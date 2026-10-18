@@ -5,7 +5,7 @@ using OceanBaseConnector.Internal.Protocol;
 
 namespace OceanBaseConnector.Internal.Values
 {
-    internal static class TemporalCodec
+    internal static partial class TemporalCodec
     {
         private const long MaximumTimeTicks = (838 * 3600L + 59 * 60 + 59) * TimeSpan.TicksPerSecond + 9999990;
 

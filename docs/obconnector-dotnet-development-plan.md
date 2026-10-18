@@ -303,7 +303,7 @@ B09 本地审核/补齐完成、状态待验证；双模式直连/OBProxy、非 
 - [x] 不带时区的 `GetDateTime`/`GetFieldValue<DateTime>` 只在100ns可精确表示时转换，否则溢出；所有p的provider-specific类型固定为OceanBaseTimestamp。
 - [x] TZ 文本/预处理读取、参数写回、稳定标准/provider-specific类型、精确 DateTimeOffset 转换和五资产消费；独立走查的参数长度及负offset问题已回归修复，详见台账。
 - [x] LTZ记录服务端会话时区标识，查询补全/结果快照、精确201读写、参数时区一致性及五资产消费；本地验证见进度台账，真实互通待验。
-- [ ] MySQL同列混合正常值与零日期在文本/预处理路径的字段类型、provider-specific值及往返。
+- [x] MySQL DATE/DATETIME/TIMESTAMP同列混合正常值、零分量与NULL，文本/预处理路径的稳定标准/provider-specific类型、精确参数写回及五资产消费；仅内部模式夹具，不等同公开MySQL握手或实库支持。
 - [ ] 两模式实库测试记录会话时区、字符集与服务端列定义。
 
 2026-10-19 纳秒子项执行细化：先贯通不带时区的 Oracle TIMESTAMP(0..9)，TZ/LTZ 和 MySQL 零日期仍保留后续子项。OceanBaseTimestamp 为五目标共享只读值，保存 DateTimeKind.Unspecified 的整秒 WholeSeconds、0..999999999 的 Nanosecond 和0..9的 Scale；构造时拒绝混入亚秒/时区或不符合scale的纳秒，不舍入。ToDateTime 仅在纳秒为100的倍数时成功；年份范围仍为1..9999，超出范围明确失败。标准字段p<=7为DateTime、p8/9为OceanBaseTimestamp，provider-specific访问对所有p都固定为OceanBaseTimestamp，NULL不改变类型。沿Java type202/12字节布局读取两种结果协议，维持载荷scale和列scale一致校验；参数默认保留provider的Scale（普通DateTime仍默认7），显式Scale只允许精确重标度，不改Java固定写9的实现但记录差异。修改到达TemporalCodec、ResultColumn/DbColumn、OceanBaseParameter/PreparedParameters、reader和五资产消费；先验证缺口，再补公开值、codec、公开环回及消费回归，最后完整编译/测试/独立走查/打包后提交。重点回归p8/9小值和NULL不缩窄、纳秒1/999999999、边界日期、非法长度/scale/小数、错误模式以及发包前拒绝。
@@ -327,6 +327,16 @@ B09 本地审核/补齐完成、状态待验证；双模式直连/OBProxy、非 
 结果column绑定QueryResult每结果冻结的时区标识；未知时保留稳定类型及DBNull（仍校验模式/scale），仅非NULL201值明确拒绝解码，不在活动reader中插入查询或改为全量缓存。任意后续SQL或多结果没有可靠报告时不能拿旧标识解释LTZ；有报告的多结果使用新标识。201前12字节沿202时间布局，两协议读取/参数写入，纳秒/scale严格不截断。修改到达新公共值、TemporalCodec、ResultColumn/QueryResult、PreparedParameters/Parameter/DbType、reader、CommandExchange内部查询与OceanBaseCommand执行路径；同步/异步/五资产回归和未知时区/发包前参数不匹配/查询故障/结果快照边界贯通，完整验证/独立走查后提交。固定Java及server证据见架构§5；数据库及非Windows验收继续暂缓。
 
 2026-10-19 LTZ子项本地验证：初始8项缺口由失败转通过；独立走查再复现3项冲突报告/显式Timestamp覆盖失败，修复后49项定向通过。最终Unit846/Consumer81/DI8，核心五/DI三目标Release编译0警告0错误，格式、diff、打包资产/依赖矩阵通过；当前状态及真实环境缺口见台账。C03保持进行中，剩余MySQL零日期及真实验收。
+
+2026-10-19 C03零日期实施计划（沿用已确认的§5契约）：
+
+- [x] 先以文本/二进制正常、全零、部分零及NULL回归复现provider类型缺口；标准DateTime不随行改变，零分量转换抛InvalidCastException，IsDBNull仅识别协议NULL。
+- [x] 新增五目标共享OceanBaseDate(year,month,day)/OceanBaseDate(DateTime)及OceanBaseDateTime(date,hour,minute,second,microsecond,scale)/OceanBaseDateTime(DateTime)，无时区。Date组件年0..9999、月0..12、日0..31，非零月/日需合法日历（year0按400年检查闰日）；零分量保留，不支持ALLOW_INVALID_DATES的其他非法日历。DateTime微秒0..999999、scale0..6且禁止舍入，default表示全零。提供Date分量、IsValidDate/IsValidDateTime、ToDateTime与固定格式ToString，不新增零值转NULL/最小日期配置。
+- [x] TemporalCodec新增MySQL DATE10/DATETIME12/TIMESTAMP7原始分量读写；文本严格格式、二进制0/4/7/11长度及分量/精度边界，DATE仅0/4，不归一化非法数据。ResultColumn整列provider类型分别Date/DateTime，标准值仍精确转换DateTime；reader的GetProviderSpecificValue(s)/GetFieldValue<T>/两套schema贯通，Oracle路径不变。
+- [x] PreparedParameters和Parameter自动推断Date/DateTime，provider值仅在MySQL对应类型写入，显式不匹配/Oracle及精度损失在发包前拒绝；零值写0长度，部分零按分量发送；不新增枚举或依赖。既有Timestamp参数映射保持MySQL DATETIME12，不承诺恢复时区瞬时点。
+- [x] codec/参数红绿、同步/异步reader和预处理混合行、畸形输入/精度/模式边界、五资产类型/消费验证；MySQL模式仅测试内部夹具，A05公开握手继续拒绝无可信模式位。Release slnx编译、Windows完整测试、格式/打包版本矩阵、独立走查并修复后更新三份文档提交；实库/非Windows继续暂缓，C03整体记待验证而非完成。
+
+2026-10-19 零日期本地验证：首批9项失败回归修复后通过；最终49项定向通过，覆盖严格文本/二进制、含零分量、带非零时钟的零日期、微秒/scale、TIMESTAMP混合reader、NULL及模式/精度拒绝。完整Windows Unit895/Consumer91/DI8全部通过，核心五/DI三目标编译0警告0错误、格式/diff/双包及版本矩阵通过。C03全部本地子项已实现，状态改为待验证，保留实库/非Windows及A05公开MySQL握手缺口；下一可本地推进模块C04，C01完整重置仍阻塞。
 
 ### C04 大值、SequentialAccess 与服务端游标
 

@@ -102,6 +102,7 @@ namespace OceanBaseConnector
             _ = column.FieldType;
             if (_result.Row == null) throw new InvalidOperationException("Read must position the reader on a row.");
             var value = _result.Row[ordinal];
+            if (column.IsMySqlDate && value != null) return column.DecodeProviderDate(value, _result.IsBinary);
             if (column.TypeCode == 202 && value != null) return column.DecodeTimestamp(value);
             return column.IsDecimal && value != null ? column.DecodeDecimal(value, _result.IsBinary) : GetValue(ordinal);
         }
@@ -112,7 +113,7 @@ namespace OceanBaseConnector
             for (var i = 0; i < count; i++) values[i] = GetProviderSpecificValue(i);
             return count;
         }
-        public override T GetFieldValue<T>(int ordinal) => typeof(T) == typeof(OceanBaseDecimal) || typeof(T) == typeof(OceanBaseTimestamp)
+        public override T GetFieldValue<T>(int ordinal) => typeof(T) == typeof(OceanBaseDecimal) || typeof(T) == typeof(OceanBaseTimestamp) || typeof(T) == typeof(OceanBaseDate) || typeof(T) == typeof(OceanBaseDateTime)
             ? (T)GetProviderSpecificValue(ordinal) : typeof(T) == typeof(decimal) ? (T)(object)GetDecimal(ordinal)
             : typeof(T) == typeof(DateTime) ? (T)(object)GetDateTime(ordinal)
             : typeof(T) == typeof(DateTimeOffset) && GetValue(ordinal) is OceanBaseTimestampWithTimeZone zoned ? (T)(object)zoned.ToDateTimeOffset()

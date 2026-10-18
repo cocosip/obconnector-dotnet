@@ -111,7 +111,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(7, "2024-02-29 23:59:58", new byte[] { 7, 232, 7, 2, 29, 23, 59, 58 })]
         public void MysqlTemporalTextAndBinaryValuesAgree(byte code, string text, byte[] wire)
         {
-            var column = ValueColumn(code, OceanBaseCompatibilityMode.MySql, scale: 6);
+            var column = ValueColumn(code, OceanBaseCompatibilityMode.MySql, scale: code == 10 ? (byte)0 : (byte)6);
             var expected = DateTime.ParseExact(text, new[] { "yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.ffffff" }, CultureInfo.InvariantCulture, DateTimeStyles.None);
             Assert.Equal(typeof(DateTime), column.FieldType);
             Assert.Equal(expected, column.Decode(Encoding.ASCII.GetBytes(text)));

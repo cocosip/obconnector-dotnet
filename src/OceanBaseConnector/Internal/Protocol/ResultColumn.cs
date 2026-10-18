@@ -39,7 +39,8 @@ namespace OceanBaseConnector.Internal.Protocol
         internal int Scale { get; }
         internal bool IsDecimal => TypeCode == 0 || TypeCode == 246 || TypeCode == 3 && Mode == OceanBaseCompatibilityMode.Oracle;
         internal bool IsTemporal => TypeCode == 7 || TypeCode == 10 || TypeCode == 11 || TypeCode == 12 || TypeCode == 200 || TypeCode == 201 || TypeCode == 202;
-        internal Type ProviderSpecificFieldType => IsDecimal ? typeof(OceanBaseDecimal) : TypeCode == 202 ? typeof(OceanBaseTimestamp) : FieldType;
+        internal bool IsMySqlDate => Mode == OceanBaseCompatibilityMode.MySql && (TypeCode == 10 || TypeCode == 12 || TypeCode == 7);
+        internal Type ProviderSpecificFieldType => IsMySqlDate ? TypeCode == 10 ? typeof(OceanBaseDate) : typeof(OceanBaseDateTime) : IsDecimal ? typeof(OceanBaseDecimal) : TypeCode == 202 ? typeof(OceanBaseTimestamp) : FieldType;
 
         internal OceanBaseTimestamp DecodeTimestamp(byte[] value)
         {
@@ -128,7 +129,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 10:
                     case 11:
                         if (Mode != OceanBaseCompatibilityMode.MySql) throw new NotSupportedException("The temporal type is not defined for this mode.");
-                        if (Scale < 0 || Scale > 6) throw new NotSupportedException("The temporal precision is not supported.");
+                        if (Scale < 0 || Scale > (TypeCode == 10 ? 0 : 6)) throw new NotSupportedException("The temporal precision is not supported.");
                         return TypeCode == 11 ? typeof(TimeSpan) : typeof(DateTime);
                     case 12:
                         if (Scale < 0 || Scale > (Mode == OceanBaseCompatibilityMode.Oracle ? 0 : 6)) throw new NotSupportedException("The temporal precision is not supported.");
@@ -200,6 +201,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 var number = DecodeDecimal(value, false);
                 return fieldType == typeof(decimal) ? (object)number.ToDecimal() : number;
             }
+            if (IsMySqlDate) return TemporalCodec.DecodeMySqlDate(TypeCode, value, false, Scale).ToDateTime();
             if (TypeCode == 201)
             {
                 if (SessionTimeZone == null) throw new NotSupportedException("The result has no trusted session time zone for LTZ values.");
@@ -251,6 +253,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 var number = DecodeDecimal(value, true);
                 return fieldType == typeof(decimal) ? (object)number.ToDecimal() : number;
             }
+            if (IsMySqlDate) return TemporalCodec.DecodeMySqlDate(TypeCode, value, true, Scale).ToDateTime();
             if (TypeCode == 201)
             {
                 if (SessionTimeZone == null) throw new NotSupportedException("The result has no trusted session time zone for LTZ values.");
@@ -272,6 +275,13 @@ namespace OceanBaseConnector.Internal.Protocol
                     return TypeCode == 4 ? (object)BitConverter.ToSingle(value, 0) : BitConverter.ToDouble(value, 0);
                 default: return Decode(value);
             }
+        }
+
+        internal object DecodeProviderDate(byte[] value, bool binary)
+        {
+            _ = FieldType;
+            var date = TemporalCodec.DecodeMySqlDate(TypeCode, value, binary, Scale);
+            return TypeCode == 10 ? (object)date.Date : date;
         }
 
         internal OceanBaseDecimal DecodeDecimal(byte[] value, bool binary)

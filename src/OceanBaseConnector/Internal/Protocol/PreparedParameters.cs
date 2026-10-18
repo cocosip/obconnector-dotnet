@@ -51,7 +51,17 @@ namespace OceanBaseConnector.Internal.Protocol
                 }
                 else if (parameter.DbType == DbType.Date || parameter.DbType == DbType.DateTime || parameter.DbType == DbType.DateTime2)
                 {
-                    if (value is OceanBaseTimestamp timestamp)
+                    if (value is OceanBaseDate dateValue)
+                    {
+                        if (mode != OceanBaseCompatibilityMode.MySql || type != 10) throw new ArgumentException("OceanBaseDate parameters require MySQL DATE.");
+                        TemporalCodec.WriteMySqlDate(writer, new OceanBaseDateTime(dateValue, scale: 0), true, parameter.DeclaredScale);
+                    }
+                    else if (value is OceanBaseDateTime dateTimeValue)
+                    {
+                        if (mode != OceanBaseCompatibilityMode.MySql || type != 12) throw new ArgumentException("OceanBaseDateTime parameters require MySQL DATETIME.");
+                        TemporalCodec.WriteMySqlDate(writer, dateTimeValue, false, parameter.DeclaredScale);
+                    }
+                    else if (value is OceanBaseTimestamp timestamp)
                     {
                         if (type != 202) throw new NotSupportedException("OceanBaseTimestamp parameters require Oracle TIMESTAMP.");
                         TemporalCodec.WriteTimestamp(writer, timestamp, parameter.DeclaredScale);
