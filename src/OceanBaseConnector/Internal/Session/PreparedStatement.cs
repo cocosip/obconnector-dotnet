@@ -13,6 +13,7 @@ namespace OceanBaseConnector.Internal.Session
             if (cursor.ReadUInt8() != 0) throw new ProtocolException("Expected a prepared statement response.");
             Id = cursor.ReadUInt32();
             columns = cursor.ReadUInt16();
+            ColumnCount = columns;
             ParameterCount = cursor.ReadUInt16();
             if (cursor.ReadUInt8() != 0) throw new ProtocolException("Invalid prepared statement filler.");
             cursor.ReadUInt16();
@@ -25,6 +26,7 @@ namespace OceanBaseConnector.Internal.Session
         internal string CommandText { get; }
         internal uint Id { get; }
         internal int ParameterCount { get; }
+        internal int ColumnCount { get; }
 
         internal static PreparedStatement Read(CommandExchange exchange, PhysicalSession session, string sql)
         {

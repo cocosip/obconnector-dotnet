@@ -342,20 +342,30 @@ B09 本地审核/补齐完成、状态待验证；双模式直连/OBProxy、非 
 
 **产物：**`SequentialAccess` 不隐式缓存整值；游标以物理会话和 statement ID 为作用域，关闭/取消/断线时释放或销毁。
 
-本地实施顺序：先补 PacketChannel 的单所有者增量 payload 流，再接 QueryResult/reader 的有序字段读取和字符解码，最后实现有明确启用条件的 prepare/execute/fetch 游标。增量报文流只读取调用方请求的字节，跨帧继续验证序号及累计 64 MiB 上限；未消费完成时禁止新读包、发包、重置序号或替换传输。提前释放、损坏或中途取消关闭传输，完整消费后才允许下一报文，保持未知执行结果不重放。目前增量报文及 QueryResult/reader 顺序字段流已完成本地实现，游标仍待实现，C04 保持进行中。
+本地实施顺序：先补 PacketChannel 的单所有者增量 payload 流，再接 QueryResult/reader 的有序字段读取和字符解码，最后实现有明确启用条件的 prepare/execute/fetch 游标。增量报文流只读取调用方请求的字节，跨帧继续验证序号及累计 64 MiB 上限；未消费完成时禁止新读包、发包、重置序号或替换传输。提前释放、损坏或中途取消关闭传输，完整消费后才允许下一报文，保持未知执行结果不重放。目前增量报文、QueryResult/reader 顺序字段流及游标分页均已完成本地实现，C04 转为待验证；真实验收仍开放。
 
 - [x] 增量报文流：同步/异步、续帧及空终结帧、序号/累计限额、截断/取消/提前关闭；用按需生成的大报文断言分块读取和固定内存，而非预先分配完整测试载荷。
 - [x] QueryResult/reader 本地接入：文本/预处理逐字段读取、GetBytes/GetChars/GetStream/GetTextReader、字段与偏移前进限制、NULL、多结果和关闭/取消资源归属。
 - [x] 本地 reader 大值分块读取、乱序访问限制、提前关闭、取消和有界分配回归。
-- [ ] 服务端游标分页、提前关闭与取消生命周期测试。
-- [ ] 只有模式/版本/能力条件经测试满足才启用游标；不支持时明确失败。
+- [x] 服务端游标本地分页、提前关闭与取消生命周期测试。
+- [x] 本地按已认证模式和协商 EOF 能力选择游标协议；无确认/不支持的响应失败并销毁会话，不回退重执行。
+- [ ] 真实模式/版本/能力矩阵验收后才声明相应组合支持；本地夹具不作为版本白名单。
 - [ ] 在两模式真实租户上测量内存峰值、吞吐和资源释放。
 
 2026-10-19 增量报文底层：新增内部 OpenPayload/OpenPayloadAsync，既有整包读取共用相同帧校验和失败关闭规则。29项新测试覆盖按需读取、32 MiB生成载荷/同步循环分配少于256 KiB、续帧和精确满帧终结、混合整包/流式序号回绕、部分I/O取消、累计限额、非法参数和提前释放；与既有报文测试共54项通过。先验证21项缺失API失败，再实现通过；整包超限未销毁传输的2项回归亦先红后绿。Release核心五/DI三目标0警告0错误，完整Windows Unit924/Consumer91/DI8通过，独立只读走查无必须修复项。该内存断言只覆盖内部同步流读取的托管分配，不是实库reader内存峰值或吞吐基线。C04进行中，当次仅交付报文底层，reader字段流见下方续接；实库/非Windows/新的旧运行时验收未执行。
 
 2026-10-19 reader 续接：文本/预处理二进制、旧 EOF/弃用 EOF 已接入同步/异步字段流；只预读行前缀和 NULL 位图。GetBytes/GetChars/GetStream/GetTextReader 及异步字段 getter 遵守 ordinal/offset 前进、NULL、显式整字段物化和流失效规则。GetChars 空 buffer 长度探测在顺序模式拒绝；字符读取严格 UTF-8、保留 BOM 和代理项边界；默认模式不变。跳列/行/结果用共享 8 KiB 缓冲区排空，提前关闭销毁未消费会话。详见现有架构文档的顺序读取契约。
 
-走查发现的缓存字符/耗尽流绕过取消与连接关闭、完整终结包被后到取消误判、字段自身 token 未进入命令预算等问题均增加先失败回归并修复；非法二进制字段 framing 亦转为未知结果并废弃会话。五资产隔离消费由 net10 宿主运行，不等于旧运行时验收。32 MiB 生成行用例验证 ExecuteReader 在正文到达前返回、跨续帧流读取且同步 drain 托管分配少于 1 MiB；这不是实库内存峰值或吞吐基线。Release slnx核心五/DI三目标编译0警告0错误，完整Windows Unit978/Consumer101/DI8通过（TestResults/c04-reader-*-final.trx）；54项顺序读取/零日期本地回归及五资产顺序流/纳秒provider消费覆盖当前契约。C04 仍进行中，剩余服务端游标、真实两模式大值/吞吐和资源验收；不放宽 A05 的公共 MySQL 握手或 C01 完整重置门槛。
+走查发现的缓存字符/耗尽流绕过取消与连接关闭、完整终结包被后到取消误判、字段自身 token 未进入命令预算等问题均增加先失败回归并修复；非法二进制字段 framing 亦转为未知结果并废弃会话。五资产隔离消费由 net10 宿主运行，不等于旧运行时验收。32 MiB 生成行用例验证 ExecuteReader 在正文到达前返回、跨续帧流读取且同步 drain 托管分配少于 1 MiB；这不是实库内存峰值或吞吐基线。Release slnx核心五/DI三目标编译0警告0错误，完整Windows Unit978/Consumer101/DI8通过（TestResults/c04-reader-*-final.trx）；54项顺序读取/零日期本地回归及五资产顺序流/纳秒provider消费覆盖当前契约。当次 C04 仍进行中，剩余服务端游标、真实两模式大值/吞吐和资源验收；不放宽 A05 的公共 MySQL 握手或 C01 完整重置门槛。
+
+C04 游标本地实施（2026-10-19，沿用既有 TDD/独立走查，合并进现有文档）：
+
+- [x] 入口：OceanBaseCommand.FetchSize 默认0不请求游标，正数强制服务端prepare并快照为本次分页行数；负数拒绝。PreparedStatement保留列计数，非结果语句发execute前拒绝；PreparedParameters.Execute只读cursor flag=1。Oracle + ClientDeprecateEof按Java协议证据省略execute/fetch元数据EOF，由首次fetch确认终态；其他组合严格验证EOF/FE-OK游标确认包，不放宽A05。
+- [x] 读取：QueryResult按模式/能力处理execute元数据（Oracle弃用EOF例外见上），其余确认CursorExists后开始fetch；9字节COM_STMT_FETCH、statement ID/行数LE32，每次请求重置序号但保持同一命令租约/总超时，不重新执行SQL。MySQL直接读二进制行，Oracle先验证重发列元数据一致；继续批次必须CursorExists且有进展，LastRowSent才结束租约。多结果游标暂拒绝并销毁会话，不伪造支持。
+- [x] 生命周期：默认与SequentialAccess共用分页控制，HasRows只预取首行，NextResult读尽剩余页；提前Close/取消/超时/断线销毁原会话，缓存statement不跨会话复用。测试翻页、空最终页、语句复用、两模式差别、非法flag/元数据/超额行、异步纯I/O和未知结果不重放。
+- [x] 验证提交：核心5/DI3编译、Windows Unit/Consumer/DI、格式/双包/版本矩阵，独立走查并修复；更新本页、架构及进度后提交当前master。真实两模式/OBProxy与非Windows仍暂缓，不据本地回归关闭互通验收。
+
+本轮走查的租约释放早于游标ERR销毁、二进制行冒充FE-OK确认、中间页遗漏会话报告、初始空结果重复清除报告等缺陷均以先失败回归修复。同步/异步、默认/顺序读取、两模式/两类EOF共16种分页组合及Oracle弃用EOF空结果首次fetch已覆盖；五资产隔离消费覆盖Oracle旧/弃用EOF。确认包形态和省略规则见架构§3，实库游标资源/内存/吞吐仍待验证，C04本地代码完成不关闭G3。最终Release核心五/DI三目标0警告0错误，Windows Unit1037/Consumer111/DI8全部通过（TestResults/c04-cursor-*-final-checked.trx）；格式、双包、统一版本及按TFM的Microsoft.Extensions依赖矩阵通过，独立复查无剩余必须修复项。
 
 ### C05 数据库目录元数据
 

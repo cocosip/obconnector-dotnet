@@ -97,11 +97,12 @@ namespace OceanBaseConnector.Internal.Protocol
                     throw new ArgumentException("The LTZ parameter time zone must match the current server session time zone.");
         }
 
-        internal static byte[] Execute(uint id, byte[] parameters)
+        internal static byte[] Execute(uint id, byte[] parameters, bool cursor = false)
         {
             var packet = new byte[10 + parameters.Length];
             packet[0] = 23;
             for (var i = 0; i < 4; i++) packet[i + 1] = (byte)(id >> (i * 8));
+            packet[5] = cursor ? (byte)1 : (byte)0;
             packet[6] = 1;
             Buffer.BlockCopy(parameters, 0, packet, 10, parameters.Length);
             return packet;

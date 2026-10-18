@@ -20,8 +20,11 @@ namespace OceanBaseConnector
         private PreparedStatement? _prepared;
         private bool _explicitPreparation;
         private bool _disposed;
+        private int _fetchSize;
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get => _timeout; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _timeout = value; } }
+        /// <summary>Rows requested per server cursor fetch; zero uses ordinary result streaming.</summary>
+        public int FetchSize { get => _fetchSize; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _fetchSize = value; } }
         public override CommandType CommandType { get; set; } = CommandType.Text;
         public override bool DesignTimeVisible { get; set; }
         public override UpdateRowSource UpdatedRowSource { get; set; } = UpdateRowSource.Both;
@@ -60,8 +63,10 @@ namespace OceanBaseConnector
                 var zone = execution.EnsureSessionTimeZone();
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var statement = operation.Binary ? EnsurePrepared(operation) : null;
-                execution.Send(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters));
-                var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0);
+                ValidateCursorStatement(operation.FetchSize, statement);
+                execution.Send(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters, operation.FetchSize > 0));
+                var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
+                    cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize);
                 result.Start();
                 return new OceanBaseDataReader(execution, result, operation.Connection, behavior);
             }
@@ -99,8 +104,10 @@ namespace OceanBaseConnector
                 var zone = await execution.EnsureSessionTimeZoneAsync(cancellationToken).ConfigureAwait(false);
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var statement = operation.Binary ? await EnsurePreparedAsync(operation, cancellationToken).ConfigureAwait(false) : null;
-                await execution.SendAsync(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters)).ConfigureAwait(false);
-                var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0);
+                ValidateCursorStatement(operation.FetchSize, statement);
+                await execution.SendAsync(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters, operation.FetchSize > 0)).ConfigureAwait(false);
+                var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
+                    cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize);
                 await result.StartAsync(cancellationToken).ConfigureAwait(false);
                 return new OceanBaseDataReader(execution, result, operation.Connection, behavior);
             }
@@ -121,7 +128,7 @@ namespace OceanBaseConnector
             await base.DisposeAsync().ConfigureAwait(false);
         }
 #endif
-        private (CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary)
+        private (CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize)
             Start(CommandBehavior behavior, CancellationToken token, bool prepareOnly)
         {
             lock (_gate)
@@ -141,8 +148,9 @@ namespace OceanBaseConnector
                 var length = ResultColumn.Utf8.GetByteCount(text);
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
                 var bindings = ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
+                var fetchSize = prepareOnly ? 0 : _fetchSize;
                 if (prepareOnly) _explicitPreparation = true;
-                var binary = _explicitPreparation || bindings.Parameters.Length != 0;
+                var binary = _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
                 var parameters = binary && !prepareOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info.Mode) : Array.Empty<byte>();
                 if (_prepared != null && (!binary || !ReferenceEquals(_prepared.Session, session) || _prepared.CommandText != bindings.CommandText))
                 { _prepared.Release(); _prepared = null; }
@@ -153,18 +161,18 @@ namespace OceanBaseConnector
                     lock (_gate) { if (ReferenceEquals(_execution, execution)) _execution = null; }
                 });
                 _execution = execution;
-                return (execution, session, connection, bindings, parameters, binary);
+                return (execution, session, connection, bindings, parameters, binary, fetchSize);
             }
         }
 
-        private PreparedStatement EnsurePrepared((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary) operation)
+        private PreparedStatement EnsurePrepared((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize) operation)
         {
             if (_prepared != null) return _prepared;
             operation.Exchange.Send(SqlPacket(operation.Bindings.CommandText, 22), executesSql: false);
             return PublishPrepared(PreparedStatement.Read(operation.Exchange, operation.Session, operation.Bindings.CommandText), operation.Bindings.Parameters.Length);
         }
 
-        private async Task<PreparedStatement> EnsurePreparedAsync((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary) operation, CancellationToken token)
+        private async Task<PreparedStatement> EnsurePreparedAsync((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize) operation, CancellationToken token)
         {
             if (_prepared != null) return _prepared;
             await operation.Exchange.SendAsync(SqlPacket(operation.Bindings.CommandText, 22), executesSql: false).ConfigureAwait(false);
@@ -184,6 +192,12 @@ namespace OceanBaseConnector
                 }
                 return _prepared = statement;
             }
+        }
+
+        private static void ValidateCursorStatement(int fetchSize, PreparedStatement? statement)
+        {
+            if (fetchSize > 0 && (statement == null || statement.ColumnCount == 0))
+                throw new NotSupportedException("Server cursors require a prepared statement with result columns.");
         }
 
         internal static byte[] SqlPacket(string text, byte code)

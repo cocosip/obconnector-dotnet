@@ -15,8 +15,11 @@ namespace OceanBaseConnector.Internal.Protocol
         private long _affected = -1;
         private bool _faulted;
         private int _metadataBytes;
-        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true, bool sequential = false)
-        { _query = query; IsBinary = binary; _completeExchange = completeExchange; _sequential = sequential; }
+        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true, bool sequential = false, uint? cursorId = null, int fetchSize = 0)
+        {
+            _query = query; IsBinary = binary; _completeExchange = completeExchange; _sequential = sequential; _cursorId = cursorId; _fetchSize = fetchSize;
+            if (cursorId.HasValue) query.OwnCursor();
+        }
         internal bool IsBinary { get; }
         internal string? SessionTimeZone { get; private set; }
         internal ResultColumn[] Columns { get; private set; } = Array.Empty<ResultColumn>();
@@ -32,9 +35,12 @@ namespace OceanBaseConnector.Internal.Protocol
                 SessionTimeZone = _query.CaptureResultTimeZone();
                 if (!Header(_query.Receive())) return;
                 for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(_query.Receive());
-                if (!DeprecatedEof) EndColumns(_query.Receive());
+                if (CursorMetadataOmitsEof) BeginCursorWithoutEof();
+                else if (_cursorId.HasValue) BeginCursor(_query.Receive());
+                else if (!DeprecatedEof) EndColumns(_query.Receive());
+                if (_ended) return;
                 if (_sequential) { _pendingSequential = OpenSequential(); HasRows = _pendingSequential != null; }
-                else { _pending = ParseRow(_query.Receive()); HasRows = _pending != null; }
+                else { _pending = ReadBufferedRow(); HasRows = _pending != null; }
             }
             catch (Exception error) { throw Fault(error); }
         }
@@ -46,9 +52,12 @@ namespace OceanBaseConnector.Internal.Protocol
                 SessionTimeZone = _query.CaptureResultTimeZone();
                 if (!Header(await _query.ReceiveAsync(token).ConfigureAwait(false))) return;
                 for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(await _query.ReceiveAsync(token).ConfigureAwait(false));
-                if (!DeprecatedEof) EndColumns(await _query.ReceiveAsync(token).ConfigureAwait(false));
+                if (CursorMetadataOmitsEof) BeginCursorWithoutEof();
+                else if (_cursorId.HasValue) BeginCursor(await _query.ReceiveAsync(token).ConfigureAwait(false));
+                else if (!DeprecatedEof) EndColumns(await _query.ReceiveAsync(token).ConfigureAwait(false));
+                if (_ended) return;
                 if (_sequential) { _pendingSequential = await OpenSequentialAsync(token).ConfigureAwait(false); HasRows = _pendingSequential != null; }
-                else { _pending = ParseRow(await _query.ReceiveAsync(token).ConfigureAwait(false)); HasRows = _pending != null; }
+                else { _pending = await ReadBufferedRowAsync(token).ConfigureAwait(false); HasRows = _pending != null; }
             }
             catch (Exception error) { throw Fault(error); }
         }
@@ -62,6 +71,7 @@ namespace OceanBaseConnector.Internal.Protocol
             _metadataBytes = 0;
             if (OkPacket.IsOk(packet))
             {
+                if (_cursorId.HasValue) throw new ProtocolException("A cursor execution returned no result columns.");
                 Columns = Array.Empty<ResultColumn>();
                 var ok = OkPacket.Parse(packet, _query.Capabilities);
                 _affected = checked(Math.Max(0, _affected) + ok.AffectedRows);
@@ -91,6 +101,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private void End(ServerStatusFlags flags, OkPacket? ok = null)
         {
             _query.ObserveSessionState(ok);
+            if (_cursorActive && !EndCursorBatch(flags)) return;
             _ended = true;
             _more = (flags & ServerStatusFlags.MoreResultsExists) != 0;
             if (!_completeExchange)
@@ -127,6 +138,7 @@ namespace OceanBaseConnector.Internal.Protocol
             }
             else for (var i = 0; i < row.Length; i++) row[i] = cursor.ReadNullableLengthEncodedBytes();
             if (cursor.HasRemaining) throw new ProtocolException("Trailing row bytes.");
+            TrackCursorRow();
             return row;
         }
 
@@ -140,7 +152,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (_ended) return false;
                 _query.EnsureReading();
                 if (_pending != null) { Row = _pending; _pending = null; return true; }
-                Row = ParseRow(_query.Receive());
+                Row = ReadBufferedRow();
                 return Row != null;
             }
             catch (Exception error) { throw Fault(error); }
@@ -157,7 +169,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 token.ThrowIfCancellationRequested();
                 _query.EnsureReading();
                 if (_pending != null) { Row = _pending; _pending = null; return true; }
-                Row = ParseRow(await _query.ReceiveAsync(token).ConfigureAwait(false));
+                Row = await ReadBufferedRowAsync(token).ConfigureAwait(false);
                 return Row != null;
             }
             catch (Exception error) { throw Fault(error); }

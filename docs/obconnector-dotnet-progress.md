@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期及 C04 报文增量/顺序字段流本地子项。C03待验证，C04进行中，目录元数据尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期及 C04 报文增量/顺序字段流及服务端游标本地子项。C03/C04待验证，目录元数据尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -29,7 +29,7 @@
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04 本地实现完成、待真实/跨平台验收；A05 还缺可信 MySQL 模式判定规则及版本/插件验收；A07 缺环境与可信版本矩阵；G0 未关闭 |
 | G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09 本地实现/审核已具证据；核心五资产有 Windows8/9/10基础运行时消费，但真实双模式、完整旧运行时消费/DI及跨平台未验收 |
-| G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02/C03本地实现完成待真实环境验证；C04顺序字段流本地完成、游标待实现；关口未关闭 |
+| G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02/C03本地实现完成待真实环境验证；C04顺序字段流及服务端游标本地完成、真实资源/性能与版本矩阵待验证；关口未关闭 |
 | G4 发布候选 R | W35-W37 | 0/2 | 未开始 | R01-R02 + 包/许可证/兼容矩阵 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
 
@@ -66,7 +66,7 @@
 | C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 2026-10-19 Codex；无真实完整重置白名单，Java reset不能代替OceanBase实测；保持Pooling=true拒绝，先推进独立C02 |
 | C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
 | C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 待验证 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)、TZ/LTZ及零日期本地实现齐备；Unit895/Consumer91/DI8、五/三目标编译/格式/打包及独立走查通过；真实验收/A05公开MySQL握手仍缺，详见本页末 |
-| C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 进行中 | 2026-10-19 Codex；增量报文及文本/预处理顺序字段流本地完成并开放SequentialAccess；Unit978/Consumer101/DI8通过；服务端游标和真实大值验收未完成，详见本页末 |
+| C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 待验证 | 2026-10-19 Codex；增量报文、顺序字段流和FetchSize只读游标分页本地完成；Unit1037/Consumer111/DI8及核心五/DI三目标编译通过，独立复查缺陷均已修复；真实两模式/OBProxy大值/游标资源及性能矩阵未验收，详见本页末 |
 | C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 未开始 | 待记录 |
 | C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 未开始 | 待记录 |
 | C07 | W29-W32 | 本地 ActivitySource/Meter、脱敏和性能基线 | 未开始 | 待记录 |
@@ -313,3 +313,13 @@ C03继续进行中，剩余MySQL零日期及真实验收；G3仍0/8，A04/A05真
 独立只读走查发现的缓存字符及已耗尽流绕过 Cancel/超时/连接关闭已修复；进一步回归修复完整终结 EOF/ERR 收完后、解析前取消被误报未知结果，以及字段自身 token 取消未进入命令预算。新增生命周期8项先红后绿、字段token2项先红后绿；前序非法二进制字段framing2项亦由先失败回归覆盖。未知结果销毁会话并禁止重放，已知服务端终结结果不被后到取消覆盖。42项新顺序读取用例及12项复用零日期读写回归覆盖跨帧32 MiB按需生成大值、正文未到达即可返回reader、同步drain托管分配低于1 MiB、NULL/偏移/异步传输/跳列/多结果/UTF-8/提前关闭和阻塞读取token/Cancel/超时/连接关闭；内存断言不是实库内存峰值或吞吐基线。
 
 Release slnx核心五/DI三目标编译0警告0错误；完整Windows Unit978、Consumer101、DI8通过（TestResults/c04-reader-unit-final.trx、c04-reader-consumer-final.trx、c04-reader-di-final.trx）。最初沙箱全量单测的10项TLS用例因Windows证书凭据/私钥存储访问失败，获授权的沙箱外完整重跑全部通过，未修改TLS校验策略。格式、diff、UTF-8无BOM/CRLF与双包检查通过，核心5/DI3资产、统一0.1.0-alpha、DI精确核心依赖及Microsoft.Extensions 8/9/10矩阵通过；既有NuGet README提示保留R01。新增五资产隔离顺序流消费及纳秒provider写回各5项，宿主为net10；不能代替旧运行时完整验收。三份既有文档合并契约、勾选本地完成项并明确C04仍进行中；剩余服务端游标、真实两模式/OBProxy大值内存/吞吐及资源验收。未执行实库、非Windows或新的旧运行时测试；A05可信MySQL判定、C01完整重置及G0/G1/G3缺口不变。
+
+2026-10-19 C04 服务端游标及中断走查修复：新增统一 OceanBaseCommand.FetchSize，默认0为普通结果流，正数快照分页行数、强制服务端prepare并设置只读execute flag=1，负数拒绝；无结果列语句在execute前拒绝。QueryResult同步/异步、默认/SequentialAccess共用COM_STMT_FETCH控制，保持同一statement ID/物理会话/命令租约和总超时，每页重置报文序号。MySQL直接读二进制行，Oracle校验重发列元数据。旧EOF及MySQL FE-OK严格确认游标；Oracle协商弃用EOF时按固定Java源码省略execute/fetch元数据EOF，由首次fetch确认结果，空结果也不跳过确认。继续页必须CursorExists且有进展，LastRowSent才释放租约；超额行、元数据变化、多结果/OUT、不确认及无进展均失败，不回退重执行。HasRows预取首行/顺序前缀，NextResult读尽所有页，提前关闭或取消销毁原会话；读尽可复用statement，FetchSize改回0恢复普通结果流。
+
+独立走查发现两项必须修复缺陷并以4项先失败回归修复：游标ERR先释放租约后销毁会话，日志重入可发送新命令；以及0x00二进制行可冒充弃用EOF的游标确认包。当前CommandExchange在Complete/回调前销毁游标会话，保留已知1064错误和IsExecutionOutcomeUnknown=false；游标确认包必须以0xFE开头，恶意行确认在执行结果未知状态下销毁会话且不发fetch。另以2项先失败回归修复中间页未消费会话状态报告，避免沿用旧时区；再以2项先失败回归修复初始LastRowSent空结果把终结报告重复清除，最终包及非终态报告均只观察一次。此前reader token不能中断部分fetch写入的2项回归亦已修复，取消进入同一命令预算，不重放未知SQL。独立差异复查已核对这些修复及Oracle弃用EOF通路，无剩余必须修复项。
+
+本次新增59项游标单测，定向Cursor共70项通过（其中11项为既有ByteCursor测试）；分页覆盖同步/异步×默认/顺序×两模式×旧/弃用EOF共16组合，另测空最终页/初始空结果、非法响应、元数据、分页总预算、部分写入取消、失败日志重入、提前关闭、NextResult排空和statement复用。五资产隔离游标消费10项覆盖Oracle旧/弃用EOF。红绿证据为TestResults/c04-cursor-review-{red,green}.trx、c04-cursor-oracle-eof-red.trx、c04-cursor-state-red.trx、c04-cursor-empty-state-red.trx及c04-cursor-complete-green.trx。
+
+最终 dotnet build OceanBaseConnector.slnx --no-restore -c Release：核心五/DI三目标0警告0错误；Windows完整Unit1037、Consumer111、DI8通过且0跳过（TestResults/c04-cursor-unit-final-checked.trx、c04-cursor-consumer-final-checked.trx、c04-cursor-di-final-checked.trx）。完整单测在已授权沙箱外运行以访问Windows TLS测试证书存储，未降低TLS校验。dotnet format whitespace --verify-no-changes、git diff --check、UTF-8无BOM/CRLF和双包检查通过；TestResults/c04-cursor-pack中核心5/DI3资产、统一0.1.0-alpha、DI精确核心版本[0.1.0-alpha]及Microsoft.Extensions按TFM为8/9/10的依赖组均通过，既有NuGet包README提示仍留R01。
+
+三份既有文档已合并当前契约、源码依据、进度及验证证据；C04由进行中改为待验证，下一可本地推进模块C05。G3仍0/8，A04真实/跨平台验收、A05可信公开MySQL握手、C01完整重置白名单及G0/G1缺口不变。未执行真实两模式/OBProxy、非Windows或新的旧运行时验收；隔离消费宿主为net10，不能代替旧运行时完整验收。offset/滚动游标、REF CURSOR和locator LOB未实现，不据本地夹具宣称目标版本互通或真实游标资源/大值性能已验证。当前master完成本阶段提交，不推送。

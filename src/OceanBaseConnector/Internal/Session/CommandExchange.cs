@@ -26,6 +26,7 @@ namespace OceanBaseConnector.Internal.Session
         private readonly bool _logCommand;
         private uint[] _statementCloses;
         private bool _terminal;
+        private bool _cursorOwned;
         private int _finished;
         private int _packets;
 
@@ -93,6 +94,8 @@ namespace OceanBaseConnector.Internal.Session
         internal void ObserveSessionState(OkPacket? ok)
             => SessionTimeZone = _session.ApplySessionVariables(_lease, ok?.SessionVariables);
 
+        internal void OwnCursor() => _cursorOwned = true;
+
         internal bool HasSentSql { get { lock (_gate) return _anySqlSent; } }
         internal void ResponseComplete() { lock (_gate) { _responsePending = false; _sqlSent = false; } }
 
@@ -109,8 +112,9 @@ namespace OceanBaseConnector.Internal.Session
             catch (Exception error) { throw Fail(error); }
         }
 
-        internal async Task SendAsync(byte[] request, bool executesSql = true)
+        internal async Task SendAsync(byte[] request, bool executesSql = true, CancellationToken readerToken = default)
         {
+            using var registration = readerToken.Register(Cancel);
             try
             {
                 foreach (var id in _statementCloses)
@@ -119,7 +123,7 @@ namespace OceanBaseConnector.Internal.Session
                 BeginSend(executesSql);
                 await _channel.WritePacketAsync(request, _budget.Token).ConfigureAwait(false);
             }
-            catch (Exception error) { throw Fail(error); }
+            catch (Exception error) { throw Fail(ReaderCanceled(error, readerToken)); }
         }
 
         internal byte[] Receive()
@@ -152,6 +156,7 @@ namespace OceanBaseConnector.Internal.Session
             {
                 var server = ErrPacket.Parse(packet);
                 var error = new OceanBaseException("The server rejected the command.", server.ErrorCode, server.SqlState);
+                if (_cursorOwned) _session.Break();
                 Complete(error);
                 throw error;
             }

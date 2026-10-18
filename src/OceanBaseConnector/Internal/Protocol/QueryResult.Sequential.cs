@@ -12,18 +12,36 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private SequentialRow? OpenSequential()
         {
-            var payload = _query.OpenResponse();
-            if (payload.FirstByte == 254 && payload.FirstFrameLength < PacketChannel.MaxFramePayload)
-            { ParseRow(payload.ReadAll()); payload.Dispose(); return null; }
-            var row = new SequentialRow(payload, Columns, IsBinary, _rowScratch ??= new byte[8192]); row.Start(); return row;
+            while (true)
+            {
+                FetchCursor();
+                var payload = _query.OpenResponse();
+                if (payload.FirstByte == 254 && payload.FirstFrameLength < PacketChannel.MaxFramePayload)
+                {
+                    ParseRow(payload.ReadAll()); payload.Dispose();
+                    if (_cursorNeedsFetch) continue;
+                    return null;
+                }
+                TrackCursorRow();
+                var row = new SequentialRow(payload, Columns, IsBinary, _rowScratch ??= new byte[8192]); row.Start(); return row;
+            }
         }
 
         private async Task<SequentialRow?> OpenSequentialAsync(CancellationToken token)
         {
-            var payload = await _query.OpenResponseAsync(token).ConfigureAwait(false);
-            if (payload.FirstByte == 254 && payload.FirstFrameLength < PacketChannel.MaxFramePayload)
-            { ParseRow(await payload.ReadAllAsync(token).ConfigureAwait(false)); payload.Dispose(); return null; }
-            var row = new SequentialRow(payload, Columns, IsBinary, _rowScratch ??= new byte[8192]); await row.StartAsync(token).ConfigureAwait(false); return row;
+            while (true)
+            {
+                await FetchCursorAsync(token).ConfigureAwait(false);
+                var payload = await _query.OpenResponseAsync(token).ConfigureAwait(false);
+                if (payload.FirstByte == 254 && payload.FirstFrameLength < PacketChannel.MaxFramePayload)
+                {
+                    ParseRow(await payload.ReadAllAsync(token).ConfigureAwait(false)); payload.Dispose();
+                    if (_cursorNeedsFetch) continue;
+                    return null;
+                }
+                TrackCursorRow();
+                var row = new SequentialRow(payload, Columns, IsBinary, _rowScratch ??= new byte[8192]); await row.StartAsync(token).ConfigureAwait(false); return row;
+            }
         }
 
         private bool ReadSequential()
