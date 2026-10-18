@@ -1,0 +1,16 @@
+{
+  "name": "framed-err-packet",
+  "description": "A single framed server ERR packet: 4-byte header (payload length 72, sequence 0) followed by the ERR payload from err-packet-handshake-failure (0xFF, error 1045, '#', 28000, message).",
+  "source": "hand-crafted",
+  "redaction": "Fully synthetic bytes; same synthetic ERR payload as err-packet-handshake-failure, prefixed with a framing header.",
+  "payloadBase64": "SAAAAP8VBCMyODAwMEFjY2VzcyBkZW5pZWQgZm9yIHVzZXIgJ3Rlc3QnQCdsb2NhbGhvc3QnICh1c2luZyBwYXNzd29yZDogWUVTKQ==",
+  "expectation": {
+    "kind": "framed-packet",
+    "framePayloadLength": 72,
+    "sequenceId": 0,
+    "payloadHeader": 255,
+    "errorCode": 1045,
+    "sqlState": "28000",
+    "messageContains": "Access denied"
+  }
+}
