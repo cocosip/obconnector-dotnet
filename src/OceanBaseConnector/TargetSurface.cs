@@ -9,8 +9,6 @@ namespace OceanBaseConnector
     /// </summary>
     public static class OceanBaseModernApis
     {
-        internal const string NotYetDelivered =
-            "Modern data-source and batch APIs are delivered by stage C06 (development plan).";
     }
 }
 #endif

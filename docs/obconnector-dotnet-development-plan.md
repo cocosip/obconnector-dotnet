@@ -18,6 +18,8 @@
 - 首版默认 `TLS Mode=VerifyFull`、`Pooling=false`、`CLIENT_FOUND_ROWS`；不自动重试已发送 SQL，不隐式客户端参数插值，不加入 `TransactionScope`。变更这些公开语义须先修订架构设计。
 - `netstandard2.0` 定义公共类型身份；现代 ADO.NET API 用条件编译，仅在 `net8.0+` 暴露。每个产品目标单独编译；全部测试及消费宿主统一使用 `net10.0`，显式选择并隔离加载 `netstandard2.0` 资产；B09/R01 另验证旧运行时消费。
 - 仓库统一使用中央包管理(CPM)：根目录 `Directory.Packages.props` 固定全部 NuGet 包版本并开启传递依赖钉扎；工程的 `PackageReference` 一律不带 `Version`。产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性提供,csproj 不得各自声明版本。新增依赖只改 `Directory.Packages.props`。
+- Microsoft 通用库按产品 TFM 条件集中定版：`netstandard2.0`/`net8.0` 使用 8.x 基线，`net9.0` 使用 9.x，`net10.0` 使用 10.x；具体补丁见架构设计 §2.3。统一发布版本不要求依赖主版本相同，.NET 10 SDK/测试宿主也不抬高旧资产依赖。验收逐目标 restore 图、程序集引用和 nuspec 依赖组，避免传递钉扎将旧目标提升到 10.x。
+- 当前依用户要求暂不执行实库及非 Windows 运行测试；缺失证据保留在台账，不阻止依赖已满足的本地模块开发、走查和提交，也不关闭真实兼容门槛。
 - 许可和包名在发布前审定；只参考 Java 行为和协议，不直接移植其 LGPL-2.1 实现。
 - 进入 A 的真实互通验收前，应取得两个兼容模式的独立租户、服务端和 OBProxy 版本、认证插件、可验证的 TLS 证书及可控故障网络。缺少环境时只报告夹具验证。
 - 所有任务先写会失败的边界用例，再实现，再运行该用例和所属阶段回归；原始协议夹具保留来源、版本、模式和预期字段，不存真实凭据。
@@ -137,14 +139,16 @@
 
 **产物：**`OceanBaseConnection`、`OceanBaseCommand`、`OceanBaseParameter`、`OceanBaseDataReader`、`OceanBaseTransaction`、`OceanBaseProviderFactory`；现代资产的 `OceanBaseDataSourceBuilder`/`OceanBaseDataSource` 和可选 DI 包；数据源级 `ILoggerFactory`。工厂创建正确派生类型，尚未实现的方法明确失败；SQL、reader、事务的执行能力仍由 B02-B08 逐项交付，不发布空壳能力声明。
 
-- [ ] 测试创建/关闭/重复使用、`DbProviderFactories.RegisterFactory`、`ConnectionString` 脱敏，以及 B 阶段 `ChangeDatabase`/`ChangeDatabaseAsync` 在发包前报不支持；reader 的 `CommandBehavior.CloseConnection` 随 B06 验收。
-- [ ] 将对象只连接到 A 阶段会话，不暴露内部 socket 或双模式两套公开类型。
-- [ ] 先实现核心 builder/无池数据源、现代 factory 入口与日志上下文，再增加可选 DI 工程及 slnx 项目项。四个资产的直接连接构造重载均可传入 `ILoggerFactory`，无全局工厂，基线资产也有日志配置入口。核心只引用 `Microsoft.Extensions.Logging.Abstractions`；集成包引用核心和 DI 抽象，版本由 CPM 管理，两个包同一根 Version。
-- [ ] 实现普通/带 key 数据源注册；容器工厂延迟 Build，先取得宿主 logger 再执行配置回调，无日志服务时可用；默认不注册连接。数据源 Singleton，key/重复注册/通用别名冲突遵循架构设计 §2.5，不创建第二个容器。
-- [ ] 测试 Build/DI 解析不联网、配置冻结、来源数据源的连接配置不可替换、独立数据源不串配置、打开失败释放、数据源关闭与打开竞争、关闭后新打开拒绝、活动连接由调用者完成、释放幂等和外部 logger factory 不被释放。
-- [ ] 测试连接事件同步/异步一致、所有级别凭据脱敏、原始服务端异常不泄露、日志后端抛错不妨碍执行与清理；日志不改变认证模式、取消或结果未知语义。
-- [ ] 新增 net10.0 DI 测试：容器创建/释放、scope validation、配置覆盖、无日志宿主、两种模式的合成会话共用公开类型及不同 key 隔离；实际模式仍需实库验证。
-- [ ] 在四目标编译并运行工厂/消费测试。
+- [x] 测试创建/关闭/重复使用、`DbProviderFactories.RegisterFactory`、`ConnectionString` 脱敏，以及 B 阶段 `ChangeDatabase`/`ChangeDatabaseAsync` 在发包前报不支持。
+- [x] 将对象只连接到 A 阶段会话，不暴露内部 socket 或双模式两套公开类型。
+- [x] 实现核心 builder/无池数据源、现代 factory 入口与日志上下文，可选 DI 工程及 slnx 项目项。四个资产的直接连接构造重载均可传入 `ILoggerFactory`，无全局工厂，基线资产也有日志配置入口。核心只引用日志抽象；集成包引用核心和 DI 抽象，两个包同一根 Version，依赖按 TFM 由 CPM 管理。
+- [x] 实现普通/带 key 数据源注册；容器工厂延迟 Build，先取得宿主 logger 再执行配置回调，无日志服务时可用；默认不注册连接。数据源 Singleton，key/重复注册/通用别名冲突遵循架构设计 §2.5，不创建第二个容器。
+- [x] 测试 Build/DI 解析不联网、配置冻结、来源数据源的连接配置不可替换、独立数据源不串配置、打开失败释放、数据源关闭与打开竞争、关闭后新打开拒绝、活动连接由调用者完成、释放幂等和外部 logger factory 不被释放。
+- [x] 测试同步/异步连接事件、凭据脱敏、原始服务端异常不泄露、日志工厂/过滤/写入抛错不妨碍建连与清理；取消保留原 token，回调关闭不乱序发布状态。命令结果未知日志随 B02/B08 验收。
+- [x] 新增 net10.0 DI 测试：容器创建/释放、scope validation、配置覆盖、无日志宿主及不同 key 隔离。
+- [x] 四目标核心、三目标 DI 编译；运行工厂/隔离消费和逐目标依赖图测试，检查两包同版本及精确核心依赖。
+- [ ] 取得可信 MySQL 模式版本证据后验证双模式公开建连路径；当前缺模式位仍安全拒绝，不为合成 MySQL 成功路径绕过门槛。实库、旧运行时和非 Windows 证据仍待补充。
+- [ ] reader 的 `CommandBehavior.CloseConnection` 随 B06 验收。
 
 ### B02 文本命令、OK/ERR 与多结果
 

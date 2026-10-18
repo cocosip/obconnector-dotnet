@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Description>Dependency injection integration for the unified OceanBase ADO.NET provider.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../OceanBaseConnector/OceanBaseConnector.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+  <!-- Keep the optional integration package bound to its matching provider release. -->
+  <Target Name="PinCorePackageDependency" AfterTargets="_GetProjectReferenceVersions">
+    <ItemGroup>
+      <_ProjectReferencesWithVersions Update="@(_ProjectReferencesWithVersions)" ProjectVersion="[$(Version)]" />
+    </ItemGroup>
+  </Target>
+</Project>

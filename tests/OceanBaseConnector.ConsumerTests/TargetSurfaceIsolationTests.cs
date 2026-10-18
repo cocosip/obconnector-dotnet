@@ -5,6 +5,8 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Runtime.Loader;
+using System.Data;
+using System.Data.Common;
 using Xunit;
 using OceanBaseConnector;
 
@@ -84,6 +86,8 @@ namespace OceanBaseConnector.ConsumerTests
             var typeNames = ReadPublicTypeNames(path);
 
             Assert.DoesNotContain(ModernTypeName, typeNames);
+            Assert.DoesNotContain("OceanBaseConnector.OceanBaseDataSource", typeNames);
+            Assert.DoesNotContain("OceanBaseConnector.OceanBaseDataSourceBuilder", typeNames);
             Assert.Contains(BaselineTypeName, typeNames);
         }
 
@@ -96,7 +100,34 @@ namespace OceanBaseConnector.ConsumerTests
                 var typeNames = ReadPublicTypeNames(path);
 
                 Assert.Contains(ModernTypeName, typeNames);
+                Assert.Contains("OceanBaseConnector.OceanBaseDataSource", typeNames);
+                Assert.Contains("OceanBaseConnector.OceanBaseDataSourceBuilder", typeNames);
                 Assert.Contains(BaselineTypeName, typeNames);
+            }
+        }
+
+        [Fact]
+        public void AllAssetsCreateStandardProviderObjectsAndResolveLoggingDependencies()
+        {
+            foreach (var tfm in new[] { "netstandard2.0", "net8.0", "net9.0", "net10.0" })
+            {
+                var context = new AssemblyLoadContext("provider-" + tfm, isCollectible: true);
+                try
+                {
+                    var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(tfm));
+                    var factory = (DbProviderFactory)assembly.GetType("OceanBaseConnector.OceanBaseProviderFactory")!.GetField("Instance")!.GetValue(null)!;
+                    Assert.False(factory.CanCreateDataAdapter);
+                    Assert.False(factory.CanCreateCommandBuilder);
+                    using var connection = factory.CreateConnection()!;
+                    connection.ConnectionString = "Server=localhost;User ID=u;Password=baseline-secret";
+                    Assert.Equal(ConnectionState.Closed, connection.State);
+                    Assert.IsAssignableFrom<DbCommand>(connection.CreateCommand());
+                    Assert.IsAssignableFrom<DbParameter>(factory.CreateParameter());
+                    var loggerType = typeof(Microsoft.Extensions.Logging.ILoggerFactory);
+                    Assert.NotNull(connection.GetType().GetConstructor(new[] { typeof(string), loggerType }));
+                    Assert.DoesNotContain(assembly.GetReferencedAssemblies(), n => n.Name == "OceanBaseConnector.DependencyInjection");
+                }
+                finally { context.Unload(); }
             }
         }
 

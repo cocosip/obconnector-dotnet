@@ -5,9 +5,11 @@
     <Platform Name="x86" />
   </Configurations>
   <Folder Name="/src/">
+    <Project Path="src/OceanBaseConnector.DependencyInjection/OceanBaseConnector.DependencyInjection.csproj" />
     <Project Path="src/OceanBaseConnector/OceanBaseConnector.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/OceanBaseConnector.DependencyInjection.Tests/OceanBaseConnector.DependencyInjection.Tests.csproj" />
     <Project Path="tests/OceanBaseConnector.ConsumerTests.NetStandard/OceanBaseConnector.ConsumerTests.NetStandard.csproj" />
     <Project Path="tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj" />
     <Project Path="tests/OceanBaseConnector.IntegrationTests/OceanBaseConnector.IntegrationTests.csproj" />

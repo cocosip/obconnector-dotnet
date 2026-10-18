@@ -1,0 +1,230 @@
+using System;
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Transactions;
+using Microsoft.Extensions.Logging;
+using OceanBaseConnector.Internal;
+using OceanBaseConnector.Internal.Session;
+
+namespace OceanBaseConnector
+{
+    public sealed class OceanBaseConnection : DbConnection
+    {
+        private readonly object _gate = new object();
+        private readonly ConnectionLog _log;
+        private string _connectionString = string.Empty;
+        private OceanBaseConnectionStringBuilder _builder = new OceanBaseConnectionStringBuilder();
+        private OceanBaseConnectionOptions? _options;
+        private PhysicalSession? _session;
+        private bool _hidePassword;
+        private bool _disposed;
+#if NET8_0_OR_GREATER
+        private readonly OceanBaseDataSource? _source;
+#endif
+
+        public OceanBaseConnection() : this(string.Empty, null) { }
+        public OceanBaseConnection(string connectionString) : this(connectionString, null) { }
+        public OceanBaseConnection(string connectionString, ILoggerFactory? loggerFactory)
+        {
+            _log = new ConnectionLog(loggerFactory);
+            ConnectionString = connectionString;
+        }
+
+#if NET8_0_OR_GREATER
+        internal OceanBaseConnection(OceanBaseDataSource source, OceanBaseConnectionOptions options, string connectionString, ConnectionLog log)
+        {
+            _source = source;
+            _options = options;
+            _connectionString = connectionString;
+            _builder = new OceanBaseConnectionStringBuilder(connectionString);
+            _hidePassword = true;
+            _log = log;
+        }
+#endif
+
+        public override string ConnectionString
+        {
+            get
+            {
+                lock (_gate) return _hidePassword && !_builder.PersistSecurityInfo
+                ? _builder.ToSanitizedConnectionString(false) : _connectionString;
+            }
+            set
+            {
+                lock (_gate)
+                {
+                    ThrowIfDisposed();
+#if NET8_0_OR_GREATER
+                    if (_source != null) throw new InvalidOperationException("A data-source connection has fixed configuration.");
+#endif
+                    if (_session != null) throw new InvalidOperationException("Close the connection before changing its configuration.");
+                    var builder = new OceanBaseConnectionStringBuilder(value ?? string.Empty);
+                    _connectionString = builder.ConnectionString;
+                    _builder = builder;
+                    _options = null;
+                    _hidePassword = false;
+                }
+            }
+        }
+
+        public override string Database { get { lock (_gate) return _builder.Database; } }
+        public override string DataSource { get { lock (_gate) return _builder.Server; } }
+        public override int ConnectionTimeout { get { lock (_gate) return _builder.ConnectionTimeout; } }
+        public OceanBaseCompatibilityMode? CompatibilityMode { get { lock (_gate) return _session?.Info?.Mode; } }
+        public override string ServerVersion
+        {
+            get { lock (_gate) return _session?.Info?.ServerVersion ?? throw new InvalidOperationException("Connection is not open."); }
+        }
+        public override ConnectionState State
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    switch (_session?.State ?? SessionState.Closed)
+                    {
+                        case SessionState.Connecting: return ConnectionState.Connecting;
+                        case SessionState.Open:
+                        case SessionState.Busy: return ConnectionState.Open;
+                        case SessionState.Broken: return ConnectionState.Broken;
+                        default: return _session == null ? ConnectionState.Closed : ConnectionState.Connecting;
+                    }
+                }
+            }
+        }
+
+        public override void Open()
+        {
+            var session = StartOpen(CancellationToken.None, out var options);
+            var timer = Stopwatch.StartNew();
+            _log.Opening(options.Endpoint);
+            try
+            {
+                EnsureOpening(session);
+                session.Open();
+                PublishOpen(session);
+            }
+            catch (Exception error) { FailedOpen(session, options, timer.ElapsedMilliseconds, error); throw; }
+            OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
+            _log.Opened(options.Endpoint, session.Info!.Mode, timer.ElapsedMilliseconds);
+        }
+
+        public override async Task OpenAsync(CancellationToken cancellationToken)
+        {
+            var session = StartOpen(cancellationToken, out var options);
+            var timer = Stopwatch.StartNew();
+            _log.Opening(options.Endpoint);
+            try
+            {
+                EnsureOpening(session);
+                await session.OpenAsync(cancellationToken).ConfigureAwait(false);
+                PublishOpen(session);
+            }
+            catch (Exception error) { FailedOpen(session, options, timer.ElapsedMilliseconds, error); throw; }
+            OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
+            _log.Opened(options.Endpoint, session.Info!.Mode, timer.ElapsedMilliseconds);
+        }
+
+        private PhysicalSession StartOpen(CancellationToken token, out OceanBaseConnectionOptions options)
+        {
+            token.ThrowIfCancellationRequested();
+            RejectAmbientTransaction();
+#if NET8_0_OR_GREATER
+            _source?.EnsureAvailable();
+#endif
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                if (_session != null) throw new InvalidOperationException("The connection is already open or opening; close it first.");
+                _options ??= _builder.Build();
+                if (_options.Pooling) throw new NotSupportedException("Pooling requires a verified session reset implementation.");
+                _hidePassword = true;
+                options = _options;
+                return _session = new PhysicalSession(options);
+            }
+        }
+
+        private void EnsureOpening(PhysicalSession session)
+        {
+            lock (_gate)
+            {
+                if (!ReferenceEquals(_session, session)) throw new OperationCanceledException("Connection was closed during opening.");
+            }
+        }
+
+        private void PublishOpen(PhysicalSession session)
+        {
+#if NET8_0_OR_GREATER
+            if (_source != null) { _source.PublishOpen(() => FinishOpen(session)); return; }
+#endif
+            FinishOpen(session);
+        }
+
+        private void FinishOpen(PhysicalSession session)
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                if (!ReferenceEquals(_session, session) || session.State != SessionState.Open)
+                    throw new OperationCanceledException("Connection was closed during opening.");
+            }
+        }
+
+        private void FailedOpen(PhysicalSession session, OceanBaseConnectionOptions options, long elapsed, Exception error)
+        {
+            session.Dispose();
+            lock (_gate) { if (ReferenceEquals(_session, session)) _session = null; }
+            _log.Failed(options.Endpoint, elapsed, error);
+        }
+
+        public override void Close()
+        {
+            PhysicalSession? session;
+            ConnectionState previous;
+            string? endpoint;
+            lock (_gate)
+            {
+                previous = State;
+                session = _session;
+                endpoint = _options?.Endpoint;
+                _session = null;
+            }
+            session?.Dispose();
+            if (previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(previous, ConnectionState.Closed));
+            if (session != null) _log.Closed(endpoint!);
+        }
+
+#if NET8_0_OR_GREATER
+        public override Task CloseAsync() { Close(); return Task.CompletedTask; }
+        public override ValueTask DisposeAsync() { Dispose(); return default; }
+        public override Task ChangeDatabaseAsync(string databaseName, CancellationToken cancellationToken = default) => Task.FromException(Unsupported());
+#endif
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                lock (_gate) _disposed = true;
+                Close();
+            }
+            base.Dispose(disposing);
+        }
+
+        public override void ChangeDatabase(string databaseName) => throw Unsupported();
+        public override void EnlistTransaction(Transaction? transaction) => throw new NotSupportedException("Ambient and distributed transactions are not supported.");
+        protected override DbTransaction BeginDbTransaction(System.Data.IsolationLevel isolationLevel) => throw Unsupported();
+        protected override DbCommand CreateDbCommand()
+        {
+            lock (_gate) { ThrowIfDisposed(); return new OceanBaseCommand { Connection = this, CommandTimeout = _builder.CommandTimeout }; }
+        }
+        protected override DbProviderFactory DbProviderFactory => OceanBaseProviderFactory.Instance;
+        internal static void RejectAmbientTransaction()
+        {
+            if (Transaction.Current != null) throw new NotSupportedException("Ambient transactions are not supported.");
+        }
+        private void ThrowIfDisposed() { if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseConnection)); }
+        private static NotSupportedException Unsupported() => new NotSupportedException("This operation is not implemented by the current provider stage.");
+    }
+}
