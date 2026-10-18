@@ -11,7 +11,7 @@ namespace OceanBaseConnector.Internal.Protocol
             ColumnOrdinal = ordinal;
             DataType = column.FieldType;
             DataTypeName = column.DataTypeName;
-            ProviderSpecificDataType = column.IsDecimal ? typeof(OceanBaseDecimal) : DataType;
+            ProviderSpecificDataType = column.ProviderSpecificFieldType;
             ProviderType = column.ProviderType;
             BaseColumnName = Known(column.OriginalName);
             BaseTableName = Known(column.OriginalTable);

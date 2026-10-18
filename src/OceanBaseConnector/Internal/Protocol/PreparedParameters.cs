@@ -37,10 +37,18 @@ namespace OceanBaseConnector.Internal.Protocol
                 else if (parameter.DbType == DbType.Decimal) WriteDecimal(writer, parameter, value, mode);
                 else if (parameter.DbType == DbType.Date || parameter.DbType == DbType.DateTime || parameter.DbType == DbType.DateTime2)
                 {
-                    if (!(value is DateTime date)) throw new ArgumentException("The parameter value does not match its declared DbType.");
-                    var oracleDate = mode == OceanBaseCompatibilityMode.Oracle && parameter.DbType == DbType.Date;
-                    if (oracleDate && parameter.DeclaredScale.GetValueOrDefault() != 0) throw new ArgumentException("Oracle DATE has no fractional seconds.");
-                    TemporalCodec.WriteDate(writer, type, date, oracleDate ? (byte?)0 : parameter.DeclaredScale);
+                    if (value is OceanBaseTimestamp timestamp)
+                    {
+                        if (type != 202) throw new NotSupportedException("OceanBaseTimestamp parameters require Oracle TIMESTAMP.");
+                        TemporalCodec.WriteTimestamp(writer, timestamp, parameter.DeclaredScale);
+                    }
+                    else
+                    {
+                        if (!(value is DateTime date)) throw new ArgumentException("The parameter value does not match its declared DbType.");
+                        var oracleDate = mode == OceanBaseCompatibilityMode.Oracle && parameter.DbType == DbType.Date;
+                        if (oracleDate && parameter.DeclaredScale.GetValueOrDefault() != 0) throw new ArgumentException("Oracle DATE has no fractional seconds.");
+                        TemporalCodec.WriteDate(writer, type, date, oracleDate ? (byte?)0 : parameter.DeclaredScale);
+                    }
                 }
                 else if (parameter.DbType == DbType.Time)
                 {
@@ -87,7 +95,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 throw new NotSupportedException("The decimal parameter metadata exceeds the supported mode limits.");
             if (parameter.DbType == DbType.Decimal && mode == OceanBaseCompatibilityMode.MySql && parameter.Precision != 0 && parameter.Scale > parameter.Precision)
                 throw new ArgumentException("Decimal scale exceeds its declared precision.");
-            var temporalScale = parameter.DbType == DbType.Time ? 6 : parameter.DbType == DbType.Date ? 0 : mode == OceanBaseCompatibilityMode.Oracle ? 7 : 6;
+            var temporalScale = parameter.DbType == DbType.Time ? 6 : parameter.DbType == DbType.Date ? 0 : mode == OceanBaseCompatibilityMode.Oracle ? 9 : 6;
             if ((parameter.DbType == DbType.Date || parameter.DbType == DbType.DateTime || parameter.DbType == DbType.DateTime2 || parameter.DbType == DbType.Time) && parameter.Scale > temporalScale)
                 throw new NotSupportedException("The temporal parameter precision is not supported.");
             switch (parameter.DbType)

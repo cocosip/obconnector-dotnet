@@ -297,9 +297,13 @@ B09 本地审核/补齐完成、状态待验证；双模式直连/OBProxy、非 
 
 - [x] 数值子项本地编译、测试与独立走查：MySQL `DECIMAL(65,20)`、Oracle 无精度/负 scale `NUMBER`；文本/预处理字段类型、provider-specific 读取和写回，五资产消费及模式边界回归。Unit672/Consumer54/DI8、格式与双包资产/依赖矩阵通过，详见进度台账。
 - [x] `GetDecimal`/`GetFieldValue<decimal>` 只作精确转换；声明列类型不随当前值或 NULL 改变。修复未声明参数精度时的误限制、MySQL负scale的声明精度漏检及零值误拒绝，均有失败后通过的回归。
-- [ ] `TIMESTAMP(9)`、TZ/LTZ、同列混合正常值与零日期在文本/预处理路径的字段类型、provider-specific 值及往返。
-- [ ] `GetDateTime`、`DateTimeOffset` 只在可精确表示时转换，否则抛转换/溢出异常；时间 provider-specific 类型整列稳定。
+- [x] 不带时区的Oracle `TIMESTAMP(0..9)`本地读写/精确转换/整列类型/五目标消费及独立走查；Unit716/Consumer59/DI8，编译、格式、打包矩阵通过，详见台账。
+- [x] 不带时区的 `GetDateTime`/`GetFieldValue<DateTime>` 只在100ns可精确表示时转换，否则溢出；所有p的provider-specific类型固定为OceanBaseTimestamp。
+- [ ] TZ/LTZ、同列混合正常值与零日期在文本/预处理路径的字段类型、provider-specific 值及往返。
+- [ ] `DateTimeOffset`/带时区时间的精确转换与稳定provider-specific类型；LTZ记录可信会话时区标识。
 - [ ] 两模式实库测试记录会话时区、字符集与服务端列定义。
+
+2026-10-19 纳秒子项执行细化：先贯通不带时区的 Oracle TIMESTAMP(0..9)，TZ/LTZ 和 MySQL 零日期仍保留后续子项。OceanBaseTimestamp 为五目标共享只读值，保存 DateTimeKind.Unspecified 的整秒 WholeSeconds、0..999999999 的 Nanosecond 和0..9的 Scale；构造时拒绝混入亚秒/时区或不符合scale的纳秒，不舍入。ToDateTime 仅在纳秒为100的倍数时成功；年份范围仍为1..9999，超出范围明确失败。标准字段p<=7为DateTime、p8/9为OceanBaseTimestamp，provider-specific访问对所有p都固定为OceanBaseTimestamp，NULL不改变类型。沿Java type202/12字节布局读取两种结果协议，维持载荷scale和列scale一致校验；参数默认保留provider的Scale（普通DateTime仍默认7），显式Scale只允许精确重标度，不改Java固定写9的实现但记录差异。修改到达TemporalCodec、ResultColumn/DbColumn、OceanBaseParameter/PreparedParameters、reader和五资产消费；先验证缺口，再补公开值、codec、公开环回及消费回归，最后完整编译/测试/独立走查/打包后提交。重点回归p8/9小值和NULL不缩窄、纳秒1/999999999、边界日期、非法长度/scale/小数、错误模式以及发包前拒绝。
 
 ### C04 大值、SequentialAccess 与服务端游标
 

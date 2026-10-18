@@ -93,8 +93,8 @@ namespace OceanBaseConnector
         public override Type GetProviderSpecificFieldType(int ordinal)
         {
             var column = Column(ordinal);
-            var type = column.FieldType;
-            return column.IsDecimal ? typeof(OceanBaseDecimal) : type;
+            _ = column.FieldType;
+            return column.ProviderSpecificFieldType;
         }
         public override object GetProviderSpecificValue(int ordinal)
         {
@@ -102,6 +102,7 @@ namespace OceanBaseConnector
             _ = column.FieldType;
             if (_result.Row == null) throw new InvalidOperationException("Read must position the reader on a row.");
             var value = _result.Row[ordinal];
+            if (column.TypeCode == 202 && value != null) return column.DecodeTimestamp(value);
             return column.IsDecimal && value != null ? column.DecodeDecimal(value, _result.IsBinary) : GetValue(ordinal);
         }
         public override int GetProviderSpecificValues(object[] values)
@@ -111,8 +112,9 @@ namespace OceanBaseConnector
             for (var i = 0; i < count; i++) values[i] = GetProviderSpecificValue(i);
             return count;
         }
-        public override T GetFieldValue<T>(int ordinal) => typeof(T) == typeof(OceanBaseDecimal)
-            ? (T)GetProviderSpecificValue(ordinal) : typeof(T) == typeof(decimal) ? (T)(object)GetDecimal(ordinal) : (T)GetValue(ordinal);
+        public override T GetFieldValue<T>(int ordinal) => typeof(T) == typeof(OceanBaseDecimal) || typeof(T) == typeof(OceanBaseTimestamp)
+            ? (T)GetProviderSpecificValue(ordinal) : typeof(T) == typeof(decimal) ? (T)(object)GetDecimal(ordinal)
+            : typeof(T) == typeof(DateTime) ? (T)(object)GetDateTime(ordinal) : (T)GetValue(ordinal);
         public override bool IsDBNull(int ordinal)
         {
             Column(ordinal);
@@ -122,7 +124,11 @@ namespace OceanBaseConnector
         public override bool GetBoolean(int ordinal) => (bool)GetValue(ordinal);
         public override byte GetByte(int ordinal) => (byte)GetValue(ordinal);
         public override char GetChar(int ordinal) => (char)GetValue(ordinal);
-        public override DateTime GetDateTime(int ordinal) => (DateTime)GetValue(ordinal);
+        public override DateTime GetDateTime(int ordinal)
+        {
+            var value = GetValue(ordinal);
+            return value is OceanBaseTimestamp timestamp ? timestamp.ToDateTime() : (DateTime)value;
+        }
         public override decimal GetDecimal(int ordinal)
         {
             var value = GetValue(ordinal);

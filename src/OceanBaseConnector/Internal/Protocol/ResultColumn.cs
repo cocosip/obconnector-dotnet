@@ -37,6 +37,13 @@ namespace OceanBaseConnector.Internal.Protocol
         internal int Scale { get; }
         internal bool IsDecimal => TypeCode == 0 || TypeCode == 246 || TypeCode == 3 && Mode == OceanBaseCompatibilityMode.Oracle;
         internal bool IsTemporal => TypeCode == 7 || TypeCode == 10 || TypeCode == 11 || TypeCode == 12 || TypeCode == 202;
+        internal Type ProviderSpecificFieldType => IsDecimal ? typeof(OceanBaseDecimal) : TypeCode == 202 ? typeof(OceanBaseTimestamp) : FieldType;
+
+        internal OceanBaseTimestamp DecodeTimestamp(byte[] value)
+        {
+            _ = FieldType;
+            return TemporalCodec.DecodeTimestamp(value, Scale);
+        }
 
         internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode)
         {
@@ -123,8 +130,8 @@ namespace OceanBaseConnector.Internal.Protocol
                         if (Scale < 0 || Scale > (Mode == OceanBaseCompatibilityMode.Oracle ? 0 : 6)) throw new NotSupportedException("The temporal precision is not supported.");
                         return typeof(DateTime);
                     case 202:
-                        if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > 7) throw new NotSupportedException("The timestamp precision requires C03.");
-                        return typeof(DateTime);
+                        if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > 9) throw new NotSupportedException("The timestamp metadata is not supported.");
+                        return Scale <= 7 ? typeof(DateTime) : typeof(OceanBaseTimestamp);
                     case 203:
                         if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("RAW is only defined in Oracle mode.");
                         return typeof(byte[]);

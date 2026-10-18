@@ -89,6 +89,7 @@ namespace OceanBaseConnector
             if (value is float) return DbType.Single;
             if (value is double) return DbType.Double;
             if (value is decimal || value is OceanBaseDecimal) return DbType.Decimal;
+            if (value is OceanBaseTimestamp) return DbType.DateTime2;
             if (value is DateTime) return DbType.DateTime;
             if (value is DateTimeOffset) return DbType.DateTimeOffset;
             if (value is TimeSpan) return DbType.Time;

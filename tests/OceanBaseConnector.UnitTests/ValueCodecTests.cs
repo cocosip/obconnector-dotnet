@@ -220,7 +220,7 @@ namespace OceanBaseConnector.UnitTests
         {
             var parameter = new OceanBaseParameter { DbType = DbType.Decimal, Precision = 66, Value = DBNull.Value };
             Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }));
-            parameter = new OceanBaseParameter { DbType = DbType.DateTime2, Scale = 9, Value = null };
+            parameter = new OceanBaseParameter { DbType = DbType.DateTime2, Scale = 10, Value = null };
             Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle));
         }
 

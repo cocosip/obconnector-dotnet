@@ -65,7 +65,7 @@
 | --- | --- | --- | --- | --- |
 | C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 2026-10-19 Codex；无真实完整重置白名单，Java reset不能代替OceanBase实测；保持Pooling=true拒绝，先推进独立C02 |
 | C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
-| C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 进行中 | 2026-10-19 Codex；数值子项本地实现及走查修复完成，Unit672/Consumer54/DI8、五/三目标编译/格式/打包通过；纳秒/TZ/LTZ、零日期和真实验收未完成，详见本页末 |
+| C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 进行中 | 2026-10-19 Codex；数值及不带时区TIMESTAMP(0..9)子项本地实现/走查完成，Unit716/Consumer59/DI8、五/三目标编译/格式/打包通过；TZ/LTZ、零日期和真实验收未完成，详见本页末 |
 | C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 未开始 | 待记录 |
 | C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 未开始 | 待记录 |
 | C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 未开始 | 待记录 |
@@ -242,3 +242,11 @@ C02保持待验证，G3仍0/8、进行中；C01阻塞且A05可信MySQL模式判�
 本地验证：净增45项单元、5项五资产消费；Release slnx 核心5目标/DI3目标编译0警告/错误，Windows Unit672、Consumer54、DI8全部通过（TestResults/c03-number-unit-final.trx、c03-number-consumer-final.trx、c03-number-di.trx），测试宿主均为net10。格式、git diff检查及双包生成通过，ZIP/XML核查核心5资产、DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心依赖和Microsoft.Extensions按Standard/net8→8、net9→9、net10→10分组均通过。包缺少README的既有提示继续留R01。
 
 C03 仍为进行中，下一步为纳秒/TZ/LTZ及MySQL零日期子项；不将数值子项提交当成C03整体完成，G3仍0/8。未执行实库、非Windows或新的旧运行时验收；MySQL数值映射来自内部夹具，公开五资产环回为认证Oracle模式，A05可信MySQL规则仍缺，不为数值测试放开握手。C01完整重置白名单及G0/G1环境缺口不变。
+
+2026-10-19 C03 不带时区的纳秒子项：新增五目标共享OceanBaseTimestamp，保留Unspecified整秒、纳秒及scale；构造和ToDateTime禁止舍入，年份范围保持1..9999。文本/二进制type202结果共用12字节解码，p<=7标准DateTime、p8/9标准OceanBaseTimestamp，所有p的provider-specific访问和两套schema固定为OceanBaseTimestamp，小值/NULL不缩窄。参数推断DateTime2/复用Timestamp身份，仅Oracle TIMESTAMP接受provider值；默认保留provider scale，DateTime默认7，显式0..9仅精确重标度。普通MySQL时间、Oracle DATE及延期TZ/LTZ仍保持原有边界。
+
+测试与走查：首批3项缺口回归全红后全绿（c03-nanos-red.trx、c03-nanos-value-green.trx），随后codec/公开环回12项先失败后通过（c03-nanos-codec-red.trx、c03-nanos-codec-green.trx）。覆盖1ns/999999999ns、7/8/9位、边界日期、非法组件/载荷/scale、typed-null、默认值、Kind、两种结果协议及同步/异步读取/写回；新增空载荷回归暴露type202被误归为零日期，现先校验TIMESTAMP长度、明确ProtocolException。独立只读走查无必须修复项；补充建议的9→8/8→9成功精确重标度与DateTime显式scale9回归，保留参数原值，最终文档合入既有设计/计划。
+
+本地验证：新增44项Unit、5项五资产消费；Release slnx核心5目标/DI3目标0警告/错误，Windows Unit716、Consumer59、DI8全部通过（TestResults/c03-nanos-unit-final.trx、c03-nanos-consumer.trx、c03-nanos-di.trx）；全部日常测试宿主net10，五资产消费在隔离加载上下文经标准ADO.NET读取/转换/写回。格式、diff及双包检查通过，5/3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本及Microsoft.Extensions按Standard/net8→8、net9→9、net10→10保持正确。既有NuGet README提示仍留R01。
+
+C03继续进行中，下一步TZ/LTZ和MySQL零日期；G3仍0/8，C01/A05及G0/G1缺口不变。Java OBTIMESTAMPParameter固定写scale9，而本驱动选择保留显式/provider scale，结果端仍严格要求列scale等于载荷scale；这两项策略和1..9999外年份的协议范围需后续真实矩阵核验。未执行数据库服务器、非Windows或新的旧运行时测试，不以本地夹具关闭互通验收。

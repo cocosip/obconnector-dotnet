@@ -64,20 +64,12 @@ namespace OceanBaseConnector.Internal.Values
                 ValidateTime(ticks);
                 return TimeSpan.FromTicks(negative == 1 ? -ticks : ticks);
             }
-            if (value.Length == 0) throw new NotSupportedException("Zero dates require the C03 value types.");
             if (type == 202)
             {
-                if (value.Length != 12) throw new ProtocolException("Invalid Oracle TIMESTAMP length.");
-                var century = cursor.ReadUInt8(); var year = cursor.ReadUInt8();
-                if (century > 99 || year > 99) throw new FormatException("The timestamp year is outside the DateTime range.");
-                var date = Date(century * 100 + year, cursor.ReadUInt8(), cursor.ReadUInt8(), cursor.ReadUInt8(), cursor.ReadUInt8(), cursor.ReadUInt8());
-                var nanoseconds = cursor.ReadUInt32();
-                var valueScale = cursor.ReadUInt8();
-                if (nanoseconds > 999999999 || valueScale > 9) throw new ProtocolException("Invalid Oracle TIMESTAMP fraction.");
-                if (valueScale > 7 || valueScale != scale || nanoseconds % (uint)Math.Pow(10, 9 - scale) != 0)
-                    throw new NotSupportedException("The timestamp fraction cannot be represented at its declared precision.");
-                return date.AddTicks(nanoseconds / 100);
+                var timestamp = DecodeTimestamp(value, scale);
+                return scale <= 7 ? (object)timestamp.ToDateTime() : timestamp;
             }
+            if (value.Length == 0) throw new NotSupportedException("Zero dates require the C03 value types.");
             if (value.Length != 4 && value.Length != 7 && value.Length != 11) throw new ProtocolException("Invalid binary date/time length.");
             var y = cursor.ReadUInt16(); var month = cursor.ReadUInt8(); var day = cursor.ReadUInt8();
             if (y == 0 || month == 0 || day == 0) throw new NotSupportedException("Zero dates require the C03 value types.");
@@ -91,29 +83,45 @@ namespace OceanBaseConnector.Internal.Values
             return Date(y, month, day, hour, minute, second).AddTicks(micros * 10L);
         }
 
+        internal static OceanBaseTimestamp DecodeTimestamp(byte[] value, int scale)
+        {
+            if (value.Length != 12) throw new ProtocolException("Invalid Oracle TIMESTAMP length.");
+            var cursor = new ByteCursor(value);
+            var century = cursor.ReadUInt8(); var year = cursor.ReadUInt8();
+            if (century > 99 || year > 99) throw new FormatException("The timestamp year is outside the DateTime range.");
+            var date = Date(century * 100 + year, cursor.ReadUInt8(), cursor.ReadUInt8(), cursor.ReadUInt8(), cursor.ReadUInt8(), cursor.ReadUInt8());
+            var nanoseconds = cursor.ReadUInt32();
+            var valueScale = cursor.ReadUInt8();
+            if (nanoseconds > 999999999 || valueScale > 9) throw new ProtocolException("Invalid Oracle TIMESTAMP fraction.");
+            if (valueScale != scale || nanoseconds % (uint)Math.Pow(10, 9 - valueScale) != 0)
+                throw new NotSupportedException("The timestamp fraction cannot be represented at its declared precision.");
+            return new OceanBaseTimestamp(date, (int)nanoseconds, valueScale);
+        }
+
+        internal static void WriteTimestamp(BinaryWriter writer, OceanBaseTimestamp value, byte? declaredScale)
+        {
+            var timestamp = declaredScale.HasValue ? new OceanBaseTimestamp(value.WholeSeconds, value.Nanosecond, declaredScale.Value) : value;
+            var date = timestamp.WholeSeconds;
+            writer.Write((byte)12); writer.Write((byte)(date.Year / 100)); writer.Write((byte)(date.Year % 100));
+            writer.Write((byte)date.Month); writer.Write((byte)date.Day);
+            writer.Write((byte)date.Hour); writer.Write((byte)date.Minute); writer.Write((byte)date.Second);
+            writer.Write((uint)timestamp.Nanosecond); writer.Write(timestamp.Scale);
+        }
+
         internal static void WriteDate(BinaryWriter writer, ushort type, DateTime date, byte? declaredScale)
         {
             if (date.Kind != DateTimeKind.Unspecified) throw new ArgumentException("Unzoned date/time parameters require DateTimeKind.Unspecified.");
+            if (type == 202) { WriteTimestamp(writer, new OceanBaseTimestamp(date), declaredScale); return; }
             var fraction = date.Ticks % TimeSpan.TicksPerSecond;
-            var maximumScale = type == 202 ? 7 : type == 12 ? 6 : 0;
+            var maximumScale = type == 12 ? 6 : 0;
             var scale = declaredScale ?? maximumScale;
             if (scale > maximumScale || fraction % (long)Math.Pow(10, 7 - scale) != 0)
                 throw new ArgumentException("The date/time precision would require truncation.");
             if (type == 10 && date.TimeOfDay != TimeSpan.Zero) throw new ArgumentException("A MySQL DATE cannot retain the time component.");
-            if (type == 202)
-            {
-                writer.Write((byte)12); writer.Write((byte)(date.Year / 100)); writer.Write((byte)(date.Year % 100));
-                writer.Write((byte)date.Month); writer.Write((byte)date.Day);
-                writer.Write((byte)date.Hour); writer.Write((byte)date.Minute); writer.Write((byte)date.Second);
-                writer.Write((uint)(fraction * 100)); writer.Write((byte)scale);
-            }
-            else
-            {
-                writer.Write((byte)(type == 10 ? 4 : fraction == 0 ? 7 : 11));
-                writer.Write((ushort)date.Year); writer.Write((byte)date.Month); writer.Write((byte)date.Day);
-                if (type != 10) { writer.Write((byte)date.Hour); writer.Write((byte)date.Minute); writer.Write((byte)date.Second); }
-                if (fraction != 0) writer.Write((uint)(fraction / 10));
-            }
+            writer.Write((byte)(type == 10 ? 4 : fraction == 0 ? 7 : 11));
+            writer.Write((ushort)date.Year); writer.Write((byte)date.Month); writer.Write((byte)date.Day);
+            if (type != 10) { writer.Write((byte)date.Hour); writer.Write((byte)date.Minute); writer.Write((byte)date.Second); }
+            if (fraction != 0) writer.Write((uint)(fraction / 10));
         }
 
         internal static void WriteTime(BinaryWriter writer, TimeSpan value, byte? declaredScale)
