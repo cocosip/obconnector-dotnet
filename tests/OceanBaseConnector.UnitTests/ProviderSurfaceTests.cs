@@ -32,7 +32,7 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public async Task UnimplementedExecutionFailsBeforeNetworkAndParametersKeepIdentity()
+        public async Task ClosedConnectionAndUnimplementedApisFailBeforeNetworkAndParametersKeepIdentity()
         {
             using var connection = new OceanBaseConnection("Server=localhost;User ID=u");
             using var command = Assert.IsType<OceanBaseCommand>(connection.CreateCommand());
@@ -40,10 +40,11 @@ namespace OceanBaseConnector.UnitTests
             parameter.ParameterName = "x";
             parameter.Value = 42;
             command.Parameters.Add(parameter);
+            command.CommandText = "select :x";
             Assert.Same(parameter, command.Parameters["x"]);
             Assert.Same(connection, command.Connection);
-            Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery());
-            await Assert.ThrowsAsync<NotSupportedException>(() => command.ExecuteNonQueryAsync());
+            Assert.Throws<InvalidOperationException>(() => command.ExecuteNonQuery());
+            await Assert.ThrowsAsync<InvalidOperationException>(() => command.ExecuteNonQueryAsync());
             await Assert.ThrowsAsync<NotSupportedException>(() => command.PrepareAsync());
             await Assert.ThrowsAsync<NotSupportedException>(() => connection.ChangeDatabaseAsync("other"));
             using var canceled = new CancellationTokenSource();

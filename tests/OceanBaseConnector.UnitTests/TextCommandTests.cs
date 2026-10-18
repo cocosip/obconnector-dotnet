@@ -56,6 +56,52 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
+        public async Task OracleBindingsAreValidatedBeforeSendAndRejectedCommandsLeaveSessionUsable(bool asynchronous)
+        {
+            const string valid = "select ':hidden', q'[it's :hidden]'";
+            var server = Server(async channel =>
+            {
+                await Query(channel, valid);
+                await channel.WritePacketAsync(Ok(1));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                Assert.Equal(OceanBaseCompatibilityMode.Oracle, connection.CompatibilityMode);
+                using var command = connection.CreateCommand();
+                Func<Task> execute = () => asynchronous ? command.ExecuteNonQueryAsync() : Task.FromResult(command.ExecuteNonQuery());
+                command.CommandText = "select :missingsecret";
+                var missing = await Assert.ThrowsAsync<ArgumentException>(execute);
+                Assert.DoesNotContain("missingsecret", missing.Message);
+                command.CommandText = "select 'unfinished";
+                await Assert.ThrowsAsync<ArgumentException>(execute);
+                command.CommandText = "select ?";
+                await Assert.ThrowsAsync<NotSupportedException>(execute);
+                command.CommandText = "select :id";
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = ":ID", Value = "valuesecret" });
+                await Assert.ThrowsAsync<NotSupportedException>(execute); // B04 will execute valid bindings.
+                command.CommandText = "select 1";
+                await Assert.ThrowsAsync<ArgumentException>(execute);
+                command.CommandText = "select :id";
+                var second = new OceanBaseParameter { ParameterName = "other" };
+                command.Parameters.Add(second);
+                second.ParameterName = "id";
+                await Assert.ThrowsAsync<ArgumentException>(execute);
+                command.Parameters.Remove(second);
+                command.Parameters[0].Direction = ParameterDirection.Output;
+                await Assert.ThrowsAsync<NotSupportedException>(execute);
+                command.Parameters.Clear();
+                command.CommandText = valid;
+                Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task TextRowsStreamWithNullsAndReuseTheSession(bool asynchronous)
         {
             var server = Server(async channel =>
@@ -466,7 +512,7 @@ namespace OceanBaseConnector.UnitTests
                 var parameter = command.CreateParameter();
                 parameter.Value = "secret";
                 command.Parameters.Add(parameter);
-                Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery());
+                Assert.Throws<ArgumentException>(() => command.ExecuteNonQuery());
                 command.Parameters.Clear();
                 command.CommandType = CommandType.StoredProcedure;
                 Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery());

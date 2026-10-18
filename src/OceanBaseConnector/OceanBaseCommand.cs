@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.Internal.Session;
+using OceanBaseConnector.Internal.Sql;
 
 namespace OceanBaseConnector
 {
@@ -100,8 +101,8 @@ namespace OceanBaseConnector
                 if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseCommand));
                 if (_execution != null) throw new InvalidOperationException("The command already has an active operation.");
                 OceanBaseConnection.RejectAmbientTransaction();
-                if (CommandType != CommandType.Text || _parameters.Count != 0 || _transaction != null)
-                    throw new NotSupportedException("Only text commands without parameters or transactions are supported at this stage.");
+                if (CommandType != CommandType.Text || _transaction != null)
+                    throw new NotSupportedException("Only text commands without transactions are supported at this stage.");
                 if ((behavior & ~CommandBehavior.CloseConnection) != 0)
                     throw new NotSupportedException("This CommandBehavior is not supported yet.");
                 if (string.IsNullOrWhiteSpace(CommandText)) throw new InvalidOperationException("CommandText is required.");
@@ -110,6 +111,9 @@ namespace OceanBaseConnector
                 var session = connection.GetOpenSession();
                 var length = TextColumn.Utf8.GetByteCount(CommandText);
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
+                var bindings = ParameterBindingPlan.Create(CommandText, session.Info!.Mode, _parameters);
+                if (bindings.Parameters.Length != 0)
+                    throw new NotSupportedException("Parameterized execution requires server-side preparation, which is not implemented yet.");
                 request = new byte[length + 1];
                 request[0] = 3;
                 TextColumn.Utf8.GetBytes(CommandText, 0, CommandText.Length, request, 1);
