@@ -27,7 +27,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Null(factory.CreateDataAdapter());
             Assert.Null(factory.CreateCommandBuilder());
             Assert.Throws<InvalidOperationException>(() => connection.BeginTransaction());
-            Assert.Throws<NotSupportedException>(() => connection.ChangeDatabase("other"));
+            Assert.Throws<InvalidOperationException>(() => connection.ChangeDatabase("other"));
             Assert.Throws<NotSupportedException>(() => connection.EnlistTransaction(null));
         }
 
@@ -46,7 +46,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Throws<InvalidOperationException>(() => command.ExecuteNonQuery());
             await Assert.ThrowsAsync<InvalidOperationException>(() => command.ExecuteNonQueryAsync());
             await Assert.ThrowsAsync<InvalidOperationException>(() => command.PrepareAsync());
-            await Assert.ThrowsAsync<NotSupportedException>(() => connection.ChangeDatabaseAsync("other"));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => connection.ChangeDatabaseAsync("other"));
             using var canceled = new CancellationTokenSource();
             canceled.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection.OpenAsync(canceled.Token));

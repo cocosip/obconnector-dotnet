@@ -95,6 +95,7 @@ namespace OceanBaseConnector.Internal.Session
             => SessionTimeZone = _session.ApplySessionVariables(_lease, ok?.SessionVariables);
 
         internal void OwnCursor() => _cursorOwned = true;
+        internal void SetDatabase(string database) => _session.SetDatabase(_lease, database);
 
         internal bool HasSentSql { get { lock (_gate) return _anySqlSent; } }
         internal void ResponseComplete() { lock (_gate) { _responsePending = false; _sqlSent = false; } }

@@ -167,6 +167,7 @@ namespace OceanBaseConnector
 
         private PreparedStatement EnsurePrepared((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize) operation)
         {
+            InvalidatePreparedDatabase(operation.Session);
             if (_prepared != null) return _prepared;
             operation.Exchange.Send(SqlPacket(operation.Bindings.CommandText, 22), executesSql: false);
             return PublishPrepared(PreparedStatement.Read(operation.Exchange, operation.Session, operation.Bindings.CommandText), operation.Bindings.Parameters.Length);
@@ -174,6 +175,7 @@ namespace OceanBaseConnector
 
         private async Task<PreparedStatement> EnsurePreparedAsync((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize) operation, CancellationToken token)
         {
+            InvalidatePreparedDatabase(operation.Session);
             if (_prepared != null) return _prepared;
             await operation.Exchange.SendAsync(SqlPacket(operation.Bindings.CommandText, 22), executesSql: false).ConfigureAwait(false);
             var statement = await PreparedStatement.ReadAsync(operation.Exchange, operation.Session, operation.Bindings.CommandText, token).ConfigureAwait(false);
@@ -192,6 +194,12 @@ namespace OceanBaseConnector
                 }
                 return _prepared = statement;
             }
+        }
+
+        private void InvalidatePreparedDatabase(PhysicalSession session)
+        {
+            if (_prepared == null || _prepared.Database == session.Database) return;
+            _prepared.Release(); _prepared = null;
         }
 
         private static void ValidateCursorStatement(int fetchSize, PreparedStatement? statement)

@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 架构设计
 
-状态：设计基线，A 阶段及 B01–B09、C02 已有本地实现/审核证据，C03数值、纳秒、TZ/LTZ和MySQL零日期、C04顺序字段流及服务端游标已有本地实现；A05 的可信 MySQL 判定仍是实现缺口，§9 产品决定和真实兼容性未关闭。日期：2026-10-19。实施任务见 [开发方案](obconnector-dotnet-development-plan.md)，证据见 [进度台账](obconnector-dotnet-progress.md)。.NET 接入已合并到 §2.1–§2.7；参数化、reader 字段元数据、本地事务及取消/超时已有本地实现，B09 补齐标量 ProviderType 和命令日志类别。目录元数据和池化仍待实现。
+状态：设计基线，A 阶段及 B01–B09、C02 已有本地实现/审核证据，C03数值、纳秒、TZ/LTZ和MySQL零日期、C04顺序字段流及服务端游标、C05数据库切换已有本地实现；A05 的可信 MySQL 判定仍是实现缺口，§9 产品决定和真实兼容性未关闭。日期：2026-10-19。实施任务见 [开发方案](obconnector-dotnet-development-plan.md)，证据见 [进度台账](obconnector-dotnet-progress.md)。.NET 接入已合并到 §2.1–§2.7；参数化、reader 字段元数据、本地事务及取消/超时已有本地实现，B09 补齐标量 ProviderType 和命令日志类别。目录元数据和池化仍待实现。
 
 ## 1. 目标与依据
 
@@ -209,6 +209,12 @@ MySQL execute 的游标确认必须为旧 EOF 或以 `0xFE` 开头的 FE-OK，�
 
 继续页必须带 `CursorExists` 且至少返回一行，页内行数不得超过 FetchSize；`LastRowSent` 可结束空最终页。多结果/OUT 标记、不确认游标、元数据变化或无进展均失败并销毁会话，绝不回退重执行。默认与 SequentialAccess 共享分页，HasRows 预取首行（顺序模式只读前缀），NextResult 排空所有页。提前关闭、取消、超时或网络故障销毁原会话；完整 ERR 保留已知服务器错误，但在释放租约和日志回调前先销毁游标会话，避免新命令进入未清理游标。每页终结包更新或失效会话状态，不复用旧报告。完整读尽后原 statement 可在同 SQL/会话复用，FetchSize 改回 0 仍使用该 statement 的普通结果流。offset/滚动游标、REF CURSOR、LOB locator 及真实版本/模式/OBProxy 验收仍不属于已验证能力，A05 的公开 MySQL 握手限制不变。
 
+C05 数据库切换本地契约：`ChangeDatabase` 只在已认证 MySQL 模式发送 COM_INIT_DB（命令2），名称按严格 UTF-8 原样编码，不拼接 USE SQL、不转义/折叠大小写/裁剪名称。null、空串、NUL、非法 UTF-16 及超出逻辑包上限在取得租约前失败；具体数据库名合法性与权限由服务端判断。Oracle 模式发包前明确报不支持，不把 schema 切换假装为 database 切换。参考 Java [setCatalog](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L1882) 的协议命令和模式边界；.NET 额外严格验证 OK 形态，不照搬 Java 的服务端错误文本回显。
+
+物理会话保存当前 Database，初值来自冻结配置；合法单一 OK（零计数、无多结果/OUT/游标标记）后，只有仍拥有该会话的租约可更新当前值，再释放租约及运行完成日志回调。已知 ERR 保留原 Database/服务器错误且可继续使用，响应不可信则销毁会话并标记执行结果未知，不重发。关闭后 Database 恢复配置值，重开/新数据源连接仍使用原始配置；旧响应不能污染重开的会话，ConnectionString 和数据源配置不因切换而变更。准备语句记录准备时 Database，持有执行租约后再次比较当前值；不同则重新 prepare，旧 ID 沿既有延迟清理路径关闭，防止同 SQL 留在旧库。SQL 自身的 `USE` 等直接会话变更不在此 API 的本地追踪保证内，发布前须确认会话报告及对象解析语义。
+
+切换允许空闲的当前显式本地事务，保持事务对象/绑定及提交状态；活动 reader/命令、关闭/故障连接和环境事务在发送前拒绝。使用连接的 Command Timeout 与同一个 CommandExchange 总预算；取消、部分发送、网络中断遵守同一未知结果不重放策略。同步入口使用同步 I/O；Standard2.1和现代目标覆写 `ChangeDatabaseAsync`，真实异步等待网络，不通过同步入口包装。Standard2.0不添加其参考 API 不存在的异步成员。真实数据库权限、事务/对象解析行为及版本矩阵仍待验收，A05可信公共MySQL握手不因此开放；C05四个GetSchema集合仍待实现。
+
 B04 本地实现：自动准备与执行共用一个物理会话租约和超时预算；只在实际发送 COM_QUERY/COM_STMT_EXECUTE 后报告 SQL 结果未知。准备响应中断销毁会话，但不声称 SQL 已执行；可信终态 ERR 不触发回退。statement ID 由命令和物理会话共同拥有，只在改写后的 SQL 与会话均不变时复用；改 SQL、重连或释放命令使旧 ID 失效。空闲时发送无响应 COM_STMT_CLOSE，其他 reader 占用时排队到下一命令前；清理取消只影响所属租约。Prepare 成功但绑定数不匹配时关闭新 ID、保留会话并报参数错误。基础输入参数支持 bool、有/无符号整数、浮点、普通 UTF-8 字符串、byte[] 和 NULL，B05 再扩展 §5 的数值与日期时间；未显式设置 DbType 时按 Value 推断，ResetDbType 恢复推断，显式类型要求 CLR 值匹配，每次执行重发类型。national charset 和 LOB 扩展仍待后续模块，执行入口在发送其准备/执行包前拒绝未支持的显式参数类型和值不匹配；显式 Prepare/PrepareAsync 只校验 SQL 与绑定结构，不检查 Value 编码。
 
 B07 本地事务沿 Java 的会话协议设置隔离和自动提交（[自动提交](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L1949)、[隔离级别](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L2080)），使用 `SET SESSION TRANSACTION ISOLATION LEVEL ...` 后 `set autocommit = 0`；实际事务由首条业务语句隐式开始。Unspecified 固定为 MySQL RepeatableRead / Oracle ReadCommitted；MySQL 映射 ReadUncommitted/ReadCommitted/RepeatableRead/Serializable，Oracle 仅开放 ReadCommitted/Serializable，其他值发送前拒绝。Java 对 Oracle RepeatableRead 的允许不能代替实测，因此暂不开放。每次 Begin 都显式设置隔离级别，不声称恢复应用通过原始 SQL 修改的会话状态；完整池化重置仍属 C01。
@@ -294,7 +300,7 @@ reader 在响应尚未消费完时独占物理会话，终态完整读取后释�
 | --- | --- | --- |
 | 连接/factory/现代数据源/可选 DI | 五资产同一 provider；两个 Standard 资产没有现代数据源，核心不引用 DI；配置与日志按实例传递 | 五目标消费、依赖图及现代 DI 生命周期测试；旧运行时 DI 尚未执行 |
 | 命令/参数 | 文本无参和强制服务端 prepare；无客户端插值回退；只允许 Input 和 Text；Oracle 名称绑定限 B03 子集 | B02-B05/B08 公共环回；不支持 Java 客户端 prepare 默认路径、存储过程及 OUT |
-| reader/元数据 | 逐行文本/二进制、多结果、两套字段 schema、固定 CLR/provider-specific 类型；typed getter 要求类型匹配，C03 的 decimal/DateTime/DateTimeOffset getter 允许精确转换 | B05/B06/B09；C04 已实现本地 SequentialAccess 字段流及服务端游标；真实大值/游标验收留 C04，目录 GetSchema 留 C05 |
+| reader/元数据 | 逐行文本/二进制、多结果、两套字段 schema、固定 CLR/provider-specific 类型；typed getter 要求类型匹配，C03 的 decimal/DateTime/DateTimeOffset getter 允许精确转换 | B05/B06/B09；C04 已实现本地 SequentialAccess 字段流及服务端游标；真实大值/游标验收留 C04，C05目录 GetSchema 仍待实现 |
 | 本地事务/取消 | 会话绑定、两模式隔离映射、结果未知不重放；环境事务始终拒绝 | B07/B08；Oracle RepeatableRead、XA/TransactionScope 不照搬 Java 支持范围 |
 | 诊断 | Connection 1000..1003、Command 1100/1101、Transaction 1200/1201 分类别；预先安全创建 logger，后端异常不改变结果 | B09 修复原命令事件误入 Connection 类别，4项类别过滤回归先失败后通过；ActivitySource/Meter 留 C07 |
 | 扩展/发布 | 不宣称 DbBatch、adapter/command builder、池化、LOB 等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
@@ -338,7 +344,7 @@ C02 的 .NET 连接串约定为 `Server=ob1:2881,ob2:2883,[::1]:2881;Port=2881`�
 | M02 URL、选项、地址 | A：.NET 连接串 builder 和单地址；C：多地址顺序尝试 | JDBC URL、TNS、OCP 地址发现和 Java 大量选项延后；不按 `oracle:` URL 判定模式 |
 | M03 网络、TLS、认证 | A：TCP、`CLIENT_SSL`/SSLRequest、`SslStream`、经验证的握手认证及标准包；D：按需求增加认证方式 | 要求 TLS 时，认证数据只在升级和所选验证完成后发送；显式明文连接仍不得使用 cleartext 类认证；Java 的 SPI、Unix socket、Windows pipe、共享内存、压缩包流不是首版承诺；私有 CA 与证书名称见 §2 |
 | M04 握手、模式、能力 | A：客户端 `CLIENT_SUPPORT_ORACLE`/`CLIENT_SESSION_TRACK` 等能力声明、认证 OK 状态位、服务端版本和协商能力 | OB20/追踪在 D；请求选项、模式、版本、服务端能力分别保存，不能把未知模式当 MySQL |
-| M05 会话与本地事务 | B：生命周期、自动提交、事务与隔离级别，命令显式绑定当前事务；C：可验证重置及 `ChangeDatabase` | B 阶段 `ChangeDatabase`/`ChangeDatabaseAsync` 均报不支持；C 阶段仅在 MySQL 模式验证切换语义和真实异步入口，Oracle 模式明确报不支持，不能把 schema 变化误当 database 切换。保存点按模式验证；现代事务异步方法执行真实异步网络 I/O，`DbTransaction.Save` 等仅在验证后开放，旧 TFM 不补同名平台 API |
+| M05 会话与本地事务 | B：生命周期、自动提交、事务与隔离级别，命令显式绑定当前事务；C：可验证重置及 `ChangeDatabase` | B 阶段曾拒绝 `ChangeDatabase`/`ChangeDatabaseAsync`；C05 已实现 MySQL 模式 COM_INIT_DB 及真实异步入口，当前数据库和预处理归属由物理会话管理，真实切换语义仍待实库验证。Oracle 模式明确报不支持，不能把 schema 变化误当 database 切换。保存点按模式验证；现代事务异步方法执行真实异步网络 I/O，`DbTransaction.Save` 等仅在验证后开放，旧 TFM 不补同名平台 API |
 | M06 SQL 与预处理 | B：文本及服务端 prepare/execute；D：Oracle PrepareExecute 与可选客户端预处理 | Java 默认客户端预处理，部分选项强制服务端预处理；.NET 首版不隐式模拟，服务端不可预处理的参数化 SQL 会报错；`CommandType.StoredProcedure` 在 D 的过程支持前明确报不支持 |
 | M07 参数和批量 | B：模式感知词法解析、位置/名称绑定和常见输入参数；C：逐条 `DbBatch`；D：bulk/array binding、长参数优化 | B 阶段的 Oracle `:name` 需映射为服务端位置参数，不能把名称绑定词法器推迟到客户端预处理阶段；`ParameterDirection.Output`/`InputOutput`、Oracle PIECE_DATA 和 MySQL LONG_DATA 要分别验证，未经支持的方向在执行前报错 |
 | M08 结果与游标 | B：OK/ERR、多结果、文本/二进制逐行读取和默认 `CLIENT_FOUND_ROWS` 计数；C：大值/服务器游标流式读取；D：REF CURSOR/offset fetch | Reader、游标、原物理会话的生命周期绑定，不透明迁移；Java 的 `useAffectedRows` 可选语义不属于 .NET 首版 |
@@ -360,4 +366,4 @@ C02 的 .NET 连接串约定为 `Server=ob1:2881,ob2:2883,[::1]:2881;Port=2881`�
 3. 首发最低 OceanBase/OBProxy 版本与两种兼容模式的实际测试环境；它们决定可对外承诺的功能矩阵。
 4. 首个正式版本是否必须包含经验证的池化与 Oracle 高精度/纳秒 provider-specific 值；本设计将它们列为 C 阶段交付门槛，而不是协议原型门槛。无法完整重置的服务端组合只承诺直连。
 
-本文定义目标架构。2026-10-19 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果、B05 低精度数值/provider-specific 访问和常见日期时间，B06 reader 字段元数据，以及 B07 本地事务和关闭回滚、B08 本地取消/超时故障矩阵、B09 标量元数据/公共 API 审核及 C02 多地址 TCP 建连；C03数值、纳秒、TZ/LTZ和MySQL零日期已有本地实现，池化及目录元数据仍未实现，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。
+本文定义目标架构。2026-10-19 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果、B05 低精度数值/provider-specific 访问和常见日期时间，B06 reader 字段元数据，以及 B07 本地事务和关闭回滚、B08 本地取消/超时故障矩阵、B09 标量元数据/公共 API 审核及 C02 多地址 TCP 建连；C03数值、纳秒、TZ/LTZ和MySQL零日期、C04顺序字段流/服务端游标及C05数据库切换已有本地实现，池化及目录元数据仍未实现，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。

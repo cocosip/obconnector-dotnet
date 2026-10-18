@@ -20,10 +20,12 @@ namespace OceanBaseConnector.Internal.Session
             if (cursor.HasRemaining || columns > 4096) throw new ProtocolException("Invalid prepared statement metadata counts.");
             Session = session;
             CommandText = sql;
+            Database = session.Database;
         }
 
         internal PhysicalSession Session { get; }
         internal string CommandText { get; }
+        internal string Database { get; }
         internal uint Id { get; }
         internal int ParameterCount { get; }
         internal int ColumnCount { get; }

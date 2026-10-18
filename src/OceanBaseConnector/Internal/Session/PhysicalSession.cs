@@ -16,6 +16,7 @@ namespace OceanBaseConnector.Internal.Session
         private readonly object _gate = new object();
         private readonly OceanBaseConnectionOptions _options;
         private string _endpoint;
+        private string _database;
         private readonly CancellationTokenSource _closing = new CancellationTokenSource();
         private SessionState _state;
         private bool _started;
@@ -26,10 +27,18 @@ namespace OceanBaseConnector.Internal.Session
         private string? _sessionTimeZone;
         private readonly HashSet<uint> _statementCloses = new HashSet<uint>();
 
-        public PhysicalSession(OceanBaseConnectionOptions options) { _options = options; _endpoint = options.Endpoint; }
+        public PhysicalSession(OceanBaseConnectionOptions options) { _options = options; _endpoint = options.Endpoint; _database = options.Database; }
 
         public SessionState State { get { lock (_gate) return _state; } }
         public ConnectResult? Info { get { lock (_gate) return _info; } }
+        internal string Database { get { lock (_gate) return _database; } }
+        internal void SetDatabase(CommandLease lease, string database)
+        {
+            lock (_gate)
+            {
+                if (_state == SessionState.Busy && ReferenceEquals(_lease, lease)) _database = database;
+            }
+        }
         internal string? SessionTimeZone { get { lock (_gate) return _sessionTimeZone; } }
         internal string Endpoint { get { lock (_gate) return _endpoint; } }
 

@@ -70,7 +70,7 @@ namespace OceanBaseConnector
             }
         }
 
-        public override string Database { get { lock (_gate) return _builder.Database; } }
+        public override string Database { get { lock (_gate) return _session?.Database ?? _builder.Database; } }
         public override string DataSource { get { lock (_gate) return _builder.Server; } }
         public override int ConnectionTimeout { get { lock (_gate) return _builder.ConnectionTimeout; } }
         public OceanBaseCompatibilityMode? CompatibilityMode { get { lock (_gate) return _session?.Info?.Mode; } }
@@ -209,7 +209,6 @@ namespace OceanBaseConnector
             base.Dispose(true);
             GC.SuppressFinalize(this);
         }
-        public override Task ChangeDatabaseAsync(string databaseName, CancellationToken cancellationToken = default) => Task.FromException(Unsupported());
 #endif
         protected override void Dispose(bool disposing)
         {
@@ -221,7 +220,6 @@ namespace OceanBaseConnector
             base.Dispose(disposing);
         }
 
-        public override void ChangeDatabase(string databaseName) => throw Unsupported();
         public override void EnlistTransaction(Transaction? transaction) => throw new NotSupportedException("Ambient and distributed transactions are not supported.");
         protected override DbCommand CreateDbCommand()
         {
@@ -244,6 +242,5 @@ namespace OceanBaseConnector
             if (Transaction.Current != null) throw new NotSupportedException("Ambient transactions are not supported.");
         }
         private void ThrowIfDisposed() { if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseConnection)); }
-        private static NotSupportedException Unsupported() => new NotSupportedException("This operation is not implemented by the current provider stage.");
     }
 }

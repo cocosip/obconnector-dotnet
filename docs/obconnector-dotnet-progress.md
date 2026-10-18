@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期及 C04 报文增量/顺序字段流及服务端游标本地子项。C03/C04待验证，目录元数据尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期及 C04 报文增量/顺序字段流及服务端游标、C05数据库切换本地子项。C03/C04待验证，C05进行中，目录元数据尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -67,7 +67,7 @@
 | C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
 | C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 待验证 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)、TZ/LTZ及零日期本地实现齐备；Unit895/Consumer91/DI8、五/三目标编译/格式/打包及独立走查通过；真实验收/A05公开MySQL握手仍缺，详见本页末 |
 | C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 待验证 | 2026-10-19 Codex；增量报文、顺序字段流和FetchSize只读游标分页本地完成；Unit1037/Consumer111/DI8及核心五/DI三目标编译通过，独立复查缺陷均已修复；真实两模式/OBProxy大值/游标资源及性能矩阵未验收，详见本页末 |
-| C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 未开始 | 待记录 |
+| C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 进行中 | 2026-10-19 Codex；数据库切换本地完成，Unit1073/Consumer120/DI8、核心五/DI三编译及独立走查通过；四个目录集合/限制/异步仍待实现，真实验收暂缓 |
 | C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 未开始 | 待记录 |
 | C07 | W29-W32 | 本地 ActivitySource/Meter、脱敏和性能基线 | 未开始 | 待记录 |
 | C08 | W33-W34 | 生产版本/模式矩阵与 G3 审核 | 未开始 | 待记录 |
@@ -323,3 +323,11 @@ Release slnx核心五/DI三目标编译0警告0错误；完整Windows Unit978、
 最终 dotnet build OceanBaseConnector.slnx --no-restore -c Release：核心五/DI三目标0警告0错误；Windows完整Unit1037、Consumer111、DI8通过且0跳过（TestResults/c04-cursor-unit-final-checked.trx、c04-cursor-consumer-final-checked.trx、c04-cursor-di-final-checked.trx）。完整单测在已授权沙箱外运行以访问Windows TLS测试证书存储，未降低TLS校验。dotnet format whitespace --verify-no-changes、git diff --check、UTF-8无BOM/CRLF和双包检查通过；TestResults/c04-cursor-pack中核心5/DI3资产、统一0.1.0-alpha、DI精确核心版本[0.1.0-alpha]及Microsoft.Extensions按TFM为8/9/10的依赖组均通过，既有NuGet包README提示仍留R01。
 
 三份既有文档已合并当前契约、源码依据、进度及验证证据；C04由进行中改为待验证，下一可本地推进模块C05。G3仍0/8，A04真实/跨平台验收、A05可信公开MySQL握手、C01完整重置白名单及G0/G1缺口不变。未执行真实两模式/OBProxy、非Windows或新的旧运行时验收；隔离消费宿主为net10，不能代替旧运行时完整验收。offset/滚动游标、REF CURSOR和locator LOB未实现，不据本地夹具宣称目标版本互通或真实游标资源/大值性能已验证。当前master完成本阶段提交，不推送。
+
+2026-10-19 C05 数据库切换模块：MySQL ChangeDatabase 使用 COM_INIT_DB 原样编码名称，Standard2.1及现代目标覆写真正异步入口，Standard2.0不补不存在的API。Oracle/环境事务/忙会话在发送前拒绝；null/空/NUL/非法UTF-16/超包拒绝，不拼接USE SQL。物理会话保存当前Database，合法单一零计数OK后、租约释放/日志回调前发布；已知ERR保留原Database并允许后续命令，非法响应/部分发送/取消/超时销毁会话并报告执行结果未知，不重放。配置和数据源保持原始Database，关闭/重开恢复配置；旧回复不能更新新会话。允许当前空闲的本地事务，但不改变其对象、绑定和提交状态。准备语句保存准备时Database，获得执行租约后重核对，不同则重新prepare，旧ID由既有关闭队列清理，失败切换保留原ID。
+
+首批5项失败证明尚未实现切换/预取消后，补实现通过（TestResults/c05-database-red.trx、c05-database-green.trx）。新增36项单测覆盖同步/异步、大小写/特殊字符名称精确字节、已知错误、参数/模式/环境事务拒绝、6种非法响应×同步异步、部分写入、预取消/网络等待取消/总超时/关闭、reader独占及本地事务绑定、完整终态与后到取消、日志回调发布/数据源隔离、旧响应后重开及成功/失败的statement复用。五资产9项隔离消费覆盖Standard2.0同步及Standard2.1/net8/net9/net10同步/异步，真实查询目标仍为协议夹具，使用明确的认证后MySQL事实夹具，不放宽A05。定向36项、消费9项通过（TestResults/c05-database-lifecycle.trx、c05-database-consumer-targeted.trx）。独立只读走查覆盖相关会话/日志/配置/事务/预处理路径，无必须修复项；没有委托实现。
+
+最终Release dotnet build OceanBaseConnector.slnx --no-restore -c Release 核心五/DI三目标0警告0错误；完整Windows Unit1073、Consumer120、DI8全部通过且0跳过（TestResults/c05-database-unit-final.trx、c05-database-consumer-final.trx、c05-database-di-final.trx）。完整单测沿用已授权沙箱外TLS证书存储访问，未修改TLS规则。格式、diff、UTF-8无BOM/CRLF与双包检查通过；TestResults/c05-database-pack中核心5/DI3资产、统一0.1.0-alpha、DI核心精确区间[0.1.0-alpha]及Microsoft.Extensions按TFM的8/9/10依赖组核对通过，既有NuGet README提示仍留R01。三份现有文档合并当前契约和实施记录，不新增设计文档；当前master提交，不推送。
+
+C05仍进行中：MetaDataCollections、DataSourceInformation、Tables、Columns及限制参数/现代GetSchemaAsync尚未实现；后续完成目录模块再转待验证，不将数据库切换子项当作C05整体完成。原始SQL USE的状态报告/追踪不属于本模块已验证契约，当前Database跟踪通过ChangeDatabase改变的数据库，详见架构§4。真实两模式/OBProxy、非Windows与新的旧运行时验收均未执行；隔离消费宿主net10不代替旧运行时完整验收。A04/A05真实关口、A05可信公共MySQL握手、C01完整重置及G0/G1/G3缺口保持开放。
