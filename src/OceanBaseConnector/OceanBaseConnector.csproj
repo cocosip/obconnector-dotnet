@@ -4,7 +4,7 @@
     <TargetFrameworks>netstandard2.0;net8.0;net9.0;net10.0</TargetFrameworks>
     <RootNamespace>OceanBaseConnector</RootNamespace>
     <AssemblyName>OceanBaseConnector</AssemblyName>
-    <Version>0.1.0-alpha</Version>
+    <!-- Version comes from Directory.Build.props; never set it here. -->
     <Description>Managed ADO.NET provider for OceanBase (MySQL and Oracle compatibility modes).</Description>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!--
