@@ -28,7 +28,7 @@
 | --- | --- | --- | --- | --- |
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04/A05 待真实验证，A07 缺环境与可信版本矩阵；G0 未关闭 |
-| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01 本地实现待真实环境验证；B02-B09 及四目标运行时/双模式实测仍待完成 |
+| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01 本地实现待真实环境验证；B02-B09 及五目标消费/双模式实测仍待完成 |
 | G3 生产连接 C | W18-W34 | 0/8 | 未开始 | C01-C08 + 池化白名单/精确类型/MySQL `ChangeDatabase`/内存故障实测 |
 | G4 发布候选 R | W35-W37 | 0/2 | 未开始 | R01-R02 + 包/许可证/兼容矩阵 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
@@ -57,7 +57,7 @@
 | B06 | W11-W14 | 逐行 reader、字段元数据及低精度 provider-specific 访问 | 未开始 | 待记录 |
 | B07 | W13-W15 | 本地事务及环境事务拒绝 | 未开始 | 待记录 |
 | B08 | W14-W16 | 取消、超时、结果未知和故障注入 | 未开始 | 待记录 |
-| B09 | W17（待重估） | 四目标消费、数据源/DI/日志生命周期、低精度 provider-specific 数值和双模式 G2 验收 | 未开始 | 待记录 |
+| B09 | W17（待重估） | 五目标消费、数据源/DI/日志生命周期、低精度 provider-specific 数值和双模式 G2 验收 | 未开始 | 待记录 |
 
 ## C. 生产连接任务
 
@@ -76,7 +76,7 @@
 
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
-| R01 | W35-W36 | NuGet 包、许可/包名审查、四目标消费 | 未开始 | 待记录 |
+| R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 未开始 | 待记录 |
 | R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 未开始 | 待记录 |
 | D01 | G4 后 | OB20、校验与完整链路追踪 | 未开始 | 待记录 |
 | D02 | G4 后 | Oracle 过程及 OUT/RETURNING | 未开始 | 待记录 |
@@ -155,3 +155,10 @@ B01 独立审查及修复：日志回调在 Opened 关闭、在 Closed 重开同
 B02 本地验证：dotnet build OceanBaseConnector.slnx -c Release --no-restore 通过，0 警告/0 错误；各 net10.0 宿主 dotnet test -c Release --no-build --no-restore：UnitTests 228、ConsumerTests 13、DependencyInjection.Tests 8 全通过。TRX 位于 TestResults/b02-unit.trx、b02-consumer.trx、b02-di.trx。B02 新增 44 项测试用例，包括公共环回执行和模式感知类型边界；红绿回归覆盖超大超时遗留 Busy、缓冲行忽略 Cancel、失败 reader 触碰下一命令、读取 token 原因、终态 OK/ERR 被日志回调取消覆盖、EOF 协商不匹配和 Scalar 前置更新计数。发包后的取消/超时/关闭返回 IsExecutionOutcomeUnknown=true 并保留原因；无发包的预取消/不支持功能/环境事务拒绝仍可继续建命令。
 
 B02 format whitespace、git diff --check、两个产品包 pack 通过；包仍为统一 0.1.0-alpha，正式 README/发布元数据由 R01 补齐。独立审查发现的 EOF 协商、超大超时占用和终态 ERR/取消竞态均已修复并回归。此次没有运行数据库或非 Windows 测试；MySQL 可信版本/两模式真实 CRUD/真实不变 UPDATE 行数及旧运行时证据仍缺失，B02 保持待验证、G2 保持进行中。下一功能模块为 B03 参数占位符词法与验证。
+
+
+2026-10-18 目标框架补充：按用户要求，在核心单包中增加 netstandard2.1；现为 netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0 五目标，DI 包仍为 net8.0/net9.0/net10.0，全部测试及消费宿主仍为 net10.0。两个 Standard 目标与 net8.0 同用 Microsoft.Extensions 8.x 基线，net9.0/10.0 各用对应主版本；CPM、根 Version 和两包统一发布规则不变。同步修订现有架构设计、开发计划和本台账，原四目标记录保留为历史证据。
+
+netstandard2.1 验证：消费回归先失败 4 项，确认缺少资产及 restore 图；补目标、CPM 条件和平台 API 判断后通过。TCP 两个 Standard 目标都使用关闭 socket 的取消路径，SqlState 只在现代目标 override；2.1 TLS 采用平台已有的令牌重载。Release slnx 构建 0 警告/0 错误；UnitTests 228、ConsumerTests 18、DependencyInjection.Tests 8 全通过。消费测试检查两个 Standard 资产的实际目标框架标记、独立加载、现代类型隔离、日志依赖、工厂对象，以及握手等待取消后的关闭状态。逐目标检查 8 个 restore 图及程序集引用，ZIP/XML 检查两包 5/3 个资产、8 个 nuspec 依赖组、统一 0.1.0-alpha 和精确核心依赖通过；format whitespace 通过。真实数据库、非 Windows 和旧运行时消费测试依用户要求暂缓，B01/B02 与 G2 的待验证门槛不变；pack 仍提示缺包 README，由 R01 处理。
+
+netstandard2.1 独立只读审查：核对已安装的 .NET Standard 2.1 参考 API、条件编译、CPM 与五/三目标边界、消费测试和文档，未发现需修复问题；git diff --check 通过。

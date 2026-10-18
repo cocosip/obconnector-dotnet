@@ -7,6 +7,10 @@ using System.Reflection.PortableExecutable;
 using System.Runtime.Loader;
 using System.Data;
 using System.Data.Common;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 using Xunit;
 using OceanBaseConnector;
 
@@ -62,13 +66,16 @@ namespace OceanBaseConnector.ConsumerTests
             finally { context.Unload(); }
         }
 
-        [Fact]
-        public void NetStandardAssetRunsInIsolatedLoadContext()
+        [Theory]
+        [InlineData("netstandard2.0", ".NETStandard,Version=v2.0")]
+        [InlineData("netstandard2.1", ".NETStandard,Version=v2.1")]
+        public void NetStandardAssetRunsInIsolatedLoadContext(string target, string frameworkName)
         {
             var context = new AssemblyLoadContext("baseline-consumer", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath("netstandard2.0"));
+                var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
+                Assert.Equal(frameworkName, assembly.GetCustomAttribute<System.Runtime.Versioning.TargetFrameworkAttribute>()!.FrameworkName);
                 var type = assembly.GetType("OceanBaseConnector.OceanBaseConnectionStringBuilder", throwOnError: true)!;
                 var builder = Activator.CreateInstance(type, "Server=localhost;User ID=sample;Password=baseline-secret")!;
                 var sanitized = (string)type.GetMethod("ToSanitizedConnectionString")!.Invoke(builder, new object[] { false })!;
@@ -79,16 +86,42 @@ namespace OceanBaseConnector.ConsumerTests
             finally { context.Unload(); }
         }
 
-        [Fact]
-        public void NetStandard20AssetDoesNotExposeModernApiTypes()
+        [Theory]
+        [InlineData("netstandard2.0")]
+        [InlineData("netstandard2.1")]
+        public void NetStandardAssetsDoNotExposeModernApiTypes(string target)
         {
-            var path = RepositoryLocator.GetProductAssemblyPath("netstandard2.0");
+            var path = RepositoryLocator.GetProductAssemblyPath(target);
             var typeNames = ReadPublicTypeNames(path);
 
             Assert.DoesNotContain(ModernTypeName, typeNames);
             Assert.DoesNotContain("OceanBaseConnector.OceanBaseDataSource", typeNames);
             Assert.DoesNotContain("OceanBaseConnector.OceanBaseDataSourceBuilder", typeNames);
             Assert.Contains(BaselineTypeName, typeNames);
+        }
+
+        [Theory]
+        [InlineData("netstandard2.0")]
+        [InlineData("netstandard2.1")]
+        public async Task NetStandardOpenCancellationClosesPendingHandshake(string target)
+        {
+            var context = new AssemblyLoadContext("cancel-" + target, isCollectible: true);
+            using var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            try
+            {
+                var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
+                using var connection = (DbConnection)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!)!;
+                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled";
+                using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var opening = connection.OpenAsync(cancellation.Token);
+                using var peer = await listener.AcceptTcpClientAsync(cancellation.Token);
+                Assert.False(opening.IsCompleted);
+                cancellation.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => opening.WaitAsync(TimeSpan.FromSeconds(5)));
+                Assert.Equal(ConnectionState.Closed, connection.State);
+            }
+            finally { context.Unload(); }
         }
 
         [Fact]
@@ -109,7 +142,7 @@ namespace OceanBaseConnector.ConsumerTests
         [Fact]
         public void AllAssetsCreateStandardProviderObjectsAndResolveLoggingDependencies()
         {
-            foreach (var tfm in new[] { "netstandard2.0", "net8.0", "net9.0", "net10.0" })
+            foreach (var tfm in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
             {
                 var context = new AssemblyLoadContext("provider-" + tfm, isCollectible: true);
                 try

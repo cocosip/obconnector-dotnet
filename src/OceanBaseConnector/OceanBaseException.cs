@@ -31,7 +31,7 @@ namespace OceanBaseConnector
         public int ServerErrorCode { get; }
 
         /// <summary>Server SQLSTATE; null when not supplied.</summary>
-#if !NETSTANDARD2_0
+#if NET8_0_OR_GREATER
         public override string? SqlState => _sqlState;
 #else
         public string? SqlState => _sqlState;

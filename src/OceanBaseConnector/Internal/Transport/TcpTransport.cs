@@ -71,7 +71,7 @@ namespace OceanBaseConnector.Internal.Transport
                 using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 combinedCts.CancelAfter(timeout);
 
-#if !NETSTANDARD2_0
+#if NET8_0_OR_GREATER
                 try
                 {
                     await client.ConnectAsync(host, port, combinedCts.Token).ConfigureAwait(false);
@@ -88,7 +88,7 @@ namespace OceanBaseConnector.Internal.Transport
 #else
                 combinedCts.Token.ThrowIfCancellationRequested();
                 var connectTask = client.ConnectAsync(host, port);
-                // netstandard2.0 has no cancellable ConnectAsync: dispose the
+                // .NET Standard has no cancellable ConnectAsync: dispose the
                 // socket to abort a pending connect when cancellation fires.
                 using (combinedCts.Token.Register(state => ((TcpClient)state!).Dispose(), client))
                 {

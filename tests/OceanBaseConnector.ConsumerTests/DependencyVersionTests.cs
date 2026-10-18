@@ -11,6 +11,7 @@ namespace OceanBaseConnector.ConsumerTests
     {
         [Theory]
         [InlineData("OceanBaseConnector", "netstandard2.0", 8)]
+        [InlineData("OceanBaseConnector", "netstandard2.1", 8)]
         [InlineData("OceanBaseConnector", "net8.0", 8)]
         [InlineData("OceanBaseConnector", "net9.0", 9)]
         [InlineData("OceanBaseConnector", "net10.0", 10)]
