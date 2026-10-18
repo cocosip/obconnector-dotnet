@@ -100,6 +100,7 @@ namespace OceanBaseConnector
         {
             var session = StartOpen(CancellationToken.None, out var options);
             var timer = Stopwatch.StartNew();
+            var diagnostics = DriverDiagnostics.Start("open");
             _log.Opening(options.Endpoint);
             try
             {
@@ -107,7 +108,8 @@ namespace OceanBaseConnector
                 session.Open();
                 PublishOpen(session);
             }
-            catch (Exception error) { FailedOpen(session, timer.ElapsedMilliseconds, error); throw; }
+            catch (Exception error) { FailedOpen(session, timer.ElapsedMilliseconds, error); diagnostics?.Finish(null, error); throw; }
+            diagnostics?.Finish(session.Info!.Mode, null);
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
             _log.Opened(session.Endpoint, session.Info!.Mode, timer.ElapsedMilliseconds);
         }
@@ -116,6 +118,7 @@ namespace OceanBaseConnector
         {
             var session = StartOpen(cancellationToken, out var options);
             var timer = Stopwatch.StartNew();
+            var diagnostics = DriverDiagnostics.Start("open");
             _log.Opening(options.Endpoint);
             try
             {
@@ -123,7 +126,8 @@ namespace OceanBaseConnector
                 await session.OpenAsync(cancellationToken).ConfigureAwait(false);
                 PublishOpen(session);
             }
-            catch (Exception error) { FailedOpen(session, timer.ElapsedMilliseconds, error); throw; }
+            catch (Exception error) { FailedOpen(session, timer.ElapsedMilliseconds, error); diagnostics?.Finish(null, error); throw; }
+            diagnostics?.Finish(session.Info!.Mode, null);
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
             _log.Opened(session.Endpoint, session.Info!.Mode, timer.ElapsedMilliseconds);
         }

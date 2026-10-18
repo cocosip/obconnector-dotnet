@@ -12,6 +12,7 @@ namespace OceanBaseConnector
         {
             var operation = StartDatabaseChange(databaseName, CancellationToken.None);
             using var exchange = operation.Exchange;
+            exchange.StartDiagnostics("change_database");
             try
             {
                 exchange.Send(operation.Request);
@@ -25,6 +26,7 @@ namespace OceanBaseConnector
         {
             var operation = StartDatabaseChange(databaseName, cancellationToken);
             using var exchange = operation.Exchange;
+            exchange.StartDiagnostics("change_database");
             try
             {
                 await exchange.SendAsync(operation.Request).ConfigureAwait(false);

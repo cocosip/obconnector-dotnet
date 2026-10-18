@@ -11,6 +11,7 @@
   <!-- Product dependencies follow the target's major version, not the SDK/test host. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' Or '$(TargetFramework)' == 'netstandard2.1' Or '$(TargetFramework)' == 'net8.0'">
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
+    <PackageVersion Include="System.Diagnostics.DiagnosticSource" Version="8.0.1" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
   </ItemGroup>

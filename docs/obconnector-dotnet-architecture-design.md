@@ -23,7 +23,7 @@
 
 ## 2. 运行目标和公开契约
 
-单个核心 provider 工程和包，`TargetFrameworks=netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`；另设可选 `OceanBaseConnector.DependencyInjection` 集成包，目标为 `net8.0;net9.0;net10.0`，不按兼容模式拆包。核心仅引入标准日志抽象，不依赖容器实现或日志后端。仓库统一使用 NuGet 中央包管理(CPM):根目录 `Directory.Packages.props` 以 `ManagePackageVersionsCentrally` 固定全部包版本并开启传递依赖钉扎,任何工程不得在自身 `PackageReference` 上内联 `Version`;产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性给出,csproj 内不得声明各自版本；核心和集成包同版本统一发布并验证包间依赖。`netstandard2.0` 是最低 API 基线,不等于保证每一个实现该标准的旧运行时都已通过集成测试。项目以 .NET 10 SDK 和 `OceanBaseConnector.slnx` 构建五目标；全部测试及消费宿主统一使用 `net10.0`，`global.json` 约束 SDK 主版本；旧运行时的专门消费验证保留为 B09/R01 发布验收;正式支持的运行时遵循微软生命周期,.NET 9 已结束官方支持时仍可提供目标资产,但不承诺修复其运行时本身的问题。若现代目标没有需要独立实现的 API,优先共享源码和行为,不分叉协议栈。
+单个核心 provider 工程和包，`TargetFrameworks=netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`；另设可选 `OceanBaseConnector.DependencyInjection` 集成包，目标为 `net8.0;net9.0;net10.0`，不按兼容模式拆包。核心引入标准日志抽象，两个Standard资产另通过DiagnosticSource提供诊断API；不依赖容器实现或日志后端。仓库统一使用 NuGet 中央包管理(CPM):根目录 `Directory.Packages.props` 以 `ManagePackageVersionsCentrally` 固定全部包版本并开启传递依赖钉扎,任何工程不得在自身 `PackageReference` 上内联 `Version`;产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性给出,csproj 内不得声明各自版本；核心和集成包同版本统一发布并验证包间依赖。`netstandard2.0` 是最低 API 基线,不等于保证每一个实现该标准的旧运行时都已通过集成测试。项目以 .NET 10 SDK 和 `OceanBaseConnector.slnx` 构建五目标；全部测试及消费宿主统一使用 `net10.0`，`global.json` 约束 SDK 主版本；旧运行时的专门消费验证保留为 B09/R01 发布验收;正式支持的运行时遵循微软生命周期,.NET 9 已结束官方支持时仍可提供目标资产,但不承诺修复其运行时本身的问题。若现代目标没有需要独立实现的 API,优先共享源码和行为,不分叉协议栈。
 
 | 范围 | 建议类型 / 行为 |
 | --- | --- |
@@ -73,7 +73,7 @@ DI 只装配应用级对象。`PhysicalSession`、包流、认证处理、命令
 
 | 包 / 工程 | 目标 | 依赖与职责 |
 | --- | --- | --- |
-| `OceanBaseConnector` | 保持 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` | 唯一 provider 与协议实现；增加 `Microsoft.Extensions.Logging.Abstractions`。不依赖容器实现、配置系统或日志后端 |
+| `OceanBaseConnector` | 保持 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` | 唯一 provider 与协议实现；引用 `Microsoft.Extensions.Logging.Abstractions`，两个Standard资产另引用 `System.Diagnostics.DiagnosticSource`，现代资产使用运行时诊断API。不依赖容器实现、配置系统或日志后端 |
 | `OceanBaseConnector.DependencyInjection` | `net8.0;net9.0;net10.0` | 引用核心及 `Microsoft.Extensions.DependencyInjection.Abstractions`；装配数据源并取得核心日志抽象中的 `ILoggerFactory`，不引用完整容器实现 |
 | DI 与消费测试 | `net10.0` | 测试工程可引用完整内置 DI 容器，验证作用域、释放、key、日志与包消费；发布时另取 .NET 8/9 运行时证据 |
 
@@ -81,11 +81,12 @@ DI 只装配应用级对象。`PhysicalSession`、包流、认证处理、命令
 
 依赖版本统一管理不等于所有目标引用同一主版本。`Directory.Packages.props` 按 `TargetFramework` 条件选择 Microsoft 通用库，核心和 DI 集成包采用相同矩阵，传递依赖也不得将较低目标抬升至较高主版本。当前版本如下；后续补丁只在对应主版本内集中升级。
 
-| 产品目标 | Logging.Abstractions | DependencyInjection.Abstractions | 完整 DependencyInjection（仅测试需要） |
-| --- | --- | --- | --- |
-| `netstandard2.0` / `netstandard2.1` / `net8.0` | 8.0.3 | 8.0.2 | 8.0.1 |
-| `net9.0` | 9.0.10 | 9.0.10 | 9.0.10 |
-| `net10.0` | 10.0.0 | 10.0.0 | 10.0.0 |
+| 产品目标 | Logging.Abstractions | DependencyInjection.Abstractions | 完整 DependencyInjection（仅测试需要） | DiagnosticSource |
+| --- | --- | --- | --- | --- |
+| `netstandard2.0` / `netstandard2.1` | 8.0.3 | 8.0.2 | 8.0.1 | 8.0.1（显式包） |
+| `net8.0` | 8.0.3 | 8.0.2 | 8.0.1 | 运行时8 |
+| `net9.0` | 9.0.10 | 9.0.10 | 9.0.10 | 运行时9 |
+| `net10.0` | 10.0.0 | 10.0.0 | 10.0.0 | 运行时10 |
 
 全部测试宿主为 `net10.0`，因此完整容器当前仅用于 10.0.0 测试；表中的较低目标版本不代表新增对应测试宿主。SDK 和测试宿主为 .NET 10，不能作为产品旧资产引用 10.x 通用库的理由。验证须检查各目标 restore 图、程序集引用及 NuGet 依赖组，不能仅靠 .NET 10 测试宿主运行时的程序集统一加载结果推断旧运行时兼容性。
 
@@ -137,7 +138,7 @@ services.AddOceanBaseDataSource(connectionString);
 
 ### 2.6 日志、追踪和指标
 
-三者单独定义：`ILogger` 是结构化运行日志，`ActivitySource` 是本地操作链路，`Meter` 是聚合指标。B01 引入日志；B02/B07 随命令/事务实现增加相应日志；C07 再实现追踪和指标，C01 增加池日志。不一次堆叠 `DiagnosticListener`、`EventSource` 和自定义日志接口；只有实际消费者需要额外桥接时再增加。
+三者单独定义：`ILogger` 是结构化运行日志，`ActivitySource` 是本地操作链路，`Meter` 是聚合指标。B01 引入日志；B02/B07 随命令/事务实现增加相应日志；C07 提供本地追踪和指标，C01 增加池日志。不一次堆叠 `DiagnosticListener`、`EventSource` 和自定义日志接口；只有实际消费者需要额外桥接时再增加。
 
 `UseLoggerFactory(ILoggerFactory?)` 属于数据源 builder，直接连接也可通过 §2.3 的构造重载传入同一标准抽象，空值均表示无日志。日志上下文随数据源→连接→会话或直接连接→会话传递，无可变进程级 LoggerFactory，也不从连接串选择日志后端。类别使用 `OceanBaseConnector.Connection`、`.Command`、`.Transaction`、`.Pool`，区分事件而不按 MySQL/Oracle 建两套类别；已认证模式可作为结构化字段。未知模式不能提前写成 MySQL。
 
@@ -146,6 +147,12 @@ services.AddOceanBaseDataSource(connectionString);
 禁用日志时先检查级别，不进行 SQL 渲染或逐包字符串分配。TCP/包流不因接入 DI 而依赖容器或反复解析服务；日志集中在会话、命令、事务与池的状态边界。日志提供程序异常不能跳过 socket 清理、覆盖原始数据库错误，或把已经成功的写入变成可重试失败，B01/B09 验证该隔离边界。
 
 C07 使用 `System.Diagnostics.DiagnosticSource` 支持旧资产的 Activity API，`Meter` 所需 API/包版本按五目标验证；指标只用有限维度，如模式、操作类别、结果，不能用 SQL、连接 ID 或任意 DI key 作高基数标签。本地追踪不依赖 OB20；D01 才处理经协商的服务端完整链路追踪。抓包仍是独立显式功能，默认关闭。
+
+C07 本地实施约定：五资产共用名称为 `OceanBaseConnector` 的 ActivitySource 和 Meter，以程序集版本标识版本，不新增公共诊断包装类型或配置开关。监听器按标准 API 订阅；两个 Standard 资产显式依赖 DiagnosticSource 8.0.1，现代三个资产使用对应运行时内置 API，不由 net10 测试宿主提高旧资产依赖。span 为 Client，名称为 `oceanbase.` 加固定操作名：`open`、`execute`、`prepare`、`change_database`、`transaction.begin`、`transaction.commit`、`transaction.rollback`。目录查询按其底层 execute 计，batch 按逐条 execute/prepare 计；内部时区探测和自动准备合并到当前操作，不重复计数。取得操作前的验证失败、预取消、连接关闭和无网络的静态目录集合不单独计数；开始后的初始化或校验失败仍计入该操作。
+
+span 继承开始时 Activity.Current 的父上下文，但立即恢复调用方 Current，reader 跨调用生命周期不占据应用的 ambient span；不发送服务端追踪信息。命令覆盖取得执行租约后的准备/执行及完整结果消费，读尽终态时结束，提前关闭或故障也结束且只结束一次；连接覆盖完整 Open 候选建连/TLS/认证，事务覆盖本地状态发布及恢复自动提交。COMMIT/ROLLBACK 已确认而恢复失败仍保留已确认结果，清理失败沿既有日志报告。诊断开始在操作独占状态发布后、内部锁外，结束在资源/事务状态清理后；监听器异常不能改变操作结果、跳过清理或泄漏 Activity.Current，包括 Activity.CurrentChanged 在恢复上下文时抛异常。若首次注册源或发布instrument的监听器抛异常，对应诊断通道可在该程序集实例内失效，不使驱动类型初始化失败或阻断后续连接；修复应用监听器后应重新启动以恢复该通道。
+
+两个指标为 `oceanbase.client.operations`（Counter<long>，单位 `{operation}`）和 `oceanbase.client.operation.duration`（Histogram<double>，单位 `s`），都在操作结束时记录一次。共同固定标签 `db.operation.name`、`oceanbase.compatibility_mode`（`mysql`/`oracle`/`unknown`）、`oceanbase.outcome`（`success`/`error`/`canceled`/`timeout`）及 `oceanbase.execution_outcome_unknown`（bool）；取消/超时原因和执行结果未知可同时表达，模式在认证确认前只能为 unknown。span 使用相同标签，另加固定 `db.system.name=oceanbase`，成功为 Ok，其余为 Error，不附错误文本/异常事件。metric 不包含端点、库名、SQL、参数、凭据、连接ID或任意键。无监听器时不创建每次诊断对象、Activity、标签集合或Stopwatch；以Windows本地公开协议/预处理/多结果/大值基线记录耗时、分配与禁用开销，不以夹具数值代替真实数据库性能。C01 尚阻塞，高并发池借还基线暂缓，不用非池连接基线冒充。
 
 ### 2.7 当前代码影响与验收
 
@@ -329,7 +336,7 @@ reader 在响应尚未消费完时独占物理会话，终态完整读取后释�
 | 命令/参数 | 文本无参和强制服务端 prepare；无客户端插值回退；只允许 Input 和 Text；Oracle 名称绑定限 B03 子集 | B02-B05/B08 公共环回；不支持 Java 客户端 prepare 默认路径、存储过程及 OUT |
 | reader/元数据 | 逐行文本/二进制、多结果、两套字段 schema、固定 CLR/provider-specific 类型；typed getter 要求类型匹配，C03 的 decimal/DateTime/DateTimeOffset getter 允许精确转换 | B05/B06/B09；C04 已实现本地 SequentialAccess 字段流及服务端游标；C05首批四个目录集合及现代GetSchemaAsync本地实现；真实大值/游标/字典验收仍开放 |
 | 本地事务/取消 | 会话绑定、两模式隔离映射、结果未知不重放；环境事务始终拒绝 | B07/B08；Oracle RepeatableRead、XA/TransactionScope 不照搬 Java 支持范围 |
-| 诊断 | Connection 1000..1003、Command 1100/1101、Transaction 1200/1201 分类别；预先安全创建 logger，后端异常不改变结果 | B09 修复原命令事件误入 Connection 类别，4项类别过滤回归先失败后通过；ActivitySource/Meter 留 C07 |
+| 诊断 | Connection 1000..1003、Command 1100/1101、Transaction 1200/1201 分类别；预先安全创建 logger，后端异常不改变结果 | B09 修复原命令事件误入 Connection 类别，4项类别过滤回归先失败后通过；C07补充五资产ActivitySource/Meter、固定标签及禁用开销基线，Windows单元/隔离消费与实际8/9/10样例通过；实库、池性能和跨平台仍待验收 |
 | 现代 batch | C06 逐条执行、流式结果、各条计数/失败归属和显式事务，现代 factory/connection/source 入口共用；两个 Standard 资产不含 batch 类型 | Windows 协议/隔离消费及 .NET8/9/10 独立运行时消费；真实双模式批量互通尚未验收 |
 | 扩展/发布 | 不宣称 adapter/command builder、池化、LOB 等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
 
@@ -349,7 +356,7 @@ C02 的 .NET 连接串约定为 `Server=ob1:2881,ob2:2883,[::1]:2881;Port=2881`�
 
 2026-10-19 C02已在共享PhysicalSession路径实现，connection和现代data source共用；Windows60项新增单元、五资产10项同步/异步消费及五次8/9/10独立运行时基础消费提供本地证据。TLS测试记录实际SNI和认证_server_host，VerifyFull拒绝不受信证书且不尝试下一地址；可信私有CA成功链仍未验收。总预算回归只证明整个Open耗时上界，跨候选不重置由单次CreateBudget及同一token传递的源码走查确认，不依赖操作系统拒绝连接的耗时。IPv6有解析证据，真实IPv6网络、两模式直连/OBProxy与非Windows互通仍未验证。C01尚无完整重置白名单，继续拒绝池化。
 
-数据库/协议错误使用 `OceanBaseException : DbException`，保留服务端错误码、SQLSTATE、模式、`IsExecutionOutcomeUnknown` 和可安全公开的端点信息；发送前的调用方取消遵循 `OperationCanceledException`。B01 接入 `Microsoft.Extensions.Logging.Abstractions`，由数据源 builder 的 `UseLoggerFactory` 配置，默认无日志，不使用可变全局工厂；命令/事务日志随 B02/B07 实现。日志与追踪不写入默认 SQL、绑定值、凭据或原始服务端错误文本，日志后端异常不能改变执行与资源清理结果。C07 再用 `ActivitySource`、`Meter` 暴露本地操作和聚合指标，旧资产所需 `System.Diagnostics.DiagnosticSource` 等依赖须五目标验证；不预先叠加多套事件设施。本地追踪不依赖 OB20，经服务端协商的完整链路追踪归 D01。日志与协议抓包分开，抓包必须显式开启并擦除认证和参数内容。事件、安全和生命周期细则见 §2.6。
+数据库/协议错误使用 `OceanBaseException : DbException`，保留服务端错误码、SQLSTATE、模式、`IsExecutionOutcomeUnknown` 和可安全公开的端点信息；发送前的调用方取消遵循 `OperationCanceledException`。B01 接入 `Microsoft.Extensions.Logging.Abstractions`，由数据源 builder 的 `UseLoggerFactory` 配置，默认无日志，不使用可变全局工厂；命令/事务日志随 B02/B07 实现。日志与追踪不写入默认 SQL、绑定值、凭据或原始服务端错误文本，日志后端异常不能改变执行与资源清理结果。C07 已用 `ActivitySource`、`Meter` 暴露本地操作和聚合指标，两个Standard资产显式DiagnosticSource8.0.1、现代资产运行时API的五目标边界已本地验证；不预先叠加多套事件设施。本地追踪不依赖 OB20，经服务端协商的完整链路追踪归 D01。日志与协议抓包分开，抓包必须显式开启并擦除认证和参数内容。事件、安全和生命周期细则见 §2.6。
 
 ## 7. 实施阶段与验收
 

@@ -67,6 +67,7 @@ namespace OceanBaseConnector
         {
             var operation = Start(behavior, token, false);
             var execution = operation.Exchange;
+            execution.StartDiagnostics("execute");
             try
             {
                 var zone = execution.EnsureSessionTimeZone();
@@ -86,6 +87,7 @@ namespace OceanBaseConnector
         internal void PrepareCore(CancellationToken token)
         {
             var operation = Start(CommandBehavior.Default, token, true);
+            operation.Exchange.StartDiagnostics("prepare");
             try { EnsurePrepared(operation); operation.Exchange.Complete(); }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }
@@ -110,6 +112,7 @@ namespace OceanBaseConnector
         {
             var operation = Start(behavior, cancellationToken, false);
             var execution = operation.Exchange;
+            execution.StartDiagnostics("execute");
             try
             {
                 var zone = await execution.EnsureSessionTimeZoneAsync(cancellationToken).ConfigureAwait(false);
@@ -128,6 +131,7 @@ namespace OceanBaseConnector
         public override async Task PrepareAsync(CancellationToken cancellationToken = default)
         {
             var operation = Start(CommandBehavior.Default, cancellationToken, true);
+            operation.Exchange.StartDiagnostics("prepare");
             try { await EnsurePreparedAsync(operation, cancellationToken).ConfigureAwait(false); operation.Exchange.Complete(); }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }

@@ -1,6 +1,10 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using System.Linq;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -20,6 +24,13 @@ namespace OceanBaseConnector.ConsumerTests
         {
             var major = int.Parse(args[0]); Check(Environment.Version.Major == major, "Runtime");
             Check(typeof(ILoggerFactory).Assembly.GetName().Version!.Major == major, "Logging dependency");
+            Check(typeof(ActivitySource).Assembly.GetName().Version!.Major == major, "DiagnosticSource dependency");
+            using var parent = new Activity("application").Start(); var spans = new List<Activity>(); var measurements = 0;
+            using var activityListener = new ActivityListener { ShouldListenTo = source => source.Name == "OceanBaseConnector", Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData, SampleUsingParentId = (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllData, ActivityStopped = activity => spans.Add(activity) };
+            ActivitySource.AddActivityListener(activityListener);
+            using var meterListener = new MeterListener(); meterListener.InstrumentPublished = (instrument, owner) => { if (instrument.Meter.Name == "OceanBaseConnector") owner.EnableMeasurementEvents(instrument); };
+            meterListener.SetMeasurementEventCallback<long>((_, value, tags, _) => { Check(value == 1 && tags.Length == 4, "Operation metric"); measurements++; });
+            meterListener.SetMeasurementEventCallback<double>((_, value, _, _) => Check(value >= 0, "Duration metric")); meterListener.Start();
             using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(15)); var token = tokenSource.Token;
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             using var fixture = JsonDocument.Parse(File.ReadAllText(args[1]));
@@ -64,7 +75,11 @@ namespace OceanBaseConnector.ConsumerTests
                 }
             }
             await serving.WaitAsync(token);
-            Console.WriteLine($"PASS batch {RuntimeInformation.FrameworkDescription} Logging={typeof(ILoggerFactory).Assembly.GetName().Version}");
+            Check(spans.Count == 8 && measurements == 8, "Diagnostic lifecycle counts");
+            Check(spans.All(span => span.ParentId == parent.Id && !string.Join(";", span.TagObjects).Contains("secret")), "Parent and redaction");
+            Check(spans.Count(span => span.Status == ActivityStatusCode.Error) == 1, "Known failure span");
+            Check(Activity.Current == parent, "Ambient span restored");
+            Console.WriteLine($"PASS batch and diagnostics {RuntimeInformation.FrameworkDescription} Logging={typeof(ILoggerFactory).Assembly.GetName().Version}");
         }
         private static DbBatchCommand Add(DbBatch batch, string sql)
         { var command = OceanBaseProviderFactory.Instance.CreateBatchCommand(); command.CommandText = sql; batch.BatchCommands.Add(command); return command; }

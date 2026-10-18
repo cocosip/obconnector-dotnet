@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using OceanBaseConnector.Internal;
 using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.Internal.Session;
 
@@ -82,15 +83,17 @@ namespace OceanBaseConnector
         {
             var operation = StartTransaction(isolationLevel, CancellationToken.None);
             var timer = Stopwatch.StartNew();
+            var diagnostics = DriverDiagnostics.Start("transaction.begin");
             try
             {
                 Control(operation.Exchange, operation.IsolationSql);
                 Control(operation.Exchange, "set autocommit = 0", false);
                 PublishTransaction(operation.Transaction, operation.Exchange);
+                diagnostics?.Finish(operation.Transaction.Session.Info!.Mode, null);
                 LogTransaction("Begin", operation.Transaction, timer, null);
                 return operation.Transaction;
             }
-            catch (Exception error) { throw BeginFailed(operation.Transaction, operation.Exchange, timer, error); }
+            catch (Exception error) { var mapped = BeginFailed(operation.Transaction, operation.Exchange, timer, error); diagnostics?.Finish(operation.Transaction.Session.Info!.Mode, mapped); throw mapped; }
         }
 
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
@@ -98,15 +101,17 @@ namespace OceanBaseConnector
         {
             var operation = StartTransaction(isolationLevel, cancellationToken);
             var timer = Stopwatch.StartNew();
+            var diagnostics = DriverDiagnostics.Start("transaction.begin");
             try
             {
                 await ControlAsync(operation.Exchange, operation.IsolationSql).ConfigureAwait(false);
                 await ControlAsync(operation.Exchange, "set autocommit = 0", false).ConfigureAwait(false);
                 PublishTransaction(operation.Transaction, operation.Exchange);
+                diagnostics?.Finish(operation.Transaction.Session.Info!.Mode, null);
                 LogTransaction("Begin", operation.Transaction, timer, null);
                 return operation.Transaction;
             }
-            catch (Exception error) { throw BeginFailed(operation.Transaction, operation.Exchange, timer, error); }
+            catch (Exception error) { var mapped = BeginFailed(operation.Transaction, operation.Exchange, timer, error); diagnostics?.Finish(operation.Transaction.Session.Info!.Mode, mapped); throw mapped; }
         }
 #endif
 
@@ -155,16 +160,18 @@ namespace OceanBaseConnector
         private void FinishTransaction(OceanBaseTransaction transaction, CommandExchange exchange, bool commit)
         {
             var timer = Stopwatch.StartNew();
+            var diagnostics = DriverDiagnostics.Start(commit ? "transaction.commit" : "transaction.rollback");
             Exception? restoreError = null;
             try
             {
                 Control(exchange, commit ? "COMMIT" : "ROLLBACK", transactionEnded: true);
             }
-            catch (Exception error) { throw EndFailed(transaction, exchange, timer, commit, error); }
+            catch (Exception error) { var mapped = EndFailed(transaction, exchange, timer, commit, error); diagnostics?.Finish(transaction.Session.Info!.Mode, mapped); throw mapped; }
             try { Control(exchange, "set autocommit = 1", true, true); }
             catch (Exception error) { restoreError = error; transaction.Session.Break(); }
             DetachTransaction(transaction);
             exchange.Complete();
+            diagnostics?.Finish(transaction.Session.Info!.Mode, null);
             if (restoreError != null) LogTransaction("RestoreAutocommit", transaction, timer, restoreError);
             LogTransaction(commit ? "Commit" : "Rollback", transaction, timer, null);
         }
@@ -172,16 +179,18 @@ namespace OceanBaseConnector
         private async Task FinishTransactionAsync(OceanBaseTransaction transaction, CommandExchange exchange, bool commit)
         {
             var timer = Stopwatch.StartNew();
+            var diagnostics = DriverDiagnostics.Start(commit ? "transaction.commit" : "transaction.rollback");
             Exception? restoreError = null;
             try
             {
                 await ControlAsync(exchange, commit ? "COMMIT" : "ROLLBACK", transactionEnded: true).ConfigureAwait(false);
             }
-            catch (Exception error) { throw EndFailed(transaction, exchange, timer, commit, error); }
+            catch (Exception error) { var mapped = EndFailed(transaction, exchange, timer, commit, error); diagnostics?.Finish(transaction.Session.Info!.Mode, mapped); throw mapped; }
             try { await ControlAsync(exchange, "set autocommit = 1", true, true).ConfigureAwait(false); }
             catch (Exception error) { restoreError = error; transaction.Session.Break(); }
             DetachTransaction(transaction);
             exchange.Complete();
+            diagnostics?.Finish(transaction.Session.Info!.Mode, null);
             if (restoreError != null) LogTransaction("RestoreAutocommit", transaction, timer, restoreError);
             LogTransaction(commit ? "Commit" : "Rollback", transaction, timer, null);
         }

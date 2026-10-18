@@ -31,6 +31,8 @@ namespace OceanBaseConnector.Internal.Session
         private bool _cursorOwned;
         private int _finished;
         private int _packets;
+        private DriverDiagnostics.Operation? _diagnostics;
+        internal void StartDiagnostics(string operation) => _diagnostics = DriverDiagnostics.Start(operation);
 
         internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release, bool logCommand = true, object? owner = null, Func<CancellationToken>? cancellationOrigin = null)
         {
@@ -224,6 +226,7 @@ namespace OceanBaseConnector.Internal.Session
 #if NET8_0_OR_GREATER
             if (error != null) BatchFailed?.Invoke();
 #endif
+            _diagnostics?.Finish(_session.Info!.Mode, error);
             if (_logCommand) _log.CommandFinished(_session.Endpoint, _session.Info!.Mode, _elapsed.ElapsedMilliseconds, error);
         }
 
