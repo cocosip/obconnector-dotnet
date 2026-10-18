@@ -22,10 +22,10 @@ namespace OceanBaseConnector.Internal.Protocol
         public const int MaxFramePayload = 0xFFFFFF;
         public const long DefaultMaxPacketSize = 64 * 1024 * 1024;
 
-        private readonly Stream _stream;
         private readonly long _maxPacketSize;
         private readonly byte[] _headerBuffer = new byte[4];
 
+        private Stream _stream;
         private int _sendSequence;
         private int _receiveSequence;
 
@@ -46,6 +46,31 @@ namespace OceanBaseConnector.Internal.Protocol
         }
 
         public long MaxPacketSize => _maxPacketSize;
+
+        /// <summary>
+        /// Swaps the underlying stream after a TLS upgrade. Sequence counters
+        /// are preserved: the TLS handshake is invisible to the packet
+        /// framing, which continues exactly where it left off.
+        /// </summary>
+        public void ReplaceUnderlyingStream(Stream stream)
+        {
+            if (stream is null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            _stream = stream;
+        }
+
+        /// <summary>
+        /// Aligns the send sequence with the last received frame + 1, as the
+        /// protocol requires when answering the server's initial handshake:
+        /// the SSLRequest is the client's frame 1 after the server's frame 0.
+        /// </summary>
+        public void AlignSendSequenceToReceived()
+        {
+            _sendSequence = _receiveSequence;
+        }
 
         /// <summary>
         /// Starts a new command exchange: the client command is frame 0 and
