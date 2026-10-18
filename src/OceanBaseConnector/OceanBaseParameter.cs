@@ -53,6 +53,7 @@ namespace OceanBaseConnector
                 case global::OceanBaseConnector.OceanBaseDbType.OracleDate:
                 case global::OceanBaseConnector.OceanBaseDbType.Date: return DbType.Date;
                 case global::OceanBaseConnector.OceanBaseDbType.Timestamp: return DbType.DateTime2;
+                case global::OceanBaseConnector.OceanBaseDbType.TimestampWithTimeZone: return DbType.DateTimeOffset;
                 case global::OceanBaseConnector.OceanBaseDbType.SByte: return DbType.SByte;
                 case global::OceanBaseConnector.OceanBaseDbType.Byte: return DbType.Byte;
                 case global::OceanBaseConnector.OceanBaseDbType.Int16: return DbType.Int16;
@@ -90,6 +91,7 @@ namespace OceanBaseConnector
             if (value is double) return DbType.Double;
             if (value is decimal || value is OceanBaseDecimal) return DbType.Decimal;
             if (value is OceanBaseTimestamp) return DbType.DateTime2;
+            if (value is OceanBaseTimestampWithTimeZone) return DbType.DateTimeOffset;
             if (value is DateTime) return DbType.DateTime;
             if (value is DateTimeOffset) return DbType.DateTimeOffset;
             if (value is TimeSpan) return DbType.Time;

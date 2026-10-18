@@ -79,8 +79,8 @@ namespace OceanBaseConnector.UnitTests
                 command.CommandText = "select ?";
                 await Assert.ThrowsAsync<NotSupportedException>(execute);
                 command.CommandText = "select :id";
-                command.Parameters.Add(new OceanBaseParameter { ParameterName = ":ID", DbType = DbType.DateTimeOffset, Value = DateTimeOffset.UtcNow });
-                await Assert.ThrowsAsync<NotSupportedException>(execute); // Zone-aware temporal binding remains deferred.
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = ":ID", DbType = DbType.Guid, Value = Guid.Empty });
+                await Assert.ThrowsAsync<NotSupportedException>(execute); // Guid binding remains unsupported.
                 command.CommandText = "select 1";
                 await Assert.ThrowsAsync<ArgumentException>(execute);
                 command.CommandText = "select :id";
@@ -701,7 +701,6 @@ namespace OceanBaseConnector.UnitTests
 
         [Theory]
         [InlineData(10, 45)]
-        [InlineData(200, 45)]
         [InlineData(207, 45)]
         [InlineData(16, 63)]
         [InlineData(253, 8)]

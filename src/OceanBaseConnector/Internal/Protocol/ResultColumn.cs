@@ -36,7 +36,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal long Precision { get; }
         internal int Scale { get; }
         internal bool IsDecimal => TypeCode == 0 || TypeCode == 246 || TypeCode == 3 && Mode == OceanBaseCompatibilityMode.Oracle;
-        internal bool IsTemporal => TypeCode == 7 || TypeCode == 10 || TypeCode == 11 || TypeCode == 12 || TypeCode == 202;
+        internal bool IsTemporal => TypeCode == 7 || TypeCode == 10 || TypeCode == 11 || TypeCode == 12 || TypeCode == 200 || TypeCode == 202;
         internal Type ProviderSpecificFieldType => IsDecimal ? typeof(OceanBaseDecimal) : TypeCode == 202 ? typeof(OceanBaseTimestamp) : FieldType;
 
         internal OceanBaseTimestamp DecodeTimestamp(byte[] value)
@@ -88,6 +88,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 10: return "DATE";
                     case 11: return "TIME";
                     case 12: return Mode == OceanBaseCompatibilityMode.Oracle ? "DATE" : "DATETIME";
+                    case 200: return "TIMESTAMP WITH TIME ZONE";
                     case 203: return "RAW";
                     case 15: return Charset == 63 ? "VARBINARY" : "VARCHAR";
                     case 253: return Charset == 63 ? "VARBINARY" : Mode == OceanBaseCompatibilityMode.Oracle ? "VARCHAR2" : "VARCHAR";
@@ -129,6 +130,9 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 12:
                         if (Scale < 0 || Scale > (Mode == OceanBaseCompatibilityMode.Oracle ? 0 : 6)) throw new NotSupportedException("The temporal precision is not supported.");
                         return typeof(DateTime);
+                    case 200:
+                        if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > 9) throw new NotSupportedException("The timestamp metadata is not supported.");
+                        return typeof(OceanBaseTimestampWithTimeZone);
                     case 202:
                         if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > 9) throw new NotSupportedException("The timestamp metadata is not supported.");
                         return Scale <= 7 ? typeof(DateTime) : typeof(OceanBaseTimestamp);
@@ -169,6 +173,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 10: return OceanBaseDbType.Date;
                     case 11: return OceanBaseDbType.Time;
                     case 12: return Mode == OceanBaseCompatibilityMode.Oracle ? OceanBaseDbType.OracleDate : OceanBaseDbType.DateTime;
+                    case 200: return OceanBaseDbType.TimestampWithTimeZone;
                     case 203: return OceanBaseDbType.Binary;
                     case 15:
                     case 253:
@@ -188,6 +193,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 var number = DecodeDecimal(value, false);
                 return fieldType == typeof(decimal) ? (object)number.ToDecimal() : number;
             }
+            if (TypeCode == 200) return TemporalCodec.DecodeTimestampWithTimeZone(value, Scale);
             if (TypeCode == 202) return TemporalCodec.DecodeBinary(TypeCode, Mode, value, Scale);
             if (IsTemporal) return TemporalCodec.DecodeText(TypeCode, Mode, Utf8.GetString(value));
             if (fieldType == typeof(byte[])) return (byte[])value.Clone();
@@ -233,6 +239,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 var number = DecodeDecimal(value, true);
                 return fieldType == typeof(decimal) ? (object)number.ToDecimal() : number;
             }
+            if (TypeCode == 200) return TemporalCodec.DecodeTimestampWithTimeZone(value, Scale);
             if (IsTemporal) return TemporalCodec.DecodeBinary(TypeCode, Mode, value, Scale);
             var cursor = new ByteCursor(value);
             switch (TypeCode)

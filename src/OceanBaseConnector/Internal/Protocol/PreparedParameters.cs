@@ -35,6 +35,14 @@ namespace OceanBaseConnector.Internal.Protocol
                     stream.Position = end;
                 }
                 else if (parameter.DbType == DbType.Decimal) WriteDecimal(writer, parameter, value, mode);
+                else if (parameter.DbType == DbType.DateTimeOffset)
+                {
+                    var zoned = value is OceanBaseTimestampWithTimeZone provider ? provider : value is DateTimeOffset date
+                        ? new OceanBaseTimestampWithTimeZone(date) : throw new ArgumentException("The parameter value does not match its declared DbType.");
+                    var payload = TemporalCodec.EncodeTimestampWithTimeZone(zoned, parameter.DeclaredScale);
+                    if (payload.Length > byte.MaxValue) throw new ArgumentException("The time zone parameter payload exceeds its single-byte protocol length.");
+                    writer.Write((byte)payload.Length); writer.Write(payload);
+                }
                 else if (parameter.DbType == DbType.Date || parameter.DbType == DbType.DateTime || parameter.DbType == DbType.DateTime2)
                 {
                     if (value is OceanBaseTimestamp timestamp)
@@ -96,7 +104,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (parameter.DbType == DbType.Decimal && mode == OceanBaseCompatibilityMode.MySql && parameter.Precision != 0 && parameter.Scale > parameter.Precision)
                 throw new ArgumentException("Decimal scale exceeds its declared precision.");
             var temporalScale = parameter.DbType == DbType.Time ? 6 : parameter.DbType == DbType.Date ? 0 : mode == OceanBaseCompatibilityMode.Oracle ? 9 : 6;
-            if ((parameter.DbType == DbType.Date || parameter.DbType == DbType.DateTime || parameter.DbType == DbType.DateTime2 || parameter.DbType == DbType.Time) && parameter.Scale > temporalScale)
+            if ((parameter.DbType == DbType.Date || parameter.DbType == DbType.DateTime || parameter.DbType == DbType.DateTime2 || parameter.DbType == DbType.Time || parameter.DbType == DbType.DateTimeOffset) && parameter.Scale > temporalScale)
                 throw new NotSupportedException("The temporal parameter precision is not supported.");
             switch (parameter.DbType)
             {
@@ -112,6 +120,9 @@ namespace OceanBaseConnector.Internal.Protocol
                 case DbType.Single: return 4;
                 case DbType.Double: return 5;
                 case DbType.Decimal: return 246;
+                case DbType.DateTimeOffset:
+                    if (mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Time zone parameters require Oracle mode.");
+                    return 200;
                 case DbType.Date: return mode == OceanBaseCompatibilityMode.Oracle ? (ushort)12 : (ushort)10;
                 case DbType.DateTime:
                 case DbType.DateTime2: return mode == OceanBaseCompatibilityMode.Oracle ? (ushort)202 : (ushort)12;

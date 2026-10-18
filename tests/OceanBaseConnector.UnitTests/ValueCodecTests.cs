@@ -364,7 +364,7 @@ namespace OceanBaseConnector.UnitTests
         {
             var raw = ValueColumn(203, OceanBaseCompatibilityMode.Oracle, charset: 63);
             Assert.Equal(new byte[] { 0, 255 }, raw.Decode(new byte[] { 0, 255 }));
-            foreach (var type in new byte[] { 13, 16, 200, 201, 204, 205, 207, 208, 210, 211, 245 })
+            foreach (var type in new byte[] { 13, 16, 201, 204, 205, 207, 208, 210, 211, 245 })
                 Assert.Throws<NotSupportedException>(() => ValueColumn(type, OceanBaseCompatibilityMode.Oracle).Decode(new byte[] { 1 }));
         }
 

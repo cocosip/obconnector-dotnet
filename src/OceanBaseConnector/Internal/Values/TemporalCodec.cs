@@ -11,6 +11,12 @@ namespace OceanBaseConnector.Internal.Values
 
         internal static byte[] ReadField(ByteCursor cursor, byte type)
         {
+            if (type == 200)
+            {
+                var lengthWithZone = cursor.ReadLengthEncodedInteger();
+                if (lengthWithZone < 14 || lengthWithZone > 530) throw new ProtocolException("Invalid Oracle TIMESTAMP WITH TIME ZONE length.");
+                return cursor.ReadBytes((int)lengthWithZone);
+            }
             var length = cursor.ReadUInt8();
             var valid = type == 202 ? length == 12 : type == 11 ? length == 0 || length == 8 || length == 12
                 : type == 10 ? length == 0 || length == 4 : length == 0 || length == 4 || length == 7 || length == 11;
@@ -86,7 +92,11 @@ namespace OceanBaseConnector.Internal.Values
         internal static OceanBaseTimestamp DecodeTimestamp(byte[] value, int scale)
         {
             if (value.Length != 12) throw new ProtocolException("Invalid Oracle TIMESTAMP length.");
-            var cursor = new ByteCursor(value);
+            return DecodeTimestamp(new ByteCursor(value), scale);
+        }
+
+        private static OceanBaseTimestamp DecodeTimestamp(ByteCursor cursor, int scale)
+        {
             var century = cursor.ReadUInt8(); var year = cursor.ReadUInt8();
             if (century > 99 || year > 99) throw new FormatException("The timestamp year is outside the DateTime range.");
             var date = Date(century * 100 + year, cursor.ReadUInt8(), cursor.ReadUInt8(), cursor.ReadUInt8(), cursor.ReadUInt8(), cursor.ReadUInt8());
@@ -98,11 +108,60 @@ namespace OceanBaseConnector.Internal.Values
             return new OceanBaseTimestamp(date, (int)nanoseconds, valueScale);
         }
 
+        internal static OceanBaseTimestampWithTimeZone DecodeTimestampWithTimeZone(byte[] value, int scale)
+        {
+            if (value.Length < 14 || value.Length > 530) throw new ProtocolException("Invalid Oracle TIMESTAMP WITH TIME ZONE length.");
+            var cursor = new ByteCursor(value);
+            var timestamp = DecodeTimestamp(cursor, scale);
+            var hour = unchecked((sbyte)cursor.ReadUInt8());
+            var minute = unchecked((sbyte)cursor.ReadUInt8());
+            var offsetMinutes = hour < 0 ? hour * 60 - minute : hour * 60 + minute;
+            if (hour < -14 || hour > 14 || minute < -59 || minute > 59 || hour != 0 && minute < 0 || Math.Abs(offsetMinutes) > 840)
+                throw new ProtocolException("Invalid timestamp UTC offset.");
+            string? name = null, abbreviation = null;
+            if (cursor.HasRemaining)
+            {
+                name = ReadTimeZoneIdentity(cursor);
+                abbreviation = ReadTimeZoneIdentity(cursor);
+                if (cursor.HasRemaining) throw new ProtocolException("Trailing time zone identity bytes.");
+            }
+            return new OceanBaseTimestampWithTimeZone(timestamp, TimeSpan.FromMinutes(offsetMinutes), name, abbreviation);
+        }
+
+        private static string ReadTimeZoneIdentity(ByteCursor cursor)
+        {
+            var length = cursor.ReadLengthEncodedInteger();
+            if (length < 0 || length > byte.MaxValue) throw new ProtocolException("Invalid time zone identity length.");
+            return ResultColumn.Utf8.GetString(cursor.ReadBytes((int)length));
+        }
+
+        internal static byte[] EncodeTimestampWithTimeZone(OceanBaseTimestampWithTimeZone value, byte? declaredScale)
+        {
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream, ResultColumn.Utf8, leaveOpen: true);
+            WriteTimestampBody(writer, value.Timestamp, declaredScale);
+            var minutes = (int)value.Offset.TotalMinutes;
+            writer.Write(unchecked((byte)(minutes / 60)));
+            // Connector/J parameter hours carry the sign; a sub-hour negative offset needs signed minutes.
+            writer.Write(unchecked((byte)(minutes <= -60 ? -minutes % 60 : minutes % 60)));
+            var name = ResultColumn.Utf8.GetBytes(value.TimeZoneName ?? "");
+            var abbreviation = ResultColumn.Utf8.GetBytes(value.TimeZoneAbbreviation ?? "");
+            writer.Write((byte)name.Length); writer.Write(name);
+            writer.Write((byte)abbreviation.Length); writer.Write(abbreviation);
+            return stream.ToArray();
+        }
+
         internal static void WriteTimestamp(BinaryWriter writer, OceanBaseTimestamp value, byte? declaredScale)
+        {
+            writer.Write((byte)12);
+            WriteTimestampBody(writer, value, declaredScale);
+        }
+
+        private static void WriteTimestampBody(BinaryWriter writer, OceanBaseTimestamp value, byte? declaredScale)
         {
             var timestamp = declaredScale.HasValue ? new OceanBaseTimestamp(value.WholeSeconds, value.Nanosecond, declaredScale.Value) : value;
             var date = timestamp.WholeSeconds;
-            writer.Write((byte)12); writer.Write((byte)(date.Year / 100)); writer.Write((byte)(date.Year % 100));
+            writer.Write((byte)(date.Year / 100)); writer.Write((byte)(date.Year % 100));
             writer.Write((byte)date.Month); writer.Write((byte)date.Day);
             writer.Write((byte)date.Hour); writer.Write((byte)date.Minute); writer.Write((byte)date.Second);
             writer.Write((uint)timestamp.Nanosecond); writer.Write(timestamp.Scale);

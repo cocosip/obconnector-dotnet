@@ -301,11 +301,15 @@ B09 本地审核/补齐完成、状态待验证；双模式直连/OBProxy、非 
 - [x] `GetDecimal`/`GetFieldValue<decimal>` 只作精确转换；声明列类型不随当前值或 NULL 改变。修复未声明参数精度时的误限制、MySQL负scale的声明精度漏检及零值误拒绝，均有失败后通过的回归。
 - [x] 不带时区的Oracle `TIMESTAMP(0..9)`本地读写/精确转换/整列类型/五目标消费及独立走查；Unit716/Consumer59/DI8，编译、格式、打包矩阵通过，详见台账。
 - [x] 不带时区的 `GetDateTime`/`GetFieldValue<DateTime>` 只在100ns可精确表示时转换，否则溢出；所有p的provider-specific类型固定为OceanBaseTimestamp。
-- [ ] TZ/LTZ、同列混合正常值与零日期在文本/预处理路径的字段类型、provider-specific 值及往返。
-- [ ] `DateTimeOffset`/带时区时间的精确转换与稳定provider-specific类型；LTZ记录可信会话时区标识。
+- [x] TZ 文本/预处理读取、参数写回、稳定标准/provider-specific类型、精确 DateTimeOffset 转换和五资产消费；独立走查的参数长度及负offset问题已回归修复，详见台账。
+- [ ] LTZ 记录可信会话时区标识；同列混合正常值与零日期在文本/预处理路径的字段类型、provider-specific 值及往返。
 - [ ] 两模式实库测试记录会话时区、字符集与服务端列定义。
 
 2026-10-19 纳秒子项执行细化：先贯通不带时区的 Oracle TIMESTAMP(0..9)，TZ/LTZ 和 MySQL 零日期仍保留后续子项。OceanBaseTimestamp 为五目标共享只读值，保存 DateTimeKind.Unspecified 的整秒 WholeSeconds、0..999999999 的 Nanosecond 和0..9的 Scale；构造时拒绝混入亚秒/时区或不符合scale的纳秒，不舍入。ToDateTime 仅在纳秒为100的倍数时成功；年份范围仍为1..9999，超出范围明确失败。标准字段p<=7为DateTime、p8/9为OceanBaseTimestamp，provider-specific访问对所有p都固定为OceanBaseTimestamp，NULL不改变类型。沿Java type202/12字节布局读取两种结果协议，维持载荷scale和列scale一致校验；参数默认保留provider的Scale（普通DateTime仍默认7），显式Scale只允许精确重标度，不改Java固定写9的实现但记录差异。修改到达TemporalCodec、ResultColumn/DbColumn、OceanBaseParameter/PreparedParameters、reader和五资产消费；先验证缺口，再补公开值、codec、公开环回及消费回归，最后完整编译/测试/独立走查/打包后提交。重点回归p8/9小值和NULL不缩窄、纳秒1/999999999、边界日期、非法长度/scale/小数、错误模式以及发包前拒绝。
+
+2026-10-19 TZ/LTZ 执行细化：先交付可独立验证的 TZ 全链路，再处理 LTZ 的可信会话时区来源，C03 始终保持进行中。TZ 的公共 OceanBaseTimestampWithTimeZone 组合已有 OceanBaseTimestamp、分钟精度 offset、可选时区名称及缩写，不用客户端时区规则重算服务端 offset；DateTimeOffset 输入保留本地字段和 offset，ToDateTimeOffset 仅精确转换，越界或纳秒不能整除100时失败。所有p0..9的标准/provider字段类型固定为该类型；type200 两种结果协议共用前12字节时间+小时符号/分钟幅值+可选名称/缩写长度字段，严格检查长度、UTF8、offset及scale；结果与参数均采用小时符号/分钟幅值，小时为零时分钟带符号；结果外层长度编码，参数单字节长度并在超过255字节时发包前拒绝。名称/缩写各按UTF-8限255字节，实际参数总长度另校验；固定server源码证据及名称优先于offset的语义见架构§5，实库接受范围仍待验。参数默认保留scale、显式scale仅精确重标度；DbType.DateTimeOffset和追加的OceanBaseDbType.TimestampWithTimeZone映射到Oracle200，MySQL及不匹配的显式类型在发包前拒绝，旧枚举数值不变。覆盖公共值、codec、同步/异步文本/二进制环回、读写回、NULL稳定schema、恶意载荷和五资产消费；编译/完整测试/格式/包矩阵和独立走查后提交。LTZ不得采用Java默认客户端时区；下一步明确会话时区查询或追踪/失效与结果快照，不能用认证时快照解释任意后续SQL。
+
+2026-10-19 TZ子项本地验证：Unit772/Consumer76/DI8全部通过，核心五目标/DI三目标Release编译0警告/错误，格式、diff、双包和资产/依赖版本矩阵通过。独立走查发现并修复参数单字节长度、负小时分钟幅值、结果名称内部长度编码三项问题；结果最大530字节、参数最大255字节，均有先失败后通过的边界回归。五资产消费宿主仍为net10，真实互通、非Windows及旧运行时未验收；C03保持进行中，LTZ/零日期继续后续实现。
 
 ### C04 大值、SequentialAccess 与服务端游标
 

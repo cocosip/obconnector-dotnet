@@ -114,7 +114,9 @@ namespace OceanBaseConnector
         }
         public override T GetFieldValue<T>(int ordinal) => typeof(T) == typeof(OceanBaseDecimal) || typeof(T) == typeof(OceanBaseTimestamp)
             ? (T)GetProviderSpecificValue(ordinal) : typeof(T) == typeof(decimal) ? (T)(object)GetDecimal(ordinal)
-            : typeof(T) == typeof(DateTime) ? (T)(object)GetDateTime(ordinal) : (T)GetValue(ordinal);
+            : typeof(T) == typeof(DateTime) ? (T)(object)GetDateTime(ordinal)
+            : typeof(T) == typeof(DateTimeOffset) && GetValue(ordinal) is OceanBaseTimestampWithTimeZone zoned ? (T)(object)zoned.ToDateTimeOffset()
+            : (T)GetValue(ordinal);
         public override bool IsDBNull(int ordinal)
         {
             Column(ordinal);

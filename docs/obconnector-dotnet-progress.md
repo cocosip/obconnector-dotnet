@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连。目录元数据和宽精度扩展尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03 宽精度/纳秒/TZ 子项。LTZ、零日期和目录元数据尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -65,7 +65,7 @@
 | --- | --- | --- | --- | --- |
 | C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 2026-10-19 Codex；无真实完整重置白名单，Java reset不能代替OceanBase实测；保持Pooling=true拒绝，先推进独立C02 |
 | C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
-| C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 进行中 | 2026-10-19 Codex；数值及不带时区TIMESTAMP(0..9)子项本地实现/走查完成，Unit716/Consumer59/DI8、五/三目标编译/格式/打包通过；TZ/LTZ、零日期和真实验收未完成，详见本页末 |
+| C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 进行中 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)及TZ子项本地实现；Unit772/Consumer76/DI8、五/三目标编译/格式/打包及独立走查通过；LTZ、零日期和真实验收未完成，详见本页末 |
 | C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 未开始 | 待记录 |
 | C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 未开始 | 待记录 |
 | C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 未开始 | 待记录 |
@@ -256,3 +256,16 @@ C03继续进行中，下一步TZ/LTZ和MySQL零日期；G3仍0/8，C01/A05及G0/
 新增消费回归先复现6项失败（TestResults/review-async-red.trx）：2.1资产五种清理入口阻塞于延迟ROLLBACK，且事务异步覆写缺失。修复后定向17项全通过（review-async-green-final.trx），覆盖异步Begin/Commit/Rollback、原token预取消、连接CloseAsync/DisposeAsync、事务DisposeAsync及reader CloseAsync/DisposeAsync等待回滚和自动提交恢复；2.1与net10的延迟清理均经公开ADO.NET接口验证。最终Windows Unit716、Consumer71、DI8全部通过（review-fixes-{unit,consumer,di}.trx）；Release slnx核心五/DI三目标0警告0错误，格式/diff、双pack及5/3资产、8依赖组、统一0.1.0-alpha、DI精确核心依赖和Microsoft.Extensions8/9/10检查通过。NuGet README提示继续留R01。
 
 独立只读复查已核对共享异步路径、预取消、延迟回滚测试和红绿TRX；指出的架构旧段落已修正，三份文档最终复核无剩余需修复项。本次只修复走查遗漏，不推进TZ/LTZ：C03保持进行中，G3仍0/8；A04/A05、C01及真实环境关口不变。未执行实库、非Windows或新的旧运行时测试；隔离资产消费宿主仍为net10，不能代替旧运行时验收。
+
+
+2026-10-19 C03 TZ 子项与中断走查续接：新增五目标共享 OceanBaseTimestampWithTimeZone，贯通 type200 的文本/二进制读取、固定标准/provider-specific字段类型与schema、精确 DateTimeOffset 转换、参数自动推断及显式 TimestampWithTimeZone（末尾27，既有枚举不变）。本地字段、纳秒、offset及服务端名称/缩写一并保留；不以客户端时区重新解释。LTZ会话时区及MySQL零日期仍未实现，C03继续进行中。
+
+独立走查发现并修复三项协议问题：一是服务端负小时结果使用分钟幅值，(-3,+30)为-03:30，不能以异号为由拒绝；二是结果使用长度编码但参数必须单字节长度，251..255字节不能调用通用WriteBytes，超过255字节须发包前拒绝；三是结果内部名称/缩写也用长度编码，251..255字节占3字节前缀，不能沿用参数单字节字段，最大结果载荷相应为530字节。根据固定服务端提交5e8a63d29dae9fde5e962b8fcc7b167d438fc343的stmt_execute与ob_time_convert补证，参数(-0:30)和非9 scale有源码支持，仍不等于目标版本互通验收。名称存在时服务端可优先按其时区表/缩写解析，不承诺矛盾名称/offset写回后仍保留offset；布局和链接已合并架构§5，未新增独立设计文档。
+
+缺口测试先有9项codec与5项公共接口失败后通过；本轮审查修复又以c03-tz-review-red.trx复现7项失败，修复后c03-tz-review-green.trx的47项通过。回归覆盖两种结果协议、同步/异步公开读取/参数写回、正负/不足小时偏移、DST重复本地时刻、0..9精度、NULL与schema稳定、精确转换/重标度、严格UTF-8、畸形载荷、530字节结果以及250/251/255参数和256/526拒绝；超长参数公开回归确认未发送准备/执行包且会话可继续使用。完整首轮3项失败为旧TZ未支持断言，已替换为Guid发送前拒绝并移除已支持类型200的延期断言，保留其他未支持类型检查。
+
+长名称结果另以c03-tz-name-red.trx复现251/255字节名称两项失败，修复ReadTimeZoneIdentity长度编码及最大载荷后，c03-tz-targeted-final.trx定向57项全通过；NULL/超限内部长度在分配前拒绝。参数内部与外部长度仍保持单字节，不把长名称结果夹具当作可写参数。
+
+最终本地验证：Release slnx核心五目标/DI三目标0警告0错误，Windows Unit772、Consumer76、DI8全部通过（TestResults/c03-tz-unit-final.trx、c03-tz-consumer-final.trx、c03-tz-di-final.trx）。五资产消费均由net10宿主隔离加载，不能代替旧运行时验收。格式/diff、双包和ZIP/XML资产/依赖检查通过：核心5资产、DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本、Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10。既有NuGet README提示留R01。独立只读最终复审已核对三项修复、红绿证据、稳定类型/typed-null/精确转换及三份文档，无剩余必须修复项。
+
+C03仍进行中，下一步LTZ可信会话时区与MySQL零日期；G3仍0/8，A04/A05真实验收、A05可信MySQL模式判定、C01完整重置白名单及G0/G1缺口不变。按用户要求未运行数据库服务器及非Windows测试，也未新增旧运行时验收；源码和环回证据不代替目标版本互通。当前提交仅完成TZ子项和本轮走查修复，不把C03整体标记完成。
