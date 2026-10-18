@@ -1,6 +1,38 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期、C04 报文增量/顺序字段流及服务端游标、C05数据库切换及首批目录集合、C06逐条DbBatch及数据源批量入口、C07本地追踪/聚合指标及Windows性能基线。C03/C04/C05/C06/C07待验证，本地实现及走查已完成，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17；当前进度更新：2026-10-19。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。
+
+## 当前开发进度
+
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；最近完成的是 R01/R02 包消费及运行时验证工具，代码基线为 `1aeba69`。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+
+| 范围 | 当前已实现及本地验证 | 尚未完成 |
+| --- | --- | --- |
+| A01/A02/A03/A06 | 工程、连接配置、标准报文/序号/分片、物理会话状态与独占生命周期已完成；后续命令、statement、reader资源管理已接入 | 真实服务端互通另随阶段门槛验收 |
+| A04 | TCP、SSLRequest、TLS升级/拒绝、同步/异步取消及Windows环回已实现；同步建连借用等待句柄缺陷已修复并有压力回归 | 私有CA成功链、真实证书名及跨平台验收 |
+| A05/A07 | 安全认证、Oracle模式位、能力协商、认证错误/脱敏及真实环境测试入口已实现 | 可信MySQL模式判定及版本/插件白名单；双模式直连/OBProxy真实验收。当前公共MySQL连接仍被拒绝 |
+| B01–B09 | 统一provider/factory、现代数据源/DI/日志；文本与预处理命令、命名绑定、逐行/多结果reader、字段元数据、基础/provider-specific类型、本地事务、取消/超时/结果未知及公共API审核已完成本地实现和走查 | 双模式真实CRUD、参数/类型往返、事务、故障及跨平台验收；本地夹具不能证明服务端兼容 |
+| C02–C04 | 多地址仅建连前切换；宽精度数值、纳秒/TZ/LTZ/零日期；SequentialAccess字段流及服务端游标已实现并有本地回归 | 真实模式/版本/OBProxy的大值、游标、精确值、资源和性能验收 |
+| C05–C07 | MySQL ChangeDatabase、首批四个GetSchema集合/现代异步入口；逐条DbBatch及数据源入口；ActivitySource/Meter、脱敏及Windows协议性能基线已实现并走查 | 真实目录权限/字典、切库、批次及诊断验收；池借还性能尚无实现基础 |
+| C01/C08 | 未开放Pooling=true，公开入口明确拒绝；生产验收缺口已列明 | 连接池及完整重置实现、可信版本/模式白名单、生产矩阵与G3验收 |
+| R01/R02 | 同版本双包、五资产实际包消费、故障/回退README、8/9完整本地Unit/DI及Windows Framework基础包消费工具已完成 | 许可证/来源/包名审核、正式Framework支持决定、真实兼容矩阵和最终发布审核 |
+| D01–D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及扩展类型等按原计划另行实施 |
+
+工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
+
+最近一次已执行的Windows验证结果如下（本次进度更新仅核对已有报告，未重跑）：
+
+| 实际运行时 | Unit通过 | Consumer通过 | DI通过 | 失败/跳过 |
+| --- | --- | --- | --- | --- |
+| .NET 8.0.31 | 1206 | 实际包消费另验 | 8 | 0/0 |
+| .NET 9.0.20 | 1206 | 实际包消费另验 | 8 | 0/0 |
+| .NET 10.0.12 | 1206 | 152 | 8 | 0/0 |
+
+报告为 `TestResults/runtime8-unit-final.trx`、`runtime8-di.trx`、`runtime9-unit.trx`、`runtime9-di.trx`及 `runtime10-{unit,consumer,di}-final.trx`。最新Release slnx核心五目标/DI三目标编译为0警告、0错误（`TestResults/framework-slnx-build-final.log`）；默认五资产和可选Framework包验证均通过（`framework-default-package-final.log`、`framework-package-final.log`）。Framework仅证明net48目标在本机4.8.1上的基础Standard2.0包消费，不代表完整SQL/TLS或原版4.8支持。
+
+最近已提交：`d8d7072`修复同步TCP等待句柄；`0e8229b`补齐8/9完整本地回归并修复测试兼容；`1aeba69`新增可选Windows Framework包消费及生成工程重建修复。已报告走查问题的修复和红绿证据见后文。
+
+后文阶段计数按正式验收完成项统计，B/C显示0项通过关口不代表没有实现；各模块落地时的测试数量为历史快照，最新全量结果以上表为准。
 
 ## 中断走查问题核销（2026-10-19）
 
@@ -20,7 +52,7 @@
 | 旧 reader 污染新批次计数或关闭重开后的连接；字段失败遗留批次预约；取消异常丢失调用方 token | `f93c15e` | BatchTests：ClosedBatchReaderCountsAreAnIndependentSnapshotAcrossReuse；BatchFaultTests：OldCloseConnectionReaderCannotCloseReopenedSession、BatchFieldStreamFailureReleasesOperationWithoutNeedingExtraClose、BatchPartialSendCancellationRetainsPrefixAndUnknownAttribution、BatchCancellationBetweenStatementsPreservesOriginalCallerToken、BatchNextResultPartialSendRetainsItsOwnReaderToken |
 | 诊断初始化回调抛错导致类型初始化失败；Activity.CurrentChanged 抛错逃逸并遗留 Busy 租约 | `e371ff4` | DiagnosticsConsumerTests：EveryAssetPublishesSafeDiagnosticsWithoutInitializationPoisoning，五资产初始化异常隔离；DiagnosticsTests：ThrowingAmbientContextChangeCallbackCannotStrandCommandOwnership，同步/异步并验证后续命令可用 |
 
-最新续接复核（代码基线 `e371ff4`）：已核对原始走查报告、当前修复路径及回归，未发现上述报告中仍未修复的产品缺陷。重新执行 Release slnx 编译，核心五目标/DI 三目标 0 警告、0 错误；完整 Windows Unit1205、Consumer152、DI8 全部通过且零跳过，报告为 `TestResults/review-recovery-{unit,consumer,di}.trx`。解析新报告另确认本表中 20 组具名回归均实际执行并通过，包含 Standard2.1 延迟异步回滚及 C06/C07 走查修复；原顺序读取/游标回归亦在完整单测中执行。完整单测使用正常 Windows TLS 证书存储权限，未修改 TLS 策略。本轮仅补齐核销记录，实库、非 Windows、完整旧运行时兼容矩阵仍未验证，A05/C01 和各真实验收关口保持开放。
+历史续接复核（代码基线 `e371ff4`）：已核对原始走查报告、当前修复路径及回归，未发现上述报告中仍未修复的产品缺陷。重新执行 Release slnx 编译，核心五目标/DI 三目标 0 警告、0 错误；完整 Windows Unit1205、Consumer152、DI8 全部通过且零跳过，报告为 `TestResults/review-recovery-{unit,consumer,di}.trx`。解析新报告另确认本表中 20 组具名回归均实际执行并通过，包含 Standard2.1 延迟异步回滚及 C06/C07 走查修复；原顺序读取/游标回归亦在完整单测中执行。完整单测使用正常 Windows TLS 证书存储权限，未修改 TLS 策略。本轮仅补齐核销记录，实库、非 Windows、完整旧运行时兼容矩阵仍未验证，A05/C01 和各真实验收关口保持开放。
 
 首次核销重新执行 `dotnet build OceanBaseConnector.slnx --no-restore -c Release`：核心五目标、DI 三目标，0 警告/0 错误。Windows 完整 Unit1073、Consumer120、DI8 全部通过且零跳过；报告为 `TestResults/interrupted-review-{unit,consumer,di}.trx`，另解析 TRX 确认当时列出的回归实际执行并通过。完整单测沿用已授权的 Windows TLS 测试证书存储访问，未调整 TLS 策略。
 
@@ -58,46 +90,46 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 
 ## 阶段门槛
 
-| 门槛 | 计划窗口 | 当前进度 | 关口状态 | 关闭证据 |
+| 门槛 | 计划窗口 | 验收完成项数 | 关口状态 | 当前实现与验收差距 |
 | --- | --- | --- | --- | --- |
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04 本地实现完成、待真实/跨平台验收；A05 还缺可信 MySQL 模式判定规则及版本/插件验收；A07 缺环境与可信版本矩阵；G0 未关闭 |
-| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09 本地实现/审核已具证据；核心五资产有 Windows8/9/10基础运行时消费，但真实双模式、完整旧运行时消费/DI及跨平台未验收 |
+| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09本地实现/走查完成；实际8/9各Unit1206/DI8、10 Unit1206/Consumer152/DI8及五资产包消费通过；真实双模式/跨平台及完整支持矩阵未验收 |
 | G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02-C07本地实现完成待真实环境验证，C04真实资源/性能与版本矩阵、C07池性能仍待验收；C08因真实环境证据缺失而阻塞，关口未关闭 |
-| G4 发布候选 R | W35-W37 | 0/2 | 进行中 | R01本地包/消费已验证，R02本地交付材料与验证已完成；许可/来源/包名及真实兼容矩阵仍开放 |
+| G4 发布候选 R | W35-W37 | 0/2 | 进行中 | R01/R02本地双包/五资产、8/9完整本地回归、Framework4.8.1基础消费及交付材料已完成；许可/来源/包名、正式支持范围及真实矩阵未验收 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
 
 ## A. 协议基础任务
 
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
-| A01 | W1 | 四目标解决方案、单测/集成/消费入口 | 完成 | 2026-10-18；提交 `✨ feat(obconnector-dotnet): scaffold A01 multi-target solution, test entries and CI`；`dotnet build OceanBaseConnector.sln -c Release` 四目标 0 警告 0 错误；UnitTests 11×3 TFM 通过、ConsumerTests 3×3 TFM 通过（含 MetadataReader 验证 netstandard2.0 资产无现代 API 泄漏）、IntegrationTests 1×3 TFM 按环境门槛跳过、`dotnet pack` 成功；CI 入口 `.github/workflows/ci.yml`（Windows/Linux 矩阵，GitHub 上首次运行待推送后验证）；夹具格式见 `tests/fixtures/README.md` + 样例 `err-packet-handshake-failure.json` |
+| A01 | W1 | 五目标核心、三目标DI、slnx及统一net10测试/集成/消费入口 | 完成 | 2026-10-19当前工程：SDK10、OceanBaseConnector.slnx、CPM及根Version统一；核心含Standard2.0/2.1和net8/9/10，日常测试工程net10。最新Release编译0警告0错误、完整本地回归及双包/五资产消费通过，报告见首页摘要；CI入口.github/workflows/ci.yml，远端及非Windows执行仍无验收证据；夹具见tests/fixtures |
 | A02 | W1-W2 | 连接串 builder、不可变选项、脱敏 | 完成 | 2026-10-18；`OceanBaseConnectionStringBuilder` + internal `OceanBaseConnectionOptions`（`Build()` 冻结快照，测试证实后续 builder 变更不影响快照）。公开键：`Server`(同义词 `Host`)、`Port`(1-65535，默认 2881)、`User ID`(`Uid`)、`Password`(`Pwd`)、`Database`、`Connection Timeout`(默认 15)、`Command Timeout`(默认 30)、`TLS Mode`(`VerifyFull` 默认/`Required`/`Disabled`，仅名称匹配、拒绝数字串)、`TLS Server Name`、`Persist Security Info`(默认 false)、`ExpectedMode`(`MySQL`/`Oracle`)、`Pooling`(默认 false)；未知键、同义词冲突（`Server`+`Host` 等）、非法端口/超时/布尔/枚举均抛 `ArgumentException`；`KEY=` 空值遵循 ADO.NET 语义移除键、`Build()` 校验必填 `Server`/`User ID`；密码可经 `ToSanitizedConnectionString(true)` 序列化、默认脱敏，异常消息经测试不含密码/冲突值。单测 62×3 TFM 通过（`ConnectionStringBuilderTests`），四目标 Release 构建 0 警告 0 错误 |
 | A03 | W1-W3 | 标准帧/序号/分片/越界夹具 | 完成 | 2026-10-18；`Internal/Protocol/{ByteCursor,PacketChannel,ProtocolException}`。帧规则：3 字节长度 + 1 字节序号；负载 ≥0xFFFFFF 分片、整倍数以空帧终止；`BeginCommand()` 命令边界双序号归零；序号按帧递增、模 256 回绕（257 帧用例验证）；单帧与续帧链均在分配前执行逻辑包上限校验（默认 64MB，可注入更小值验证拒绝）；`ByteCursor` 全部读取经无符号比较防负数/溢出绕过。夹具：`framed-err-packet.json`（帧化 ERR：长度 72、序号 0、错误码 1045、SQLSTATE 28000）由加载器消费并用游标解析断言。测试 98×3 TFM 通过：单包/多分片/空终止帧/错序/截断（含 5 种随机种子×32 截断点）/上限拒绝；`SpyStream` 断言异步读写路径同步调用计数为 0。同步与异步共享 `TakeHeader`/`PrepareHeader`/上限校验，命令解析未混入帧层 |
 | A04 | W2-W4 | TCP、SSLRequest、TLS 验证与拒绝场景 | 待验证 | **本地实现/Windows 环回已完成，真实与跨平台验收未完成。** 2026-10-18；`Internal/Transport/{TcpTransport,TlsUpgrade,TlsHandshakeFlow}` + `Internal/Protocol/{CapabilityFlags,SslRequestPacket}` + `PacketChannel 共享双向序号/ReplaceUnderlyingStream`。TCP 同步（BeginConnect+WaitOne 超时）与异步（现代目标 ct 重载 / 两个 Standard 目标关闭 socket 中止）互不包装；拒绝/超时/取消均释放 socket，异常仅含端点信息。SSLRequest 固定 32 字节（能力 LE32 + 16MB + utf8mb4(45) + 23 零填充），字节级断言。TLS：默认 VerifyFull 走 OS 信任链+主机名校验（SslStream 无自定义回调）；Required 显式接受任意证书；Disabled 不发 SSLRequest 不升级；失败即销毁传输，无降级路径。环回测试（运行时自签证书）覆盖严格顺序（初始握手→CLIENT_SSL 检查→SSLRequest 序号 1→TLS→零认证字节）、VerifyFull 拒绝不受信证书（服务端 TLS 流解密后 0 字节）、服务端无 CLIENT_SSL 时不发任何字节、Disabled 零字节、同步/异步路径一致；`TLS Server Name` 优先于端点主机名（IP+显式 DNS 名称用例）。私有 CA/跨平台/真实主机名不匹配留待 A07 实测记录。测试 113×3 TFM 通过 |
 | A05 | W3-W4 | 认证、模式位、能力协商与夹具 | 待验证 | **本地认证/Oracle 模式/能力实现及合成验证已完成；可信 MySQL 判定、版本/插件矩阵和真实验收未完成。** Codex，2026-10-18：续接 GLM 原型，修复双向序号、session-track 嵌套长度、切换种子 NUL、无插件 native 回退、TLS 能力/字符集/最大包一致性、长属性 lenenc、错误回显脱敏、长度整数边界；合成夹具及环回通过。无可信版本矩阵时拒绝未设置 Oracle 位的连接，MySQL 真实连接暂未开放；插件与版本白名单仍待 G0/G1 |
-| A06 | W3-W5 | 物理会话状态、独占和异常映射 | 完成 | Codex，2026-10-18：PhysicalSession 的 Closed/Connecting/Open/Busy/Broken、独占 lease、未确认响应销毁、同步/异步打开关闭、全过程连接预算与取消、幂等释放、安全异常；环回测试验证截断、关闭不复活、超时、打开后 caller token 取消不投毒。B 阶段再扩展尚不存在的 statement/reader 资源 |
+| A06 | W3-W5 | 物理会话状态、独占和异常映射 | 完成 | Codex，2026-10-18：PhysicalSession 的 Closed/Connecting/Open/Busy/Broken、独占 lease、未确认响应销毁、同步/异步打开关闭、全过程连接预算与取消、幂等释放、安全异常；环回测试验证截断、关闭不复活、超时、打开后 caller token 取消不投毒。statement/reader资源已由B04/B06接入，后续生命周期修复见走查核销记录 |
 | A07 | W5 | 双模式直连/OBProxy 真实连接门槛 | 阻塞 | Codex，2026-10-18：替换永久失败占位符；四项真实测试覆盖四种连接组合、同步/异步打开关闭、模式不符、TLS 名称错误、未知插件。OB_* 环境未配置，日常运行跳过；强制关口缺环境实际失败。还需租户/TLS/插件/确切版本与可信 MySQL 模式判定；G1 不关闭 |
 
 ## B. ADO.NET 核心任务
 
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
-| B01 | W6-W7（待重估） | 标准 provider/factory、现代无池数据源、可选 DI 与基础日志；`ChangeDatabase` 暂拒绝 | 待验证 | 本地实现、五/三目标编译、环回建连、DI/消费测试及双包依赖检查通过；双模式真实建连、旧运行时和非 Windows 验收待补 |
-| B02 | W7-W9 | 文本 SQL、OK/ERR、多结果和更新计数 | 待验证 | COM_QUERY 同步/异步、逐行文本 reader、OK/ERR/EOF/FE OK、多结果和更新计数已有 Windows 环回证据；两模式真实 CRUD/匹配行语义、非 Windows 和旧运行时待验证 |
-| B03 | W8-W10 | Oracle 命名占位符词法器及各类 `q` 字面量；MySQL 参数数由服务端确定 | 待验证 | 本地完成词法扫描、名称/顺序映射与发送前绑定校验；基础参数执行由 B04 接入，真实参数化集成测试暂缓 |
-| B04 | W9-W12 | 服务端 prepare/execute、二进制结果和 statement ID | 待验证 | 本地实现及 Windows 协议/环回、五目标编译、消费/DI 测试通过；双模式实库、旧运行时和非 Windows 待补 |
-| B05 | W10-W13 | 基础值、低精度 `OceanBaseDecimal`、Oracle DATE 与未支持类型拒绝 | 待验证 | Codex，2026-10-18：本地精确数值/日期编解码、公开 provider-specific 访问、五目标消费及 Windows 协议/环回通过；双模式实库、旧运行时及非 Windows 待补，完整字段元数据留 B06 |
-| B06 | W11-W14 | 逐行 reader、字段元数据及低精度 provider-specific 访问 | 待验证 | Codex，2026-10-18：两套字段 schema/独立快照、多结果和生命周期、本地五目标编译及 Windows 单元/消费/DI 均通过；独立走查无需修复项。双模式真实元数据、非 Windows 和旧运行时待补，ProviderType 契约留 B09 审核 |
-| B07 | W13-W15 | 本地事务及环境事务拒绝 | 待验证 | Codex，2026-10-18：本地显式绑定、逐模式隔离映射、同步/异步事务与关闭回滚、日志和未知结果已实现；Unit455/Consumer34/DI8、五目标编译及独立复查通过；实库、非 Windows 和旧运行时待补 |
-| B08 | W14-W16 | 取消、超时、结果未知和故障注入 | 待验证 | Codex，2026-10-19：本地故障矩阵已完成，新增43项单元/5项五资产消费测试；修复内部预算超时误判为调用方取消及 Canceled 日志，终态竞争/部分发送/旧命令重开隔离通过；Unit498/Consumer39/DI8、五目标核心/三目标 DI build、格式/pack/依赖分组校验通过，详见本页末；实库/非 Windows/旧运行时待验证 |
+| B01 | W6-W7（待重估） | 标准provider/factory、现代无池数据源、可选DI与基础日志；ChangeDatabase见C05 | 待验证 | 本地实现、五/三目标编译、环回建连、实际8/9/10 DI/消费及双包依赖验证通过；双模式真实建连、完整支持矩阵及非Windows验收待补 |
+| B02 | W7-W9 | 文本 SQL、OK/ERR、多结果和更新计数 | 待验证 | COM_QUERY 同步/异步、逐行文本 reader、OK/ERR/EOF/FE OK、多结果和更新计数已有 Windows 环回证据；两模式真实CRUD/匹配行语义、非Windows及完整支持矩阵待验收 |
+| B03 | W8-W10 | Oracle 命名占位符词法器及各类 `q` 字面量；MySQL 参数数由服务端确定 | 待验证 | 本地完成词法扫描、名称/顺序映射与发送前绑定校验；基础参数执行已由B04接入，真实参数化集成测试暂缓 |
+| B04 | W9-W12 | 服务端 prepare/execute、二进制结果和 statement ID | 待验证 | 本地实现及 Windows 协议/环回、五目标编译、消费/DI 测试通过；双模式实库、非Windows及完整支持矩阵待验收 |
+| B05 | W10-W13 | 基础值、低精度 `OceanBaseDecimal`、Oracle DATE 与未支持类型拒绝 | 待验证 | 本地精确数值/日期编解码、公开provider-specific访问、五目标消费及Windows协议/环回通过；完整字段元数据已由B06实现，宽精度及精确时间由C03实现；真实类型往返和完整兼容矩阵未验收 |
+| B06 | W11-W14 | 逐行 reader、字段元数据及低精度 provider-specific 访问 | 待验证 | 两套字段schema/独立快照、多结果和生命周期、本地五目标编译及Windows单元/消费/DI通过；ProviderType已由B09审核补齐。双模式真实元数据、非Windows及完整兼容矩阵待验收 |
+| B07 | W13-W15 | 本地事务及环境事务拒绝 | 待验证 | Codex，2026-10-18：本地显式绑定、逐模式隔离映射、同步/异步事务与关闭回滚、日志和未知结果已实现；Unit455/Consumer34/DI8、五目标编译及独立复查通过；实库、非Windows及完整支持矩阵待验收 |
+| B08 | W14-W16 | 取消、超时、结果未知和故障注入 | 待验证 | Codex，2026-10-19：本地故障矩阵已完成，新增43项单元/5项五资产消费测试；修复内部预算超时误判为调用方取消及 Canceled 日志，终态竞争/部分发送/旧命令重开隔离通过；Unit498/Consumer39/DI8、五目标核心/三目标 DI build、格式/pack/依赖分组校验通过，详见本页末；实库/非Windows及完整支持矩阵待验收 |
 | B09 | W17（待重估） | 五目标消费、数据源/DI/日志生命周期、低精度 provider-specific 数值和双模式 G2 验收 | 待验证 | Codex，2026-10-19：本地公共 API 审核、标量 ProviderType/参数映射和 Command 类别修复完成；Unit567/Consumer39/DI8、五/三目标build零警告错误、格式/pack/依赖组通过，Windows核心五资产在8/9/10运行时基础消费通过；详见架构§5和本页末，实库/非Windows/完整旧运行时仍待验收 |
 
 ## C. 生产连接任务
 
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
-| C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 2026-10-19 Codex；无真实完整重置白名单，Java reset不能代替OceanBase实测；保持Pooling=true拒绝，先推进独立C02 |
+| C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 尚未实现连接池及完整重置；缺可信真实版本/模式白名单，Java reset不能代替OceanBase实测；Pooling=true继续拒绝。独立C02-C07已有本地实现 |
 | C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
 | C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 待验证 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)、TZ/LTZ及零日期本地实现齐备；Unit895/Consumer91/DI8、五/三目标编译/格式/打包及独立走查通过；真实验收/A05公开MySQL握手仍缺，详见本页末 |
 | C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 待验证 | 2026-10-19 Codex；增量报文、顺序字段流和FetchSize只读游标分页本地完成；Unit1037/Consumer111/DI8及核心五/DI三目标编译通过，独立复查缺陷均已修复；真实两模式/OBProxy大值/游标资源及性能矩阵未验收，详见本页末 |
