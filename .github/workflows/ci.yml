@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDKs
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore OceanBaseConnector.sln
+
+      - name: Build
+        run: dotnet build OceanBaseConnector.sln -c Release --no-restore
+
+      - name: Unit tests (.NET 8/9/10)
+        run: >-
+          dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj
+          -c Release --no-restore --no-build
+
+      - name: Consumer tests (.NET 8/9/10)
+        run: >-
+          dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj
+          -c Release --no-restore --no-build
+
+      - name: Integration tests (skip without environment)
+        run: >-
+          dotnet test tests/OceanBaseConnector.IntegrationTests/OceanBaseConnector.IntegrationTests.csproj
+          -c Release --no-restore --no-build
+
+      - name: Pack (release artifact smoke check)
+        run: dotnet pack src/OceanBaseConnector/OceanBaseConnector.csproj -c Release --no-build

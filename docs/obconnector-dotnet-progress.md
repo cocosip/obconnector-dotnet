@@ -37,7 +37,7 @@
 
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
-| A01 | W1 | 四目标解决方案、单测/集成/消费入口 | 未开始 | 待记录 |
+| A01 | W1 | 四目标解决方案、单测/集成/消费入口 | 完成 | 2026-10-18；提交 `✨ feat(obconnector-dotnet): scaffold A01 multi-target solution, test entries and CI`；`dotnet build OceanBaseConnector.sln -c Release` 四目标 0 警告 0 错误；UnitTests 11×3 TFM 通过、ConsumerTests 3×3 TFM 通过（含 MetadataReader 验证 netstandard2.0 资产无现代 API 泄漏）、IntegrationTests 1×3 TFM 按环境门槛跳过、`dotnet pack` 成功；CI 入口 `.github/workflows/ci.yml`（Windows/Linux 矩阵，GitHub 上首次运行待推送后验证）；夹具格式见 `tests/fixtures/README.md` + 样例 `err-packet-handshake-failure.json` |
 | A02 | W1-W2 | 连接串 builder、不可变选项、脱敏 | 未开始 | 待记录 |
 | A03 | W1-W3 | 标准帧/序号/分片/越界夹具 | 未开始 | 待记录 |
 | A04 | W2-W4 | TCP、SSLRequest、TLS 验证与拒绝场景 | 未开始 | 待记录 |

@@ -1,0 +1,13 @@
+{
+  "name": "err-packet-handshake-failure",
+  "description": "Server ERR packet for a failed authentication: 0xFF header, error code 1045 (ER_ACCESS_DENIED_ERROR), SQLSTATE marker '#', SQLSTATE 28000, and a generic access-denied message.",
+  "source": "hand-crafted",
+  "redaction": "Fully synthetic bytes derived from the MySQL client/server protocol ERR packet layout; contains no captured data.",
+  "payloadBase64": "/xUEIzI4MDAwQWNjZXNzIGRlbmllZCBmb3IgdXNlciAndGVzdCdAJ2xvY2FsaG9zdCcgKHVzaW5nIHBhc3N3b3JkOiBZRVMp",
+  "expectation": {
+    "kind": "err-packet",
+    "errorCode": 1045,
+    "sqlState": "28000",
+    "messageContains": "Access denied"
+  }
+}

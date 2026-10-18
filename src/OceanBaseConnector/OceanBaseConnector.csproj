@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0;net9.0;net10.0</TargetFrameworks>
+    <RootNamespace>OceanBaseConnector</RootNamespace>
+    <AssemblyName>OceanBaseConnector</AssemblyName>
+    <Version>0.1.0-alpha</Version>
+    <Description>Managed ADO.NET provider for OceanBase (MySQL and Oracle compatibility modes).</Description>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Packaging metadata is finalized at the R01 release gate. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>
