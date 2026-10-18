@@ -40,7 +40,7 @@ namespace OceanBaseConnector.ConsumerTests
                 var channel = new PacketChannel(peer.GetStream());
                 await channel.WritePacketAsync(greeting, budget.Token);
                 await channel.ReadPacketAsync(budget.Token);
-                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, budget.Token);
+                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token);
                 channel.BeginCommand();
                 Assert.Equal(new byte[] { 3, 117, 112, 100, 97, 116, 101 }, await channel.ReadPacketAsync(budget.Token));
                 await channel.WritePacketAsync(new byte[] { 0, 7, 0, 6, 0, 0, 0 }, budget.Token);

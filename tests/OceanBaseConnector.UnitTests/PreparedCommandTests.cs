@@ -12,10 +12,10 @@ namespace OceanBaseConnector.UnitTests
 {
     public sealed partial class TextCommandTests
     {
-        private static async Task<byte[]> StatementCommand(PacketChannel channel, byte code)
+        private static async Task<byte[]> StatementCommand(PacketChannel channel, byte code, bool deprecated = false)
         {
             channel.BeginCommand();
-            var request = await channel.ReadPacketAsync();
+            var request = await ReadClientCommand(channel, deprecated);
             Assert.Equal(code, request[0]);
             return request;
         }

@@ -57,6 +57,8 @@ namespace OceanBaseConnector
             var execution = operation.Exchange;
             try
             {
+                var zone = execution.EnsureSessionTimeZone();
+                PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var statement = operation.Binary ? EnsurePrepared(operation) : null;
                 execution.Send(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters));
                 var result = new QueryResult(execution, operation.Binary);
@@ -94,6 +96,8 @@ namespace OceanBaseConnector
             var execution = operation.Exchange;
             try
             {
+                var zone = await execution.EnsureSessionTimeZoneAsync(cancellationToken).ConfigureAwait(false);
+                PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var statement = operation.Binary ? await EnsurePreparedAsync(operation, cancellationToken).ConfigureAwait(false) : null;
                 await execution.SendAsync(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters)).ConfigureAwait(false);
                 var result = new QueryResult(execution, operation.Binary);

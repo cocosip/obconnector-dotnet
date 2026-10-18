@@ -302,7 +302,8 @@ B09 本地审核/补齐完成、状态待验证；双模式直连/OBProxy、非 
 - [x] 不带时区的Oracle `TIMESTAMP(0..9)`本地读写/精确转换/整列类型/五目标消费及独立走查；Unit716/Consumer59/DI8，编译、格式、打包矩阵通过，详见台账。
 - [x] 不带时区的 `GetDateTime`/`GetFieldValue<DateTime>` 只在100ns可精确表示时转换，否则溢出；所有p的provider-specific类型固定为OceanBaseTimestamp。
 - [x] TZ 文本/预处理读取、参数写回、稳定标准/provider-specific类型、精确 DateTimeOffset 转换和五资产消费；独立走查的参数长度及负offset问题已回归修复，详见台账。
-- [ ] LTZ 记录可信会话时区标识；同列混合正常值与零日期在文本/预处理路径的字段类型、provider-specific 值及往返。
+- [x] LTZ记录服务端会话时区标识，查询补全/结果快照、精确201读写、参数时区一致性及五资产消费；本地验证见进度台账，真实互通待验。
+- [ ] MySQL同列混合正常值与零日期在文本/预处理路径的字段类型、provider-specific值及往返。
 - [ ] 两模式实库测试记录会话时区、字符集与服务端列定义。
 
 2026-10-19 纳秒子项执行细化：先贯通不带时区的 Oracle TIMESTAMP(0..9)，TZ/LTZ 和 MySQL 零日期仍保留后续子项。OceanBaseTimestamp 为五目标共享只读值，保存 DateTimeKind.Unspecified 的整秒 WholeSeconds、0..999999999 的 Nanosecond 和0..9的 Scale；构造时拒绝混入亚秒/时区或不符合scale的纳秒，不舍入。ToDateTime 仅在纳秒为100的倍数时成功；年份范围仍为1..9999，超出范围明确失败。标准字段p<=7为DateTime、p8/9为OceanBaseTimestamp，provider-specific访问对所有p都固定为OceanBaseTimestamp，NULL不改变类型。沿Java type202/12字节布局读取两种结果协议，维持载荷scale和列scale一致校验；参数默认保留provider的Scale（普通DateTime仍默认7），显式Scale只允许精确重标度，不改Java固定写9的实现但记录差异。修改到达TemporalCodec、ResultColumn/DbColumn、OceanBaseParameter/PreparedParameters、reader和五资产消费；先验证缺口，再补公开值、codec、公开环回及消费回归，最后完整编译/测试/独立走查/打包后提交。重点回归p8/9小值和NULL不缩窄、纳秒1/999999999、边界日期、非法长度/scale/小数、错误模式以及发包前拒绝。
@@ -317,6 +318,15 @@ B09 本地审核/补齐完成、状态待验证；双模式直连/OBProxy、非 
 修改贯通PhysicalSession、CommandExchange、QueryResult与事务控制OK路径，不新增公开配置或依赖。先用Windows同步/异步协议回归验证认证快照独立、任意SQL失效、终态/多结果更新、结果快照独立、非执行准备不失效和故障/关闭清空；再实现最小共享状态方法。完成编译、完整测试、格式/打包/版本矩阵和独立审查后提交；LTZ后续仍须查询来源、参数时区一致性及type201完整读写，不能用此状态通路替代LTZ交付。
 
 2026-10-19 LTZ状态前置验证：25项定向回归（首批12失败、审查补充2失败后均通过）纳入完整Windows Unit797，Consumer76/DI8通过；核心5/DI3目标Release编译0警告/错误，格式/diff、打包和资产/依赖矩阵通过，独立复审无剩余必须修复项。QueryResult捕获已移到读取头包前，后续ERR也使时区失效。完整LTZ查询/参数/值编解码和零日期仍待后续实现。
+
+
+2026-10-19 LTZ完整链路实施：公共只读OceanBaseTimestampLocalTimeZone组合OceanBaseTimestamp和SessionTimeZone（非空、严格UTF-8<=255字节、无空白/控制字符；SYSTEM未解析标记拒绝，数字offset严格±HH:MM/±14小时）。不解析本机时区、不提供推测DateTimeOffset；ToDateTime/GetDateTime仅精确转换且Kind=Unspecified。未初始化default值无时区，不能写入。所有p0..9标准/provider-specific类型固定，新增OceanBaseDbType.TimestampLocalTimeZone末尾28、DbType.DateTime2仅在显式provider身份或provider值时选择Oracle201，不更改普通TIMESTAMP的202身份。
+
+执行前若Oracle物理会话没有可用时区报告，在现有独占租约/超时预算内发送SELECT SESSIONTIMEZONE FROM DUAL。只接受单个字符串列、单行非NULL、<=255字节的严格标识和可信终态，不改变用户RecordsAffected、不单独记录命令，不把查询失败标记成用户SQL已执行；先检查所有普通绑定/值，查询完成且LTZ参数标识与当前时区完全一致后才prepare/execute。已报告且合法的时区可直接使用；每次SQL仍沿前置通路失效，不长期缓存。prepare-only不查询，事务控制不因不返回LTZ增加查询。内部查询支持经典EOF/FEOK，在同一交换中读完不释放租约，未知响应销毁不重放；额外往返是此正确性选择的成本，暂不新增配置。
+
+结果column绑定QueryResult每结果冻结的时区标识；未知时保留稳定类型及DBNull（仍校验模式/scale），仅非NULL201值明确拒绝解码，不在活动reader中插入查询或改为全量缓存。任意后续SQL或多结果没有可靠报告时不能拿旧标识解释LTZ；有报告的多结果使用新标识。201前12字节沿202时间布局，两协议读取/参数写入，纳秒/scale严格不截断。修改到达新公共值、TemporalCodec、ResultColumn/QueryResult、PreparedParameters/Parameter/DbType、reader、CommandExchange内部查询与OceanBaseCommand执行路径；同步/异步/五资产回归和未知时区/发包前参数不匹配/查询故障/结果快照边界贯通，完整验证/独立走查后提交。固定Java及server证据见架构§5；数据库及非Windows验收继续暂缓。
+
+2026-10-19 LTZ子项本地验证：初始8项缺口由失败转通过；独立走查再复现3项冲突报告/显式Timestamp覆盖失败，修复后49项定向通过。最终Unit846/Consumer81/DI8，核心五/DI三目标Release编译0警告0错误，格式、diff、打包资产/依赖矩阵通过；当前状态及真实环境缺口见台账。C03保持进行中，剩余MySQL零日期及真实验收。
 
 ### C04 大值、SequentialAccess 与服务端游标
 

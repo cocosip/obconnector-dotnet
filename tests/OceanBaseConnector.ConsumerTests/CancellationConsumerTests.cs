@@ -33,7 +33,7 @@ namespace OceanBaseConnector.ConsumerTests
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token);
                 var channel = new PacketChannel(peer.GetStream());
                 await channel.WritePacketAsync(greeting, budget.Token); await channel.ReadPacketAsync(budget.Token);
-                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, budget.Token); channel.BeginCommand();
+                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token); channel.BeginCommand();
                 var request = await channel.ReadPacketAsync(budget.Token);
                 Assert.Equal(3, request[0]); Assert.Equal("update timeout", Encoding.UTF8.GetString(request, 1, request.Length - 1));
                 await Assert.ThrowsAnyAsync<Exception>(() => channel.ReadPacketAsync(budget.Token));

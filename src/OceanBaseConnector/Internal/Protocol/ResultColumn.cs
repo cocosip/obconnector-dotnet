@@ -9,9 +9,10 @@ namespace OceanBaseConnector.Internal.Protocol
     {
         internal static readonly Encoding Utf8 = new UTF8Encoding(false, true);
         private ResultColumn(string database, string table, string originalTable, string name, string originalName,
-            byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode)
+            byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode, string? sessionTimeZone)
         {
             Database = database; Table = table; OriginalTable = originalTable; OriginalName = originalName; Length = length; Flags = flags;
+            SessionTimeZone = sessionTimeZone;
             Name = name; TypeCode = type; Charset = charset; Unsigned = (flags & 32) != 0; Mode = mode;
             Scale = mode == OceanBaseCompatibilityMode.Oracle ? unchecked((sbyte)scale) : scale;
             Precision = mode == OceanBaseCompatibilityMode.Oracle ? precision : (long)length - (Unsigned ? 0 : 1) - (scale > 0 ? 1 : 0);
@@ -22,6 +23,7 @@ namespace OceanBaseConnector.Internal.Protocol
             }
             if (mode == OceanBaseCompatibilityMode.Oracle && type == 3 && precision == 0 && scale == 0) Precision = 10;
         }
+        internal string? SessionTimeZone { get; }
         internal string Name { get; }
         internal string Database { get; }
         internal string Table { get; }
@@ -36,7 +38,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal long Precision { get; }
         internal int Scale { get; }
         internal bool IsDecimal => TypeCode == 0 || TypeCode == 246 || TypeCode == 3 && Mode == OceanBaseCompatibilityMode.Oracle;
-        internal bool IsTemporal => TypeCode == 7 || TypeCode == 10 || TypeCode == 11 || TypeCode == 12 || TypeCode == 200 || TypeCode == 202;
+        internal bool IsTemporal => TypeCode == 7 || TypeCode == 10 || TypeCode == 11 || TypeCode == 12 || TypeCode == 200 || TypeCode == 201 || TypeCode == 202;
         internal Type ProviderSpecificFieldType => IsDecimal ? typeof(OceanBaseDecimal) : TypeCode == 202 ? typeof(OceanBaseTimestamp) : FieldType;
 
         internal OceanBaseTimestamp DecodeTimestamp(byte[] value)
@@ -45,7 +47,7 @@ namespace OceanBaseConnector.Internal.Protocol
             return TemporalCodec.DecodeTimestamp(value, Scale);
         }
 
-        internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode)
+        internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode, string? sessionTimeZone = null)
         {
             var cursor = new ByteCursor(payload);
             cursor.ReadLengthEncodedBytes(); // Protocol catalog marker, not the database catalog name.
@@ -64,7 +66,7 @@ namespace OceanBaseConnector.Internal.Protocol
             var precision = cursor.ReadUInt8();
             cursor.ReadUInt8();
             if (cursor.HasRemaining) throw new NotSupportedException("Extended column metadata is not supported yet.");
-            return new ResultColumn(database, table, originalTable, name, originalName, type, charset, flags, length, scale, precision, mode);
+            return new ResultColumn(database, table, originalTable, name, originalName, type, charset, flags, length, scale, precision, mode, sessionTimeZone);
         }
 
         internal string DataTypeName
@@ -89,6 +91,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 11: return "TIME";
                     case 12: return Mode == OceanBaseCompatibilityMode.Oracle ? "DATE" : "DATETIME";
                     case 200: return "TIMESTAMP WITH TIME ZONE";
+                    case 201: return "TIMESTAMP WITH LOCAL TIME ZONE";
                     case 203: return "RAW";
                     case 15: return Charset == 63 ? "VARBINARY" : "VARCHAR";
                     case 253: return Charset == 63 ? "VARBINARY" : Mode == OceanBaseCompatibilityMode.Oracle ? "VARCHAR2" : "VARCHAR";
@@ -133,6 +136,9 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 200:
                         if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > 9) throw new NotSupportedException("The timestamp metadata is not supported.");
                         return typeof(OceanBaseTimestampWithTimeZone);
+                    case 201:
+                        if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > 9) throw new NotSupportedException("The timestamp metadata is not supported.");
+                        return typeof(OceanBaseTimestampLocalTimeZone);
                     case 202:
                         if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > 9) throw new NotSupportedException("The timestamp metadata is not supported.");
                         return Scale <= 7 ? typeof(DateTime) : typeof(OceanBaseTimestamp);
@@ -174,6 +180,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 11: return OceanBaseDbType.Time;
                     case 12: return Mode == OceanBaseCompatibilityMode.Oracle ? OceanBaseDbType.OracleDate : OceanBaseDbType.DateTime;
                     case 200: return OceanBaseDbType.TimestampWithTimeZone;
+                    case 201: return OceanBaseDbType.TimestampLocalTimeZone;
                     case 203: return OceanBaseDbType.Binary;
                     case 15:
                     case 253:
@@ -192,6 +199,11 @@ namespace OceanBaseConnector.Internal.Protocol
             {
                 var number = DecodeDecimal(value, false);
                 return fieldType == typeof(decimal) ? (object)number.ToDecimal() : number;
+            }
+            if (TypeCode == 201)
+            {
+                if (SessionTimeZone == null) throw new NotSupportedException("The result has no trusted session time zone for LTZ values.");
+                return new OceanBaseTimestampLocalTimeZone(TemporalCodec.DecodeTimestamp(value, Scale), SessionTimeZone);
             }
             if (TypeCode == 200) return TemporalCodec.DecodeTimestampWithTimeZone(value, Scale);
             if (TypeCode == 202) return TemporalCodec.DecodeBinary(TypeCode, Mode, value, Scale);
@@ -238,6 +250,11 @@ namespace OceanBaseConnector.Internal.Protocol
             {
                 var number = DecodeDecimal(value, true);
                 return fieldType == typeof(decimal) ? (object)number.ToDecimal() : number;
+            }
+            if (TypeCode == 201)
+            {
+                if (SessionTimeZone == null) throw new NotSupportedException("The result has no trusted session time zone for LTZ values.");
+                return new OceanBaseTimestampLocalTimeZone(TemporalCodec.DecodeTimestamp(value, Scale), SessionTimeZone);
             }
             if (TypeCode == 200) return TemporalCodec.DecodeTimestampWithTimeZone(value, Scale);
             if (IsTemporal) return TemporalCodec.DecodeBinary(TypeCode, Mode, value, Scale);

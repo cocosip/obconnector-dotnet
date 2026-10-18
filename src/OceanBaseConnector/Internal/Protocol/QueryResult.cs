@@ -8,13 +8,15 @@ namespace OceanBaseConnector.Internal.Protocol
     internal sealed class QueryResult
     {
         private readonly CommandExchange _query;
+        private readonly bool _completeExchange;
         private byte[]?[]? _pending;
         private bool _ended;
         private bool _more;
         private long _affected = -1;
         private bool _faulted;
         private int _metadataBytes;
-        internal QueryResult(CommandExchange query, bool binary = false) { _query = query; IsBinary = binary; }
+        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true)
+        { _query = query; IsBinary = binary; _completeExchange = completeExchange; }
         internal bool IsBinary { get; }
         internal string? SessionTimeZone { get; private set; }
         internal ResultColumn[] Columns { get; private set; } = Array.Empty<ResultColumn>();
@@ -84,14 +86,19 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             if (packet.Length > 4 * 1024 * 1024 - _metadataBytes) throw new ProtocolException("Result metadata size limit exceeded.");
             _metadataBytes += packet.Length;
-            return ResultColumn.Parse(packet, _query.Mode);
+            return ResultColumn.Parse(packet, _query.Mode, SessionTimeZone);
         }
         private void End(ServerStatusFlags flags, OkPacket? ok = null)
         {
             _query.ObserveSessionState(ok);
             _ended = true;
             _more = (flags & ServerStatusFlags.MoreResultsExists) != 0;
-            if (!_more) _query.Complete();
+            if (!_completeExchange)
+            {
+                if (_more) throw new ProtocolException("The session time zone query returned multiple results.");
+                _query.ResponseComplete();
+            }
+            else if (!_more) _query.Complete();
         }
 
         private byte[]?[]? ParseRow(byte[] packet)

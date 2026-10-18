@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03 宽精度/纳秒/TZ 子项。LTZ、零日期和目录元数据尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ子项。零日期和目录元数据尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -65,7 +65,7 @@
 | --- | --- | --- | --- | --- |
 | C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 2026-10-19 Codex；无真实完整重置白名单，Java reset不能代替OceanBase实测；保持Pooling=true拒绝，先推进独立C02 |
 | C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
-| C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 进行中 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)及TZ子项本地实现；LTZ会话状态前置完成；Unit797/Consumer76/DI8、五/三目标编译/格式/打包及独立走查通过；LTZ、零日期和真实验收未完成，详见本页末 |
+| C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 进行中 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)、TZ及LTZ全链路本地实现；Unit846/Consumer81/DI8、五/三目标编译/格式/打包及独立走查通过；零日期和真实验收未完成，详见本页末 |
 | C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 未开始 | 待记录 |
 | C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 未开始 | 待记录 |
 | C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 未开始 | 待记录 |
@@ -280,3 +280,14 @@ C03仍进行中，下一步LTZ可信会话时区与MySQL零日期；G3仍0/8，A
 最终本地验证：Release slnx核心五目标/DI三目标0警告0错误，Windows Unit797、Consumer76、DI8全部通过（TestResults/c03-ltz-state-unit-final.trx、c03-ltz-state-consumer-final.trx、c03-ltz-state-di-final.trx）；25项状态回归纳入完整单元套件。格式/diff、双包及ZIP/XML的5/3资产、8依赖组、统一0.1.0-alpha、DI精确核心依赖及Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10全部通过。独立只读最终复审已确认ERR修复和三份文档，无剩余必须修复项。既有NuGet README提示仍留R01。
 
 C03继续进行中：LTZ可靠查询补全、type201全链路和参数时区一致性、MySQL零日期仍需实现；不把会话报告通路当作LTZ交付。A04/A05真实验收、A05可信MySQL判定、C01完整重置和G0/G1/G3缺口不变。遵用户要求未执行实库或非Windows，net10隔离消费不替代旧运行时验收。
+
+
+2026-10-19 中断续接LTZ全链路：上次只留下计划和8项缺口测试，未将未实现功能计入交付。本次新增五目标共享OceanBaseTimestampLocalTimeZone和末尾枚举28，贯通201文本/二进制、固定schema/provider类型、精确DateTime转换及参数写回。保留本地字段/纳秒/scale/服务端会话标识，不用客户端时区推算DST或恢复原始offset。NULL可在未知时区下保持稳定类型，但模式和scale照常校验；非NULL值没有有效结果快照时失败。MySQL201及错误显式类型（含typed NULL模式边界）拒绝。
+
+Oracle业务执行前复用有效报告，缺失/SYSTEM/非法时同租约和取消/超时预算查询SELECT SESSIONTIMEZONE FROM DUAL；严格限定一列UTF-8字符串、一行有效非NULL标识，排空终态后发布，内部查询不标记用户SQL已发送。普通参数错误在查询前拒绝，LTZ标识与当前会话不匹配在prepare/execute前拒绝。无持续报告时会增加后续执行的一轮查询；活动reader不查询，多结果没有新报告时不沿用旧时区。依据固定Java及server源码的本地字段、会话上下文与MYSQL_ONLY追踪配置说明已合并架构§5，未新增设计文档。
+
+独立走查发现并修复两项问题：内部查询标量/终态报告冲突后仍保留报告，可能影响下次LTZ解释；显式Timestamp被LTZ值自动覆盖为201。c03-ltz-review-red.trx的3项同步/异步回归先失败，修复后49项定向通过（c03-ltz-review-green.trx）：已排空的冲突清空报告并失败，连接保持Open但下一次必须重查；显式Timestamp+LTZ在发包前拒绝。覆盖纳秒/NULL/schema、文本/预处理公开读写、逐字时区匹配、查询额外行/结果/非法UTF-8/NULL/超长/断连、同预算超时、原caller token及同步Cancel、服务端ERR后重查、普通绑定先拒绝和真实201多结果快照。五资产增加LTZ隔离消费，仍由net10宿主运行。
+
+首次完整回归的失败分别为旧测试夹具未补答新查询、deprecated EOF补答格式不符，以及Windows断连时服务器仍发送终态的竞争；已显式适配查询流程并消除无效响应写入。沙箱内TLS证书导入失败在正常权限下重跑，不改动产品TLS实现。最终Release slnx核心五/DI三目标0警告0错误；Windows Unit846、Consumer81、DI8全部通过（TestResults/c03-ltz-unit-final.trx、c03-ltz-consumer-final.trx、c03-ltz-di-final.trx）。格式/diff、双包ZIP/XML检查通过：核心5资产、DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本、Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10。独立复审确认生产代码无剩余必须修复项，三份文档已同步当前口径；既有NuGet README提示保留R01。
+
+C03继续进行中，剩余MySQL零日期及真实验收；G3仍0/8，A04/A05真实验收、A05可信MySQL模式判定和C01完整重置缺口不变。本次未执行数据库服务器、非Windows或新的旧运行时测试；本地源码/环回/隔离消费不代替目标版本与OBProxy互通，SESSIONTIMEZONE权限、时区表和真实DST仍需验证。

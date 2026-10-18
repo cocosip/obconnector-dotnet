@@ -46,7 +46,7 @@ namespace OceanBaseConnector.ConsumerTests
                 channel.BeginCommand();
                 foreach (var sql in new[] { "SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE", "set autocommit = 0", "update sample", commit ? "COMMIT" : "ROLLBACK", "set autocommit = 1" })
                 {
-                    var request = await channel.ReadPacketAsync(budget.Token);
+                    var request = await SessionTimeZoneFixture.ReadCommand(channel, budget.Token, expectProbe: false);
                     Assert.Equal(3, request[0]);
                     Assert.Equal(sql, Encoding.UTF8.GetString(request, 1, request.Length - 1));
                     if (asynchronousApis && sql == "set autocommit = 0") { beginRequested.SetResult(); await allowBegin.Task.WaitAsync(budget.Token); }
@@ -144,7 +144,7 @@ namespace OceanBaseConnector.ConsumerTests
                 channel.BeginCommand();
                 foreach (var sql in new[] { "SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE", "set autocommit = 0", "update sample", "ROLLBACK", "set autocommit = 1" })
                 {
-                    var request = await channel.ReadPacketAsync(budget.Token);
+                    var request = await SessionTimeZoneFixture.ReadCommand(channel, budget.Token, expectProbe: false);
                     Assert.Equal(3, request[0]);
                     Assert.Equal(sql, Encoding.UTF8.GetString(request, 1, request.Length - 1));
                     if (sql == "ROLLBACK") { rollbackRequested.SetResult(); await allowRollback.Task.WaitAsync(budget.Token); }

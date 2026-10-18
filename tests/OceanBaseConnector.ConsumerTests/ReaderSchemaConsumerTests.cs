@@ -45,7 +45,7 @@ namespace OceanBaseConnector.ConsumerTests
                 var channel = new PacketChannel(peer.GetStream());
                 await channel.WritePacketAsync(greeting, budget.Token);
                 await channel.ReadPacketAsync(budget.Token);
-                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, budget.Token);
+                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token);
                 channel.BeginCommand();
                 Assert.Equal(3, (await channel.ReadPacketAsync(budget.Token))[0]);
                 await channel.WritePacketAsync(new byte[] { 1 }, budget.Token);
@@ -57,7 +57,7 @@ namespace OceanBaseConnector.ConsumerTests
                 if (wide)
                 {
                     channel.BeginCommand();
-                    Assert.Equal(22, (await channel.ReadPacketAsync(budget.Token))[0]);
+                    Assert.Equal(22, (await SessionTimeZoneFixture.ReadCommand(channel, budget.Token))[0]);
                     await channel.WritePacketAsync(new byte[] { 0, 91, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0 }, budget.Token);
                     await channel.WritePacketAsync(metadata, budget.Token);
                     await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);

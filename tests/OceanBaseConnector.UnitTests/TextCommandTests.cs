@@ -15,7 +15,7 @@ namespace OceanBaseConnector.UnitTests
     {
         private static string Configuration(int port) => $"Server=127.0.0.1;Port={port};User ID=u;Password=secret;TLS Mode=Disabled;Connection Timeout=5";
 
-        private static LoopbackServer Server(Func<PacketChannel, Task> exchange, bool deprecateEof = false) => LoopbackServer.Start(async client =>
+        private static LoopbackServer Server(Func<PacketChannel, Task> exchange, bool deprecateEof = false, bool reportTimeZone = true) => LoopbackServer.Start(async client =>
         {
             var channel = new PacketChannel(client.GetStream());
             var greeting = (byte[])ProtocolFixture.Load("initial-handshake-oceanbase").Payload.Clone();
@@ -23,7 +23,7 @@ namespace OceanBaseConnector.UnitTests
             await channel.WritePacketAsync(greeting);
             var authentication = await channel.ReadPacketAsync();
             if (deprecateEof) Assert.Equal(1, authentication[3] & 1);
-            await channel.WritePacketAsync(Ok());
+            await channel.WritePacketAsync(reportTimeZone ? TimeZoneOk("+00:00") : Ok());
             channel.BeginCommand();
             await exchange(channel);
         });
@@ -46,9 +46,9 @@ namespace OceanBaseConnector.UnitTests
             return bytes.ToArray();
         }
 
-        private static async Task Query(PacketChannel channel, string expected)
+        private static async Task Query(PacketChannel channel, string expected, bool deprecated = false)
         {
-            var request = await channel.ReadPacketAsync();
+            var request = await ReadClientCommand(channel, deprecated);
             Assert.Equal(3, request[0]);
             Assert.Equal(expected, Encoding.UTF8.GetString(request, 1, request.Length - 1));
         }
@@ -635,7 +635,7 @@ namespace OceanBaseConnector.UnitTests
                 terminator[0] = 254;
                 await channel.WritePacketAsync(terminator);
                 channel.BeginCommand();
-                await Query(channel, "next");
+                await Query(channel, "next", deprecated: true);
                 await channel.WritePacketAsync(Ok(1));
             }, deprecateEof: true);
             using var connection = new OceanBaseConnection(Configuration(server.Port));

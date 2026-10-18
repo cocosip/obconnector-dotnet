@@ -18,7 +18,7 @@ namespace OceanBaseConnector.Internal.Values
                 return cursor.ReadBytes((int)lengthWithZone);
             }
             var length = cursor.ReadUInt8();
-            var valid = type == 202 ? length == 12 : type == 11 ? length == 0 || length == 8 || length == 12
+            var valid = type == 201 || type == 202 ? length == 12 : type == 11 ? length == 0 || length == 8 || length == 12
                 : type == 10 ? length == 0 || length == 4 : length == 0 || length == 4 || length == 7 || length == 11;
             if (!valid) throw new ProtocolException("Invalid binary temporal field length.");
             return cursor.ReadBytes(length);

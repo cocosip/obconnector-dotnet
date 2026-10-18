@@ -31,5 +31,6 @@ namespace OceanBaseConnector
         Time,
         Null,
         TimestampWithTimeZone,
+        TimestampLocalTimeZone,
     }
 }

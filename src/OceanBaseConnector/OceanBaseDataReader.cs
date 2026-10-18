@@ -129,7 +129,8 @@ namespace OceanBaseConnector
         public override DateTime GetDateTime(int ordinal)
         {
             var value = GetValue(ordinal);
-            return value is OceanBaseTimestamp timestamp ? timestamp.ToDateTime() : (DateTime)value;
+            return value is OceanBaseTimestamp timestamp ? timestamp.ToDateTime()
+                : value is OceanBaseTimestampLocalTimeZone local ? local.ToDateTime() : (DateTime)value;
         }
         public override decimal GetDecimal(int ordinal)
         {

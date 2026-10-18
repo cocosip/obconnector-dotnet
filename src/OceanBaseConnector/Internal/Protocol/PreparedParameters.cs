@@ -34,6 +34,12 @@ namespace OceanBaseConnector.Internal.Protocol
                     writer.Write((byte)(bits | (1 << (i % 8))));
                     stream.Position = end;
                 }
+                else if (type == 201)
+                {
+                    if (!(value is OceanBaseTimestampLocalTimeZone local)) throw new ArgumentException("An LTZ parameter requires its provider value.");
+                    _ = local.SessionTimeZone;
+                    TemporalCodec.WriteTimestamp(writer, local.Timestamp, parameter.DeclaredScale);
+                }
                 else if (parameter.DbType == DbType.Decimal) WriteDecimal(writer, parameter, value, mode);
                 else if (parameter.DbType == DbType.DateTimeOffset)
                 {
@@ -73,6 +79,14 @@ namespace OceanBaseConnector.Internal.Protocol
             return stream.ToArray();
         }
 
+        internal static void ValidateSessionTimeZone(OceanBaseParameter[] parameters, string? sessionTimeZone)
+        {
+            foreach (var parameter in parameters)
+                if (parameter.Value is OceanBaseTimestampLocalTimeZone local &&
+                    !string.Equals(local.SessionTimeZone, sessionTimeZone, StringComparison.Ordinal))
+                    throw new ArgumentException("The LTZ parameter time zone must match the current server session time zone.");
+        }
+
         internal static byte[] Execute(uint id, byte[] parameters)
         {
             var packet = new byte[10 + parameters.Length];
@@ -106,6 +120,11 @@ namespace OceanBaseConnector.Internal.Protocol
             var temporalScale = parameter.DbType == DbType.Time ? 6 : parameter.DbType == DbType.Date ? 0 : mode == OceanBaseCompatibilityMode.Oracle ? 9 : 6;
             if ((parameter.DbType == DbType.Date || parameter.DbType == DbType.DateTime || parameter.DbType == DbType.DateTime2 || parameter.DbType == DbType.Time || parameter.DbType == DbType.DateTimeOffset) && parameter.Scale > temporalScale)
                 throw new NotSupportedException("The temporal parameter precision is not supported.");
+            if (parameter.OceanBaseDbType == OceanBaseDbType.TimestampLocalTimeZone || !parameter.OceanBaseDbType.HasValue && parameter.DbType == DbType.DateTime2 && parameter.Value is OceanBaseTimestampLocalTimeZone)
+            {
+                if (mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("LTZ parameters require Oracle mode.");
+                return 201;
+            }
             switch (parameter.DbType)
             {
                 case DbType.Boolean:

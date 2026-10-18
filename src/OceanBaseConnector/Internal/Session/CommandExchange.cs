@@ -7,7 +7,7 @@ using OceanBaseConnector.Internal.Protocol;
 namespace OceanBaseConnector.Internal.Session
 {
     // Owns one exchange through its terminal response, including a reader's lifetime.
-    internal sealed class CommandExchange : IDisposable
+    internal sealed partial class CommandExchange : IDisposable
     {
         private readonly PhysicalSession _session;
         private readonly PhysicalSession.CommandLease _lease;
@@ -175,7 +175,7 @@ namespace OceanBaseConnector.Internal.Session
                 ? new OceanBaseException("The command response was not fully consumed; execution outcome is unknown.",
                     isExecutionOutcomeUnknown: true, innerException: cause)
                 : _responsePending && !(cause is OperationCanceledException) && !(cause is TimeoutException)
-                    ? new OceanBaseException("The statement preparation failed before execution.", innerException: cause) : cause;
+                    ? new OceanBaseException("Command initialization failed before execution.", innerException: cause) : cause;
             Finish(mapped);
             return mapped;
         }
