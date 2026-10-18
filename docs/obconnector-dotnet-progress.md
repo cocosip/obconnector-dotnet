@@ -4,16 +4,23 @@
 
 ## 中断走查问题核销（2026-10-19）
 
-首次核销已将原走查记录与当时 `0f43bf2` 源码、历史修复提交和实际执行的回归逐项核对；下表另补充后续目录模块的修复。以下问题均已有修复提交，本节续接复核不新增产品代码。
+首次核销已将原走查记录与当时 `0f43bf2` 源码、历史修复提交和实际执行的回归逐项核对；再次续接已找回 B01–B05 原始走查报告，并补齐 B01/B02/B04 及 C06/C07 的修复索引。以下问题均已有修复提交，本节续接复核不新增产品代码。
 
 | 已报告问题 | 修复提交 | 当前回归证据 |
 | --- | --- | --- |
+| Opened/Closed 日志回调关闭或重开连接，导致状态事件倒序 | `7af799f` | ProviderConnectionTests：OpenedLoggerClosingConnectionPreservesStateEventOrder、ClosedLoggerReopeningConnectionPreservesStateEventOrder |
+| 协商弃用 EOF 后仍要求旧 EOF；超大 CommandTimeout 取得租约后抛错并遗留 Busy | `a142f70` | TextCommandTests：NegotiatedDeprecatedEofOmitsMetadataEofAndUsesOkTerminator、UnrepresentableTimeoutDoesNotAcquireOrStrandTheSession |
 | 终态 ERR 被失败日志回调触发的取消覆盖；Scalar 未跳过前置更新计数 | `a142f70` | TextCommandTests：ServerErrorWinsOverCancellationFromFailureLogger、ScalarSkipsInitialUpdateCountsToReachFirstResultSet |
+| 旧预处理清理超时回调可能破坏新命令；netstandard2.1 缺少异步 prepare/清理覆盖 | `a431ee8` | PhysicalSessionTests：ExpiredLeaseCancellationCannotBreakSubsequentCommand；PreparedCommandTests：PrepareAsyncWaitsAsynchronouslyForMetadata。取消回调绑定原租约，完成后的旧租约不能破坏新操作 |
 | Decimal 仅声明 Precision 时误按 Scale=0；畸形 TIME 天数参与溢出运算 | `b772c0f` | ValueCodecTests：DecimalPrecisionOnlyInfersScaleWhileExplicitZeroRequiresExactInteger、MalformedTimeDayCountIsRejectedBeforeTickArithmetic |
 | netstandard2.1 异步事务/连接/reader 清理被错误条件编译排除 | `e6b50d9` | TransactionConsumerTests：AsyncCleanupReturnsBeforeDelayedRollbackAndWaitsForRestoration，含 Standard2.1 的真实异步延迟回滚 |
 | 预读字符/耗尽字段流绕过命令取消和关闭；完整终结包误判结果未知；字段 token 未进入命令预算 | `230d596` | SequentialAccessTests：缓存字段生命周期、完整终态与取消、字段独立 token 回归 |
 | 游标 ERR 先释放租约再销毁会话；二进制行冒充 FE-OK 确认；分页/初始空结果遗漏或重复处理会话报告；部分 fetch 写入不响应 reader token | `b6881a6` | CursorTests：错误日志重入、二进制伪确认、逐页及空结果会话报告、部分写入取消回归 |
 | 目录整数转换先舍入微小小数，导致非法值误通过整数校验 | `fa37cd5` | ConnectionSchemaEdgeTests：ConnectionSchemaNeverRoundsTinyFractionsBeforeIntegerValidation，覆盖长小数字符串和浮点表示 |
+| 旧 reader 污染新批次计数或关闭重开后的连接；字段失败遗留批次预约；取消异常丢失调用方 token | `f93c15e` | BatchTests：ClosedBatchReaderCountsAreAnIndependentSnapshotAcrossReuse；BatchFaultTests：OldCloseConnectionReaderCannotCloseReopenedSession、BatchFieldStreamFailureReleasesOperationWithoutNeedingExtraClose、BatchPartialSendCancellationRetainsPrefixAndUnknownAttribution、BatchCancellationBetweenStatementsPreservesOriginalCallerToken、BatchNextResultPartialSendRetainsItsOwnReaderToken |
+| 诊断初始化回调抛错导致类型初始化失败；Activity.CurrentChanged 抛错逃逸并遗留 Busy 租约 | `e371ff4` | DiagnosticsConsumerTests：EveryAssetPublishesSafeDiagnosticsWithoutInitializationPoisoning，五资产初始化异常隔离；DiagnosticsTests：ThrowingAmbientContextChangeCallbackCannotStrandCommandOwnership，同步/异步并验证后续命令可用 |
+
+最新续接复核（代码基线 `e371ff4`）：已核对原始走查报告、当前修复路径及回归，未发现上述报告中仍未修复的产品缺陷。重新执行 Release slnx 编译，核心五目标/DI 三目标 0 警告、0 错误；完整 Windows Unit1205、Consumer152、DI8 全部通过且零跳过，报告为 `TestResults/review-recovery-{unit,consumer,di}.trx`。解析新报告另确认本表中 20 组具名回归均实际执行并通过，包含 Standard2.1 延迟异步回滚及 C06/C07 走查修复；原顺序读取/游标回归亦在完整单测中执行。完整单测使用正常 Windows TLS 证书存储权限，未修改 TLS 策略。本轮仅补齐核销记录，实库、非 Windows、完整旧运行时兼容矩阵仍未验证，A05/C01 和各真实验收关口保持开放。
 
 首次核销重新执行 `dotnet build OceanBaseConnector.slnx --no-restore -c Release`：核心五目标、DI 三目标，0 警告/0 错误。Windows 完整 Unit1073、Consumer120、DI8 全部通过且零跳过；报告为 `TestResults/interrupted-review-{unit,consumer,di}.trx`，另解析 TRX 确认当时列出的回归实际执行并通过。完整单测沿用已授权的 Windows TLS 测试证书存储访问，未调整 TLS 策略。
 
