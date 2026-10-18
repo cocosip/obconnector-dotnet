@@ -93,7 +93,7 @@ namespace OceanBaseConnector
             catch (Exception error) { throw BeginFailed(operation.Transaction, operation.Exchange, timer, error); }
         }
 
-#if NET8_0_OR_GREATER
+#if NETSTANDARD2_1 || NET8_0_OR_GREATER
         protected override async ValueTask<DbTransaction> BeginDbTransactionAsync(IsolationLevel isolationLevel, CancellationToken cancellationToken)
         {
             var operation = StartTransaction(isolationLevel, cancellationToken);

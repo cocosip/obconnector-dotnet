@@ -169,7 +169,7 @@ namespace OceanBaseConnector
             finally { if (_closeConnection) _connection.Close(); }
         }
         protected override void Dispose(bool disposing) { if (disposing) Close(); base.Dispose(disposing); }
-#if NET8_0_OR_GREATER
+#if NETSTANDARD2_1 || NET8_0_OR_GREATER
         public override async Task CloseAsync()
         {
             if (_closed) return;

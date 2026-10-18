@@ -26,7 +26,7 @@ namespace OceanBaseConnector
             if (disposing) _owner.DisposeTransaction(this);
             base.Dispose(disposing);
         }
-#if NET8_0_OR_GREATER
+#if NETSTANDARD2_1 || NET8_0_OR_GREATER
         public override Task CommitAsync(CancellationToken cancellationToken = default) => _owner.EndTransactionAsync(this, true, cancellationToken);
         public override Task RollbackAsync(CancellationToken cancellationToken = default) => _owner.EndTransactionAsync(this, false, cancellationToken);
         public override async ValueTask DisposeAsync()

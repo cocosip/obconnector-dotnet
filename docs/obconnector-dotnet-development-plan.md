@@ -16,7 +16,7 @@
 
 - 当前排期以 A/B/C 均进入首个正式版本为基线，G0-5 决定是否调整；D 按独立能力交付。没有真实双模式测试和明确版本矩阵，不能把 A/B/C 标记为发布完成。
 - 首版默认 `TLS Mode=VerifyFull`、`Pooling=false`、`CLIENT_FOUND_ROWS`；不自动重试已发送 SQL，不隐式客户端参数插值，不加入 `TransactionScope`。变更这些公开语义须先修订架构设计。
-- `netstandard2.0` 定义公共类型身份；数据源/batch 等现代 ADO.NET API 用条件编译，仅在 `net8.0+` 暴露；`netstandard2.1` 另覆写其参考 API 已有的命令 `PrepareAsync`/`DisposeAsync`。每个产品目标单独编译；全部测试及消费宿主统一使用 `net10.0`，显式选择并隔离加载 `netstandard2.0`/`netstandard2.1` 资产；B09/R01 另验证旧运行时消费。
+- `netstandard2.0` 定义公共类型身份；数据源/batch 等现代 ADO.NET API 用条件编译，仅在 `net8.0+` 暴露；`netstandard2.1` 另覆写其参考 API 已有的命令 `PrepareAsync`/`DisposeAsync`、连接/reader 的 `CloseAsync`/`DisposeAsync`、事务 `CommitAsync`/`RollbackAsync`/`DisposeAsync` 和连接受保护的 `BeginDbTransactionAsync`；`ChangeDatabaseAsync` 在尚未实现前明确拒绝。每个产品目标单独编译；全部测试及消费宿主统一使用 `net10.0`，显式选择并隔离加载 `netstandard2.0`/`netstandard2.1` 资产；B09/R01 另验证旧运行时消费。
 - 仓库统一使用中央包管理(CPM)：根目录 `Directory.Packages.props` 固定全部 NuGet 包版本并开启传递依赖钉扎；工程的 `PackageReference` 一律不带 `Version`。产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性提供,csproj 不得各自声明版本。新增依赖只改 `Directory.Packages.props`。
 - Microsoft 通用库按产品 TFM 条件集中定版：`netstandard2.0`/`netstandard2.1`/`net8.0` 使用 8.x 基线，`net9.0` 使用 9.x，`net10.0` 使用 10.x；具体补丁见架构设计 §2.3。统一发布版本不要求依赖主版本相同，.NET 10 SDK/测试宿主也不抬高旧资产依赖。验收逐目标 restore 图、程序集引用和 nuspec 依赖组，避免传递钉扎将旧目标提升到 10.x。
 - 当前依用户要求暂不执行实库及非 Windows 运行测试；缺失证据保留在台账，不阻止依赖已满足的本地模块开发、走查和提交，也不关闭真实兼容门槛。
@@ -227,6 +227,8 @@ B07 本地实现：沿 Java 的 `SET SESSION TRANSACTION ISOLATION LEVEL ...`、
 - [x] 沿用 B01 日志上下文，覆盖事务完成/失败及结果未知；不记录 SQL/参数或原始服务端错误文本，日志异常不能掩盖提交结果。
 
 2026-10-18 本地验证：五目标核心/三目标 DI Release build 0 警告/错误；Windows Unit455、Consumer34、DI8 通过（`TestResults/b07-{unit,consumer,di}.trx`）。独立走查指出的 reader 异步释放同步回滚、延迟关闭后重开事件顺序已有失败后通过的回归；日志工厂在事务执行前创建类别，避免惰性创建重入。CloseConnection reader 的现代异步清理沿用连接异步回滚；关闭先发布逻辑 Closed，旧会话清理不能销毁新会话。格式、双包和资产/依赖版本检查通过。整体仍待验证，G2 不关闭；下一模块 B08。
+
+2026-10-19 中断走查续接修正：直接检查 NETStandard.Library.Ref 2.1.0 的 netstandard.dll 元数据，确认连接/reader/事务异步生命周期 API 已存在；将四处仅 NET8_0_OR_GREATER 的条件扩大至 NETSTANDARD2_1，复用同一异步实现。先以隔离消费的 2.1 五种延迟回滚清理和事务覆写共6项失败证明缺口，修复后17项定向通过，补充 COMMIT/ROLLBACK 等待网络及预取消原 token 的检查。完整验证与延期边界见进度台账；不把本次修复当作 C03 TZ/LTZ 子项完成。
 
 ### B08 取消、超时与结果未知
 

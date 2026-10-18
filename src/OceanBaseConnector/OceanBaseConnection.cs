@@ -191,7 +191,7 @@ namespace OceanBaseConnector
             finally { closing.Exchange?.Dispose(); FinishClose(closing.Session, closing.Endpoint); }
         }
 
-#if NET8_0_OR_GREATER
+#if NETSTANDARD2_1 || NET8_0_OR_GREATER
         public override async Task CloseAsync()
         {
             var closing = DetachForClose();

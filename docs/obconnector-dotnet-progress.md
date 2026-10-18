@@ -49,7 +49,7 @@
 
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
-| B01 | W6-W7（待重估） | 标准 provider/factory、现代无池数据源、可选 DI 与基础日志；`ChangeDatabase` 暂拒绝 | 待验证 | 本地实现、四/三目标编译、环回建连、DI/消费测试及双包依赖检查通过；双模式真实建连、旧运行时和非 Windows 验收待补 |
+| B01 | W6-W7（待重估） | 标准 provider/factory、现代无池数据源、可选 DI 与基础日志；`ChangeDatabase` 暂拒绝 | 待验证 | 本地实现、五/三目标编译、环回建连、DI/消费测试及双包依赖检查通过；双模式真实建连、旧运行时和非 Windows 验收待补 |
 | B02 | W7-W9 | 文本 SQL、OK/ERR、多结果和更新计数 | 待验证 | COM_QUERY 同步/异步、逐行文本 reader、OK/ERR/EOF/FE OK、多结果和更新计数已有 Windows 环回证据；两模式真实 CRUD/匹配行语义、非 Windows 和旧运行时待验证 |
 | B03 | W8-W10 | Oracle 命名占位符词法器及各类 `q` 字面量；MySQL 参数数由服务端确定 | 待验证 | 本地完成词法扫描、名称/顺序映射与发送前绑定校验；基础参数执行由 B04 接入，真实参数化集成测试暂缓 |
 | B04 | W9-W12 | 服务端 prepare/execute、二进制结果和 statement ID | 待验证 | 本地实现及 Windows 协议/环回、五目标编译、消费/DI 测试通过；双模式实库、旧运行时和非 Windows 待补 |
@@ -250,3 +250,9 @@ C03 仍为进行中，下一步为纳秒/TZ/LTZ及MySQL零日期子项；不将�
 本地验证：新增44项Unit、5项五资产消费；Release slnx核心5目标/DI3目标0警告/错误，Windows Unit716、Consumer59、DI8全部通过（TestResults/c03-nanos-unit-final.trx、c03-nanos-consumer.trx、c03-nanos-di.trx）；全部日常测试宿主net10，五资产消费在隔离加载上下文经标准ADO.NET读取/转换/写回。格式、diff及双包检查通过，5/3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本及Microsoft.Extensions按Standard/net8→8、net9→9、net10→10保持正确。既有NuGet README提示仍留R01。
 
 C03继续进行中，下一步TZ/LTZ和MySQL零日期；G3仍0/8，C01/A05及G0/G1缺口不变。Java OBTIMESTAMPParameter固定写scale9，而本驱动选择保留显式/provider scale，结果端仍严格要求列scale等于载荷scale；这两项策略和1..9999外年份的协议范围需后续真实矩阵核验。未执行数据库服务器、非Windows或新的旧运行时测试，不以本地夹具关闭互通验收。
+
+2026-10-19 中断走查续接：先核对历史审查和修复提交，B01关闭事件、B02终态/取消、B04语句清理、B05精度/TIME及C03数值/纳秒问题均已有回归和提交。再次走查发现 netstandard2.1 连接、reader、事务异步生命周期错误受 NET8 条件限制；直接读取 NETStandard.Library.Ref 2.1.0 参考程序集确认 API 后，将四处条件扩至 NETSTANDARD2_1，复用共享异步实现。ChangeDatabaseAsync 同时提供明确的不支持失败，不新增目录切换能力；数据源/batch 目标和 Microsoft.Extensions 版本矩阵保持原约定。
+
+新增消费回归先复现6项失败（TestResults/review-async-red.trx）：2.1资产五种清理入口阻塞于延迟ROLLBACK，且事务异步覆写缺失。修复后定向17项全通过（review-async-green-final.trx），覆盖异步Begin/Commit/Rollback、原token预取消、连接CloseAsync/DisposeAsync、事务DisposeAsync及reader CloseAsync/DisposeAsync等待回滚和自动提交恢复；2.1与net10的延迟清理均经公开ADO.NET接口验证。最终Windows Unit716、Consumer71、DI8全部通过（review-fixes-{unit,consumer,di}.trx）；Release slnx核心五/DI三目标0警告0错误，格式/diff、双pack及5/3资产、8依赖组、统一0.1.0-alpha、DI精确核心依赖和Microsoft.Extensions8/9/10检查通过。NuGet README提示继续留R01。
+
+独立只读复查已核对共享异步路径、预取消、延迟回滚测试和红绿TRX；指出的架构旧段落已修正，三份文档最终复核无剩余需修复项。本次只修复走查遗漏，不推进TZ/LTZ：C03保持进行中，G3仍0/8；A04/A05、C01及真实环境关口不变。未执行实库、非Windows或新的旧运行时测试；隔离资产消费宿主仍为net10，不能代替旧运行时验收。

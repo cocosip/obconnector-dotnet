@@ -31,7 +31,7 @@
 | 连接配置 | `OceanBaseConnectionStringBuilder : DbConnectionStringBuilder`；在提供 `DbProviderFactories.RegisterFactory` 的运行时由应用显式注册，旧运行时按其 provider 注册机制处理，不在程序集加载时修改全局状态 |
 | 现代目标 | B01 提供 `OceanBaseDataSourceBuilder`、`OceanBaseDataSource : DbDataSource` 及 factory 的 `CreateDataSource`，先支持无池建连；C06 再提供 `DbBatch`。`netstandard2.0`/`netstandard2.1` 不暴露这些平台 API，也不补造同名平台类型。`DbConnection.CanCreateBatch` 和 `DbProviderFactory.CanCreateBatch` 在 C 阶段真正实现前为 `false`，相应创建方法不返回执行语义未定义的空壳 |
 | 宿主接入 | B01 的可选 DI 包提供普通/带 key 的统一数据源注册，容器工厂创建 Singleton 数据源并接入宿主 `ILoggerFactory`；应用按操作创建/释放连接，默认不注入连接、命令或 reader。无 DI 的 builder 和直接连接入口继续可用；生命周期和注册冲突规则见 §2.4–§2.5 |
-| 异步 | `netstandard2.0`/`netstandard2.1` 覆写带 `CancellationToken` 的 `OpenAsync`、`ExecuteNonQueryAsync`、`ExecuteScalarAsync`、受保护的 `ExecuteDbDataReaderAsync`、`ReadAsync`、`NextResultAsync`；`netstandard2.1` 与现代目标还覆盖实际发包的 `PrepareAsync` 和命令 `DisposeAsync`，`netstandard2.0` 参考 API 没有这两个入口；现代目标还须覆盖受保护的 `BeginDbTransactionAsync`（公开的 `BeginTransactionAsync` 委托给它）、`CommitAsync`、`RollbackAsync`，以及 C 阶段的 `ChangeDatabaseAsync`、各个 `GetSchemaAsync` 重载和 `DbBatch.Execute*Async`。关闭或释放需要读包、回滚或池重置时，现代 `CloseAsync`/`DisposeAsync` 也走异步清理。网络层用异步读写；同步入口使用同步 I/O，共享编码、状态机和错误映射，不以同步等待异步任务充数，也不依赖基类调用同步方法的默认异步实现 |
+| 异步 | `netstandard2.0`/`netstandard2.1` 覆写带 `CancellationToken` 的 `OpenAsync`、`ExecuteNonQueryAsync`、`ExecuteScalarAsync`、受保护的 `ExecuteDbDataReaderAsync`、`ReadAsync`、`NextResultAsync`；`netstandard2.1` 与现代目标还覆盖其参考 API 已有的 `PrepareAsync`、受保护的 `BeginDbTransactionAsync`（公开的 `BeginTransactionAsync` 委托给它）、`CommitAsync`、`RollbackAsync`，以及连接、命令、reader 和事务的 `DisposeAsync`、连接及 reader 的 `CloseAsync`；`netstandard2.0` 参考 API 没有这些入口。关闭或释放需要读包、回滚或池重置时，2.1 与现代目标共用真正异步的清理实现。C 阶段的 `ChangeDatabaseAsync` 同样覆盖 2.1 与现代目标；`GetSchemaAsync` 和 `DbBatch.Execute*Async` 仅在提供对应 API 的现代目标覆盖。网络层用异步读写；同步入口使用同步 I/O，共享编码、状态机和错误映射，不以同步等待异步任务充数，也不依赖基类调用同步方法的默认异步实现 |
 | 扩展 | 仅对 ADO.NET 无法表达且已实现的 OceanBase 类型/能力增加 `OceanBaseDbType`、provider-specific 值或显式方法；扩展不替代标准 `DbType`、`ParameterDirection`、`GetSchemaTable` |
 
 名称和 NuGet ID 暂按 `OceanBaseConnector` 工作名；发布前检查商标、包名可用性和授权。连接串不要求 JDBC URL 兼容。最小键为 `Server`、`Port`、`User ID`、`Password`、`Database`、`Connection Timeout`、`Command Timeout`、`TLS Mode`；同义词须少且有测试。未知或冲突选项报错。连接串 builder 为创建连接必须能序列化密码，因此调用方应保护其输出；已打开连接的公开 `ConnectionString` 及现代 `DbDataSource.ConnectionString` 默认隐藏凭据，只有显式 `Persist Security Info=true` 才允许保留。异常和日志始终隐藏凭据。Oracle 模式的 `Database`/schema 语义需要按服务端实际行为定义，不通过连接串强行指定会话模式；可提供 `ExpectedMode` 校验配置，若服务端模式不符则在打开连接时失败。
@@ -91,7 +91,7 @@ DI 只装配应用级对象。`PhysicalSession`、包流、认证处理、命令
 
 `OceanBaseDataSourceBuilder` 和 `OceanBaseDataSource : DbDataSource` 仅在现代核心资产出现；`netstandard2.0`/`netstandard2.1` 保持连接/工厂入口，不补造 `System.Data.Common.DbDataSource`，也不把自定义同名类型伪装成平台类型。五个资产均提供直接连接的 `(string connectionString, ILoggerFactory? loggerFactory)` 构造重载，使旧资产也能按实例配置日志，不需要全局工厂或 DI。不因 Npgsql 10 的依赖选择而提高本项目旧资产的 Microsoft 通用库基线。
 
-新增 `netstandard2.1` 资产继续共享 provider 和协议实现，不提高 Microsoft 通用库基线，不引入数据源、batch 等现代 ADO.NET 类型。条件编译按实际平台 API 判断：两个 Standard 目标的 TCP 连接取消均通过关闭 socket 中断；2.1 的 TLS 握手可使用带取消令牌的重载，2.0 仍由关闭传输中断。两个 Standard 资产均以独立加载上下文验证类型边界、日志依赖和公开连接入口；这些 .NET 10 宿主证据不代表所有旧运行时已验收。
+新增 `netstandard2.1` 资产继续共享 provider 和协议实现，不提高 Microsoft 通用库基线，不引入数据源、batch 等现代 ADO.NET 类型。条件编译按实际平台 API 判断：两个 Standard 目标的 TCP 连接取消均通过关闭 socket 中断；2.1 的 TLS 握手可使用带取消令牌的重载，2.0 仍由关闭传输中断。2.1 已有的连接/事务异步开始、提交、回滚和连接/reader/事务异步关闭释放均覆写，不误限于 net8+；数据源/batch 的目标边界保持不变。两个 Standard 资产均以独立加载上下文验证类型边界、日志依赖和公开连接入口；这些 .NET 10 宿主证据不代表所有旧运行时已验收。
 
 ### 2.4 数据源与连接所有权
 
@@ -201,9 +201,9 @@ B04 本地实现：自动准备与执行共用一个物理会话租约和超时�
 
 B07 本地事务沿 Java 的会话协议设置隔离和自动提交（[自动提交](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L1949)、[隔离级别](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L2080)），使用 `SET SESSION TRANSACTION ISOLATION LEVEL ...` 后 `set autocommit = 0`；实际事务由首条业务语句隐式开始。Unspecified 固定为 MySQL RepeatableRead / Oracle ReadCommitted；MySQL 映射 ReadUncommitted/ReadCommitted/RepeatableRead/Serializable，Oracle 仅开放 ReadCommitted/Serializable，其他值发送前拒绝。Java 对 Oracle RepeatableRead 的允许不能代替实测，因此暂不开放。每次 Begin 都显式设置隔离级别，不声称恢复应用通过原始 SQL 修改的会话状态；完整池化重置仍属 C01。
 
-提交/回滚与恢复 `set autocommit = 1` 共用独占租约。控制响应仅接受单个合法 OK，拒绝多结果、未结束事务或自动提交状态不符；完整 ERR 仍保留活动事务供调用方回滚。终态 COMMIT/ROLLBACK 已确认后，恢复失败只销毁物理会话并记录恢复失败，保留该已确认结果；响应未确认时才报告该事务操作结果未知。Dispose/Close 内部回滚不受环境事务阻止；忙 reader/事务操作不能被插入回滚包，直接销毁原会话。现代 reader CloseAsync/DisposeAsync 的 CloseConnection 路径也必须等待异步回滚。关闭时先发布逻辑 Closed，再清理捕获的旧会话，重开后的会话不受旧清理影响。事务日志使用独立类别及 1200/1201 完成/失败事件，只有已脱敏的结构化字段。
+提交/回滚与恢复 `set autocommit = 1` 共用独占租约。控制响应仅接受单个合法 OK，拒绝多结果、未结束事务或自动提交状态不符；完整 ERR 仍保留活动事务供调用方回滚。终态 COMMIT/ROLLBACK 已确认后，恢复失败只销毁物理会话并记录恢复失败，保留该已确认结果；响应未确认时才报告该事务操作结果未知。Dispose/Close 内部回滚不受环境事务阻止；忙 reader/事务操作不能被插入回滚包，直接销毁原会话。`netstandard2.1` 与现代 reader CloseAsync/DisposeAsync 的 CloseConnection 路径也必须等待异步回滚。关闭时先发布逻辑 Closed，再清理捕获的旧会话，重开后的会话不受旧清理影响。事务日志使用独立类别及 1200/1201 完成/失败事件，只有已脱敏的结构化字段。
 
-五资产公共事务消费已在 .NET 10 宿主通过，现代资产有延迟响应验证异步 Begin/End，Windows 环回另覆盖取消/结果未知、清理及状态事件。两个 Standard 资产仅实现其参考 API 中的同步事务入口；.NET 10 宿主消费不能证明旧运行时兼容。真实双模式隔离与提交语义、OBProxy、非 Windows 及旧运行时证据仍待补；缺 Oracle 模式位的公共握手安全门槛不变。
+五资产公共事务消费已在 .NET 10 宿主通过，`netstandard2.1` 和现代资产有延迟响应验证异步 Begin/End，2.1 与 net10 另验证连接关闭/释放、事务释放和 reader 关闭/释放等待异步回滚及恢复自动提交。预取消 Begin/Commit/Rollback 保留原 token 且不发控制 SQL；Windows 环回另覆盖结果未知、清理及状态事件。`netstandard2.0` 仅实现其参考 API 中的同步事务入口；.NET 10 宿主消费不能证明旧运行时兼容。真实双模式隔离与提交语义、OBProxy、非 Windows 及旧运行时证据仍待补；缺 Oracle 模式位的公共握手安全门槛不变。
 
 B08 本地取消契约：发送前取消不写包、归还租约并保留调用方 token；发送执行请求后若未收到可信终态，则销毁所属物理会话、报告结果未知且不重放。准备阶段中断也销毁会话，但不宣称 SQL 已执行。内部链接预算 token 仅用于中止 I/O，不能直接把它当作外部取消原因；调用方取消保留原 token，Cancel 映射取消，纯预算到期映射 TimeoutException。命令/事务 Canceled 日志反映归因后的异常，不把超时内部中止算成调用方取消。
 
