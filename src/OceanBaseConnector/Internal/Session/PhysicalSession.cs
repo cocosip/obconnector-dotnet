@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
@@ -13,6 +15,7 @@ namespace OceanBaseConnector.Internal.Session
     {
         private readonly object _gate = new object();
         private readonly OceanBaseConnectionOptions _options;
+        private string _endpoint;
         private readonly CancellationTokenSource _closing = new CancellationTokenSource();
         private SessionState _state;
         private bool _started;
@@ -22,11 +25,11 @@ namespace OceanBaseConnector.Internal.Session
         private ConnectResult? _info;
         private readonly HashSet<uint> _statementCloses = new HashSet<uint>();
 
-        public PhysicalSession(OceanBaseConnectionOptions options) => _options = options;
+        public PhysicalSession(OceanBaseConnectionOptions options) { _options = options; _endpoint = options.Endpoint; }
 
         public SessionState State { get { lock (_gate) return _state; } }
         public ConnectResult? Info { get { lock (_gate) return _info; } }
-        internal string Endpoint => _options.Endpoint;
+        internal string Endpoint { get { lock (_gate) return _endpoint; } }
 
         public void Open()
         {
@@ -34,11 +37,18 @@ namespace OceanBaseConnector.Internal.Session
             using var budget = CreateBudget(CancellationToken.None);
             try
             {
-                budget.Token.ThrowIfCancellationRequested();
-                var transport = TcpTransport.Connect(_options.Server, _options.Port, ConnectionTimeout, budget.Token);
-                Attach(transport);
-                using var registration = budget.Token.Register(CancelOpeningTransport);
-                FinishOpen(HandshakeFlow.Authenticate(transport, _channel!, _options), budget.Token);
+                for (var i = 0; ; i++)
+                {
+                    budget.Token.ThrowIfCancellationRequested();
+                    var options = SelectEndpoint(_options.Endpoints[i]);
+                    TcpTransport transport;
+                    try { transport = TcpTransport.Connect(options.Server, options.Port, ConnectionTimeout, budget.Token); }
+                    catch (IOException error) when (CanTryNext(error, i, budget)) { continue; }
+                    Attach(transport);
+                    using var registration = budget.Token.Register(CancelOpeningTransport);
+                    FinishOpen(HandshakeFlow.Authenticate(transport, _channel!, options), budget.Token);
+                    return;
+                }
             }
             catch (Exception exception)
             {
@@ -53,15 +63,25 @@ namespace OceanBaseConnector.Internal.Session
             using var budget = CreateBudget(cancellationToken);
             try
             {
-                budget.Token.ThrowIfCancellationRequested();
-                var transport = await TcpTransport.ConnectAsync(_options.Server, _options.Port, ConnectionTimeout, budget.Token)
-                    .ConfigureAwait(false);
-                Attach(transport);
-                // Closing the socket also interrupts netstandard2.0 TLS and reads.
-                using var registration = budget.Token.Register(CancelOpeningTransport);
-                var info = await HandshakeFlow.AuthenticateAsync(transport, _channel!, _options, budget.Token)
-                    .ConfigureAwait(false);
-                FinishOpen(info, budget.Token);
+                for (var i = 0; ; i++)
+                {
+                    budget.Token.ThrowIfCancellationRequested();
+                    var options = SelectEndpoint(_options.Endpoints[i]);
+                    TcpTransport transport;
+                    try
+                    {
+                        transport = await TcpTransport.ConnectAsync(options.Server, options.Port, ConnectionTimeout, budget.Token)
+                            .ConfigureAwait(false);
+                    }
+                    catch (IOException error) when (CanTryNext(error, i, budget)) { continue; }
+                    Attach(transport);
+                    // Closing the socket also interrupts netstandard2.0 TLS and reads.
+                    using var registration = budget.Token.Register(CancelOpeningTransport);
+                    var info = await HandshakeFlow.AuthenticateAsync(transport, _channel!, options, budget.Token)
+                        .ConfigureAwait(false);
+                    FinishOpen(info, budget.Token);
+                    return;
+                }
             }
             catch (Exception exception)
             {
@@ -72,6 +92,19 @@ namespace OceanBaseConnector.Internal.Session
 
         private TimeSpan ConnectionTimeout => _options.ConnectionTimeoutSeconds == 0
             ? Timeout.InfiniteTimeSpan : TimeSpan.FromSeconds(_options.ConnectionTimeoutSeconds);
+
+        private bool CanTryNext(IOException error, int index, CancellationTokenSource budget) =>
+            error.InnerException is SocketException && index + 1 < _options.Endpoints.Count && !budget.IsCancellationRequested;
+
+        private OceanBaseConnectionOptions SelectEndpoint(OceanBaseEndpoint endpoint)
+        {
+            lock (_gate)
+            {
+                if (_state != SessionState.Connecting) throw new OperationCanceledException(_closing.Token);
+                _endpoint = endpoint.ToString();
+            }
+            return _options.ForEndpoint(endpoint);
+        }
 
         private void CancelOpeningTransport()
         {
@@ -129,9 +162,9 @@ namespace OceanBaseConnector.Internal.Session
             if (caller.IsCancellationRequested) return new OperationCanceledException("Connection opening canceled.", exception, caller);
             if (_closing.IsCancellationRequested) return new OperationCanceledException("Session closed during opening.", exception, _closing.Token);
             if (budget.IsCancellationRequested || exception is TimeoutException)
-                return new TimeoutException($"Connection to {_options.Endpoint} timed out.", exception);
+                return new TimeoutException($"Connection to {Endpoint} timed out.", exception);
             if (exception is OceanBaseException) return exception;
-            return new OceanBaseException($"Connection to {_options.Endpoint} failed.", innerException: exception);
+            return new OceanBaseException($"Connection to {Endpoint} failed.", innerException: exception);
         }
 
         public CommandLease Acquire()

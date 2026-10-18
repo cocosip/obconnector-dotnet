@@ -21,6 +21,8 @@ namespace OceanBaseConnector.ConsumerTests
             Check(Environment.Version.Major == int.Parse(args[0]), "Selected runtime");
             Check(typeof(ILoggerFactory).Assembly.GetName().Version!.Major == int.Parse(args[1]), "Logging dependency major");
             using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var refused = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            refused.Bind(new IPEndPoint(IPAddress.Loopback, 0));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             using var fixture = JsonDocument.Parse(File.ReadAllText(args[2]));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
@@ -39,7 +41,7 @@ namespace OceanBaseConnector.ConsumerTests
                 await Send(stream, new byte[] { 5, 49, 50, 46, 51, 52 }, 4, cancellation.Token);
                 await Send(stream, new byte[] { 254, 0, 0, 6, 0 }, 5, cancellation.Token);
             }, cancellation.Token);
-            using var connection = new OceanBaseConnection($"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled", NullLoggerFactory.Instance);
+            using var connection = new OceanBaseConnection($"Server=127.0.0.1:{((IPEndPoint)refused.LocalEndPoint!).Port},127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled", NullLoggerFactory.Instance);
             using var canceled = new CancellationTokenSource(); canceled.Cancel();
             try { await connection.OpenAsync(canceled.Token); throw new InvalidOperationException("Pre-cancel ignored"); }
             catch (OperationCanceledException error) { Check(error.CancellationToken == canceled.Token, "Caller token"); }

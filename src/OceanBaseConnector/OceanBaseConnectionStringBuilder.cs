@@ -59,6 +59,7 @@ namespace OceanBaseConnector
             ConnectionString = connectionString;
         }
 
+        /// <summary>Comma-separated host[:port] or [IPv6][:port] candidates; omitted ports use Port.</summary>
         public string Server
         {
             get => GetString(ServerKey) ?? string.Empty;
@@ -303,6 +304,9 @@ namespace OceanBaseConnector
             switch (canonicalKey)
             {
                 case ServerKey:
+                    OceanBaseEndpoint.Parse(value, DefaultPort);
+                    return value;
+
                 case UserIdKey:
                     if (value.Trim().Length == 0)
                     {

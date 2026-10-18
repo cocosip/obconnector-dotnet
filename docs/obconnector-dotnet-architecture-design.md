@@ -268,6 +268,10 @@ ADO.NET 不替 provider 自动管理物理连接。`Pooling=false` 是默认值�
 
 多地址先实现连接建立前顺序尝试；后续负载均衡和发现能力按真实 OceanBase/OBProxy 拓扑扩展。故障后创建的新物理会话必须重新握手、识别模式、初始化状态和准备 statement；不透明恢复 reader、事务或 locator。XA 需要显式 API、固定会话、恢复语义及两种模式不同命令；在真实服务端和事务协调器测试完成前不接入 `System.Transactions`。
 
+C02 的 .NET 连接串约定为 `Server=ob1:2881,ob2:2883,[::1]:2881;Port=2881`：候选按声明顺序尝试，省略的端口继承 Port，不带端口的 IPv6 也可使用；带端口的 IPv6 必须加方括号。候选两侧空格忽略，拒绝空候选及非法主机/端口，不接受 JDBC URL 或候选角色语法。整个 Open（全部候选 TCP、TLS、认证、模式初始化）共享 Connection Timeout 预算，0 为无限。仅 TCP 建连的 socket 故障触发下一候选；一旦连通，TLS/认证/协议/模式失败立即返回，不通过切换隐藏身份或配置错误。这比 Java connectWithoutProxy 对 SQLException 的广泛尝试更保守，是本驱动的明确选择。每次显式 Open 创建新会话并重新从首候选开始；业务执行路径没有候选切换。TLS 名称和认证 _server_host 使用本次实际候选主机（显式 TLS Server Name 优先）；DataSource 返回配置列表，成功/关闭/执行诊断使用实际端点。
+
+2026-10-19 C02已在共享PhysicalSession路径实现，connection和现代data source共用；Windows60项新增单元、五资产10项同步/异步消费及五次8/9/10独立运行时基础消费提供本地证据。TLS测试记录实际SNI和认证_server_host，VerifyFull拒绝不受信证书且不尝试下一地址；可信私有CA成功链仍未验收。总预算回归只证明整个Open耗时上界，跨候选不重置由单次CreateBudget及同一token传递的源码走查确认，不依赖操作系统拒绝连接的耗时。IPv6有解析证据，真实IPv6网络、两模式直连/OBProxy与非Windows互通仍未验证。C01尚无完整重置白名单，继续拒绝池化。
+
 数据库/协议错误使用 `OceanBaseException : DbException`，保留服务端错误码、SQLSTATE、模式、`IsExecutionOutcomeUnknown` 和可安全公开的端点信息；发送前的调用方取消遵循 `OperationCanceledException`。B01 接入 `Microsoft.Extensions.Logging.Abstractions`，由数据源 builder 的 `UseLoggerFactory` 配置，默认无日志，不使用可变全局工厂；命令/事务日志随 B02/B07 实现。日志与追踪不写入默认 SQL、绑定值、凭据或原始服务端错误文本，日志后端异常不能改变执行与资源清理结果。C07 再用 `ActivitySource`、`Meter` 暴露本地操作和聚合指标，旧资产所需 `System.Diagnostics.DiagnosticSource` 等依赖须五目标验证；不预先叠加多套事件设施。本地追踪不依赖 OB20，经服务端协商的完整链路追踪归 D01。日志与协议抓包分开，抓包必须显式开启并擦除认证和参数内容。事件、安全和生命周期细则见 §2.6。
 
 ## 7. 实施阶段与验收
@@ -313,4 +317,4 @@ ADO.NET 不替 provider 自动管理物理连接。`Pooling=false` 是默认值�
 3. 首发最低 OceanBase/OBProxy 版本与两种兼容模式的实际测试环境；它们决定可对外承诺的功能矩阵。
 4. 首个正式版本是否必须包含经验证的池化与 Oracle 高精度/纳秒 provider-specific 值；本设计将它们列为 C 阶段交付门槛，而不是协议原型门槛。无法完整重置的服务端组合只承诺直连。
 
-本文定义目标架构。2026-10-19 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果、B05 低精度数值/provider-specific 访问和常见日期时间，B06 reader 字段元数据，以及 B07 本地事务和关闭回滚、B08 本地取消/超时故障矩阵及 B09 标量元数据/公共 API 审核；宽精度扩展和目录元数据仍未实现，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。
+本文定义目标架构。2026-10-19 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果、B05 低精度数值/provider-specific 访问和常见日期时间，B06 reader 字段元数据，以及 B07 本地事务和关闭回滚、B08 本地取消/超时故障矩阵、B09 标量元数据/公共 API 审核及 C02 多地址 TCP 建连；池化、宽精度扩展和目录元数据仍未实现，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。

@@ -107,9 +107,9 @@ namespace OceanBaseConnector
                 session.Open();
                 PublishOpen(session);
             }
-            catch (Exception error) { FailedOpen(session, options, timer.ElapsedMilliseconds, error); throw; }
+            catch (Exception error) { FailedOpen(session, timer.ElapsedMilliseconds, error); throw; }
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
-            _log.Opened(options.Endpoint, session.Info!.Mode, timer.ElapsedMilliseconds);
+            _log.Opened(session.Endpoint, session.Info!.Mode, timer.ElapsedMilliseconds);
         }
 
         public override async Task OpenAsync(CancellationToken cancellationToken)
@@ -123,9 +123,9 @@ namespace OceanBaseConnector
                 await session.OpenAsync(cancellationToken).ConfigureAwait(false);
                 PublishOpen(session);
             }
-            catch (Exception error) { FailedOpen(session, options, timer.ElapsedMilliseconds, error); throw; }
+            catch (Exception error) { FailedOpen(session, timer.ElapsedMilliseconds, error); throw; }
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
-            _log.Opened(options.Endpoint, session.Info!.Mode, timer.ElapsedMilliseconds);
+            _log.Opened(session.Endpoint, session.Info!.Mode, timer.ElapsedMilliseconds);
         }
 
         private PhysicalSession StartOpen(CancellationToken token, out OceanBaseConnectionOptions options)
@@ -173,11 +173,11 @@ namespace OceanBaseConnector
             }
         }
 
-        private void FailedOpen(PhysicalSession session, OceanBaseConnectionOptions options, long elapsed, Exception error)
+        private void FailedOpen(PhysicalSession session, long elapsed, Exception error)
         {
             session.Dispose();
             lock (_gate) { if (ReferenceEquals(_session, session)) _session = null; }
-            _log.Failed(options.Endpoint, elapsed, error);
+            _log.Failed(session.Endpoint, elapsed, error);
         }
 
         public override void Close()

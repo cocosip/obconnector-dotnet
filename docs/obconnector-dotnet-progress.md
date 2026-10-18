@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵及 B09 公共 API/标量 ProviderType 审核。目录元数据和宽精度扩展尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连。目录元数据和宽精度扩展尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -29,7 +29,7 @@
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04 本地实现完成、待真实/跨平台验收；A05 还缺可信 MySQL 模式判定规则及版本/插件验收；A07 缺环境与可信版本矩阵；G0 未关闭 |
 | G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09 本地实现/审核已具证据；核心五资产有 Windows8/9/10基础运行时消费，但真实双模式、完整旧运行时消费/DI及跨平台未验收 |
-| G3 生产连接 C | W18-W34 | 0/8 | 未开始 | C01-C08 + 池化白名单/精确类型/MySQL `ChangeDatabase`/内存故障实测 |
+| G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02本地实现完成待真实环境验证；关口未关闭 |
 | G4 发布候选 R | W35-W37 | 0/2 | 未开始 | R01-R02 + 包/许可证/兼容矩阵 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
 
@@ -63,8 +63,8 @@
 
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
-| C01 | W18-W23 | 可选池、完整重置和版本白名单 | 未开始 | 待记录 |
-| C02 | W18-W21 | 多地址建连与发包后不重试 | 未开始 | 待记录 |
+| C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 2026-10-19 Codex；无真实完整重置白名单，Java reset不能代替OceanBase实测；保持Pooling=true拒绝，先推进独立C02 |
+| C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
 | C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 未开始 | 待记录 |
 | C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 未开始 | 待记录 |
 | C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 未开始 | 待记录 |
@@ -223,3 +223,14 @@ B09日志核查确认命令1100/1101原先误用Connection类别，导致只启�
 独立运行时基础消费：版本管理的RuntimeConsumerSample.cs经SDK10 csc和8/9/10 reference pack编译；私有依赖目录及LatestPatch runtimeconfig防止net10宿主统一旧依赖。Standard2.0/2.1/net8→.NET8.0.31+日志程序集8，net9→9.0.20+日志9，net10→10.0.12+日志10，五次均通过原token预取消、已认证Oracle环回查询、NUMBER/decimal、两套ProviderType及CloseConnection。命令、响应文件和结果位于artifacts/b09-runtime-smoke，复现方式见开发计划B09。日常xUnit工程仍net10.0；此基础样例不代表旧运行时DI、全部API、.NET Framework4.8或真实双模式兼容通过。
 
 B09保持待验证，G2仍0/9；下一模块C01。按用户要求未执行实库和非Windows测试，真实两模式/OBProxy及完整运行时矩阵仍缺。A04本地完成、真实TLS验收未完；A05可信MySQL模式判定仍是实现缺口，不以样例Oracle成功放行MySQL。C01必须保留无可信完整重置白名单时拒绝池化的边界。
+
+
+2026-10-19 C01核查与C02实施：未取得任何可信的OceanBase/OBProxy完整重置版本/模式白名单；Java2.4.14 reset在非特定MariaDB组合依赖驱动跟踪状态，也不能证明原始SET/ALTER SESSION和临时对象清理。C01记为阻塞，Pooling=true继续拒绝。按暂缓实库要求先推进独立C02，未添加测试专用池化开关或将销毁连接冒充连接池。
+
+C02使用既有Server/Host键的有序逗号候选，支持host[:port]、[IPv6][:port]和无端口IPv6；省略端口继承Port。解析/冻结位于OceanBaseEndpoint与OceanBaseConnectionOptions，PhysicalSession同步/异步仅在TCP建连socket故障时尝试下一地址；全Open共享预算、0无限。每次显式重开从首候选开始，TLS/认证/协议/模式错误及所有业务执行均不切换、不重放。逐端点快照保留TLS/凭据/模式/数据库配置；DataSource保留原列表，SNI和认证_server_host使用实际主机，成功/关闭/命令/事务日志记录实际端点并脱敏。
+
+C02本地验证：首批26项非法候选/公开fallback测试先全失败后全通过；共新增60项单元和10项五资产同步/异步消费。Release slnx五/三目标0警告/错误，Unit627、Consumer49、DI8通过（TestResults/c02-unit-final.trx、c02-consumer.trx、c02-di.trx）。覆盖全部失败、模式不匹配、认证错误、握手/SQL断线不重试、取消/关闭、无超时配置、总超时、数据源、重开首候选、未用候选不接触、逐地址TLS和显式名称、证书拒绝及密码保护。独立走查发现总预算测试错误依赖拒绝耗时，已删除对末候选必须未接触的断言；现回归仅证实Open总耗时上界（2项单独通过），共享预算不重置由循环外一次CreateBudget的源码确认：TCP及异步握手传预算token，同步TLS/认证由预算注册关闭传输中断；无剩余需修复项。
+
+五资产实际Windows基础消费使用扩展的RuntimeConsumerSample.cs，新增首地址失败后的查询；Standard2.0/2.1/net8在8.0.31、net9在9.0.20、net10在10.0.12，日志程序集8/9/10全部通过。私有依赖、SDK10 csc响应文件和LatestPatch runtimeconfig方法沿用B09，材料在artifacts/c02-runtime-smoke。格式/diff、双包5/3资产及8依赖组、统一0.1.0-alpha和Microsoft.Extensions按TFM8/9/10检查通过；未新增依赖，包README提示留R01。
+
+C02保持待验证，G3仍0/8、进行中；C01阻塞且A05可信MySQL模式判定仍是实现缺口，下一可本地推进模块C03。真实两模式/OBProxy、非Windows、IPv6网络和可信私有CA成功链未执行；旧运行时DI/完整API矩阵亦未验收，不把基础环回或源码走查替代实测。

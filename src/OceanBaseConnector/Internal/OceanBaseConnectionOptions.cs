@@ -1,5 +1,5 @@
 using System;
-using System.Globalization;
+using System.Collections.Generic;
 
 namespace OceanBaseConnector.Internal
 {
@@ -28,6 +28,7 @@ namespace OceanBaseConnector.Internal
         {
             Server = server;
             Port = port;
+            Endpoints = Array.AsReadOnly(OceanBaseEndpoint.Parse(server, port));
             UserId = userId;
             Password = password;
             Database = database;
@@ -44,6 +45,12 @@ namespace OceanBaseConnector.Internal
         public string Server { get; }
 
         public int Port { get; }
+
+        internal IReadOnlyList<OceanBaseEndpoint> Endpoints { get; }
+
+        internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
+            endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
+            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, SanitizedConnectionString);
 
         public string UserId { get; }
 
@@ -69,11 +76,7 @@ namespace OceanBaseConnector.Internal
         public string SanitizedConnectionString { get; }
 
         /// <summary>Endpoint description without credentials, for error reporting.</summary>
-        public string Endpoint => string.Format(
-            CultureInfo.InvariantCulture,
-            "{0}:{1}",
-            Server,
-            Port);
+        public string Endpoint => string.Join(",", Endpoints);
 
         public override string ToString() => SanitizedConnectionString;
     }

@@ -299,7 +299,7 @@ namespace OceanBaseConnector
                     try { exchange = new CommandExchange(session, _log, transaction.Timeout, CancellationToken.None, () => { }, logCommand: false); }
                     catch { session.Break(); }
                 }
-                return (session, transaction, exchange, previous, _options?.Endpoint);
+                return (session, transaction, exchange, previous, session?.Endpoint);
             }
         }
 
