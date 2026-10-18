@@ -4,7 +4,7 @@
 
 ## 中断走查问题核销（2026-10-19）
 
-已将原走查记录与当前 `0f43bf2` 源码、历史修复提交和本轮实际执行的回归逐项核对。以下问题均已有修复提交；本轮补充集中核销记录，没有新增产品代码。
+首次核销已将原走查记录与当时 `0f43bf2` 源码、历史修复提交和实际执行的回归逐项核对；下表另补充后续目录模块的修复。以下问题均已有修复提交，本节续接复核不新增产品代码。
 
 | 已报告问题 | 修复提交 | 当前回归证据 |
 | --- | --- | --- |
@@ -13,10 +13,15 @@
 | netstandard2.1 异步事务/连接/reader 清理被错误条件编译排除 | `e6b50d9` | TransactionConsumerTests：AsyncCleanupReturnsBeforeDelayedRollbackAndWaitsForRestoration，含 Standard2.1 的真实异步延迟回滚 |
 | 预读字符/耗尽字段流绕过命令取消和关闭；完整终结包误判结果未知；字段 token 未进入命令预算 | `230d596` | SequentialAccessTests：缓存字段生命周期、完整终态与取消、字段独立 token 回归 |
 | 游标 ERR 先释放租约再销毁会话；二进制行冒充 FE-OK 确认；分页/初始空结果遗漏或重复处理会话报告；部分 fetch 写入不响应 reader token | `b6881a6` | CursorTests：错误日志重入、二进制伪确认、逐页及空结果会话报告、部分写入取消回归 |
+| 目录整数转换先舍入微小小数，导致非法值误通过整数校验 | `fa37cd5` | ConnectionSchemaEdgeTests：ConnectionSchemaNeverRoundsTinyFractionsBeforeIntegerValidation，覆盖长小数字符串和浮点表示 |
 
-本轮重新执行 `dotnet build OceanBaseConnector.slnx --no-restore -c Release`：核心五目标、DI 三目标，0 警告/0 错误。Windows 完整 Unit1073、Consumer120、DI8 全部通过且零跳过；报告为 `TestResults/interrupted-review-{unit,consumer,di}.trx`，另解析 TRX 确认上表对应回归实际执行并通过。完整单测沿用已授权的 Windows TLS 测试证书存储访问，未调整 TLS 策略。
+首次核销重新执行 `dotnet build OceanBaseConnector.slnx --no-restore -c Release`：核心五目标、DI 三目标，0 警告/0 错误。Windows 完整 Unit1073、Consumer120、DI8 全部通过且零跳过；报告为 `TestResults/interrupted-review-{unit,consumer,di}.trx`，另解析 TRX 确认当时列出的回归实际执行并通过。完整单测沿用已授权的 Windows TLS 测试证书存储访问，未调整 TLS 策略。
 
 当时此核销不改变阶段验收状态（C05后续进展见末尾目录模块记录）：A04 待验证；A05 仍缺可信公开 MySQL 模式判定；C04 待验证；C05 仅数据库切换子项落地，目录集合仍未实现；C01 完整重置白名单仍阻塞。真实数据库、非 Windows 及新的旧运行时验收未执行。
+
+2026-10-19 再次续接复核：`fa37cd5` 已实现 C05 目录集合并修复目录数值舍入问题，C05 当前为待验证。再次核对现有代码、对应回归和已有独立走查结论，未发现上述已报告问题仍待修复；本次没有新增产品代码，也没有启动 C06。
+
+本次重新编译 Release slnx：核心五目标、DI 三目标，0 警告/0 错误；完整 Windows Unit1117、Consumer128、DI8 全通过且零跳过，报告为 `TestResults/review-resume-{unit,consumer,di}.trx`。解析报告确认上表对应回归均实际执行并通过，包含目录长小数字符串/浮点拒绝、游标失败日志重入/伪确认/状态报告/部分发送取消及字段缓存生命周期。实库、非 Windows 与新的旧运行时验收仍按既有约定暂不执行，阶段关口不变。
 
 ## 进度口径
 
