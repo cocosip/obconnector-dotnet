@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-18 已续接 A 阶段握手/物理会话，并实现 B01 公开连接/工厂、现代无池数据源、可选 DI 和连接日志。SQL、reader、事务执行尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-18 已续接 A 阶段握手/物理会话、B01 宿主接入及 B02 无参文本命令/逐行 reader/多结果。参数化、完整类型/元数据及事务尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -50,7 +50,7 @@
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
 | B01 | W6-W7（待重估） | 标准 provider/factory、现代无池数据源、可选 DI 与基础日志；`ChangeDatabase` 暂拒绝 | 待验证 | 本地实现、四/三目标编译、环回建连、DI/消费测试及双包依赖检查通过；双模式真实建连、旧运行时和非 Windows 验收待补 |
-| B02 | W7-W9 | 文本 SQL、OK/ERR、多结果和更新计数 | 未开始 | 待记录 |
+| B02 | W7-W9 | 文本 SQL、OK/ERR、多结果和更新计数 | 待验证 | COM_QUERY 同步/异步、逐行文本 reader、OK/ERR/EOF/FE OK、多结果和更新计数已有 Windows 环回证据；两模式真实 CRUD/匹配行语义、非 Windows 和旧运行时待验证 |
 | B03 | W8-W10 | Oracle 命名占位符词法器及各类 `q` 字面量；MySQL 参数数由服务端确定 | 未开始 | 待记录 |
 | B04 | W9-W12 | 服务端 prepare/execute、二进制结果和 statement ID | 未开始 | 待记录 |
 | B05 | W10-W13 | 基础值、低精度 `OceanBaseDecimal`、Oracle DATE 与未支持类型拒绝 | 未开始 | 待记录 |
@@ -149,3 +149,9 @@
 B01 验证命令：dotnet restore OceanBaseConnector.slnx；dotnet build OceanBaseConnector.slnx -c Release --no-restore（0 警告/0 错误）；分别对 UnitTests、ConsumerTests、DependencyInjection.Tests 执行 dotnet test -c Release --no-build --no-restore，184/13/8 全通过，TRX 位于 TestResults/b01-unit.trx、b01-consumer.trx、b01-di.trx。dotnet format OceanBaseConnector.slnx whitespace --verify-no-changes --no-restore 与 git diff --check 通过；两产品工程 dotnet pack -c Release --no-build --no-restore 成功。正式包 README/许可等元数据仍在 R01，当前 pack 保留缺 README 提示。
 
 B01 独立审查及修复：日志回调在 Opened 关闭、在 Closed 重开同一连接的状态事件乱序均由先失败回归复现，改为先发送状态事件再调用外部日志；另覆盖连接并发、日志工厂/过滤/写入抛错、实际 DI 日志覆盖、取消与清理、PersistSecurityInfo、配置冻结和参数归属。复核未发现剩余重要问题。依用户要求未运行真实数据库和非 Windows 测试，未取得旧运行时运行证据；无可信 MySQL 模式版本时继续安全拒绝缺失模式位。B01 保持待验证、G2 保持进行中，下一功能模块为 B02，不将本地通过等同于双模式兼容或可发布。
+
+2026-10-18 B02 本地实施：复用一个 PhysicalSession/CommandLease 和 PacketChannel，增加 COM_QUERY 同步/异步执行、逐行文本 reader、NULL/空字符串、基础标量、结果切换和 OK 更新计数累加；ExecuteScalar 跳过前置更新计数取得首个结果集单元，再消费剩余响应。传统 EOF 与协商后的 DEPRECATE_EOF（无列 EOF、FE OK 行终止）均覆盖。关闭未读 reader 销毁会话，CloseConnection 另关闭逻辑连接；服务器终态 ERR 可安全复用会话，失败 reader 不能再访问下一命令。LOCAL INFILE、不合法列/行/长度/包数和超限元数据安全拒绝，不触及文件系统、不重放 SQL。B05/B06 之前的精确数值、日期、完整元数据等边界保持显式不支持；特别是 Oracle 类型码 3 不误作 MySQL INT。
+
+B02 本地验证：dotnet build OceanBaseConnector.slnx -c Release --no-restore 通过，0 警告/0 错误；各 net10.0 宿主 dotnet test -c Release --no-build --no-restore：UnitTests 228、ConsumerTests 13、DependencyInjection.Tests 8 全通过。TRX 位于 TestResults/b02-unit.trx、b02-consumer.trx、b02-di.trx。B02 新增 44 项测试用例，包括公共环回执行和模式感知类型边界；红绿回归覆盖超大超时遗留 Busy、缓冲行忽略 Cancel、失败 reader 触碰下一命令、读取 token 原因、终态 OK/ERR 被日志回调取消覆盖、EOF 协商不匹配和 Scalar 前置更新计数。发包后的取消/超时/关闭返回 IsExecutionOutcomeUnknown=true 并保留原因；无发包的预取消/不支持功能/环境事务拒绝仍可继续建命令。
+
+B02 format whitespace、git diff --check、两个产品包 pack 通过；包仍为统一 0.1.0-alpha，正式 README/发布元数据由 R01 补齐。独立审查发现的 EOF 协商、超大超时占用和终态 ERR/取消竞态均已修复并回归。此次没有运行数据库或非 Windows 测试；MySQL 可信版本/两模式真实 CRUD/真实不变 UPDATE 行数及旧运行时证据仍缺失，B02 保持待验证、G2 保持进行中。下一功能模块为 B03 参数占位符词法与验证。

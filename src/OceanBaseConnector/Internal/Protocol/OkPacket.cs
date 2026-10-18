@@ -47,10 +47,11 @@ namespace OceanBaseConnector.Internal.Protocol
 
         public static bool IsOk(byte[] payload) => payload.Length > 0 && payload[0] == 0x00;
 
-        public static OkPacket Parse(byte[] payload, CapabilityFlags effectiveCapabilities)
+        public static OkPacket Parse(byte[] payload, CapabilityFlags effectiveCapabilities, bool allowEofHeader = false)
         {
             var cursor = new ByteCursor(payload);
-            if (cursor.ReadUInt8() != 0x00)
+            var header = cursor.ReadUInt8();
+            if (header != 0x00 && !(allowEofHeader && header == 0xFE))
             {
                 throw new ProtocolException("Not an OK packet.");
             }

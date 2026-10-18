@@ -154,10 +154,13 @@
 
 **产物：**`COM_QUERY`、文本行、OK/ERR、多结果状态；`ExecuteNonQuery`、`ExecuteScalar`、`ExecuteReader` 同步与异步路径共享状态机。
 
-- [ ] 夹具覆盖 `SELECT`、DML、空结果、多个结果集、结果集后更新计数、服务器 ERR 和有未消费响应的关闭。
-- [ ] 验证默认 `CLIENT_FOUND_ROWS` 下无实际变化的 `UPDATE` 返回匹配行数；`RecordsAffected` 仅按服务端 OK 计数累计。
-- [ ] 两模式分别运行文本 CRUD 与异步网络阻塞测试。
-- [ ] 使用 B01 日志上下文记录命令完成/错误/取消/结果未知，默认不记录 SQL 或绑定值；日志后端故障不将已成功执行转成可重试错误。
+- [x] 夹具/环回覆盖 `SELECT`、DML、空结果、多个结果集、结果集后更新计数、服务器 ERR、有未消费响应的关闭，以及传统 EOF/协商后的 FE OK 终止。
+- [x] 保留默认 `CLIENT_FOUND_ROWS` 能力；`RecordsAffected` 仅累计服务端 OK 的计数，不按客户端 SQL 猜测，也不把 SELECT 行数算入更新计数。真实不变 UPDATE 的匹配行语义仍待实库证明。
+- [x] Windows 环回验证异步建命令/逐行读取等待网络，文本路径不缓存整个结果；同步调用同步 I/O。预取消/不支持参数/行为/环境事务在发包前失败；发包后取消、超时或关闭销毁会话并报告结果未知。B08 继续覆盖更完整的故障矩阵。
+- [x] 使用 B01 日志上下文记录命令完成/错误/取消/结果未知，默认不记录 SQL 或绑定值；已收到可信 OK/ERR 后，日志回调触发取消也不覆盖终态。
+- [ ] 两模式分别运行真实文本 CRUD 和不变 UPDATE 匹配行验证；依用户要求实库及非 Windows 测试暂不执行，MySQL 模式可信版本门槛保持不变。
+
+B02 当前 reader 支持基础有/无符号整数、浮点、UTF-8 字符串、binary 字符串和 NULL；保留物理会话模式，Oracle 类型码 3（NUMBER）在 B05 精确数值完成前明确拒绝，不借用 MySQL INT 映射。日期、decimal、national charset、LOB 和其他扩展值不猜测解码。完整 provider-specific 值及字段元数据仍属 B05/B06。仅接受 `CommandBehavior.Default`/`CloseConnection`，`SequentialAccess` 等行为在对应能力实现前拒绝。响应硬上限为每包 64 MiB、每结果 4096 列/4 MiB 元数据、每命令一百万包；超限销毁会话。超出平台计时器范围的超时在取得会话前失败，不遗留 Busy 会话。
 
 ### B03 Oracle 占位符词法器与参数验证
 

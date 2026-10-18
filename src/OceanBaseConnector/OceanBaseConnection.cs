@@ -220,6 +220,17 @@ namespace OceanBaseConnector
             lock (_gate) { ThrowIfDisposed(); return new OceanBaseCommand { Connection = this, CommandTimeout = _builder.CommandTimeout }; }
         }
         protected override DbProviderFactory DbProviderFactory => OceanBaseProviderFactory.Instance;
+        internal PhysicalSession GetOpenSession()
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                if (_session == null || _session.State != SessionState.Open)
+                    throw new InvalidOperationException("The connection must be open and have no active operation.");
+                return _session;
+            }
+        }
+        internal ConnectionLog Log => _log;
         internal static void RejectAmbientTransaction()
         {
             if (Transaction.Current != null) throw new NotSupportedException("Ambient transactions are not supported.");

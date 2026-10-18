@@ -164,6 +164,13 @@ namespace OceanBaseConnector.Internal.Protocol
             return ReadBytes((int)length);
         }
 
+        public byte[]? ReadNullableLengthEncodedBytes()
+        {
+            EnsureAvailable(1);
+            if (_data[_offset + _position] == 0xFB) { _position++; return null; }
+            return ReadLengthEncodedBytes();
+        }
+
         /// <summary>Reads bytes up to (not including) the next NUL byte and skips it.</summary>
         public byte[] ReadNullTerminatedBytes()
         {

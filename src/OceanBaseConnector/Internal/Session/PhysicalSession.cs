@@ -24,6 +24,7 @@ namespace OceanBaseConnector.Internal.Session
 
         public SessionState State { get { lock (_gate) return _state; } }
         public ConnectResult? Info { get { lock (_gate) return _info; } }
+        internal string Endpoint => _options.Endpoint;
 
         public void Open()
         {
@@ -205,6 +206,16 @@ namespace OceanBaseConnector.Internal.Session
                     _released = true;
                     _owner._lease = null;
                     _owner._state = SessionState.Open;
+                }
+            }
+
+            internal void CompleteIfActive()
+            {
+                lock (_owner._gate)
+                {
+                    // A terminal reply remains authoritative if cancellation already closed the socket.
+                    if (!_released && _owner._state == SessionState.Busy && ReferenceEquals(_owner._lease, this))
+                        Complete();
                 }
             }
 
