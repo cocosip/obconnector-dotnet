@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Runtime.Loader;
 using Xunit;
 using OceanBaseConnector;
 
@@ -42,6 +43,38 @@ namespace OceanBaseConnector.ConsumerTests
             }
 
             return names;
+        }
+
+        [Fact]
+        public void BaselineConsumerUsesNetStandardAsset()
+        {
+            var context = new AssemblyLoadContext("baseline-sample", isCollectible: true);
+            try
+            {
+                context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath("netstandard2.0"));
+                var assembly = context.LoadFromAssemblyPath(Path.Combine(AppContext.BaseDirectory,
+                    "OceanBaseConnector.ConsumerTests.NetStandard.dll"));
+                var sample = assembly.GetType("OceanBaseConnector.ConsumerTests.NetStandard.NetStandardConsumerSample")!;
+                Assert.Contains("netstandard2.0", (string)sample.GetMethod("Describe")!.Invoke(null, null)!);
+            }
+            finally { context.Unload(); }
+        }
+
+        [Fact]
+        public void NetStandardAssetRunsInIsolatedLoadContext()
+        {
+            var context = new AssemblyLoadContext("baseline-consumer", isCollectible: true);
+            try
+            {
+                var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath("netstandard2.0"));
+                var type = assembly.GetType("OceanBaseConnector.OceanBaseConnectionStringBuilder", throwOnError: true)!;
+                var builder = Activator.CreateInstance(type, "Server=localhost;User ID=sample;Password=baseline-secret")!;
+                var sanitized = (string)type.GetMethod("ToSanitizedConnectionString")!.Invoke(builder, new object[] { false })!;
+                Assert.DoesNotContain("baseline-secret", sanitized);
+                var property = assembly.GetType(BaselineTypeName)!.GetProperty("HasModernAdoNetApis")!;
+                Assert.Equal(false, property.GetValue(null));
+            }
+            finally { context.Unload(); }
         }
 
         [Fact]

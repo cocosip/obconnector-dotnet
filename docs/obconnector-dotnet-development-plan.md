@@ -14,7 +14,7 @@
 
 - 当前排期以 A/B/C 均进入首个正式版本为基线，G0-5 决定是否调整；D 按独立能力交付。没有真实双模式测试和明确版本矩阵，不能把 A/B/C 标记为发布完成。
 - 首版默认 `TLS Mode=VerifyFull`、`Pooling=false`、`CLIENT_FOUND_ROWS`；不自动重试已发送 SQL，不隐式客户端参数插值，不加入 `TransactionScope`。变更这些公开语义须先修订架构设计。
-- `netstandard2.0` 定义公共类型身份；现代 ADO.NET API 用条件编译，仅在 `net8.0+` 暴露。每个目标单独编译，.NET 8/9/10 运行测试，另用 `netstandard2.0` 资产做消费测试。
+- `netstandard2.0` 定义公共类型身份；现代 ADO.NET API 用条件编译，仅在 `net8.0+` 暴露。每个产品目标单独编译；全部测试及消费宿主统一使用 `net10.0`，显式选择并隔离加载 `netstandard2.0` 资产；B09/R01 另验证旧运行时消费。
 - 仓库统一使用中央包管理(CPM)：根目录 `Directory.Packages.props` 固定全部 NuGet 包版本并开启传递依赖钉扎；工程的 `PackageReference` 一律不带 `Version`。产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性提供,csproj 不得各自声明版本。新增依赖只改 `Directory.Packages.props`。
 - 许可和包名在发布前审定；只参考 Java 行为和协议，不直接移植其 LGPL-2.1 实现。
 - 进入 A 的真实互通验收前，应取得两个兼容模式的独立租户、服务端和 OBProxy 版本、认证插件、可验证的 TLS 证书及可控故障网络。缺少环境时只报告夹具验证。
@@ -24,6 +24,8 @@
 
 | 位置 | 职责 |
 | --- | --- |
+| `OceanBaseConnector.slnx`、`global.json` | .NET 10 SDK 的统一解决方案和 SDK 主版本约束 |
+| `Directory.Build.props` | 全部产品、程序集与包版本唯一来源 Version |
 | `Directory.Packages.props` | 中央包管理：全部 NuGet 包版本的唯一来源，传递依赖钉扎 |
 | `src/OceanBaseConnector/OceanBaseConnector.csproj` | 唯一产品程序集和多目标条件编译；包元数据在发布门槛确定 |
 | `src/OceanBaseConnector/OceanBaseConnection*.cs`、`OceanBaseCommand*.cs`、`OceanBaseDataReader*.cs`、`OceanBaseTransaction*.cs` | ADO.NET 公共对象；拆分文件按对象职责，不复制四套协议 |
@@ -35,7 +37,7 @@
 | `src/OceanBaseConnector/Internal/Pooling/` | C 阶段的池、会话完整重置与池键 |
 | `tests/OceanBaseConnector.UnitTests/` | 不依赖服务端的字节夹具、API/状态机和错误路径测试 |
 | `tests/OceanBaseConnector.IntegrationTests/` | 独立 MySQL/Oracle 租户、OBProxy、TLS、故障与重置测试；没有环境时跳过并明确报告 |
-| `tests/OceanBaseConnector.ConsumerTests/` | `netstandard2.0` 编译消费工程和 .NET 8/9/10 运行消费工程；打包后用独立宿主显式加载 `netstandard2.0` 资产，验证工厂、条件 API 和公开值类型身份 |
+| `tests/OceanBaseConnector.ConsumerTests/` | 统一 .NET 10 消费宿主；基线样例显式选择 netstandard2.0 资产，在隔离加载上下文执行；发布时另验证包、工厂和公开值类型身份 |
 
 `PhysicalSession` 独占 socket、包序号、模式、版本、协商能力及服务端 statement ID；一次只有一个命令或 reader 持有它。公开 `OceanBaseConnection` 是逻辑借用者。`OceanBaseCommand` 在发送前验证参数、事务和环境事务；`OceanBaseDataReader` 在关闭/读尽前持有响应；任何未读包、结果未知、重置失败都使物理会话失效。`SessionMode` 只能由认证 OK 的服务端状态确定，`ExpectedMode` 只做事后校验。
 
@@ -68,27 +70,27 @@
 
 ### A01 多目标工程与测试入口
 
-**产物：**解决方案、唯一产品工程、三个测试工程、CI 构建入口。以 .NET 10 SDK 构建四目标；测试工程分别运行于 .NET 8/9/10，消费测试显式引用 `netstandard2.0` 资产。
+**产物：**slnx 解决方案、唯一四目标产品工程、统一 net10.0 的测试及消费工程、CI 入口。消费测试显式选择并隔离加载 netstandard2.0 资产。
 
-- [ ] 建立多目标工程和目标条件编译样例；验证不存在现代 API 泄漏到 `netstandard2.0`。
-- [ ] 建立协议夹具格式：二进制数据、来源、服务端版本、模式、脱敏说明和期望解析结果。
-- [ ] 运行 `dotnet restore`、`dotnet build -c Release`、各测试目标的 `dotnet test -c Release`；将命令及日志位置登记到进度台账。
+- [x] 建立多目标工程和目标条件编译样例；验证不存在现代 API 泄漏到 `netstandard2.0`。
+- [x] 建立协议夹具格式：二进制数据、来源、服务端版本、模式、脱敏说明和期望解析结果。
+- [x] 运行 `dotnet restore`、`dotnet build -c Release`、各测试目标的 `dotnet test -c Release`；将命令及日志位置登记到进度台账。
 
 ### A02 连接串与公开配置
 
 **产物：**`OceanBaseConnectionStringBuilder`、不可变内部连接选项；解析 `Server`、`Port`、`User ID`、`Password`、`Database`、超时、`TLS Mode`、`TLS Server Name`、`Persist Security Info`、`ExpectedMode`、`Pooling`。未实现的选项不得静默接受。
 
-- [ ] 用测试固定空值、非法端口/超时、同义词冲突、未知键、密码序列化与公开连接串脱敏。
-- [ ] 解析一次并冻结内部配置；密码不进入异常/默认日志，池键规则留给 C01。
-- [ ] 运行连接串单测及四目标编译；在进度台账记录公开键清单。
+- [x] 用测试固定空值、非法端口/超时、同义词冲突、未知键、密码序列化与公开连接串脱敏。
+- [x] 解析一次并冻结内部配置；密码不进入异常/默认日志，池键规则留给 C01。
+- [x] 运行连接串单测及四目标编译；在进度台账记录公开键清单。
 
 ### A03 标准包帧与字节游标
 
 **产物：**协议帧读写器，处理 3 字节长度、1 字节序号、最大长度分片、命令边界序号重置、截断/越界/恶意长度。解析前检查剩余字节和整数溢出，不按不可信长度直接分配。
 
-- [ ] 用固定字节夹具先覆盖单包、多分片、零长度尾包、错序、截断、过长长度编码和服务端 ERR。
-- [ ] 分离包流与命令解析；同步/异步网络入口使用同一帧规则，异步不调用同步读写。
-- [ ] 运行协议单测，包含随机截断输入与资源上限断言。
+- [x] 用固定字节夹具先覆盖单包、多分片、零长度尾包、错序、截断、过长长度编码和服务端 ERR。
+- [x] 分离包流与命令解析；同步/异步网络入口使用同一帧规则，异步不调用同步读写。
+- [x] 运行协议单测，包含随机截断输入与资源上限断言。
 
 ### A04 TCP、SSLRequest 与 TLS
 
@@ -106,13 +108,15 @@
 - [ ] 只在已验证 TLS 上允许 cleartext 类插件；认证切换同样检查这个条件。
 - [ ] 运行夹具单测与两模式真实握手测试，记录服务端和 OBProxy 版本、插件与能力位。
 
+当前实现边界（2026-10-18）：native challenge 和仅 VerifyFull 下的 clear password 编码尚无实库验收。没有已验证版本矩阵时，缺少 Oracle 状态位的连接明确失败，不能假设 MySQL；补齐 G0 后须以真实证据建立版本白名单再运行 A07。合成夹具中的 4.2.1 不是兼容承诺。
+
 ### A06 物理会话、错误与生命周期
 
 **产物：**`PhysicalSession` 的 `Connecting/Open/Busy/Broken/Closed` 状态与独占租约；关闭/错误释放 socket、statement ID、结果状态。`OceanBaseException` 保留 SQLSTATE、服务端码及安全端点信息。
 
-- [ ] 测试同一物理会话并发执行拒绝、未读响应不得复用、错误后失效、重复释放幂等和日志脱敏。
-- [ ] 实现同步/异步关闭的资源所有权；不让后台清理线程替代显式状态转换。
-- [ ] 运行状态机单测及网络断开夹具。
+- [x] 测试同一物理会话并发执行拒绝、未读响应不得复用、错误后失效、重复释放幂等和日志脱敏。
+- [x] 实现同步/异步关闭的资源所有权；不让后台清理线程替代显式状态转换。
+- [x] 运行状态机单测及网络断开夹具。
 
 ### A07 G1 真实连接门槛
 
@@ -328,12 +332,12 @@
 统一验证入口（工程创建后执行；实际命令和退出码写入进度台账）：
 
 ```powershell
-dotnet restore OceanBaseConnector.sln
-dotnet build OceanBaseConnector.sln -c Release --no-restore
+dotnet restore OceanBaseConnector.slnx
+dotnet build OceanBaseConnector.slnx -c Release --no-restore
 dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore
 dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj -c Release --no-restore
 dotnet test tests/OceanBaseConnector.IntegrationTests/OceanBaseConnector.IntegrationTests.csproj -c Release --no-restore
 dotnet pack src/OceanBaseConnector/OceanBaseConnector.csproj -c Release --no-build
 ```
 
-单测和运行消费测试覆盖 .NET 8/9/10，并在 Windows/Linux CI 运行；`netstandard2.0` 消费工程只编译，另由独立宿主显式加载其包资产做运行验证，不把它当可执行测试目标。集成测试使用 `OB_MYSQL_CONNECTION_STRING`、`OB_ORACLE_CONNECTION_STRING`、`OB_MYSQL_PROXY_CONNECTION_STRING`、`OB_ORACLE_PROXY_CONNECTION_STRING`；关口验收设置 `OB_REQUIRE_INTEGRATION=1`，缺少必需环境时测试失败，日常开发可明确跳过并报告。证书、凭据和原始抓包不写入仓库。
+日常测试和消费工程统一运行于 .NET 10，Windows/Linux CI 构建产品四目标；基线样例用 SetTargetFramework 和 SkipGetTargetFrameworkProperties 显式选择 netstandard2.0，并在隔离加载上下文运行，不把该资产当可执行测试目标。旧运行时证据在 B09/R01 单独取得。集成测试使用 `OB_MYSQL_CONNECTION_STRING`、`OB_ORACLE_CONNECTION_STRING`、`OB_MYSQL_PROXY_CONNECTION_STRING`、`OB_ORACLE_PROXY_CONNECTION_STRING`；未知认证插件用例另需 `OB_UNSUPPORTED_AUTH_CONNECTION_STRING`（默认 VerifyFull，仅使用测试账户）；关口验收设置 `OB_REQUIRE_INTEGRATION=1`，缺少必需环境时测试失败，日常开发可明确跳过并报告。证书、凭据和原始抓包不写入仓库。

@@ -15,7 +15,7 @@ namespace OceanBaseConnector.ConsumerTests
             var directory = new DirectoryInfo(AppContext.BaseDirectory);
             for (var i = 0; i < 8 && directory is not null; i++)
             {
-                if (directory.GetFiles("OceanBaseConnector.sln").Length > 0)
+                if (directory.GetFiles("OceanBaseConnector.slnx").Length > 0)
                 {
                     return directory.FullName;
                 }
@@ -24,7 +24,7 @@ namespace OceanBaseConnector.ConsumerTests
             }
 
             throw new InvalidOperationException(
-                $"Could not locate OceanBaseConnector.sln above '{AppContext.BaseDirectory}'.");
+                $"Could not locate OceanBaseConnector.slnx above '{AppContext.BaseDirectory}'.");
         }
 
         public static string GetProductAssemblyPath(string targetFramework, string configuration = "Release")

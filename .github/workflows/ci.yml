@@ -17,26 +17,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET SDKs
+      - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore OceanBaseConnector.sln
+        run: dotnet restore OceanBaseConnector.slnx
 
       - name: Build
-        run: dotnet build OceanBaseConnector.sln -c Release --no-restore
+        run: dotnet build OceanBaseConnector.slnx -c Release --no-restore
 
-      - name: Unit tests (.NET 8/9/10)
+      - name: Unit tests (.NET 10)
         run: >-
           dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj
           -c Release --no-restore --no-build
 
-      - name: Consumer tests (.NET 8/9/10)
+      - name: Consumer tests (.NET 10)
         run: >-
           dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj
           -c Release --no-restore --no-build

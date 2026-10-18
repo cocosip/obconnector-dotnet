@@ -25,13 +25,16 @@ namespace OceanBaseConnector.Internal.Transport
 
         public Stream Stream => _client.GetStream();
 
-        public static TcpTransport Connect(string host, int port, TimeSpan timeout)
+        public static TcpTransport Connect(string host, int port, TimeSpan timeout, CancellationToken cancellationToken = default)
         {
             var client = new TcpClient();
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                using var registration = cancellationToken.Register(client.Close);
                 var asyncResult = client.BeginConnect(host, port, null, null);
-                if (!asyncResult.AsyncWaitHandle.WaitOne(timeout))
+                using var waitHandle = asyncResult.AsyncWaitHandle;
+                if (!waitHandle.WaitOne(timeout))
                 {
                     client.Close();
                     throw CreateTimeoutException(host, port, timeout);
@@ -47,6 +50,11 @@ namespace OceanBaseConnector.Internal.Transport
                 }
 
                 return new TcpTransport(client);
+            }
+            catch (Exception exception) when (cancellationToken.IsCancellationRequested)
+            {
+                client.Dispose();
+                throw new OperationCanceledException("TCP connection canceled.", exception, cancellationToken);
             }
             catch
             {
@@ -78,6 +86,7 @@ namespace OceanBaseConnector.Internal.Transport
                     throw CreateConnectFailureException(host, port, exception);
                 }
 #else
+                combinedCts.Token.ThrowIfCancellationRequested();
                 var connectTask = client.ConnectAsync(host, port);
                 // netstandard2.0 has no cancellable ConnectAsync: dispose the
                 // socket to abort a pending connect when cancellation fires.
@@ -103,6 +112,10 @@ namespace OceanBaseConnector.Internal.Transport
                         }
 
                         throw;
+                    }
+                    catch (Exception exception) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw new OperationCanceledException("TCP connection canceled.", exception, cancellationToken);
                     }
                 }
 #endif

@@ -26,8 +26,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private readonly byte[] _headerBuffer = new byte[4];
 
         private Stream _stream;
-        private int _sendSequence;
-        private int _receiveSequence;
+        private int _sequence;
 
         public PacketChannel(Stream stream, long maxPacketSize = DefaultMaxPacketSize)
         {
@@ -47,6 +46,8 @@ namespace OceanBaseConnector.Internal.Protocol
 
         public long MaxPacketSize => _maxPacketSize;
 
+        public void Close() => _stream.Dispose();
+
         /// <summary>
         /// Swaps the underlying stream after a TLS upgrade. Sequence counters
         /// are preserved: the TLS handshake is invisible to the packet
@@ -63,23 +64,12 @@ namespace OceanBaseConnector.Internal.Protocol
         }
 
         /// <summary>
-        /// Aligns the send sequence with the last received frame + 1, as the
-        /// protocol requires when answering the server's initial handshake:
-        /// the SSLRequest is the client's frame 1 after the server's frame 0.
-        /// </summary>
-        public void AlignSendSequenceToReceived()
-        {
-            _sendSequence = _receiveSequence;
-        }
-
-        /// <summary>
         /// Starts a new command exchange: the client command is frame 0 and
-        /// the server response restarts its own chain at 0.
+        /// the server response continues after the last command frame.
         /// </summary>
         public void BeginCommand()
         {
-            _sendSequence = 0;
-            _receiveSequence = 0;
+            _sequence = 0;
         }
 
         public byte[] ReadPacket()
@@ -243,13 +233,13 @@ namespace OceanBaseConnector.Internal.Protocol
                 ((uint)_headerBuffer[2] << 16));
             var sequenceId = _headerBuffer[3];
 
-            if (sequenceId != (byte)_receiveSequence)
+            if (sequenceId != (byte)_sequence)
             {
                 throw new ProtocolException(
-                    $"Packet sequence mismatch: expected {(byte)_receiveSequence}, received {sequenceId}.");
+                    $"Packet sequence mismatch: expected {(byte)_sequence}, received {sequenceId}.");
             }
 
-            _receiveSequence = (_receiveSequence + 1) & 0xFF;
+            _sequence = (_sequence + 1) & 0xFF;
             isContinuation = frameLength == MaxFramePayload;
         }
 
@@ -302,8 +292,8 @@ namespace OceanBaseConnector.Internal.Protocol
             _headerBuffer[0] = (byte)count;
             _headerBuffer[1] = (byte)(count >> 8);
             _headerBuffer[2] = (byte)(count >> 16);
-            _headerBuffer[3] = (byte)_sendSequence;
-            _sendSequence = (_sendSequence + 1) & 0xFF;
+            _headerBuffer[3] = (byte)_sequence;
+            _sequence = (_sequence + 1) & 0xFF;
         }
 
         private void ReadExactly(byte[] buffer, int offset, int count, string part)

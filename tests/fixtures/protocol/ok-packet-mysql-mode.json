@@ -1,0 +1,16 @@
+{
+  "name": "ok-packet-mysql-mode",
+  "description": "OK packet in MySQL compatibility mode: affected rows 3, insert id 0, status AUTOCOMMIT (0x0002) without the Oracle-mode bit or session-state change, warnings 0, info 'Records: 3'.",
+  "source": "hand-crafted",
+  "redaction": "Fully synthetic bytes derived from the OK packet layout; no credentials.",
+  "payloadBase64": "AAMAAgAAAApSZWNvcmRzOiAz",
+  "expectation": {
+    "kind": "ok-packet",
+    "affectedRows": 3,
+    "lastInsertId": 0,
+    "statusFlags": 2,
+    "statusFlagsHasOracleMode": false,
+    "warnings": 0,
+    "info": "Records: 3"
+  }
+}

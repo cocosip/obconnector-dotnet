@@ -89,6 +89,15 @@ namespace OceanBaseConnector.UnitTests.Transport
         }
 
         [Fact]
+        public void ConnectSyncHonorsPriorCancellation()
+        {
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+            Assert.ThrowsAny<OperationCanceledException>(() => TcpTransport.Connect(
+                "127.0.0.1", 1, Timeout.InfiniteTimeSpan, cts.Token));
+        }
+
+        [Fact]
         public async Task ConnectAsyncHonorsPriorCancellation()
         {
             using var cts = new CancellationTokenSource();

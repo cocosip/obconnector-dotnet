@@ -120,6 +120,71 @@ namespace OceanBaseConnector.Internal.Protocol
             return ReadBytes(_length - _position);
         }
 
+        /// <summary>
+        /// Reads a length-encoded integer: 0-250 in one byte, 0xFC/0xFD/0xFE
+        /// prefixes introduce 2/3/8-byte values. 0xFB marks a NULL string and
+        /// is rejected here; this reader is only used where NULL is invalid.
+        /// </summary>
+        public long ReadLengthEncodedInteger()
+        {
+            var prefix = ReadUInt8();
+            switch (prefix)
+            {
+                case 0xFB:
+                    throw new ProtocolException("Unexpected NULL marker in a length-encoded integer.");
+                case 0xFC:
+                    return ReadUInt16();
+                case 0xFD:
+                    return ReadUInt24();
+                case 0xFE:
+                    var value = ReadUInt64();
+                    if (value > long.MaxValue) throw new ProtocolException("Length-encoded integer exceeds Int64.");
+                    return (long)value;
+                case 0xFF:
+                    throw new ProtocolException("Invalid length-encoded integer marker.");
+                default:
+                    return prefix;
+            }
+        }
+
+        public void SkipLengthEncodedInteger()
+        {
+            ReadLengthEncodedInteger();
+        }
+
+        public byte[] ReadLengthEncodedBytes()
+        {
+            var length = ReadLengthEncodedInteger();
+            if (length > int.MaxValue || (uint)length > (uint)(_length - _position))
+            {
+                throw new ProtocolException(
+                    $"Length-encoded value of {length} byte(s) exceeds the remaining {_length - _position} byte(s).");
+            }
+
+            return ReadBytes((int)length);
+        }
+
+        /// <summary>Reads bytes up to (not including) the next NUL byte and skips it.</summary>
+        public byte[] ReadNullTerminatedBytes()
+        {
+            var start = _position;
+            while (_position < _length && _data[_offset + _position] != 0)
+            {
+                _position++;
+            }
+
+            EnsureAvailable(1);
+            var result = new byte[_position - start];
+            Buffer.BlockCopy(_data, _offset + start, result, 0, result.Length);
+            _position++; // consume the NUL
+            return result;
+        }
+
+        public string ReadNullTerminatedAscii()
+        {
+            return System.Text.Encoding.ASCII.GetString(ReadNullTerminatedBytes());
+        }
+
         private void EnsureAvailable(int count)
         {
             // Unsigned comparison: negative or overflowing counts read as huge.

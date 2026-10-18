@@ -1,0 +1,189 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using OceanBaseConnector.Internal.Protocol;
+using OceanBaseConnector.Internal.Session;
+using OceanBaseConnector.UnitTests.TestInfrastructure;
+using Xunit;
+
+namespace OceanBaseConnector.UnitTests.Session
+{
+    public sealed class PhysicalSessionTests
+    {
+        private static LoopbackServer StartServer(bool truncate = false)
+        {
+            return LoopbackServer.Start(async client =>
+            {
+                var channel = new PacketChannel(client.GetStream());
+                await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
+                await channel.ReadPacketAsync();
+                if (truncate) return;
+                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });
+                _ = await client.GetStream().ReadAsync(new byte[1]);
+            });
+        }
+
+        private static PhysicalSession Create(int port, int timeout = 5)
+        {
+            return new PhysicalSession(new OceanBaseConnectionStringBuilder
+            {
+                Server = "127.0.0.1",
+                Port = port,
+                UserId = "u",
+                Password = "hidden-secret",
+                TlsMode = OceanBaseTlsMode.Disabled,
+                ConnectionTimeout = timeout,
+            }.Build());
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task OpenLeaseCompleteAndClose(bool asynchronous)
+        {
+            var server = StartServer();
+            using var session = Create(server.Port);
+            try
+            {
+                Assert.Equal(SessionState.Closed, session.State);
+                if (asynchronous) await session.OpenAsync(); else session.Open();
+                Assert.Equal(OceanBaseCompatibilityMode.Oracle, session.Info!.Mode);
+                using (var lease = session.Acquire())
+                {
+                    Assert.Equal(SessionState.Busy, session.State);
+                    Assert.Throws<InvalidOperationException>(() => session.Acquire());
+                    lease.Complete();
+                }
+                Assert.Equal(SessionState.Open, session.State);
+                await session.CloseAsync();
+                session.Close();
+                Assert.Equal(SessionState.Closed, session.State);
+                Assert.Throws<InvalidOperationException>(() => session.Acquire());
+                Assert.Throws<InvalidOperationException>(() => session.Open());
+            }
+            finally { session.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task UnconsumedLeaseBreaksSessionAndClosesSocket()
+        {
+            var server = StartServer();
+            using var session = Create(server.Port);
+            try
+            {
+                await session.OpenAsync();
+                var lease = session.Acquire();
+                lease.Dispose();
+                lease.Dispose();
+                Assert.Equal(SessionState.Broken, session.State);
+                Assert.Throws<InvalidOperationException>(() => session.Acquire());
+                Assert.Throws<InvalidOperationException>(() => lease.Complete());
+            }
+            finally { session.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task TruncatedAuthenticationBreaksSessionWithSafeException()
+        {
+            var server = StartServer(truncate: true);
+            using var session = Create(server.Port);
+            try
+            {
+                var error = await Assert.ThrowsAsync<OceanBaseException>(() => session.OpenAsync());
+                Assert.NotNull(error.InnerException);
+                Assert.False(error.IsExecutionOutcomeUnknown);
+                Assert.DoesNotContain("hidden-secret", error.ToString());
+                Assert.Equal(SessionState.Broken, session.State);
+            }
+            finally { session.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task ConnectionBudgetIncludesSilentHandshake(bool asynchronous)
+        {
+            var server = LoopbackServer.Start(async client =>
+            {
+                _ = await client.GetStream().ReadAsync(new byte[1]);
+            });
+            using var session = Create(server.Port, timeout: 1);
+            try
+            {
+                if (asynchronous)
+                    await Assert.ThrowsAsync<TimeoutException>(() => session.OpenAsync().WaitAsync(TimeSpan.FromSeconds(10)));
+                else
+                    Assert.Throws<TimeoutException>(() => session.Open());
+                Assert.Equal(SessionState.Broken, session.State);
+            }
+            finally { session.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task CloseDuringHandshakeCancelsAndCannotResurrectSession()
+        {
+            var accepted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var server = LoopbackServer.Start(async client =>
+            {
+                accepted.SetResult();
+                _ = await client.GetStream().ReadAsync(new byte[1]);
+            });
+            using var session = Create(server.Port);
+            try
+            {
+                var opening = session.OpenAsync();
+                await accepted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.Equal(SessionState.Connecting, session.State);
+                session.Close();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => opening);
+                Assert.Equal(SessionState.Closed, session.State);
+            }
+            finally { session.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task CallerCancellationAfterOpenDoesNotCloseSession()
+        {
+            var server = LoopbackServer.Start(async client =>
+            {
+                var channel = new PacketChannel(client.GetStream());
+                await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
+                await channel.ReadPacketAsync();
+                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });
+                channel.BeginCommand();
+                Assert.Equal(new byte[] { 0x0E }, await channel.ReadPacketAsync());
+                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });
+            });
+            using var session = Create(server.Port);
+            using var cts = new CancellationTokenSource();
+            try
+            {
+                await session.OpenAsync(cts.Token);
+                cts.Cancel();
+                using var lease = session.Acquire();
+                await lease.Channel.WritePacketAsync(new byte[] { 0x0E });
+                var ok = OkPacket.Parse(await lease.Channel.ReadPacketAsync(), CapabilityFlags.ClientProtocol41);
+                Assert.Equal(ServerStatusFlags.Autocommit | ServerStatusFlags.ObServerUseOracleMode, ok.StatusFlags);
+                lease.Complete();
+                Assert.Equal(SessionState.Open, session.State);
+            }
+            finally { session.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task PreCanceledOpenSendsNoCredentials()
+        {
+            using var session = Create(1);
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.OpenAsync(cts.Token));
+            Assert.Equal(SessionState.Broken, session.State);
+        }
+    }
+}

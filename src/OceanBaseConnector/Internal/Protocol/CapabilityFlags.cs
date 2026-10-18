@@ -39,8 +39,10 @@ namespace OceanBaseConnector.Internal.Protocol
         ClientDeprecateEof = 0x1000000,
         ClientOptionalResultsetMetadata = 0x2000000,
         ClientZstdCompressionAlgorithm = 0x4000000,
-        ClientQueryAttributes = 0x8000000,
 
+        // Note: bit 27 is CLIENT_QUERY_ATTRIBUTES in MySQL 8.0.23+, but
+        // OceanBase assigns CLIENT_SUPPORT_ORACLE to the same bit (Java
+        // baseline OceanBaseCapabilityFlag line 47); we follow OceanBase.
         /// <summary>OceanBase extension: client understands Oracle-mode packets.</summary>
         ClientSupportOracle = 0x8000000,
 

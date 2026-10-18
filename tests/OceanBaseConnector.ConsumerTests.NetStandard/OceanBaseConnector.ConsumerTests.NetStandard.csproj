@@ -2,16 +2,15 @@
 
   <PropertyGroup>
     <!--
-      Compile-only netstandard2.0 consumer: proves the baseline asset stays
-      consumable by netstandard2.0 projects. It is not an executable test
-      target (development plan: "netstandard2.0 消费工程只编译").
+      .NET 10 consumer compiled against the product's netstandard2.0 asset.
+      The companion tests inspect that asset without assembly unification.
     -->
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\OceanBaseConnector\OceanBaseConnector.csproj" />
+    <ProjectReference Include="..\..\src\OceanBaseConnector\OceanBaseConnector.csproj" SetTargetFramework="TargetFramework=netstandard2.0" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
 </Project>

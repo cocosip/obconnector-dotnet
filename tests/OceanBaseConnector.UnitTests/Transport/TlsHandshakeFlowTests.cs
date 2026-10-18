@@ -187,6 +187,7 @@ namespace OceanBaseConnector.UnitTests.Transport
                 postTlsBytes = await ReadExactlyAsync(tls, new byte[16], 16);
             });
 
+            var clientCapabilities = CapabilityFlags.None;
             try
             {
                 using var transport = await TcpTransport.ConnectAsync(
@@ -198,8 +199,10 @@ namespace OceanBaseConnector.UnitTests.Transport
                 Assert.Equal((byte)10, initialHandshake[0]);
 
                 var options = BuildOptions("127.0.0.1", OceanBaseTlsMode.Required);
+                var serverCapabilities = ParseCapabilities(initialHandshake);
+                clientCapabilities = OceanBaseConnector.Internal.Session.ClientCapabilities.Build(serverCapabilities, options);
                 await TlsHandshakeFlow.ApplyAsync(
-                    transport, channel, ParseCapabilities(initialHandshake), options, CancellationToken.None);
+                    transport, channel, serverCapabilities, clientCapabilities, options, CancellationToken.None);
 
                 // A04 transport flow ends here; authentication is A05. Closing
                 // now must leave the server with zero post-TLS bytes.
@@ -213,11 +216,11 @@ namespace OceanBaseConnector.UnitTests.Transport
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
 
             // Sequence 1 follows the server's frame 0; payload matches the
-            // SSLRequest wire format byte for byte.
+            // SSLRequest wire format byte for byte (client caps + CLIENT_SSL).
             Assert.Equal(36, receivedSslRequest.Length);
             Assert.Equal(1, receivedSslRequest[3]);
             Assert.Equal(
-                SslRequestPacket.Build(TlsHandshakeFlow.BuildSslRequestCapabilities()),
+                SslRequestPacket.Build(clientCapabilities | CapabilityFlags.ClientSsl),
                 receivedSslRequest[4..]);
             Assert.Equal(0, postTlsBytes);
         }
@@ -265,9 +268,11 @@ namespace OceanBaseConnector.UnitTests.Transport
                 var initialHandshake = await channel.ReadPacketAsync(CancellationToken.None);
 
                 var options = BuildOptions("127.0.0.1", OceanBaseTlsMode.VerifyFull);
+                var serverCapabilities = ParseCapabilities(initialHandshake);
+                var clientCapabilities = OceanBaseConnector.Internal.Session.ClientCapabilities.Build(serverCapabilities, options);
                 await Assert.ThrowsAnyAsync<Exception>(
                     () => TlsHandshakeFlow.ApplyAsync(
-                        transport, channel, ParseCapabilities(initialHandshake), options, CancellationToken.None));
+                        transport, channel, serverCapabilities, clientCapabilities, options, CancellationToken.None));
             }
             finally
             {
@@ -300,9 +305,11 @@ namespace OceanBaseConnector.UnitTests.Transport
                 var initialHandshake = await channel.ReadPacketAsync(CancellationToken.None);
 
                 var options = BuildOptions("127.0.0.1", OceanBaseTlsMode.VerifyFull);
+                var serverCapabilities = ParseCapabilities(initialHandshake);
+                var clientCapabilities = OceanBaseConnector.Internal.Session.ClientCapabilities.Build(serverCapabilities, options);
                 var exception = await Assert.ThrowsAsync<ProtocolException>(
                     () => TlsHandshakeFlow.ApplyAsync(
-                        transport, channel, ParseCapabilities(initialHandshake), options, CancellationToken.None));
+                        transport, channel, serverCapabilities, clientCapabilities, options, CancellationToken.None));
                 Assert.Contains("CLIENT_SSL", exception.Message, StringComparison.Ordinal);
             }
             finally
@@ -337,8 +344,9 @@ namespace OceanBaseConnector.UnitTests.Transport
                 await channel.ReadPacketAsync(CancellationToken.None);
 
                 var options = BuildOptions("127.0.0.1", OceanBaseTlsMode.Disabled);
+                var clientCapabilities = OceanBaseConnector.Internal.Session.ClientCapabilities.Build(CapabilityFlags.ClientSsl, options);
                 await TlsHandshakeFlow.ApplyAsync(
-                    transport, channel, CapabilityFlags.ClientSsl, options, CancellationToken.None);
+                    transport, channel, CapabilityFlags.ClientSsl, clientCapabilities, options, CancellationToken.None);
             }
             finally
             {
@@ -380,7 +388,9 @@ namespace OceanBaseConnector.UnitTests.Transport
                 var initialHandshake = channel.ReadPacket();
 
                 var options = BuildOptions("127.0.0.1", OceanBaseTlsMode.Required);
-                TlsHandshakeFlow.Apply(transport, channel, ParseCapabilities(initialHandshake), options);
+                var serverCapabilities = ParseCapabilities(initialHandshake);
+                var clientCapabilities = OceanBaseConnector.Internal.Session.ClientCapabilities.Build(serverCapabilities, options);
+                TlsHandshakeFlow.Apply(transport, channel, serverCapabilities, clientCapabilities, options);
                 transport.Close();
             }
             finally

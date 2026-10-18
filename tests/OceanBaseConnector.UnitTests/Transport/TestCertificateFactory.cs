@@ -22,7 +22,7 @@ namespace OceanBaseConnector.UnitTests.Transport
 
             // Re-import the PFX so the private key is usable by SslStream on
             // every platform (Schannel dislikes ephemeral keys).
-            return new X509Certificate2(ephemeral.Export(X509ContentType.Pfx));
+            return X509CertificateLoader.LoadPkcs12(ephemeral.Export(X509ContentType.Pfx), null);
         }
     }
 }
