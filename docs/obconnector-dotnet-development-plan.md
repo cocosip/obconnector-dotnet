@@ -371,20 +371,31 @@ C04 游标本地实施（2026-10-19，沿用既有 TDD/独立走查，合并进�
 
 **产物：**`DbConnection.GetSchema` 的首批集合、限制参数与现代 `GetSchemaAsync`；C 阶段实现 MySQL 模式 `ChangeDatabase` 和真实异步的 `ChangeDatabaseAsync`，Oracle 模式在发包前明确报不支持。MySQL 与 Oracle 模式的目录元数据分别使用对应系统视图，不复用错误方言。
 
-- [ ] 固定首批集合清单及列形状：`MetaDataCollections`、`DataSourceInformation`、`Tables`、`Columns`；其他集合报不支持。
-- [ ] 双模式测试名称大小写、schema、限制参数、权限不足和异步入口不阻塞网络等待；验证 MySQL 切换后的 `Database`/查询目标、失败时状态不变，Oracle 模式拒绝切换且不发包。
-- [ ] 记录与 Java 元数据范围的差距，作为 D 阶段候选。
+- [x] 固定首批集合清单及列形状：`MetaDataCollections`、`DataSourceInformation`、`Tables`、`Columns`；其他集合报不支持。
+- [x] 双模式测试名称大小写、schema、限制参数、权限不足和异步入口不阻塞网络等待；验证 MySQL 切换后的 `Database`/查询目标、失败时状态不变，Oracle 模式拒绝切换且不发包。
+- [x] 记录与 Java 元数据范围的差距，作为 D 阶段候选。
 
 C05 本地执行顺序（2026-10-19，沿用现有文档与原生实现/独立走查）：
 
 - [x] 数据库切换模块：新增连接 Database partial，MySQL 使用 COM_INIT_DB 原样发送严格 UTF-8 名称（不拼接 USE SQL）；拒绝 null/空/NUL/非法 UTF-16/超包，Oracle 在发包前拒绝。共享 CommandExchange 的独占租约/Command Timeout/未知结果不重放；同步使用同步 I/O，Standard2.1和现代目标覆写真正异步入口。
 - [x] 状态归属：物理会话持有当前 Database，只有合法终态 OK 且租约仍有效时更新；失败不更新，配置/数据源保持原始数据库，关闭重开恢复配置。旧响应不能改变重开的新会话；当前 Database 在完成回调前发布。成功切换后，同 SQL 的预处理语句必须按准备时数据库重新判定复用，不能继续查询旧库。允许空闲的显式本地事务内切换但不改变事务绑定/提交状态；忙 reader/命令及环境事务在发包前拒绝。
 - [x] 测试数据库模块：同步/异步、原样特殊字符/大小写名称、成功/拒绝/异常报文、部分 I/O、取消/超时/关闭重开、日志重入、预处理复用、事务与数据源隔离；五资产消费仍用内部认证后 MySQL 事实夹具，绝不放宽 A05 公共握手。
-- [ ] 目录模块：固定四集合列形状与每集合限制顺序；对照 Java 的两模式目录 SQL，使用协议绑定值，不将限制参数拼成 SQL；同步/异步共享结果装载，保留权限错误和取消语义。
+- [x] 目录模块：固定四集合列形状与每集合限制顺序；对照 Java 的两模式目录 SQL，使用协议绑定值，不将限制参数拼成 SQL；同步/异步共享结果装载，保留权限错误和取消语义。
 - [x] 数据库切换模块：核心5/DI3编译、Windows Unit1073/Consumer120/DI8、格式/双包/版本矩阵通过，独立走查无必须修复项；更新三份文档并在当前 master 提交。新增36项单测及9项五资产消费，TestResults/c05-database-*-final.trx。
-- [ ] 目录模块实现后独立执行相同编译/测试/走查/提交关口；真实目录权限、事务/切换互通、跨平台与旧运行时仍待验收。
+- [x] 目录模块实现后独立执行相同编译/测试/走查/提交关口；真实目录权限、事务/切换互通、跨平台与旧运行时仍待验收。
 
-2026-10-19 数据库切换本地验证：首批5项失败回归修复后通过；36项定向覆盖精确名称传输、模式/名称/环境事务拒绝、已知ERR保留原状态、非法OK/响应、部分发送和取消/超时、reader独占、本地事务绑定、回调发布、数据源隔离及关闭重开。预处理比较在获取租约之后执行，旧ID由既有队列清理；失败切换保留旧ID。Standard2.0同步与其余四资产同步/异步隔离消费9项通过，宿主仍net10。Release slnx核心五/DI三目标0警告0错误，完整Windows Unit1073/Consumer120/DI8全部通过；独立走查无必须修复项。C05保持进行中，下一子模块为四个GetSchema集合及限制/异步入口；不据协议夹具宣称真实切换、事务/目录权限或A05公共MySQL握手已验证。
+2026-10-19 数据库切换本地验证：首批5项失败回归修复后通过；36项定向覆盖精确名称传输、模式/名称/环境事务拒绝、已知ERR保留原状态、非法OK/响应、部分发送和取消/超时、reader独占、本地事务绑定、回调发布、数据源隔离及关闭重开。预处理比较在获取租约之后执行，旧ID由既有队列清理；失败切换保留旧ID。Standard2.0同步与其余四资产同步/异步隔离消费9项通过，宿主仍net10。Release slnx核心五/DI三目标0警告0错误，完整Windows Unit1073/Consumer120/DI8全部通过；独立走查无必须修复项。当时C05保持进行中，目录子模块的后续实现见下；不据协议夹具宣称真实切换、事务/目录权限或A05公共MySQL握手已验证。
+
+C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/reader）：
+
+- [x] 新建 `OceanBaseConnection.Schema.cs`：五目标覆写三个同步 GetSchema；现代三目标覆写三个 GetSchemaAsync，静态集合直接返回任务，目录读取使用 ExecuteReaderAsync/ReadAsync/NextResultAsync。所有集合要求打开且空闲的连接、拒绝环境事务；限制数组先快照，绑定当前显式事务并固定物理会话，防止关闭重开后换模式执行旧查询。
+- [x] 固定集合：MetaDataCollections 三列（CollectionName:string、NumberOfRestrictions:int、NumberOfIdentifierParts:int），四行限制数为0/0/4/4，对象标识部分数为0/0/3/4。Tables 四列 TABLE_CATALOG/TABLE_SCHEMA/TABLE_NAME/TABLE_TYPE 均为string；限制顺序同四列，类型归一 TABLE/VIEW。Columns 十二列为 TABLE_CATALOG/TABLE_SCHEMA/TABLE_NAME/COLUMN_NAME:string、ORDINAL_POSITION:int、COLUMN_DEFAULT/IS_NULLABLE/DATA_TYPE:string、CHARACTER_MAXIMUM_LENGTH:long、NUMERIC_PRECISION/NUMERIC_SCALE/DATETIME_PRECISION:int；限制顺序为前四列。
+- [x] DataSourceInformation 使用 ADO.NET 标准17列（枚举列使用对应枚举类型）；产品名OceanBase，版本保留认证原文，参数语法和引号按模式；没有可靠证据的规范版本/正则/长度/连接运算符等保持DBNull，不从MySQL兼容前缀猜OceanBase版本或大小写配置。
+- [x] null限制表示不筛选，空字符串和%/_为原样精确值；不去引号、不做大小写折叠，匹配由服务端比较规则决定。MySQL目录映射catalog、schema为DBNull；Oracle映射schema=OWNER、catalog为DBNull，限制不存在的标识部分返回空表。MySQL使用INFORMATION_SCHEMA.TABLES/COLUMNS，Oracle使用ALL_OBJECTS（仅TABLE/VIEW）/ALL_TAB_COLUMNS；按标识及列序号排序，NULL元数据保留DBNull，Oracle NUMBER精确转换为固定整数列。
+- [x] 首批失败回归覆盖四集合、两模式同步/异步目录、限制安全绑定、NULL和数值；补齐事务、权限错误、超时/取消/部分发送/关闭、空结果/非法结果形状和真实异步I/O及五资产消费。复用原错误、独占和未知结果语义，不增加重放或方言回退。
+- [x] 记录Java差距：首批不提供JDBC的模式/类型/键/索引/过程/同义词等完整集合，不复用Java模式匹配和字符串插值；本地环回不证明真实字典列/权限、标识大小写配置、默认值LONG及列序号版本语义。编译、完整测试、格式/包矩阵、独立走查、三文档同步后提交。
+
+目录模块本地验证：首批13项失败转绿，最终44项定向/8项五资产消费通过；独立走查发现的数值先舍入问题用2项失败回归修复并复查通过。Release核心五/DI三目标0警告0错误，Windows完整Unit1117/Consumer128/DI8通过（TestResults/c05-schema-*-final.trx）；格式、UTF-8无BOM/CRLF、diff、核心5/DI3包资产及统一版本/按TFM的依赖矩阵通过。C05转待验证，真实目录/权限/版本互通仍留空，下一可本地推进C06。
 
 ### C06 逐条 DbBatch 与数据源批量入口
 

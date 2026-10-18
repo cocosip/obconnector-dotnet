@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 架构设计
 
-状态：设计基线，A 阶段及 B01–B09、C02 已有本地实现/审核证据，C03数值、纳秒、TZ/LTZ和MySQL零日期、C04顺序字段流及服务端游标、C05数据库切换已有本地实现；A05 的可信 MySQL 判定仍是实现缺口，§9 产品决定和真实兼容性未关闭。日期：2026-10-19。实施任务见 [开发方案](obconnector-dotnet-development-plan.md)，证据见 [进度台账](obconnector-dotnet-progress.md)。.NET 接入已合并到 §2.1–§2.7；参数化、reader 字段元数据、本地事务及取消/超时已有本地实现，B09 补齐标量 ProviderType 和命令日志类别。目录元数据和池化仍待实现。
+状态：设计基线，A 阶段及 B01–B09、C02 已有本地实现/审核证据，C03数值、纳秒、TZ/LTZ和MySQL零日期、C04顺序字段流及服务端游标、C05数据库切换及首批四个目录集合已有本地实现；A05 的可信 MySQL 判定仍是实现缺口，§9 产品决定和真实兼容性未关闭。日期：2026-10-19。实施任务见 [开发方案](obconnector-dotnet-development-plan.md)，证据见 [进度台账](obconnector-dotnet-progress.md)。.NET 接入已合并到 §2.1–§2.7；参数化、reader 字段元数据、本地事务及取消/超时已有本地实现，B09 补齐标量 ProviderType 和命令日志类别。目录元数据真实验收仍开放，池化仍因完整重置证据不足而阻塞。
 
 ## 1. 目标与依据
 
@@ -213,7 +213,7 @@ C05 数据库切换本地契约：`ChangeDatabase` 只在已认证 MySQL 模式�
 
 物理会话保存当前 Database，初值来自冻结配置；合法单一 OK（零计数、无多结果/OUT/游标标记）后，只有仍拥有该会话的租约可更新当前值，再释放租约及运行完成日志回调。已知 ERR 保留原 Database/服务器错误且可继续使用，响应不可信则销毁会话并标记执行结果未知，不重发。关闭后 Database 恢复配置值，重开/新数据源连接仍使用原始配置；旧响应不能污染重开的会话，ConnectionString 和数据源配置不因切换而变更。准备语句记录准备时 Database，持有执行租约后再次比较当前值；不同则重新 prepare，旧 ID 沿既有延迟清理路径关闭，防止同 SQL 留在旧库。SQL 自身的 `USE` 等直接会话变更不在此 API 的本地追踪保证内，发布前须确认会话报告及对象解析语义。
 
-切换允许空闲的当前显式本地事务，保持事务对象/绑定及提交状态；活动 reader/命令、关闭/故障连接和环境事务在发送前拒绝。使用连接的 Command Timeout 与同一个 CommandExchange 总预算；取消、部分发送、网络中断遵守同一未知结果不重放策略。同步入口使用同步 I/O；Standard2.1和现代目标覆写 `ChangeDatabaseAsync`，真实异步等待网络，不通过同步入口包装。Standard2.0不添加其参考 API 不存在的异步成员。真实数据库权限、事务/对象解析行为及版本矩阵仍待验收，A05可信公共MySQL握手不因此开放；C05四个GetSchema集合仍待实现。
+切换允许空闲的当前显式本地事务，保持事务对象/绑定及提交状态；活动 reader/命令、关闭/故障连接和环境事务在发送前拒绝。使用连接的 Command Timeout 与同一个 CommandExchange 总预算；取消、部分发送、网络中断遵守同一未知结果不重放策略。同步入口使用同步 I/O；Standard2.1和现代目标覆写 `ChangeDatabaseAsync`，真实异步等待网络，不通过同步入口包装。Standard2.0不添加其参考 API 不存在的异步成员。真实数据库权限、事务/对象解析行为及版本矩阵仍待验收，A05可信公共MySQL握手不因此开放；C05目录集合契约见§5。
 
 B04 本地实现：自动准备与执行共用一个物理会话租约和超时预算；只在实际发送 COM_QUERY/COM_STMT_EXECUTE 后报告 SQL 结果未知。准备响应中断销毁会话，但不声称 SQL 已执行；可信终态 ERR 不触发回退。statement ID 由命令和物理会话共同拥有，只在改写后的 SQL 与会话均不变时复用；改 SQL、重连或释放命令使旧 ID 失效。空闲时发送无响应 COM_STMT_CLOSE，其他 reader 占用时排队到下一命令前；清理取消只影响所属租约。Prepare 成功但绑定数不匹配时关闭新 ID、保留会话并报参数错误。基础输入参数支持 bool、有/无符号整数、浮点、普通 UTF-8 字符串、byte[] 和 NULL，B05 再扩展 §5 的数值与日期时间；未显式设置 DbType 时按 Value 推断，ResetDbType 恢复推断，显式类型要求 CLR 值匹配，每次执行重发类型。national charset 和 LOB 扩展仍待后续模块，执行入口在发送其准备/执行包前拒绝未支持的显式参数类型和值不匹配；显式 Prepare/PrepareAsync 只校验 SQL 与绑定结构，不检查 Value 编码。
 
@@ -276,6 +276,23 @@ Oracle业务命令执行前复用有效time_zone报告；缺失、SYSTEM或非�
 
 `DbDataReader` 通过 `IDbColumnSchemaGenerator` 支持 `GetColumnSchema()`，并提供 `GetSchemaTable()`；字段类型、列名、长度、精度和可空性基于实际列定义。数据库对象元数据通过 `DbConnection.GetSchema()` 实现，MySQL 模式使用相应 `SHOW`/`INFORMATION_SCHEMA`，Oracle 模式使用其兼容数据字典。字段元数据和数据库目录元数据分别验证，不用一套 SQL 混用。LOB locator、REF CURSOR 和复杂类型值若依赖连接/事务，公开对象必须说明失效点和 `Dispose` 义务；首个里程碑可先支持安全的内联字节/文本值，不能把 locator 当普通 `byte[]` 误解码。
 
+C05首批目录集合（2026-10-19本地实现，真实字典版本/权限仍待验收）：五目标提供三个同步GetSchema重载；现代三目标覆写三个GetSchemaAsync重载，后者使用异步执行、逐行/结果读取及释放，不调用基类同步回退。每次返回独立的InvariantCulture DataTable，空结果保留列形状；未支持集合抛NotSupportedException，不静默返回空集。
+
+| 集合 | 固定列形状（按顺序） | 限制参数顺序 |
+| --- | --- | --- |
+| MetaDataCollections | CollectionName:string、NumberOfRestrictions:int、NumberOfIdentifierParts:int；四行对应本表，限制数0/0/4/4，标识部分数0/0/3/4 | 无 |
+| DataSourceInformation | ADO.NET标准17列，见下文 | 无 |
+| Tables | TABLE_CATALOG/TABLE_SCHEMA/TABLE_NAME/TABLE_TYPE:string；仅TABLE/VIEW | catalog、schema、table、type |
+| Columns | TABLE_CATALOG/TABLE_SCHEMA/TABLE_NAME/COLUMN_NAME:string、ORDINAL_POSITION:int、COLUMN_DEFAULT/IS_NULLABLE/DATA_TYPE:string、CHARACTER_MAXIMUM_LENGTH:long、NUMERIC_PRECISION/NUMERIC_SCALE/DATETIME_PRECISION:int | catalog、schema、table、column |
+
+DataSourceInformation列为CompositeIdentifierSeparatorPattern、DataSourceProductName、DataSourceProductVersion、DataSourceProductVersionNormalized:string；GroupByBehavior:GroupByBehavior；IdentifierPattern:string、IdentifierCase:IdentifierCase、OrderByColumnsInSelect:bool、ParameterMarkerFormat/ParameterMarkerPattern:string、ParameterNameMaxLength:int、ParameterNamePattern/QuotedIdentifierPattern:string、QuotedIdentifierCase:IdentifierCase、StatementSeparatorPattern/StringLiteralPattern:string、SupportedJoinOperators:SupportedJoinOperators。产品名OceanBase、版本保留认证原文，不把MySQL兼容版本前缀猜成OceanBase规范版本；参数标记按模式为`?`或`:{0}`，Oracle名称正则限定驱动实际支持的ASCII字母/下划线开头。Oracle未引用标识大小写不敏感、引用标识敏感；MySQL大小写配置未知，IdentifierCase/QuotedIdentifierCase为Unknown。GroupByBehavior为Unknown；其余无可靠证据的版本规范化、名称长度、引号/文字正则、分组/连接运算符等字段保留DBNull，不发布虚假能力。
+
+四集合都要求连接已打开且无进行中的命令/reader，拒绝环境事务；静态两集合不发包。目录命令快照限制数组，显式绑定当前本地事务并固定原物理会话，关闭重开不能令旧模式查询在新会话执行。使用连接Command Timeout及原命令独占/取消/错误/未知结果不重放契约；权限错误保留服务端错误码，不吞成空结果或切换方言重试。限制数超过集合上限抛ArgumentException；null限制不筛选，空串、百分号、下划线、引号均作为绑定值参与`=`比较，不去引号或改写大小写，比较遵守服务端标识列的排序/比较规则。MySQL catalog映射TABLE_SCHEMA、schema为DBNull；Oracle catalog为DBNull、schema映射OWNER。对不存在标识部分的非null限制返回空表。未给限制时列举当前用户可见对象，不隐式限定当前Database/用户。
+
+MySQL从INFORMATION_SCHEMA.TABLES/COLUMNS读取，BASE TABLE归一为TABLE；Oracle从ALL_OBJECTS（TABLE/VIEW，排除__recyclebin）/ALL_TAB_COLUMNS读取，DATA_DEFAULT原样保留、NULLABLE归一YES/NO，列序号保留字典COLUMN_ID，字符长度仅对字符类型取CHAR_LENGTH，TIMESTAMP小数精度取DATA_SCALE。按catalog/schema/table及列序号排序，缺失元数据保留DBNull，数值使用精确整数转换并拒绝溢出/小数；文本经精确十进制解析，浮点等不支持的数值表示明确拒绝，不能先舍入再判整数，也不依赖当前文化。固定列名/数量验证防止把不兼容结果误装载；返回DataTable前读到终态并拒绝额外结果集。
+
+源码依据为Java基线JDBC4DatabaseMetaData.getTables/getColumns及OceanBaseOracleDatabaseMetadata和util/DefaultSQLs：沿用两模式字典来源，不复制其字符串插值、模式匹配、JDBC类型码或列序号调整。与Java相比，首批不提供同义词、键/索引、过程/参数、类型/模式等完整集合；差距留D阶段。真实目标版本字典列、ALL_TAB_COLUMNS默认值LONG、列序号、权限可见性及大小写配置仍须实库确认，本地协议/五资产消费不能替代互通验收。
+
 B06 本地契约：五目标 reader 的两套 schema 共用 ResultColumn/内部 DbColumn 映射，仅反映当前结果；不额外发 SQL、不缓存整个结果集。返回独立快照，GetColumnSchema 集合只读，调用方修改 schema table 不影响 reader。零行 SELECT 仍保留声明列，直到 NextResult 返回 false 才清空；无列的 OK 结果返回 null schema table/空 column schema。表别名与原始表列名分别保留，GetName 返回标签；原始名称缺失时不猜测来源。MySQL 数据库名映射 BaseCatalogName，Oracle 映射 BaseSchemaName；协议 catalog 标记 def 不是库名。
 
 C03 MySQL零日期本地契约：OceanBaseDate保存Year/Month/Day（0..9999/0..12/0..31）；非零月/日需合法日历，year0按400年检查闰日，其他ALLOW_INVALID_DATES非法日历仍明确拒绝。IsValidDate仅在三个分量均非零时为true，ToDateTime对零分量抛InvalidCastException，default表示全零。DateTime输入须Kind=Unspecified且时间为零。OceanBaseDateTime组合Date、Hour/Minute/Second、Microsecond和Scale（0..6），仅允许合法时钟、0..999999微秒及符合scale的精确小数；DateTime输入须Unspecified且不能有亚微秒tick，默认scale6。IsValidDateTime遵循Date，ToDateTime保留100ns可表示的微秒，不进行时区转换。ToString严格输出yyyy-MM-dd及可选时分秒/声明精度小数，不做文化相关或零值归一化。
@@ -300,7 +317,7 @@ reader 在响应尚未消费完时独占物理会话，终态完整读取后释�
 | --- | --- | --- |
 | 连接/factory/现代数据源/可选 DI | 五资产同一 provider；两个 Standard 资产没有现代数据源，核心不引用 DI；配置与日志按实例传递 | 五目标消费、依赖图及现代 DI 生命周期测试；旧运行时 DI 尚未执行 |
 | 命令/参数 | 文本无参和强制服务端 prepare；无客户端插值回退；只允许 Input 和 Text；Oracle 名称绑定限 B03 子集 | B02-B05/B08 公共环回；不支持 Java 客户端 prepare 默认路径、存储过程及 OUT |
-| reader/元数据 | 逐行文本/二进制、多结果、两套字段 schema、固定 CLR/provider-specific 类型；typed getter 要求类型匹配，C03 的 decimal/DateTime/DateTimeOffset getter 允许精确转换 | B05/B06/B09；C04 已实现本地 SequentialAccess 字段流及服务端游标；真实大值/游标验收留 C04，C05目录 GetSchema 仍待实现 |
+| reader/元数据 | 逐行文本/二进制、多结果、两套字段 schema、固定 CLR/provider-specific 类型；typed getter 要求类型匹配，C03 的 decimal/DateTime/DateTimeOffset getter 允许精确转换 | B05/B06/B09；C04 已实现本地 SequentialAccess 字段流及服务端游标；C05首批四个目录集合及现代GetSchemaAsync本地实现；真实大值/游标/字典验收仍开放 |
 | 本地事务/取消 | 会话绑定、两模式隔离映射、结果未知不重放；环境事务始终拒绝 | B07/B08；Oracle RepeatableRead、XA/TransactionScope 不照搬 Java 支持范围 |
 | 诊断 | Connection 1000..1003、Command 1100/1101、Transaction 1200/1201 分类别；预先安全创建 logger，后端异常不改变结果 | B09 修复原命令事件误入 Connection 类别，4项类别过滤回归先失败后通过；ActivitySource/Meter 留 C07 |
 | 扩展/发布 | 不宣称 DbBatch、adapter/command builder、池化、LOB 等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
@@ -366,4 +383,4 @@ C02 的 .NET 连接串约定为 `Server=ob1:2881,ob2:2883,[::1]:2881;Port=2881`�
 3. 首发最低 OceanBase/OBProxy 版本与两种兼容模式的实际测试环境；它们决定可对外承诺的功能矩阵。
 4. 首个正式版本是否必须包含经验证的池化与 Oracle 高精度/纳秒 provider-specific 值；本设计将它们列为 C 阶段交付门槛，而不是协议原型门槛。无法完整重置的服务端组合只承诺直连。
 
-本文定义目标架构。2026-10-19 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果、B05 低精度数值/provider-specific 访问和常见日期时间，B06 reader 字段元数据，以及 B07 本地事务和关闭回滚、B08 本地取消/超时故障矩阵、B09 标量元数据/公共 API 审核及 C02 多地址 TCP 建连；C03数值、纳秒、TZ/LTZ和MySQL零日期、C04顺序字段流/服务端游标及C05数据库切换已有本地实现，池化及目录元数据仍未实现，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。
+本文定义目标架构。2026-10-19 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果、B05 低精度数值/provider-specific 访问和常见日期时间，B06 reader 字段元数据，以及 B07 本地事务和关闭回滚、B08 本地取消/超时故障矩阵、B09 标量元数据/公共 API 审核及 C02 多地址 TCP 建连；C03数值、纳秒、TZ/LTZ和MySQL零日期、C04顺序字段流/服务端游标及C05数据库切换及首批目录集合已有本地实现，池化仍未实现，目录元数据真实验收仍开放，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。

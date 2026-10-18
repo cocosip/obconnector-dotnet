@@ -21,6 +21,7 @@ namespace OceanBaseConnector
         private bool _explicitPreparation;
         private bool _disposed;
         private int _fetchSize;
+        internal PhysicalSession? RequiredSession { get; set; }
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get => _timeout; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _timeout = value; } }
         /// <summary>Rows requested per server cursor fetch; zero uses ordinary result streaming.</summary>
@@ -145,6 +146,8 @@ namespace OceanBaseConnector
                 token.ThrowIfCancellationRequested();
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
                 var session = connection.GetCommandSession(_transaction);
+                if (RequiredSession != null && !ReferenceEquals(session, RequiredSession))
+                    throw new InvalidOperationException("The connection's physical session changed before the operation started.");
                 var length = ResultColumn.Utf8.GetByteCount(text);
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
                 var bindings = ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);

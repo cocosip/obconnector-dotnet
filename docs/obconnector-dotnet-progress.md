@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期及 C04 报文增量/顺序字段流及服务端游标、C05数据库切换本地子项。C03/C04待验证，C05进行中，目录元数据尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期及 C04 报文增量/顺序字段流及服务端游标、C05数据库切换及首批目录集合。C03/C04/C05待验证，目录元数据本地实现及走查已完成，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 中断走查问题核销（2026-10-19）
 
@@ -16,7 +16,7 @@
 
 本轮重新执行 `dotnet build OceanBaseConnector.slnx --no-restore -c Release`：核心五目标、DI 三目标，0 警告/0 错误。Windows 完整 Unit1073、Consumer120、DI8 全部通过且零跳过；报告为 `TestResults/interrupted-review-{unit,consumer,di}.trx`，另解析 TRX 确认上表对应回归实际执行并通过。完整单测沿用已授权的 Windows TLS 测试证书存储访问，未调整 TLS 策略。
 
-此核销不改变阶段验收状态：A04 待验证；A05 仍缺可信公开 MySQL 模式判定；C04 待验证；C05 仅数据库切换子项落地，目录集合仍未实现；C01 完整重置白名单仍阻塞。真实数据库、非 Windows 及新的旧运行时验收未执行。
+当时此核销不改变阶段验收状态（C05后续进展见末尾目录模块记录）：A04 待验证；A05 仍缺可信公开 MySQL 模式判定；C04 待验证；C05 仅数据库切换子项落地，目录集合仍未实现；C01 完整重置白名单仍阻塞。真实数据库、非 Windows 及新的旧运行时验收未执行。
 
 ## 进度口径
 
@@ -83,7 +83,7 @@
 | C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
 | C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 待验证 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)、TZ/LTZ及零日期本地实现齐备；Unit895/Consumer91/DI8、五/三目标编译/格式/打包及独立走查通过；真实验收/A05公开MySQL握手仍缺，详见本页末 |
 | C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 待验证 | 2026-10-19 Codex；增量报文、顺序字段流和FetchSize只读游标分页本地完成；Unit1037/Consumer111/DI8及核心五/DI三目标编译通过，独立复查缺陷均已修复；真实两模式/OBProxy大值/游标资源及性能矩阵未验收，详见本页末 |
-| C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 进行中 | 2026-10-19 Codex；数据库切换本地完成，Unit1073/Consumer120/DI8、核心五/DI三编译及独立走查通过；四个目录集合/限制/异步仍待实现，真实验收暂缓 |
+| C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 待验证 | 2026-10-19 Codex；切换及四个目录集合/限制/现代异步本地完成，核心五/DI三编译、Windows完整测试与五资产消费、独立走查通过；字典/权限/版本真实验收暂缓，证据见末尾目录模块记录 |
 | C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 未开始 | 待记录 |
 | C07 | W29-W32 | 本地 ActivitySource/Meter、脱敏和性能基线 | 未开始 | 待记录 |
 | C08 | W33-W34 | 生产版本/模式矩阵与 G3 审核 | 未开始 | 待记录 |
@@ -346,4 +346,12 @@ Release slnx核心五/DI三目标编译0警告0错误；完整Windows Unit978、
 
 最终Release dotnet build OceanBaseConnector.slnx --no-restore -c Release 核心五/DI三目标0警告0错误；完整Windows Unit1073、Consumer120、DI8全部通过且0跳过（TestResults/c05-database-unit-final.trx、c05-database-consumer-final.trx、c05-database-di-final.trx）。完整单测沿用已授权沙箱外TLS证书存储访问，未修改TLS规则。格式、diff、UTF-8无BOM/CRLF与双包检查通过；TestResults/c05-database-pack中核心5/DI3资产、统一0.1.0-alpha、DI核心精确区间[0.1.0-alpha]及Microsoft.Extensions按TFM的8/9/10依赖组核对通过，既有NuGet README提示仍留R01。三份现有文档合并当前契约和实施记录，不新增设计文档；当前master提交，不推送。
 
-C05仍进行中：MetaDataCollections、DataSourceInformation、Tables、Columns及限制参数/现代GetSchemaAsync尚未实现；后续完成目录模块再转待验证，不将数据库切换子项当作C05整体完成。原始SQL USE的状态报告/追踪不属于本模块已验证契约，当前Database跟踪通过ChangeDatabase改变的数据库，详见架构§4。真实两模式/OBProxy、非Windows与新的旧运行时验收均未执行；隔离消费宿主net10不代替旧运行时完整验收。A04/A05真实关口、A05可信公共MySQL握手、C01完整重置及G0/G1/G3缺口保持开放。
+当时C05仍进行中：MetaDataCollections、DataSourceInformation、Tables、Columns及限制参数/现代GetSchemaAsync尚未实现；后续完成目录模块再转待验证，不将数据库切换子项当作C05整体完成。原始SQL USE的状态报告/追踪不属于本模块已验证契约，当前Database跟踪通过ChangeDatabase改变的数据库，详见架构§4。真实两模式/OBProxy、非Windows与新的旧运行时验收均未执行；隔离消费宿主net10不代替旧运行时完整验收。A04/A05真实关口、A05可信公共MySQL握手、C01完整重置及G0/G1/G3缺口保持开放。
+
+2026-10-19 C05 目录模块：四个首批集合MetaDataCollections、DataSourceInformation、Tables、Columns本地实现完成，列形状、类型、NULL及限制顺序固定在架构§5。集合名不区分大小写，未支持集合明确拒绝；限制用精确绑定值，保留大小写/引号/%/_，不做LIKE展开。MySQL目录映射catalog=TABLE_SCHEMA、schema=NULL，Oracle映射schema=OWNER、catalog=NULL，不存在标识部分的限制返回空表。MySQL使用INFORMATION_SCHEMA，Oracle使用ALL_OBJECTS（TABLE/VIEW）和ALL_TAB_COLUMNS，不混方言或自动回退。DSI保留认证版本原文和已知参数语法，未知能力为DBNull/Unknown。五目标覆写三个同步入口，现代三目标覆写三个异步入口，使用异步执行、读取和释放；静态集合无网络I/O。目录命令绑定当前事务并固定原物理会话，返回前读尽终态，原错误/独占/取消/未知结果不重放契约保留。
+
+首批13项回归全部失败证明基类未实现入口后转绿（TestResults/c05-schema-{red,green}.trx）。最终44项单测覆盖两模式×同步/异步×Tables/Columns、特殊字符安全绑定、静态集合独立快照、缺失标识部分、环境事务/忙会话、当前本地事务、权限1143、取消/总超时/关闭、部分写入、空结果、纯同步/纯异步传输、Oracle NUMBER精确整数、畸形列名/多结果/溢出/小数、限制数组快照和会话重开。独立只读走查发现通用Convert.ToDecimal先舍入微小小数再误判整数，以长小数字符串和double的2项先失败回归修复：文本经过精确DecimalCodec/OceanBaseDecimal转换，仅CLR整数/decimal走通用转换，浮点等表示明确拒绝；独立差异复查无剩余必须修复项。红绿证据TestResults/c05-schema-review-{red,green}.trx，44项定向通过。
+
+五资产8项隔离消费验证公开静态集合、Oracle目录及API暴露，Standard两个资产仅同步、现代三个资产同步/异步，宿主net10；测试不改变A05公共MySQL认证。最终Release slnx核心五/DI三目标0警告0错误；完整Windows Unit1117、Consumer128、DI8通过且0跳过（TestResults/c05-schema-unit-final.trx、c05-schema-consumer-final.trx、c05-schema-di-final.trx）。完整单测沿用已授权的Windows TLS证书存储访问，未降低校验策略。双包TestResults/c05-schema-pack核对核心5/DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本[0.1.0-alpha]及Microsoft.Extensions按TFM为8/9/10；既有缺包README提示保留R01。
+
+格式检查、UTF-8无BOM/CRLF及git diff --check通过。C05由进行中改为待验证，两个本地子模块均已落地；三份现有文档合并契约、Java差距、步骤和证据，当前master提交不推送。真实字典版本、权限可见性/大小写配置、Oracle DATA_DEFAULT LONG和COLUMN_ID语义、两模式/OBProxy及非Windows/新的旧运行时验收仍未执行，不能据协议夹具关闭G3。Java完整键/索引/过程/类型/模式/同义词元数据不属于首批集合，留D阶段。A05可信公开MySQL判定、C01完整重置和G0/G1缺口不变；下一可本地推进模块C06逐条DbBatch。
