@@ -15,6 +15,11 @@ namespace OceanBaseConnector.Internal.Protocol
             Name = name; TypeCode = type; Charset = charset; Unsigned = (flags & 32) != 0; Mode = mode;
             Scale = mode == OceanBaseCompatibilityMode.Oracle ? unchecked((sbyte)scale) : scale;
             Precision = mode == OceanBaseCompatibilityMode.Oracle ? precision : (long)length - (Unsigned ? 0 : 1) - (scale > 0 ? 1 : 0);
+            if (mode == OceanBaseCompatibilityMode.Oracle && IsDecimal)
+            {
+                if (precision == 255) Precision = 0;
+                if (Scale == -85) Scale = 0;
+            }
             if (mode == OceanBaseCompatibilityMode.Oracle && type == 3 && precision == 0 && scale == 0) Precision = 10;
         }
         internal string Name { get; }
@@ -92,9 +97,11 @@ namespace OceanBaseConnector.Internal.Protocol
             {
                 if (IsDecimal)
                 {
-                    if (Precision < 1 || Precision > 28 || Scale < 0 || Scale > Precision)
-                        throw new NotSupportedException("The declared decimal precision or scale requires the C03 implementation.");
-                    return typeof(decimal);
+                    var oracle = Mode == OceanBaseCompatibilityMode.Oracle;
+                    if (Precision > (oracle ? 38 : 65) || Scale < (oracle ? -84 : 0) || Scale > (oracle ? 127 : 30) ||
+                        !oracle && Precision > 0 && Scale > Precision)
+                        throw new NotSupportedException("The declared decimal metadata exceeds the supported mode limits.");
+                    return Precision >= 1 && Precision <= 28 && Scale >= 0 && Scale <= Precision ? typeof(decimal) : typeof(OceanBaseDecimal);
                 }
                 switch (TypeCode)
                 {
@@ -169,7 +176,11 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
-            if (IsDecimal) return DecodeDecimal(value, false).ToDecimal();
+            if (IsDecimal)
+            {
+                var number = DecodeDecimal(value, false);
+                return fieldType == typeof(decimal) ? (object)number.ToDecimal() : number;
+            }
             if (TypeCode == 202) return TemporalCodec.DecodeBinary(TypeCode, Mode, value, Scale);
             if (IsTemporal) return TemporalCodec.DecodeText(TypeCode, Mode, Utf8.GetString(value));
             if (fieldType == typeof(byte[])) return (byte[])value.Clone();
@@ -208,9 +219,13 @@ namespace OceanBaseConnector.Internal.Protocol
 
         internal object DecodeBinary(byte[]? value)
         {
-            _ = FieldType;
+            var fieldType = FieldType;
             if (value == null) return DBNull.Value;
-            if (IsDecimal) return DecodeDecimal(value, true).ToDecimal();
+            if (IsDecimal)
+            {
+                var number = DecodeDecimal(value, true);
+                return fieldType == typeof(decimal) ? (object)number.ToDecimal() : number;
+            }
             if (IsTemporal) return TemporalCodec.DecodeBinary(TypeCode, Mode, value, Scale);
             var cursor = new ByteCursor(value);
             switch (TypeCode)
@@ -231,13 +246,17 @@ namespace OceanBaseConnector.Internal.Protocol
         internal OceanBaseDecimal DecodeDecimal(byte[] value, bool binary)
         {
             _ = FieldType;
+            OceanBaseDecimal number;
             if (TypeCode == 3 && binary)
             {
                 var integer = new ByteCursor(value).ReadUInt32();
-                var number = Unsigned ? (decimal)integer : unchecked((int)integer);
-                return DecimalCodec.Constrain(new OceanBaseDecimal(number), (int)Precision, Scale, Unsigned);
+                number = new OceanBaseDecimal(Unsigned ? (decimal)integer : unchecked((int)integer));
             }
-            return DecimalCodec.Parse(Utf8.GetString(value), (int)Precision, Scale, Unsigned);
+            else number = DecimalCodec.Parse(Utf8.GetString(value));
+            if (Precision > 0 || Scale != 0)
+                number = DecimalCodec.Constrain(number, Precision > 0 ? (int)Precision : Mode == OceanBaseCompatibilityMode.Oracle ? 38 : 65, Scale, Unsigned);
+            DecimalCodec.Validate(number, Mode, Unsigned);
+            return number;
         }
     }
 }

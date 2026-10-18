@@ -700,7 +700,6 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(246, 45)]
         [InlineData(10, 45)]
         [InlineData(200, 45)]
         [InlineData(207, 45)]

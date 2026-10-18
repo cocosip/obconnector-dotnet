@@ -28,8 +28,8 @@ namespace OceanBaseConnector.Internal.Protocol
             ColumnSize = (int)Math.Min(int.MaxValue, size);
             if (column.IsDecimal)
             {
-                NumericPrecision = (int)column.Precision;
-                NumericScale = column.Scale;
+                NumericPrecision = column.Precision > 0 ? (int?)column.Precision : null;
+                NumericScale = column.Precision > 0 || column.Scale != 0 ? (int?)column.Scale : null;
             }
             else
             {

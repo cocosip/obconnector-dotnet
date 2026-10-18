@@ -65,7 +65,7 @@
 | --- | --- | --- | --- | --- |
 | C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 2026-10-19 Codex；无真实完整重置白名单，Java reset不能代替OceanBase实测；保持Pooling=true拒绝，先推进独立C02 |
 | C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
-| C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 未开始 | 待记录 |
+| C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 进行中 | 2026-10-19 Codex；数值子项本地实现及走查修复完成，Unit672/Consumer54/DI8、五/三目标编译/格式/打包通过；纳秒/TZ/LTZ、零日期和真实验收未完成，详见本页末 |
 | C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 未开始 | 待记录 |
 | C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 未开始 | 待记录 |
 | C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 未开始 | 待记录 |
@@ -234,3 +234,11 @@ C02本地验证：首批26项非法候选/公开fallback测试先全失败后全
 五资产实际Windows基础消费使用扩展的RuntimeConsumerSample.cs，新增首地址失败后的查询；Standard2.0/2.1/net8在8.0.31、net9在9.0.20、net10在10.0.12，日志程序集8/9/10全部通过。私有依赖、SDK10 csc响应文件和LatestPatch runtimeconfig方法沿用B09，材料在artifacts/c02-runtime-smoke。格式/diff、双包5/3资产及8依赖组、统一0.1.0-alpha和Microsoft.Extensions按TFM8/9/10检查通过；未新增依赖，包README提示留R01。
 
 C02保持待验证，G3仍0/8、进行中；C01阻塞且A05可信MySQL模式判定仍是实现缺口，下一可本地推进模块C03。真实两模式/OBProxy、非Windows、IPv6网络和可信私有CA成功链未执行；旧运行时DI/完整API矩阵亦未验收，不把基础环回或源码走查替代实测。
+
+2026-10-19 C03 数值子项续接与修复：DecimalCodec/ResultColumn 贯通 MySQL DECIMAL(65,20)、Oracle NUMBER(38)、未知精度标记和负 scale；标准类型由声明固定，宽精度/未知精度列的小值和 NULL 不缩窄。GetDecimal/GetFieldValue<decimal> 只精确转换，参数用普通十进制文本写回，不经 decimal/double。p0/s0 保留载荷系数/scale；p0 且已知非零 scale 使用 Oracle38/MySQL65 精度上限精确重标度，schema 精度仍未知。参数仅声明 Scale 时不凭空套用 Precision=38，合法大指数不误拒绝；两项回归先红后绿（c03-scale-red.trx、c03-number-green-final.trx）。
+
+独立走查发现并修复两项 MySQL 负 scale 问题：声明 Precision 未计算展开后的整数零位（Precision5 错误接受123000），以及零系数因负 scale 被误判超界。分别有1项、2项先红后绿的回归（c03-precision-red.trx、c03-zero-red.trx；最终数值筛选68项通过，c03-number-targeted.trx）。修复按模式限定，不改 Oracle 的有符号 scale 语义；最终只读复查无剩余代码问题，文档澄清已合入既有设计/计划。旧 B 阶段“拒绝宽精度”的测试预期同步调整，保留越界、unsigned、需舍入、恶意指数/scale 和输入长度拒绝；公开同步/异步、文本/二进制测试覆盖读取、稳定 schema、精确转换与参数写回。
+
+本地验证：净增45项单元、5项五资产消费；Release slnx 核心5目标/DI3目标编译0警告/错误，Windows Unit672、Consumer54、DI8全部通过（TestResults/c03-number-unit-final.trx、c03-number-consumer-final.trx、c03-number-di.trx），测试宿主均为net10。格式、git diff检查及双包生成通过，ZIP/XML核查核心5资产、DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心依赖和Microsoft.Extensions按Standard/net8→8、net9→9、net10→10分组均通过。包缺少README的既有提示继续留R01。
+
+C03 仍为进行中，下一步为纳秒/TZ/LTZ及MySQL零日期子项；不将数值子项提交当成C03整体完成，G3仍0/8。未执行实库、非Windows或新的旧运行时验收；MySQL数值映射来自内部夹具，公开五资产环回为认证Oracle模式，A05可信MySQL规则仍缺，不为数值测试放开握手。C01完整重置白名单及G0/G1环境缺口不变。

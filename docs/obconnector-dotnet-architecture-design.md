@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 架构设计
 
-状态：设计基线，A 阶段及 B01–B09 已有本地实现/审核证据；A05 的可信 MySQL 判定仍是实现缺口，§9 产品决定和真实兼容性未关闭。日期：2026-10-19。实施任务见 [开发方案](obconnector-dotnet-development-plan.md)，证据见 [进度台账](obconnector-dotnet-progress.md)。.NET 接入已合并到 §2.1–§2.7；参数化、低精度数值、reader 字段元数据、本地事务及取消/超时已有本地实现，B09 补齐标量 ProviderType 和命令日志类别。宽精度、目录元数据、池化等 C 阶段能力仍待实现。
+状态：设计基线，A 阶段及 B01–B09、C02 已有本地实现/审核证据，C03 数值子项本地实现与审核已完成；A05 的可信 MySQL 判定仍是实现缺口，§9 产品决定和真实兼容性未关闭。日期：2026-10-19。实施任务见 [开发方案](obconnector-dotnet-development-plan.md)，证据见 [进度台账](obconnector-dotnet-progress.md)。.NET 接入已合并到 §2.1–§2.7；参数化、reader 字段元数据、本地事务及取消/超时已有本地实现，B09 补齐标量 ProviderType 和命令日志类别。C03 时间扩展、目录元数据和池化仍待实现。
 
 ## 1. 目标与依据
 
@@ -215,7 +215,7 @@ B08 本地取消契约：发送前取消不写包、归还租约并保留调用�
 
 | 服务端列 | `GetValue` / `GetFieldType` | 精确访问与写回 |
 | --- | --- | --- |
-| MySQL `DECIMAL(p,s)` 或 Oracle `NUMBER(p,s)`，且列元数据确认 `p<=28`、`0<=s<=p` | `decimal` / `typeof(decimal)` | B 阶段起 `GetProviderSpecificFieldType` 为 `typeof(OceanBaseDecimal)`，`GetProviderSpecificValue` 返回 `OceanBaseDecimal`（系数 `BigInteger` + scale）；`GetDecimal` 必须精确，范围内的 `OceanBaseDecimal` 参数保留 scale 写回 |
+| MySQL `DECIMAL(p,s)` 或 Oracle `NUMBER(p,s)`，且列元数据确认 `1<=p<=28`、`0<=s<=p` | `decimal` / `typeof(decimal)` | B 阶段起 `GetProviderSpecificFieldType` 为 `typeof(OceanBaseDecimal)`，`GetProviderSpecificValue` 返回 `OceanBaseDecimal`（系数 `BigInteger` + scale）；`GetDecimal` 必须精确，范围内的 `OceanBaseDecimal` 参数保留 scale 写回 |
 | 其他精确数值，包括 MySQL `DECIMAL(p,s)` 的 `p>28`、无可靠精度元数据的列，以及 Oracle 无声明精度、负 scale 或 `p>28` 的 `NUMBER` | `OceanBaseDecimal` / `typeof(OceanBaseDecimal)`，一列内类型稳定 | `GetDecimal` 在该行的值恰能精确表示时转换，否则抛转换/溢出异常；参数接受 `OceanBaseDecimal` 并保持 scale；MySQL `DECIMAL(65,20)` 不经 `decimal` 或 `double` 中转 |
 | Oracle `DATE`（协议可表现为 `DATETIME`） | `DateTime` / `typeof(DateTime)`，包括时分秒 | `DateTime.Kind=Unspecified`；`GetDateTime` 与 `GetProviderSpecificValue` 保留时分秒。Oracle 模式下用 `OceanBaseDbType.OracleDate` 显式写回，`DbType.Date` 绑定 `DateTime` 时也不得静默截断非零时间部分 |
 | Oracle 不带时区的 `TIMESTAMP(p)` | `p<=7` 用 `DateTime`，`p>7` 用 `OceanBaseTimestamp`；`GetFieldType` 随声明精度固定 | `DateTime.Kind=Unspecified`；`GetDateTime` 仅在纳秒可精确表示为 100ns 时成功，写回 provider 类型保留 0–9 位小数秒 |
@@ -225,11 +225,13 @@ B08 本地取消契约：发送前取消不写包、归还租约并保留调用�
 
 `GetProviderSpecificFieldType` 与 `GetProviderSpecificValue` 使用同一 provider 类型，`GetFieldValue<T>`、`GetValues`、`IsDBNull` 和 `GetSchemaTable` 必须遵守上表及列元数据；不能逐行改变 `GetFieldType`。`DBNull.Value` 与空字符串遵循服务端模式语义，Oracle 的空字符串/NULL 规则单独验证。字符集、NCHAR、无符号溢出、`DateTime.Kind` 和会话时区都写成双向测试；`DateOnly`/`TimeOnly` 可在现代目标上作便利转换，但不能成为跨目标唯一表示，Oracle `DATE` 含非零时间时不得隐式转换为 `DateOnly`。Java 的 `TIMESTAMPTZ` 解码会读取额外的时区名称，因此 .NET 的默认值不能只保留 offset：[Java 时间解码](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/extend/datatype/DataTypeUtilities.java#L1030)。
 
-C 阶段完成前，B 阶段已支持低精度列的 `OceanBaseDecimal` provider-specific 读取和范围内参数写入；遇到尚未实现的宽精度数值、纳秒时间或零日期时在读取该值时明确报不支持。B 阶段正常 MySQL `DATE`/`DATETIME` 列的 `GetProviderSpecificFieldType` 暂为 `typeof(DateTime)`，`GetProviderSpecificValue` 返回 `DateTime`；C 阶段起整列改为上述 provider 类型，并验证同列混合正常值与零值。相同规则适用于各阶段尚未实现的类型及编码，包括 Oracle NCHAR/INTERVAL、MySQL JSON/BIT/YEAR：读取时按实际模式、列类型与字符集识别并报不支持，显式指定未支持类型的参数在发包前报不支持；不得截断、舍入，或猜测性地解码为 `string`/`byte[]`。未声明服务端目标类型的普通 `string` 参数仍按普通字符串绑定，不据此声称支持 NCHAR/JSON。Oracle NCHAR 需独立识别服务端 national character set，不能沿用普通字符集；新增支持时同时验证文本与预处理读写及元数据映射。MySQL 宽精度数值的参照场景见 Java 的 [`DECIMAL(65,20)` 测试](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/test/java/com/oceanbase/jdbc/DataTypeSignedTest.java#L77)。
+C 阶段完成前，B 阶段已支持低精度列的 `OceanBaseDecimal` provider-specific 读取和范围内参数写入；C03 数值子项已扩展宽精度；尚未实现的纳秒时间或零日期在读取该值时明确报不支持。B 阶段正常 MySQL `DATE`/`DATETIME` 列的 `GetProviderSpecificFieldType` 暂为 `typeof(DateTime)`，`GetProviderSpecificValue` 返回 `DateTime`；C 阶段起整列改为上述 provider 类型，并验证同列混合正常值与零值。相同规则适用于各阶段尚未实现的类型及编码，包括 Oracle NCHAR/INTERVAL、MySQL JSON/BIT/YEAR：读取时按实际模式、列类型与字符集识别并报不支持，显式指定未支持类型的参数在发包前报不支持；不得截断、舍入，或猜测性地解码为 `string`/`byte[]`。未声明服务端目标类型的普通 `string` 参数仍按普通字符串绑定，不据此声称支持 NCHAR/JSON。Oracle NCHAR 需独立识别服务端 national character set，不能沿用普通字符集；新增支持时同时验证文本与预处理读写及元数据映射。MySQL 宽精度数值的参照场景见 Java 的 [`DECIMAL(65,20)` 测试](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/test/java/com/oceanbase/jdbc/DataTypeSignedTest.java#L77)。
 
-B05 本地实现边界：低精度列必须有 `1<=p<=28`、`0<=s<=p` 的可靠元数据；Oracle 精度来自列定义尾部独立字节、scale 按有符号字节读取，MySQL DECIMAL 精度由显示长度减去符号位和小数点位置推导。Oracle 类型码 3 是优化 NUMBER 的四字节整数布局，缺省 p=0/s=0 可按该布局确定 p=10；不能把此规则套用到类型码 246 或其他无精度 NUMBER。类型码 0/246 在二进制行中仍读取长度编码的十进制文本，按系数与 scale 精确解析，不经浮点或允许舍入的转换；标准读取为 decimal，provider-specific 及 `GetFieldValue<OceanBaseDecimal>` 保留列 scale，NULL 为 DBNull。宽精度/未知精度列即使当前值为 1 或 NULL 也不据值缩窄类型。
+B05 本地实现边界：低精度列必须有 `1<=p<=28`、`0<=s<=p` 的可靠元数据；Oracle 精度来自列定义尾部独立字节、scale 按有符号字节读取，MySQL DECIMAL 精度由显示长度减去符号位和小数点位置推导。Oracle 类型码 3 是优化 NUMBER 的四字节整数布局，缺省 p=0/s=0 可按该布局确定 p=10；不能把此规则套用到类型码 246 或其他无精度 NUMBER。类型码 0/246 在二进制行中仍读取长度编码的十进制文本，按系数与 scale 精确解析，不经浮点或允许舍入的转换；低精度标准读取为 decimal，provider-specific 及 `GetFieldValue<OceanBaseDecimal>` 保留列 scale，NULL 为 DBNull。宽精度/未知精度列即使当前值为 1 或 NULL 也不据值缩窄类型。
 
-参数的 `OceanBaseDbType` 是可选显式覆盖；设置 `DbType` 或调用 `ResetDbType` 清除覆盖。B05 支持 Decimal、OracleDate、Timestamp；已命名但延期的类型即使绑定 NULL 也拒绝。decimal/OceanBaseDecimal 参数要求 scale 0–28 且值可被 CLR decimal 精确表示，显式 Precision 不得超过 28；只设置 Precision 时推断值的 scale，显式 Scale=0 则要求精确整数，任何重标度都不得舍入。OceanBaseDecimal 的公共表示允许任意 BigInteger 系数和 int scale，但不表示 B 阶段支持宽精度协议读写；ToDecimal 仅作精确转换，溢出或需舍入时失败。
+参数的 `OceanBaseDbType` 是可选显式覆盖；设置 `DbType` 或调用 `ResetDbType` 清除覆盖。B05 支持 Decimal、OracleDate、Timestamp；已命名但延期的类型即使绑定 NULL 也拒绝。B05 原有限制是 scale 0–28、值可被 CLR decimal 精确表示、显式 Precision 不超过 28，C03 数值子项将其扩展为以下模式范围。只设置 Precision 时推断值的 scale，显式 Scale=0 则要求精确整数，任何重标度都不得舍入。OceanBaseDecimal 的公共表示允许任意 BigInteger 系数和 int scale，协议入口另作范围校验；ToDecimal 仅作精确转换，溢出或需舍入时失败。
+
+C03 数值契约：可靠 `1<=p<=28`、`0<=s<=p` 的列仍为 decimal，其余精确数值整列为 OceanBaseDecimal；GetDecimal/GetFieldValue<decimal> 只对可精确表示的当前值成功。MySQL 声明上限 p65/s30；Oracle 声明上限 p38、s[-84,127]，非零 NUMBER 绝对值范围为 [1e-130,1e126)，未知精度最多38个有效数字。Oracle 原始 p255/s-85 沿 Java ColumnDefinition 归一为未知 p0/s0，schema 不伪造精度，p0/s0 按载荷保留系数和 scale；已知 scale 需精确重标度；p0 且已知非零 scale 时用 Oracle38/MySQL65 的精度上限校验，schema 精度仍为未知。参数沿 Java BigDecimalParameter 发送长度编码的普通十进制文本，不经 CLR decimal 或 double，不用科学记数法；负 scale 展开为整数，读回 scale 由目标列决定。仅显式设置参数 Scale 时不凭空声明 Precision，重标度后仍校验模式范围；显式 Precision 则严格检查。DbParameter.Scale 保留 byte API，负 scale 通过 OceanBaseDecimal.Scale 表达。输入文本最长512字符、指数[-256,256]，内部 scale/重标度差值有界，防止不可信载荷造成无界展开。数值本地证据见台账；纳秒/TZ/LTZ 和 MySQL 零日期仍未实现，C03 保持进行中。
 
 日期时间参数要求 `DateTimeKind.Unspecified`，MySQL DATE 不允许非零时间、DATETIME/TIMESTAMP 和 TIME 保留最多六位小数秒；TIME 是范围 ±838:59:59.999999 的 TimeSpan，二进制天数先验证范围再计算 ticks。Oracle DATE 用类型码 12 保留时分秒、不接受小数秒，TIMESTAMP 用 202；两种结果协议的 202 字段都是长度编码的 12 字节内容（世纪、世纪内年份、月日时分秒、LE32 纳秒、scale），B05 仅接受声明和载荷 scale 一致且不超过 7、可精确表示为 100ns 的值，其他变体留待实库确认/C03。Oracle RAW 203 读取为 byte[]，二进制参数按 Java Oracle 路径绑定 VARSTRING 253。以上布局核对 Java 基线的 ColumnDefinition、BinaryRowProtocol、RowProtocol、DataTypeUtilities 和 OBTIMESTAMPParameter；本地合成报文及 Windows 环回通过不能代替两模式真实互通。B06 已补 GetSchemaTable/GetColumnSchema。
 
@@ -237,7 +239,7 @@ B05 本地实现边界：低精度列必须有 `1<=p<=28`、`0<=s<=p` 的可靠�
 
 B06 本地契约：五目标 reader 的两套 schema 共用 ResultColumn/内部 DbColumn 映射，仅反映当前结果；不额外发 SQL、不缓存整个结果集。返回独立快照，GetColumnSchema 集合只读，调用方修改 schema table 不影响 reader。零行 SELECT 仍保留声明列，直到 NextResult 返回 false 才清空；无列的 OK 结果返回 null schema table/空 column schema。表别名与原始表列名分别保留，GetName 返回标签；原始名称缺失时不猜测来源。MySQL 数据库名映射 BaseCatalogName，Oracle 映射 BaseSchemaName；协议 catalog 标记 def 不是库名。
 
-ColumnSize 对 MySQL 文本列按支持的 utf8/utf8mb4 最大字符宽度换算字符数，binary 按字节；Oracle 普通字符长度沿用 Java 基线的服务端单位，真实字符/字节语义仍待矩阵验证。非字符列保留线格式长度，超过 int 的长度先换算再饱和为 int.MaxValue；decimal 精度/scale 遵守 B05，整数精度按固定宽度及符号位确定，不使用显示宽度冒充数值精度。浮点列未提供可靠十进制 precision/scale 时保持未知。NOT_NULL 与 AUTO_INCREMENT 标志分别给出 AllowDBNull/IsAutoIncrement；IsKey/IsUnique/IsExpression/IsReadOnly/IsIdentity 及服务端名称等未可靠提供的字段为 null（schema table 为 DBNull），不凭单列标志宣称复合索引唯一性或可更新性。ProviderSpecificDataType 与实际读取类型一致；B09 已补齐当前支持标量的 OceanBaseDbType 身份，ProviderType 返回该枚举的整数值，不把原始协议码伪装成枚举。
+ColumnSize 对 MySQL 文本列按支持的 utf8/utf8mb4 最大字符宽度换算字符数，binary 按字节；Oracle 普通字符长度沿用 Java 基线的服务端单位，真实字符/字节语义仍待矩阵验证。非字符列保留线格式长度，超过 int 的长度先换算再饱和为 int.MaxValue；decimal 精度/scale 遵守 B05/C03 数值契约，整数精度按固定宽度及符号位确定，不使用显示宽度冒充数值精度。浮点列未提供可靠十进制 precision/scale 时保持未知。NOT_NULL 与 AUTO_INCREMENT 标志分别给出 AllowDBNull/IsAutoIncrement；IsKey/IsUnique/IsExpression/IsReadOnly/IsIdentity 及服务端名称等未可靠提供的字段为 null（schema table 为 DBNull），不凭单列标志宣称复合索引唯一性或可更新性。ProviderSpecificDataType 与实际读取类型一致；B09 已补齐当前支持标量的 OceanBaseDbType 身份，ProviderType 返回该枚举的整数值，不把原始协议码伪装成枚举。
 
 reader 在响应尚未消费完时独占物理会话，终态完整读取后释放租约；提前关闭未读响应则销毁会话。CloseConnection 在读尽和提前关闭两条路径都关闭逻辑连接。ExecuteScalar/ExecuteNonQuery 沿用安全消费路径；scalar 值转换失败时 Dispose 销毁未读会话。零日期仍按 C03 边界拒绝，不因 schema 或 reader 支持而转换为 DateTime.MinValue。以上有 Windows 合成协议/环回及五目标隔离消费证据，实库、非 Windows 和完整旧运行时验收仍未取得；B09 的 Windows 基础运行时消费证据见下。
 
@@ -251,10 +253,10 @@ reader 在响应尚未消费完时独占物理会话，终态完整读取后释�
 | --- | --- | --- |
 | 连接/factory/现代数据源/可选 DI | 五资产同一 provider；两个 Standard 资产没有现代数据源，核心不引用 DI；配置与日志按实例传递 | 五目标消费、依赖图及现代 DI 生命周期测试；旧运行时 DI 尚未执行 |
 | 命令/参数 | 文本无参和强制服务端 prepare；无客户端插值回退；只允许 Input 和 Text；Oracle 名称绑定限 B03 子集 | B02-B05/B08 公共环回；不支持 Java 客户端 prepare 默认路径、存储过程及 OUT |
-| reader/元数据 | 逐行文本/二进制、多结果、两套字段 schema、固定 CLR/provider-specific 类型；typed getter 要求实际 CLR 类型匹配 | B05/B06/B09；目录 GetSchema、SequentialAccess、大值游标留 C04/C05，不以普通 GetBytes/GetChars 宣称流式大值 |
+| reader/元数据 | 逐行文本/二进制、多结果、两套字段 schema、固定 CLR/provider-specific 类型；typed getter 要求类型匹配，C03 的 decimal getter 允许精确转换 | B05/B06/B09；目录 GetSchema、SequentialAccess、大值游标留 C04/C05，不以普通 GetBytes/GetChars 宣称流式大值 |
 | 本地事务/取消 | 会话绑定、两模式隔离映射、结果未知不重放；环境事务始终拒绝 | B07/B08；Oracle RepeatableRead、XA/TransactionScope 不照搬 Java 支持范围 |
 | 诊断 | Connection 1000..1003、Command 1100/1101、Transaction 1200/1201 分类别；预先安全创建 logger，后端异常不改变结果 | B09 修复原命令事件误入 Connection 类别，4项类别过滤回归先失败后通过；ActivitySource/Meter 留 C07 |
-| 扩展/发布 | 不宣称 DbBatch、adapter/command builder、池化、宽精度/时区/LOB 等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
+| 扩展/发布 | 不宣称 DbBatch、adapter/command builder、池化、时区/LOB 等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
 
 Windows 实际运行时冒烟源为 `tests/OceanBaseConnector.ConsumerTests/RuntimeConsumerSample.cs`，从 xUnit 编译项排除以保持全部日常测试宿主 net10.0。用 SDK10 的 csc 对相应运行时 reference pack 和单个产品资产编译独立可执行文件，使用该资产 project.assets.json 对应包的私有 DLL，runtimeconfig 的 Microsoft.NETCore.App 主版本固定、rollForward=LatestPatch；样例断言实际 Environment.Version/日志程序集主版本，并通过公开预取消、已认证 Oracle 环回查询、NUMBER(6,2) 读取、两套 ProviderType 和 CloseConnection。
 
@@ -317,4 +319,4 @@ C02 的 .NET 连接串约定为 `Server=ob1:2881,ob2:2883,[::1]:2881;Port=2881`�
 3. 首发最低 OceanBase/OBProxy 版本与两种兼容模式的实际测试环境；它们决定可对外承诺的功能矩阵。
 4. 首个正式版本是否必须包含经验证的池化与 Oracle 高精度/纳秒 provider-specific 值；本设计将它们列为 C 阶段交付门槛，而不是协议原型门槛。无法完整重置的服务端组合只承诺直连。
 
-本文定义目标架构。2026-10-19 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果、B05 低精度数值/provider-specific 访问和常见日期时间，B06 reader 字段元数据，以及 B07 本地事务和关闭回滚、B08 本地取消/超时故障矩阵、B09 标量元数据/公共 API 审核及 C02 多地址 TCP 建连；池化、宽精度扩展和目录元数据仍未实现，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。
+本文定义目标架构。2026-10-19 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果、B05 低精度数值/provider-specific 访问和常见日期时间，B06 reader 字段元数据，以及 B07 本地事务和关闭回滚、B08 本地取消/超时故障矩阵、B09 标量元数据/公共 API 审核及 C02 多地址 TCP 建连；C03 数值子项已扩展宽精度，池化、时间扩展和目录元数据仍未实现，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。

@@ -112,7 +112,7 @@ namespace OceanBaseConnector
             return count;
         }
         public override T GetFieldValue<T>(int ordinal) => typeof(T) == typeof(OceanBaseDecimal)
-            ? (T)GetProviderSpecificValue(ordinal) : (T)GetValue(ordinal);
+            ? (T)GetProviderSpecificValue(ordinal) : typeof(T) == typeof(decimal) ? (T)(object)GetDecimal(ordinal) : (T)GetValue(ordinal);
         public override bool IsDBNull(int ordinal)
         {
             Column(ordinal);
@@ -123,7 +123,11 @@ namespace OceanBaseConnector
         public override byte GetByte(int ordinal) => (byte)GetValue(ordinal);
         public override char GetChar(int ordinal) => (char)GetValue(ordinal);
         public override DateTime GetDateTime(int ordinal) => (DateTime)GetValue(ordinal);
-        public override decimal GetDecimal(int ordinal) => (decimal)GetValue(ordinal);
+        public override decimal GetDecimal(int ordinal)
+        {
+            var value = GetValue(ordinal);
+            return value is OceanBaseDecimal number ? number.ToDecimal() : (decimal)value;
+        }
         public override double GetDouble(int ordinal) => (double)GetValue(ordinal);
         public override float GetFloat(int ordinal) => (float)GetValue(ordinal);
         public override Guid GetGuid(int ordinal) => (Guid)GetValue(ordinal);

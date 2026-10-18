@@ -60,25 +60,25 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(65, 20)]
         [InlineData(0, 0)]
         [InlineData(38, 0)]
         [InlineData(5, 255)]
-        public void DeferredDecimalColumnsNeverNarrowBasedOnCurrentValue(byte precision, byte scale)
+        public void WideDecimalColumnsNeverNarrowBasedOnCurrentValue(byte precision, byte scale)
         {
             var column = ValueColumn(246, OceanBaseCompatibilityMode.Oracle, precision, scale);
-            Assert.Throws<NotSupportedException>(() => column.Decode(Encoding.ASCII.GetBytes("1")));
+            Assert.Equal(typeof(OceanBaseDecimal), column.FieldType);
+            Assert.IsType<OceanBaseDecimal>(column.Decode(Encoding.ASCII.GetBytes("10")));
         }
 
         [Theory]
         [InlineData(OceanBaseCompatibilityMode.MySql)]
         [InlineData(OceanBaseCompatibilityMode.Oracle)]
-        public void UnsignedDecimalUsesMetadataAndDeferredColumnsRejectNullToo(OceanBaseCompatibilityMode mode)
+        public void UnsignedDecimalUsesMetadataAndInvalidColumnsRejectNullToo(OceanBaseCompatibilityMode mode)
         {
             var column = ValueColumn(246, mode, 5, 2, flags: 32);
             Assert.Equal(999.99m, column.Decode(Encoding.ASCII.GetBytes("999.99")));
             Assert.Throws<OverflowException>(() => column.Decode(Encoding.ASCII.GetBytes("-0.01")));
-            Assert.Throws<NotSupportedException>(() => ValueColumn(246, mode, 65, 20).Decode(null));
+            Assert.Throws<NotSupportedException>(() => ValueColumn(246, mode, 66, 20).Decode(null));
         }
 
         [Fact]
@@ -186,7 +186,7 @@ namespace OceanBaseConnector.UnitTests
             parameter.Scale = 1;
             Assert.Throws<OverflowException>(() => PreparedParameters.Encode(new[] { parameter }));
             parameter.Value = new OceanBaseDecimal(BigInteger.One, 29);
-            Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }));
+            Assert.Throws<OverflowException>(() => PreparedParameters.Encode(new[] { parameter })); // Explicit scale=1 still cannot round.
         }
 
         [Fact]
@@ -216,9 +216,9 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public void DeferredPrecisionIsRejectedEvenForTypedNullParameters()
+        public void InvalidPrecisionIsRejectedEvenForTypedNullParameters()
         {
-            var parameter = new OceanBaseParameter { DbType = DbType.Decimal, Precision = 65, Value = DBNull.Value };
+            var parameter = new OceanBaseParameter { DbType = DbType.Decimal, Precision = 66, Value = DBNull.Value };
             Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }));
             parameter = new OceanBaseParameter { DbType = DbType.DateTime2, Scale = 9, Value = null };
             Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle));

@@ -293,8 +293,12 @@ B09 本地审核/补齐完成、状态待验证；双模式直连/OBProxy、非 
 
 **产物：**在 B 阶段 `OceanBaseDecimal` 基础上扩展宽精度读写编解码；`BigInteger` 系数/scale 保真，时间值保留纳秒、offset/时区信息；MySQL `DATE`/`DATETIME` 列的 provider-specific 类型整列稳定，零日期不映射 `DateTime.MinValue`。
 
-- [ ] 测试 MySQL `DECIMAL(65,20)`、Oracle 无精度/负 scale `NUMBER`、`TIMESTAMP(9)`、TZ/LTZ、同列混合正常值与零日期在文本/预处理路径的字段类型、provider-specific 值及往返。
-- [ ] `GetDecimal`、`GetDateTime`、`DateTimeOffset` 只在可精确表示时转换，否则抛转换/溢出异常；provider-specific 类型整列稳定。
+2026-10-19 分步实施（C03在所有子项完成前保持进行中）：先实现精确数值，后实现纳秒/时区和零日期，不把数值子项通过标为整个C03完成。数值改动贯通DecimalCodec、ResultColumn、ResultDbColumn、PreparedParameters、OceanBaseDataReader及五资产消费；先用DECIMAL(65,20)、NUMBER(38)、未知精度标记、负scale和精确转换回归证明缺口，再补实现。标准类型由列声明固定：可靠p<=28且0<=s<=p为decimal，其余为OceanBaseDecimal；NULL不缩窄类型。Oracle p=255/s=-85按Java ColumnDefinition归一为未知p=0/s=0；未知精度不伪造schema精度，p0/s0按payload保留系数/scale；p0且已知非零scale时按该scale精确重标度，校验精度上限使用Oracle38/MySQL65，schema精度仍未知；声明负scale时精确重标度，不舍入。MySQL最大p65/s30，Oracle声明p38/s[-84,127]及非零值绝对值[1e-130,1e126)范围，超界明确失败；未知NUMBER按最多38个有效数字和该范围校验。GetDecimal/GetFieldValue<decimal>只作精确转换。参数不经过CLR decimal或浮点缩窄；沿Java BigDecimalParameter的长度编码普通十进制文本，不发送科学记数法，负scale扩成整数，服务端目标列元数据决定读回scale。DbParameter.Scale是byte，负scale从OceanBaseDecimal.Scale表达，不新增不兼容的Scale覆盖。所有本地编译/回归/打包和独立走查通过后提交数值子项；实库与非Windows继续暂缓。
+
+- [x] 数值子项本地编译、测试与独立走查：MySQL `DECIMAL(65,20)`、Oracle 无精度/负 scale `NUMBER`；文本/预处理字段类型、provider-specific 读取和写回，五资产消费及模式边界回归。Unit672/Consumer54/DI8、格式与双包资产/依赖矩阵通过，详见进度台账。
+- [x] `GetDecimal`/`GetFieldValue<decimal>` 只作精确转换；声明列类型不随当前值或 NULL 改变。修复未声明参数精度时的误限制、MySQL负scale的声明精度漏检及零值误拒绝，均有失败后通过的回归。
+- [ ] `TIMESTAMP(9)`、TZ/LTZ、同列混合正常值与零日期在文本/预处理路径的字段类型、provider-specific 值及往返。
+- [ ] `GetDateTime`、`DateTimeOffset` 只在可精确表示时转换，否则抛转换/溢出异常；时间 provider-specific 类型整列稳定。
 - [ ] 两模式实库测试记录会话时区、字符集与服务端列定义。
 
 ### C04 大值、SequentialAccess 与服务端游标
