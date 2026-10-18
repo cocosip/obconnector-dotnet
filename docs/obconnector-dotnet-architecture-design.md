@@ -162,6 +162,8 @@ span 继承开始时 Activity.Current 的父上下文，但立即恢复调用方
 
 2026-10-19 Windows 本地回归另在实际 .NET8.0.31/9.0.20 各运行完整 Unit1206/DI8，全部通过；仅以临时MSBuild属性构建旧运行时测试宿主，工程声明仍为net10.0，核心五目标/DI三目标及按TFM的8/9/10依赖主版本保持不变。恢复默认后.NET10.0.12完整Unit1206/Consumer152/DI8及实际五资产包消费通过。该证据补齐本地套件的8/9执行，不关闭真实数据库、非Windows、Framework4.8或完整兼容矩阵验收。
 
+Windows 包验证可显式增加 `-VerifyNetFramework`，在有4.8 targeting pack的机器上临时编译net48宿主，复用Standard2.0消费库并还原本次核心包；不增加仓库测试目标、产品目标或DI包目标。检查实际包哈希、Standard2.0资产选择和8.x Microsoft.Extensions依赖；宿主使用自动生成的binding redirects，输出桌面CLR描述及注册表Release。2026-10-19本机Framework4.8.1（Release533509、运行时描述4.8.9337.0）通过factory/类型身份/现代API边界/预取消/脱敏基础检查，未验证SQL/TLS及原版4.8；§9/G0正式支持决定仍开放，Standard2.1不宣称兼容Framework。
+
 ### 2.7 当前代码影响与验收
 
 现有 `ConnectResult.Mode`、`PhysicalSession` 独占状态机、`OceanBaseConnectionOptions` 冻结配置、TCP/TLS 与包序号处理可以保留。现有代码没有双模式两套公开对象，不需要按参考项目重写。B01 在已有 options 之外增加不可变日志上下文并交给连接/会话，不把 `ILoggerFactory` 序列化进连接串；底层 byte cursor/帧编解码不增加宿主依赖。

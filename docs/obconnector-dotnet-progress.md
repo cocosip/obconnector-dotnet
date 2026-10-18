@@ -110,7 +110,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
-| R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-19 本地统一打包元数据/包内文档/五资产实际包消费完成；Unit1205/Consumer152/DI8及独立走查通过，许可证、来源及包名/商标审查仍开放，不发布；证据见末尾 |
+| R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-19 本地包/五资产消费完成，另补Windows Framework4.8.1上net48宿主的Standard2.0基础包消费及绑定重定向；独立走查见末尾，正式Framework支持/许可/来源/包名审查仍开放，不发布 |
 | R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | README本地交付材料及独立走查已完成；Windows实际8.0.31/9.0.20各Unit1206/DI8、默认10.0.12 Unit1206/Consumer152/DI8与五资产包消费通过；最终真实矩阵与发布审查待验收，不关闭候选版门槛 |
 | D01 | G4 后 | OB20、校验与完整链路追踪 | 未开始 | 待记录 |
 | D02 | G4 后 | Oracle 过程及 OUT/RETURNING | 未开始 | 待记录 |
@@ -443,3 +443,17 @@ R02仅完成本地材料和本地验证，状态保持进行中；G4同步为进
 修改过的独立BatchRuntimeConsumerSample另按三个现代参考程序集重新编译，实际8.0.31/9.0.20/10.0.12批次/诊断断言均通过（TestResults/runtime{8,9,10}-batch-final.log）。首次调用遗漏夹具参数造成的命令错误单独保留runtime8-batch-invocation-error.log，补齐参数后通过，不归为产品故障。独立只读闭环复核核对全部七份最终TRX、实际运行时、依赖图、默认目标、编译和包内README，无剩余需修复项；git diff --check及UTF-8无BOM/CRLF检查通过。
 
 本轮不新增产品功能；先前11类走查问题及TCP借用等待句柄缺陷已修复，本轮补齐旧运行时测试发现的夹具问题和进度证据。R02仍进行中、G4仍0/2；真实数据库与非Windows按约定暂缓，Framework4.8、完整兼容矩阵及许可/来源/包名审核未完成。A04真实/跨平台验收、A05可信公共MySQL模式判定和C01完整重置白名单仍开放，不发布、不推送。
+
+## R01/R02 Windows Framework 基础包消费（2026-10-19）
+
+本轮复核余项后只推进本机可运行的消费验证，不提前启动依赖G4或实库矩阵的D扩展。eng/Verify-Packages.ps1增加显式-VerifyNetFramework选项；默认五资产流程继续保留，非Windows使用该选项会明确拒绝。指定选项时在本次独立包消费目录下临时生成net48宿主，引用已编译的Standard2.0消费库并通过PackageReference还原本次核心包；检查包SHA512、compile资产lib/netstandard2.0/OceanBaseConnector.dll及Microsoft.Extensions 8.x依赖。使用已安装4.8 targeting pack，不下载额外参考包；自动生成宿主binding redirects并保留exe.config。核心五目标、DI三目标、CPM/Version和所有日常net10测试工程均不改变。
+
+真实桌面CLR执行复用原PackageConsumer.Verify的全部基础断言：provider factory、连接/命令/参数及公开数值类型身份、现代API在Standard资产不可见、Logging/DiagnosticSource程序集主版本8、未建连状态、预取消及凭据脱敏。输出确认Host=.NET Framework 4.8.9337.0、注册表Release=533509，对应本机安装Framework4.8.1；4.0.30319.42000只是CLR版本，不把它或net48目标名误报为原版4.8实际运行证据。Standard2.1仍不用于Framework。
+
+红绿证据：TestResults/framework-verifier-red.log记录原脚本拒绝新参数；实现时首次完整执行因错误使用旧式Framework还原图键失败，TestResults/framework-verifier-green.log保留失败，修正为SDK10实际net48键后通过。进一步重建生成父工程，暴露递归源码glob包含framework-host及其obj导致40个重复特性错误（framework-consumer-rebuild-red.log）；排除framework-host/**/*.cs后，五目标重建0警告0错误（framework-consumer-rebuild-green.log）。未改弱任何消费断言。
+
+默认Release slnx核心五/DI三目标编译0警告0错误（TestResults/framework-slnx-build-final.log），重新统一pack到TestResults/framework-pack。最终默认验证与可选Framework验证都从新独立缓存通过，分别保留TestResults/framework-default-package-final.log（cdf06f55d0184c058e30de717ea84a5d）和framework-package-final.log（9305f9f46ee342339e437d635ff92afd）；可选路径也执行完整原五资产检查，Framework宿主另外编译0警告0错误并实际通过。复现命令为pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/framework-pack -VerifyNetFramework。源README重新随包交付，现有架构/计划合并边界，不新增独立设计文档。
+
+独立只读走查已复核五文件差异、实际包SHA512/Standard2.0资产、8.x依赖及生成绑定重定向、默认/可选两份最终日志、父工程红绿重建和包内README一致性，无剩余需修复项。git diff --check、UTF-8无BOM/CRLF及两个包README逐字节核对通过。
+
+只增加工程验证与文档，没有修改产品或既有单元测试源码，因此未重复运行刚通过的完整Unit1206/Consumer152/DI8；本轮实际测试是两个包验证路径、真实Framework消费和生成工程的重建回归。真实数据库、非Windows和原版Framework4.8均未执行，完整SQL/TLS/核心API及Framework正式支持决定仍开放。R01/R02继续进行中，G4仍0/2，A05可信MySQL判定及C01完整重置门槛不变，不发布、不推送。

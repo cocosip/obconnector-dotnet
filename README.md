@@ -119,6 +119,8 @@ dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestRe
 pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/packages
 ```
 
+Windows 上安装 .NET Framework 4.8 targeting pack 和兼容桌面运行时后，可给最后一条命令追加 `-VerifyNetFramework`。验证器临时生成 net48 宿主，加载本次核心包的 netstandard2.0 资产并检查基本公开契约；宿主自动生成的依赖绑定重定向需随应用配置一起交付。本机实际为 Framework 4.8.1（Release 533509），本项仅有基础包消费证据，未覆盖原版4.8、完整SQL/TLS或实库；正式Framework支持仍未确定。仓库日常测试工程继续声明net10.0。
+
 包验证器核对包内容、依赖和实际还原的 SHA512，在独立缓存中只通过本地包消费五个资产，运行时不连接数据库。Standard 样例在隔离的 .NET 10 宿主运行；现代样例分别使用实际 .NET 8/9/10。生成目录和还原证据保留在 `TestResults/package-validation/`。这项检查不会发布任何包。
 
 项目开源许可证尚待维护者确定，R01 许可和包名/商标审查未关闭。第三方依赖和参考来源见包内 `THIRD-PARTY-NOTICES.md`；参考实现的许可证不自动成为本项目许可证。

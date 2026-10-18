@@ -1,9 +1,13 @@
 #Requires -Version 7.1
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$PackageDirectory)
+param(
+    [Parameter(Mandatory)][string]$PackageDirectory,
+    [switch]$VerifyNetFramework
+)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+if ($VerifyNetFramework -and !$IsWindows) { throw '-VerifyNetFramework requires Windows and the .NET Framework 4.8 targeting pack.' }
 $repository = Split-Path $PSScriptRoot -Parent
 $feed = (Resolve-Path -LiteralPath $PackageDirectory).Path
 [xml]$rootProperties = Get-Content -LiteralPath (Join-Path $repository 'Directory.Build.props') -Raw
@@ -126,7 +130,10 @@ Write-ConsumerFile 'PackageConsumer.csproj' @'
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors><CheckEolTargetFramework>false</CheckEolTargetFramework>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
-  <ItemGroup><PackageReference Include="OceanBaseConnector" /></ItemGroup>
+  <ItemGroup>
+    <Compile Remove="framework-host/**/*.cs" />
+    <PackageReference Include="OceanBaseConnector" />
+  </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0' Or '$(TargetFramework)' == 'net9.0' Or '$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="OceanBaseConnector.DependencyInjection" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
@@ -158,5 +165,57 @@ foreach ($target in $targets[2..4]) {
 }
 foreach ($target in $targets[0..1]) {
     Invoke-Dotnet @((Join-Path $run 'bin/Release/net10.0/PackageConsumer.dll'), (Join-Path $run "bin/Release/$target/PackageConsumer.dll"))
+}
+if ($VerifyNetFramework) {
+    $frameworkDirectory = Join-Path $run 'framework-host'
+    $null = New-Item -ItemType Directory -Path $frameworkDirectory
+    Write-ConsumerFile 'framework-host/FrameworkHost.csproj' @'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework><OutputType>Exe</OutputType>
+    <LangVersion>latest</LangVersion><Nullable>enable</Nullable><ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AutomaticallyUseReferenceAssemblyPackages>false</AutomaticallyUseReferenceAssemblyPackages>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="OceanBaseConnector" />
+    <Reference Include="PackageConsumer"><HintPath>../bin/Release/netstandard2.0/PackageConsumer.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>
+'@
+    Write-ConsumerFile 'framework-host/Program.cs' @'
+using System;
+using System.Runtime.InteropServices;
+using Microsoft.Win32;
+
+internal static class Program
+{
+    private static void Main()
+    {
+        if (!RuntimeInformation.FrameworkDescription.StartsWith(".NET Framework", StringComparison.Ordinal))
+            throw new InvalidOperationException("The sample must run on the desktop CLR.");
+        Console.WriteLine(PackageConsumer.Verify());
+        using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full");
+        Console.WriteLine("Host=" + RuntimeInformation.FrameworkDescription + " Release=" + key?.GetValue("Release"));
+    }
+}
+'@
+    $frameworkProject = Join-Path $frameworkDirectory 'FrameworkHost.csproj'
+    Invoke-Dotnet @('restore', $frameworkProject, '--configfile', (Join-Path $run 'NuGet.Config'), '--packages', (Join-Path $run 'packages'))
+    $frameworkAssets = Get-Content -LiteralPath (Join-Path $frameworkDirectory 'obj/project.assets.json') -Raw | ConvertFrom-Json
+    $coreKey = "$($packages[0])/$version"
+    $frameworkGraph = $frameworkAssets.targets.net48
+    $coreLibrary = $frameworkAssets.libraries.$coreKey
+    Assert-Package ($coreLibrary.type -eq 'package' -and $coreLibrary.sha512 -ceq $hashes[$packages[0]]) "Framework host did not restore this run's core package."
+    $selected = @($frameworkGraph.$coreKey.compile.PSObject.Properties.Name)
+    Assert-Package ($selected.Count -eq 1 -and $selected[0] -eq 'lib/netstandard2.0/OceanBaseConnector.dll') 'Framework host must select the netstandard2.0 asset.'
+    foreach ($dependency in $frameworkGraph.PSObject.Properties.Name | Where-Object { $_ -like 'Microsoft.Extensions.*' }) {
+        Assert-Package ($dependency.Split('/')[1].StartsWith('8.')) "Framework host resolved an incompatible $dependency."
+    }
+    Invoke-Dotnet @('build', $frameworkProject, '-c', 'Release', '--no-restore')
+    & (Join-Path $frameworkDirectory 'bin/Release/net48/FrameworkHost.exe')
+    if ($LASTEXITCODE -ne 0) { throw "Framework package consumer failed ($LASTEXITCODE)." }
 }
 Write-Host "Package verification passed. Retained consumers, packages and restore graphs: $run"
