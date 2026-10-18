@@ -17,11 +17,12 @@ namespace OceanBaseConnector
         private readonly CommandExchange _query;
         private readonly QueryResult _result;
         private readonly OceanBaseConnection _connection;
+        private readonly PhysicalSession _session;
         private readonly bool _closeConnection;
         private readonly bool _sequential;
         private bool _closed;
-        internal OceanBaseDataReader(CommandExchange query, QueryResult result, OceanBaseConnection connection, CommandBehavior behavior)
-        { _query = query; _result = result; _connection = connection; _closeConnection = (behavior & CommandBehavior.CloseConnection) != 0; _sequential = (behavior & CommandBehavior.SequentialAccess) != 0; }
+        internal OceanBaseDataReader(CommandExchange query, QueryResult result, OceanBaseConnection connection, PhysicalSession session, CommandBehavior behavior)
+        { _query = query; _result = result; _connection = connection; _session = session; _closeConnection = (behavior & CommandBehavior.CloseConnection) != 0; _sequential = (behavior & CommandBehavior.SequentialAccess) != 0; }
         public override object this[int ordinal] => GetValue(ordinal);
         public override object this[string name] => GetValue(GetOrdinal(name));
         public override int Depth => 0;
@@ -235,7 +236,7 @@ namespace OceanBaseConnector
             if (_closed) return;
             _closed = true;
             try { _query.Dispose(); }
-            finally { _result.InvalidateRows(); if (_closeConnection) _connection.Close(); }
+            finally { _result.InvalidateRows(); if (_closeConnection) _connection.CloseSession(_session); }
         }
         protected override void Dispose(bool disposing) { if (disposing) Close(); base.Dispose(disposing); }
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
@@ -244,7 +245,7 @@ namespace OceanBaseConnector
             if (_closed) return;
             _closed = true;
             try { _query.Dispose(); }
-            finally { _result.InvalidateRows(); if (_closeConnection) await _connection.CloseAsync().ConfigureAwait(false); }
+            finally { _result.InvalidateRows(); if (_closeConnection) await _connection.CloseSessionAsync(_session).ConfigureAwait(false); }
         }
         public override async ValueTask DisposeAsync()
         {

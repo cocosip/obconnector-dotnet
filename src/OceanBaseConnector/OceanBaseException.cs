@@ -39,6 +39,10 @@ namespace OceanBaseConnector
 
         /// <summary>True when a sent command's outcome cannot be determined.</summary>
         public bool IsExecutionOutcomeUnknown { get; }
+#if NET8_0_OR_GREATER
+        internal DbBatchCommand? FailedBatchCommand { get; set; }
+        protected override DbBatchCommand? DbBatchCommand => FailedBatchCommand;
+#endif
 
         private readonly string? _sqlState;
     }

@@ -15,6 +15,8 @@ namespace OceanBaseConnector.Internal.Session
         private readonly ConnectionLog _log;
         private readonly Action _release;
         private readonly CancellationToken _caller;
+        private readonly CancellationToken _operationToken;
+        private readonly Func<CancellationToken>? _cancellationOrigin;
         private readonly CancellationTokenSource _cancel = new CancellationTokenSource();
         private readonly CancellationTokenSource _budget;
         private readonly CancellationTokenRegistration _registration;
@@ -30,19 +32,21 @@ namespace OceanBaseConnector.Internal.Session
         private int _finished;
         private int _packets;
 
-        internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release, bool logCommand = true)
+        internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release, bool logCommand = true, object? owner = null, Func<CancellationToken>? cancellationOrigin = null)
         {
             _session = session;
             _log = log;
             _release = release;
             _caller = caller;
+            _cancellationOrigin = cancellationOrigin;
+            _operationToken = caller;
             _logCommand = logCommand;
             _budget = CancellationTokenSource.CreateLinkedTokenSource(caller, _cancel.Token);
             try
             {
                 // Validate the platform timer range before acquiring the physical session.
                 if (timeout != 0) _budget.CancelAfter(TimeSpan.FromSeconds(timeout));
-                _lease = session.Acquire();
+                _lease = session.Acquire(owner);
                 _channel = _lease.Channel;
                 _statementCloses = session.TakeStatementCloses();
                 _registration = _budget.Token.Register(() =>
@@ -95,6 +99,10 @@ namespace OceanBaseConnector.Internal.Session
             => SessionTimeZone = _session.ApplySessionVariables(_lease, ok?.SessionVariables);
 
         internal void OwnCursor() => _cursorOwned = true;
+#if NET8_0_OR_GREATER
+        internal System.Data.Common.DbBatchCommand? BatchCommand { get; set; }
+        internal Action? BatchFailed { get; set; }
+#endif
         internal void SetDatabase(string database) => _session.SetDatabase(_lease, database);
 
         internal bool HasSentSql { get { lock (_gate) return _anySqlSent; } }
@@ -157,6 +165,9 @@ namespace OceanBaseConnector.Internal.Session
             {
                 var server = ErrPacket.Parse(packet);
                 var error = new OceanBaseException("The server rejected the command.", server.ErrorCode, server.SqlState);
+#if NET8_0_OR_GREATER
+                error.FailedBatchCommand = BatchCommand;
+#endif
                 if (_cursorOwned) _session.Break();
                 Complete(error);
                 throw error;
@@ -178,15 +189,19 @@ namespace OceanBaseConnector.Internal.Session
             if (_responsePending) _lease.Dispose();
             else _lease.CompleteIfActive();
             Exception cause = error;
-            if (_caller.IsCancellationRequested) cause = new OperationCanceledException("Command canceled.", error, _caller);
+            var caller = _cancellationOrigin?.Invoke() ?? _caller;
+            if (caller.IsCancellationRequested) cause = new OperationCanceledException("Command canceled.", error, caller);
             else if (error is OperationCanceledException canceled && canceled.CancellationToken.CanBeCanceled && canceled.CancellationToken != _budget.Token) cause = error;
-            else if (_cancel.IsCancellationRequested) cause = new OperationCanceledException("Command canceled.", error);
+            else if (_cancel.IsCancellationRequested || _operationToken.IsCancellationRequested) cause = new OperationCanceledException("Command canceled.", error);
             else if (_budget.IsCancellationRequested) cause = new TimeoutException("Command timed out.", error);
             var mapped = _sqlSent
                 ? new OceanBaseException("The command response was not fully consumed; execution outcome is unknown.",
                     isExecutionOutcomeUnknown: true, innerException: cause)
                 : _responsePending && !(cause is OperationCanceledException) && !(cause is TimeoutException)
                     ? new OceanBaseException("Command initialization failed before execution.", innerException: cause) : cause;
+#if NET8_0_OR_GREATER
+            if (mapped is OceanBaseException batchError) batchError.FailedBatchCommand = BatchCommand;
+#endif
             Finish(mapped);
             return mapped;
         }
@@ -206,6 +221,9 @@ namespace OceanBaseConnector.Internal.Session
             _budget.Dispose();
             _cancel.Dispose();
             _release();
+#if NET8_0_OR_GREATER
+            if (error != null) BatchFailed?.Invoke();
+#endif
             if (_logCommand) _log.CommandFinished(_session.Endpoint, _session.Info!.Mode, _elapsed.ElapsedMilliseconds, error);
         }
 

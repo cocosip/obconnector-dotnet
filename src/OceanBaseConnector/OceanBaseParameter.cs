@@ -43,6 +43,13 @@ namespace OceanBaseConnector
         public override byte Precision { get; set; }
         public override byte Scale { get => _scale ?? 0; set => _scale = value; }
         internal byte? DeclaredScale => _scale;
+        internal OceanBaseParameter Snapshot()
+        {
+            var copy = (OceanBaseParameter)MemberwiseClone();
+            copy.Owner = null;
+            if (copy.Value is byte[] bytes) copy.Value = (byte[])bytes.Clone();
+            return copy;
+        }
         public override void ResetDbType() { _dbType = null; _providerType = null; }
 
         internal static DbType? ProviderDbType(OceanBaseDbType type)

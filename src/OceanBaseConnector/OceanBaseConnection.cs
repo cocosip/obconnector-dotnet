@@ -180,9 +180,11 @@ namespace OceanBaseConnector
             _log.Failed(session.Endpoint, elapsed, error);
         }
 
-        public override void Close()
+        public override void Close() => CloseCore(null);
+        internal void CloseSession(PhysicalSession session) => CloseCore(session);
+        private void CloseCore(PhysicalSession? requiredSession)
         {
-            var closing = DetachForClose();
+            var closing = DetachForClose(requiredSession);
             try
             {
                 if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
@@ -192,9 +194,11 @@ namespace OceanBaseConnector
         }
 
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
-        public override async Task CloseAsync()
+        public override Task CloseAsync() => CloseCoreAsync(null);
+        internal Task CloseSessionAsync(PhysicalSession session) => CloseCoreAsync(session);
+        private async Task CloseCoreAsync(PhysicalSession? requiredSession)
         {
-            var closing = DetachForClose();
+            var closing = DetachForClose(requiredSession);
             try
             {
                 if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
@@ -226,12 +230,12 @@ namespace OceanBaseConnector
             lock (_gate) { ThrowIfDisposed(); return new OceanBaseCommand { Connection = this, CommandTimeout = _builder.CommandTimeout }; }
         }
         protected override DbProviderFactory DbProviderFactory => OceanBaseProviderFactory.Instance;
-        internal PhysicalSession GetOpenSession()
+        internal PhysicalSession GetOpenSession(object? owner = null)
         {
             lock (_gate)
             {
                 ThrowIfDisposed();
-                if (_session == null || _session.State != SessionState.Open)
+                if (_session == null || _session.State != SessionState.Open || _session.IsReservedForOther(owner))
                     throw new InvalidOperationException("The connection must be open and have no active operation.");
                 return _session;
             }

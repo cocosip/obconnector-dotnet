@@ -22,6 +22,12 @@ namespace OceanBaseConnector
         private bool _disposed;
         private int _fetchSize;
         internal PhysicalSession? RequiredSession { get; set; }
+        internal object? SessionOwner { get; set; }
+        internal Func<CancellationToken>? CancellationOrigin { get; set; }
+#if NET8_0_OR_GREATER
+        internal DbBatchCommand? BatchCommand { get; set; }
+        internal Action? BatchFailed { get; set; }
+#endif
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get => _timeout; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _timeout = value; } }
         /// <summary>Rows requested per server cursor fetch; zero uses ordinary result streaming.</summary>
@@ -56,8 +62,10 @@ namespace OceanBaseConnector
             return value;
         }
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+            => ExecuteReaderCore(behavior, CancellationToken.None);
+        internal DbDataReader ExecuteReaderCore(CommandBehavior behavior, CancellationToken token)
         {
-            var operation = Start(behavior, CancellationToken.None, false);
+            var operation = Start(behavior, token, false);
             var execution = operation.Exchange;
             try
             {
@@ -69,13 +77,15 @@ namespace OceanBaseConnector
                 var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize);
                 result.Start();
-                return new OceanBaseDataReader(execution, result, operation.Connection, behavior);
+                return new OceanBaseDataReader(execution, result, operation.Connection, operation.Session, behavior);
             }
             catch (Exception error) { throw execution.Fail(error); }
         }
         public override void Prepare()
+            => PrepareCore(CancellationToken.None);
+        internal void PrepareCore(CancellationToken token)
         {
-            var operation = Start(CommandBehavior.Default, CancellationToken.None, true);
+            var operation = Start(CommandBehavior.Default, token, true);
             try { EnsurePrepared(operation); operation.Exchange.Complete(); }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }
@@ -110,7 +120,7 @@ namespace OceanBaseConnector
                 var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize);
                 await result.StartAsync(cancellationToken).ConfigureAwait(false);
-                return new OceanBaseDataReader(execution, result, operation.Connection, behavior);
+                return new OceanBaseDataReader(execution, result, operation.Connection, operation.Session, behavior);
             }
             catch (Exception error) { throw execution.Fail(error); }
         }
@@ -143,9 +153,9 @@ namespace OceanBaseConnector
                     throw new NotSupportedException("This CommandBehavior is not supported yet.");
                 var text = CommandText;
                 if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("CommandText is required.");
-                token.ThrowIfCancellationRequested();
+                if (token.IsCancellationRequested) { CancellationOrigin?.Invoke().ThrowIfCancellationRequested(); token.ThrowIfCancellationRequested(); }
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
-                var session = connection.GetCommandSession(_transaction);
+                var session = connection.GetCommandSession(_transaction, SessionOwner);
                 if (RequiredSession != null && !ReferenceEquals(session, RequiredSession))
                     throw new InvalidOperationException("The connection's physical session changed before the operation started.");
                 var length = ResultColumn.Utf8.GetByteCount(text);
@@ -162,7 +172,11 @@ namespace OceanBaseConnector
                 execution = connection.StartCommand(session, _transaction, _timeout, token, () =>
                 {
                     lock (_gate) { if (ReferenceEquals(_execution, execution)) _execution = null; }
-                });
+                }, SessionOwner, CancellationOrigin);
+#if NET8_0_OR_GREATER
+                execution.BatchCommand = BatchCommand;
+                execution.BatchFailed = BatchFailed;
+#endif
                 _execution = execution;
                 return (execution, session, connection, bindings, parameters, binary, fetchSize);
             }

@@ -23,6 +23,7 @@ namespace OceanBaseConnector.Internal.Session
         private TcpTransport? _transport;
         private PacketChannel? _channel;
         private CommandLease? _lease;
+        private object? _reservation;
         private ConnectResult? _info;
         private string? _sessionTimeZone;
         private readonly HashSet<uint> _statementCloses = new HashSet<uint>();
@@ -179,19 +180,31 @@ namespace OceanBaseConnector.Internal.Session
             return new OceanBaseException($"Connection to {Endpoint} failed.", innerException: exception);
         }
 
-        public CommandLease Acquire()
+        internal bool IsReservedForOther(object? owner) { lock (_gate) return _reservation != null && !ReferenceEquals(_reservation, owner); }
+        internal void Reserve(object owner)
         {
             lock (_gate)
             {
-                return TryAcquire() ?? throw new InvalidOperationException($"Session is {_state}; exclusive access requires Open.");
+                if (_state != SessionState.Open || _reservation != null) throw new InvalidOperationException("The session already has an active operation.");
+                _reservation = owner;
+            }
+        }
+        internal void ReleaseReservation(object owner)
+        { lock (_gate) { if (ReferenceEquals(_reservation, owner)) _reservation = null; } }
+
+        public CommandLease Acquire(object? owner = null)
+        {
+            lock (_gate)
+            {
+                return TryAcquire(owner) ?? throw new InvalidOperationException($"Session is {_state}; exclusive access requires Open and no other owner.");
             }
         }
 
-        internal CommandLease? TryAcquire()
+        internal CommandLease? TryAcquire(object? owner = null)
         {
             lock (_gate)
             {
-                if (_state != SessionState.Open) return null;
+                if (_state != SessionState.Open || IsReservedForOther(owner)) return null;
                 _state = SessionState.Busy;
                 _channel!.BeginCommand();
                 return _lease = new CommandLease(this, _channel);

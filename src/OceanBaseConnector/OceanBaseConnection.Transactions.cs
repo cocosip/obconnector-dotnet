@@ -13,11 +13,11 @@ namespace OceanBaseConnector
     {
         private OceanBaseTransaction? _transaction;
 
-        internal PhysicalSession GetCommandSession(OceanBaseTransaction? transaction)
+        internal PhysicalSession GetCommandSession(OceanBaseTransaction? transaction, object? owner = null)
         {
             lock (_gate)
             {
-                var session = GetOpenSession();
+                var session = GetOpenSession(owner);
                 ValidateCommandTransaction(session, transaction);
                 return session;
             }
@@ -30,13 +30,13 @@ namespace OceanBaseConnector
                 throw new InvalidOperationException("The command must reference the connection's active transaction, or null outside a transaction.");
         }
 
-        internal CommandExchange StartCommand(PhysicalSession session, OceanBaseTransaction? transaction, int timeout, CancellationToken token, Action release)
+        internal CommandExchange StartCommand(PhysicalSession session, OceanBaseTransaction? transaction, int timeout, CancellationToken token, Action release, object? owner = null, Func<CancellationToken>? cancellationOrigin = null)
         {
             lock (_gate)
             {
                 ThrowIfDisposed();
                 ValidateCommandTransaction(session, transaction);
-                return new CommandExchange(session, _log, timeout, token, release);
+                return new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin);
             }
         }
 
@@ -285,10 +285,11 @@ namespace OceanBaseConnector
             catch { DetachTransaction(transaction); transaction.Session.Break(); }
         }
 
-        private (PhysicalSession? Session, OceanBaseTransaction? Transaction, CommandExchange? Exchange, ConnectionState Previous, string? Endpoint) DetachForClose()
+        private (PhysicalSession? Session, OceanBaseTransaction? Transaction, CommandExchange? Exchange, ConnectionState Previous, string? Endpoint) DetachForClose(PhysicalSession? requiredSession = null)
         {
             lock (_gate)
             {
+                if (requiredSession != null && !ReferenceEquals(_session, requiredSession)) return (null, null, null, ConnectionState.Closed, null);
                 var previous = State;
                 var session = _session;
                 var transaction = _transaction;

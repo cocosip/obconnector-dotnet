@@ -401,9 +401,20 @@ C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/re
 
 **产物：**`net8.0+` 的 `DbBatch`、factory 和 B01 数据源的批量入口；`DbBatch` 先逐条执行，保留每条 `RecordsAffected` 和失败前缀，不自动保证原子性。基础数据源不再延后到本任务。
 
-- [ ] 实现后测试 `CanCreateBatch=true`、batch 事务绑定、逐条计数、失败位置、异步批量和结果未知；实现前不发布空壳 batch。
-- [ ] 数据源 batch 沿用其冻结配置、日志、独立可选池和事务规则，公开连接串仍脱敏；旧目标不出现现代 API。
+本地实施步骤（沿用架构批量契约，本轮自行实施、独立只读走查）：
+
+- [x] 先以公共 DbBatch 入口的失败用例固定顺序执行、空批次、逐条计数、失败命令及不执行后缀。
+- [x] 新增 OceanBaseBatch/BatchCommand/BatchCommandCollection 和内部批量 reader；复用现有 OceanBaseCommand，开始时快照所有命令和参数（byte[]复制），保留各命令准备缓存。集合/命令只归属一个 batch，活动期间禁止修改集合及配置。
+- [x] PhysicalSession 增加批量所有者预约；普通命令、目录、切库及事务操作不能插入批量语句之间，旧批次不能进入重开后的会话。失败或 reader 关闭释放预约；提前关闭不执行后缀，未读响应仍销毁原会话。
+- [x] reader 按 NextResult 逐条启动，支持现有多结果、字段类型/schema、SequentialAccess 和真正异步；ExecuteScalar 取第一个有列结果的首行首列（无行则 null）后排空全部后缀。Timeout 对每条命令（含准备和读取）生效，0 无限；Cancel 覆盖当前与未启动后缀，不自动开启事务。
+- [x] 数据源入口复用平台 DbDataSource 包装，自动打开/关闭/释放；其 Prepare、Connection/Transaction 按平台拒绝，命令通过 factory.CreateBatchCommand 创建。五资产隔离和现代三资产消费覆盖 API 边界。
+- [x] 完整编译、Windows 单元/消费/DI、格式/包矩阵和独立走查修复后，更新三份文档并在当前分支提交；实库和非 Windows 暂缓。
+
+- [x] 实现后测试 `CanCreateBatch=true`、batch 事务绑定、逐条计数、失败位置、异步批量和结果未知；实现前不发布空壳 batch。
+- [x] 数据源 batch 沿用其冻结配置、日志、独立可选池和事务规则，公开连接串仍脱敏；旧目标不出现现代 API，池化仍按 C01 拒绝。
 - [ ] 在 .NET 8/9/10 分别运行消费与集成测试。
+
+2026-10-19 本地实现、Windows 完整测试和独立走查已完成，C06 待验证。另以独立编译样例在实际 .NET 8.0.31/9.0.20/10.0.12 验证批量消费及对应 Logging 8/9/10；完整集成和非 Windows 暂缓，最后一项不据此勾选。证据及走查修复见进度台账末尾 C06 记录。
 
 ### C07 诊断与性能基线
 

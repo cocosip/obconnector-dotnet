@@ -29,7 +29,7 @@
 | --- | --- |
 | 标准入口 | `OceanBaseConnection : DbConnection`、`OceanBaseCommand : DbCommand`、`OceanBaseParameter : DbParameter`、`OceanBaseDataReader : DbDataReader`、`OceanBaseTransaction : DbTransaction`、`OceanBaseProviderFactory : DbProviderFactory` |
 | 连接配置 | `OceanBaseConnectionStringBuilder : DbConnectionStringBuilder`；在提供 `DbProviderFactories.RegisterFactory` 的运行时由应用显式注册，旧运行时按其 provider 注册机制处理，不在程序集加载时修改全局状态 |
-| 现代目标 | B01 提供 `OceanBaseDataSourceBuilder`、`OceanBaseDataSource : DbDataSource` 及 factory 的 `CreateDataSource`，先支持无池建连；C06 再提供 `DbBatch`。`netstandard2.0`/`netstandard2.1` 不暴露这些平台 API，也不补造同名平台类型。`DbConnection.CanCreateBatch` 和 `DbProviderFactory.CanCreateBatch` 在 C 阶段真正实现前为 `false`，相应创建方法不返回执行语义未定义的空壳 |
+| 现代目标 | B01 提供 `OceanBaseDataSourceBuilder`、`OceanBaseDataSource : DbDataSource` 及 factory 的 `CreateDataSource`，先支持无池建连；C06 已本地实现 `OceanBaseBatch : DbBatch`、`OceanBaseBatchCommand` 和集合，connection/factory 的 `CanCreateBatch=true`。`netstandard2.0`/`netstandard2.1` 不暴露这些平台 API，也不补造同名平台类型；其继承能力保持不支持 |
 | 宿主接入 | B01 的可选 DI 包提供普通/带 key 的统一数据源注册，容器工厂创建 Singleton 数据源并接入宿主 `ILoggerFactory`；应用按操作创建/释放连接，默认不注入连接、命令或 reader。无 DI 的 builder 和直接连接入口继续可用；生命周期和注册冲突规则见 §2.4–§2.5 |
 | 异步 | `netstandard2.0`/`netstandard2.1` 覆写带 `CancellationToken` 的 `OpenAsync`、`ExecuteNonQueryAsync`、`ExecuteScalarAsync`、受保护的 `ExecuteDbDataReaderAsync`、`ReadAsync`、`NextResultAsync`；`netstandard2.1` 与现代目标还覆盖其参考 API 已有的 `PrepareAsync`、受保护的 `BeginDbTransactionAsync`（公开的 `BeginTransactionAsync` 委托给它）、`CommitAsync`、`RollbackAsync`，以及连接、命令、reader 和事务的 `DisposeAsync`、连接及 reader 的 `CloseAsync`；`netstandard2.0` 参考 API 没有这些入口。关闭或释放需要读包、回滚或池重置时，2.1 与现代目标共用真正异步的清理实现。C 阶段的 `ChangeDatabaseAsync` 同样覆盖 2.1 与现代目标；`GetSchemaAsync` 和 `DbBatch.Execute*Async` 仅在提供对应 API 的现代目标覆盖。网络层用异步读写；同步入口使用同步 I/O，共享编码、状态机和错误映射，不以同步等待异步任务充数，也不依赖基类调用同步方法的默认异步实现 |
 | 扩展 | 仅对 ADO.NET 无法表达且已实现的 OceanBase 类型/能力增加 `OceanBaseDbType`、provider-specific 值或显式方法；扩展不替代标准 `DbType`、`ParameterDirection`、`GetSchemaTable` |
@@ -103,7 +103,7 @@ DI 只装配应用级对象。`PhysicalSession`、包流、认证处理、命令
 - 手工 `Build()` 的数据源由调用方释放；容器工厂创建的数据源由容器释放，应用服务不释放注入的数据源。外部传入的 `ILoggerFactory` 始终由原所有者管理，驱动不得释放它。数据源释放幂等，须允许 DI 别名指向同一实例后发生重复释放调用。
 - 数据源释放后拒绝新建连接及由其创建但尚未打开的连接的后续打开；已经打开的连接由调用方继续完成和关闭，不强行中断其事务。C01 清理空闲连接，已借用连接归还即销毁；释放不无限等待活动借用者。已开始的打开与释放竞争必须有明确提交点，不能让新会话进入已释放的池。
 
-`OceanBaseProviderFactory.CreateDataSource` 在现代资产上走相同 builder，默认无日志；静态 factory 不从全局容器取服务。B01 只交付其已实现的创建能力；`DbBatch` 仍在 C06，不能因已有数据源就宣称支持 batch。
+`OceanBaseProviderFactory.CreateDataSource` 在现代资产上走相同 builder，默认无日志；静态 factory 不从全局容器取服务。C06 的数据源 batch 复用平台 `DbDataSource` 包装与同一个连接 batch 实现，冻结配置、日志、来源释放检查和无池策略均沿用 B01，不另起协议路径。
 
 ### 2.5 DI 注册契约
 
@@ -227,6 +227,16 @@ B08 本地取消契约：发送前取消不写包、归还租约并保留调用�
 
 完整 OK/ERR 已读取时保留确认结果，即使取消发生在解析之前且已保守销毁传输；多结果的中间 OK 尚不能确认整个命令完成。Close 后重开仅由新物理会话处理新请求，旧命令的 Cancel/Dispose 不影响它。同步/异步故障注入覆盖部分头/负载 I/O 失败，异步写入固定前缀后使用真实预算 token 等待 Cancel/token/超时，另覆盖无终态响应、事务中断及五资产公共取消/超时消费。Windows 环回不证明真实服务端已执行；真实双模式/OBProxy 故障时序、非 Windows 与旧运行时仍待验收。
 
+C06 批量本地契约：现代三个资产公开 `OceanBaseBatch : DbBatch`、`OceanBaseBatchCommand` 和集合；connection 创建时继承 Command Timeout，factory 可创建未绑定 batch 和命令。开始执行或准备时，快照全部条目的 SQL、CommandType、参数元数据和值（复制 byte[]），复用每个条目的服务端准备缓存。条目只能属于一个集合；移除/替换/清空释放其准备资源，batch 释放同样关闭自有 ID，但不释放调用方的连接或事务。活动期间禁止改变 batch 配置、条目 SQL/CommandType 和集合；参数对象的后续变更不影响本次快照。同一 batch/reader 不支持并发执行、读取或释放。
+
+执行始终逐条发送，不合并 SQL、不自动开启事务、不发送额外的提交或回滚，服务端当前自动提交设置仍然生效。reader 初始执行第一条，`NextResult` 先消费该条剩余结果，再启动下一条；更新计数也是 FieldCount=0 的结果，空批次不发包，FieldCount=0、无行/后续结果。同步/异步共用现有命令协议，保留多结果、严格 typed/provider-specific getter、两套 schema 和 SequentialAccess 字段流；不为 batch 缓存整批结果。ExecuteNonQuery 排空所有条目，ExecuteScalar 跳过前置更新计数，取第一个有列结果的首行首列（该结果无行则 null），再排空全部后缀。每条 RecordsAffected 开始时重置为 -1，已读到的 OK 累加，只有结果集/尚未完成计数保持 -1；总计忽略 -1，全无计数为 -1，空批次为0。reader 保存该次执行的独立计数快照，不能被 batch 重用覆盖，也不能反写新执行的条目计数。
+
+批次从开始到 reader 关闭预约原物理会话，包括已读尽后的 reader 生命周期；普通命令、目录、切库、另一批次及事务控制不能在条目间插入。失败停止后缀并释放预约，字段流/物化故障同样通知批次结束；提前关闭只清理当前条，不启动后缀，当前响应未读尽仍销毁会话。关闭重开后，原批次不能进入新会话，普通/batch reader 的 CloseConnection 也只关闭仍是原物理会话的逻辑连接。显式 batch.Transaction 必须精确匹配当前事务，环境事务拒绝；已知 ERR 不表示已完成前缀回滚。
+
+Timeout 是每条命令包含准备、执行和读取的总秒数，0 表示无限，条目间重建预算；不是整批墙钟上限。Cancel 中止当前请求并阻止后缀。异步初始执行 token、NextResult/字段读取自己的 token 和内部 Cancel 分开归因，原调用方已取消时优先保留原 token；完整终态结果不被后到取消覆盖，部分发送或无可信终态的 SQL 仍报告未知结果并销毁，不重放。服务端及协议/未知结果 OceanBaseException 通过继承的 DbException.BatchCommand 指向原集合条目，保留原错误码/SQLSTATE/原因；本地参数/配置校验仍保留原异常类型。
+
+数据源 batch 使用 .NET 的 DbDataSource 包装：ExecuteNonQuery/Scalar 自动打开并在 finally 关闭，reader 注入 CloseConnection，释放 batch 同时释放其内部连接；来源的冻结配置、日志、脱敏和释放关口不变。平台包装明确拒绝 Connection/Transaction 和 Prepare，使用 factory.CreateBatchCommand 添加条目（不依赖平台包装的 CreateBatchCommand）。池化仍受 C01 阻塞，bulk/array binding、隐式原子性和额外的 JDBC 批量优化均未实现。Windows 的隔离消费和三个实际运行时样例不替代真实 MySQL/Oracle 租户、OBProxy 或跨平台验收。
+
 ## 5. 值与元数据契约
 
 公共值优先用 `bool`、有符号/无符号整数、`decimal`、`double`、`string`、`byte[]`、`DateTime`、`DateTimeOffset`、`TimeSpan`、`DBNull.Value`。参数编码依据 `DbType`/`OceanBaseDbType` 和实际值；读取依据列定义、兼容模式、字符集、精度及符号位，不仅依据协议类型码。Java 类型码 3 在 MySQL 模式是 `INTEGER`、Oracle 模式是 `NUMBER`：[ColumnType](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/ColumnType.java#L72)。所有 provider-specific 值类型定义在公共的 `netstandard2.0` API 中，五个目标框架共用同一类型身份和往返语义。
@@ -320,7 +330,8 @@ reader 在响应尚未消费完时独占物理会话，终态完整读取后释�
 | reader/元数据 | 逐行文本/二进制、多结果、两套字段 schema、固定 CLR/provider-specific 类型；typed getter 要求类型匹配，C03 的 decimal/DateTime/DateTimeOffset getter 允许精确转换 | B05/B06/B09；C04 已实现本地 SequentialAccess 字段流及服务端游标；C05首批四个目录集合及现代GetSchemaAsync本地实现；真实大值/游标/字典验收仍开放 |
 | 本地事务/取消 | 会话绑定、两模式隔离映射、结果未知不重放；环境事务始终拒绝 | B07/B08；Oracle RepeatableRead、XA/TransactionScope 不照搬 Java 支持范围 |
 | 诊断 | Connection 1000..1003、Command 1100/1101、Transaction 1200/1201 分类别；预先安全创建 logger，后端异常不改变结果 | B09 修复原命令事件误入 Connection 类别，4项类别过滤回归先失败后通过；ActivitySource/Meter 留 C07 |
-| 扩展/发布 | 不宣称 DbBatch、adapter/command builder、池化、LOB 等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
+| 现代 batch | C06 逐条执行、流式结果、各条计数/失败归属和显式事务，现代 factory/connection/source 入口共用；两个 Standard 资产不含 batch 类型 | Windows 协议/隔离消费及 .NET8/9/10 独立运行时消费；真实双模式批量互通尚未验收 |
+| 扩展/发布 | 不宣称 adapter/command builder、池化、LOB 等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
 
 Windows 实际运行时冒烟源为 `tests/OceanBaseConnector.ConsumerTests/RuntimeConsumerSample.cs`，从 xUnit 编译项排除以保持全部日常测试宿主 net10.0。用 SDK10 的 csc 对相应运行时 reference pack 和单个产品资产编译独立可执行文件，使用该资产 project.assets.json 对应包的私有 DLL，runtimeconfig 的 Microsoft.NETCore.App 主版本固定、rollForward=LatestPatch；样例断言实际 Environment.Version/日志程序集主版本，并通过公开预取消、已认证 Oracle 环回查询、NUMBER(6,2) 读取、两套 ProviderType 和 CloseConnection。
 

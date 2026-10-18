@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期及 C04 报文增量/顺序字段流及服务端游标、C05数据库切换及首批目录集合。C03/C04/C05待验证，目录元数据本地实现及走查已完成，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期、C04 报文增量/顺序字段流及服务端游标、C05数据库切换及首批目录集合、C06逐条DbBatch及数据源批量入口。C03/C04/C05/C06待验证，本地实现及走查已完成，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 中断走查问题核销（2026-10-19）
 
@@ -19,7 +19,7 @@
 
 当时此核销不改变阶段验收状态（C05后续进展见末尾目录模块记录）：A04 待验证；A05 仍缺可信公开 MySQL 模式判定；C04 待验证；C05 仅数据库切换子项落地，目录集合仍未实现；C01 完整重置白名单仍阻塞。真实数据库、非 Windows 及新的旧运行时验收未执行。
 
-2026-10-19 再次续接复核：`fa37cd5` 已实现 C05 目录集合并修复目录数值舍入问题，C05 当前为待验证。再次核对现有代码、对应回归和已有独立走查结论，未发现上述已报告问题仍待修复；本次没有新增产品代码，也没有启动 C06。
+2026-10-19 再次续接复核：`fa37cd5` 已实现 C05 目录集合并修复目录数值舍入问题，C05 当前为待验证。再次核对现有代码、对应回归和已有独立走查结论，未发现上述已报告问题仍待修复；该次复核没有新增产品代码，也没有启动 C06。后续 C06 实现和新发现问题修复见本页末记录。
 
 本次重新编译 Release slnx：核心五目标、DI 三目标，0 警告/0 错误；完整 Windows Unit1117、Consumer128、DI8 全通过且零跳过，报告为 `TestResults/review-resume-{unit,consumer,di}.trx`。解析报告确认上表对应回归均实际执行并通过，包含目录长小数字符串/浮点拒绝、游标失败日志重入/伪确认/状态报告/部分发送取消及字段缓存生命周期。实库、非 Windows 与新的旧运行时验收仍按既有约定暂不执行，阶段关口不变。
 
@@ -50,7 +50,7 @@
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04 本地实现完成、待真实/跨平台验收；A05 还缺可信 MySQL 模式判定规则及版本/插件验收；A07 缺环境与可信版本矩阵；G0 未关闭 |
 | G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09 本地实现/审核已具证据；核心五资产有 Windows8/9/10基础运行时消费，但真实双模式、完整旧运行时消费/DI及跨平台未验收 |
-| G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02/C03本地实现完成待真实环境验证；C04顺序字段流及服务端游标本地完成、真实资源/性能与版本矩阵待验证；关口未关闭 |
+| G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02-C06本地实现完成待真实环境验证，C04真实资源/性能与版本矩阵待验证；C07/C08未开始，关口未关闭 |
 | G4 发布候选 R | W35-W37 | 0/2 | 未开始 | R01-R02 + 包/许可证/兼容矩阵 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
 
@@ -89,7 +89,7 @@
 | C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 待验证 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)、TZ/LTZ及零日期本地实现齐备；Unit895/Consumer91/DI8、五/三目标编译/格式/打包及独立走查通过；真实验收/A05公开MySQL握手仍缺，详见本页末 |
 | C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 待验证 | 2026-10-19 Codex；增量报文、顺序字段流和FetchSize只读游标分页本地完成；Unit1037/Consumer111/DI8及核心五/DI三目标编译通过，独立复查缺陷均已修复；真实两模式/OBProxy大值/游标资源及性能矩阵未验收，详见本页末 |
 | C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 待验证 | 2026-10-19 Codex；切换及四个目录集合/限制/现代异步本地完成，核心五/DI三编译、Windows完整测试与五资产消费、独立走查通过；字典/权限/版本真实验收暂缓，证据见末尾目录模块记录 |
-| C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 未开始 | 待记录 |
+| C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 待验证 | 2026-10-19 Codex；现代三资产逐条执行/会话预约/快照/准备复用/计数/失败归因及数据源入口本地完成；Windows Unit1172、Consumer142、DI8和实际8/9/10样例通过，走查问题已修复；实库及非Windows暂缓，见末尾C06记录 |
 | C07 | W29-W32 | 本地 ActivitySource/Meter、脱敏和性能基线 | 未开始 | 待记录 |
 | C08 | W33-W34 | 生产版本/模式矩阵与 G3 审核 | 未开始 | 待记录 |
 
@@ -360,3 +360,16 @@ Release slnx核心五/DI三目标编译0警告0错误；完整Windows Unit978、
 五资产8项隔离消费验证公开静态集合、Oracle目录及API暴露，Standard两个资产仅同步、现代三个资产同步/异步，宿主net10；测试不改变A05公共MySQL认证。最终Release slnx核心五/DI三目标0警告0错误；完整Windows Unit1117、Consumer128、DI8通过且0跳过（TestResults/c05-schema-unit-final.trx、c05-schema-consumer-final.trx、c05-schema-di-final.trx）。完整单测沿用已授权的Windows TLS证书存储访问，未降低校验策略。双包TestResults/c05-schema-pack核对核心5/DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本[0.1.0-alpha]及Microsoft.Extensions按TFM为8/9/10；既有缺包README提示保留R01。
 
 格式检查、UTF-8无BOM/CRLF及git diff --check通过。C05由进行中改为待验证，两个本地子模块均已落地；三份现有文档合并契约、Java差距、步骤和证据，当前master提交不推送。真实字典版本、权限可见性/大小写配置、Oracle DATA_DEFAULT LONG和COLUMN_ID语义、两模式/OBProxy及非Windows/新的旧运行时验收仍未执行，不能据协议夹具关闭G3。Java完整键/索引/过程/类型/模式/同义词元数据不属于首批集合，留D阶段。A05可信公开MySQL判定、C01完整重置和G0/G1缺口不变；下一可本地推进模块C06逐条DbBatch。
+
+
+2026-10-19 C06逐条DbBatch及中断走查修复：现代三资产新增OceanBaseBatch、OceanBaseBatchCommand、命令集合和内部reader，factory/connection公开CanCreateBatch及创建入口；两个Standard资产不暴露现代类型。复用已有OceanBaseCommand逐条执行，不合并SQL、不隐式开启事务、不发送额外提交/回滚、不重放结果未知语句。开始时快照全部SQL/参数元数据和值（复制byte[]），缓存每条准备语句；集合单一归属，移除/替换/清空/释放关闭自有statement，不释放调用方连接/事务。连接创建的batch继承Command Timeout，每条包含prepare/execute/read的独立预算，0无限。
+
+批次预约原PhysicalSession直到reader关闭，普通命令、目录、切库和事务操作不能在条目间或完成日志回调中插入，关闭重开不能让后缀迁入新会话。NextResult排空当前语句全部结果后启动下一条，兼容两套schema、provider-specific值和SequentialAccess字段流；Scalar跳过更新计数，取首个有列结果的首行首列后排空后缀。每条已知更新累加、查询/未执行为-1，总计忽略-1、无计数为-1、空批次为0。显式事务精确绑定、环境事务拒绝；服务端/协议/未知结果OceanBaseException通过BatchCommand指向原条目，保留错误码、SQLSTATE和未知结果语义。数据源复用平台DbDataSource包装自动打开/关闭、reader注入CloseConnection；按平台契约拒绝Prepare和Connection/Transaction，条目通过factory.CreateBatchCommand创建。
+
+独立走查指出并修复四类问题，均补入先失败回归：旧reader通过共享条目读写新执行计数，改为每次执行独立计数；普通/batch旧CloseConnection reader可能关闭重开后的会话，在连接锁下按原PhysicalSession原子匹配后关闭；批次内部linked token泄漏到取消异常，保留初始调用方token并区分NextResult自己的token及Cancel；字段流/异步物化失败未释放预约，CommandExchange在外部日志回调前通知batch失败并释放。后续边界回归覆盖首条后取消、Prepare取消及NextResult后缀部分发送的token归因，另验证日志回调关闭重开时后缀被拒绝且新连接可用。清理移除缓存命令对旧操作的引用；reader异步CloseConnection在释放预约后等待ROLLBACK/恢复自动提交，新增延迟响应回归通过。独立只读最终复核产品代码、邻接生命周期、取消、消费样例及文档，无剩余必须修复项。
+
+新增55项Unit和14项Consumer，首批6项公共入口先失败后通过；红绿证据TestResults/c06-batch-{red,green}.trx、c06-batch-count-red.trx、c06-batch-review-{red,green}.trx、c06-batch-token-red.trx和c06-batch-token-edge-{red,green}.trx。覆盖同步/异步逐条计数、错误前缀/停止后缀、空批次、多结果/标量/顺序字段流、准备复用与释放、事务/环境事务拒绝、集合与配置冻结、byte[]快照、日志重入、旧会话隔离、字段故障、EOF/部分发送/超时/Cancel及真实环回等待响应时关闭。首轮部分发送用例中，Oracle首条OK未报告时区会触发内部探测，已补正确时区报告使故障落在业务SQL；虚拟流关闭不唤醒等待的问题改用真实环回关闭用例，不把两类夹具问题计作产品缺陷。两个模式均有明确内部认证后事实夹具，不改公共MySQL认证门槛。独立计数/原会话关闭/取消/字段故障修复已进入完整套件。
+
+最终本地验证：Release slnx核心五/DI三目标0警告0错误；Windows完整Unit1172、Consumer142、DI8全部通过且0跳过（TestResults/c06-batch-unit-final-checked.trx、c06-batch-consumer-final.trx、c06-batch-di-final.trx）。完整Unit沿用已授权的Windows TLS证书存储访问，不降低TLS策略。Consumer五资产隔离宿主仍是net10；另用BatchRuntimeConsumerSample.cs独立编译样例在实际.NET8.0.31/9.0.20/10.0.12运行，通过批次计数、已知ERR归因、数据源reader结果及关闭，实际Logging程序集主版本分别为8/9/10，输出见TestResults/c06-batch-runtime/net{8,9,10}.0/result.log；未新增日常旧目标测试宿主。
+
+格式、git diff --check及UTF-8无BOM/CRLF检查通过；TestResults/c06-batch-pack双包核对核心5/DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本[0.1.0-alpha]和Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10，既有NuGet缺README提示仍留R01。三份既有文档同步契约、步骤、进度与证据，C06从未开始改为待验证，当前master提交且不推送；下一可本地推进模块C07。G3仍0/8，A04/A05真实关口、A05可信公共MySQL模式判定和C01完整重置白名单缺口不变。未执行真实两模式/OBProxy或非Windows验收；实际旧运行时的局部环回样例不替代完整兼容/集成矩阵，逐条批次无原子性保证。
