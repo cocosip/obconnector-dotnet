@@ -4,10 +4,10 @@ using System.Text;
 
 namespace OceanBaseConnector.Internal.Protocol
 {
-    internal sealed class TextColumn
+    internal sealed class ResultColumn
     {
         internal static readonly Encoding Utf8 = new UTF8Encoding(false, true);
-        private TextColumn(string name, byte type, ushort charset, ushort flags, OceanBaseCompatibilityMode mode)
+        private ResultColumn(string name, byte type, ushort charset, ushort flags, OceanBaseCompatibilityMode mode)
         { Name = name; TypeCode = type; Charset = charset; Unsigned = (flags & 32) != 0; Mode = mode; }
         internal string Name { get; }
         internal byte TypeCode { get; }
@@ -15,7 +15,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal bool Unsigned { get; }
         internal OceanBaseCompatibilityMode Mode { get; }
 
-        internal static TextColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode)
+        internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode)
         {
             var cursor = new ByteCursor(payload);
             for (var i = 0; i < 4; i++) cursor.ReadLengthEncodedBytes();
@@ -29,7 +29,7 @@ namespace OceanBaseConnector.Internal.Protocol
             // Oracle uses the last two bytes for precision and parameter direction.
             cursor.Skip(3);
             if (cursor.HasRemaining) throw new NotSupportedException("Extended column metadata is not supported yet.");
-            return new TextColumn(name, type, charset, flags, mode);
+            return new ResultColumn(name, type, charset, flags, mode);
         }
 
         internal Type FieldType
@@ -51,6 +51,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 15:
                     case 253:
                     case 254:
+                    case 252:
                         if (Charset == 63) return typeof(byte[]);
                         // Only the negotiated UTF-8 families are decoded; never substitute another charset.
                         if (Charset == 33 || Charset == 45 || Charset == 46 || Charset == 83 || Charset == 224 || Charset == 255)
@@ -78,6 +79,43 @@ namespace OceanBaseConnector.Internal.Protocol
                 case 5: return double.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture);
                 case 6: throw new ProtocolException("A NULL column contained a non-NULL value.");
                 default: return text;
+            }
+        }
+
+        internal byte[] ReadBinaryField(ByteCursor cursor)
+        {
+            _ = FieldType;
+            switch (TypeCode)
+            {
+                case 1: return cursor.ReadBytes(1);
+                case 2: return cursor.ReadBytes(2);
+                case 3:
+                case 9:
+                case 4: return cursor.ReadBytes(4);
+                case 8:
+                case 5: return cursor.ReadBytes(8);
+                case 6: throw new ProtocolException("A NULL column contained a non-NULL value.");
+                default: return cursor.ReadLengthEncodedBytes();
+            }
+        }
+
+        internal object DecodeBinary(byte[]? value)
+        {
+            _ = FieldType;
+            if (value == null) return DBNull.Value;
+            var cursor = new ByteCursor(value);
+            switch (TypeCode)
+            {
+                case 1: return Unsigned ? (object)cursor.ReadUInt8() : unchecked((sbyte)cursor.ReadUInt8());
+                case 2: return Unsigned ? (object)cursor.ReadUInt16() : unchecked((short)cursor.ReadUInt16());
+                case 3:
+                case 9: return Unsigned ? (object)cursor.ReadUInt32() : unchecked((int)cursor.ReadUInt32());
+                case 8: return Unsigned ? (object)cursor.ReadUInt64() : unchecked((long)cursor.ReadUInt64());
+                case 4:
+                case 5:
+                    if (!BitConverter.IsLittleEndian) { value = (byte[])value.Clone(); Array.Reverse(value); }
+                    return TypeCode == 4 ? (object)BitConverter.ToSingle(value, 0) : BitConverter.ToDouble(value, 0);
+                default: return Decode(value);
             }
         }
     }

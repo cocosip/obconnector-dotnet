@@ -7,7 +7,7 @@ using OceanBaseConnector.Internal.Protocol;
 namespace OceanBaseConnector.Internal.Session
 {
     // Owns one exchange through its terminal response, including a reader's lifetime.
-    internal sealed class TextQuery : IDisposable
+    internal sealed class CommandExchange : IDisposable
     {
         private readonly PhysicalSession _session;
         private readonly PhysicalSession.CommandLease _lease;
@@ -20,12 +20,14 @@ namespace OceanBaseConnector.Internal.Session
         private readonly CancellationTokenRegistration _registration;
         private readonly Stopwatch _elapsed = Stopwatch.StartNew();
         private readonly object _gate = new object();
-        private bool _sent;
+        private bool _responsePending;
+        private bool _sqlSent;
+        private uint[] _statementCloses;
         private bool _terminal;
         private int _finished;
         private int _packets;
 
-        internal TextQuery(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release)
+        internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release)
         {
             _session = session;
             _log = log;
@@ -38,9 +40,10 @@ namespace OceanBaseConnector.Internal.Session
                 if (timeout != 0) _budget.CancelAfter(TimeSpan.FromSeconds(timeout));
                 _lease = session.Acquire();
                 _channel = _lease.Channel;
+                _statementCloses = session.TakeStatementCloses();
                 _registration = _budget.Token.Register(() =>
                 {
-                    lock (_gate) { if (_sent && !_terminal) session.Break(); }
+                    lock (_gate) { if (_responsePending && !_terminal) session.Break(); }
                 });
             }
             catch
@@ -62,22 +65,40 @@ namespace OceanBaseConnector.Internal.Session
             if (_session.State != SessionState.Busy) throw new InvalidOperationException("The command session is no longer active.");
         }
 
-        private void BeginSend()
+        private void BeginSend(bool executesSql)
         {
-            lock (_gate) { _budget.Token.ThrowIfCancellationRequested(); _sent = true; }
+            lock (_gate)
+            {
+                _budget.Token.ThrowIfCancellationRequested();
+                _channel.BeginCommand();
+                _responsePending = true;
+                _sqlSent |= executesSql;
+            }
         }
 
-        internal void Send(byte[] request)
-        {
-            try { BeginSend(); _channel.WritePacket(request); }
-            catch (Exception error) { throw Fail(error); }
-        }
+        internal void ResponseComplete() { lock (_gate) _responsePending = false; }
 
-        internal async Task SendAsync(byte[] request)
+        internal void Send(byte[] request, bool executesSql = true)
         {
             try
             {
-                BeginSend();
+                foreach (var id in _statementCloses)
+                { BeginSend(false); _channel.WritePacket(PreparedStatement.ClosePacket(id)); ResponseComplete(); }
+                _statementCloses = Array.Empty<uint>();
+                BeginSend(executesSql);
+                _channel.WritePacket(request);
+            }
+            catch (Exception error) { throw Fail(error); }
+        }
+
+        internal async Task SendAsync(byte[] request, bool executesSql = true)
+        {
+            try
+            {
+                foreach (var id in _statementCloses)
+                { BeginSend(false); await _channel.WritePacketAsync(PreparedStatement.ClosePacket(id), _budget.Token).ConfigureAwait(false); ResponseComplete(); }
+                _statementCloses = Array.Empty<uint>();
+                BeginSend(executesSql);
                 await _channel.WritePacketAsync(request, _budget.Token).ConfigureAwait(false);
             }
             catch (Exception error) { throw Fail(error); }
@@ -116,26 +137,27 @@ namespace OceanBaseConnector.Internal.Session
 
         internal void Complete(Exception? error = null)
         {
-            lock (_gate) _terminal = true;
+            lock (_gate) { _terminal = true; _responsePending = false; }
             _lease.CompleteIfActive();
             Finish(error);
         }
 
         internal Exception Fail(Exception error)
         {
-            if (_terminal) return error;
+            if (_terminal || Volatile.Read(ref _finished) != 0) return error;
             if (error is OceanBaseException databaseError && databaseError.IsExecutionOutcomeUnknown) return error;
-            if (_sent) _lease.Dispose();
+            if (_responsePending) _lease.Dispose();
             else _lease.CompleteIfActive();
             Exception cause = error;
             if (_caller.IsCancellationRequested) cause = new OperationCanceledException("Command canceled.", error, _caller);
             else if (error is OperationCanceledException canceled && canceled.CancellationToken.CanBeCanceled) cause = error;
             else if (_cancel.IsCancellationRequested) cause = new OperationCanceledException("Command canceled.", error);
             else if (_budget.IsCancellationRequested) cause = new TimeoutException("Command timed out.", error);
-            var mapped = _sent
+            var mapped = _sqlSent
                 ? new OceanBaseException("The command response was not fully consumed; execution outcome is unknown.",
                     isExecutionOutcomeUnknown: true, innerException: cause)
-                : cause;
+                : _responsePending && !(cause is OperationCanceledException) && !(cause is TimeoutException)
+                    ? new OceanBaseException("The statement preparation failed before execution.", innerException: cause) : cause;
             Finish(mapped);
             return mapped;
         }
@@ -149,6 +171,8 @@ namespace OceanBaseConnector.Internal.Session
         private void Finish(Exception? error)
         {
             if (Interlocked.Exchange(ref _finished, 1) != 0) return;
+            foreach (var id in _statementCloses) _session.QueueStatementClose(id);
+            _statementCloses = Array.Empty<uint>();
             _registration.Dispose();
             _budget.Dispose();
             _cancel.Dispose();

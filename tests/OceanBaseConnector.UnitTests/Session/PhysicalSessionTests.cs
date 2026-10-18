@@ -66,6 +66,29 @@ namespace OceanBaseConnector.UnitTests.Session
         }
 
         [Fact]
+        public async Task ExpiredLeaseCancellationCannotBreakSubsequentCommand()
+        {
+            var server = StartServer();
+            using var session = Create(server.Port);
+            try
+            {
+                await session.OpenAsync();
+                using var budget = new CancellationTokenSource();
+                using var cleanup = session.Acquire();
+                using var cancellation = budget.Token.Register(cleanup.Dispose);
+                cleanup.CompleteIfActive();
+                using var next = session.Acquire();
+                budget.Cancel();
+                Assert.Equal(SessionState.Busy, session.State);
+                Assert.NotNull(next.Channel);
+                next.Complete();
+                Assert.Equal(SessionState.Open, session.State);
+            }
+            finally { session.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
         public async Task UnconsumedLeaseBreaksSessionAndClosesSocket()
         {
             var server = StartServer();

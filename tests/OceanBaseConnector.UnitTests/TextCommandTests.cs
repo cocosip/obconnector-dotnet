@@ -11,7 +11,7 @@ using Xunit;
 
 namespace OceanBaseConnector.UnitTests
 {
-    public sealed class TextCommandTests
+    public sealed partial class TextCommandTests
     {
         private static string Configuration(int port) => $"Server=127.0.0.1;Port={port};User ID=u;Password=secret;TLS Mode=Disabled;Connection Timeout=5";
 
@@ -79,8 +79,8 @@ namespace OceanBaseConnector.UnitTests
                 command.CommandText = "select ?";
                 await Assert.ThrowsAsync<NotSupportedException>(execute);
                 command.CommandText = "select :id";
-                command.Parameters.Add(new OceanBaseParameter { ParameterName = ":ID", Value = "valuesecret" });
-                await Assert.ThrowsAsync<NotSupportedException>(execute); // B04 will execute valid bindings.
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = ":ID", DbType = DbType.Decimal, Value = 1m });
+                await Assert.ThrowsAsync<NotSupportedException>(execute); // Precise decimal binding belongs to B05.
                 command.CommandText = "select 1";
                 await Assert.ThrowsAsync<ArgumentException>(execute);
                 command.CommandText = "select :id";
@@ -674,7 +674,7 @@ namespace OceanBaseConnector.UnitTests
         {
             foreach (var mode in new[] { OceanBaseCompatibilityMode.MySql, OceanBaseCompatibilityMode.Oracle })
             {
-                var column = TextColumn.Parse(Column("value", type, flags: unsigned ? (ushort)32 : (ushort)0), mode);
+                var column = ResultColumn.Parse(Column("value", type, flags: unsigned ? (ushort)32 : (ushort)0), mode);
                 Assert.Equal(fieldType, column.FieldType);
                 Assert.Equal(expected, column.Decode(Encoding.UTF8.GetBytes(text)));
                 Assert.Same(DBNull.Value, column.Decode(null));
@@ -684,16 +684,16 @@ namespace OceanBaseConnector.UnitTests
         [Fact]
         public void MysqlIntAndBinaryColumnsRetainTheirOwnContracts()
         {
-            var integer = TextColumn.Parse(Column("value", 3, flags: 32), OceanBaseCompatibilityMode.MySql);
+            var integer = ResultColumn.Parse(Column("value", 3, flags: 32), OceanBaseCompatibilityMode.MySql);
             Assert.Equal(typeof(uint), integer.FieldType);
             Assert.Equal(uint.MaxValue, integer.Decode(Encoding.UTF8.GetBytes("4294967295")));
-            var binary = TextColumn.Parse(Column("bytes", 253, charset: 63), OceanBaseCompatibilityMode.Oracle);
+            var binary = ResultColumn.Parse(Column("bytes", 253, charset: 63), OceanBaseCompatibilityMode.Oracle);
             var bytes = new byte[] { 255, 0, 128 };
             Assert.Equal(typeof(byte[]), binary.FieldType);
             var decoded = Assert.IsType<byte[]>(binary.Decode(bytes));
             Assert.Equal(bytes, decoded);
             Assert.NotSame(bytes, decoded);
-            var text = TextColumn.Parse(Column("text", 253), OceanBaseCompatibilityMode.Oracle);
+            var text = ResultColumn.Parse(Column("text", 253), OceanBaseCompatibilityMode.Oracle);
             Assert.Equal("海洋", text.Decode(Encoding.UTF8.GetBytes("海洋")));
             Assert.Throws<DecoderFallbackException>(() => text.Decode(bytes));
             Assert.Throws<OverflowException>(() => integer.Decode(Encoding.UTF8.GetBytes("4294967296")));
@@ -708,7 +708,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(253, 8)]
         public void UnsupportedTypesOrCharsetsNeverBecomeGuessedStrings(byte type, ushort charset)
         {
-            var column = TextColumn.Parse(Column("unsupported", type, charset), OceanBaseCompatibilityMode.Oracle);
+            var column = ResultColumn.Parse(Column("unsupported", type, charset), OceanBaseCompatibilityMode.Oracle);
             Assert.Throws<NotSupportedException>(() => column.FieldType);
             Assert.Throws<NotSupportedException>(() => column.Decode(new byte[] { 49 }));
         }

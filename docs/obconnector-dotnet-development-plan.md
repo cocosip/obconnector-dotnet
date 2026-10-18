@@ -16,7 +16,7 @@
 
 - 当前排期以 A/B/C 均进入首个正式版本为基线，G0-5 决定是否调整；D 按独立能力交付。没有真实双模式测试和明确版本矩阵，不能把 A/B/C 标记为发布完成。
 - 首版默认 `TLS Mode=VerifyFull`、`Pooling=false`、`CLIENT_FOUND_ROWS`；不自动重试已发送 SQL，不隐式客户端参数插值，不加入 `TransactionScope`。变更这些公开语义须先修订架构设计。
-- `netstandard2.0` 定义公共类型身份；现代 ADO.NET API 用条件编译，仅在 `net8.0+` 暴露。每个产品目标单独编译；全部测试及消费宿主统一使用 `net10.0`，显式选择并隔离加载 `netstandard2.0`/`netstandard2.1` 资产；B09/R01 另验证旧运行时消费。
+- `netstandard2.0` 定义公共类型身份；数据源/batch 等现代 ADO.NET API 用条件编译，仅在 `net8.0+` 暴露；`netstandard2.1` 另覆写其参考 API 已有的命令 `PrepareAsync`/`DisposeAsync`。每个产品目标单独编译；全部测试及消费宿主统一使用 `net10.0`，显式选择并隔离加载 `netstandard2.0`/`netstandard2.1` 资产；B09/R01 另验证旧运行时消费。
 - 仓库统一使用中央包管理(CPM)：根目录 `Directory.Packages.props` 固定全部 NuGet 包版本并开启传递依赖钉扎；工程的 `PackageReference` 一律不带 `Version`。产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性提供,csproj 不得各自声明版本。新增依赖只改 `Directory.Packages.props`。
 - Microsoft 通用库按产品 TFM 条件集中定版：`netstandard2.0`/`netstandard2.1`/`net8.0` 使用 8.x 基线，`net9.0` 使用 9.x，`net10.0` 使用 10.x；具体补丁见架构设计 §2.3。统一发布版本不要求依赖主版本相同，.NET 10 SDK/测试宿主也不抬高旧资产依赖。验收逐目标 restore 图、程序集引用和 nuspec 依赖组，避免传递钉扎将旧目标提升到 10.x。
 - 当前依用户要求暂不执行实库及非 Windows 运行测试；缺失证据保留在台账，不阻止依赖已满足的本地模块开发、走查和提交，也不关闭真实兼容门槛。
@@ -171,15 +171,18 @@ B02 当前 reader 支持基础有/无符号整数、浮点、UTF-8 字符串、b
 - [x] 运行词法器单测及同步/异步公共命令环回测试，验证错误绑定不发包且会话仍可用。
 - [ ] Oracle/MySQL 参数化集成测试依用户要求暂缓；合法参数实际执行由 B04 接入后验收。
 
-B03 当前支持 ASCII `[A-Za-z_][A-Za-z0-9_$#]*` 名称（ParameterName 可带一个 `:`），按 OrdinalIgnoreCase 匹配；数字、带引号、Unicode 名称及 Oracle 字面量外的 `?` 显式不支持。`q`/`nq` 大小写均可，分隔符为单个非空白/非控制/非代理项 BMP 字符；单/双引号双写转义，反斜杠无转义含义。块注释不嵌套、以首个 `*/` 结束。规范化后的重复名称、缺失/多余参数和不支持的参数方向在命令租约/发包前拒绝，参数 Value 不参与 SQL 重写；集合本身的名称查找语义不变。校验依据已认证模式，关闭连接先报无可用会话。Prepare 及合法参数执行仍显式不支持，避免把 B03 映射等同于 B04 服务端执行。
+B03 当前支持 ASCII `[A-Za-z_][A-Za-z0-9_$#]*` 名称（ParameterName 可带一个 `:`），按 OrdinalIgnoreCase 匹配；数字、带引号、Unicode 名称及 Oracle 字面量外的 `?` 显式不支持。`q`/`nq` 大小写均可，分隔符为单个非空白/非控制/非代理项 BMP 字符；单/双引号双写转义，反斜杠无转义含义。块注释不嵌套、以首个 `*/` 结束。规范化后的重复名称、缺失/多余参数和不支持的参数方向在命令租约/发包前拒绝，参数 Value 不参与 SQL 重写；集合本身的名称查找语义不变。校验依据已认证模式，关闭连接先报无可用会话。B03 单独交付映射与校验，服务端 Prepare 及合法基础参数执行已由 B04 接入。
 
 ### B04 服务端预处理与语句所有权
 
-**产物：**`COM_STMT_PREPARE/EXECUTE/CLOSE`、二进制参数/结果、同一物理会话上的 statement ID；MySQL 参数数量以服务端 prepare 响应为准，Oracle 改写后数量须与响应一致。不支持 prepare 的 SQL 明确失败。`PrepareAsync` 在现代目标真实异步。
+**产物：**`COM_STMT_PREPARE/EXECUTE/CLOSE`、二进制参数/结果、同一物理会话上的 statement ID；MySQL 参数数量以服务端 prepare 响应为准，Oracle 改写后数量须与响应一致。不支持 prepare 的 SQL 明确失败。`PrepareAsync` 和命令 `DisposeAsync` 在 netstandard2.1/net8.0/net9.0/net10.0 覆写并真实异步；netstandard2.0 仅提供其参考 API 支持的入口。
 
-- [ ] 夹具覆盖参数类型、NULL、重复执行、多结果、错误关闭、断线后旧 statement ID 不复用。
-- [ ] 实现同步/异步发包与响应；保持 `Prepare()` 强制准备，失败不转成客户端插值。
-- [ ] 两模式运行预处理 CRUD 和 `PrepareAsync` 非同步退化测试。
+- [x] Windows 字节级/环回覆盖基础参数类型、有/无符号边界、跨字节 NULL 位图、类型变化、重复执行、多结果、畸形二进制行、错误关闭、断线后旧 statement ID 不复用。
+- [x] 实现同步/异步发包与响应；保持 `Prepare()` 强制准备，失败不转成客户端插值。自动准备与执行共享一个租约/超时预算；只有实际执行发送后故障才报 SQL 结果未知。
+- [x] Windows 环回确认 net10.0 和隔离加载的 netstandard2.1 资产 PrepareAsync 等待网络，不退回同步 I/O；覆盖执行、同步/异步释放和忙会话延迟关闭。
+- [ ] 两模式运行真实预处理 CRUD、目标运行时非同步退化与类型往返测试；依用户要求实库、非 Windows 和旧运行时暂缓，缺 Oracle 模式位的握手仍安全拒绝。
+
+B04 本地实现仅包含基础 bool/整数/浮点/普通 UTF-8 字符串/byte[]/NULL 编解码，执行入口在发送其准备/执行包前拒绝显式 DbType 与 CLR 值不匹配及未支持类型；显式 Prepare/PrepareAsync 不检查 Value 编码。语句 ID 仅在同一命令、相同改写 SQL 和同一物理会话复用；变更、重连和释放时失效，空闲关闭或忙时排队到下次命令前。服务端参数数不符不执行 SQL，准备元数据 ERR 关闭已知 ID，终态执行 ERR 保留可复用会话；未消费响应则销毁会话。B05 精确数值/日期、B06 完整元数据和 B08 故障矩阵仍未完成，不据此关闭 G2。
 
 ### B05 基础值、字符集与不支持类型
 

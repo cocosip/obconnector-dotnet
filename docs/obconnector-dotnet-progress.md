@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-18 已续接 A 阶段握手/物理会话、B01 宿主接入及 B02 无参文本命令/逐行 reader/多结果。参数化、完整类型/元数据及事务尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-18 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果及 B03/B04 名称绑定/服务端预处理。精确类型、完整元数据及事务尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -28,7 +28,7 @@
 | --- | --- | --- | --- | --- |
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04/A05 待真实验证，A07 缺环境与可信版本矩阵；G0 未关闭 |
-| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B03 本地实现待真实环境验证；B04-B09 及五目标旧运行时消费/双模式实测仍待完成 |
+| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B04 本地实现待真实环境验证；B05-B09 及五目标旧运行时消费/双模式实测仍待完成 |
 | G3 生产连接 C | W18-W34 | 0/8 | 未开始 | C01-C08 + 池化白名单/精确类型/MySQL `ChangeDatabase`/内存故障实测 |
 | G4 发布候选 R | W35-W37 | 0/2 | 未开始 | R01-R02 + 包/许可证/兼容矩阵 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
@@ -51,8 +51,8 @@
 | --- | --- | --- | --- | --- |
 | B01 | W6-W7（待重估） | 标准 provider/factory、现代无池数据源、可选 DI 与基础日志；`ChangeDatabase` 暂拒绝 | 待验证 | 本地实现、四/三目标编译、环回建连、DI/消费测试及双包依赖检查通过；双模式真实建连、旧运行时和非 Windows 验收待补 |
 | B02 | W7-W9 | 文本 SQL、OK/ERR、多结果和更新计数 | 待验证 | COM_QUERY 同步/异步、逐行文本 reader、OK/ERR/EOF/FE OK、多结果和更新计数已有 Windows 环回证据；两模式真实 CRUD/匹配行语义、非 Windows 和旧运行时待验证 |
-| B03 | W8-W10 | Oracle 命名占位符词法器及各类 `q` 字面量；MySQL 参数数由服务端确定 | 待验证 | 本地完成词法扫描、名称/顺序映射与发送前绑定校验；合法参数执行待 B04，真实参数化集成测试暂缓 |
-| B04 | W9-W12 | 服务端 prepare/execute、二进制结果和 statement ID | 未开始 | 待记录 |
+| B03 | W8-W10 | Oracle 命名占位符词法器及各类 `q` 字面量；MySQL 参数数由服务端确定 | 待验证 | 本地完成词法扫描、名称/顺序映射与发送前绑定校验；基础参数执行由 B04 接入，真实参数化集成测试暂缓 |
+| B04 | W9-W12 | 服务端 prepare/execute、二进制结果和 statement ID | 待验证 | 本地实现及 Windows 协议/环回、五目标编译、消费/DI 测试通过；双模式实库、旧运行时和非 Windows 待补 |
 | B05 | W10-W13 | 基础值、低精度 `OceanBaseDecimal`、Oracle DATE 与未支持类型拒绝 | 未开始 | 待记录 |
 | B06 | W11-W14 | 逐行 reader、字段元数据及低精度 provider-specific 访问 | 未开始 | 待记录 |
 | B07 | W13-W15 | 本地事务及环境事务拒绝 | 未开始 | 待记录 |
@@ -169,3 +169,13 @@ netstandard2.1 独立只读审查：核对已安装的 .NET Standard 2.1 参考 
 B03 命令入口使用已认证会话模式，在获取命令租约及发送之前校验，空参数集合也检测未绑定 :name。关闭连接不能靠 ExpectedMode 确定模式；原脚手架的关闭连接和无名称参数异常预期已改为具体校验错误。合法参数执行及 Prepare 仍由 B04 接入，本模块不宣称已有参数化执行能力。普通无参文本仍走 B02。
 
 B03 验证：词法/映射初始 52 例中 40 例红，公共同步/异步两例红确认缺失绑定 SQL 曾到达对端；实现后通过。另有注释内再次出现 /* 的红绿回归，确认按首个 */ 结束。最终 dotnet build OceanBaseConnector.slnx -c Release --no-restore 五目标核心及三目标 DI 编译 0 警告/0 错误；UnitTests 282、ConsumerTests 18、DependencyInjection.Tests 8 全通过，TRX 位于 TestResults/b03-unit.trx、b03-consumer.trx、b03-di.trx。format whitespace、git diff --check、两个产品包 pack 通过；包版本仍统一为 0.1.0-alpha，README 提示留 R01。独立只读走查未发现文档范围内需修复问题。依用户要求未执行数据库、非 Windows 或旧运行时测试；B03 保持待验证，G2 保持进行中，下一模块为 B04 服务端预处理与语句所有权。
+
+2026-10-18 B04 本地实施：实现 COM_STMT_PREPARE/EXECUTE/CLOSE、基础二进制参数/结果、多结果和命令/物理会话内的 statement ID 所有权。Oracle 使用 B03 名称映射顺序，MySQL 保留 SQL 并由服务端参数数校验。Prepare 强制准备，无客户端插值或 SQL 重放。自动准备和执行使用同一租约/超时；准备中断不报告未知 SQL 执行，实际发送执行后的不完整响应则销毁会话并报告结果未知。改变 SQL、重连、命令释放均使旧 ID 失效；其他 reader 忙时延迟关闭到下一命令前。
+
+B04 修复与验证：初始六个公开协议用例红后转绿；服务端参数数不符曾误包装为数据库异常，修复后保留 ArgumentException 并关闭 ID、复用会话。准备元数据中途 ERR 的已知 ID 泄漏由红绿回归修复。独立审查发现旧清理超时可能关闭后续命令，改为只取消所属租约并增加跨租约回归。netstandard2.1 参考 API 已包含 PrepareAsync/DisposeAsync，补齐真实异步覆写；隔离资产入口回归先红后绿，环回进一步验证该资产的准备等待、执行及异步释放。
+
+B04 最终 Windows 验证：dotnet build OceanBaseConnector.slnx -c Release --no-restore 核心五目标/DI 三目标 0 警告、0 错误；UnitTests 327、ConsumerTests 19、DependencyInjection.Tests 8 全通过，TRX 位于 TestResults/b04-unit.trx、b04-consumer.trx、b04-di.trx。覆盖有/无符号边界、IEEE 浮点、UTF-8、NULL 位图跨字节、长度编码边界、类型变化、同步/异步执行、重复绑定、多结果、准备/执行错误和取消、畸形二进制行、未读响应关闭、重连和忙会话清理。format whitespace --verify-no-changes、git diff --check 和双包 pack 通过；ZIP/XML 验证两包 5/3 个目标资产、8 个依赖组、统一 0.1.0-alpha 及集成包精确核心依赖，README 提示仍留 R01。框架/依赖策略仍为核心 netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0，DI net8.0/net9.0/net10.0；Standard 与 net8 使用 Microsoft.Extensions 8.x，net9/10 使用对应主版本，CPM 和统一根版本不变。
+
+B04 只支持基础 bool/整数/浮点/普通 UTF-8 字符串/byte[]/NULL；精确数值、日期和 Oracle NUMBER 仍属 B05，完整字段元数据属 B06，事务属 B07。没有可信 MySQL 模式版本证据时仍拒绝缺 Oracle 模式位的握手，不为环回成功绕过安全门槛。依用户要求不执行实库、非 Windows 或旧运行时验收；net10.0 宿主加载 Standard 资产不能替代旧运行时证据。B04 保持待验证、G2 保持进行中，下一模块为 B05。
+
+B04 独立复审：源码/测试未发现剩余需修复问题；文档复核后明确显式 Prepare 不校验 Value 编码、执行入口才在自身发包前校验，并补充 netstandard2.1 的命令异步入口范围。

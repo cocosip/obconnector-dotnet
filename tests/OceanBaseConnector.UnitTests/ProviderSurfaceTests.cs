@@ -45,7 +45,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Same(connection, command.Connection);
             Assert.Throws<InvalidOperationException>(() => command.ExecuteNonQuery());
             await Assert.ThrowsAsync<InvalidOperationException>(() => command.ExecuteNonQueryAsync());
-            await Assert.ThrowsAsync<NotSupportedException>(() => command.PrepareAsync());
+            await Assert.ThrowsAsync<InvalidOperationException>(() => command.PrepareAsync());
             await Assert.ThrowsAsync<NotSupportedException>(() => connection.ChangeDatabaseAsync("other"));
             using var canceled = new CancellationTokenSource();
             canceled.Cancel();

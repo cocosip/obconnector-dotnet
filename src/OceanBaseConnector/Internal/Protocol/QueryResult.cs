@@ -5,17 +5,18 @@ using OceanBaseConnector.Internal.Session;
 
 namespace OceanBaseConnector.Internal.Protocol
 {
-    internal sealed class TextResult
+    internal sealed class QueryResult
     {
-        private readonly TextQuery _query;
+        private readonly CommandExchange _query;
         private byte[]?[]? _pending;
         private bool _ended;
         private bool _more;
         private long _affected = -1;
         private bool _faulted;
         private int _metadataBytes;
-        internal TextResult(TextQuery query) => _query = query;
-        internal TextColumn[] Columns { get; private set; } = Array.Empty<TextColumn>();
+        internal QueryResult(CommandExchange query, bool binary = false) { _query = query; IsBinary = binary; }
+        internal bool IsBinary { get; }
+        internal ResultColumn[] Columns { get; private set; } = Array.Empty<ResultColumn>();
         internal byte[]?[]? Row { get; private set; }
         internal bool HasRows { get; private set; }
         internal int RecordsAffected => checked((int)_affected);
@@ -56,7 +57,7 @@ namespace OceanBaseConnector.Internal.Protocol
             _metadataBytes = 0;
             if (OkPacket.IsOk(packet))
             {
-                Columns = Array.Empty<TextColumn>();
+                Columns = Array.Empty<ResultColumn>();
                 var ok = OkPacket.Parse(packet, _query.Capabilities);
                 _affected = checked(Math.Max(0, _affected) + ok.AffectedRows);
                 End(ok.StatusFlags);
@@ -66,21 +67,21 @@ namespace OceanBaseConnector.Internal.Protocol
             var cursor = new ByteCursor(packet);
             var count = cursor.ReadLengthEncodedInteger();
             if (cursor.HasRemaining || count < 1 || count > 4096) throw new ProtocolException("Invalid or excessive result column count.");
-            Columns = new TextColumn[(int)count];
+            Columns = new ResultColumn[(int)count];
             return true;
         }
 
-        private static ServerStatusFlags Eof(byte[] packet)
+        internal static ServerStatusFlags ReadEof(byte[] packet)
         {
             if (packet.Length != 5 || packet[0] != 254) throw new ProtocolException("Expected a protocol 4.1 EOF packet.");
             return (ServerStatusFlags)(packet[3] | (packet[4] << 8));
         }
-        private static void EndColumns(byte[] packet) => Eof(packet);
-        private TextColumn ParseColumn(byte[] packet)
+        private static void EndColumns(byte[] packet) => ReadEof(packet);
+        private ResultColumn ParseColumn(byte[] packet)
         {
             if (packet.Length > 4 * 1024 * 1024 - _metadataBytes) throw new ProtocolException("Result metadata size limit exceeded.");
             _metadataBytes += packet.Length;
-            return TextColumn.Parse(packet, _query.Mode);
+            return ResultColumn.Parse(packet, _query.Mode);
         }
         private void End(ServerStatusFlags flags)
         {
@@ -100,13 +101,21 @@ namespace OceanBaseConnector.Internal.Protocol
                     if (ok.AffectedRows != 0 || ok.LastInsertId != 0) throw new ProtocolException("Invalid result terminator counters.");
                     End(ok.StatusFlags);
                 }
-                else End(Eof(packet));
+                else End(ReadEof(packet));
                 return null;
             }
             var cursor = new ByteCursor(packet);
             var row = new byte[]?[Columns.Length];
-            for (var i = 0; i < row.Length; i++) row[i] = cursor.ReadNullableLengthEncodedBytes();
-            if (cursor.HasRemaining) throw new ProtocolException("Trailing text row bytes.");
+            if (IsBinary)
+            {
+                if (cursor.ReadUInt8() != 0) throw new ProtocolException("Invalid binary row header.");
+                var nulls = cursor.ReadBytes((Columns.Length + 9) / 8);
+                if ((nulls[0] & 3) != 0) throw new ProtocolException("Invalid binary row reserved bits.");
+                for (var i = 0; i < row.Length; i++)
+                    if ((nulls[(i + 2) / 8] & (1 << ((i + 2) % 8))) == 0) row[i] = Columns[i].ReadBinaryField(cursor);
+            }
+            else for (var i = 0; i < row.Length; i++) row[i] = cursor.ReadNullableLengthEncodedBytes();
+            if (cursor.HasRemaining) throw new ProtocolException("Trailing row bytes.");
             return row;
         }
 

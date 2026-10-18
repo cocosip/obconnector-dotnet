@@ -125,6 +125,20 @@ namespace OceanBaseConnector.ConsumerTests
         }
 
         [Fact]
+        public void NetStandard21OverridesPreparedAsyncEntrypoints()
+        {
+            var context = new AssemblyLoadContext("prepared-standard21", isCollectible: true);
+            try
+            {
+                var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath("netstandard2.1"));
+                var command = assembly.GetType("OceanBaseConnector.OceanBaseCommand")!;
+                Assert.Equal(command, command.GetMethod("PrepareAsync", new[] { typeof(CancellationToken) })!.DeclaringType);
+                Assert.Equal(command, command.GetMethod("DisposeAsync")!.DeclaringType);
+            }
+            finally { context.Unload(); }
+        }
+
+        [Fact]
         public void ModernAssetsExposeModernApiTypes()
         {
             foreach (var targetFramework in new[] { "net8.0", "net9.0", "net10.0" })

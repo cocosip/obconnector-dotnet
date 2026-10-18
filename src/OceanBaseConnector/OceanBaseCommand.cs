@@ -16,7 +16,9 @@ namespace OceanBaseConnector
         private OceanBaseTransaction? _transaction;
         private int _timeout = OceanBaseConnectionStringBuilder.DefaultCommandTimeoutSeconds;
         private readonly object _gate = new object();
-        private TextQuery? _execution;
+        private CommandExchange? _execution;
+        private PreparedStatement? _prepared;
+        private bool _explicitPreparation;
         private bool _disposed;
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get => _timeout; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _timeout = value; } }
@@ -51,17 +53,24 @@ namespace OceanBaseConnector
         }
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
         {
-            var execution = Start(behavior, CancellationToken.None, out var request, out var connection);
+            var operation = Start(behavior, CancellationToken.None, false);
+            var execution = operation.Exchange;
             try
             {
-                execution.Send(request);
-                var result = new TextResult(execution);
+                var statement = operation.Binary ? EnsurePrepared(operation) : null;
+                execution.Send(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters));
+                var result = new QueryResult(execution, operation.Binary);
                 result.Start();
-                return new OceanBaseDataReader(execution, result, connection, behavior);
+                return new OceanBaseDataReader(execution, result, operation.Connection, behavior);
             }
-            catch { execution.Dispose(); throw; }
+            catch (Exception error) { throw execution.Fail(error); }
         }
-        public override void Prepare() => throw Unsupported();
+        public override void Prepare()
+        {
+            var operation = Start(CommandBehavior.Default, CancellationToken.None, true);
+            try { EnsurePrepared(operation); operation.Exchange.Complete(); }
+            catch (Exception error) { throw operation.Exchange.Fail(error); }
+        }
         public override void Cancel() { lock (_gate) _execution?.Cancel(); }
         public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
         {
@@ -81,20 +90,35 @@ namespace OceanBaseConnector
         }
         protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
         {
-            var execution = Start(behavior, cancellationToken, out var request, out var connection);
+            var operation = Start(behavior, cancellationToken, false);
+            var execution = operation.Exchange;
             try
             {
-                await execution.SendAsync(request).ConfigureAwait(false);
-                var result = new TextResult(execution);
+                var statement = operation.Binary ? await EnsurePreparedAsync(operation, cancellationToken).ConfigureAwait(false) : null;
+                await execution.SendAsync(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters)).ConfigureAwait(false);
+                var result = new QueryResult(execution, operation.Binary);
                 await result.StartAsync(cancellationToken).ConfigureAwait(false);
-                return new OceanBaseDataReader(execution, result, connection, behavior);
+                return new OceanBaseDataReader(execution, result, operation.Connection, behavior);
             }
-            catch { execution.Dispose(); throw; }
+            catch (Exception error) { throw execution.Fail(error); }
         }
-#if NET8_0_OR_GREATER
-        public override Task PrepareAsync(CancellationToken cancellationToken = default) => Task.FromException(Unsupported());
+#if NETSTANDARD2_1 || NET8_0_OR_GREATER
+        public override async Task PrepareAsync(CancellationToken cancellationToken = default)
+        {
+            var operation = Start(CommandBehavior.Default, cancellationToken, true);
+            try { await EnsurePreparedAsync(operation, cancellationToken).ConfigureAwait(false); operation.Exchange.Complete(); }
+            catch (Exception error) { throw operation.Exchange.Fail(error); }
+        }
+
+        public override async ValueTask DisposeAsync()
+        {
+            var statement = DetachStatement();
+            if (statement != null) await PreparedStatement.CloseIdleAsync(statement.Session, _timeout).ConfigureAwait(false);
+            await base.DisposeAsync().ConfigureAwait(false);
+        }
 #endif
-        private TextQuery Start(CommandBehavior behavior, CancellationToken token, out byte[] request, out OceanBaseConnection connection)
+        private (CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary)
+            Start(CommandBehavior behavior, CancellationToken token, bool prepareOnly)
         {
             lock (_gate)
             {
@@ -105,31 +129,90 @@ namespace OceanBaseConnector
                     throw new NotSupportedException("Only text commands without transactions are supported at this stage.");
                 if ((behavior & ~CommandBehavior.CloseConnection) != 0)
                     throw new NotSupportedException("This CommandBehavior is not supported yet.");
-                if (string.IsNullOrWhiteSpace(CommandText)) throw new InvalidOperationException("CommandText is required.");
+                var text = CommandText;
+                if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("CommandText is required.");
                 token.ThrowIfCancellationRequested();
-                connection = _connection ?? throw new InvalidOperationException("A connection is required.");
+                var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
                 var session = connection.GetOpenSession();
-                var length = TextColumn.Utf8.GetByteCount(CommandText);
+                var length = ResultColumn.Utf8.GetByteCount(text);
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
-                var bindings = ParameterBindingPlan.Create(CommandText, session.Info!.Mode, _parameters);
-                if (bindings.Parameters.Length != 0)
-                    throw new NotSupportedException("Parameterized execution requires server-side preparation, which is not implemented yet.");
-                request = new byte[length + 1];
-                request[0] = 3;
-                TextColumn.Utf8.GetBytes(CommandText, 0, CommandText.Length, request, 1);
-                TextQuery? execution = null;
-                execution = new TextQuery(session, connection.Log, _timeout, token, () =>
+                var bindings = ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
+                if (prepareOnly) _explicitPreparation = true;
+                var binary = _explicitPreparation || bindings.Parameters.Length != 0;
+                var parameters = binary && !prepareOnly ? PreparedParameters.Encode(bindings.Parameters) : Array.Empty<byte>();
+                if (_prepared != null && (!binary || !ReferenceEquals(_prepared.Session, session) || _prepared.CommandText != bindings.CommandText))
+                { _prepared.Release(); _prepared = null; }
+                if (_prepared != null && _prepared.ParameterCount != bindings.Parameters.Length) throw ParameterCountMismatch();
+                CommandExchange? execution = null;
+                execution = new CommandExchange(session, connection.Log, _timeout, token, () =>
                 {
                     lock (_gate) { if (ReferenceEquals(_execution, execution)) _execution = null; }
                 });
-                return _execution = execution;
+                _execution = execution;
+                return (execution, session, connection, bindings, parameters, binary);
             }
         }
+
+        private PreparedStatement EnsurePrepared((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary) operation)
+        {
+            if (_prepared != null) return _prepared;
+            operation.Exchange.Send(SqlPacket(operation.Bindings.CommandText, 22), executesSql: false);
+            return PublishPrepared(PreparedStatement.Read(operation.Exchange, operation.Session, operation.Bindings.CommandText), operation.Bindings.Parameters.Length);
+        }
+
+        private async Task<PreparedStatement> EnsurePreparedAsync((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary) operation, CancellationToken token)
+        {
+            if (_prepared != null) return _prepared;
+            await operation.Exchange.SendAsync(SqlPacket(operation.Bindings.CommandText, 22), executesSql: false).ConfigureAwait(false);
+            var statement = await PreparedStatement.ReadAsync(operation.Exchange, operation.Session, operation.Bindings.CommandText, token).ConfigureAwait(false);
+            return PublishPrepared(statement, operation.Bindings.Parameters.Length);
+        }
+
+        private PreparedStatement PublishPrepared(PreparedStatement statement, int count)
+        {
+            lock (_gate)
+            {
+                if (_disposed || statement.ParameterCount != count)
+                {
+                    statement.Release();
+                    if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseCommand));
+                    throw ParameterCountMismatch();
+                }
+                return _prepared = statement;
+            }
+        }
+
+        private static byte[] SqlPacket(string text, byte code)
+        {
+            var bytes = ResultColumn.Utf8.GetBytes(text);
+            var packet = new byte[bytes.Length + 1];
+            packet[0] = code;
+            Buffer.BlockCopy(bytes, 0, packet, 1, bytes.Length);
+            return packet;
+        }
+
+        private PreparedStatement? DetachStatement()
+        {
+            lock (_gate)
+            {
+                _disposed = true;
+                _execution?.Cancel();
+                var statement = _prepared;
+                _prepared = null;
+                statement?.Release();
+                return statement;
+            }
+        }
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { lock (_gate) { _disposed = true; _execution?.Cancel(); } }
+            if (disposing)
+            {
+                var statement = DetachStatement();
+                if (statement != null) PreparedStatement.CloseIdle(statement.Session, _timeout);
+            }
             base.Dispose(disposing);
         }
-        private static NotSupportedException Unsupported() => new NotSupportedException("Command execution is not implemented by the current provider stage.");
+        private static ArgumentException ParameterCountMismatch() => new ArgumentException("The server's prepared parameter count does not match the supplied bindings.");
     }
 }

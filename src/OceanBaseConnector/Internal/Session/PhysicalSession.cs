@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
@@ -19,6 +20,7 @@ namespace OceanBaseConnector.Internal.Session
         private PacketChannel? _channel;
         private CommandLease? _lease;
         private ConnectResult? _info;
+        private readonly HashSet<uint> _statementCloses = new HashSet<uint>();
 
         public PhysicalSession(OceanBaseConnectionOptions options) => _options = options;
 
@@ -136,10 +138,32 @@ namespace OceanBaseConnector.Internal.Session
         {
             lock (_gate)
             {
-                if (_state != SessionState.Open) throw new InvalidOperationException($"Session is {_state}; exclusive access requires Open.");
+                return TryAcquire() ?? throw new InvalidOperationException($"Session is {_state}; exclusive access requires Open.");
+            }
+        }
+
+        internal CommandLease? TryAcquire()
+        {
+            lock (_gate)
+            {
+                if (_state != SessionState.Open) return null;
                 _state = SessionState.Busy;
                 _channel!.BeginCommand();
                 return _lease = new CommandLease(this, _channel);
+            }
+        }
+
+        internal void QueueStatementClose(uint id)
+        { lock (_gate) { if (_state == SessionState.Open || _state == SessionState.Busy) _statementCloses.Add(id); } }
+
+        internal uint[] TakeStatementCloses()
+        {
+            lock (_gate)
+            {
+                var ids = new uint[_statementCloses.Count];
+                _statementCloses.CopyTo(ids);
+                _statementCloses.Clear();
+                return ids;
             }
         }
 
@@ -170,6 +194,7 @@ namespace OceanBaseConnector.Internal.Session
 
         private void ReleaseTransport()
         {
+            _statementCloses.Clear();
             _channel?.Close();
             _transport?.Dispose();
             _transport = null;

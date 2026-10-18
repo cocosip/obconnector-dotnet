@@ -11,12 +11,12 @@ namespace OceanBaseConnector
 {
     public sealed class OceanBaseDataReader : DbDataReader
     {
-        private readonly TextQuery _query;
-        private readonly TextResult _result;
+        private readonly CommandExchange _query;
+        private readonly QueryResult _result;
         private readonly OceanBaseConnection _connection;
         private readonly bool _closeConnection;
         private bool _closed;
-        internal OceanBaseDataReader(TextQuery query, TextResult result, OceanBaseConnection connection, CommandBehavior behavior)
+        internal OceanBaseDataReader(CommandExchange query, QueryResult result, OceanBaseConnection connection, CommandBehavior behavior)
         { _query = query; _result = result; _connection = connection; _closeConnection = (behavior & CommandBehavior.CloseConnection) != 0; }
         public override object this[int ordinal] => GetValue(ordinal);
         public override object this[string name] => GetValue(GetOrdinal(name));
@@ -43,6 +43,7 @@ namespace OceanBaseConnector
                 case 15: return column.Charset == 63 ? "VARBINARY" : "VARCHAR";
                 case 253: return column.Charset == 63 ? "VARBINARY" : column.Mode == OceanBaseCompatibilityMode.Oracle ? "VARCHAR2" : "VARCHAR";
                 case 254: return column.Charset == 63 ? "BINARY" : "CHAR";
+                case 252: return column.Charset == 63 ? "BLOB" : "TEXT";
                 default: throw new NotSupportedException("The column type is not supported yet.");
             }
         }
@@ -58,7 +59,7 @@ namespace OceanBaseConnector
         {
             var column = Column(ordinal);
             if (_result.Row == null) throw new InvalidOperationException("Read must position the reader on a row.");
-            return column.Decode(_result.Row[ordinal]);
+            return _result.IsBinary ? column.DecodeBinary(_result.Row[ordinal]) : column.Decode(_result.Row[ordinal]);
         }
         public override int GetValues(object[] values)
         {
@@ -117,7 +118,7 @@ namespace OceanBaseConnector
         public override Task CloseAsync() { Close(); return Task.CompletedTask; }
         public override ValueTask DisposeAsync() { Dispose(); return default; }
 #endif
-        private TextColumn Column(int ordinal)
+        private ResultColumn Column(int ordinal)
         {
             EnsureOpen();
             if ((uint)ordinal >= (uint)_result.Columns.Length) throw new IndexOutOfRangeException();
