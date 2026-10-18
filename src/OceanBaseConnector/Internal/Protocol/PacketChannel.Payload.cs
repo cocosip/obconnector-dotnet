@@ -11,7 +11,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private bool _closed;
 
         // One logical packet owns the channel until its last frame has been consumed.
-        internal Stream OpenPayload()
+        internal PacketPayload OpenPayload()
         {
             EnsureIdle();
             var payload = _activePayload = new PacketPayload(this);
@@ -19,7 +19,7 @@ namespace OceanBaseConnector.Internal.Protocol
             catch { AbortPayload(); throw; }
         }
 
-        internal async Task<Stream> OpenPayloadAsync(CancellationToken token = default)
+        internal async Task<PacketPayload> OpenPayloadAsync(CancellationToken token = default)
         {
             EnsureIdle();
             token.ThrowIfCancellationRequested();
@@ -41,7 +41,7 @@ namespace OceanBaseConnector.Internal.Protocol
             catch { }
         }
 
-        private sealed class PacketPayload : Stream
+        internal sealed class PacketPayload : Stream
         {
             private readonly PacketChannel _channel;
             private long _size;
@@ -51,6 +51,9 @@ namespace OceanBaseConnector.Internal.Protocol
             private bool _disposed;
 
             internal PacketPayload(PacketChannel channel) => _channel = channel;
+            internal int FirstFrameLength { get; private set; }
+            internal bool IsComplete => _complete;
+            internal long MaximumLength => FirstFrameLength < MaxFramePayload ? FirstFrameLength : _channel.MaxPacketSize;
 
             internal byte[] ReadBuffered()
             {
@@ -102,6 +105,7 @@ namespace OceanBaseConnector.Internal.Protocol
             private void TakeFrame()
             {
                 _channel.TakeHeader(out _remaining, out _continues);
+                if (_size == 0) FirstFrameLength = _remaining;
                 _size = checked(_size + _remaining);
                 _channel.EnforcePacketCap(_size);
                 CompleteIfConsumed();

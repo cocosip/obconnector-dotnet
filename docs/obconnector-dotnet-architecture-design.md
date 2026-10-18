@@ -197,7 +197,11 @@ flowchart TD
 5. 每次执行把调用方 `CancellationToken`、命令超时和连接关闭合并处理。请求尚未发送时取消返回 `OperationCanceledException`，可确认未执行；完整成功/错误响应已收到时遵循该响应，但服务器 ERR 不代表批量中较早的语句已回滚。发包已开始而没有可信终态响应时，包括自动提交的写入、`Commit` 和 `Rollback`，必须丢弃物理会话并抛 `OceanBaseException : DbException`，其 `IsExecutionOutcomeUnknown=true`，错误中保留取消/超时/网络中断原因；此时不能仅返回普通取消或超时，以免调用方误认为写入未发生。只有能够确认服务端取消成功且协议响应已读尽，才能保留会话。辅助连接取消只是可选优化，连接 ID 必须匹配原物理会话。对 `netstandard2.0` 无法直接取消的 socket/TLS 等待，关闭传输以中断等待。`DbCommand.Cancel()` 遵循同一状态机。
 6. 首版只支持显式本地 `DbTransaction`。`Open`/`OpenAsync` 在建连前检查 `System.Transactions.Transaction.Current`；已打开连接的所有调用方发起的协议操作，在公共发送入口再次检查，包括命令执行与预处理、`BeginTransaction`、`Commit`、`Rollback`、`ChangeDatabase`、`GetSchema` 及其异步入口。存在环境事务时，在发包前抛 `NotSupportedException`；`EnlistTransaction` 也始终显式拒绝。内部关闭、回滚清理和销毁会话不得因这个检查被阻止，清理失败则销毁物理会话。这样即使连接在进入 `TransactionScope` 前打开，也不会悄然执行自动提交或改变会话状态。未来只有完成加入、提交/回滚、跨连接升级和恢复测试后才改变此契约；显式 XA API 与 `TransactionScope` 是不同能力。
 
-C04 报文底层已提供内部 OpenPayload/OpenPayloadAsync，只读取当前逻辑包的帧头及调用方请求的正文，不缓存整包；每个续帧仍校验双向序号和累计 64 MiB 上限，恰好满帧必须读完空终结帧。完整消费前禁止其他读包/发包、BeginCommand 和 TLS 传输替换，提前释放、截断、损坏及正文读取取消关闭传输；读取开始前已取消则不消费空闲传输。整包 ReadPacket 也共用此链路，保留显式完整数组语义。该通道仍按物理会话单所有者使用，不支持并发调用。QueryResult 尚通过整包 API 缓存当前行，因此此底层交付不开放 SequentialAccess，也不代表服务端游标已实现。Java 2.4.14 的 StandardPacketInputStream.getPacketArray 同样拼接整包；其行为只作为协议参考，不作为 .NET 大值流式内存的证明。后续需将字段读取、字符解码和游标接入同一命令租约与取消预算。
+C04 报文底层已提供内部 OpenPayload/OpenPayloadAsync，只读取当前逻辑包的帧头及调用方请求的正文，不缓存整包；每个续帧仍校验双向序号和累计 64 MiB 上限，恰好满帧必须读完空终结帧。完整消费前禁止其他读包/发包、BeginCommand 和 TLS 传输替换，提前释放、截断、损坏及正文读取取消关闭传输；读取开始前已取消则不消费空闲传输。整包 ReadPacket 也共用此链路，保留显式完整数组语义。该通道仍按物理会话单所有者使用，不支持并发调用。默认 QueryResult 仍通过整包 API 缓存当前行；C04 已将 SequentialAccess 接入逐字段读取，服务端游标仍未实现。Java 2.4.14 的 StandardPacketInputStream.getPacketArray 同样拼接整包；其行为只作为协议参考，不作为 .NET 大值流式内存的证明。字段读取与字符解码已接入同一命令租约与取消预算，后续游标也必须复用此所有权。
+
+`CommandBehavior.SequentialAccess` 的文本及预处理二进制结果仅预读行前缀/NULL 位图，`HasRows` 不要求读取正文。字段 ordinal 和字段内偏移只能前进；`IsDBNull` 只消费字段头。`GetBytes`/`GetStream` 直接读原始二进制列，`GetChars`/`GetTextReader` 用严格 UTF-8 增量解码字符串列（保留 BOM 和 UTF-16 代理项边界）；NULL 流访问拒绝。跳列、`Read` 和 `NextResult` 用复用的有界缓冲区排空未读正文，不缓存整行。`GetBytes` 的空 buffer 可查询字节长度；`GetChars` 的空 buffer 在顺序模式明确拒绝，避免为统计字符数而消费或缓存整列，调用方可使用 `GetTextReader`。默认模式原有长度查询语义保留。
+
+显式 `GetValue`、typed/provider-specific getter 和 `GetFieldValueAsync<T>` 可完整物化当前字段并重复转换，保留 C03 精度/零日期契约；这是调用方主动请求整值的分配，不把它当作固定内存流接口。整值、字节流和字符流不可在同一字段混用。字段流在换列、换行、换结果或关闭 reader 后失效；提前关闭且响应未读尽时销毁会话，`CloseConnection` 同时关闭逻辑连接。缓存字符和已耗尽流也检查命令取消、超时及连接关闭；字段异步读取 token 纳入相同取消预算。已完整收到的终结 EOF/ERR 在解析前遇到取消仍保留已知服务端结果，未完成响应则标记执行结果未知并禁止重放。异步路径直接使用异步传输，禁止同一 reader/字段流并发操作。服务端游标尚无公开启用选项，不能将本地顺序读取等同于 COM_STMT_FETCH 或 locator LOB 支持。
 
 B04 本地实现：自动准备与执行共用一个物理会话租约和超时预算；只在实际发送 COM_QUERY/COM_STMT_EXECUTE 后报告 SQL 结果未知。准备响应中断销毁会话，但不声称 SQL 已执行；可信终态 ERR 不触发回退。statement ID 由命令和物理会话共同拥有，只在改写后的 SQL 与会话均不变时复用；改 SQL、重连或释放命令使旧 ID 失效。空闲时发送无响应 COM_STMT_CLOSE，其他 reader 占用时排队到下一命令前；清理取消只影响所属租约。Prepare 成功但绑定数不匹配时关闭新 ID、保留会话并报参数错误。基础输入参数支持 bool、有/无符号整数、浮点、普通 UTF-8 字符串、byte[] 和 NULL，B05 再扩展 §5 的数值与日期时间；未显式设置 DbType 时按 Value 推断，ResetDbType 恢复推断，显式类型要求 CLR 值匹配，每次执行重发类型。national charset 和 LOB 扩展仍待后续模块，执行入口在发送其准备/执行包前拒绝未支持的显式参数类型和值不匹配；显式 Prepare/PrepareAsync 只校验 SQL 与绑定结构，不检查 Value 编码。
 
@@ -284,7 +288,7 @@ reader 在响应尚未消费完时独占物理会话，终态完整读取后释�
 | --- | --- | --- |
 | 连接/factory/现代数据源/可选 DI | 五资产同一 provider；两个 Standard 资产没有现代数据源，核心不引用 DI；配置与日志按实例传递 | 五目标消费、依赖图及现代 DI 生命周期测试；旧运行时 DI 尚未执行 |
 | 命令/参数 | 文本无参和强制服务端 prepare；无客户端插值回退；只允许 Input 和 Text；Oracle 名称绑定限 B03 子集 | B02-B05/B08 公共环回；不支持 Java 客户端 prepare 默认路径、存储过程及 OUT |
-| reader/元数据 | 逐行文本/二进制、多结果、两套字段 schema、固定 CLR/provider-specific 类型；typed getter 要求类型匹配，C03 的 decimal/DateTime/DateTimeOffset getter 允许精确转换 | B05/B06/B09；目录 GetSchema、SequentialAccess、大值游标留 C04/C05，不以普通 GetBytes/GetChars 宣称流式大值 |
+| reader/元数据 | 逐行文本/二进制、多结果、两套字段 schema、固定 CLR/provider-specific 类型；typed getter 要求类型匹配，C03 的 decimal/DateTime/DateTimeOffset getter 允许精确转换 | B05/B06/B09；C04 已实现本地 SequentialAccess 字段流；目录 GetSchema、服务端游标及真实大值验收仍留 C04/C05 |
 | 本地事务/取消 | 会话绑定、两模式隔离映射、结果未知不重放；环境事务始终拒绝 | B07/B08；Oracle RepeatableRead、XA/TransactionScope 不照搬 Java 支持范围 |
 | 诊断 | Connection 1000..1003、Command 1100/1101、Transaction 1200/1201 分类别；预先安全创建 logger，后端异常不改变结果 | B09 修复原命令事件误入 Connection 类别，4项类别过滤回归先失败后通过；ActivitySource/Meter 留 C07 |
 | 扩展/发布 | 不宣称 DbBatch、adapter/command builder、池化、LOB 等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |

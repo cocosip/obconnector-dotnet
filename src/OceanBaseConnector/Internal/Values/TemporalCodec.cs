@@ -14,14 +14,19 @@ namespace OceanBaseConnector.Internal.Values
             if (type == 200)
             {
                 var lengthWithZone = cursor.ReadLengthEncodedInteger();
-                if (lengthWithZone < 14 || lengthWithZone > 530) throw new ProtocolException("Invalid Oracle TIMESTAMP WITH TIME ZONE length.");
+                ValidateFieldLength(type, lengthWithZone);
                 return cursor.ReadBytes((int)lengthWithZone);
             }
             var length = cursor.ReadUInt8();
-            var valid = type == 201 || type == 202 ? length == 12 : type == 11 ? length == 0 || length == 8 || length == 12
+            ValidateFieldLength(type, length);
+            return cursor.ReadBytes(length);
+        }
+
+        internal static void ValidateFieldLength(byte type, long length)
+        {
+            var valid = type == 200 ? length >= 14 && length <= 530 : type == 201 || type == 202 ? length == 12 : type == 11 ? length == 0 || length == 8 || length == 12
                 : type == 10 ? length == 0 || length == 4 : length == 0 || length == 4 || length == 7 || length == 11;
             if (!valid) throw new ProtocolException("Invalid binary temporal field length.");
-            return cursor.ReadBytes(length);
         }
 
         internal static object DecodeText(byte type, OceanBaseCompatibilityMode mode, string text)

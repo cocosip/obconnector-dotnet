@@ -5,7 +5,7 @@ using OceanBaseConnector.Internal.Session;
 
 namespace OceanBaseConnector.Internal.Protocol
 {
-    internal sealed class QueryResult
+    internal sealed partial class QueryResult
     {
         private readonly CommandExchange _query;
         private readonly bool _completeExchange;
@@ -15,8 +15,8 @@ namespace OceanBaseConnector.Internal.Protocol
         private long _affected = -1;
         private bool _faulted;
         private int _metadataBytes;
-        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true)
-        { _query = query; IsBinary = binary; _completeExchange = completeExchange; }
+        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true, bool sequential = false)
+        { _query = query; IsBinary = binary; _completeExchange = completeExchange; _sequential = sequential; }
         internal bool IsBinary { get; }
         internal string? SessionTimeZone { get; private set; }
         internal ResultColumn[] Columns { get; private set; } = Array.Empty<ResultColumn>();
@@ -33,8 +33,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (!Header(_query.Receive())) return;
                 for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(_query.Receive());
                 if (!DeprecatedEof) EndColumns(_query.Receive());
-                _pending = ParseRow(_query.Receive());
-                HasRows = _pending != null;
+                if (_sequential) { _pendingSequential = OpenSequential(); HasRows = _pendingSequential != null; }
+                else { _pending = ParseRow(_query.Receive()); HasRows = _pending != null; }
             }
             catch (Exception error) { throw Fault(error); }
         }
@@ -47,8 +47,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (!Header(await _query.ReceiveAsync(token).ConfigureAwait(false))) return;
                 for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(await _query.ReceiveAsync(token).ConfigureAwait(false));
                 if (!DeprecatedEof) EndColumns(await _query.ReceiveAsync(token).ConfigureAwait(false));
-                _pending = ParseRow(await _query.ReceiveAsync(token).ConfigureAwait(false));
-                HasRows = _pending != null;
+                if (_sequential) { _pendingSequential = await OpenSequentialAsync(token).ConfigureAwait(false); HasRows = _pendingSequential != null; }
+                else { _pending = ParseRow(await _query.ReceiveAsync(token).ConfigureAwait(false)); HasRows = _pending != null; }
             }
             catch (Exception error) { throw Fault(error); }
         }
@@ -132,6 +132,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
         internal bool Read()
         {
+            if (_sequential) return ReadSequential();
             EnsureValid();
             try
             {
@@ -147,6 +148,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
         internal async Task<bool> ReadAsync(CancellationToken token)
         {
+            if (_sequential) return await ReadSequentialAsync(token).ConfigureAwait(false);
             EnsureValid();
             try
             {
@@ -180,6 +182,8 @@ namespace OceanBaseConnector.Internal.Protocol
         internal void EnsureValid()
         {
             if (_faulted) throw new InvalidOperationException("The reader's command exchange has failed.");
+            try { _query.EnsureReading(); }
+            catch (Exception error) { throw Fault(error); }
         }
 
         private void ClearColumns() { Columns = Array.Empty<ResultColumn>(); HasRows = false; }
@@ -188,6 +192,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             _faulted = true;
             Row = _pending = null;
+            InvalidateRows();
             return _query.Fail(error);
         }
     }

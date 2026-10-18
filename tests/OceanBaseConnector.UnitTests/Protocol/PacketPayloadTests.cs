@@ -288,8 +288,8 @@ namespace OceanBaseConnector.UnitTests.Protocol
             if (async) Assert.Equal(0, wire.SyncReads);
         }
 
-        private static Task<Stream> Open(PacketChannel channel, bool async) => async
-            ? channel.OpenPayloadAsync() : Task.FromResult(channel.OpenPayload());
+        private static async Task<Stream> Open(PacketChannel channel, bool async) => async
+            ? await channel.OpenPayloadAsync() : channel.OpenPayload();
 
         private static Task<int> Read(Stream payload, byte[] buffer, bool async) => async
             ? payload.ReadAsync(buffer, 0, buffer.Length) : Task.FromResult(payload.Read(buffer, 0, buffer.Length));

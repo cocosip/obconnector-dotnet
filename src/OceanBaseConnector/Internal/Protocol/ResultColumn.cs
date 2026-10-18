@@ -230,17 +230,26 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             _ = FieldType;
             if (IsTemporal) return TemporalCodec.ReadField(cursor, TypeCode);
-            switch (TypeCode)
+            var length = BinaryFixedLength;
+            return length < 0 ? cursor.ReadLengthEncodedBytes() : cursor.ReadBytes(length);
+        }
+
+        internal int BinaryFixedLength
+        {
+            get
             {
-                case 1: return cursor.ReadBytes(1);
-                case 2: return cursor.ReadBytes(2);
-                case 3:
-                case 9:
-                case 4: return cursor.ReadBytes(4);
-                case 8:
-                case 5: return cursor.ReadBytes(8);
-                case 6: throw new ProtocolException("A NULL column contained a non-NULL value.");
-                default: return cursor.ReadLengthEncodedBytes();
+                switch (TypeCode)
+                {
+                    case 1: return 1;
+                    case 2: return 2;
+                    case 3:
+                    case 9:
+                    case 4: return 4;
+                    case 8:
+                    case 5: return 8;
+                    case 6: throw new ProtocolException("A NULL column contained a non-NULL value.");
+                    default: return -1;
+                }
             }
         }
 

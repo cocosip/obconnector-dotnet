@@ -139,9 +139,14 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
-        private byte[] CheckPacket(byte[] packet)
+        private void CountPacket()
         {
             if (++_packets > 1_000_000) throw new ProtocolException("Command response packet limit exceeded.");
+        }
+
+        private byte[] CheckPacket(byte[] packet, bool count = true)
+        {
+            if (count) CountPacket();
             if (packet.Length == 0) throw new ProtocolException("Empty command response packet.");
             if (ErrPacket.IsErr(packet))
             {

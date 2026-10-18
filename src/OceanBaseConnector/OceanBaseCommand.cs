@@ -61,7 +61,7 @@ namespace OceanBaseConnector
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var statement = operation.Binary ? EnsurePrepared(operation) : null;
                 execution.Send(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters));
-                var result = new QueryResult(execution, operation.Binary);
+                var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0);
                 result.Start();
                 return new OceanBaseDataReader(execution, result, operation.Connection, behavior);
             }
@@ -100,7 +100,7 @@ namespace OceanBaseConnector
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var statement = operation.Binary ? await EnsurePreparedAsync(operation, cancellationToken).ConfigureAwait(false) : null;
                 await execution.SendAsync(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters)).ConfigureAwait(false);
-                var result = new QueryResult(execution, operation.Binary);
+                var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0);
                 await result.StartAsync(cancellationToken).ConfigureAwait(false);
                 return new OceanBaseDataReader(execution, result, operation.Connection, behavior);
             }
@@ -131,7 +131,7 @@ namespace OceanBaseConnector
                 OceanBaseConnection.RejectAmbientTransaction();
                 if (CommandType != CommandType.Text)
                     throw new NotSupportedException("Only text commands are supported at this stage.");
-                if ((behavior & ~CommandBehavior.CloseConnection) != 0)
+                if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess)) != 0)
                     throw new NotSupportedException("This CommandBehavior is not supported yet.");
                 var text = CommandText;
                 if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("CommandText is required.");

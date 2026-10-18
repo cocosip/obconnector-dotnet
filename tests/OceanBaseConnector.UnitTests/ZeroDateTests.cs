@@ -171,6 +171,25 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, true, 7)]
         [InlineData(true, true, 7)]
         public async Task ZeroDateInternalMySqlReaderKeepsMixedRowsAndWriteBack(bool asynchronous, bool binary, byte code)
+            => await VerifyZeroDateReader(asynchronous, binary, code, false);
+
+        [Theory]
+        [InlineData(false, false, 10)]
+        [InlineData(true, false, 10)]
+        [InlineData(false, true, 10)]
+        [InlineData(true, true, 10)]
+        [InlineData(false, false, 12)]
+        [InlineData(true, false, 12)]
+        [InlineData(false, true, 12)]
+        [InlineData(true, true, 12)]
+        [InlineData(false, false, 7)]
+        [InlineData(true, false, 7)]
+        [InlineData(false, true, 7)]
+        [InlineData(true, true, 7)]
+        public async Task SequentialZeroDateReaderKeepsProviderValuesAndExactWriteBack(bool asynchronous, bool binary, byte code)
+            => await VerifyZeroDateReader(asynchronous, binary, code, true);
+
+        private static async Task VerifyZeroDateReader(bool asynchronous, bool binary, byte code, bool sequential)
         {
             var dateOnly = code == 10; var normal = dateOnly ? "2024-02-29" : "2024-02-29 01:02:03.123456";
             var partial = dateOnly ? "2024-00-12" : "2024-00-12 01:02:03.123456";
@@ -206,7 +225,7 @@ namespace OceanBaseConnector.UnitTests
                 {
                     command.CommandText = "mixed";
                     if (binary) { if (asynchronous) await command.PrepareAsync(); else command.Prepare(); }
-                    using var reader = asynchronous ? await command.ExecuteReaderAsync() : command.ExecuteReader();
+                    using var reader = asynchronous ? await command.ExecuteReaderAsync(sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default) : command.ExecuteReader(sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default);
                     var providerType = dateOnly ? typeof(OceanBaseDate) : typeof(OceanBaseDateTime);
                     Assert.Equal(typeof(DateTime), reader.GetFieldType(0)); Assert.Equal(providerType, reader.GetProviderSpecificFieldType(0));
                     Assert.Equal(providerType, Assert.Single(reader.GetColumnSchema())["ProviderSpecificDataType"]);

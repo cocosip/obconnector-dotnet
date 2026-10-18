@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
@@ -17,9 +18,10 @@ namespace OceanBaseConnector
         private readonly QueryResult _result;
         private readonly OceanBaseConnection _connection;
         private readonly bool _closeConnection;
+        private readonly bool _sequential;
         private bool _closed;
         internal OceanBaseDataReader(CommandExchange query, QueryResult result, OceanBaseConnection connection, CommandBehavior behavior)
-        { _query = query; _result = result; _connection = connection; _closeConnection = (behavior & CommandBehavior.CloseConnection) != 0; }
+        { _query = query; _result = result; _connection = connection; _closeConnection = (behavior & CommandBehavior.CloseConnection) != 0; _sequential = (behavior & CommandBehavior.SequentialAccess) != 0; }
         public override object this[int ordinal] => GetValue(ordinal);
         public override object this[string name] => GetValue(GetOrdinal(name));
         public override int Depth => 0;
@@ -80,8 +82,7 @@ namespace OceanBaseConnector
         public override object GetValue(int ordinal)
         {
             var column = Column(ordinal);
-            if (_result.Row == null) throw new InvalidOperationException("Read must position the reader on a row.");
-            return _result.IsBinary ? column.DecodeBinary(_result.Row[ordinal]) : column.Decode(_result.Row[ordinal]);
+            return DecodeValue(column, FieldBytes(ordinal), false);
         }
         public override int GetValues(object[] values)
         {
@@ -100,11 +101,7 @@ namespace OceanBaseConnector
         {
             var column = Column(ordinal);
             _ = column.FieldType;
-            if (_result.Row == null) throw new InvalidOperationException("Read must position the reader on a row.");
-            var value = _result.Row[ordinal];
-            if (column.IsMySqlDate && value != null) return column.DecodeProviderDate(value, _result.IsBinary);
-            if (column.TypeCode == 202 && value != null) return column.DecodeTimestamp(value);
-            return column.IsDecimal && value != null ? column.DecodeDecimal(value, _result.IsBinary) : GetValue(ordinal);
+            return DecodeValue(column, FieldBytes(ordinal), true);
         }
         public override int GetProviderSpecificValues(object[] values)
         {
@@ -113,16 +110,66 @@ namespace OceanBaseConnector
             for (var i = 0; i < count; i++) values[i] = GetProviderSpecificValue(i);
             return count;
         }
-        public override T GetFieldValue<T>(int ordinal) => typeof(T) == typeof(OceanBaseDecimal) || typeof(T) == typeof(OceanBaseTimestamp) || typeof(T) == typeof(OceanBaseDate) || typeof(T) == typeof(OceanBaseDateTime)
-            ? (T)GetProviderSpecificValue(ordinal) : typeof(T) == typeof(decimal) ? (T)(object)GetDecimal(ordinal)
-            : typeof(T) == typeof(DateTime) ? (T)(object)GetDateTime(ordinal)
-            : typeof(T) == typeof(DateTimeOffset) && GetValue(ordinal) is OceanBaseTimestampWithTimeZone zoned ? (T)(object)zoned.ToDateTimeOffset()
-            : (T)GetValue(ordinal);
+        public override T GetFieldValue<T>(int ordinal) => typeof(T) == typeof(Stream) ? (T)(object)GetStream(ordinal)
+            : typeof(T) == typeof(TextReader) ? (T)(object)GetTextReader(ordinal)
+            : ConvertValue<T>(IsProviderValue<T>() ? GetProviderSpecificValue(ordinal) : GetValue(ordinal));
+
+        private static bool IsProviderValue<T>() => typeof(T) == typeof(OceanBaseDecimal) || typeof(T) == typeof(OceanBaseTimestamp) || typeof(T) == typeof(OceanBaseDate) || typeof(T) == typeof(OceanBaseDateTime);
+        private static T ConvertValue<T>(object value)
+        {
+            if (typeof(T) == typeof(decimal) && value is OceanBaseDecimal number) return (T)(object)number.ToDecimal();
+            if (typeof(T) == typeof(DateTime))
+            {
+                if (value is OceanBaseTimestamp timestamp) return (T)(object)timestamp.ToDateTime();
+                if (value is OceanBaseTimestampLocalTimeZone local) return (T)(object)local.ToDateTime();
+            }
+            if (typeof(T) == typeof(DateTimeOffset) && value is OceanBaseTimestampWithTimeZone zoned) return (T)(object)zoned.ToDateTimeOffset();
+            return (T)value;
+        }
+
+        public override async Task<T> GetFieldValueAsync<T>(int ordinal, CancellationToken cancellationToken = default)
+        {
+            if (!_sequential) return await base.GetFieldValueAsync<T>(ordinal, cancellationToken).ConfigureAwait(false);
+            var column = Column(ordinal); cancellationToken.ThrowIfCancellationRequested(); var row = Sequential;
+            if (typeof(T) == typeof(Stream) || typeof(T) == typeof(TextReader))
+            {
+                RequireFieldType(ordinal, typeof(T) == typeof(Stream) ? typeof(byte[]) : typeof(string));
+                await row.MoveToAsync(ordinal, cancellationToken).ConfigureAwait(false);
+                return typeof(T) == typeof(Stream) ? (T)(object)row.GetStream(ordinal) : (T)(object)row.GetTextReader(ordinal);
+            }
+            var bytes = await row.MaterializeAsync(ordinal, cancellationToken).ConfigureAwait(false);
+            return ConvertValue<T>(DecodeValue(column, bytes, IsProviderValue<T>()));
+        }
+
+        private object DecodeValue(ResultColumn column, byte[]? bytes, bool provider)
+        {
+            if (provider && bytes != null)
+            {
+                if (column.IsMySqlDate) return column.DecodeProviderDate(bytes, _result.IsBinary);
+                if (column.TypeCode == 202) return column.DecodeTimestamp(bytes);
+                if (column.IsDecimal) return column.DecodeDecimal(bytes, _result.IsBinary);
+            }
+            return _result.IsBinary ? column.DecodeBinary(bytes) : column.Decode(bytes);
+        }
+
+        private SequentialRow Sequential => _result.Sequential ?? throw new InvalidOperationException("Read must position the reader on a row.");
+        private byte[]? FieldBytes(int ordinal)
+        {
+            if (_sequential) return Sequential.Materialize(ordinal);
+            if (_result.Row == null) throw new InvalidOperationException("Read must position the reader on a row.");
+            return _result.Row[ordinal];
+        }
         public override bool IsDBNull(int ordinal)
         {
             Column(ordinal);
+            if (_sequential) return Sequential.IsNull(ordinal);
             if (_result.Row == null) throw new InvalidOperationException("Read must position the reader on a row.");
             return _result.Row[ordinal] == null;
+        }
+        public override Task<bool> IsDBNullAsync(int ordinal, CancellationToken cancellationToken = default)
+        {
+            if (!_sequential) return base.IsDBNullAsync(ordinal, cancellationToken);
+            Column(ordinal); cancellationToken.ThrowIfCancellationRequested(); return Sequential.IsNullAsync(ordinal, cancellationToken);
         }
         public override bool GetBoolean(int ordinal) => (bool)GetValue(ordinal);
         public override byte GetByte(int ordinal) => (byte)GetValue(ordinal);
@@ -145,10 +192,28 @@ namespace OceanBaseConnector
         public override int GetInt32(int ordinal) => (int)GetValue(ordinal);
         public override long GetInt64(int ordinal) => (long)GetValue(ordinal);
         public override string GetString(int ordinal) => (string)GetValue(ordinal);
-        public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length) =>
-            Copy((byte[])GetValue(ordinal), dataOffset, buffer, bufferOffset, length);
-        public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length) =>
-            Copy(GetString(ordinal).ToCharArray(), dataOffset, buffer, bufferOffset, length);
+        public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length)
+        {
+            if (!_sequential) return Copy((byte[])GetValue(ordinal), dataOffset, buffer, bufferOffset, length);
+            RequireFieldType(ordinal, typeof(byte[])); return Sequential.GetBytes(ordinal, dataOffset, buffer, bufferOffset, length);
+        }
+        public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length)
+        {
+            if (!_sequential) return Copy(GetString(ordinal).ToCharArray(), dataOffset, buffer, bufferOffset, length);
+            RequireFieldType(ordinal, typeof(string)); return Sequential.GetChars(ordinal, dataOffset, buffer, bufferOffset, length);
+        }
+        public override Stream GetStream(int ordinal)
+        {
+            if (!_sequential) return base.GetStream(ordinal);
+            RequireFieldType(ordinal, typeof(byte[])); return Sequential.GetStream(ordinal);
+        }
+        public override TextReader GetTextReader(int ordinal)
+        {
+            if (!_sequential) return base.GetTextReader(ordinal);
+            RequireFieldType(ordinal, typeof(string)); return Sequential.GetTextReader(ordinal);
+        }
+        private void RequireFieldType(int ordinal, Type type)
+        { if (Column(ordinal).FieldType != type) throw new InvalidCastException("The field has a different type."); }
         private static long Copy<T>(T[] value, long offset, T[]? buffer, int bufferOffset, int length)
         {
             if (offset < 0 || offset > value.Length) throw new ArgumentOutOfRangeException(nameof(offset));
@@ -170,7 +235,7 @@ namespace OceanBaseConnector
             if (_closed) return;
             _closed = true;
             try { _query.Dispose(); }
-            finally { if (_closeConnection) _connection.Close(); }
+            finally { _result.InvalidateRows(); if (_closeConnection) _connection.Close(); }
         }
         protected override void Dispose(bool disposing) { if (disposing) Close(); base.Dispose(disposing); }
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
@@ -179,7 +244,7 @@ namespace OceanBaseConnector
             if (_closed) return;
             _closed = true;
             try { _query.Dispose(); }
-            finally { if (_closeConnection) await _connection.CloseAsync().ConfigureAwait(false); }
+            finally { _result.InvalidateRows(); if (_closeConnection) await _connection.CloseAsync().ConfigureAwait(false); }
         }
         public override async ValueTask DisposeAsync()
         {

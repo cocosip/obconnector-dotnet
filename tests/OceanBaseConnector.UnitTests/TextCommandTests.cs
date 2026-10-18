@@ -517,7 +517,7 @@ namespace OceanBaseConnector.UnitTests
                 command.CommandType = CommandType.StoredProcedure;
                 Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery());
                 command.CommandType = CommandType.Text;
-                Assert.Throws<NotSupportedException>(() => command.ExecuteReader(CommandBehavior.SequentialAccess));
+                Assert.Throws<NotSupportedException>(() => command.ExecuteReader(CommandBehavior.SchemaOnly));
                 using (var scope = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
                     await Assert.ThrowsAsync<NotSupportedException>(() => command.ExecuteNonQueryAsync());
                 Assert.Equal(1, await command.ExecuteNonQueryAsync());

@@ -34,6 +34,18 @@ namespace OceanBaseConnector.ConsumerTests
         [InlineData("net9.0", false, true)]
         [InlineData("net10.0", false, true)]
         public async Task EachAssetPreservesPreciseTimestampsAndWritesProviderValuesBack(string target, bool zoned, bool local)
+            => await VerifyTimestamps(target, zoned, local, false);
+
+        [Theory]
+        [InlineData("netstandard2.0")]
+        [InlineData("netstandard2.1")]
+        [InlineData("net8.0")]
+        [InlineData("net9.0")]
+        [InlineData("net10.0")]
+        public async Task SequentialAssetsKeepNanosecondsAndProviderWriteBack(string target)
+            => await VerifyTimestamps(target, false, false, true);
+
+        private static async Task VerifyTimestamps(string target, bool zoned, bool local, bool sequential)
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             using var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -87,7 +99,7 @@ namespace OceanBaseConnector.ConsumerTests
                 {
                     command.CommandText = "select t";
                     object provider;
-                    using (var reader = await command.ExecuteReaderAsync(budget.Token))
+                    using (var reader = await command.ExecuteReaderAsync(sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default, budget.Token))
                     {
                         var column = Assert.Single(reader.GetColumnSchema());
                         Assert.Equal(timestampType, column.DataType);

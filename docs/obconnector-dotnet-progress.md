@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期本地子项。C03待验证，目录元数据尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期及 C04 报文增量/顺序字段流本地子项。C03待验证，C04进行中，目录元数据尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -29,7 +29,7 @@
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04 本地实现完成、待真实/跨平台验收；A05 还缺可信 MySQL 模式判定规则及版本/插件验收；A07 缺环境与可信版本矩阵；G0 未关闭 |
 | G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09 本地实现/审核已具证据；核心五资产有 Windows8/9/10基础运行时消费，但真实双模式、完整旧运行时消费/DI及跨平台未验收 |
-| G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02本地实现完成待真实环境验证；关口未关闭 |
+| G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02/C03本地实现完成待真实环境验证；C04顺序字段流本地完成、游标待实现；关口未关闭 |
 | G4 发布候选 R | W35-W37 | 0/2 | 未开始 | R01-R02 + 包/许可证/兼容矩阵 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
 
@@ -66,7 +66,7 @@
 | C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 2026-10-19 Codex；无真实完整重置白名单，Java reset不能代替OceanBase实测；保持Pooling=true拒绝，先推进独立C02 |
 | C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
 | C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 待验证 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)、TZ/LTZ及零日期本地实现齐备；Unit895/Consumer91/DI8、五/三目标编译/格式/打包及独立走查通过；真实验收/A05公开MySQL握手仍缺，详见本页末 |
-| C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 进行中 | 2026-10-19 Codex；增量报文底层完成并由整包读取复用，报文54项/Unit924/Consumer91/DI8通过；reader字段流和游标未实现，未开放SequentialAccess，详见本页末 |
+| C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 进行中 | 2026-10-19 Codex；增量报文及文本/预处理顺序字段流本地完成并开放SequentialAccess；Unit978/Consumer101/DI8通过；服务端游标和真实大值验收未完成，详见本页末 |
 | C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 未开始 | 待记录 |
 | C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 未开始 | 待记录 |
 | C07 | W29-W32 | 本地 ActivitySource/Meter、脱敏和性能基线 | 未开始 | 待记录 |
@@ -307,3 +307,9 @@ C03继续进行中，剩余MySQL零日期及真实验收；G3仍0/8，A04/A05真
 初始21项增量API缺失回归失败后通过（c04-payload-red.trx、c04-payload-green.trx）；整包超限未关闭传输的2项回归先红后绿（c04-buffered-red.trx、c04-packet-green.trx）。新测试扩展至29项，含32 MiB按需生成载荷、同步循环分配小于256 KiB、正文不预读、续帧/精确满帧空终结、混合读包序号回绕、分片I/O/中途取消、累计上限提前拒绝及提前关闭；报文定向共54项通过（c04-packet-targeted.trx）。该分配断言不代表公开reader或真实服务端内存/吞吐验收。
 
 最终Release slnx核心五/DI三目标0警告0错误；Windows Unit924、Consumer91、DI8通过（TestResults/c04-payload-unit-final.trx、c04-payload-consumer-final.trx、c04-payload-di-final.trx）。格式/diff和UTF-8无BOM/CRLF检查通过；双包核心5资产、DI3资产、8依赖组及统一0.1.0-alpha/DI精确核心版本/Microsoft.Extensions 8/9/10矩阵核对通过，既有NuGet README提示保留R01。独立只读走查已检查整包/增量路径、帧状态、失败资源清理及握手/CommandExchange调用，无必须修复项。三份文档同步C04进行中；下一步QueryResult/reader有序字段流和字符解码，再按模式/版本/能力证据实现游标。Java 2.4.14标准输入流仍拼接整包，游标由不同模式/执行选项决定并有普通/Oracle扩展fetch差别，不直接照搬为已验证.NET能力。实库、非Windows和新的旧运行时测试暂未执行；A05可信MySQL判定、C01完整重置和G0/G1/G3缺口不变。
+
+2026-10-19 C04 reader 续接及中断走查修复：QueryResult/CommandExchange 接入单所有者增量 payload，SequentialAccess 同步/异步支持文本与预处理二进制、旧 EOF/弃用 EOF、逐字段流与显式整字段物化；默认 reader 保留当前行缓冲。GetBytes/GetChars/GetStream/GetTextReader、异步 Stream/TextReader/值 getter、NULL 和 provider-specific 精度遵守字段/偏移只前进约束；跳列/行/结果复用 8 KiB 缓冲区排空。GetChars 的 null buffer 字符长度探测在顺序模式拒绝，严格 UTF-8 保留 BOM 和代理项；整值/字节/字符访问不混用，前一个字段流在换列/行/结果或关闭时失效。未读完提前关闭销毁会话，CloseConnection 同时关闭逻辑连接。
+
+独立只读走查发现的缓存字符及已耗尽流绕过 Cancel/超时/连接关闭已修复；进一步回归修复完整终结 EOF/ERR 收完后、解析前取消被误报未知结果，以及字段自身 token 取消未进入命令预算。新增生命周期8项先红后绿、字段token2项先红后绿；前序非法二进制字段framing2项亦由先失败回归覆盖。未知结果销毁会话并禁止重放，已知服务端终结结果不被后到取消覆盖。42项新顺序读取用例及12项复用零日期读写回归覆盖跨帧32 MiB按需生成大值、正文未到达即可返回reader、同步drain托管分配低于1 MiB、NULL/偏移/异步传输/跳列/多结果/UTF-8/提前关闭和阻塞读取token/Cancel/超时/连接关闭；内存断言不是实库内存峰值或吞吐基线。
+
+Release slnx核心五/DI三目标编译0警告0错误；完整Windows Unit978、Consumer101、DI8通过（TestResults/c04-reader-unit-final.trx、c04-reader-consumer-final.trx、c04-reader-di-final.trx）。最初沙箱全量单测的10项TLS用例因Windows证书凭据/私钥存储访问失败，获授权的沙箱外完整重跑全部通过，未修改TLS校验策略。格式、diff、UTF-8无BOM/CRLF与双包检查通过，核心5/DI3资产、统一0.1.0-alpha、DI精确核心依赖及Microsoft.Extensions 8/9/10矩阵通过；既有NuGet README提示保留R01。新增五资产隔离顺序流消费及纳秒provider写回各5项，宿主为net10；不能代替旧运行时完整验收。三份既有文档合并契约、勾选本地完成项并明确C04仍进行中；剩余服务端游标、真实两模式/OBProxy大值内存/吞吐及资源验收。未执行实库、非Windows或新的旧运行时测试；A05可信MySQL判定、C01完整重置及G0/G1/G3缺口不变。
