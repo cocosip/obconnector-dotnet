@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-18 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理及 B05 低精度数值/provider-specific 访问/常见日期时间。完整元数据、事务和宽精度扩展尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-18 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间及 B06 reader 字段元数据。事务、目录元数据和宽精度扩展尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -28,7 +28,7 @@
 | --- | --- | --- | --- | --- |
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04/A05 待真实验证，A07 缺环境与可信版本矩阵；G0 未关闭 |
-| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B05 本地实现待真实环境验证；B06-B09 及五目标旧运行时消费/双模式实测仍待完成 |
+| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B06 本地实现待真实环境验证；B07-B09 及五目标旧运行时消费/双模式实测仍待完成 |
 | G3 生产连接 C | W18-W34 | 0/8 | 未开始 | C01-C08 + 池化白名单/精确类型/MySQL `ChangeDatabase`/内存故障实测 |
 | G4 发布候选 R | W35-W37 | 0/2 | 未开始 | R01-R02 + 包/许可证/兼容矩阵 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
@@ -54,7 +54,7 @@
 | B03 | W8-W10 | Oracle 命名占位符词法器及各类 `q` 字面量；MySQL 参数数由服务端确定 | 待验证 | 本地完成词法扫描、名称/顺序映射与发送前绑定校验；基础参数执行由 B04 接入，真实参数化集成测试暂缓 |
 | B04 | W9-W12 | 服务端 prepare/execute、二进制结果和 statement ID | 待验证 | 本地实现及 Windows 协议/环回、五目标编译、消费/DI 测试通过；双模式实库、旧运行时和非 Windows 待补 |
 | B05 | W10-W13 | 基础值、低精度 `OceanBaseDecimal`、Oracle DATE 与未支持类型拒绝 | 待验证 | Codex，2026-10-18：本地精确数值/日期编解码、公开 provider-specific 访问、五目标消费及 Windows 协议/环回通过；双模式实库、旧运行时及非 Windows 待补，完整字段元数据留 B06 |
-| B06 | W11-W14 | 逐行 reader、字段元数据及低精度 provider-specific 访问 | 未开始 | 待记录 |
+| B06 | W11-W14 | 逐行 reader、字段元数据及低精度 provider-specific 访问 | 待验证 | Codex，2026-10-18：两套字段 schema/独立快照、多结果和生命周期、本地五目标编译及 Windows 单元/消费/DI 均通过；独立走查无需修复项。双模式真实元数据、非 Windows 和旧运行时待补，ProviderType 契约留 B09 审核 |
 | B07 | W13-W15 | 本地事务及环境事务拒绝 | 未开始 | 待记录 |
 | B08 | W14-W16 | 取消、超时、结果未知和故障注入 | 未开始 | 待记录 |
 | B09 | W17（待重估） | 五目标消费、数据源/DI/日志生命周期、低精度 provider-specific 数值和双模式 G2 验收 | 未开始 | 待记录 |
@@ -189,3 +189,11 @@ B05 回归与审查：初始缺失精确数值/时间用例及公共同步/异�
 B05 最终 Windows 验证：dotnet build OceanBaseConnector.slnx -c Release --no-restore 核心五目标/DI 三目标编译 0 警告、0 错误；UnitTests 369、ConsumerTests 24、DependencyInjection.Tests 8 全通过，TRX 位于 TestResults/b05-unit.trx、b05-consumer.trx、b05-di.trx。消费测试逐个隔离加载五目标资产，校验 OceanBaseDecimal 构造/转换/类型身份、参数推断和覆盖重置；宿主统一 net10.0。format whitespace --verify-no-changes、git diff --check 和双包 pack 通过；ZIP/XML 校验 5/3 个资产、8 个依赖组、统一 0.1.0-alpha、集成包精确核心依赖及 Microsoft.Extensions 按 Standard/net8→8.x、net9→9.x、net10→10.x 分组。包 README 提示仍留 R01。
 
 B05 保持待验证、G2 保持进行中，下一模块为 B06。依用户要求未执行实库、非 Windows 或旧运行时验收；真实 Oracle 空字符串/NULL 语义、TIMESTAMP scale 变体和两模式往返仍无证据。可信 MySQL 模式版本矩阵仍未建立，缺 Oracle 模式位时继续安全拒绝，不为合成测试放行。宽精度/负 scale、纳秒/时区、零日期留 C03，完整字段元数据留 B06，不以本地测试关闭 G1/G2。
+
+2026-10-18 B06 本地实施：保留列定义的数据库名、别名/原始表列名、长度和 flags；新增内部 DbColumn 映射，统一提供 GetSchemaTable 与 IDbColumnSchemaGenerator.GetColumnSchema。五目标接口均已核对可用的 .NET Standard 2.0 参考 API，无新依赖。两套 schema 返回独立快照，标准/provider-specific 类型沿用 B05；MySQL 字符长度按已支持字符集换算、Oracle 普通字符长度保留服务器单位、大长度先换算再饱和。零行 SELECT 保留 schema，最终 NextResult(false) 清空旧列。未提供的 key/unique/updateability/表达式等不猜测；ProviderType 暂未知，B09 需补齐枚举覆盖契约，见架构 §5。
+
+B06 测试与走查：公开文本/二进制、同步/异步四例先因 schema 缺失失败后通过；字符长度/uint 上限 19 例中 7 例先红，换算实现后全部通过。另覆盖整数精度/符号、中文来源名称、无效 UTF-8、NULL/空串、多结果/更新计数、快照不可变、零行 SELECT、提前关闭/读尽的 CloseConnection、未读响应独占及 scalar 转换失败销毁。关闭未读 TCP 可能产生 FIN 或 RST，环回断言限定为 ProtocolException/IOException 两类关闭结果。五目标隔离消费经标准 ADO.NET 接口读取实际 schema/值及 provider 类型。独立源码、关联生命周期和最终文档走查无需修复项，已补走查建议的零行 schema 回归。
+
+B06 最终 Windows 验证：dotnet build OceanBaseConnector.slnx -c Release --no-restore 核心五目标/DI 三目标 0 警告、0 错误；UnitTests 410、ConsumerTests 29、DependencyInjection.Tests 8 全通过，报告 TestResults/b06-unit.trx、b06-consumer.trx、b06-di.trx。format whitespace --verify-no-changes、git diff --check、两包 pack 通过；ZIP/XML 校验 5/3 目标资产、8 个依赖组、统一 0.1.0-alpha、精确核心依赖及 Standard/net8→8.x、net9→9.x、net10→10.x 依赖分组通过。包 README 提示仍归 R01。全部测试宿主仍 net10.0，隔离加载资产不等于旧运行时通过。
+
+B06 保持待验证、G2 保持进行中，下一模块为 B07 本地事务。依用户要求继续暂缓实库及非 Windows，旧运行时亦无验收证据；MySQL 可信模式版本矩阵及 Oracle 字符长度/真实空字符串语义仍待环境。不改变 A04/A05、G0/G1 的缺口，不因字段 schema 已实现声称数据库目录 GetSchema 或两模式实库兼容已完成。

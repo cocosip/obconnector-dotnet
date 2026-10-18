@@ -153,7 +153,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal bool NextResult()
         {
             while (Read()) { }
-            if (!_more) return false;
+            if (!_more) { ClearColumns(); return false; }
             Start();
             return true;
         }
@@ -161,7 +161,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal async Task<bool> NextResultAsync(CancellationToken token)
         {
             while (await ReadAsync(token).ConfigureAwait(false)) { }
-            if (!_more) return false;
+            if (!_more) { ClearColumns(); return false; }
             await StartAsync(token).ConfigureAwait(false);
             return true;
         }
@@ -170,6 +170,8 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             if (_faulted) throw new InvalidOperationException("The reader's command exchange has failed.");
         }
+
+        private void ClearColumns() { Columns = Array.Empty<ResultColumn>(); HasRows = false; }
 
         private Exception Fault(Exception error)
         {

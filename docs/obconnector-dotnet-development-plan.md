@@ -186,7 +186,7 @@ B03 当前支持 ASCII `[A-Za-z_][A-Za-z0-9_$#]*` 名称（ParameterName 可带�
 - [x] Windows 环回确认 net10.0 和隔离加载的 netstandard2.1 资产 PrepareAsync 等待网络，不退回同步 I/O；覆盖执行、同步/异步释放和忙会话延迟关闭。
 - [ ] 两模式运行真实预处理 CRUD、目标运行时非同步退化与类型往返测试；依用户要求实库、非 Windows 和旧运行时暂缓，缺 Oracle 模式位的握手仍安全拒绝。
 
-B04 交付基础 bool/整数/浮点/普通 UTF-8 字符串/byte[]/NULL 编解码，B05 已扩展精确数值/日期；执行入口在发送其准备/执行包前拒绝显式 DbType 与 CLR 值不匹配及未支持类型，显式 Prepare/PrepareAsync 不检查 Value 编码。语句 ID 仅在同一命令、相同改写 SQL 和同一物理会话复用；变更、重连和释放时失效，空闲关闭或忙时排队到下次命令前。服务端参数数不符不执行 SQL，准备元数据 ERR 关闭已知 ID，终态执行 ERR 保留可复用会话；未消费响应则销毁会话。B06 完整元数据和 B08 故障矩阵仍未完成，不据此关闭 G2。
+B04 交付基础 bool/整数/浮点/普通 UTF-8 字符串/byte[]/NULL 编解码，B05 已扩展精确数值/日期；执行入口在发送其准备/执行包前拒绝显式 DbType 与 CLR 值不匹配及未支持类型，显式 Prepare/PrepareAsync 不检查 Value 编码。语句 ID 仅在同一命令、相同改写 SQL 和同一物理会话复用；变更、重连和释放时失效，空闲关闭或忙时排队到下次命令前。服务端参数数不符不执行 SQL，准备元数据 ERR 关闭已知 ID，终态执行 ERR 保留可复用会话；未消费响应则销毁会话。B06 已补 reader 字段元数据，B07 事务及 B08 故障矩阵仍未完成，不据此关闭 G2。
 
 ### B05 基础值、字符集与不支持类型
 
@@ -202,9 +202,17 @@ B05 本地实现及 Windows 验证已完成，整体待验证。低精度读列�
 
 **产物：**逐行 `Read`/`ReadAsync`、`NextResult`/`NextResultAsync`、`GetSchemaTable`、`IDbColumnSchemaGenerator.GetColumnSchema`、固定的 `GetFieldType`/provider-specific 字段类型；低精度 NUMBER/DECIMAL 列的 `GetProviderSpecificFieldType` 与 `GetProviderSpecificValue` 使用 `OceanBaseDecimal`。B 阶段允许有上限的当前行缓冲，不缓存整个结果集。
 
-- [ ] 测试跨多结果读取、早关、`CommandBehavior.CloseConnection`、零/空值、低精度列的标准/provider-specific 类型随行稳定、未消费响应的会话处理。
-- [ ] 实现 reader 独占物理会话；`ExecuteScalar`/`ExecuteNonQuery` 安全消费或使会话失效。
-- [ ] 两模式对照服务端列定义验证名称、精度、长度、可空性和异步读取。
+- [x] 测试跨多结果读取、早关、`CommandBehavior.CloseConnection`、零/空值、低精度列的标准/provider-specific 类型随行稳定、未消费响应的会话处理；零日期继续按 C03 边界拒绝。
+- [x] 实现 reader 在响应未消费完时独占物理会话；`ExecuteScalar`/`ExecuteNonQuery` 安全消费或使会话失效。
+- [ ] 两模式对照真实服务端列定义验证名称、精度、长度、可空性和异步读取；合成列定义/Windows 环回已通过，实库暂缓。
+
+B06 本地实施步骤（现有 master，基线 b772c0f）：
+
+- [x] `ResultColumn` 保留数据库/表/原始表列名、原始长度与 flags；新增内部 `ResultDbColumn`，把它们映射到跨五目标的 `DbColumn`，不增加依赖。名称、类型名及解码共用同一列定义，MySQL 字符长度按已支持字符集宽度换算，Oracle 普通字符长度按其元数据单位保留；超出 int 的长度饱和为 int.MaxValue。MySQL 数据库名映射 BaseCatalogName，Oracle 映射 BaseSchemaName。
+- [x] `OceanBaseDataReader` 实现 `IDbColumnSchemaGenerator` 及 schema table；返回独立快照，未提供的唯一性/表达式/可更新性/ProviderType 保持未知，ProviderSpecificDataType 与实际 provider-specific 读取一致。无列结果的 schema table 为 null、column schema 为空；推进结果时不复用旧元数据。
+- [x] 先以公开文本/二进制、同步/异步环回及内部 MySQL/Oracle 列定义测试证明缺口，再验证大小/精度/NULL/别名/多结果/提前关闭/独占/安全消费和五目标消费；编译、完整 Windows 单元/消费/DI、format、包矩阵、独立走查通过后提交。实库及非 Windows/旧运行时验收继续留空。
+
+B06 本地实现边界见架构 §5：GetColumnSchema/GetSchemaTable 已有跨五目标消费证据；独立源码走查未发现需修复问题，另补零行 SELECT 保留 schema 的回归。真实字符长度/Oracle 空值语义、真实服务端元数据及旧运行时/非 Windows 仍未验证。ProviderType 枚举覆盖需在 B09 公开 API 审核时补齐，当前以未知返回而不伪装协议码。
 
 ### B07 本地事务与环境事务拒绝
 

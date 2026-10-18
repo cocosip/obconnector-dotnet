@@ -8,14 +8,22 @@ namespace OceanBaseConnector.Internal.Protocol
     internal sealed class ResultColumn
     {
         internal static readonly Encoding Utf8 = new UTF8Encoding(false, true);
-        private ResultColumn(string name, byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode)
+        private ResultColumn(string database, string table, string originalTable, string name, string originalName,
+            byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode)
         {
+            Database = database; Table = table; OriginalTable = originalTable; OriginalName = originalName; Length = length; Flags = flags;
             Name = name; TypeCode = type; Charset = charset; Unsigned = (flags & 32) != 0; Mode = mode;
             Scale = mode == OceanBaseCompatibilityMode.Oracle ? unchecked((sbyte)scale) : scale;
             Precision = mode == OceanBaseCompatibilityMode.Oracle ? precision : (long)length - (Unsigned ? 0 : 1) - (scale > 0 ? 1 : 0);
             if (mode == OceanBaseCompatibilityMode.Oracle && type == 3 && precision == 0 && scale == 0) Precision = 10;
         }
         internal string Name { get; }
+        internal string Database { get; }
+        internal string Table { get; }
+        internal string OriginalTable { get; }
+        internal string OriginalName { get; }
+        internal uint Length { get; }
+        internal ushort Flags { get; }
         internal byte TypeCode { get; }
         internal ushort Charset { get; }
         internal bool Unsigned { get; }
@@ -28,9 +36,12 @@ namespace OceanBaseConnector.Internal.Protocol
         internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode)
         {
             var cursor = new ByteCursor(payload);
-            for (var i = 0; i < 4; i++) cursor.ReadLengthEncodedBytes();
+            cursor.ReadLengthEncodedBytes(); // Protocol catalog marker, not the database catalog name.
+            var database = Utf8.GetString(cursor.ReadLengthEncodedBytes());
+            var table = Utf8.GetString(cursor.ReadLengthEncodedBytes());
+            var originalTable = Utf8.GetString(cursor.ReadLengthEncodedBytes());
             var name = Utf8.GetString(cursor.ReadLengthEncodedBytes());
-            cursor.ReadLengthEncodedBytes();
+            var originalName = Utf8.GetString(cursor.ReadLengthEncodedBytes());
             if (cursor.ReadLengthEncodedInteger() != 12) throw new ProtocolException("Unsupported column metadata layout.");
             var charset = cursor.ReadUInt16();
             var length = cursor.ReadUInt32();
@@ -41,7 +52,38 @@ namespace OceanBaseConnector.Internal.Protocol
             var precision = cursor.ReadUInt8();
             cursor.ReadUInt8();
             if (cursor.HasRemaining) throw new NotSupportedException("Extended column metadata is not supported yet.");
-            return new ResultColumn(name, type, charset, flags, length, scale, precision, mode);
+            return new ResultColumn(database, table, originalTable, name, originalName, type, charset, flags, length, scale, precision, mode);
+        }
+
+        internal string DataTypeName
+        {
+            get
+            {
+                switch (TypeCode)
+                {
+                    case 0:
+                    case 246: return Mode == OceanBaseCompatibilityMode.Oracle ? "NUMBER" : "DECIMAL";
+                    case 1: return "TINYINT";
+                    case 2: return "SMALLINT";
+                    case 3: return Mode == OceanBaseCompatibilityMode.Oracle ? "NUMBER" : "INT";
+                    case 9: return "MEDIUMINT";
+                    case 8: return "BIGINT";
+                    case 4: return Mode == OceanBaseCompatibilityMode.Oracle ? "BINARY_FLOAT" : "FLOAT";
+                    case 5: return Mode == OceanBaseCompatibilityMode.Oracle ? "BINARY_DOUBLE" : "DOUBLE";
+                    case 6: return "NULL";
+                    case 7:
+                    case 202: return "TIMESTAMP";
+                    case 10: return "DATE";
+                    case 11: return "TIME";
+                    case 12: return Mode == OceanBaseCompatibilityMode.Oracle ? "DATE" : "DATETIME";
+                    case 203: return "RAW";
+                    case 15: return Charset == 63 ? "VARBINARY" : "VARCHAR";
+                    case 253: return Charset == 63 ? "VARBINARY" : Mode == OceanBaseCompatibilityMode.Oracle ? "VARCHAR2" : "VARCHAR";
+                    case 254: return Charset == 63 ? "BINARY" : "CHAR";
+                    case 252: return Charset == 63 ? "BLOB" : "TEXT";
+                    default: throw new NotSupportedException("The column type is not supported yet.");
+                }
+            }
         }
 
         internal Type FieldType

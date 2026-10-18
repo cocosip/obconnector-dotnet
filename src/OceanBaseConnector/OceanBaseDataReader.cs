@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
+using System.Collections.ObjectModel;
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
@@ -9,7 +11,7 @@ using OceanBaseConnector.Internal.Session;
 
 namespace OceanBaseConnector
 {
-    public sealed class OceanBaseDataReader : DbDataReader
+    public sealed class OceanBaseDataReader : DbDataReader, IDbColumnSchemaGenerator
     {
         private readonly CommandExchange _query;
         private readonly QueryResult _result;
@@ -27,34 +29,47 @@ namespace OceanBaseConnector
         public override int RecordsAffected => _result.RecordsAffected;
         public override string GetName(int ordinal) => Column(ordinal).Name;
         public override Type GetFieldType(int ordinal) => Column(ordinal).FieldType;
-        public override string GetDataTypeName(int ordinal)
+        public override string GetDataTypeName(int ordinal) => Column(ordinal).DataTypeName;
+
+        public ReadOnlyCollection<DbColumn> GetColumnSchema()
         {
-            var column = Column(ordinal);
-            switch (column.TypeCode)
-            {
-                case 0:
-                case 246: return column.Mode == OceanBaseCompatibilityMode.Oracle ? "NUMBER" : "DECIMAL";
-                case 1: return "TINYINT";
-                case 2: return "SMALLINT";
-                case 3: return column.Mode == OceanBaseCompatibilityMode.Oracle ? "NUMBER" : "INT";
-                case 9: return "MEDIUMINT";
-                case 8: return "BIGINT";
-                case 4: return column.Mode == OceanBaseCompatibilityMode.Oracle ? "BINARY_FLOAT" : "FLOAT";
-                case 5: return column.Mode == OceanBaseCompatibilityMode.Oracle ? "BINARY_DOUBLE" : "DOUBLE";
-                case 6: return "NULL";
-                case 7:
-                case 202: return "TIMESTAMP";
-                case 10: return "DATE";
-                case 11: return "TIME";
-                case 12: return column.Mode == OceanBaseCompatibilityMode.Oracle ? "DATE" : "DATETIME";
-                case 203: return "RAW";
-                case 15: return column.Charset == 63 ? "VARBINARY" : "VARCHAR";
-                case 253: return column.Charset == 63 ? "VARBINARY" : column.Mode == OceanBaseCompatibilityMode.Oracle ? "VARCHAR2" : "VARCHAR";
-                case 254: return column.Charset == 63 ? "BINARY" : "CHAR";
-                case 252: return column.Charset == 63 ? "BLOB" : "TEXT";
-                default: throw new NotSupportedException("The column type is not supported yet.");
-            }
+            EnsureOpen();
+            var columns = new DbColumn[_result.Columns.Length];
+            for (var i = 0; i < columns.Length; i++) columns[i] = new ResultDbColumn(_result.Columns[i], i);
+            return Array.AsReadOnly(columns);
         }
+
+        public override DataTable? GetSchemaTable()
+        {
+            var columns = GetColumnSchema();
+            if (columns.Count == 0) return null;
+            var table = new DataTable("SchemaTable") { Locale = CultureInfo.InvariantCulture };
+            foreach (var entry in SchemaColumns) table.Columns.Add(entry.Name, entry.Type);
+            foreach (var column in columns)
+            {
+                var row = table.NewRow();
+                foreach (var entry in SchemaColumns) row[entry.Name] = column[entry.Name] ?? DBNull.Value;
+                table.Rows.Add(row);
+            }
+            return table;
+        }
+
+        private static readonly (string Name, Type Type)[] SchemaColumns =
+        {
+            (SchemaTableColumn.ColumnName, typeof(string)), (SchemaTableColumn.ColumnOrdinal, typeof(int)),
+            (SchemaTableColumn.ColumnSize, typeof(int)), (SchemaTableColumn.NumericPrecision, typeof(short)),
+            (SchemaTableColumn.NumericScale, typeof(short)), (SchemaTableColumn.DataType, typeof(Type)),
+            ("DataTypeName", typeof(string)), (SchemaTableOptionalColumn.ProviderSpecificDataType, typeof(Type)),
+            // shortcut: ProviderType is unknown until the provider enum covers all scalar types, reviewed at B09.
+            (SchemaTableColumn.ProviderType, typeof(int)), (SchemaTableColumn.AllowDBNull, typeof(bool)),
+            (SchemaTableColumn.IsAliased, typeof(bool)), (SchemaTableColumn.IsExpression, typeof(bool)),
+            (SchemaTableColumn.IsKey, typeof(bool)), (SchemaTableColumn.IsUnique, typeof(bool)),
+            (SchemaTableColumn.IsLong, typeof(bool)), (SchemaTableOptionalColumn.IsAutoIncrement, typeof(bool)),
+            (SchemaTableOptionalColumn.IsReadOnly, typeof(bool)), (SchemaTableOptionalColumn.IsHidden, typeof(bool)),
+            (SchemaTableOptionalColumn.BaseCatalogName, typeof(string)), (SchemaTableColumn.BaseSchemaName, typeof(string)),
+            (SchemaTableColumn.BaseTableName, typeof(string)), (SchemaTableColumn.BaseColumnName, typeof(string)),
+            (SchemaTableOptionalColumn.BaseServerName, typeof(string))
+        };
         public override int GetOrdinal(string name)
         {
             EnsureOpen();

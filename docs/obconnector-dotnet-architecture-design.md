@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 架构设计
 
-状态：设计基线，A 阶段及 B01–B05 已有本地实现；§9 的产品决定和真实服务端兼容性仍待确认。日期：2026-10-18。实施任务见 [开发方案](obconnector-dotnet-development-plan.md)，实际完成证据见 [进度台账](obconnector-dotnet-progress.md)。.NET 接入设计已合并到 §2.1–§2.7；基础参数化、低精度数值/provider-specific 访问及常见日期时间已有本地实现；宽精度扩展、完整元数据及事务能力仍待实现。
+状态：设计基线，A 阶段及 B01–B06 已有本地实现；§9 的产品决定和真实服务端兼容性仍待确认。日期：2026-10-18。实施任务见 [开发方案](obconnector-dotnet-development-plan.md)，实际完成证据见 [进度台账](obconnector-dotnet-progress.md)。.NET 接入设计已合并到 §2.1–§2.7；基础参数化、低精度数值/provider-specific 访问、常见日期时间及 reader 字段元数据已有本地实现；宽精度扩展、目录元数据及事务能力仍待实现。
 
 ## 1. 目标与依据
 
@@ -160,7 +160,7 @@ C07 使用 `System.Diagnostics.DiagnosticSource` 支持旧资产的 Activity API
 | C01 | 数据源拥有池；重置、租户/模式/TLS/凭据隔离；数据源关闭后归还即销毁；禁止跨数据源共享物理会话 |
 | C06/C07 | C06 只补 batch 和数据源 batch 入口；C07 追踪、指标、禁用开销和性能验收，不重新实现数据源/基础日志 |
 
-B01 已实现统一公开连接/工厂、现代无池数据源、可选 DI 和基础连接日志；B02 已增加无参文本命令、逐行 reader、多结果、更新计数与命令日志；B03/B04 已增加 Oracle 名称绑定和服务端预处理、基础二进制参数/结果；B05 已增加低精度精确数值、provider-specific 访问及模式感知日期时间。完整字段元数据、事务和故障矩阵仍按 B06–B08 交付。A 阶段的 G0/G1、MySQL 模式可信版本矩阵与真实租户测试仍是阻塞项。DI 注册成功不能作为双模式连接或 SQL 兼容的证据。依用户要求，暂不执行实库及非 Windows 运行测试，保留验收项。
+B01 已实现统一公开连接/工厂、现代无池数据源、可选 DI 和基础连接日志；B02 已增加无参文本命令、逐行 reader、多结果、更新计数与命令日志；B03/B04 已增加 Oracle 名称绑定和服务端预处理、基础二进制参数/结果；B05 已增加低精度精确数值、provider-specific 访问及模式感知日期时间；B06 已增加 reader 的两套字段 schema 和结果切换快照。事务和故障矩阵仍按 B07/B08 交付。A 阶段的 G0/G1、MySQL 模式可信版本矩阵与真实租户测试仍是阻塞项。DI 注册成功不能作为双模式连接或 SQL 兼容的证据。依用户要求，暂不执行实库及非 Windows 运行测试，保留验收项。
 
 ## 3. 分层与状态所有权
 
@@ -221,9 +221,15 @@ B05 本地实现边界：低精度列必须有 `1<=p<=28`、`0<=s<=p` 的可靠�
 
 参数的 `OceanBaseDbType` 是可选显式覆盖；设置 `DbType` 或调用 `ResetDbType` 清除覆盖。B05 支持 Decimal、OracleDate、Timestamp；已命名但延期的类型即使绑定 NULL 也拒绝。decimal/OceanBaseDecimal 参数要求 scale 0–28 且值可被 CLR decimal 精确表示，显式 Precision 不得超过 28；只设置 Precision 时推断值的 scale，显式 Scale=0 则要求精确整数，任何重标度都不得舍入。OceanBaseDecimal 的公共表示允许任意 BigInteger 系数和 int scale，但不表示 B 阶段支持宽精度协议读写；ToDecimal 仅作精确转换，溢出或需舍入时失败。
 
-日期时间参数要求 `DateTimeKind.Unspecified`，MySQL DATE 不允许非零时间、DATETIME/TIMESTAMP 和 TIME 保留最多六位小数秒；TIME 是范围 ±838:59:59.999999 的 TimeSpan，二进制天数先验证范围再计算 ticks。Oracle DATE 用类型码 12 保留时分秒、不接受小数秒，TIMESTAMP 用 202；两种结果协议的 202 字段都是长度编码的 12 字节内容（世纪、世纪内年份、月日时分秒、LE32 纳秒、scale），B05 仅接受声明和载荷 scale 一致且不超过 7、可精确表示为 100ns 的值，其他变体留待实库确认/C03。Oracle RAW 203 读取为 byte[]，二进制参数按 Java Oracle 路径绑定 VARSTRING 253。以上布局核对 Java 基线的 ColumnDefinition、BinaryRowProtocol、RowProtocol、DataTypeUtilities 和 OBTIMESTAMPParameter；本地合成报文及 Windows 环回通过不能代替两模式真实互通，GetSchemaTable/GetColumnSchema 仍待 B06。
+日期时间参数要求 `DateTimeKind.Unspecified`，MySQL DATE 不允许非零时间、DATETIME/TIMESTAMP 和 TIME 保留最多六位小数秒；TIME 是范围 ±838:59:59.999999 的 TimeSpan，二进制天数先验证范围再计算 ticks。Oracle DATE 用类型码 12 保留时分秒、不接受小数秒，TIMESTAMP 用 202；两种结果协议的 202 字段都是长度编码的 12 字节内容（世纪、世纪内年份、月日时分秒、LE32 纳秒、scale），B05 仅接受声明和载荷 scale 一致且不超过 7、可精确表示为 100ns 的值，其他变体留待实库确认/C03。Oracle RAW 203 读取为 byte[]，二进制参数按 Java Oracle 路径绑定 VARSTRING 253。以上布局核对 Java 基线的 ColumnDefinition、BinaryRowProtocol、RowProtocol、DataTypeUtilities 和 OBTIMESTAMPParameter；本地合成报文及 Windows 环回通过不能代替两模式真实互通。B06 已补 GetSchemaTable/GetColumnSchema。
 
 `DbDataReader` 通过 `IDbColumnSchemaGenerator` 支持 `GetColumnSchema()`，并提供 `GetSchemaTable()`；字段类型、列名、长度、精度和可空性基于实际列定义。数据库对象元数据通过 `DbConnection.GetSchema()` 实现，MySQL 模式使用相应 `SHOW`/`INFORMATION_SCHEMA`，Oracle 模式使用其兼容数据字典。字段元数据和数据库目录元数据分别验证，不用一套 SQL 混用。LOB locator、REF CURSOR 和复杂类型值若依赖连接/事务，公开对象必须说明失效点和 `Dispose` 义务；首个里程碑可先支持安全的内联字节/文本值，不能把 locator 当普通 `byte[]` 误解码。
+
+B06 本地契约：五目标 reader 的两套 schema 共用 ResultColumn/内部 DbColumn 映射，仅反映当前结果；不额外发 SQL、不缓存整个结果集。返回独立快照，GetColumnSchema 集合只读，调用方修改 schema table 不影响 reader。零行 SELECT 仍保留声明列，直到 NextResult 返回 false 才清空；无列的 OK 结果返回 null schema table/空 column schema。表别名与原始表列名分别保留，GetName 返回标签；原始名称缺失时不猜测来源。MySQL 数据库名映射 BaseCatalogName，Oracle 映射 BaseSchemaName；协议 catalog 标记 def 不是库名。
+
+ColumnSize 对 MySQL 文本列按支持的 utf8/utf8mb4 最大字符宽度换算字符数，binary 按字节；Oracle 普通字符长度沿用 Java 基线的服务端单位，真实字符/字节语义仍待矩阵验证。非字符列保留线格式长度，超过 int 的长度先换算再饱和为 int.MaxValue；decimal 精度/scale 遵守 B05，整数精度按固定宽度及符号位确定，不使用显示宽度冒充数值精度。浮点列未提供可靠十进制 precision/scale 时保持未知。NOT_NULL 与 AUTO_INCREMENT 标志分别给出 AllowDBNull/IsAutoIncrement；IsKey/IsUnique/IsExpression/IsReadOnly/IsIdentity 及服务端名称等未可靠提供的字段为 null（schema table 为 DBNull），不凭单列标志宣称复合索引唯一性或可更新性。ProviderSpecificDataType 与实际读取类型一致；当前 OceanBaseDbType 尚未覆盖所有标量，ProviderType 暂为未知，需在 B09 公开 API 审核时补齐契约，不把原始协议码伪装成该枚举。
+
+reader 在响应尚未消费完时独占物理会话，终态完整读取后释放租约；提前关闭未读响应则销毁会话。CloseConnection 在读尽和提前关闭两条路径都关闭逻辑连接。ExecuteScalar/ExecuteNonQuery 沿用安全消费路径；scalar 值转换失败时 Dispose 销毁未读会话。零日期仍按 C03 边界拒绝，不因 schema 或 reader 支持而转换为 DateTime.MinValue。以上有 Windows 合成协议/环回及五目标隔离消费证据，实库、非 Windows 和旧运行时验收仍未取得。
 
 ## 6. 池、HA、诊断和扩展范围
 
@@ -278,4 +284,4 @@ ADO.NET 不替 provider 自动管理物理连接。`Pooling=false` 是默认值�
 3. 首发最低 OceanBase/OBProxy 版本与两种兼容模式的实际测试环境；它们决定可对外承诺的功能矩阵。
 4. 首个正式版本是否必须包含经验证的池化与 Oracle 高精度/纳秒 provider-specific 值；本设计将它们列为 C 阶段交付门槛，而不是协议原型门槛。无法完整重置的服务端组合只承诺直连。
 
-本文定义目标架构。2026-10-18 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果，以及 B05 低精度数值/provider-specific 访问和常见日期时间；宽精度扩展、完整元数据和事务仍未实现，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。
+本文定义目标架构。2026-10-18 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果、B05 低精度数值/provider-specific 访问和常见日期时间，以及 B06 reader 字段元数据；宽精度扩展、目录元数据和事务仍未实现，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。
