@@ -17,7 +17,7 @@ namespace OceanBaseConnector.Internal.Protocol
     /// The channel is single-owner by design: one physical session, one
     /// exclusive command at a time (see the development plan, A06).
     /// </summary>
-    internal sealed class PacketChannel
+    internal sealed partial class PacketChannel
     {
         public const int MaxFramePayload = 0xFFFFFF;
         public const long DefaultMaxPacketSize = 64 * 1024 * 1024;
@@ -46,7 +46,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
         public long MaxPacketSize => _maxPacketSize;
 
-        public void Close() => _stream.Dispose();
+        public void Close() { _closed = true; _stream.Dispose(); }
 
         /// <summary>
         /// Swaps the underlying stream after a TLS upgrade. Sequence counters
@@ -55,6 +55,7 @@ namespace OceanBaseConnector.Internal.Protocol
         /// </summary>
         public void ReplaceUnderlyingStream(Stream stream)
         {
+            EnsureIdle();
             if (stream is null)
             {
                 throw new ArgumentNullException(nameof(stream));
@@ -69,82 +70,20 @@ namespace OceanBaseConnector.Internal.Protocol
         /// </summary>
         public void BeginCommand()
         {
+            EnsureIdle();
             _sequence = 0;
         }
 
         public byte[] ReadPacket()
         {
-            byte[]? accumulated = null;
-            var accumulatedLength = 0L;
-
-            while (true)
-            {
-                ReadExactly(_headerBuffer, 0, 4, "packet header");
-                TakeHeader(out var frameLength, out var isContinuation);
-
-                if (accumulated is null && !isContinuation)
-                {
-                    // Fast path: single-frame packet.
-                    EnforcePacketCap(frameLength);
-                    var payload = new byte[frameLength];
-                    if (frameLength > 0)
-                    {
-                        ReadExactly(payload, 0, frameLength, "packet payload");
-                    }
-
-                    return payload;
-                }
-
-                EnforcePacketCap(accumulatedLength + frameLength);
-                var chunk = new byte[frameLength];
-                if (frameLength > 0)
-                {
-                    ReadExactly(chunk, 0, frameLength, "packet payload");
-                }
-
-                accumulated = AppendChunk(accumulated, chunk, ref accumulatedLength);
-                if (!isContinuation)
-                {
-                    return accumulated;
-                }
-            }
+            using var payload = (PacketPayload)OpenPayload();
+            return payload.ReadBuffered();
         }
 
         public async Task<byte[]> ReadPacketAsync(CancellationToken cancellationToken = default)
         {
-            byte[]? accumulated = null;
-            var accumulatedLength = 0L;
-
-            while (true)
-            {
-                await ReadExactlyAsync(_headerBuffer, 0, 4, cancellationToken).ConfigureAwait(false);
-                TakeHeader(out var frameLength, out var isContinuation);
-
-                if (accumulated is null && !isContinuation)
-                {
-                    EnforcePacketCap(frameLength);
-                    var payload = new byte[frameLength];
-                    if (frameLength > 0)
-                    {
-                        await ReadExactlyAsync(payload, 0, frameLength, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    return payload;
-                }
-
-                EnforcePacketCap(accumulatedLength + frameLength);
-                var chunk = new byte[frameLength];
-                if (frameLength > 0)
-                {
-                    await ReadExactlyAsync(chunk, 0, frameLength, cancellationToken).ConfigureAwait(false);
-                }
-
-                accumulated = AppendChunk(accumulated, chunk, ref accumulatedLength);
-                if (!isContinuation)
-                {
-                    return accumulated;
-                }
-            }
+            using var payload = (PacketPayload)await OpenPayloadAsync(cancellationToken).ConfigureAwait(false);
+            return await payload.ReadBufferedAsync(cancellationToken).ConfigureAwait(false);
         }
 
         public void WritePacket(byte[] payload)
@@ -159,6 +98,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
         public void WritePacket(byte[] payload, int offset, int count)
         {
+            EnsureIdle();
             ValidateRange(payload, offset, count);
 
             var position = offset;
@@ -196,6 +136,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
         public async Task WritePacketAsync(byte[] payload, int offset, int count, CancellationToken cancellationToken = default)
         {
+            EnsureIdle();
             ValidateRange(payload, offset, count);
 
             var position = offset;

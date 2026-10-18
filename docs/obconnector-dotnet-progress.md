@@ -66,7 +66,7 @@
 | C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 2026-10-19 Codex；无真实完整重置白名单，Java reset不能代替OceanBase实测；保持Pooling=true拒绝，先推进独立C02 |
 | C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
 | C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 待验证 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)、TZ/LTZ及零日期本地实现齐备；Unit895/Consumer91/DI8、五/三目标编译/格式/打包及独立走查通过；真实验收/A05公开MySQL握手仍缺，详见本页末 |
-| C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 未开始 | 待记录 |
+| C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 进行中 | 2026-10-19 Codex；增量报文底层完成并由整包读取复用，报文54项/Unit924/Consumer91/DI8通过；reader字段流和游标未实现，未开放SequentialAccess，详见本页末 |
 | C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 未开始 | 待记录 |
 | C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 未开始 | 待记录 |
 | C07 | W29-W32 | 本地 ActivitySource/Meter、脱敏和性能基线 | 未开始 | 待记录 |
@@ -300,3 +300,10 @@ C03继续进行中，剩余MySQL零日期及真实验收；G3仍0/8，A04/A05真
 独立只读走查未发现必须修复项，建议的TIMESTAMP混合行和少于声明精度小数已补入定向回归。最终Release slnx核心五/DI三目标0警告0错误；Windows Unit895、Consumer91、DI8全部通过（TestResults/c03-zero-unit-final.trx、c03-zero-consumer-final.trx、c03-zero-di-final.trx）。格式/diff、双包ZIP/XML资产/版本检查通过：核心5资产、DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心依赖及Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10。NuGet README既有提示继续留R01。
 
 三份现有文档已合并零日期构造/转换、协议、参数及精度契约，未新增设计文档。C03本地子项已齐备，状态从进行中改为待验证，G3仍0/8；下一可本地推进模块C04。A05可信MySQL认证仍未实现，reader及五资产MySQL测试通过明确内部模式夹具替换认证后事实完成，不增加产品测试开关或放宽握手，不据此宣称公开MySQL连接可用。SQL_MODE对零分量/年份0的接受、TIMESTAMP时区语义及目标版本写回scale待实库确认；其他ALLOW_INVALID_DATES非法日历仍拒绝。未执行数据库服务器、非Windows或新的旧运行时测试，五资产消费宿主为net10；A04/A05真实验收、C01完整重置及G0/G1缺口不变。
+
+
+2026-10-19 C04报文增量读取前置：PacketChannel新增内部OpenPayload/OpenPayloadAsync，打开只读取4字节帧头，正文按调用方请求读取；续帧/空终结帧保持序号和累计64 MiB上限。未完整消费的payload独占通道，禁止另一次读包/写包、重置序号或替换TLS传输；提前释放、截断、损坏和正文取消关闭传输，预取消打开不消费空闲通道。ReadPacket同步/异步改为共用同一实现并保留显式数组返回；普通reader仍缓存当前行，未开放SequentialAccess或游标，不更改参数/模式/租约策略。
+
+初始21项增量API缺失回归失败后通过（c04-payload-red.trx、c04-payload-green.trx）；整包超限未关闭传输的2项回归先红后绿（c04-buffered-red.trx、c04-packet-green.trx）。新测试扩展至29项，含32 MiB按需生成载荷、同步循环分配小于256 KiB、正文不预读、续帧/精确满帧空终结、混合读包序号回绕、分片I/O/中途取消、累计上限提前拒绝及提前关闭；报文定向共54项通过（c04-packet-targeted.trx）。该分配断言不代表公开reader或真实服务端内存/吞吐验收。
+
+最终Release slnx核心五/DI三目标0警告0错误；Windows Unit924、Consumer91、DI8通过（TestResults/c04-payload-unit-final.trx、c04-payload-consumer-final.trx、c04-payload-di-final.trx）。格式/diff和UTF-8无BOM/CRLF检查通过；双包核心5资产、DI3资产、8依赖组及统一0.1.0-alpha/DI精确核心版本/Microsoft.Extensions 8/9/10矩阵核对通过，既有NuGet README提示保留R01。独立只读走查已检查整包/增量路径、帧状态、失败资源清理及握手/CommandExchange调用，无必须修复项。三份文档同步C04进行中；下一步QueryResult/reader有序字段流和字符解码，再按模式/版本/能力证据实现游标。Java 2.4.14标准输入流仍拼接整包，游标由不同模式/执行选项决定并有普通/Oracle扩展fetch差别，不直接照搬为已验证.NET能力。实库、非Windows和新的旧运行时测试暂未执行；A05可信MySQL判定、C01完整重置和G0/G1/G3缺口不变。
