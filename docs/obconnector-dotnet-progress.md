@@ -2,6 +2,22 @@
 
 基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵、B09 公共 API/标量 ProviderType 审核及 C02 多地址 TCP 建连、C03宽精度/纳秒/TZ/LTZ/零日期及 C04 报文增量/顺序字段流及服务端游标、C05数据库切换本地子项。C03/C04待验证，C05进行中，目录元数据尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
+## 中断走查问题核销（2026-10-19）
+
+已将原走查记录与当前 `0f43bf2` 源码、历史修复提交和本轮实际执行的回归逐项核对。以下问题均已有修复提交；本轮补充集中核销记录，没有新增产品代码。
+
+| 已报告问题 | 修复提交 | 当前回归证据 |
+| --- | --- | --- |
+| 终态 ERR 被失败日志回调触发的取消覆盖；Scalar 未跳过前置更新计数 | `a142f70` | TextCommandTests：ServerErrorWinsOverCancellationFromFailureLogger、ScalarSkipsInitialUpdateCountsToReachFirstResultSet |
+| Decimal 仅声明 Precision 时误按 Scale=0；畸形 TIME 天数参与溢出运算 | `b772c0f` | ValueCodecTests：DecimalPrecisionOnlyInfersScaleWhileExplicitZeroRequiresExactInteger、MalformedTimeDayCountIsRejectedBeforeTickArithmetic |
+| netstandard2.1 异步事务/连接/reader 清理被错误条件编译排除 | `e6b50d9` | TransactionConsumerTests：AsyncCleanupReturnsBeforeDelayedRollbackAndWaitsForRestoration，含 Standard2.1 的真实异步延迟回滚 |
+| 预读字符/耗尽字段流绕过命令取消和关闭；完整终结包误判结果未知；字段 token 未进入命令预算 | `230d596` | SequentialAccessTests：缓存字段生命周期、完整终态与取消、字段独立 token 回归 |
+| 游标 ERR 先释放租约再销毁会话；二进制行冒充 FE-OK 确认；分页/初始空结果遗漏或重复处理会话报告；部分 fetch 写入不响应 reader token | `b6881a6` | CursorTests：错误日志重入、二进制伪确认、逐页及空结果会话报告、部分写入取消回归 |
+
+本轮重新执行 `dotnet build OceanBaseConnector.slnx --no-restore -c Release`：核心五目标、DI 三目标，0 警告/0 错误。Windows 完整 Unit1073、Consumer120、DI8 全部通过且零跳过；报告为 `TestResults/interrupted-review-{unit,consumer,di}.trx`，另解析 TRX 确认上表对应回归实际执行并通过。完整单测沿用已授权的 Windows TLS 测试证书存储访问，未调整 TLS 策略。
+
+此核销不改变阶段验收状态：A04 待验证；A05 仍缺可信公开 MySQL 模式判定；C04 待验证；C05 仅数据库切换子项落地，目录集合仍未实现；C01 完整重置白名单仍阻塞。真实数据库、非 Windows 及新的旧运行时验收未执行。
+
 ## 进度口径
 
 - 状态只用 `未开始`、`进行中`、`待验证`、`阻塞`、`完成`。`待验证` 表示代码或夹具已完成，但所属真实环境/目标框架验收尚未完成；不能计入完成数。
