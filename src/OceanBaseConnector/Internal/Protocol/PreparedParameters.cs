@@ -1,12 +1,13 @@
 using System;
 using System.Data;
 using System.IO;
+using OceanBaseConnector.Internal.Values;
 
 namespace OceanBaseConnector.Internal.Protocol
 {
     internal static class PreparedParameters
     {
-        internal static byte[] Encode(OceanBaseParameter[] parameters)
+        internal static byte[] Encode(OceanBaseParameter[] parameters, OceanBaseCompatibilityMode mode = OceanBaseCompatibilityMode.MySql)
         {
             if (parameters.Length == 0) return Array.Empty<byte>();
             if (parameters.Length > ushort.MaxValue) throw new ArgumentException("The prepared parameter count exceeds the protocol limit.");
@@ -21,7 +22,7 @@ namespace OceanBaseConnector.Internal.Protocol
             for (var i = 0; i < parameters.Length; i++)
             {
                 var parameter = parameters[i];
-                var type = TypeCode(parameter.DbType);
+                var type = TypeCode(parameter, mode);
                 var value = parameter.Value;
                 if (value == null || value == DBNull.Value)
                 {
@@ -32,6 +33,19 @@ namespace OceanBaseConnector.Internal.Protocol
                     stream.Position--;
                     writer.Write((byte)(bits | (1 << (i % 8))));
                     stream.Position = end;
+                }
+                else if (parameter.DbType == DbType.Decimal) WriteDecimal(writer, parameter, value);
+                else if (parameter.DbType == DbType.Date || parameter.DbType == DbType.DateTime || parameter.DbType == DbType.DateTime2)
+                {
+                    if (!(value is DateTime date)) throw new ArgumentException("The parameter value does not match its declared DbType.");
+                    var oracleDate = mode == OceanBaseCompatibilityMode.Oracle && parameter.DbType == DbType.Date;
+                    if (oracleDate && parameter.DeclaredScale.GetValueOrDefault() != 0) throw new ArgumentException("Oracle DATE has no fractional seconds.");
+                    TemporalCodec.WriteDate(writer, type, date, oracleDate ? (byte?)0 : parameter.DeclaredScale);
+                }
+                else if (parameter.DbType == DbType.Time)
+                {
+                    if (!(value is TimeSpan time)) throw new ArgumentException("The parameter value does not match its declared DbType.");
+                    TemporalCodec.WriteTime(writer, time, parameter.DeclaredScale);
                 }
                 else WriteValue(writer, parameter.DbType, value);
                 var position = stream.Position;
@@ -53,9 +67,28 @@ namespace OceanBaseConnector.Internal.Protocol
             return packet;
         }
 
-        private static ushort TypeCode(DbType type)
+        private static ushort TypeCode(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode)
         {
-            switch (type)
+            if (parameter.OceanBaseDbType.HasValue)
+            {
+                switch (parameter.OceanBaseDbType.Value)
+                {
+                    case OceanBaseDbType.Decimal:
+                    case OceanBaseDbType.Timestamp: break;
+                    case OceanBaseDbType.OracleDate:
+                        if (mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("OracleDate requires Oracle mode.");
+                        break;
+                    default: throw new NotSupportedException("The provider-specific parameter type is not supported yet.");
+                }
+            }
+            if (parameter.DbType == DbType.Decimal && (parameter.Precision > 28 || parameter.Scale > 28))
+                throw new NotSupportedException("The decimal parameter precision or scale requires C03.");
+            if (parameter.DbType == DbType.Decimal && parameter.Precision != 0 && parameter.Scale > parameter.Precision)
+                throw new ArgumentException("Decimal scale exceeds its declared precision.");
+            var temporalScale = parameter.DbType == DbType.Time ? 6 : parameter.DbType == DbType.Date ? 0 : mode == OceanBaseCompatibilityMode.Oracle ? 7 : 6;
+            if ((parameter.DbType == DbType.Date || parameter.DbType == DbType.DateTime || parameter.DbType == DbType.DateTime2 || parameter.DbType == DbType.Time) && parameter.Scale > temporalScale)
+                throw new NotSupportedException("The temporal parameter precision is not supported.");
+            switch (parameter.DbType)
             {
                 case DbType.Boolean:
                 case DbType.SByte: return 1;
@@ -68,11 +101,18 @@ namespace OceanBaseConnector.Internal.Protocol
                 case DbType.UInt64: return 0x8008;
                 case DbType.Single: return 4;
                 case DbType.Double: return 5;
+                case DbType.Decimal: return 246;
+                case DbType.Date: return mode == OceanBaseCompatibilityMode.Oracle ? (ushort)12 : (ushort)10;
+                case DbType.DateTime:
+                case DbType.DateTime2: return mode == OceanBaseCompatibilityMode.Oracle ? (ushort)202 : (ushort)12;
+                case DbType.Time:
+                    if (mode != OceanBaseCompatibilityMode.MySql) throw new NotSupportedException("TIME duration parameters require MySQL mode.");
+                    return 11;
                 case DbType.String:
                 case DbType.AnsiString:
                 case DbType.StringFixedLength:
                 case DbType.AnsiStringFixedLength: return 253;
-                case DbType.Binary: return 252;
+                case DbType.Binary: return mode == OceanBaseCompatibilityMode.Oracle ? (ushort)253 : (ushort)252;
                 default: throw new NotSupportedException("The parameter type is not supported yet.");
             }
         }
@@ -103,6 +143,21 @@ namespace OceanBaseConnector.Internal.Protocol
                 case DbType.Binary when value is byte[] bytes: CheckLength(writer, bytes.Length); WriteBytes(writer, bytes); return;
             }
             throw new ArgumentException("The parameter value does not match its declared DbType.");
+        }
+
+        private static void WriteDecimal(BinaryWriter writer, OceanBaseParameter parameter, object value)
+        {
+            var number = value is decimal exact ? new OceanBaseDecimal(exact) : value is OceanBaseDecimal provider ? provider
+                : throw new ArgumentException("The parameter value does not match its declared DbType.");
+            if (number.Scale < 0 || number.Scale > 28 || parameter.Precision > 28 || parameter.Scale > 28)
+                throw new NotSupportedException("The decimal parameter precision or scale requires C03.");
+            number.ToDecimal(); // Validate the CLR range exactly, without rounding.
+            var scale = parameter.DeclaredScale ?? number.Scale;
+            if (parameter.Precision != 0 && scale > parameter.Precision)
+                throw new ArgumentException("Decimal scale exceeds its declared precision.");
+            if (parameter.Precision != 0 || parameter.DeclaredScale.HasValue)
+                number = DecimalCodec.Constrain(number, parameter.Precision == 0 ? 29 : parameter.Precision, scale);
+            WriteBytes(writer, ResultColumn.Utf8.GetBytes(number.ToString()));
         }
 
         private static void CheckLength(BinaryWriter writer, int count)

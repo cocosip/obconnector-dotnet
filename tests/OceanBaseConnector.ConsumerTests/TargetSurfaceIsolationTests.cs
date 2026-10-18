@@ -9,6 +9,7 @@ using System.Data;
 using System.Data.Common;
 using System.Net;
 using System.Net.Sockets;
+using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -134,6 +135,39 @@ namespace OceanBaseConnector.ConsumerTests
                 var command = assembly.GetType("OceanBaseConnector.OceanBaseCommand")!;
                 Assert.Equal(command, command.GetMethod("PrepareAsync", new[] { typeof(CancellationToken) })!.DeclaringType);
                 Assert.Equal(command, command.GetMethod("DisposeAsync")!.DeclaringType);
+            }
+            finally { context.Unload(); }
+        }
+
+        [Theory]
+        [InlineData("netstandard2.0")]
+        [InlineData("netstandard2.1")]
+        [InlineData("net8.0")]
+        [InlineData("net9.0")]
+        [InlineData("net10.0")]
+        public void ExactDecimalContractRunsInEachProductAsset(string target)
+        {
+            var context = new AssemblyLoadContext("decimal-" + target, isCollectible: true);
+            try
+            {
+                var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
+                var type = assembly.GetType("OceanBaseConnector.OceanBaseDecimal", throwOnError: true)!;
+                var number = Activator.CreateInstance(type, new object[] { new BigInteger(-123400), 4 })!;
+                Assert.Equal(new BigInteger(-123400), type.GetProperty("Coefficient")!.GetValue(number));
+                Assert.Equal(4, type.GetProperty("Scale")!.GetValue(number));
+                Assert.Equal(-12.3400m, type.GetMethod("ToDecimal")!.Invoke(number, null));
+                Assert.Equal("-12.3400", number.ToString());
+                var parameter = (DbParameter)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseParameter")!)!;
+                parameter.Value = number;
+                Assert.Equal(DbType.Decimal, parameter.DbType);
+                var providerType = parameter.GetType().GetProperty("OceanBaseDbType")!;
+                var enumType = Nullable.GetUnderlyingType(providerType.PropertyType)!;
+                Assert.Equal(assembly, enumType.Assembly);
+                providerType.SetValue(parameter, Enum.Parse(enumType, "Timestamp"));
+                Assert.Equal(DbType.DateTime2, parameter.DbType);
+                parameter.ResetDbType();
+                Assert.Null(providerType.GetValue(parameter));
+                Assert.Equal(DbType.Decimal, parameter.DbType);
             }
             finally { context.Unload(); }
         }

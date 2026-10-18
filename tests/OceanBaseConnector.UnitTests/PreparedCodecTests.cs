@@ -87,8 +87,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(DbType.Decimal)]
-        [InlineData(DbType.DateTime)]
+        [InlineData(DbType.Currency)]
+        [InlineData(DbType.DateTimeOffset)]
         [InlineData(DbType.Guid)]
         [InlineData(DbType.Object)]
         public void UnsupportedTypedNullFailsBeforeWireEncoding(DbType type)
@@ -97,10 +97,11 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public void OracleNumberIsNeverDecodedAsBinaryMysqlInteger()
+        public void OracleNumberUsesDecimalPublicTypeWithItsFixedWidthWireValue()
         {
             var column = ResultColumn.Parse(Column("n", 3), OceanBaseCompatibilityMode.Oracle);
-            Assert.Throws<NotSupportedException>(() => column.ReadBinaryField(new ByteCursor(new byte[4])));
+            Assert.Equal(typeof(decimal), column.FieldType);
+            Assert.Equal(0m, column.DecodeBinary(column.ReadBinaryField(new ByteCursor(new byte[4]))));
         }
     }
 }

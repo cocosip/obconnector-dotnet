@@ -32,6 +32,8 @@ namespace OceanBaseConnector
             var column = Column(ordinal);
             switch (column.TypeCode)
             {
+                case 0:
+                case 246: return column.Mode == OceanBaseCompatibilityMode.Oracle ? "NUMBER" : "DECIMAL";
                 case 1: return "TINYINT";
                 case 2: return "SMALLINT";
                 case 3: return column.Mode == OceanBaseCompatibilityMode.Oracle ? "NUMBER" : "INT";
@@ -40,6 +42,12 @@ namespace OceanBaseConnector
                 case 4: return column.Mode == OceanBaseCompatibilityMode.Oracle ? "BINARY_FLOAT" : "FLOAT";
                 case 5: return column.Mode == OceanBaseCompatibilityMode.Oracle ? "BINARY_DOUBLE" : "DOUBLE";
                 case 6: return "NULL";
+                case 7:
+                case 202: return "TIMESTAMP";
+                case 10: return "DATE";
+                case 11: return "TIME";
+                case 12: return column.Mode == OceanBaseCompatibilityMode.Oracle ? "DATE" : "DATETIME";
+                case 203: return "RAW";
                 case 15: return column.Charset == 63 ? "VARBINARY" : "VARCHAR";
                 case 253: return column.Charset == 63 ? "VARBINARY" : column.Mode == OceanBaseCompatibilityMode.Oracle ? "VARCHAR2" : "VARCHAR";
                 case 254: return column.Charset == 63 ? "BINARY" : "CHAR";
@@ -68,6 +76,29 @@ namespace OceanBaseConnector
             for (var i = 0; i < count; i++) values[i] = GetValue(i);
             return count;
         }
+        public override Type GetProviderSpecificFieldType(int ordinal)
+        {
+            var column = Column(ordinal);
+            var type = column.FieldType;
+            return column.IsDecimal ? typeof(OceanBaseDecimal) : type;
+        }
+        public override object GetProviderSpecificValue(int ordinal)
+        {
+            var column = Column(ordinal);
+            _ = column.FieldType;
+            if (_result.Row == null) throw new InvalidOperationException("Read must position the reader on a row.");
+            var value = _result.Row[ordinal];
+            return column.IsDecimal && value != null ? column.DecodeDecimal(value, _result.IsBinary) : GetValue(ordinal);
+        }
+        public override int GetProviderSpecificValues(object[] values)
+        {
+            if (values == null) throw new ArgumentNullException(nameof(values));
+            var count = Math.Min(values.Length, FieldCount);
+            for (var i = 0; i < count; i++) values[i] = GetProviderSpecificValue(i);
+            return count;
+        }
+        public override T GetFieldValue<T>(int ordinal) => typeof(T) == typeof(OceanBaseDecimal)
+            ? (T)GetProviderSpecificValue(ordinal) : (T)GetValue(ordinal);
         public override bool IsDBNull(int ordinal)
         {
             Column(ordinal);

@@ -164,7 +164,7 @@ A04 本地实现及 Windows 环回已完成，整体仍为待验证：可信私�
 - [x] 使用 B01 日志上下文记录命令完成/错误/取消/结果未知，默认不记录 SQL 或绑定值；已收到可信 OK/ERR 后，日志回调触发取消也不覆盖终态。
 - [ ] 两模式分别运行真实文本 CRUD 和不变 UPDATE 匹配行验证；依用户要求实库及非 Windows 测试暂不执行，MySQL 模式可信版本门槛保持不变。
 
-B02 当前 reader 支持基础有/无符号整数、浮点、UTF-8 字符串、binary 字符串和 NULL；保留物理会话模式，Oracle 类型码 3（NUMBER）在 B05 精确数值完成前明确拒绝，不借用 MySQL INT 映射。日期、decimal、national charset、LOB 和其他扩展值不猜测解码。完整 provider-specific 值及字段元数据仍属 B05/B06。仅接受 `CommandBehavior.Default`/`CloseConnection`，`SequentialAccess` 等行为在对应能力实现前拒绝。响应硬上限为每包 64 MiB、每结果 4096 列/4 MiB 元数据、每命令一百万包；超限销毁会话。超出平台计时器范围的超时在取得会话前失败，不遗留 Busy 会话。
+B02 交付的 reader 支持基础有/无符号整数、浮点、UTF-8 字符串、binary 字符串和 NULL；保留物理会话模式，Oracle 类型码 3（NUMBER）当时明确拒绝，不借用 MySQL INT 映射。B05 已补精确数值、日期及低精度 provider-specific 访问，完整字段元数据仍属 B06；national charset、LOB 和其他扩展值不猜测解码。仅接受 `CommandBehavior.Default`/`CloseConnection`，`SequentialAccess` 等行为在对应能力实现前拒绝。响应硬上限为每包 64 MiB、每结果 4096 列/4 MiB 元数据、每命令一百万包；超限销毁会话。超出平台计时器范围的超时在取得会话前失败，不遗留 Busy 会话。
 
 ### B03 Oracle 占位符词法器与参数验证
 
@@ -186,15 +186,17 @@ B03 当前支持 ASCII `[A-Za-z_][A-Za-z0-9_$#]*` 名称（ParameterName 可带�
 - [x] Windows 环回确认 net10.0 和隔离加载的 netstandard2.1 资产 PrepareAsync 等待网络，不退回同步 I/O；覆盖执行、同步/异步释放和忙会话延迟关闭。
 - [ ] 两模式运行真实预处理 CRUD、目标运行时非同步退化与类型往返测试；依用户要求实库、非 Windows 和旧运行时暂缓，缺 Oracle 模式位的握手仍安全拒绝。
 
-B04 本地实现仅包含基础 bool/整数/浮点/普通 UTF-8 字符串/byte[]/NULL 编解码，执行入口在发送其准备/执行包前拒绝显式 DbType 与 CLR 值不匹配及未支持类型；显式 Prepare/PrepareAsync 不检查 Value 编码。语句 ID 仅在同一命令、相同改写 SQL 和同一物理会话复用；变更、重连和释放时失效，空闲关闭或忙时排队到下次命令前。服务端参数数不符不执行 SQL，准备元数据 ERR 关闭已知 ID，终态执行 ERR 保留可复用会话；未消费响应则销毁会话。B05 精确数值/日期、B06 完整元数据和 B08 故障矩阵仍未完成，不据此关闭 G2。
+B04 交付基础 bool/整数/浮点/普通 UTF-8 字符串/byte[]/NULL 编解码，B05 已扩展精确数值/日期；执行入口在发送其准备/执行包前拒绝显式 DbType 与 CLR 值不匹配及未支持类型，显式 Prepare/PrepareAsync 不检查 Value 编码。语句 ID 仅在同一命令、相同改写 SQL 和同一物理会话复用；变更、重连和释放时失效，空闲关闭或忙时排队到下次命令前。服务端参数数不符不执行 SQL，准备元数据 ERR 关闭已知 ID，终态执行 ERR 保留可复用会话；未消费响应则销毁会话。B06 完整元数据和 B08 故障矩阵仍未完成，不据此关闭 G2。
 
 ### B05 基础值、字符集与不支持类型
 
 **产物：**模式感知编解码支持基础整数、浮点、可表示的 `decimal`、低精度列的 `OceanBaseDecimal` provider-specific 读取和范围内参数写入、文本/二进制、NULL、常见日期时间及含时间的 Oracle `DATE`；宽精度和延期类型显式失败。
 
-- [ ] 夹具覆盖有符号/无符号边界、乱码、NULL/空串、Oracle `DATE` 时分秒、低精度 NUMBER/DECIMAL 经 `OceanBaseDecimal` 精确读取和写入、MySQL `DECIMAL(65,20)` 在 C 前失败、NCHAR/INTERVAL/JSON/BIT/YEAR 未支持时失败。
-- [ ] 编码依据 `DbType`/显式 `OceanBaseDbType`，解码依据模式、列定义、字符集、精度；普通 `string` 参数不声称支持 NCHAR/JSON。
-- [ ] 两模式运行基本类型往返和字段元数据一致性测试。
+- [x] 夹具覆盖有符号/无符号边界、乱码、NULL/空串、Oracle `DATE` 时分秒、低精度 NUMBER/DECIMAL 经 `OceanBaseDecimal` 精确读取和写入、MySQL `DECIMAL(65,20)` 在 C 前失败、NCHAR/INTERVAL/JSON/BIT/YEAR 未支持时失败。
+- [x] 编码依据 `DbType`/显式 `OceanBaseDbType`，解码依据模式、列定义、字符集、精度；普通 `string` 参数不声称支持 NCHAR/JSON。
+- [ ] 两模式运行真实基本类型往返和字段元数据一致性测试；依用户要求暂缓，合成报文及 Windows 环回不能替代。
+
+B05 本地实现及 Windows 验证已完成，整体待验证。低精度读列使用固定 decimal/OceanBaseDecimal 类型，元数据缺失、p>28 或负 scale 明确拒绝；Oracle 优化 NUMBER 类型码 3 的四字节布局独立处理。参数保留显式/推断 scale 的差异、不舍入；日期时间保留 Oracle DATE 的时分秒，MySQL TIME 按有符号时长处理，Oracle TIMESTAMP 202 按原始 12 字节布局处理，精确范围及拒绝规则见架构 §5。公开 reader 文本/二进制、同步/异步命令前置校验和五目标隔离资产消费已有测试；真实 Oracle 空字符串/NULL、TIMESTAMP scale 变体、旧运行时及非 Windows 验收仍缺证据。GetSchemaTable/GetColumnSchema 留 B06。
 
 ### B06 逐行 reader 与列元数据
 

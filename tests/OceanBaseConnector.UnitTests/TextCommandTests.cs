@@ -79,8 +79,8 @@ namespace OceanBaseConnector.UnitTests
                 command.CommandText = "select ?";
                 await Assert.ThrowsAsync<NotSupportedException>(execute);
                 command.CommandText = "select :id";
-                command.Parameters.Add(new OceanBaseParameter { ParameterName = ":ID", DbType = DbType.Decimal, Value = 1m });
-                await Assert.ThrowsAsync<NotSupportedException>(execute); // Precise decimal binding belongs to B05.
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = ":ID", DbType = DbType.DateTimeOffset, Value = DateTimeOffset.UtcNow });
+                await Assert.ThrowsAsync<NotSupportedException>(execute); // Zone-aware temporal binding remains deferred.
                 command.CommandText = "select 1";
                 await Assert.ThrowsAsync<ArgumentException>(execute);
                 command.CommandText = "select :id";
@@ -443,8 +443,8 @@ namespace OceanBaseConnector.UnitTests
                 command.CommandText = "number";
                 using var reader = await command.ExecuteReaderAsync();
                 Assert.True(reader.Read());
-                Assert.Throws<NotSupportedException>(() => reader.GetFieldType(0));
-                Assert.Throws<NotSupportedException>(() => reader.GetValue(0));
+                Assert.Equal(typeof(decimal), reader.GetFieldType(0));
+                Assert.Equal(42m, reader.GetValue(0));
                 Assert.Equal("NUMBER", reader.GetDataTypeName(0));
                 Assert.False(await reader.ReadAsync());
             }

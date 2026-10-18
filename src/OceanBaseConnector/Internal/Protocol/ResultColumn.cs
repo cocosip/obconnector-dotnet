@@ -1,19 +1,29 @@
 using System;
 using System.Globalization;
 using System.Text;
+using OceanBaseConnector.Internal.Values;
 
 namespace OceanBaseConnector.Internal.Protocol
 {
     internal sealed class ResultColumn
     {
         internal static readonly Encoding Utf8 = new UTF8Encoding(false, true);
-        private ResultColumn(string name, byte type, ushort charset, ushort flags, OceanBaseCompatibilityMode mode)
-        { Name = name; TypeCode = type; Charset = charset; Unsigned = (flags & 32) != 0; Mode = mode; }
+        private ResultColumn(string name, byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode)
+        {
+            Name = name; TypeCode = type; Charset = charset; Unsigned = (flags & 32) != 0; Mode = mode;
+            Scale = mode == OceanBaseCompatibilityMode.Oracle ? unchecked((sbyte)scale) : scale;
+            Precision = mode == OceanBaseCompatibilityMode.Oracle ? precision : (long)length - (Unsigned ? 0 : 1) - (scale > 0 ? 1 : 0);
+            if (mode == OceanBaseCompatibilityMode.Oracle && type == 3 && precision == 0 && scale == 0) Precision = 10;
+        }
         internal string Name { get; }
         internal byte TypeCode { get; }
         internal ushort Charset { get; }
         internal bool Unsigned { get; }
         internal OceanBaseCompatibilityMode Mode { get; }
+        internal long Precision { get; }
+        internal int Scale { get; }
+        internal bool IsDecimal => TypeCode == 0 || TypeCode == 246 || TypeCode == 3 && Mode == OceanBaseCompatibilityMode.Oracle;
+        internal bool IsTemporal => TypeCode == 7 || TypeCode == 10 || TypeCode == 11 || TypeCode == 12 || TypeCode == 202;
 
         internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode)
         {
@@ -23,21 +33,27 @@ namespace OceanBaseConnector.Internal.Protocol
             cursor.ReadLengthEncodedBytes();
             if (cursor.ReadLengthEncodedInteger() != 12) throw new ProtocolException("Unsupported column metadata layout.");
             var charset = cursor.ReadUInt16();
-            cursor.ReadUInt32();
+            var length = cursor.ReadUInt32();
             var type = cursor.ReadUInt8();
             var flags = cursor.ReadUInt16();
             // Oracle uses the last two bytes for precision and parameter direction.
-            cursor.Skip(3);
+            var scale = cursor.ReadUInt8();
+            var precision = cursor.ReadUInt8();
+            cursor.ReadUInt8();
             if (cursor.HasRemaining) throw new NotSupportedException("Extended column metadata is not supported yet.");
-            return new ResultColumn(name, type, charset, flags, mode);
+            return new ResultColumn(name, type, charset, flags, length, scale, precision, mode);
         }
 
         internal Type FieldType
         {
             get
             {
-                if (TypeCode == 3 && Mode == OceanBaseCompatibilityMode.Oracle)
-                    throw new NotSupportedException("Oracle NUMBER decoding requires the B05 precise numeric implementation.");
+                if (IsDecimal)
+                {
+                    if (Precision < 1 || Precision > 28 || Scale < 0 || Scale > Precision)
+                        throw new NotSupportedException("The declared decimal precision or scale requires the C03 implementation.");
+                    return typeof(decimal);
+                }
                 switch (TypeCode)
                 {
                     case 1: return Unsigned ? typeof(byte) : typeof(sbyte);
@@ -48,6 +64,21 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 4: return typeof(float);
                     case 5: return typeof(double);
                     case 6: return typeof(DBNull);
+                    case 7:
+                    case 10:
+                    case 11:
+                        if (Mode != OceanBaseCompatibilityMode.MySql) throw new NotSupportedException("The temporal type is not defined for this mode.");
+                        if (Scale < 0 || Scale > 6) throw new NotSupportedException("The temporal precision is not supported.");
+                        return TypeCode == 11 ? typeof(TimeSpan) : typeof(DateTime);
+                    case 12:
+                        if (Scale < 0 || Scale > (Mode == OceanBaseCompatibilityMode.Oracle ? 0 : 6)) throw new NotSupportedException("The temporal precision is not supported.");
+                        return typeof(DateTime);
+                    case 202:
+                        if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > 7) throw new NotSupportedException("The timestamp precision requires C03.");
+                        return typeof(DateTime);
+                    case 203:
+                        if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("RAW is only defined in Oracle mode.");
+                        return typeof(byte[]);
                     case 15:
                     case 253:
                     case 254:
@@ -66,6 +97,9 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
+            if (IsDecimal) return DecodeDecimal(value, false).ToDecimal();
+            if (TypeCode == 202) return TemporalCodec.DecodeBinary(TypeCode, Mode, value, Scale);
+            if (IsTemporal) return TemporalCodec.DecodeText(TypeCode, Mode, Utf8.GetString(value));
             if (fieldType == typeof(byte[])) return (byte[])value.Clone();
             var text = Utf8.GetString(value);
             switch (TypeCode)
@@ -85,6 +119,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal byte[] ReadBinaryField(ByteCursor cursor)
         {
             _ = FieldType;
+            if (IsTemporal) return TemporalCodec.ReadField(cursor, TypeCode);
             switch (TypeCode)
             {
                 case 1: return cursor.ReadBytes(1);
@@ -103,6 +138,8 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             _ = FieldType;
             if (value == null) return DBNull.Value;
+            if (IsDecimal) return DecodeDecimal(value, true).ToDecimal();
+            if (IsTemporal) return TemporalCodec.DecodeBinary(TypeCode, Mode, value, Scale);
             var cursor = new ByteCursor(value);
             switch (TypeCode)
             {
@@ -117,6 +154,18 @@ namespace OceanBaseConnector.Internal.Protocol
                     return TypeCode == 4 ? (object)BitConverter.ToSingle(value, 0) : BitConverter.ToDouble(value, 0);
                 default: return Decode(value);
             }
+        }
+
+        internal OceanBaseDecimal DecodeDecimal(byte[] value, bool binary)
+        {
+            _ = FieldType;
+            if (TypeCode == 3 && binary)
+            {
+                var integer = new ByteCursor(value).ReadUInt32();
+                var number = Unsigned ? (decimal)integer : unchecked((int)integer);
+                return DecimalCodec.Constrain(new OceanBaseDecimal(number), (int)Precision, Scale, Unsigned);
+            }
+            return DecimalCodec.Parse(Utf8.GetString(value), (int)Precision, Scale, Unsigned);
         }
     }
 }

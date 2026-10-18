@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-18 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果及 B03/B04 名称绑定/服务端预处理。精确类型、完整元数据及事务尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-18 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理及 B05 低精度数值/provider-specific 访问/常见日期时间。完整元数据、事务和宽精度扩展尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -28,7 +28,7 @@
 | --- | --- | --- | --- | --- |
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04/A05 待真实验证，A07 缺环境与可信版本矩阵；G0 未关闭 |
-| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B04 本地实现待真实环境验证；B05-B09 及五目标旧运行时消费/双模式实测仍待完成 |
+| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B05 本地实现待真实环境验证；B06-B09 及五目标旧运行时消费/双模式实测仍待完成 |
 | G3 生产连接 C | W18-W34 | 0/8 | 未开始 | C01-C08 + 池化白名单/精确类型/MySQL `ChangeDatabase`/内存故障实测 |
 | G4 发布候选 R | W35-W37 | 0/2 | 未开始 | R01-R02 + 包/许可证/兼容矩阵 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
@@ -53,7 +53,7 @@
 | B02 | W7-W9 | 文本 SQL、OK/ERR、多结果和更新计数 | 待验证 | COM_QUERY 同步/异步、逐行文本 reader、OK/ERR/EOF/FE OK、多结果和更新计数已有 Windows 环回证据；两模式真实 CRUD/匹配行语义、非 Windows 和旧运行时待验证 |
 | B03 | W8-W10 | Oracle 命名占位符词法器及各类 `q` 字面量；MySQL 参数数由服务端确定 | 待验证 | 本地完成词法扫描、名称/顺序映射与发送前绑定校验；基础参数执行由 B04 接入，真实参数化集成测试暂缓 |
 | B04 | W9-W12 | 服务端 prepare/execute、二进制结果和 statement ID | 待验证 | 本地实现及 Windows 协议/环回、五目标编译、消费/DI 测试通过；双模式实库、旧运行时和非 Windows 待补 |
-| B05 | W10-W13 | 基础值、低精度 `OceanBaseDecimal`、Oracle DATE 与未支持类型拒绝 | 未开始 | 待记录 |
+| B05 | W10-W13 | 基础值、低精度 `OceanBaseDecimal`、Oracle DATE 与未支持类型拒绝 | 待验证 | Codex，2026-10-18：本地精确数值/日期编解码、公开 provider-specific 访问、五目标消费及 Windows 协议/环回通过；双模式实库、旧运行时及非 Windows 待补，完整字段元数据留 B06 |
 | B06 | W11-W14 | 逐行 reader、字段元数据及低精度 provider-specific 访问 | 未开始 | 待记录 |
 | B07 | W13-W15 | 本地事务及环境事务拒绝 | 未开始 | 待记录 |
 | B08 | W14-W16 | 取消、超时、结果未知和故障注入 | 未开始 | 待记录 |
@@ -181,3 +181,11 @@ B04 只支持基础 bool/整数/浮点/普通 UTF-8 字符串/byte[]/NULL；精�
 B04 独立复审：源码/测试未发现剩余需修复问题；文档复核后明确显式 Prepare 不校验 Value 编码、执行入口才在自身发包前校验，并补充 netstandard2.1 的命令异步入口范围。
 
 2026-10-18 A04/A05 进度校准：此前台账已列本地证据，但开发计划中的本地完成项漏勾，现按代码和测试补齐，真实环境验收仍独立保留未勾。A04 本地实现完成，A05 本地安全认证/Oracle 模式/能力实现完成但 MySQL 允许规则仍需可信版本证据。重新运行 Windows Transport/Handshake 筛选套件 54 项全部通过（TestResults/a04-a05-refresh.trx）；没有执行实库、可信私有 CA 成功链或非 Windows 测试，不把待验证改为整体完成，G1 仍阻塞。
+
+2026-10-18 B05 本地实施：统一模式感知的精确数值、日期时间和 RAW 编解码；新增公共 OceanBaseDecimal（BigInteger 系数/scale、精确 ToDecimal）、可选 OceanBaseDbType 覆盖，以及低精度列的 GetProviderSpecificFieldType/Value/Values 和 GetFieldValue<OceanBaseDecimal>。Oracle 列定义读取独立 precision/有符号 scale；类型码 3 按优化整数布局、246 按长度编码十进制文本解析，不混用 MySQL INT。低精度列的类型随元数据固定，宽精度/未知精度即使值很小或 NULL 也拒绝。Oracle DATE 保留时分秒，TIMESTAMP 202 两协议读取原始 12 字节；MySQL DATE/DATETIME/TIMESTAMP 和有符号 TIME 采用各自线格式，禁止隐式舍入、日期截断或 Kind 转换。协议依据核对 Java 基线 6adc311，具体边界见架构 §5。
+
+B05 回归与审查：初始缺失精确数值/时间用例及公共同步/异步入口回归由红转绿；原 B03/B04 的 decimal/Oracle NUMBER 未支持预期更新为新契约，其他延期类型继续拒绝。独立只读审查发现仅设 Precision 时误用 Scale=0，以及二进制 TIME 天数溢出绕过；分别增加省略/显式 scale 区分、推断 scale 超精度及 8/12 字节天数 35/10,675,200/uint.MaxValue 回归，先红后绿。修复后源码复审未发现剩余需修复问题，文档复审发现的两处旧状态声明已同步修正。
+
+B05 最终 Windows 验证：dotnet build OceanBaseConnector.slnx -c Release --no-restore 核心五目标/DI 三目标编译 0 警告、0 错误；UnitTests 369、ConsumerTests 24、DependencyInjection.Tests 8 全通过，TRX 位于 TestResults/b05-unit.trx、b05-consumer.trx、b05-di.trx。消费测试逐个隔离加载五目标资产，校验 OceanBaseDecimal 构造/转换/类型身份、参数推断和覆盖重置；宿主统一 net10.0。format whitespace --verify-no-changes、git diff --check 和双包 pack 通过；ZIP/XML 校验 5/3 个资产、8 个依赖组、统一 0.1.0-alpha、集成包精确核心依赖及 Microsoft.Extensions 按 Standard/net8→8.x、net9→9.x、net10→10.x 分组。包 README 提示仍留 R01。
+
+B05 保持待验证、G2 保持进行中，下一模块为 B06。依用户要求未执行实库、非 Windows 或旧运行时验收；真实 Oracle 空字符串/NULL 语义、TIMESTAMP scale 变体和两模式往返仍无证据。可信 MySQL 模式版本矩阵仍未建立，缺 Oracle 模式位时继续安全拒绝，不为合成测试放行。宽精度/负 scale、纳秒/时区、零日期留 C03，完整字段元数据留 B06，不以本地测试关闭 G1/G2。

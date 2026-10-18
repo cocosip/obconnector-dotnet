@@ -139,7 +139,7 @@ namespace OceanBaseConnector
                 var bindings = ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
                 if (prepareOnly) _explicitPreparation = true;
                 var binary = _explicitPreparation || bindings.Parameters.Length != 0;
-                var parameters = binary && !prepareOnly ? PreparedParameters.Encode(bindings.Parameters) : Array.Empty<byte>();
+                var parameters = binary && !prepareOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info.Mode) : Array.Empty<byte>();
                 if (_prepared != null && (!binary || !ReferenceEquals(_prepared.Session, session) || _prepared.CommandText != bindings.CommandText))
                 { _prepared.Release(); _prepared = null; }
                 if (_prepared != null && _prepared.ParameterCount != bindings.Parameters.Length) throw ParameterCountMismatch();
