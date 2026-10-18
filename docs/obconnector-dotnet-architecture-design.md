@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 架构设计
 
-状态：实现前设计基线；§9 的产品决定和真实服务端兼容性仍待确认。日期：2026-10-17。实施任务见 [开发方案](obconnector-dotnet-development-plan.md)，实际完成证据见 [进度台账](obconnector-dotnet-progress.md)。
+状态：设计基线，A 阶段已有原型；§9 的产品决定和真实服务端兼容性仍待确认。日期：2026-10-18。实施任务见 [开发方案](obconnector-dotnet-development-plan.md)，实际完成证据见 [进度台账](obconnector-dotnet-progress.md)。本次 .NET 接入修订已合并到 §2.1–§2.7，属于待实现方案。
 
 ## 1. 目标与依据
 
@@ -23,13 +23,14 @@
 
 ## 2. 运行目标和公开契约
 
-单个包、单个核心工程，`TargetFrameworks=netstandard2.0;net8.0;net9.0;net10.0`。仓库统一使用 NuGet 中央包管理(CPM):根目录 `Directory.Packages.props` 以 `ManagePackageVersionsCentrally` 固定全部包版本并开启传递依赖钉扎,任何工程不得在自身 `PackageReference` 上内联 `Version`;产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性给出,csproj 内不得声明各自版本。`netstandard2.0` 是最低 API 基线,不等于保证每一个实现该标准的旧运行时都已通过集成测试。项目以 .NET 10 SDK 和 `OceanBaseConnector.slnx` 构建四目标；全部测试及消费宿主统一使用 `net10.0`，`global.json` 约束 SDK 主版本；旧运行时的专门消费验证保留为 B09/R01 发布验收;正式支持的运行时遵循微软生命周期,.NET 9 已结束官方支持时仍可提供目标资产,但不承诺修复其运行时本身的问题。若现代目标没有需要独立实现的 API,优先共享源码和行为,不分叉协议栈。
+单个核心 provider 工程和包，`TargetFrameworks=netstandard2.0;net8.0;net9.0;net10.0`；另设可选 `OceanBaseConnector.DependencyInjection` 集成包，目标为 `net8.0;net9.0;net10.0`，不按兼容模式拆包。核心仅引入标准日志抽象，不依赖容器实现或日志后端。仓库统一使用 NuGet 中央包管理(CPM):根目录 `Directory.Packages.props` 以 `ManagePackageVersionsCentrally` 固定全部包版本并开启传递依赖钉扎,任何工程不得在自身 `PackageReference` 上内联 `Version`;产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性给出,csproj 内不得声明各自版本；核心和集成包同版本统一发布并验证包间依赖。`netstandard2.0` 是最低 API 基线,不等于保证每一个实现该标准的旧运行时都已通过集成测试。项目以 .NET 10 SDK 和 `OceanBaseConnector.slnx` 构建四目标；全部测试及消费宿主统一使用 `net10.0`，`global.json` 约束 SDK 主版本；旧运行时的专门消费验证保留为 B09/R01 发布验收;正式支持的运行时遵循微软生命周期,.NET 9 已结束官方支持时仍可提供目标资产,但不承诺修复其运行时本身的问题。若现代目标没有需要独立实现的 API,优先共享源码和行为,不分叉协议栈。
 
 | 范围 | 建议类型 / 行为 |
 | --- | --- |
 | 标准入口 | `OceanBaseConnection : DbConnection`、`OceanBaseCommand : DbCommand`、`OceanBaseParameter : DbParameter`、`OceanBaseDataReader : DbDataReader`、`OceanBaseTransaction : DbTransaction`、`OceanBaseProviderFactory : DbProviderFactory` |
 | 连接配置 | `OceanBaseConnectionStringBuilder : DbConnectionStringBuilder`；在提供 `DbProviderFactories.RegisterFactory` 的运行时由应用显式注册，旧运行时按其 provider 注册机制处理，不在程序集加载时修改全局状态 |
-| 现代目标 | 在 `net8.0+` 适配 `DbDataSource` 和 `DbBatch`，由 factory 的 `CreateDataSource` 暴露前者；`netstandard2.0` 不暴露这些平台 API。`DbConnection.CanCreateBatch` 和 `DbProviderFactory.CanCreateBatch` 在 C 阶段真正实现前为 `false`，相应创建方法不返回执行语义未定义的空壳 |
+| 现代目标 | B01 提供 `OceanBaseDataSourceBuilder`、`OceanBaseDataSource : DbDataSource` 及 factory 的 `CreateDataSource`，先支持无池建连；C06 再提供 `DbBatch`。`netstandard2.0` 不暴露这些平台 API，也不补造同名平台类型。`DbConnection.CanCreateBatch` 和 `DbProviderFactory.CanCreateBatch` 在 C 阶段真正实现前为 `false`，相应创建方法不返回执行语义未定义的空壳 |
+| 宿主接入 | B01 的可选 DI 包提供普通/带 key 的统一数据源注册，容器工厂创建 Singleton 数据源并接入宿主 `ILoggerFactory`；应用按操作创建/释放连接，默认不注入连接、命令或 reader。无 DI 的 builder 和直接连接入口继续可用；生命周期和注册冲突规则见 §2.4–§2.5 |
 | 异步 | `netstandard2.0` 覆写带 `CancellationToken` 的 `OpenAsync`、`ExecuteNonQueryAsync`、`ExecuteScalarAsync`、受保护的 `ExecuteDbDataReaderAsync`、`ReadAsync`、`NextResultAsync`；现代目标还须覆盖实际发包的 `PrepareAsync`、受保护的 `BeginDbTransactionAsync`（公开的 `BeginTransactionAsync` 委托给它）、`CommitAsync`、`RollbackAsync`，以及 C 阶段的 `ChangeDatabaseAsync`、各个 `GetSchemaAsync` 重载和 `DbBatch.Execute*Async`。关闭或释放需要读包、回滚或池重置时，现代 `CloseAsync`/`DisposeAsync` 也走异步清理。网络层用异步读写；同步入口使用同步 I/O，共享编码、状态机和错误映射，不以同步等待异步任务充数，也不依赖基类调用同步方法的默认异步实现 |
 | 扩展 | 仅对 ADO.NET 无法表达且已实现的 OceanBase 类型/能力增加 `OceanBaseDbType`、provider-specific 值或显式方法；扩展不替代标准 `DbType`、`ParameterDirection`、`GetSchemaTable` |
 
@@ -37,10 +38,124 @@
 
 `TLS Mode` 拟以 `VerifyFull` 为默认值，校验证书链和主机名；`Required` 表示加密但不验证身份，`Disabled` 表示明文，两者必须显式选择。四个目标均使用操作系统信任根；私有 CA 需先安装到运行环境的受信根中。`netstandard2.0` 没有 `X509ChainPolicy.CustomTrustStore`，因此首版不暴露行为不一致的独立 PEM 根证书参数；需要它时先设计并验证跨目标一致的证书链校验。默认以当前连接端点的 DNS 名称校验证书并用于 SNI；以 IP 连接 OBProxy、证书却签给 DNS 名称时，可显式设置 `TLS Server Name`，仍须用此名称完成证书验证，多地址场景要求所有目标都为该名称提供有效证书，否则逐地址使用可验证的 DNS 名称。TLS 握手失败不得回退明文，证书错误也不得自动降级为 `Required`。认证方式按服务端握手协商，首个里程碑只承诺经两种模式真实环境验证的插件；未知插件明确失败，cleartext 类认证只允许在已验证的 TLS 通道上发送。该默认值与证书配置是 .NET 新驱动的设计决定，可能与 Java 默认值不同。
 
+### 2.1 参考依据与取舍
+
+| 依据 | 已核对事实 | 本设计采用的边界 |
+| --- | --- | --- |
+| `obconnector-j`，提交 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` | `OceanBaseDataSource.getConnection()`、`OceanBaseConnection.newConnection()` 共用连接路径；`AbstractConnectProtocol` 在认证 OK 后记录 `isOracleMode`，并据此处理会话初始化和协议差异 | 统一 provider、连接、命令、结果与事务类型；模式、版本、能力保留在物理会话。Java 是协议与模式行为的主要参考，JDBC、XA、日志工厂不直接翻译成 .NET 公共 API |
+| Npgsql 10.0.0 | builder 提供 `UseLoggerFactory`；DI 扩展在容器工厂中构建数据源，取得宿主 `ILoggerFactory`；默认数据源 Singleton、连接 Transient，并支持带 key 的注册 | 参考 .NET 的构建入口、宿主日志和资源所有权。首版默认只注册数据源，由操作显式创建/释放连接，不照搬全部连接注入与生命周期选项 |
+| 本地 `oceanbase-dotnet`，提交 `b9dd14f7c0ea26a29a244c113c5dbe059a07eb9c` | 有独立 DI 工程和 builder 的 `UseLoggerFactory`；但 MySql/Oracle 数据源与注册入口分开，且扩展使用 `AddSingleton(builder.Build())` 实例注册 | 仅参考独立集成包、builder 日志入口。实例注册不会把实例释放责任交给内置容器，不能沿用其所有权方式；不采用双模式分离结构或可变全局日志配置 |
+
+源码定位：Java [`OceanBaseDataSource`](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/OceanBaseDataSource.java#L271)、[`OceanBaseConnection`](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/OceanBaseConnection.java#L393)、[`AbstractConnectProtocol`](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractConnectProtocol.java#L823)；Npgsql [`DI 工厂及默认生命周期`](https://github.com/npgsql/npgsql/blob/v10.0.0/src/Npgsql.DependencyInjection/NpgsqlServiceCollectionExtensions.cs#L354)、[`builder 日志入口`](https://github.com/npgsql/npgsql/blob/v10.0.0/src/Npgsql/NpgsqlDataSourceBuilder.cs#L99)；本地参考 `D:/dotnet-code/oceanbase-dotnet/src/OceanBase.DependencyInjection/OceanBaseServiceCollectionExtensions.cs` 及 `src/OceanBase/Logging/MySqlConnectorLoggingConfiguration.cs`。以上只证明参考源码行为，不证明本项目已支持这些功能。
+
+### 2.2 同一 provider，两层接入
+
+```mermaid
+flowchart TD
+  A[手工构建 / 无 DI 应用] --> B[OceanBaseDataSourceBuilder]
+  H[ASP.NET Core / Generic Host] --> I[可选 DependencyInjection 集成包]
+  I --> B
+  H --> L[宿主 ILoggerFactory]
+  L --> B
+  B --> D[OceanBaseDataSource：配置快照与资源所有者]
+  D --> C[OceanBaseConnection / Command / Reader / Transaction]
+  N[直接 new OceanBaseConnection] --> C
+  C --> S[共享 PhysicalSession / 协议 / TCP / TLS]
+  S --> M[认证确定模式、版本与能力]
+  M --> V[按会话选择初始化、绑定和类型语义]
+```
+
+DI 只装配应用级对象。`PhysicalSession`、包流、认证处理、命令和 reader 不注册为容器服务，底层不接收 `IServiceProvider`，也不根据注册名称选择兼容模式。不新增 `MySqlConnection`/`OracleConnection`、两套数据源、两套注册扩展或自定义 `IOceanBaseConnection` 抽象。差异落在现有会话状态和对应协议处理位置，确有多处重复时再提取内部共享逻辑。
+
+一个应用访问两种模式的租户时，使用两个独立配置的数据源，但公共类型和协议实现相同。DI key 标识应用中的数据源用途，不代表服务端模式；每个物理连接仍独立认证、校验 `ExpectedMode`。统一 API 不承诺自动翻译两种 SQL 方言，也不表示同一物理连接能切换租户模式。
+
+### 2.3 包、目标框架和发布
+
+| 包 / 工程 | 目标 | 依赖与职责 |
+| --- | --- | --- |
+| `OceanBaseConnector` | 保持 `netstandard2.0;net8.0;net9.0;net10.0` | 唯一 provider 与协议实现；增加 `Microsoft.Extensions.Logging.Abstractions`。不依赖容器实现、配置系统或日志后端 |
+| `OceanBaseConnector.DependencyInjection`（新增计划） | `net8.0;net9.0;net10.0` | 引用核心及 `Microsoft.Extensions.DependencyInjection.Abstractions`；装配数据源并取得核心日志抽象中的 `ILoggerFactory`，不引用完整容器实现 |
+| DI 与消费测试 | `net10.0` | 测试工程可引用完整内置 DI 容器，验证作用域、释放、key、日志与包消费；发布时另取 .NET 8/9 运行时证据 |
+
+将原先的“单个产品包/程序集”修订为“单个核心 provider 包 + 可选宿主集成包”。它们不是两个模式的驱动。两个包都从 `Directory.Build.props` 取同一 `Version`，在同一次发布中构建、验证和发布；所有依赖版本仍只写在 `Directory.Packages.props`，解决方案继续使用 slnx。集成包的核心依赖使用当前根版本的精确 NuGet 区间（如 `[0.1.0-alpha]`，由根 Version 派生，不在项目复制版本字面量），打包时核对 nuspec，不各自发布不同版本。
+
+`OceanBaseDataSourceBuilder` 和 `OceanBaseDataSource : DbDataSource` 仅在现代核心资产出现；`netstandard2.0` 保持连接/工厂入口，不补造 `System.Data.Common.DbDataSource`，也不把自定义同名类型伪装成平台类型。四个资产均提供直接连接的 `(string connectionString, ILoggerFactory? loggerFactory)` 构造重载，使旧资产也能按实例配置日志，不需要全局工厂或 DI。`Microsoft.Extensions.Logging.Abstractions` 10 的源码目标包括 `netstandard2.0`，但实际采用版本与传递依赖仍须在 B01 四目标 restore/build/pack 验证；不因 Npgsql 10 的目标框架而删掉本项目旧资产。
+
+### 2.4 数据源与连接所有权
+
+- builder 是可变构建器，不保证线程安全；`Build()` 只冻结配置并建立日志上下文，不连接数据库、不判断模式。修改 builder 不影响已构建数据源，重复构建得到独立数据源。
+- 数据源是可并发使用的长期对象，保存冻结的连接配置、日志上下文，C01 后拥有自己的可选池。B01 使用 `Pooling=false` 即可完整工作，不等待池实现。不同数据源即使连接串相同，也不共享隐含全局池，避免日志、凭据和信任材料交叉。
+- `CreateConnection()` 只创建关闭的逻辑连接；`OpenConnection()`/`OpenConnectionAsync(ct)` 创建并打开，打开失败必须释放连接。同步与异步仍分别使用真实同步/异步 I/O。
+- 从数据源创建的连接继承其配置和日志；`ConnectionString` 不能替换成其他配置，尝试修改须在发包前失败。直接 `new OceanBaseConnection(connectionString)` 仍可用，关闭状态按 ADO.NET 契约设置配置，默认无日志；两条入口最终使用同一个 `PhysicalSession` 和协议实现。
+- 连接、命令、reader 和事务属于一次业务操作，应用按 `using`/`await using` 释放；每个连接仍只允许一个活动命令或 reader。多个并行操作从同一数据源取得各自连接，不共享一个请求级连接。
+- 手工 `Build()` 的数据源由调用方释放；容器工厂创建的数据源由容器释放，应用服务不释放注入的数据源。外部传入的 `ILoggerFactory` 始终由原所有者管理，驱动不得释放它。数据源释放幂等，须允许 DI 别名指向同一实例后发生重复释放调用。
+- 数据源释放后拒绝新建连接及由其创建但尚未打开的连接的后续打开；已经打开的连接由调用方继续完成和关闭，不强行中断其事务。C01 清理空闲连接，已借用连接归还即销毁；释放不无限等待活动借用者。已开始的打开与释放竞争必须有明确提交点，不能让新会话进入已释放的池。
+
+`OceanBaseProviderFactory.CreateDataSource` 在现代资产上走相同 builder，默认无日志；静态 factory 不从全局容器取服务。B01 只交付其已实现的创建能力；`DbBatch` 仍在 C06，不能因已有数据源就宣称支持 batch。
+
+### 2.5 DI 注册契约
+
+计划提供两种注册，配置回调统一为可选的 `Action<IServiceProvider, OceanBaseDataSourceBuilder>`：
+
+```csharp
+services.AddOceanBaseDataSource(connectionString, (sp, builder) => { /* 可选配置 */ });
+services.AddKeyedOceanBaseDataSource("reporting", reportingConnectionString);
+```
+
+普通注册提供 Singleton `OceanBaseDataSource`；未被其他 provider 占用时再提供指向它的 `DbDataSource` 别名，不覆盖其他数据库的注册。带 key 的注册提供同 key 的具体类型和 `DbDataSource` 别名，均指向同一实例；key 不能为空。多个 OceanBase 数据源要求使用不同 key，重复普通注册或重复 key 在注册时明确失败。若同 key 的 `DbDataSource` 已被其他 provider 占用，也须失败而不覆盖；所有冲突检查在新增本次服务描述符之前完成，不能留下半套注册。泛型数据库消费代码须明确其绑定，业务默认优先注入具体类型。
+
+注册阶段只登记工厂并验证必要参数；首次解析时，容器工厂创建 builder，取得可选的 `ILoggerFactory`，调用 `UseLoggerFactory`，再执行应用配置回调并 `Build()`。应用回调可显式覆盖日志设置；宿主没注册日志时使用 `NullLoggerFactory`，不隐式添加日志提供程序。不得调用 `BuildServiceProvider()` 创建第二个容器，不在注册时打开网络连接。
+
+默认不注册 `OceanBaseConnection`/`DbConnection`，避免把可变连接变成共享服务；也不注册 command、reader 或事务。首版不增加连接生命周期参数、自动配置热重载、宿主后台服务、健康检查或自定义 options 管线。连接字符串由应用读取 `IConfiguration` 后传入，不使驱动强依赖配置和 Options 包。Singleton 的配置回调不能捕获 Scoped 服务，测试应开启 scope validation。
+
+使用示意（计划 API，尚不能在当前代码运行）：
+
+```csharp
+// 不使用 DI：调用方拥有数据源，loggerFactory 仍由外部管理。
+var builder = new OceanBaseDataSourceBuilder(connectionString);
+builder.UseLoggerFactory(loggerFactory);
+await using var dataSource = builder.Build();
+await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+
+// 使用 DI：启动时只注册，业务注入 OceanBaseDataSource 后按操作取得连接。
+services.AddOceanBaseDataSource(connectionString);
+// 两租户可分别用 "orders"、"reporting" 注册同一种数据源类型；
+// ExpectedMode 只是打开后的校验条件，不能覆盖认证模式。
+```
+
+### 2.6 日志、追踪和指标
+
+三者单独定义：`ILogger` 是结构化运行日志，`ActivitySource` 是本地操作链路，`Meter` 是聚合指标。B01 引入日志；B02/B07 随命令/事务实现增加相应日志；C07 再实现追踪和指标，C01 增加池日志。不一次堆叠 `DiagnosticListener`、`EventSource` 和自定义日志接口；只有实际消费者需要额外桥接时再增加。
+
+`UseLoggerFactory(ILoggerFactory?)` 属于数据源 builder，直接连接也可通过 §2.3 的构造重载传入同一标准抽象，空值均表示无日志。日志上下文随数据源→连接→会话或直接连接→会话传递，无可变进程级 LoggerFactory，也不从连接串选择日志后端。类别使用 `OceanBaseConnector.Connection`、`.Command`、`.Transaction`、`.Pool`，区分事件而不按 MySQL/Oracle 建两套类别；已认证模式可作为结构化字段。未知模式不能提前写成 MySQL。
+
+稳定 `EventId` 与字段先覆盖连接开始/完成/失败、执行完成/失败/取消/结果未知，池事件在 C01 定义。默认记录耗时、命令类别、端点、已确认模式、错误码/SQLSTATE；默认日志、span、metric 均不包含 SQL 文本、参数值、密码、完整连接串或认证字节。服务端错误文本可能回显敏感内容，不能直接把原始异常对象/Message 交给日志后端。各日志级别都遵守凭据保护；首版不提供敏感参数日志开关。
+
+禁用日志时先检查级别，不进行 SQL 渲染或逐包字符串分配。TCP/包流不因接入 DI 而依赖容器或反复解析服务；日志集中在会话、命令、事务与池的状态边界。日志提供程序异常不能跳过 socket 清理、覆盖原始数据库错误，或把已经成功的写入变成可重试失败，B01/B09 验证该隔离边界。
+
+C07 使用 `System.Diagnostics.DiagnosticSource` 支持旧资产的 Activity API，`Meter` 所需 API/包版本按四目标验证；指标只用有限维度，如模式、操作类别、结果，不能用 SQL、连接 ID 或任意 DI key 作高基数标签。本地追踪不依赖 OB20；D01 才处理经协商的服务端完整链路追踪。抓包仍是独立显式功能，默认关闭。
+
+### 2.7 当前代码影响与验收
+
+现有 `ConnectResult.Mode`、`PhysicalSession` 独占状态机、`OceanBaseConnectionOptions` 冻结配置、TCP/TLS 与包序号处理可以保留。现有代码没有双模式两套公开对象，不需要按参考项目重写。B01 在已有 options 之外增加不可变日志上下文并交给连接/会话，不把 `ILoggerFactory` 序列化进连接串；底层 byte cursor/帧编解码不增加宿主依赖。
+
+| 范围 | 后续必须修改 / 验证 |
+| --- | --- |
+| B01 | 核心 builder/data source、factory 现代入口、日志上下文；新增可选 DI 工程、slnx 项目项、CPM 依赖；保留无 DI 建连路径 |
+| B01/B09 | 无网络 Build/解析；配置快照；数据源并发但连接独占；连接打开失败清理；关闭/释放竞争；容器创建和释放、外部 logger 不释放、无日志宿主、配置覆盖、key 隔离、重复注册和 scope validation |
+| B02/B07/B09 | 同步/异步日志一致、失败/取消/结果未知不混淆；恶意服务端回显不泄密；日志后端异常不改变数据库执行与清理结果 |
+| 消费 / 包 | 四个核心资产编译；旧资产无现代类型；隔离消费测试解析新增日志依赖；DI 工程三个现代资产编译；全部测试宿主 .NET 10；两个包版本与依赖一致，核心不反向依赖 DI |
+| C01 | 数据源拥有池；重置、租户/模式/TLS/凭据隔离；数据源关闭后归还即销毁；禁止跨数据源共享物理会话 |
+| C06/C07 | C06 只补 batch 和数据源 batch 入口；C07 追踪、指标、禁用开销和性能验收，不重新实现数据源/基础日志 |
+
+A 阶段的 G0/G1、MySQL 模式可信版本矩阵与真实租户测试仍是阻塞项。DI 注册成功不能作为双模式连接或 SQL 兼容的证据。本次仅调整设计和任务归属，不增加产品能力声明。
+
 ## 3. 分层与状态所有权
 
 ```mermaid
 flowchart TD
+  J[手工 builder / 可选 DI 集成] --> K[现代 DataSource：冻结配置与日志]
+  K --> A
   A[ADO.NET 公共对象] --> B[连接配置与逻辑连接]
   B --> C[物理会话 / 状态机]
   C --> D[命令与结果协议]
@@ -52,6 +167,8 @@ flowchart TD
   I --> D
   I --> E
 ```
+
+现代数据源拥有冻结的配置、日志上下文及 C01 后的独立可选池；可以并发创建连接，但不是一条可共享执行的连接。DI 仅装配数据源，不注册内部协议对象，也不把 `IServiceProvider` 传入会话。外部 `ILoggerFactory` 不由驱动释放；手工创建的数据源由应用释放，容器工厂创建的由容器释放。具体释放竞争、活动连接与配置修改契约见 §2.4。
 
 物理会话拥有 socket、包序号、连接 ID、服务端版本、服务端确认的模式、协商后的能力、当前事务和服务端 statement ID。逻辑 `DbConnection` 拥有借用/关闭语义；`DbCommand` 拥有 SQL、参数与超时；`DbDataReader` 拥有尚未消费的响应和游标。每个物理会话同一时刻只允许一条命令或一个活动 reader；未消费的响应必须先读尽或使会话失效，绝不把带有未读包的连接交给下一条命令或连接池。
 
@@ -90,20 +207,20 @@ C 阶段完成前，B 阶段已支持低精度列的 `OceanBaseDecimal` provider
 
 ## 6. 池、HA、诊断和扩展范围
 
-ADO.NET 不替 provider 自动管理物理连接。`Pooling=false` 是默认值；生产版本提供可选池，只有某个服务端/OBProxy 版本与兼容模式组合经真实测试证实“完整重置”后，才允许为该组合启用 `Pooling=true`。其他组合在 `Open` 时明确拒绝池化请求。池按规范化连接选项、认证身份以及 TLS 信任材料/名称分组，限制连接数和等待超时；凭据或信任材料轮换须清空对应旧池。现代 `DbDataSource` 只是同一池的便捷入口。
+ADO.NET 不替 provider 自动管理物理连接。`Pooling=false` 是默认值；生产版本提供可选池，只有某个服务端/OBProxy 版本与兼容模式组合经真实测试证实“完整重置”后，才允许为该组合启用 `Pooling=true`。其他组合在 `Open` 时明确拒绝池化请求。池按规范化连接选项、认证身份以及 TLS 信任材料/名称分组，限制连接数和等待超时；凭据或信任材料轮换须清空对应旧池。现代 `DbDataSource` 从 B01 即提供配置与生命周期入口，C01 才挂接其拥有的独立池；不跨数据源共享物理会话。直接连接入口复用相同协议/重置规则；未来池化实现不得形成另一套协议链。
 
 归还会话时先关闭或读尽 reader，回滚未结束事务，再执行经过验证的服务端完整重置，并重做必要的字符集、时区、schema/NLS 等初始化；服务端 statement ID 与缓存、游标和 locator 全部失效。验证必须覆盖应用直接执行的 `SET`/`ALTER SESSION`、当前 database/schema、用户变量、临时对象、准备语句和失败中的事务，不能只恢复驱动 API 记录的设置。任何一步失败、遇到不能证明已清理的会话对象，或该版本没有完整重置能力，都销毁物理会话。Java 的 `OceanBaseConnection.reset()` 仅在特定条件下发 `COM_RESET_CONNECTION`，其他时候主要恢复已跟踪状态；它不能作为 OceanBase 完整重置的证明：[Java reset](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/OceanBaseConnection.java#L2463)。
 
 多地址先实现连接建立前顺序尝试；后续负载均衡和发现能力按真实 OceanBase/OBProxy 拓扑扩展。故障后创建的新物理会话必须重新握手、识别模式、初始化状态和准备 statement；不透明恢复 reader、事务或 locator。XA 需要显式 API、固定会话、恢复语义及两种模式不同命令；在真实服务端和事务协调器测试完成前不接入 `System.Transactions`。
 
-数据库/协议错误使用 `OceanBaseException : DbException`，保留服务端错误码、SQLSTATE、模式、`IsExecutionOutcomeUnknown` 和可安全公开的端点信息；发送前的调用方取消遵循 `OperationCanceledException`。不把 SQL 文本、绑定值或凭据写入默认异常与日志。使用 `System.Diagnostics.Activity` 和 `DiagnosticListener`/`EventSource` 暴露耗时、命令类别、连接/池事件与错误码；`netstandard2.0` 的 Activity/DiagnosticListener 来自 `System.Diagnostics.DiagnosticSource` 包，C 阶段须验证四个目标的事件语义一致。完整链路追踪只在 OB20 和服务端能力确认后启用。日志与协议抓包分开，抓包必须显式开启并擦除认证和参数内容。
+数据库/协议错误使用 `OceanBaseException : DbException`，保留服务端错误码、SQLSTATE、模式、`IsExecutionOutcomeUnknown` 和可安全公开的端点信息；发送前的调用方取消遵循 `OperationCanceledException`。B01 接入 `Microsoft.Extensions.Logging.Abstractions`，由数据源 builder 的 `UseLoggerFactory` 配置，默认无日志，不使用可变全局工厂；命令/事务日志随 B02/B07 实现。日志与追踪不写入默认 SQL、绑定值、凭据或原始服务端错误文本，日志后端异常不能改变执行与资源清理结果。C07 再用 `ActivitySource`、`Meter` 暴露本地操作和聚合指标，旧资产所需 `System.Diagnostics.DiagnosticSource` 等依赖须四目标验证；不预先叠加多套事件设施。本地追踪不依赖 OB20，经服务端协商的完整链路追踪归 D01。日志与协议抓包分开，抓包必须显式开启并擦除认证和参数内容。事件、安全和生命周期细则见 §2.6。
 
 ## 7. 实施阶段与验收
 
 | 阶段 | 最小完整产物 | 验收门槛 |
 | --- | --- | --- |
 | A. 协议基础 | 四目标构建；连接串、TCP/TLS、握手认证、模式/能力识别、标准包流、错误映射 | 固定字节夹具验证包边界/错误/模式位、客户端 Oracle/会话跟踪能力声明及协商、`CLIENT_SSL` 与 SSLRequest 顺序；要求 TLS 时，无 TLS 能力或升级失败不得发送认证数据；认证 OK 后无法识别模式则在解码查询结果前失败；两模式真实服务端用已确认的认证插件打开、关闭并识别模式；私有 CA、名称不匹配和禁止 TLS 降级均有测试 |
-| B. ADO.NET 核心 | 标准 provider 对象、同步/异步文本与服务端参数执行、逐行结果/多结果、显式事务、取消、基础类型和字段元数据 | 四目标编译；.NET 8/9/10 分别运行测试，并以 `netstandard2.0` 资产在兼容运行时做消费测试；两模式 CRUD、Oracle 名称绑定及重复名称、低精度 `OceanBaseDecimal` provider-specific 访问、Oracle `DATE` 含时间值的读取和写回、服务端不支持 prepare 时明确报错、参数往返、未实现类型的读取及绑定显式失败、`UPDATE` 匹配但值不变时的 `RecordsAffected`/`ExecuteNonQuery` 结果、活动事务下缺失/错误/过期 `DbCommand.Transaction` 拒绝、已打开连接进入 `TransactionScope` 后各协议入口拒绝且可清理、发送前取消和发包后结果未知均有集成测试；现代目标验证预处理及本地事务异步入口不退回同步 I/O |
+| B. ADO.NET 核心 | 标准 provider 对象、现代数据源/可选 DI、标准日志、同步/异步文本与服务端参数执行、逐行结果/多结果、显式事务、取消、基础类型和字段元数据 | 四目标编译；日常测试宿主统一 .NET 10，发布消费另取 .NET 8/9 与 `netstandard2.0` 资产证据；验证数据源/DI 生命周期、key 隔离和日志脱敏；两模式 CRUD、Oracle 名称绑定及重复名称、低精度 `OceanBaseDecimal` provider-specific 访问、Oracle `DATE` 含时间值的读取和写回、服务端不支持 prepare 时明确报错、参数往返、未实现类型的读取及绑定显式失败、`UPDATE` 匹配但值不变时的 `RecordsAffected`/`ExecuteNonQuery` 结果、活动事务下缺失/错误/过期 `DbCommand.Transaction` 拒绝、已打开连接进入 `TransactionScope` 后各协议入口拒绝且可清理、发送前取消和发包后结果未知均有集成测试；现代目标验证预处理及本地事务异步入口不退回同步 I/O |
 | C. 生产连接 | 经验证后可启用的池、多地址建连、服务端语句缓存、大值/游标流式读取、基础 `GetSchema`、MySQL 模式 `ChangeDatabase`、逐条 `DbBatch`、高精度/纳秒值、诊断 | 对池验证原始会话 SQL、临时对象、事务、准备语句及重置失败的隔离；不支持重置的组合拒绝 `Pooling=true`；验证 `DbBatch.Transaction` 绑定、每条命令的更新计数和失败前缀、异步批量、`GetSchemaAsync`/`ChangeDatabaseAsync` 不阻塞调用线程，以及 MySQL `DECIMAL(65,20)` 等宽精度值在文本/预处理路径上的精确读写、字段类型、provider-specific 读取及写回、OBProxy 与故障路径 |
 | D. OceanBase 扩展 | OB20/校验/追踪、Oracle OUT/RETURNING/游标、LOB/复杂类型、批量优化、显式 XA，以及有需求的客户端预处理回退/认证插件 | 每项都在目标服务端版本和兼容模式上有往返、错误及资源生命周期测试；扩展 API 未经验证时明确报不支持，不把 Java 选项名直接暴露给 .NET 用户 |
 
@@ -115,7 +232,7 @@ ADO.NET 不替 provider 自动管理物理连接。`Pooling=false` 是默认值�
 
 | Java 模块 | .NET 对应与计划阶段 | 差异或延后范围 |
 | --- | --- | --- |
-| M01 入口与统一 API | B：`DbConnection`、`DbCommand`、`DbDataReader`、`DbTransaction`、`DbProviderFactory`；C：现代 `DbDataSource`/`DbBatch` | JDBC `DataSource`/XA 入口不照搬；`DbDataAdapter`/`DbCommandBuilder` 仅在实际需要且模式语义明确时实现，未实现时 factory 不宣称支持 |
+| M01 入口与统一 API | B：`DbConnection`、`DbCommand`、`DbDataReader`、`DbTransaction`、`DbProviderFactory`、现代 `DbDataSource` 和可选 DI；C：`DbBatch` | JDBC `DataSource`/XA 入口不照搬；`DbDataAdapter`/`DbCommandBuilder` 仅在实际需要且模式语义明确时实现，未实现时 factory 不宣称支持 |
 | M02 URL、选项、地址 | A：.NET 连接串 builder 和单地址；C：多地址顺序尝试 | JDBC URL、TNS、OCP 地址发现和 Java 大量选项延后；不按 `oracle:` URL 判定模式 |
 | M03 网络、TLS、认证 | A：TCP、`CLIENT_SSL`/SSLRequest、`SslStream`、经验证的握手认证及标准包；D：按需求增加认证方式 | 要求 TLS 时，认证数据只在升级和所选验证完成后发送；显式明文连接仍不得使用 cleartext 类认证；Java 的 SPI、Unix socket、Windows pipe、共享内存、压缩包流不是首版承诺；私有 CA 与证书名称见 §2 |
 | M04 握手、模式、能力 | A：客户端 `CLIENT_SUPPORT_ORACLE`/`CLIENT_SESSION_TRACK` 等能力声明、认证 OK 状态位、服务端版本和协商能力 | OB20/追踪在 D；请求选项、模式、版本、服务端能力分别保存，不能把未知模式当 MySQL |
@@ -129,7 +246,7 @@ ADO.NET 不替 provider 自动管理物理连接。`Pooling=false` 是默认值�
 | M12 HA/地址发现 | C：建连前顺序切换；D：经拓扑验证的负载均衡/发现 | 不迁移 Java 的 AURORA/REPLICATION 名称或透明重试已发送 SQL |
 | M13 内置池 | C：provider 池与完整重置门槛 | .NET 没有替 provider 提供通用物理池；Java 的已跟踪状态重置不足以证明隔离 |
 | M14 XA | D：固定会话的显式 XA API，分模式命令和恢复 | 不自动等价于 `TransactionScope`，首版显式拒绝环境事务 |
-| M15 诊断/OB20 | C：`Activity`/诊断事件；D：OB20、校验与完整链路追踪 | 追踪依赖协商，抓包默认关闭并擦除敏感内容 |
+| M15 诊断/OB20 | B：标准日志；C：`ActivitySource`/`Meter`；D：OB20、校验与服务端完整链路追踪 | 本地追踪不依赖 OB20；服务端追踪依赖协商，抓包默认关闭并擦除敏感内容 |
 | M16 构建与生态 | A–D：NuGet、多目标、夹具和双模式集成矩阵 | Java SPI/OSGi/JMX/JNA 不移植；.NET 工厂注册和可选生态集成按需求实现 |
 
 ## 9. 实现前需确认的产品决定

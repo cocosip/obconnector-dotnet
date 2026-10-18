@@ -6,9 +6,11 @@
 
 **Architecture:** 一个公开 provider、一个共享协议主链，每个物理会话保存模式、版本、能力和事务状态。同步与异步入口共享编码和状态机，分别使用同步与异步网络 I/O；C 阶段才开放经完整重置验证的池化。
 
-**Tech Stack:** C#、.NET 10 SDK；单个 `netstandard2.0;net8.0;net9.0;net10.0` NuGet 包；ADO.NET、`TcpClient`/`SslStream`、`System.Numerics.BigInteger`、xUnit。协议核心不引入 Oracle/MySQL 原生客户端。
+**Tech Stack:** C#、.NET 10 SDK；单个 `netstandard2.0;net8.0;net9.0;net10.0` 核心 provider 包和可选的现代 DI 集成包，同版本统一发布；ADO.NET、`TcpClient`/`SslStream`、标准日志抽象、`System.Numerics.BigInteger`、xUnit。协议核心不引入 Oracle/MySQL 原生客户端。
 
 **Spec:** [架构设计](obconnector-dotnet-architecture-design.md)，Java 行为基线为 [Connector/J 架构提纲](obconnector-j-architecture-outline.md)固定的提交 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。这两个文档是设计和对照依据，不是 .NET 已实现能力的证明。
+
+**.NET 接入修订（2026-10-18）：**架构设计 §2.1–§2.7将现代数据源、可选 DI 和基础日志前移到 B01；C06 保留 batch，C07 保留追踪/指标与性能。Java 仍是统一协议与模式行为的主要依据，`oceanbase-dotnet` 只作有限的宿主接入参考。B01 范围扩大，原周窗口只保留为估算，进入 B 前需重估，不由任务数量不变推断工作量不变。
 
 ## 全局约束与准入
 
@@ -27,7 +29,9 @@
 | `OceanBaseConnector.slnx`、`global.json` | .NET 10 SDK 的统一解决方案和 SDK 主版本约束 |
 | `Directory.Build.props` | 全部产品、程序集与包版本唯一来源 Version |
 | `Directory.Packages.props` | 中央包管理：全部 NuGet 包版本的唯一来源，传递依赖钉扎 |
-| `src/OceanBaseConnector/OceanBaseConnector.csproj` | 唯一产品程序集和多目标条件编译；包元数据在发布门槛确定 |
+| `src/OceanBaseConnector/OceanBaseConnector.csproj` | 唯一核心 provider 程序集和四目标条件编译；日志仅依赖标准抽象 |
+| `src/OceanBaseConnector/OceanBaseDataSource*.cs` | B01 的现代 builder/数据源、冻结配置与生命周期；C01 后拥有独立可选池 |
+| `src/OceanBaseConnector.DependencyInjection/` | B01 新增的可选集成包，目标 net8.0/net9.0/net10.0；容器工厂创建统一数据源并接入宿主日志，无模式分支 |
 | `src/OceanBaseConnector/OceanBaseConnection*.cs`、`OceanBaseCommand*.cs`、`OceanBaseDataReader*.cs`、`OceanBaseTransaction*.cs` | ADO.NET 公共对象；拆分文件按对象职责，不复制四套协议 |
 | `src/OceanBaseConnector/OceanBaseParameter*.cs`、`OceanBaseProviderFactory.cs`、`OceanBaseConnectionStringBuilder.cs` | 参数、工厂和配置的公开契约 |
 | `src/OceanBaseConnector/Internal/Transport/` | TCP、SSLRequest、TLS、同步/异步字节流与关闭取消 |
@@ -38,6 +42,7 @@
 | `tests/OceanBaseConnector.UnitTests/` | 不依赖服务端的字节夹具、API/状态机和错误路径测试 |
 | `tests/OceanBaseConnector.IntegrationTests/` | 独立 MySQL/Oracle 租户、OBProxy、TLS、故障与重置测试；没有环境时跳过并明确报告 |
 | `tests/OceanBaseConnector.ConsumerTests/` | 统一 .NET 10 消费宿主；基线样例显式选择 netstandard2.0 资产，在隔离加载上下文执行；发布时另验证包、工厂和公开值类型身份 |
+| `tests/OceanBaseConnector.DependencyInjection.Tests/` | B01 新增，net10.0；内置容器释放、普通/key 注册隔离、配置与日志测试 |
 
 `PhysicalSession` 独占 socket、包序号、模式、版本、协商能力及服务端 statement ID；一次只有一个命令或 reader 持有它。公开 `OceanBaseConnection` 是逻辑借用者。`OceanBaseCommand` 在发送前验证参数、事务和环境事务；`OceanBaseDataReader` 在关闭/读尽前持有响应；任何未读包、结果未知、重置失败都使物理会话失效。`SessionMode` 只能由认证 OK 的服务端状态确定，`ExpectedMode` 只做事后校验。
 
@@ -51,7 +56,7 @@
 | --- | --- | --- |
 | G0 准入 | W0 | 记录目标 OceanBase/OBProxy 版本、租户、TLS/认证、测试运行方式和 §9 产品决定；环境缺失列为阻塞项 |
 | G1 协议基础 A | W1-W5 | A01-A07 完成；双模式真实连接/关闭与 TLS 拒绝场景有证据 |
-| G2 ADO.NET 核心 B | W6-W17 | B01-B09 完成；双模式 CRUD、参数、低精度 `OceanBaseDecimal` provider-specific 访问、事务、取消、元数据和四目标消费证据齐全 |
+| G2 ADO.NET 核心 B | W6-W17（接入修订后待重估） | B01-B09 完成；现代数据源/DI 生命周期与基础日志、双模式 CRUD、参数、低精度 `OceanBaseDecimal` provider-specific 访问、事务、取消、元数据和四目标消费证据齐全 |
 | G3 生产连接 C | W18-W34 | C01-C08 完成；池化仅对通过完整重置的组合开放，精确类型和负载故障场景通过 |
 | G4 发布候选 | W35-W37 | R01-R02 完成；兼容矩阵、许可证/包名和 NuGet 包验证齐全 |
 | D 扩展 | G4 后逐项排期 | D01-D15 各自有独立版本/模式矩阵，不阻塞 G4，除非产品决定更改 |
@@ -128,12 +133,17 @@
 
 ## B. ADO.NET 核心
 
-### B01 标准 provider 对象
+### B01 标准 provider、现代数据源与宿主接入
 
-**产物：**`OceanBaseConnection`、`OceanBaseCommand`、`OceanBaseParameter`、`OceanBaseDataReader`、`OceanBaseTransaction`、`OceanBaseProviderFactory`；工厂创建正确派生类型，未实现的方法明确失败。
+**产物：**`OceanBaseConnection`、`OceanBaseCommand`、`OceanBaseParameter`、`OceanBaseDataReader`、`OceanBaseTransaction`、`OceanBaseProviderFactory`；现代资产的 `OceanBaseDataSourceBuilder`/`OceanBaseDataSource` 和可选 DI 包；数据源级 `ILoggerFactory`。工厂创建正确派生类型，尚未实现的方法明确失败；SQL、reader、事务的执行能力仍由 B02-B08 逐项交付，不发布空壳能力声明。
 
-- [ ] 测试创建/关闭/重复使用、`DbProviderFactories.RegisterFactory`、`ConnectionString` 脱敏、`CommandBehavior.CloseConnection`，以及 B 阶段 `ChangeDatabase`/`ChangeDatabaseAsync` 在发包前报不支持。
+- [ ] 测试创建/关闭/重复使用、`DbProviderFactories.RegisterFactory`、`ConnectionString` 脱敏，以及 B 阶段 `ChangeDatabase`/`ChangeDatabaseAsync` 在发包前报不支持；reader 的 `CommandBehavior.CloseConnection` 随 B06 验收。
 - [ ] 将对象只连接到 A 阶段会话，不暴露内部 socket 或双模式两套公开类型。
+- [ ] 先实现核心 builder/无池数据源、现代 factory 入口与日志上下文，再增加可选 DI 工程及 slnx 项目项。四个资产的直接连接构造重载均可传入 `ILoggerFactory`，无全局工厂，基线资产也有日志配置入口。核心只引用 `Microsoft.Extensions.Logging.Abstractions`；集成包引用核心和 DI 抽象，版本由 CPM 管理，两个包同一根 Version。
+- [ ] 实现普通/带 key 数据源注册；容器工厂延迟 Build，先取得宿主 logger 再执行配置回调，无日志服务时可用；默认不注册连接。数据源 Singleton，key/重复注册/通用别名冲突遵循架构设计 §2.5，不创建第二个容器。
+- [ ] 测试 Build/DI 解析不联网、配置冻结、来源数据源的连接配置不可替换、独立数据源不串配置、打开失败释放、数据源关闭与打开竞争、关闭后新打开拒绝、活动连接由调用者完成、释放幂等和外部 logger factory 不被释放。
+- [ ] 测试连接事件同步/异步一致、所有级别凭据脱敏、原始服务端异常不泄露、日志后端抛错不妨碍执行与清理；日志不改变认证模式、取消或结果未知语义。
+- [ ] 新增 net10.0 DI 测试：容器创建/释放、scope validation、配置覆盖、无日志宿主、两种模式的合成会话共用公开类型及不同 key 隔离；实际模式仍需实库验证。
 - [ ] 在四目标编译并运行工厂/消费测试。
 
 ### B02 文本命令、OK/ERR 与多结果
@@ -143,6 +153,7 @@
 - [ ] 夹具覆盖 `SELECT`、DML、空结果、多个结果集、结果集后更新计数、服务器 ERR 和有未消费响应的关闭。
 - [ ] 验证默认 `CLIENT_FOUND_ROWS` 下无实际变化的 `UPDATE` 返回匹配行数；`RecordsAffected` 仅按服务端 OK 计数累计。
 - [ ] 两模式分别运行文本 CRUD 与异步网络阻塞测试。
+- [ ] 使用 B01 日志上下文记录命令完成/错误/取消/结果未知，默认不记录 SQL 或绑定值；日志后端故障不将已成功执行转成可重试错误。
 
 ### B03 Oracle 占位符词法器与参数验证
 
@@ -183,6 +194,7 @@
 - [ ] 测试遗漏、错误连接、已结束事务、重复开启、隔离级别错误、关闭时回滚及回滚失败销毁。
 - [ ] 测试连接打开前/后进入 `TransactionScope`，所有调用方协议入口拒绝但内部清理可继续。
 - [ ] 两模式运行提交、回滚、断线后结果未知测试。
+- [ ] 沿用 B01 日志上下文，覆盖事务完成/失败及结果未知；不记录 SQL/参数或原始服务端错误文本，日志异常不能掩盖提交结果。
 
 ### B08 取消、超时与结果未知
 
@@ -194,9 +206,10 @@
 
 ### B09 G2 公共 API 与双模式验收
 
-**产物：**B01-B08 的四目标编译/消费、双模式 CRUD、参数、低精度 `OceanBaseDecimal` provider-specific 访问、事务、reader、取消证据；公开 API 审查记录，列明与 Java 的有意功能差距。
+**产物：**B01-B08 的核心四目标编译/消费、现代数据源/DI 生命周期与基础日志、双模式 CRUD、参数、低精度 `OceanBaseDecimal` provider-specific 访问、事务、reader、取消证据；公开 API 审查记录，列明与 Java 的有意功能差距。
 
-- [ ] 运行 `dotnet build -c Release`、`dotnet test -c Release`，并按 .NET 8/9/10 分别执行测试及 `netstandard2.0` 包消费。
+- [ ] 用 .NET 10 SDK 对 slnx 运行 Release build/test，核心四目标及 DI 三个现代目标编译，日常测试宿主全部 net10.0；发布消费另取 .NET 8/9 运行时和 `netstandard2.0` 资产证据。
+- [ ] 验证基线隔离消费在增加日志依赖后仍能解析依赖；核心不反向引用集成包，旧资产无现代数据源类型，数据源/DI/factory 入口的模式与安全语义一致。
 - [ ] 在双模式直连和 OBProxy 上运行 B 阶段集成套件，登记版本、失败用例及已知不支持项。
 - [ ] 仅当必需组合全部通过、无 P0/P1 缺陷时关闭 G2。
 
@@ -204,7 +217,7 @@
 
 ### C01 池、完整重置与会话隔离
 
-**产物：**按规范化连接选项、凭据身份/材料和 TLS 目标分组的可选池；默认不池化。仅在版本/模式组合的完整重置已验证后接受 `Pooling=true`。
+**产物：**由数据源拥有、按规范化连接选项、凭据身份/材料和 TLS 目标分组的可选池；默认不池化。仅在版本/模式组合的完整重置已验证后接受 `Pooling=true`。不同显式数据源不共享物理会话，池日志继承各自上下文；数据源释放后清空空闲连接、活动借用归还即销毁，打开/释放竞争不能产生游离会话。直接连接入口的池作用域须与显式数据源隔离，沿用同一池/重置实现。
 
 - [ ] 测试 `SET`/`ALTER SESSION`、schema、用户变量、临时对象、未完成事务、准备语句、reader 和重置失败不会跨借用者泄漏。
 - [ ] 归还时读尽/销毁未消费响应、回滚、服务端重置、重做初始化；任何无法证明已清理的状态销毁物理会话。
@@ -242,17 +255,17 @@
 - [ ] 双模式测试名称大小写、schema、限制参数、权限不足和异步入口不阻塞网络等待；验证 MySQL 切换后的 `Database`/查询目标、失败时状态不变，Oracle 模式拒绝切换且不发包。
 - [ ] 记录与 Java 元数据范围的差距，作为 D 阶段候选。
 
-### C06 现代数据源与逐条 DbBatch
+### C06 逐条 DbBatch 与数据源批量入口
 
-**产物：**`net8.0+` 的 `DbDataSource`、`DbBatch` 与 factory 入口；`DbBatch` 先逐条执行，保留每条 `RecordsAffected` 和失败前缀，不自动保证原子性。
+**产物：**`net8.0+` 的 `DbBatch`、factory 和 B01 数据源的批量入口；`DbBatch` 先逐条执行，保留每条 `RecordsAffected` 和失败前缀，不自动保证原子性。基础数据源不再延后到本任务。
 
 - [ ] 实现后测试 `CanCreateBatch=true`、batch 事务绑定、逐条计数、失败位置、异步批量和结果未知；实现前不发布空壳 batch。
-- [ ] `DbDataSource` 使用同一配置和池，公开连接串仍脱敏；旧目标不出现现代 API。
+- [ ] 数据源 batch 沿用其冻结配置、日志、独立可选池和事务规则，公开连接串仍脱敏；旧目标不出现现代 API。
 - [ ] 在 .NET 8/9/10 分别运行消费与集成测试。
 
 ### C07 诊断与性能基线
 
-**产物：**`Activity`、`DiagnosticListener`/`EventSource` 的连接、命令、池和错误事件；默认无 SQL、绑定值或凭据。抓包单独显式开启并擦除认证/参数数据。
+**产物：**`ActivitySource` 本地操作追踪、`Meter` 聚合指标及禁用开销/性能基线；基础 `ILogger` 接入已由 B01 交付，命令/事务和池日志随对应任务实现。四目标 API/包依赖验证；本地追踪不依赖 OB20，不预先堆叠其他诊断桥接。默认无 SQL、绑定值或凭据；指标不用 SQL/连接 ID/任意 key 作高基数标签。抓包单独显式开启并擦除认证/参数数据。
 
 - [ ] 测试四目标事件名称/字段一致、敏感数据不出现、取消与结果未知被区分。
 - [ ] 以预处理、多结果、大值和高并发池借还建立性能/内存基线；显著退化写入缺陷台账。
@@ -308,14 +321,14 @@
 | M12 HA 与地址发现 | C02、D08 |
 | M13 内置池 | C01 |
 | M14 XA | D09 |
-| M15 诊断与 OB20 | C07、D01 |
+| M15 诊断与 OB20 | B01、B02、B07、C01、C07、D01 |
 | M16 构建与生态 | A01、B09、R01-R02 |
 
 ## 发布与交接
 
 ### R01 包与公开契约审查
 
-- [ ] 固定 NuGet ID、版本、许可证声明和第三方归属；只打包四个目标资产和必要文档。
+- [ ] 固定核心/集成包 NuGet ID、许可证声明和第三方归属；两个包从根 Version 取同一版本，统一打包和发布，检查 nuspec 中集成包的核心依赖为根 Version 派生的精确区间；核心四资产、集成包三现代资产及必要文档齐全。
 - [ ] 从空项目分别消费 `netstandard2.0`、.NET 8/9/10 资产，验证 provider factory、现代 API 可见性、公开类型身份和脱敏。
 - [ ] 生成包并检查内容，公开不支持能力与兼容矩阵；不得把阶段 D 计划写成已支持。
 
