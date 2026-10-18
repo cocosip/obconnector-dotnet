@@ -1,0 +1,15 @@
+<Project>
+  <Import Project="../Directory.Build.props" />
+  <PropertyGroup>
+    <Authors>OceanBaseConnector contributors</Authors>
+    <RepositoryUrl>https://github.com/cocosip/obconnector-dotnet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/cocosip/obconnector-dotnet</PackageProjectUrl>
+    <PackageTags>OceanBase;ADO.NET;database;MySQL;Oracle</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="/" />
+    <None Include="$(MSBuildThisFileDirectory)../THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

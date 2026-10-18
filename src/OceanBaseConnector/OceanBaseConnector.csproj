@@ -4,8 +4,9 @@
     <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0</TargetFrameworks>
     <RootNamespace>OceanBaseConnector</RootNamespace>
     <AssemblyName>OceanBaseConnector</AssemblyName>
+    <PackageId>OceanBaseConnector</PackageId>
     <!-- Version comes from Directory.Build.props; never set it here. -->
-    <Description>Managed ADO.NET provider for OceanBase (MySQL and Oracle compatibility modes).</Description>
+    <Description>Experimental managed ADO.NET provider for OceanBase MySQL and Oracle compatibility modes. See the package README for current validation and capability limits.</Description>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!--
       DbConnectionStringBuilder's indexer annotations are asymmetric on modern
@@ -13,7 +14,6 @@
       override signature satisfies both. See OceanBaseConnectionStringBuilder.
     -->
     <NoWarn>$(NoWarn);CS8764;CS8765</NoWarn>
-    <!-- Packaging metadata is finalized at the R01 release gate. -->
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 

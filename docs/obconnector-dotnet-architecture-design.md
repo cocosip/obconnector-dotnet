@@ -79,6 +79,10 @@ DI 只装配应用级对象。`PhysicalSession`、包流、认证处理、命令
 
 将原先的“单个产品包/程序集”修订为“单个核心 provider 包 + 可选宿主集成包”。它们不是两个模式的驱动。两个包都从 `Directory.Build.props` 取同一 `Version`，在同一次发布中构建、验证和发布；所有依赖版本仍只写在 `Directory.Packages.props`，解决方案继续使用 slnx。集成包的核心依赖使用当前根版本的精确 NuGet 区间（如 `[0.1.0-alpha]`，由根 Version 派生，不在项目复制版本字面量），打包时核对 nuspec，不各自发布不同版本。
 
+R01 本地打包固定以上两个现有包 ID；`src/Directory.Build.props` 显式导入根公共属性后统一产品包的源码仓库、说明文档和归属清单，包内包含根 `README.md` 及 `THIRD-PARTY-NOTICES.md`。一次 `dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/packages` 生成两个包，`eng/Verify-Packages.ps1 -PackageDirectory TestResults/packages` 检查实际 nuspec/资产/依赖后，在全新缓存、限制产品 ID 仅来自本地包源的空项目中进行实际 PackageReference 还原；SHA512 与本次 nupkg 对照，禁止由旧同版本缓存或产品 ProjectReference 替代包消费。项目开源许可证、商标/包名可用性和源码来源审核仍为发布前独立关口，不自动沿用 Java 的 LGPL 或为缺失的授权虚构 SPDX 表达式。
+
+专门的发布消费样例保存在 `tests/PackageConsumer/Program.cs`，不新增日常旧目标测试宿主；验证器临时生成五目标样例工程及其 CPM 配置，分别编译两个 Standard 库与三个现代可执行样例。Standard 在 .NET 10 的隔离加载上下文中验证；现代样例分别运行于实际 .NET / ASP.NET Core 8、9、10，借用样例宿主的容器实现验证普通/keyed DI、factory、类型身份、现代 API 边界、取消/凭据隐藏及日志/诊断程序集主版本，不给产品增加 ASP.NET Core 依赖。这只证明本地包消费，不代替完整旧运行时、真实双模式或跨平台兼容验收。普通测试工程仍统一 net10。
+
 依赖版本统一管理不等于所有目标引用同一主版本。`Directory.Packages.props` 按 `TargetFramework` 条件选择 Microsoft 通用库，核心和 DI 集成包采用相同矩阵，传递依赖也不得将较低目标抬升至较高主版本。当前版本如下；后续补丁只在对应主版本内集中升级。
 
 | 产品目标 | Logging.Abstractions | DependencyInjection.Abstractions | 完整 DependencyInjection（仅测试需要） | DiagnosticSource |

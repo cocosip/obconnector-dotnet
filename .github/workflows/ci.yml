@@ -22,6 +22,14 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Setup package-consumer runtimes (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
       - name: Restore
         run: dotnet restore OceanBaseConnector.slnx
 
@@ -49,6 +57,9 @@ jobs:
           -c Release --no-restore --no-build
 
       - name: Pack (release artifact smoke check)
-        run: |
-          dotnet pack src/OceanBaseConnector/OceanBaseConnector.csproj -c Release --no-build
-          dotnet pack src/OceanBaseConnector.DependencyInjection/OceanBaseConnector.DependencyInjection.csproj -c Release --no-build
+        run: dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/packages
+
+      - name: Verify actual package consumers (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./eng/Verify-Packages.ps1 -PackageDirectory TestResults/packages

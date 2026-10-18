@@ -98,13 +98,13 @@
 | C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 待验证 | 2026-10-19 Codex；切换及四个目录集合/限制/现代异步本地完成，核心五/DI三编译、Windows完整测试与五资产消费、独立走查通过；字典/权限/版本真实验收暂缓，证据见末尾目录模块记录 |
 | C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 待验证 | 2026-10-19 Codex；现代三资产逐条执行/会话预约/快照/准备复用/计数/失败归因及数据源入口本地完成；Windows Unit1172、Consumer142、DI8和实际8/9/10样例通过，走查问题已修复；实库及非Windows暂缓，见末尾C06记录 |
 | C07 | W29-W32 | 本地 ActivitySource/Meter、脱敏和性能基线 | 待验证 | 2026-10-19 Codex；固定操作/模式/结果/未知标签、会话/命令/事务追踪及两个指标本地完成，监听器异常隔离和独立走查修复通过；Unit1205/Consumer152/DI8、五/三目标编译与实际8/9/10样例通过；Windows协议基线已记录，池/实库/跨平台待验收 |
-| C08 | W33-W34 | 生产版本/模式矩阵与 G3 审核 | 未开始 | 待记录 |
+| C08 | W33-W34 | 生产版本/模式矩阵与 G3 审核 | 阻塞 | 2026-10-19 已核对本地证据与生产验收差距；G3仍0/8，缺真实两模式/OBProxy/TLS/认证/重置白名单矩阵，按约定暂缓，不用协议夹具关闭门槛 |
 
 ## 发布与可选扩展
 
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
-| R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 未开始 | 待记录 |
+| R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-19 本地统一打包元数据/包内文档/五资产实际包消费完成；Unit1205/Consumer152/DI8及独立走查通过，许可证、来源及包名/商标审查仍开放，不发布；证据见末尾 |
 | R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 未开始 | 待记录 |
 | D01 | G4 后 | OB20、校验与完整链路追踪 | 未开始 | 待记录 |
 | D02 | G4 后 | Oracle 过程及 OUT/RETURNING | 未开始 | 待记录 |
@@ -401,3 +401,11 @@ Windows本地基线环境为.NET10.0.12、Windows10.0.26200、Intel64 Family6 Mo
 诊断Start/Finish微基线各10000次：无监听6.195ms/0字节，拒绝采样1.185ms/480000字节，Activity启用16.811ms/9440000字节。采样/启用数值含运行时Activity机制；分配分别约0/48/944字节每次，无监听不创建每次诊断对象/标签/额外Stopwatch。计时受JIT和调度影响，单次结果不用于宣称启用更快或生产吞吐无退化；这是首份可重复基线，尚无历史同环境回归对比，不虚构退化结论。复现命令为dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-build --no-restore --filter FullyQualifiedName~DiagnosticsTests --logger "trx;LogFileName=c07-diagnostics-baseline.trx" --results-directory TestResults，TRX保留逐组输出。
 
 格式、UTF-8无BOM/CRLF和git diff --check通过，TestResults/c07-diagnostics-pack双包检查核心5/DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本[0.1.0-alpha]、Microsoft.Extensions 8/9/10及仅两个Standard资产显式DiagnosticSource8.0.1。既有NuGet缺README提示仍归R01。三份既有文档已更新，C07待验证，当前master提交不推送；不据本地基线关闭G3，真实两模式/OBProxy、非Windows及高并发池借还暂缓，C01未开放所以未用非池测试冒充池基线。A05可信公共MySQL认证和G0/G1缺口不变；后续先核对C08尚缺证据，再推进可本地开展的发布准备。
+
+2026-10-19 C08证据核对与R01本地包准备：核对现有本地实现/协议证据后，C08改为阻塞，G3仍0/8；真实两模式/OBProxy/TLS/认证及完整重置白名单缺口不能由本地包消费补齐。R01按现有设计推进，两个产品显式固定现有包ID，新增src/Directory.Build.props导入根属性后统一仓库/作者描述/包内README与THIRD-PARTY-NOTICES；根Version、CPM、五/三目标和DI精确核心依赖保持统一。README公开实验版本、真实组合全部未验证、A05公共MySQL握手拒绝、Pooling=true拒绝、结果未知不重放及未支持能力，没有把D阶段当作已支持。归属清单从实际依赖元数据核对，包含CPM提升为直接依赖的DI抽象；参考Java LGPL不自动成为本项目许可证。项目许可证已向维护者询问，尚未确定，也未作源码来源/商标和包名授权结论。
+
+新增eng/Verify-Packages.ps1与tests/PackageConsumer/Program.cs：先对旧包验证README缺失而失败（TestResults/r01-package-readme-red.log），再以一次slnx pack生成两包，检查实际ZIP/nuspec、核心5/DI3资产、8依赖组、按TFM的Microsoft 8/9/10、仅Standard显式DiagnosticSource8.0.1和DI核心精确[0.1.0-alpha]。验证器使用全新目录/缓存、产品ID只映射至本地包源、PackageReference和包SHA512核对，拒绝旧同版本缓存替代本次产物；既有依赖缓存仅作离线依赖源。临时五目标样例采用独立CPM，不新增日常旧目标测试工程，不引用产品ProjectReference。全部样例验证factory、公开类型身份/数值、现代API可见性、预取消及凭据隐藏、实际Logging/DiagnosticSource程序集主版本；现代样例另验证普通/keyed DI和数据源别名/释放与batch入口，使用样例宿主自带的ASP.NET Core容器，产品不增加宿主依赖。实际.NET8.0.31/9.0.20/10.0.12运行通过，两个Standard资产在隔离.NET10.0.12宿主通过；这不是完整旧运行时或真实服务器兼容矩阵。
+
+两项损坏产物检查分别删除包内README、将DI核心约束从精确区间放宽为最低版本，验证器均退出1并输出对应原因；日志保留于TestResults/r01-negative/78dcd9057dbf4297a1b5c7c899cad852下。Windows CI改为统一slnx pack并接入实际包消费验证，所需8/9运行时通过setup-dotnet安装；现有非Windows作业未在本地执行。独立只读走查核对全部新增文件、依赖和缓存隔离，没有发现其他需修复项；唯一最低PowerShell版本问题（7.0不支持所用HashData）已将Requires及README修正为7.1+，本机实际7.6.6/.NET10.0.12执行。
+
+最终本地Release slnx核心五/DI三目标编译0警告0错误，完整Windows Unit1205、Consumer152、DI8通过且0跳过（TestResults/r01-unit-final.trx、r01-consumer-final.trx、r01-di-final.trx）；完整单测沿用正常Windows TLS证书存储访问，没有降低TLS校验。新包及实际包消费日志为TestResults/r01-pack和TestResults/r01-package-green.log，生成样例、独立缓存与还原图路径由该日志记录。最终包复跑曾因沙箱NuGet漏洞数据查询失败报NU1900；使用正常Windows TLS凭据完整重跑后五资产全部通过，没有禁用漏洞查询或TLS校验。PowerShell语法、格式/diff和UTF-8无BOM/CRLF检查通过后，在当前master提交不推送。R01两项技术验收勾选，许可/来源及包名/商标项保持开放，状态为进行中；未发布包，真实数据库、非Windows和完整历史运行时矩阵仍暂缓，A05/C01/G0/G1/G3/R02缺口不变。
