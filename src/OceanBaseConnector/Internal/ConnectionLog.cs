@@ -42,7 +42,7 @@ namespace OceanBaseConnector.Internal
                 logger.Log(level, new EventId(id, name),
                     "{Operation} Endpoint={Endpoint} Mode={Mode} ElapsedMilliseconds={ElapsedMilliseconds} ErrorCode={ErrorCode} SqlState={SqlState} Canceled={Canceled} OutcomeUnknown={OutcomeUnknown}",
                     name, endpoint, mode, elapsed, databaseError?.ServerErrorCode, databaseError?.SqlState,
-                    error is OperationCanceledException || error?.InnerException is OperationCanceledException,
+                    error is OperationCanceledException || databaseError?.InnerException is OperationCanceledException,
                     databaseError?.IsExecutionOutcomeUnknown ?? false);
             }
             catch { }

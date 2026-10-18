@@ -155,7 +155,7 @@ namespace OceanBaseConnector.Internal.Session
             else _lease.CompleteIfActive();
             Exception cause = error;
             if (_caller.IsCancellationRequested) cause = new OperationCanceledException("Command canceled.", error, _caller);
-            else if (error is OperationCanceledException canceled && canceled.CancellationToken.CanBeCanceled) cause = error;
+            else if (error is OperationCanceledException canceled && canceled.CancellationToken.CanBeCanceled && canceled.CancellationToken != _budget.Token) cause = error;
             else if (_cancel.IsCancellationRequested) cause = new OperationCanceledException("Command canceled.", error);
             else if (_budget.IsCancellationRequested) cause = new TimeoutException("Command timed out.", error);
             var mapped = _sqlSent
