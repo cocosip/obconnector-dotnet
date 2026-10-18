@@ -15,6 +15,7 @@
 - 当前排期以 A/B/C 均进入首个正式版本为基线，G0-5 决定是否调整；D 按独立能力交付。没有真实双模式测试和明确版本矩阵，不能把 A/B/C 标记为发布完成。
 - 首版默认 `TLS Mode=VerifyFull`、`Pooling=false`、`CLIENT_FOUND_ROWS`；不自动重试已发送 SQL，不隐式客户端参数插值，不加入 `TransactionScope`。变更这些公开语义须先修订架构设计。
 - `netstandard2.0` 定义公共类型身份；现代 ADO.NET API 用条件编译，仅在 `net8.0+` 暴露。每个目标单独编译，.NET 8/9/10 运行测试，另用 `netstandard2.0` 资产做消费测试。
+- 仓库统一使用中央包管理(CPM)：根目录 `Directory.Packages.props` 固定全部 NuGet 包版本并开启传递依赖钉扎；工程的 `PackageReference` 一律不带 `Version`。新增依赖只改 `Directory.Packages.props`。
 - 许可和包名在发布前审定；只参考 Java 行为和协议，不直接移植其 LGPL-2.1 实现。
 - 进入 A 的真实互通验收前，应取得两个兼容模式的独立租户、服务端和 OBProxy 版本、认证插件、可验证的 TLS 证书及可控故障网络。缺少环境时只报告夹具验证。
 - 所有任务先写会失败的边界用例，再实现，再运行该用例和所属阶段回归；原始协议夹具保留来源、版本、模式和预期字段，不存真实凭据。
@@ -23,6 +24,7 @@
 
 | 位置 | 职责 |
 | --- | --- |
+| `Directory.Packages.props` | 中央包管理：全部 NuGet 包版本的唯一来源，传递依赖钉扎 |
 | `src/OceanBaseConnector/OceanBaseConnector.csproj` | 唯一产品程序集和多目标条件编译；包元数据在发布门槛确定 |
 | `src/OceanBaseConnector/OceanBaseConnection*.cs`、`OceanBaseCommand*.cs`、`OceanBaseDataReader*.cs`、`OceanBaseTransaction*.cs` | ADO.NET 公共对象；拆分文件按对象职责，不复制四套协议 |
 | `src/OceanBaseConnector/OceanBaseParameter*.cs`、`OceanBaseProviderFactory.cs`、`OceanBaseConnectionStringBuilder.cs` | 参数、工厂和配置的公开契约 |

@@ -40,6 +40,12 @@ namespace OceanBaseConnector.Internal.Protocol
         ClientOptionalResultsetMetadata = 0x2000000,
         ClientZstdCompressionAlgorithm = 0x4000000,
         ClientQueryAttributes = 0x8000000,
+
+        /// <summary>OceanBase extension: client understands Oracle-mode packets.</summary>
+        ClientSupportOracle = 0x8000000,
+
+        /// <summary>OceanBase extension: client understands LOB locators.</summary>
+        ClientSupportLobLocator = 0x20000000,
         ClientSslVerifyServerCert = 0x40000000,
     }
 }
