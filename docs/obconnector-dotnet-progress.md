@@ -30,6 +30,12 @@
 
 本次重新编译 Release slnx：核心五目标、DI 三目标，0 警告/0 错误；完整 Windows Unit1117、Consumer128、DI8 全通过且零跳过，报告为 `TestResults/review-resume-{unit,consumer,di}.trx`。解析报告确认上表对应回归均实际执行并通过，包含目录长小数字符串/浮点拒绝、游标失败日志重入/伪确认/状态报告/部分发送取消及字段缓存生命周期。实库、非 Windows 与新的旧运行时验收仍按既有约定暂不执行，阶段关口不变。
 
+## 续接验证新增修复（2026-10-19）
+
+R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceBatchReaderOwnsConnectionAndSourceDisposalRejectsNewOpens(false)` 同步建连失败，内因为 `TcpTransport.Connect` 的 `WaitOne` 访问已释放 `SafeWaitHandle`；这不是前表已报告问题的漏修。核对 .NET 10 runtime 的 Socket.BeginConnect → TaskToAsyncResult → Task.AsyncWaitHandle 实现，确认快速完成的连接可能共享已完成 Task 的等待句柄，驱动不能释放该借用句柄。修复提交为 `d8d7072`，移除错误的 using 释放，socket、取消注册、超时和错误清理流程保留。
+
+新增真实 loopback 回归 `ConnectSyncRepeatedSuccessDoesNotPoisonLaterConnections`：8 个并发调用方各完成 1024 次同步建连并读取服务端字节。修复前复现同一 ObjectDisposedException（首次 TestResults/tcp-wait-handle-red.trx；修正清理后的 TestResults/tcp-wait-handle-cleanup-red-final.trx），修复后连同传输及原失败用例 14 项通过（最终 TestResults/tcp-wait-handle-cleanup-green-final.trx）。首次全量复跑因该压力回归积累 TIME_WAIT 耗尽 Windows 临时端口而失败，不能计为通过；测试服务端改为收到应用确认字节后以零 linger 和 Close(0) 关闭，避免残留连接影响后续测试，不修改产品 socket 策略；清理只在传播客户端主异常时忽略次生服务端异常，成功路径仍暴露服务端失败。最终验证与独立走查记录见本页末 R02 记录。
+
 ## 进度口径
 
 - 状态只用 `未开始`、`进行中`、`待验证`、`阻塞`、`完成`。`待验证` 表示代码或夹具已完成，但所属真实环境/目标框架验收尚未完成；不能计入完成数。
@@ -57,8 +63,8 @@
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04 本地实现完成、待真实/跨平台验收；A05 还缺可信 MySQL 模式判定规则及版本/插件验收；A07 缺环境与可信版本矩阵；G0 未关闭 |
 | G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09 本地实现/审核已具证据；核心五资产有 Windows8/9/10基础运行时消费，但真实双模式、完整旧运行时消费/DI及跨平台未验收 |
-| G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02-C07本地实现完成待真实环境验证，C04真实资源/性能与版本矩阵、C07池性能仍待验收；C08未开始，关口未关闭 |
-| G4 发布候选 R | W35-W37 | 0/2 | 未开始 | R01-R02 + 包/许可证/兼容矩阵 |
+| G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02-C07本地实现完成待真实环境验证，C04真实资源/性能与版本矩阵、C07池性能仍待验收；C08因真实环境证据缺失而阻塞，关口未关闭 |
+| G4 发布候选 R | W35-W37 | 0/2 | 进行中 | R01本地包/消费已验证，R02本地交付材料与验证已完成；许可/来源/包名及真实兼容矩阵仍开放 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
 
 ## A. 协议基础任务
@@ -105,7 +111,7 @@
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
 | R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-19 本地统一打包元数据/包内文档/五资产实际包消费完成；Unit1205/Consumer152/DI8及独立走查通过，许可证、来源及包名/商标审查仍开放，不发布；证据见末尾 |
-| R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 未开始 | 待记录 |
+| R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | README本地交付/故障/兼容限制/回退材料及独立走查已完成，Windows Unit1206/Consumer152/DI8与五资产包消费通过；最终真实矩阵与发布审查待验收，不关闭候选版门槛 |
 | D01 | G4 后 | OB20、校验与完整链路追踪 | 未开始 | 待记录 |
 | D02 | G4 后 | Oracle 过程及 OUT/RETURNING | 未开始 | 待记录 |
 | D03 | G4 后 | REF CURSOR | 未开始 | 待记录 |
@@ -409,3 +415,11 @@ Windows本地基线环境为.NET10.0.12、Windows10.0.26200、Intel64 Family6 Mo
 两项损坏产物检查分别删除包内README、将DI核心约束从精确区间放宽为最低版本，验证器均退出1并输出对应原因；日志保留于TestResults/r01-negative/78dcd9057dbf4297a1b5c7c899cad852下。Windows CI改为统一slnx pack并接入实际包消费验证，所需8/9运行时通过setup-dotnet安装；现有非Windows作业未在本地执行。独立只读走查核对全部新增文件、依赖和缓存隔离，没有发现其他需修复项；唯一最低PowerShell版本问题（7.0不支持所用HashData）已将Requires及README修正为7.1+，本机实际7.6.6/.NET10.0.12执行。
 
 最终本地Release slnx核心五/DI三目标编译0警告0错误，完整Windows Unit1205、Consumer152、DI8通过且0跳过（TestResults/r01-unit-final.trx、r01-consumer-final.trx、r01-di-final.trx）；完整单测沿用正常Windows TLS证书存储访问，没有降低TLS校验。新包及实际包消费日志为TestResults/r01-pack和TestResults/r01-package-green.log，生成样例、独立缓存与还原图路径由该日志记录。最终包复跑曾因沙箱NuGet漏洞数据查询失败报NU1900；使用正常Windows TLS凭据完整重跑后五资产全部通过，没有禁用漏洞查询或TLS校验。PowerShell语法、格式/diff和UTF-8无BOM/CRLF检查通过后，在当前master提交不推送。R01两项技术验收勾选，许可/来源及包名/商标项保持开放，状态为进行中；未发布包，真实数据库、非Windows和完整历史运行时矩阵仍暂缓，A05/C01/G0/G1/G3/R02缺口不变。
+
+2026-10-19 R02 本地交付材料及续接修复闭环：故障、结果未知、提前关闭 reader、可信事务结果与后续清理失败、逐条批次计数/原子性边界、多地址 TCP 切换、脱敏日志/诊断、认证/TLS 支持限制以及 0.1.0-alpha 升级/回退指南合并到根 README，随两个包交付。明确释放字段流不代表所属 reader 完成；按独立走查修正可信 COMMIT ERR 的说明，仅在会话仍 Open 且事务仍活动时保留显式回滚能力，否则新建连接核对状态。同步更正既有架构/方案中异常暴露模式或端点属性的误述，实际由日志/诊断关联；现代目标通过继承的 BatchCommand 关联批次条目。不另建独立设计文档，不添加未实现的 API。
+
+本轮首次完整 Unit 为1204通过/1失败，发现并修复同步 TCP 共享等待句柄释放问题，修复及红绿回归见前文。首次压力回归全量复跑还造成端口耗尽（Unit218失败/Consumer1失败，保留 TestResults/r02-{unit,consumer}-port-exhausted.trx），调整测试关闭顺序与异常保留后重新执行；没有把失败轮次计为通过，也没有修改系统端口范围、超时或产品连接重试策略。独立只读走查已对文档、产品修复和测试清理闭环，无剩余需修复项。
+
+最终 Release slnx 编译核心五/DI三目标0警告0错误（TestResults/r02-build-final.log）；完整 Windows Unit1206、Consumer152、DI8全通过且0跳过（TestResults/r02-{unit,consumer,di}-final.trx）。解析最终TRX确认既有20组具名走查回归及新增TCP回归均实际执行通过，Standard2.1异步清理仍覆盖。统一 pack 后 TestResults/r02-pack 双包验证通过，五资产样例分别在实际.NET8.0.31/9.0.20/10.0.12及隔离.NET10 Standard宿主执行，日志为TestResults/r02-package-final.log；独立还原目录TestResults/package-validation/e2b0d53c4b4a4880b643a9bfaf723532。另逐字核对两个包内README与源文件一致，UTF-8无BOM/CRLF及diff检查通过。单元证书与包还原采用正常Windows TLS权限，未禁用审计或降低TLS校验。
+
+R02仅完成本地材料和本地验证，状态保持进行中；G4同步为进行中、仍0/2，C08仍因真实证据缺失而阻塞。R01项目许可证/来源/包名审查、G0/G1及完整G3/真实版本矩阵均未关闭，未发布、未推送。真实数据库与非Windows验收继续按约定暂缓；A04待真实/跨平台验收、A05公开MySQL模式可信判定缺口和C01池重置白名单不变。

@@ -48,7 +48,7 @@
 
 `PhysicalSession` 独占 socket、包序号、模式、版本、协商能力及服务端 statement ID；一次只有一个命令或 reader 持有它。公开 `OceanBaseConnection` 是逻辑借用者。`OceanBaseCommand` 在发送前验证参数、事务和环境事务；`OceanBaseDataReader` 在关闭/读尽前持有响应；任何未读包、结果未知、重置失败都使物理会话失效。`SessionMode` 只能由认证 OK 的服务端状态确定，`ExpectedMode` 只做事后校验。
 
-对外扩展类型先固定 `OceanBaseDbType`、`OceanBaseDecimal`、`OceanBaseTimestamp`、`OceanBaseTimestampWithTimeZone`、`OceanBaseTimestampLocalTimeZone`、`OceanBaseDate`、`OceanBaseDateTime` 的 `netstandard2.0` 类型身份；`OceanBaseDecimal` 的低精度列访问及范围内写入在 B05/B06 落地，宽精度编解码及其余精确时间类型在 C03 落地。不得让 `GetFieldType` 随行值变化。`OceanBaseException` 含服务端错误码、SQLSTATE、模式和 `IsExecutionOutcomeUnknown`，不含默认 SQL/参数/凭据。
+对外扩展类型先固定 `OceanBaseDbType`、`OceanBaseDecimal`、`OceanBaseTimestamp`、`OceanBaseTimestampWithTimeZone`、`OceanBaseTimestampLocalTimeZone`、`OceanBaseDate`、`OceanBaseDateTime` 的 `netstandard2.0` 类型身份；`OceanBaseDecimal` 的低精度列访问及范围内写入在 B05/B06 落地，宽精度编解码及其余精确时间类型在 C03 落地。不得让 `GetFieldType` 随行值变化。`OceanBaseException` 含服务端错误码、SQLSTATE 和 `IsExecutionOutcomeUnknown`，现代目标还通过继承的 `BatchCommand` 关联批次条目；异常不提供模式或端点属性，安全端点和模式通过日志/诊断关联，不含默认 SQL/参数/凭据。
 
 ## 阶段与日程基线
 
@@ -123,7 +123,7 @@ A04 本地实现及 Windows 环回已完成，整体仍为待验证：可信私�
 
 ### A06 物理会话、错误与生命周期
 
-**产物：**`PhysicalSession` 的 `Connecting/Open/Busy/Broken/Closed` 状态与独占租约；关闭/错误释放 socket、statement ID、结果状态。`OceanBaseException` 保留 SQLSTATE、服务端码及安全端点信息。
+**产物：**`PhysicalSession` 的 `Connecting/Open/Busy/Broken/Closed` 状态与独占租约；关闭/错误释放 socket、statement ID、结果状态。`OceanBaseException` 保留 SQLSTATE、服务端码和结果未知标记；安全端点和模式通过日志/诊断关联。
 
 - [x] 测试同一物理会话并发执行拒绝、未读响应不得复用、错误后失效、重复释放幂等和日志脱敏。
 - [x] 实现同步/异步关闭的资源所有权；不让后台清理线程替代显式状态转换。
@@ -509,6 +509,14 @@ C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/re
 - [ ] 再运行 G1-G3 全部必需套件与交付矩阵，留存命令、版本、日志链接及跳过原因。
 - [ ] 对每个模式/版本/OBProxy/TLS/认证组合逐项标注“已验证/未验证/不支持”；无真实测试时不得标“已验证”。
 - [ ] 完成发布说明、故障与结果未知指南、已知差异、回滚方案；通过最终代码和文档走查后才发布。
+
+本地交付材料准备（2026-10-19，不代替候选版验收）：
+
+1. 从当前命令/reader/事务/多地址/认证代码和已有回归核对错误结果、提前关闭、已知提交与清理失败语义；将故障处置、版本升级/回退、日志诊断及认证/TLS限制合并进包内根 README，不另建设计文档。
+2. 在现有兼容矩阵区分未验证与明确不支持，不虚构 OceanBase/OBProxy 最低版本或已验证升级来源；保留公共 MySQL 判定、池化及真实矩阵缺口。
+3. 编译并运行 Windows 本地测试，用统一 pack 与实际五资产包消费验证重新检查随包交付的 README；独立只读走查指南与代码/测试的一致性，修复后更新三份现有文档并提交。G1–G3 与 R01 许可关口未通过前，不勾选 R02 最终发布项、不创建发布或推送。
+
+2026-10-19 本地材料已补齐并通过独立走查：修正字段流释放/reader完成和可信COMMIT ERR的会话存活边界，同时按源码更正异常公开契约。验证发现的同步TCP共享句柄释放缺陷已在d8d7072修复，压力回归的端口清理及主异常保留问题亦已闭环；最终五/三目标编译0警告0错误、Windows Unit1206/Consumer152/DI8、实际五资产包消费全部通过，失败与最终报告均记录在台账。R02真实矩阵及最终发布验收仍未勾选，许可与生产关口未关闭，不发布或推送。
 
 ## 执行与进度规则
 
