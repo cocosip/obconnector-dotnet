@@ -33,7 +33,8 @@ namespace OceanBaseConnector.Internal.Transport
                 cancellationToken.ThrowIfCancellationRequested();
                 using var registration = cancellationToken.Register(client.Close);
                 var asyncResult = client.BeginConnect(host, port, null, null);
-                using var waitHandle = asyncResult.AsyncWaitHandle;
+                // The runtime owns this handle; synchronously completed connects may share it.
+                var waitHandle = asyncResult.AsyncWaitHandle;
                 if (!waitHandle.WaitOne(timeout))
                 {
                     client.Close();

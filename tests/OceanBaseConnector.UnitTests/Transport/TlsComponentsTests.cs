@@ -108,6 +108,56 @@ namespace OceanBaseConnector.UnitTests.Transport
         }
 
         [Fact]
+        public async Task ConnectSyncRepeatedSuccessDoesNotPoisonLaterConnections()
+        {
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            using var stop = new CancellationTokenSource();
+            var serve = Task.Run(async () =>
+            {
+                try
+                {
+                    while (true)
+                    {
+                        using var peer = await listener.AcceptTcpClientAsync(stop.Token);
+                        // Close only after the byte was consumed; avoid filling Windows TIME_WAIT ports.
+                        peer.Client.LingerState = new LingerOption(true, 0);
+                        peer.GetStream().WriteByte(42);
+                        await peer.GetStream().ReadExactlyAsync(new byte[1], stop.Token);
+                        peer.Client.Close(0);
+                    }
+                }
+                catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+            });
+            var workersCompleted = false;
+            try
+            {
+                var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                var workers = new Task[8];
+                for (var worker = 0; worker < workers.Length; worker++)
+                    workers[worker] = Task.Run(() =>
+                    {
+                        for (var i = 0; i < 1024; i++)
+                        {
+                            using var transport = TcpTransport.Connect("127.0.0.1", port, TimeSpan.FromSeconds(5));
+                            transport.Stream.ReadTimeout = 5000;
+                            Assert.Equal(42, transport.Stream.ReadByte());
+                            transport.Stream.WriteByte(1);
+                        }
+                    });
+                await Task.WhenAll(workers);
+                workersCompleted = true;
+            }
+            finally
+            {
+                stop.Cancel();
+                try { await serve; }
+                catch (Exception) when (!workersCompleted) { /* Preserve the original client failure. */ }
+                finally { listener.Stop(); }
+            }
+        }
+
+        [Fact]
         public async Task ConnectSyncSucceedsAndRefusedWraps()
         {
             var listener = new TcpListener(IPAddress.Loopback, 0);
