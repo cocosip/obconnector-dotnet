@@ -23,12 +23,14 @@ namespace OceanBaseConnector.Internal.Session
         private PacketChannel? _channel;
         private CommandLease? _lease;
         private ConnectResult? _info;
+        private string? _sessionTimeZone;
         private readonly HashSet<uint> _statementCloses = new HashSet<uint>();
 
         public PhysicalSession(OceanBaseConnectionOptions options) { _options = options; _endpoint = options.Endpoint; }
 
         public SessionState State { get { lock (_gate) return _state; } }
         public ConnectResult? Info { get { lock (_gate) return _info; } }
+        internal string? SessionTimeZone { get { lock (_gate) return _sessionTimeZone; } }
         internal string Endpoint { get { lock (_gate) return _endpoint; } }
 
         public void Open()
@@ -153,6 +155,7 @@ namespace OceanBaseConnector.Internal.Session
                 token.ThrowIfCancellationRequested();
                 if (_state != SessionState.Connecting) throw new OperationCanceledException(_closing.Token);
                 _info = info;
+                _sessionTimeZone = ReportedTimeZone(info.SessionVariables);
                 _state = SessionState.Open;
             }
         }
@@ -184,6 +187,35 @@ namespace OceanBaseConnector.Internal.Session
                 _channel!.BeginCommand();
                 return _lease = new CommandLease(this, _channel);
             }
+        }
+
+        internal string? TakeSessionTimeZone(CommandLease lease)
+        {
+            lock (_gate)
+            {
+                if (_state != SessionState.Busy || !ReferenceEquals(_lease, lease)) return null;
+                var value = _sessionTimeZone;
+                _sessionTimeZone = null;
+                return value;
+            }
+        }
+
+        internal string? ApplySessionVariables(CommandLease lease, IReadOnlyDictionary<string, string>? variables)
+        {
+            lock (_gate)
+            {
+                if (_state != SessionState.Busy || !ReferenceEquals(_lease, lease)) return null;
+                _sessionTimeZone = variables == null ? null : ReportedTimeZone(variables);
+                return _sessionTimeZone;
+            }
+        }
+
+        private static string? ReportedTimeZone(IReadOnlyDictionary<string, string> variables)
+        {
+            foreach (var variable in variables)
+                if (string.Equals(variable.Key, "time_zone", StringComparison.OrdinalIgnoreCase))
+                    return string.IsNullOrWhiteSpace(variable.Value) ? null : variable.Value;
+            return null;
         }
 
         internal void QueueStatementClose(uint id)
@@ -228,6 +260,7 @@ namespace OceanBaseConnector.Internal.Session
         private void ReleaseTransport()
         {
             _statementCloses.Clear();
+            _sessionTimeZone = null;
             _channel?.Close();
             _transport?.Dispose();
             _transport = null;

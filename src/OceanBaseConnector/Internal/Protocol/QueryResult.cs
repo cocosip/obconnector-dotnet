@@ -16,6 +16,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private int _metadataBytes;
         internal QueryResult(CommandExchange query, bool binary = false) { _query = query; IsBinary = binary; }
         internal bool IsBinary { get; }
+        internal string? SessionTimeZone { get; private set; }
         internal ResultColumn[] Columns { get; private set; } = Array.Empty<ResultColumn>();
         internal byte[]?[]? Row { get; private set; }
         internal bool HasRows { get; private set; }
@@ -26,6 +27,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             try
             {
+                SessionTimeZone = _query.CaptureResultTimeZone();
                 if (!Header(_query.Receive())) return;
                 for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(_query.Receive());
                 if (!DeprecatedEof) EndColumns(_query.Receive());
@@ -39,6 +41,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             try
             {
+                SessionTimeZone = _query.CaptureResultTimeZone();
                 if (!Header(await _query.ReceiveAsync(token).ConfigureAwait(false))) return;
                 for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(await _query.ReceiveAsync(token).ConfigureAwait(false));
                 if (!DeprecatedEof) EndColumns(await _query.ReceiveAsync(token).ConfigureAwait(false));
@@ -60,7 +63,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 Columns = Array.Empty<ResultColumn>();
                 var ok = OkPacket.Parse(packet, _query.Capabilities);
                 _affected = checked(Math.Max(0, _affected) + ok.AffectedRows);
-                End(ok.StatusFlags);
+                End(ok.StatusFlags, ok);
                 return false;
             }
             if (packet[0] == 251) throw new ProtocolException("LOCAL INFILE is not permitted.");
@@ -83,8 +86,9 @@ namespace OceanBaseConnector.Internal.Protocol
             _metadataBytes += packet.Length;
             return ResultColumn.Parse(packet, _query.Mode);
         }
-        private void End(ServerStatusFlags flags)
+        private void End(ServerStatusFlags flags, OkPacket? ok = null)
         {
+            _query.ObserveSessionState(ok);
             _ended = true;
             _more = (flags & ServerStatusFlags.MoreResultsExists) != 0;
             if (!_more) _query.Complete();
@@ -99,7 +103,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 {
                     var ok = OkPacket.Parse(packet, _query.Capabilities, allowEofHeader: true);
                     if (ok.AffectedRows != 0 || ok.LastInsertId != 0) throw new ProtocolException("Invalid result terminator counters.");
-                    End(ok.StatusFlags);
+                    End(ok.StatusFlags, ok);
                 }
                 else End(ReadEof(packet));
                 return null;

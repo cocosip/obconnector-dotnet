@@ -65,7 +65,7 @@
 | --- | --- | --- | --- | --- |
 | C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 2026-10-19 Codex；无真实完整重置白名单，Java reset不能代替OceanBase实测；保持Pooling=true拒绝，先推进独立C02 |
 | C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
-| C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 进行中 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)及TZ子项本地实现；Unit772/Consumer76/DI8、五/三目标编译/格式/打包及独立走查通过；LTZ、零日期和真实验收未完成，详见本页末 |
+| C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 进行中 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)及TZ子项本地实现；LTZ会话状态前置完成；Unit797/Consumer76/DI8、五/三目标编译/格式/打包及独立走查通过；LTZ、零日期和真实验收未完成，详见本页末 |
 | C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 未开始 | 待记录 |
 | C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 未开始 | 待记录 |
 | C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 未开始 | 待记录 |
@@ -269,3 +269,14 @@ C03继续进行中，下一步TZ/LTZ和MySQL零日期；G3仍0/8，C01/A05及G0/
 最终本地验证：Release slnx核心五目标/DI三目标0警告0错误，Windows Unit772、Consumer76、DI8全部通过（TestResults/c03-tz-unit-final.trx、c03-tz-consumer-final.trx、c03-tz-di-final.trx）。五资产消费均由net10宿主隔离加载，不能代替旧运行时验收。格式/diff、双包和ZIP/XML资产/依赖检查通过：核心5资产、DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本、Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10。既有NuGet README提示留R01。独立只读最终复审已核对三项修复、红绿证据、稳定类型/typed-null/精确转换及三份文档，无剩余必须修复项。
 
 C03仍进行中，下一步LTZ可信会话时区与MySQL零日期；G3仍0/8，A04/A05真实验收、A05可信MySQL模式判定、C01完整重置白名单及G0/G1缺口不变。按用户要求未运行数据库服务器及非Windows测试，也未新增旧运行时验收；源码和环回证据不代替目标版本互通。当前提交仅完成TZ子项和本轮走查修复，不把C03整体标记完成。
+
+
+2026-10-19 C03 LTZ前置状态通路：核查发现命令OK/FEOK已解析的会话变量原被丢弃，仅靠认证SessionVariables会误用旧时区。现PhysicalSession保存独立可失效time_zone报告，SQL发送时原子捕获/清空，QueryResult每结果冻结快照并清空后续来源，合法终态OK/事务控制报告更新，经典EOF/ERR不猜测。prepare/close不执行SQL，未发包取消不失效；Close/Break清空且租约身份校验阻止晚到响应污染新命令或复活关闭会话。未增加网络查询、公开配置或依赖；type201仍未开放，查询补全/参数时区一致性继续后续实现。
+
+回归先复现12项缺口失败（c03-ltz-state-red.trx）；最小实现后23项定向通过（c03-ltz-state-green.trx），覆盖同步/异步、认证快照独立、三结果报告A→无报告→未知、经典EOF/FEOK、空/有行预读、SQL ERR/未发送取消、准备/关闭、事务逐Control、关闭/故障和旧租约隔离。初次绿运行两项测试误将关闭时ProtocolException当成EndOfStreamException，修正服务端断言后通过，不作为产品缺陷记录。该报告状态不是已验证的时区解释保证，不以原始SYSTEM/任意名称直接解析LTZ。完整验证和走查结果续记于下。
+
+独立走查补充修复：前一结果报告A后，后一结果首包ERR会在进入Header前抛出，原实现未清除A。同步/异步两项回归先失败（c03-ltz-state-review-red.trx），将快照捕获/失效移到Receive之前后，c03-ltz-state-green.trx最终25项全部通过；连接仍可用但时区为未知，不回填认证值。
+
+最终本地验证：Release slnx核心五目标/DI三目标0警告0错误，Windows Unit797、Consumer76、DI8全部通过（TestResults/c03-ltz-state-unit-final.trx、c03-ltz-state-consumer-final.trx、c03-ltz-state-di-final.trx）；25项状态回归纳入完整单元套件。格式/diff、双包及ZIP/XML的5/3资产、8依赖组、统一0.1.0-alpha、DI精确核心依赖及Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10全部通过。独立只读最终复审已确认ERR修复和三份文档，无剩余必须修复项。既有NuGet README提示仍留R01。
+
+C03继续进行中：LTZ可靠查询补全、type201全链路和参数时区一致性、MySQL零日期仍需实现；不把会话报告通路当作LTZ交付。A04/A05真实验收、A05可信MySQL判定、C01完整重置和G0/G1/G3缺口不变。遵用户要求未执行实库或非Windows，net10隔离消费不替代旧运行时验收。

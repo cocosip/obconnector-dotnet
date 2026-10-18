@@ -235,6 +235,7 @@ namespace OceanBaseConnector
                 (transactionEnded && (ok.StatusFlags & ServerStatusFlags.InTransaction) != 0) ||
                 (autocommit.HasValue && ((ok.StatusFlags & ServerStatusFlags.Autocommit) != 0) != autocommit.Value))
                 throw new ProtocolException("The transaction control response did not confirm the requested state.");
+            exchange.ObserveSessionState(ok);
             exchange.ResponseComplete();
         }
 

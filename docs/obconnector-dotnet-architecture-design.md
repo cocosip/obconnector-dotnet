@@ -241,6 +241,11 @@ C03 TZ 本地契约：OceanBaseTimestampWithTimeZone 保存 OceanBaseTimestamp�
 
 TZ type200 的文本/二进制结果使用长度编码的14..530字节载荷，时间前12字节沿202布局，随后hour/minute及可选名称/缩写的长度编码（各限255字节）；hour非零时分钟为非负幅值，hour为零时分钟才带符号，(-3,+30)为-03:30，(0,-30)为-00:30。非法长度、日期、UTF-8、偏移和scale明确失败。参数时间/偏移布局相同，但名称/缩写长度及外层总长度均为单字节，超过255字节（含两个名称长度字段）在发包前拒绝，不能复用结果的长度编码。Java OBTIMESTAMPTZParameter 同样写单字节长度但未检查溢出且固定写scale9；本驱动检查上限并保留值/显式scale。固定服务端源码补证：[参数读取单字节并保留scale](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/observer/mysql/obmp_stmt_execute.cpp#L3232)、[参数时区解释和结果偏移编码](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/deps/oblib/src/lib/timezone/ob_time_convert.cpp#L7593)。有名称时服务端按其时区表和缩写解释本地时间，不能承诺任意名称/offset组合在真实写回后原样保留offset；不带名称的 DateTimeOffset 使用明确offset。结果内部名称编码另核对服务端 [write_segment_str/store_length](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp#L543)，251..255字节名称占3字节长度字段，因此两名称各255字节时结果最大530字节；不能按参数单字节规则读取结果名称。上述是源码与Windows环回证据，目标版本/OBProxy、时区表及真实 DST 行为仍待验收。LTZ 仍未实现：不得采用 Java 的客户端默认时区或仅认证快照；须有可靠会话时区来源、SQL变更后的刷新/失效及结果快照，不能猜测 UTC 或本机时区。
 
+LTZ前置状态通路（type201仍未开放）：PhysicalSession单独保存可失效的time_zone报告，ConnectResult.SessionVariables只代表认证事实、不随命令改变。任意业务/事务SQL在开始发送时，以同一物理会话锁捕获当前值后清空；预取消未开始发送、prepare和statement-close不触发SQL失效。每个QueryResult在读取头包前冻结本结果快照，并清空后续结果来源；终态合法OK或FEOK、事务控制OK在校验通过后才能报告新值，供后续命令/结果使用。经典EOF和ERR无报告即未知；不能把执行前或认证时快照回填未知值。故“第一结果报告A、第二结果无报告、第三结果”中第三结果保持未知；空结果预读终态也不改变已冻结的本结果快照。
+
+状态应用校验有效Busy及同一租约身份，已完成交换不能污染新命令；Close/Break清空，晚到完整OK不复活已关闭/损坏的会话。time_zone报告是服务端给出的原始事实，不等同于可解析的地区标识、已验证的持续追踪保证或LTZ正确解释所需的可靠查询结果；未知、SYSTEM和时区规则验证仍需后续执行前查询/解析策略。此通路不改变已认证模式和协商能力、不额外发送SQL、不新增公开配置，保持单provider设计；LTZ值类型/201编解码、查询补全和参数时区一致性仍未实现，不能宣称C03完成。
+
+
 
 `DbDataReader` 通过 `IDbColumnSchemaGenerator` 支持 `GetColumnSchema()`，并提供 `GetSchemaTable()`；字段类型、列名、长度、精度和可空性基于实际列定义。数据库对象元数据通过 `DbConnection.GetSchema()` 实现，MySQL 模式使用相应 `SHOW`/`INFORMATION_SCHEMA`，Oracle 模式使用其兼容数据字典。字段元数据和数据库目录元数据分别验证，不用一套 SQL 混用。LOB locator、REF CURSOR 和复杂类型值若依赖连接/事务，公开对象必须说明失效点和 `Dispose` 义务；首个里程碑可先支持安全的内联字节/文本值，不能把 locator 当普通 `byte[]` 误解码。
 

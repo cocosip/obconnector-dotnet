@@ -59,6 +59,7 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         internal CapabilityFlags Capabilities => _session.Info!.Capabilities.Effective;
+        internal string? SessionTimeZone { get; private set; }
         internal OceanBaseCompatibilityMode Mode => _session.Info!.Mode;
         internal void EnsureReading()
         {
@@ -73,12 +74,24 @@ namespace OceanBaseConnector.Internal.Session
             lock (_gate)
             {
                 _budget.Token.ThrowIfCancellationRequested();
+                if (executesSql) SessionTimeZone = _session.TakeSessionTimeZone(_lease);
                 _channel.BeginCommand();
                 _responsePending = true;
                 _sqlSent |= executesSql;
                 _anySqlSent |= executesSql;
             }
         }
+
+        internal string? CaptureResultTimeZone()
+        {
+            var value = SessionTimeZone;
+            SessionTimeZone = null;
+            _session.TakeSessionTimeZone(_lease);
+            return value;
+        }
+
+        internal void ObserveSessionState(OkPacket? ok)
+            => SessionTimeZone = _session.ApplySessionVariables(_lease, ok?.SessionVariables);
 
         internal bool HasSentSql { get { lock (_gate) return _anySqlSent; } }
         internal void ResponseComplete() { lock (_gate) { _responsePending = false; _sqlSent = false; } }
