@@ -7,11 +7,13 @@ namespace OceanBaseConnector.Internal
     internal sealed class ConnectionLog
     {
         private readonly ILogger _logger;
+        private readonly ILogger _commandLogger;
         private readonly ILogger _transactionLogger;
 
         internal ConnectionLog(ILoggerFactory? factory)
         {
             _logger = Create(factory, "OceanBaseConnector.Connection");
+            _commandLogger = Create(factory, "OceanBaseConnector.Command");
             _transactionLogger = Create(factory, "OceanBaseConnector.Transaction");
         }
 
@@ -26,7 +28,7 @@ namespace OceanBaseConnector.Internal
         internal void Failed(string endpoint, long elapsed, Exception error) => Write(1002, "OpenFailed", endpoint, null, elapsed, error);
         internal void Closed(string endpoint) => Write(1003, "Closed", endpoint, null, 0, null);
         internal void CommandFinished(string endpoint, OceanBaseCompatibilityMode mode, long elapsed, Exception? error) =>
-            Write(error == null ? 1100 : 1101, error == null ? "CommandCompleted" : "CommandFailed", endpoint, mode, elapsed, error);
+            Write(error == null ? 1100 : 1101, error == null ? "CommandCompleted" : "CommandFailed", endpoint, mode, elapsed, error, _commandLogger);
         internal void TransactionFinished(string operation, string endpoint, OceanBaseCompatibilityMode mode, long elapsed, Exception? error) =>
             Write(error == null ? 1200 : 1201, "Transaction" + operation + (error == null ? "Completed" : "Failed"), endpoint, mode, elapsed, error, _transactionLogger);
 

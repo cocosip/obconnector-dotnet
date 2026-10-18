@@ -209,10 +209,10 @@ B05 本地实现及 Windows 验证已完成，整体待验证。低精度读列�
 B06 本地实施步骤（现有 master，基线 b772c0f）：
 
 - [x] `ResultColumn` 保留数据库/表/原始表列名、原始长度与 flags；新增内部 `ResultDbColumn`，把它们映射到跨五目标的 `DbColumn`，不增加依赖。名称、类型名及解码共用同一列定义，MySQL 字符长度按已支持字符集宽度换算，Oracle 普通字符长度按其元数据单位保留；超出 int 的长度饱和为 int.MaxValue。MySQL 数据库名映射 BaseCatalogName，Oracle 映射 BaseSchemaName。
-- [x] `OceanBaseDataReader` 实现 `IDbColumnSchemaGenerator` 及 schema table；返回独立快照，未提供的唯一性/表达式/可更新性/ProviderType 保持未知，ProviderSpecificDataType 与实际 provider-specific 读取一致。无列结果的 schema table 为 null、column schema 为空；推进结果时不复用旧元数据。
+- [x] `OceanBaseDataReader` 实现 `IDbColumnSchemaGenerator` 及 schema table；返回独立快照，未提供的唯一性/表达式/可更新性保持未知；ProviderType 在 B06 时未知，已由 B09 补齐，ProviderSpecificDataType 与实际 provider-specific 读取一致。无列结果的 schema table 为 null、column schema 为空；推进结果时不复用旧元数据。
 - [x] 先以公开文本/二进制、同步/异步环回及内部 MySQL/Oracle 列定义测试证明缺口，再验证大小/精度/NULL/别名/多结果/提前关闭/独占/安全消费和五目标消费；编译、完整 Windows 单元/消费/DI、format、包矩阵、独立走查通过后提交。实库及非 Windows/旧运行时验收继续留空。
 
-B06 本地实现边界见架构 §5：GetColumnSchema/GetSchemaTable 已有跨五目标消费证据；独立源码走查未发现需修复问题，另补零行 SELECT 保留 schema 的回归。真实字符长度/Oracle 空值语义、真实服务端元数据及旧运行时/非 Windows 仍未验证。ProviderType 枚举覆盖需在 B09 公开 API 审核时补齐，当前以未知返回而不伪装协议码。
+B06 本地实现边界见架构 §5：GetColumnSchema/GetSchemaTable 已有跨五目标消费证据；独立源码走查未发现需修复问题，另补零行 SELECT 保留 schema 的回归。真实字符长度/Oracle 空值语义、真实服务端元数据及旧运行时/非 Windows 仍未验证。B06 当时的 ProviderType 未知项已在 B09 补齐标量枚举与参数映射，不伪装协议码。
 
 ### B07 本地事务与环境事务拒绝
 
@@ -241,12 +241,22 @@ B07 本地实现：沿 Java 的 `SET SESSION TRANSACTION ISOLATION LEVEL ...`、
 
 ### B09 G2 公共 API 与双模式验收
 
+本地实施步骤（2026-10-19）：先以字段 schema/参数编码回归固定 ProviderType 缺口；在 OceanBaseDbType 末尾追加基础标量族而保持既有0..9数值，OceanBaseParameter 映射到已支持的 DbType/编解码，ResultColumn/ResultDbColumn 提供与该枚举一致的整数 ProviderType。普通字符串与字节族归一为 String/Binary，原始数据库类型仍由 DataTypeName 区分，不伪装原始协议码；NULL 独立映射且只接受空值。更新现有 reader/五资产消费测试，核查 factory/DI/日志及明确不支持的公共入口；最终运行五目标/三目标 build、Windows 单测/消费/DI、格式、双包及资产/依赖组校验，独立源码走查后提交。实库/非 Windows 继续暂缓；net10.0 宿主不能替代旧运行时验收。
+
 **产物：**B01-B08 的核心五目标编译/消费、现代数据源/DI 生命周期与基础日志、双模式 CRUD、参数、低精度 `OceanBaseDecimal` provider-specific 访问、事务、reader、取消证据；公开 API 审查记录，列明与 Java 的有意功能差距。
 
-- [ ] 用 .NET 10 SDK 对 slnx 运行 Release build/test，核心五目标及 DI 三个现代目标编译，日常测试宿主全部 net10.0；发布消费另取 .NET 8/9 运行时和 `netstandard2.0`/`netstandard2.1` 资产证据。
-- [ ] 验证基线隔离消费在增加日志依赖后仍能解析依赖；核心不反向引用集成包，旧资产无现代数据源类型，数据源/DI/factory 入口的模式与安全语义一致。
+- [x] .NET10 SDK 的 Release slnx 核心五目标/DI 三目标编译和 Windows 单测/消费/DI 通过，日常宿主保持 net10.0；独立核心样例取得五资产在 Windows .NET8/9/10 的基础消费证据，范围见下。
+- [ ] 旧运行时现代 DI、全部核心 API 和 .NET Framework4.8 正式支持仍需 R01/版本矩阵验收，不能由基础样例替代。
+- [x] 基线隔离消费解析日志依赖，核心无反向 DI 引用，Standard 无现代数据源类型；数据源/DI/factory 的配置、安全与生命周期本地证据通过，实际模式/SQL 互通仍受下列实库门槛约束。
+- [x] 公共 API 审核及与 Java 的有意差距归档到架构 §5；补齐 ProviderType/标量参数映射、保持原枚举身份，修复命令事件类别过滤。
 - [ ] 在双模式直连和 OBProxy 上运行 B 阶段集成套件，登记版本、失败用例及已知不支持项。
 - [ ] 仅当必需组合全部通过、无 P0/P1 缺陷时关闭 G2。
+
+2026-10-19 B09 本地结果：新增65项类型/模式单元测试（首批49项先失败后通过），补5资产既有 schema/parameter 消费断言；新增4项命令日志类别回归先红后绿。最终 Release build0警告/错误，Windows Unit567、Consumer39、DI8 全通过（TestResults/b09-{unit,consumer,di}.trx）。格式/diff、双包及 ZIP/XML5/3资产、8依赖组、统一0.1.0-alpha和精确核心依赖检查通过。源码独立走查无剩余需修复项。
+
+运行时基础消费：`RuntimeConsumerSample.cs` 用 SDK10 csc 编译为独立 Smoke.dll，reference pack 选择8/9/10、仅引用对应产品 DLL 和 project.assets.json 对应 runtime 包；把依赖放入各自私有目录，runtimeconfig 固定该 Microsoft.NETCore.App 主版本、LatestPatch。生成的 compile.rsp/runtimeconfig 与 results.txt 位于忽略目录 artifacts/b09-runtime-smoke，各目录执行 `dotnet <SDK>/Roslyn/bincore/csc.dll -noconfig @<目录>/compile.rsp`，再执行 `dotnet <目录>/Smoke.dll <运行时主版本> <日志主版本> tests/fixtures/protocol/initial-handshake-oceanbase.json <产品TFM>`。结果：Standard2.0/2.1/net8→8.0.31/日志8，net9→9.0.20/日志9，net10→10.0.12/日志10，5次均通过预取消/Oracle环回/decimal/schema/关闭验证。源码纳入版本管理，生成材料仅作本地证据，日常测试工程仍只面向 net10.0；未覆盖真实数据库、所有 API 或旧运行时 DI。
+
+B09 本地审核/补齐完成、状态待验证；双模式直连/OBProxy、非 Windows、完整旧运行时消费与 A05 MySQL 判定仍未完成，G2 不关闭。下一模块 C01 池与完整会话重置；在可信完整重置版本白名单建立前仍拒绝 Pooling=true。
 
 ## C. 生产连接
 

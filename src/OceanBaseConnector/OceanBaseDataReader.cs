@@ -60,7 +60,6 @@ namespace OceanBaseConnector
             (SchemaTableColumn.ColumnSize, typeof(int)), (SchemaTableColumn.NumericPrecision, typeof(short)),
             (SchemaTableColumn.NumericScale, typeof(short)), (SchemaTableColumn.DataType, typeof(Type)),
             ("DataTypeName", typeof(string)), (SchemaTableOptionalColumn.ProviderSpecificDataType, typeof(Type)),
-            // shortcut: ProviderType is unknown until the provider enum covers all scalar types, reviewed at B09.
             (SchemaTableColumn.ProviderType, typeof(int)), (SchemaTableColumn.AllowDBNull, typeof(bool)),
             (SchemaTableColumn.IsAliased, typeof(bool)), (SchemaTableColumn.IsExpression, typeof(bool)),
             (SchemaTableColumn.IsKey, typeof(bool)), (SchemaTableColumn.IsUnique, typeof(bool)),

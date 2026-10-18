@@ -135,6 +135,36 @@ namespace OceanBaseConnector.Internal.Protocol
             }
         }
 
+        internal OceanBaseDbType ProviderType
+        {
+            get
+            {
+                if (IsDecimal) return OceanBaseDbType.Decimal;
+                switch (TypeCode)
+                {
+                    case 1: return Unsigned ? OceanBaseDbType.Byte : OceanBaseDbType.SByte;
+                    case 2: return Unsigned ? OceanBaseDbType.UInt16 : OceanBaseDbType.Int16;
+                    case 3:
+                    case 9: return Unsigned ? OceanBaseDbType.UInt32 : OceanBaseDbType.Int32;
+                    case 8: return Unsigned ? OceanBaseDbType.UInt64 : OceanBaseDbType.Int64;
+                    case 4: return OceanBaseDbType.Single;
+                    case 5: return OceanBaseDbType.Double;
+                    case 6: return OceanBaseDbType.Null;
+                    case 7:
+                    case 202: return OceanBaseDbType.Timestamp;
+                    case 10: return OceanBaseDbType.Date;
+                    case 11: return OceanBaseDbType.Time;
+                    case 12: return Mode == OceanBaseCompatibilityMode.Oracle ? OceanBaseDbType.OracleDate : OceanBaseDbType.DateTime;
+                    case 203: return OceanBaseDbType.Binary;
+                    case 15:
+                    case 253:
+                    case 254:
+                    case 252: return Charset == 63 ? OceanBaseDbType.Binary : OceanBaseDbType.String;
+                    default: throw new NotSupportedException("The column type has no supported provider identity.");
+                }
+            }
+        }
+
         internal object Decode(byte[]? value)
         {
             var fieldType = FieldType;

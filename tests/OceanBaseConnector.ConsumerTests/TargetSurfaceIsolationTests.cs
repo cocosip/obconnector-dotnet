@@ -162,6 +162,14 @@ namespace OceanBaseConnector.ConsumerTests
                 Assert.Equal(DbType.Decimal, parameter.DbType);
                 var providerType = parameter.GetType().GetProperty("OceanBaseDbType")!;
                 var enumType = Nullable.GetUnderlyingType(providerType.PropertyType)!;
+                providerType.SetValue(parameter, Enum.Parse(enumType, "UInt64"));
+                Assert.Equal(DbType.UInt64, parameter.DbType);
+                providerType.SetValue(parameter, Enum.Parse(enumType, "Binary"));
+                Assert.Equal(DbType.Binary, parameter.DbType);
+                providerType.SetValue(parameter, Enum.Parse(enumType, "Null"));
+                Assert.Equal(DbType.Object, parameter.DbType);
+                parameter.ResetDbType();
+                Assert.Equal(DbType.Decimal, parameter.DbType);
                 Assert.Equal(assembly, enumType.Assembly);
                 providerType.SetValue(parameter, Enum.Parse(enumType, "Timestamp"));
                 Assert.Equal(DbType.DateTime2, parameter.DbType);

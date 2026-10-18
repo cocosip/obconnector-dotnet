@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚及 B08 本地取消/超时故障矩阵。目录元数据和宽精度扩展尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-19 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据、B07 本地事务/关闭回滚、B08 本地取消/超时故障矩阵及 B09 公共 API/标量 ProviderType 审核。目录元数据和宽精度扩展尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -28,7 +28,7 @@
 | --- | --- | --- | --- | --- |
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04 本地实现完成、待真实/跨平台验收；A05 还缺可信 MySQL 模式判定规则及版本/插件验收；A07 缺环境与可信版本矩阵；G0 未关闭 |
-| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B08 本地实现待真实环境验证；B09 公共 API 审核及五目标旧运行时消费/双模式实测仍待完成 |
+| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09 本地实现/审核已具证据；核心五资产有 Windows8/9/10基础运行时消费，但真实双模式、完整旧运行时消费/DI及跨平台未验收 |
 | G3 生产连接 C | W18-W34 | 0/8 | 未开始 | C01-C08 + 池化白名单/精确类型/MySQL `ChangeDatabase`/内存故障实测 |
 | G4 发布候选 R | W35-W37 | 0/2 | 未开始 | R01-R02 + 包/许可证/兼容矩阵 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
@@ -57,7 +57,7 @@
 | B06 | W11-W14 | 逐行 reader、字段元数据及低精度 provider-specific 访问 | 待验证 | Codex，2026-10-18：两套字段 schema/独立快照、多结果和生命周期、本地五目标编译及 Windows 单元/消费/DI 均通过；独立走查无需修复项。双模式真实元数据、非 Windows 和旧运行时待补，ProviderType 契约留 B09 审核 |
 | B07 | W13-W15 | 本地事务及环境事务拒绝 | 待验证 | Codex，2026-10-18：本地显式绑定、逐模式隔离映射、同步/异步事务与关闭回滚、日志和未知结果已实现；Unit455/Consumer34/DI8、五目标编译及独立复查通过；实库、非 Windows 和旧运行时待补 |
 | B08 | W14-W16 | 取消、超时、结果未知和故障注入 | 待验证 | Codex，2026-10-19：本地故障矩阵已完成，新增43项单元/5项五资产消费测试；修复内部预算超时误判为调用方取消及 Canceled 日志，终态竞争/部分发送/旧命令重开隔离通过；Unit498/Consumer39/DI8、五目标核心/三目标 DI build、格式/pack/依赖分组校验通过，详见本页末；实库/非 Windows/旧运行时待验证 |
-| B09 | W17（待重估） | 五目标消费、数据源/DI/日志生命周期、低精度 provider-specific 数值和双模式 G2 验收 | 未开始 | 待记录 |
+| B09 | W17（待重估） | 五目标消费、数据源/DI/日志生命周期、低精度 provider-specific 数值和双模式 G2 验收 | 待验证 | Codex，2026-10-19：本地公共 API 审核、标量 ProviderType/参数映射和 Command 类别修复完成；Unit567/Consumer39/DI8、五/三目标build零警告错误、格式/pack/依赖组通过，Windows核心五资产在8/9/10运行时基础消费通过；详见架构§5和本页末，实库/非Windows/完整旧运行时仍待验收 |
 
 ## C. 生产连接任务
 
@@ -212,3 +212,14 @@ B08 修复及审查：异步 I/O 抛出的内部预算 token 原先被当作外�
 B08 最终 Windows 验证：Release slnx 核心五目标/DI 三目标编译0警告/0错误；Unit498、Consumer39、DI8 全通过（TestResults/b08-unit.trx、b08-consumer.trx、b08-di.trx），相比 B07 新增43项单元与5项消费测试。五资产在 net10.0 宿主分别验证公共预取消 token 和真实环回命令超时；不等同旧运行时验证。format whitespace --verify-no-changes、diff 检查和双包 pack 通过；ZIP/XML 校验核心5/DI3资产、8依赖组、统一0.1.0-alpha、DI 精确核心版本、Microsoft.Extensions 的 Standard/net8→8.x、net9→9.x、net10→10.x 分组，无新依赖。包 README 提示继续留 R01。
 
 B08 保持待验证，下一模块 B09 公共 API 审核；G2 仍0/9、进行中。实库与非 Windows 按用户要求暂缓，旧运行时亦无验收证据。A04 本地已完成、待真实/跨平台 TLS 验收；A05 可信 MySQL 模式判定规则仍是实现缺口，版本/插件/真实握手证据亦缺，不把该缺口归为单纯环境验证，也不放行缺 Oracle 模式位的公共握手。G0/G1 门槛不变。
+
+
+2026-10-19 B09 本地审核与修复：保留 OceanBaseDbType0..9，追加10..26基础标量族，reader两套schema的ProviderType使用公开枚举整数；模式相关NUMBER/OracleDate/Timestamp及String/Binary归一映射见架构§5。参数override复用严格DbType编码与模式检查，Null只允许空值，延期类型仍拒绝。新增65项类型/模式测试，首批49项证明缺口后通过，包含Oracle TIME非空/typed-null拒绝；5资产既有消费用例补ProviderType/override断言。公开能力与Java有意差距归档进既有架构文档，不另建文档。
+
+B09日志核查确认命令1100/1101原先误用Connection类别，导致只启用Command类别的应用看不到命令日志；新增同步/异步成功/失败4项公共环回回归先全红后全绿。命令logger在构造时安全创建，沿用既有过滤/写入异常隔离，不变更事件ID、脱敏或日志工厂所有权；DI创建logger数量预期同步更新。独立源码走查无剩余需修复项。
+
+最终Windows验证：`dotnet build OceanBaseConnector.slnx -c Release --no-restore`核心五/DI三目标0警告0错误；Unit567、Consumer39、DI8全通过（TestResults/b09-unit.trx、b09-consumer.trx、b09-di.trx），相比B08增加69项单元。format whitespace、diff、双pack及ZIP/XML5/3资产/8依赖组/统一0.1.0-alpha/DI精确核心版本/按TFM划分Microsoft.Extensions8/9/10全部通过；未新增依赖，NuGet README提示留R01。
+
+独立运行时基础消费：版本管理的RuntimeConsumerSample.cs经SDK10 csc和8/9/10 reference pack编译；私有依赖目录及LatestPatch runtimeconfig防止net10宿主统一旧依赖。Standard2.0/2.1/net8→.NET8.0.31+日志程序集8，net9→9.0.20+日志9，net10→10.0.12+日志10，五次均通过原token预取消、已认证Oracle环回查询、NUMBER/decimal、两套ProviderType及CloseConnection。命令、响应文件和结果位于artifacts/b09-runtime-smoke，复现方式见开发计划B09。日常xUnit工程仍net10.0；此基础样例不代表旧运行时DI、全部API、.NET Framework4.8或真实双模式兼容通过。
+
+B09保持待验证，G2仍0/9；下一模块C01。按用户要求未执行实库和非Windows测试，真实两模式/OBProxy及完整运行时矩阵仍缺。A04本地完成、真实TLS验收未完；A05可信MySQL模式判定仍是实现缺口，不以样例Oracle成功放行MySQL。C01必须保留无可信完整重置白名单时拒绝池化的边界。

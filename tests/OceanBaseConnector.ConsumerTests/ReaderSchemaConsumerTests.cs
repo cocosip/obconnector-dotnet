@@ -66,6 +66,9 @@ namespace OceanBaseConnector.ConsumerTests
                     var providerType = Assert.IsAssignableFrom<Type>(column["ProviderSpecificDataType"]);
                     Assert.Equal(assembly, providerType.Assembly);
                     Assert.Equal(providerType, reader.GetSchemaTable()!.Rows[0][SchemaTableOptionalColumn.ProviderSpecificDataType]);
+                    var identity = Assert.IsType<int>(column[SchemaTableColumn.ProviderType]);
+                    Assert.Equal("Decimal", Enum.GetName(assembly.GetType("OceanBaseConnector.OceanBaseDbType")!, identity));
+                    Assert.Equal(identity, reader.GetSchemaTable()!.Rows[0][SchemaTableColumn.ProviderType]);
                     Assert.True(await reader.ReadAsync(budget.Token));
                     Assert.Equal(12.34m, reader.GetDecimal(0));
                     Assert.Equal(providerType, reader.GetProviderSpecificValue(0).GetType());

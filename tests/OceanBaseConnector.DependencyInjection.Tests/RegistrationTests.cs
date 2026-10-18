@@ -110,7 +110,7 @@ namespace OceanBaseConnector.DependencyInjection.Tests
             using var provider = services.BuildServiceProvider();
             var source = provider.GetRequiredService<OceanBaseDataSource>();
             Assert.Equal(0, hostLog.CreateCount);
-            Assert.Equal(2, overrideLog.CreateCount);
+            Assert.Equal(3, overrideLog.CreateCount);
             try
             {
                 var opening = source.OpenConnectionAsync().AsTask();

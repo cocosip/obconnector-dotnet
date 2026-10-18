@@ -12,6 +12,7 @@ namespace OceanBaseConnector.Internal.Protocol
             DataType = column.FieldType;
             DataTypeName = column.DataTypeName;
             ProviderSpecificDataType = column.IsDecimal ? typeof(OceanBaseDecimal) : DataType;
+            ProviderType = column.ProviderType;
             BaseColumnName = Known(column.OriginalName);
             BaseTableName = Known(column.OriginalTable);
             if (column.Mode == OceanBaseCompatibilityMode.MySql) BaseCatalogName = Known(column.Database);
@@ -46,7 +47,9 @@ namespace OceanBaseConnector.Internal.Protocol
         }
 
         internal Type ProviderSpecificDataType { get; }
-        public override object? this[string property] => property == "ProviderSpecificDataType" ? ProviderSpecificDataType : base[property];
+        private OceanBaseDbType ProviderType { get; }
+        public override object? this[string property] => property == "ProviderSpecificDataType" ? ProviderSpecificDataType
+            : property == "ProviderType" ? (int)ProviderType : base[property];
         private static string? Known(string value) => value.Length == 0 ? null : value;
     }
 }

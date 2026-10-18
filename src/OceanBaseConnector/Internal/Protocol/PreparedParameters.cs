@@ -71,14 +71,16 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             if (parameter.OceanBaseDbType.HasValue)
             {
-                switch (parameter.OceanBaseDbType.Value)
+                var providerType = parameter.OceanBaseDbType.Value;
+                if (!OceanBaseParameter.ProviderDbType(providerType).HasValue)
+                    throw new NotSupportedException("The provider-specific parameter type is not supported yet.");
+                if (providerType == OceanBaseDbType.OracleDate && mode != OceanBaseCompatibilityMode.Oracle)
+                    throw new NotSupportedException("OracleDate requires Oracle mode.");
+                if (providerType == OceanBaseDbType.Null)
                 {
-                    case OceanBaseDbType.Decimal:
-                    case OceanBaseDbType.Timestamp: break;
-                    case OceanBaseDbType.OracleDate:
-                        if (mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("OracleDate requires Oracle mode.");
-                        break;
-                    default: throw new NotSupportedException("The provider-specific parameter type is not supported yet.");
+                    if (parameter.Value != null && parameter.Value != DBNull.Value)
+                        throw new ArgumentException("A Null parameter cannot contain a non-null value.");
+                    return 6;
                 }
             }
             if (parameter.DbType == DbType.Decimal && (parameter.Precision > 28 || parameter.Scale > 28))

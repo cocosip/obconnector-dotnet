@@ -73,7 +73,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Null(identity.IsKey);
             Assert.Null(identity.IsUnique);
             Assert.Null(identity.IsExpression);
-            Assert.Null(identity["ProviderType"]);
+            Assert.Equal((int)OceanBaseDbType.Int32, identity["ProviderType"]);
         }
 
         [Theory]
@@ -173,7 +173,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(typeof(decimal), table.Rows[0][SchemaTableColumn.DataType]);
                 Assert.Equal(typeof(OceanBaseDecimal), table.Rows[0][SchemaTableOptionalColumn.ProviderSpecificDataType]);
                 Assert.Equal((short)6, table.Rows[0][SchemaTableColumn.NumericPrecision]);
-                Assert.Equal(DBNull.Value, table.Rows[0][SchemaTableColumn.ProviderType]);
+                Assert.Equal((int)OceanBaseDbType.Decimal, table.Rows[0][SchemaTableColumn.ProviderType]);
                 table.Rows[0][SchemaTableColumn.ColumnName] = "changed by caller";
                 Assert.Equal("金额别名", reader.GetSchemaTable()!.Rows[0][SchemaTableColumn.ColumnName]);
                 Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());

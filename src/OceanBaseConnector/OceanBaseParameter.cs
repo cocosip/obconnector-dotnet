@@ -25,9 +25,7 @@ namespace OceanBaseConnector
             {
                 if (value.HasValue && !Enum.IsDefined(typeof(OceanBaseDbType), value.Value)) throw new ArgumentOutOfRangeException(nameof(value));
                 _providerType = value;
-                _dbType = value == global::OceanBaseConnector.OceanBaseDbType.Decimal ? DbType.Decimal
-                    : value == global::OceanBaseConnector.OceanBaseDbType.OracleDate ? DbType.Date
-                    : value == global::OceanBaseConnector.OceanBaseDbType.Timestamp ? DbType.DateTime2 : (DbType?)null;
+                _dbType = value.HasValue ? ProviderDbType(value.Value) : null;
             }
         }
         public override ParameterDirection Direction
@@ -46,6 +44,34 @@ namespace OceanBaseConnector
         public override byte Scale { get => _scale ?? 0; set => _scale = value; }
         internal byte? DeclaredScale => _scale;
         public override void ResetDbType() { _dbType = null; _providerType = null; }
+
+        internal static DbType? ProviderDbType(OceanBaseDbType type)
+        {
+            switch (type)
+            {
+                case global::OceanBaseConnector.OceanBaseDbType.Decimal: return DbType.Decimal;
+                case global::OceanBaseConnector.OceanBaseDbType.OracleDate:
+                case global::OceanBaseConnector.OceanBaseDbType.Date: return DbType.Date;
+                case global::OceanBaseConnector.OceanBaseDbType.Timestamp: return DbType.DateTime2;
+                case global::OceanBaseConnector.OceanBaseDbType.SByte: return DbType.SByte;
+                case global::OceanBaseConnector.OceanBaseDbType.Byte: return DbType.Byte;
+                case global::OceanBaseConnector.OceanBaseDbType.Int16: return DbType.Int16;
+                case global::OceanBaseConnector.OceanBaseDbType.UInt16: return DbType.UInt16;
+                case global::OceanBaseConnector.OceanBaseDbType.Int32: return DbType.Int32;
+                case global::OceanBaseConnector.OceanBaseDbType.UInt32: return DbType.UInt32;
+                case global::OceanBaseConnector.OceanBaseDbType.Int64: return DbType.Int64;
+                case global::OceanBaseConnector.OceanBaseDbType.UInt64: return DbType.UInt64;
+                case global::OceanBaseConnector.OceanBaseDbType.Single: return DbType.Single;
+                case global::OceanBaseConnector.OceanBaseDbType.Double: return DbType.Double;
+                case global::OceanBaseConnector.OceanBaseDbType.Boolean: return DbType.Boolean;
+                case global::OceanBaseConnector.OceanBaseDbType.String: return DbType.String;
+                case global::OceanBaseConnector.OceanBaseDbType.Binary: return DbType.Binary;
+                case global::OceanBaseConnector.OceanBaseDbType.DateTime: return DbType.DateTime;
+                case global::OceanBaseConnector.OceanBaseDbType.Time: return DbType.Time;
+                case global::OceanBaseConnector.OceanBaseDbType.Null: return DbType.Object;
+                default: return null;
+            }
+        }
 
         private static DbType InferType(object? value)
         {
