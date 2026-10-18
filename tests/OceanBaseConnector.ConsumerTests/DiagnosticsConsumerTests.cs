@@ -56,7 +56,7 @@ namespace OceanBaseConnector.ConsumerTests
                 ActivityStopped = activity => spans.Add(activity)
             };
             ActivitySource.AddActivityListener(activities);
-            using var metrics = new MeterListener();
+            using var metrics = new MeterListener { MeasurementsCompleted = (_, _) => { } };
             metrics.InstrumentPublished = (instrument, owner) =>
             {
                 if (!armed || instrument.Meter.Name != "OceanBaseConnector") return;

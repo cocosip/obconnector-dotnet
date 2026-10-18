@@ -166,7 +166,7 @@ namespace OceanBaseConnector.UnitTests
                 ActivityStopped = _ => { if (failure == "stop") throw new InvalidOperationException("listener"); }
             };
             ActivitySource.AddActivityListener(listener);
-            using var meter = new MeterListener(); meter.InstrumentPublished = (instrument, owner) => { if (instrument.Meter.Name == "OceanBaseConnector") owner.EnableMeasurementEvents(instrument); };
+            using var meter = new MeterListener { MeasurementsCompleted = (_, _) => { } }; meter.InstrumentPublished = (instrument, owner) => { if (instrument.Meter.Name == "OceanBaseConnector") owner.EnableMeasurementEvents(instrument); };
             meter.SetMeasurementEventCallback<long>((_, _, _, _) => { if (failure == "count") throw new InvalidOperationException("listener"); });
             meter.SetMeasurementEventCallback<double>((_, _, _, _) => { if (failure == "duration") throw new InvalidOperationException("listener"); }); meter.Start();
             var server = Server(async channel => { await Request(channel, "first"); await channel.WritePacketAsync(TimeZone()); channel.BeginCommand(); await Request(channel, "second"); await channel.WritePacketAsync(Error()); });
@@ -217,7 +217,7 @@ namespace OceanBaseConnector.UnitTests
         {
             using var activities = new ActivityListener { ShouldListenTo = source => source.Name == "OceanBaseConnector", Sample = (ref ActivityCreationOptions<ActivityContext> _) => diagnostics == "on" ? ActivitySamplingResult.AllData : ActivitySamplingResult.None };
             if (diagnostics != "off") ActivitySource.AddActivityListener(activities);
-            using var metrics = new MeterListener(); metrics.InstrumentPublished = (instrument, owner) => { if (diagnostics == "on" && instrument.Meter.Name == "OceanBaseConnector") owner.EnableMeasurementEvents(instrument); };
+            using var metrics = new MeterListener { MeasurementsCompleted = (_, _) => { } }; metrics.InstrumentPublished = (instrument, owner) => { if (diagnostics == "on" && instrument.Meter.Name == "OceanBaseConnector") owner.EnableMeasurementEvents(instrument); };
             metrics.SetMeasurementEventCallback<long>((_, _, _, _) => { }); metrics.SetMeasurementEventCallback<double>((_, _, _, _) => { }); metrics.Start();
             const int length = 4 * 1024 * 1024; var repetitions = workload == "large" ? 8 : 400;
             var prepares = 0; var executions = 0;
@@ -410,7 +410,8 @@ namespace OceanBaseConnector.UnitTests
         private sealed class Capture : IDisposable
         {
             private readonly ActivityListener _activities;
-            private readonly MeterListener _metrics = new MeterListener();
+            // .NET 8.0.31 only detaches enabled instruments during Dispose when this callback exists.
+            private readonly MeterListener _metrics = new MeterListener { MeasurementsCompleted = (_, _) => { } };
             internal List<Activity> Spans { get; } = new List<Activity>();
             internal List<(long Value, Dictionary<string, object?> Tags)> Counts { get; } = new();
             internal List<(double Value, Dictionary<string, object?> Tags)> Durations { get; } = new();

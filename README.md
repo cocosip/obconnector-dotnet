@@ -74,6 +74,8 @@ using var connection = source.CreateConnection();
 
 排障可记录驱动版本、应用目标/实际运行时、脱敏端点和模式、异常类型、错误码/SQLSTATE、未知标记、取消/超时原因类别及业务操作标识。不要把密码、原始连接串、SQL/参数值或未经脱敏的抓包写进报告。连接、命令、事务日志类别分别为 `OceanBaseConnector.Connection`、`.Command`、`.Transaction`；日志可包含端点和耗时，不携带原始异常文本。`ActivitySource`/`Meter` 名称均为 `OceanBaseConnector`，指标为 `oceanbase.client.operations` 和秒单位 `oceanbase.client.operation.duration`，固定标签仅包含操作、模式、结果和未知标记。监听器回调失败会被隔离；诊断通道首次初始化失败时，该通道可能在当前程序集生命周期内不可用，不能根据缺少 span 推断 SQL 没有执行。
 
+在本次验证的 .NET 8.0.31 中，应用自行创建的 `MeterListener` 若未设置 `MeasurementsCompleted`，释放时可能仍保留已启用的指标订阅，残留回调会影响后续采集和无监听开销。宿主应设置该完成回调（无清理状态时可为空操作），或在释放前显式调用 `DisableMeasurementEvents` 解除订阅；驱动不拥有或释放应用的监听器。
+
 ## 兼容性证据
 
 | 部署组合 | 真实握手/TLS/SQL/事务验收 |
@@ -93,7 +95,7 @@ OceanBase 和 OBProxy 最低版本均未确定，没有已验证的版本白名�
 
 其他认证插件（包括 `caching_sha2_password`）尚不支持。证书故障应核对信任链、端点主机名及 `TLS Server Name`，驱动不会自动降低 TLS 要求。即使插件/TLS 条件满足，公共 MySQL 模式判定缺口仍会阻止该模式连接。
 
-Windows 上的本地协议测试及部分实际 .NET 8/9/10 消费样例已有证据；非 Windows 和完整旧运行时兼容矩阵尚未验收。.NET Standard 资产的存在不代表所有实现该标准的运行时都已验证。详见仓库 `docs/obconnector-dotnet-progress.md`，设计与实施范围见同目录的架构设计和开发方案。
+Windows 上已在实际 .NET 8.0.31、9.0.20 各执行完整本地 Unit 1206 项和 DI 8 项，全部通过且无跳过，另有实际 .NET 8/9/10 包消费样例。日常测试项目仍统一声明 net10.0；8/9 使用临时构建属性验证，Microsoft 通用库依赖分别保持 8/9 主版本。非 Windows、真实数据库和完整旧运行时兼容矩阵尚未验收。.NET Standard 资产的存在不代表所有实现该标准的运行时都已验证。详见仓库 `docs/obconnector-dotnet-progress.md`，设计与实施范围见同目录的架构设计和开发方案。
 
 ## 0.1.0-alpha 交付与回退说明（未发布）
 

@@ -158,6 +158,10 @@ span 继承开始时 Activity.Current 的父上下文，但立即恢复调用方
 
 两个指标为 `oceanbase.client.operations`（Counter<long>，单位 `{operation}`）和 `oceanbase.client.operation.duration`（Histogram<double>，单位 `s`），都在操作结束时记录一次。共同固定标签 `db.operation.name`、`oceanbase.compatibility_mode`（`mysql`/`oracle`/`unknown`）、`oceanbase.outcome`（`success`/`error`/`canceled`/`timeout`）及 `oceanbase.execution_outcome_unknown`（bool）；取消/超时原因和执行结果未知可同时表达，模式在认证确认前只能为 unknown。span 使用相同标签，另加固定 `db.system.name=oceanbase`，成功为 Ok，其余为 Error，不附错误文本/异常事件。metric 不包含端点、库名、SQL、参数、凭据、连接ID或任意键。无监听器时不创建每次诊断对象、Activity、标签集合或Stopwatch；以Windows本地公开协议/预处理/多结果/大值基线记录耗时、分配与禁用开销，不以夹具数值代替真实数据库性能。C01 尚阻塞，高并发池借还基线暂缓，不用非池连接基线冒充。
 
+应用自行创建和释放诊断监听器，驱动不接管宿主的 `MeterListener`。本次实际 .NET 8.0.31 回归及对应 runtime 源码确认：未设置 `MeasurementsCompleted` 时，`Dispose` 可能保留已启用的 instrument 订阅。宿主应提供完成回调（可为空操作），或在释放前显式 `DisableMeasurementEvents`；测试夹具亦遵守此清理要求，不放宽监听异常隔离或无监听分配断言。此处仅描述已验证补丁版本，不推断所有 .NET 8 补丁行为。
+
+2026-10-19 Windows 本地回归另在实际 .NET8.0.31/9.0.20 各运行完整 Unit1206/DI8，全部通过；仅以临时MSBuild属性构建旧运行时测试宿主，工程声明仍为net10.0，核心五目标/DI三目标及按TFM的8/9/10依赖主版本保持不变。恢复默认后.NET10.0.12完整Unit1206/Consumer152/DI8及实际五资产包消费通过。该证据补齐本地套件的8/9执行，不关闭真实数据库、非Windows、Framework4.8或完整兼容矩阵验收。
+
 ### 2.7 当前代码影响与验收
 
 现有 `ConnectResult.Mode`、`PhysicalSession` 独占状态机、`OceanBaseConnectionOptions` 冻结配置、TCP/TLS 与包序号处理可以保留。现有代码没有双模式两套公开对象，不需要按参考项目重写。B01 在已有 options 之外增加不可变日志上下文并交给连接/会话，不把 `ILoggerFactory` 序列化进连接串；底层 byte cursor/帧编解码不增加宿主依赖。

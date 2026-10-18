@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.IO;
@@ -113,9 +114,14 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
+        public static IEnumerable<object[]> PrepareAsyncTargetAssets()
+        {
+            yield return new object[] { "netstandard2.1" };
+            yield return new object[] { "net" + Environment.Version.Major + ".0" };
+        }
+
         [Theory]
-        [InlineData("netstandard2.1")]
-        [InlineData("net10.0")]
+        [MemberData(nameof(PrepareAsyncTargetAssets))]
         public async Task PrepareAsyncWaitsAsynchronouslyForMetadata(string target)
         {
             var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

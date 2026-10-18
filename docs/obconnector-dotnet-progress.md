@@ -111,7 +111,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
 | R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-19 本地统一打包元数据/包内文档/五资产实际包消费完成；Unit1205/Consumer152/DI8及独立走查通过，许可证、来源及包名/商标审查仍开放，不发布；证据见末尾 |
-| R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | README本地交付/故障/兼容限制/回退材料及独立走查已完成，Windows Unit1206/Consumer152/DI8与五资产包消费通过；最终真实矩阵与发布审查待验收，不关闭候选版门槛 |
+| R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | README本地交付材料及独立走查已完成；Windows实际8.0.31/9.0.20各Unit1206/DI8、默认10.0.12 Unit1206/Consumer152/DI8与五资产包消费通过；最终真实矩阵与发布审查待验收，不关闭候选版门槛 |
 | D01 | G4 后 | OB20、校验与完整链路追踪 | 未开始 | 待记录 |
 | D02 | G4 后 | Oracle 过程及 OUT/RETURNING | 未开始 | 待记录 |
 | D03 | G4 后 | REF CURSOR | 未开始 | 待记录 |
@@ -423,3 +423,23 @@ Windows本地基线环境为.NET10.0.12、Windows10.0.26200、Intel64 Family6 Mo
 最终 Release slnx 编译核心五/DI三目标0警告0错误（TestResults/r02-build-final.log）；完整 Windows Unit1206、Consumer152、DI8全通过且0跳过（TestResults/r02-{unit,consumer,di}-final.trx）。解析最终TRX确认既有20组具名走查回归及新增TCP回归均实际执行通过，Standard2.1异步清理仍覆盖。统一 pack 后 TestResults/r02-pack 双包验证通过，五资产样例分别在实际.NET8.0.31/9.0.20/10.0.12及隔离.NET10 Standard宿主执行，日志为TestResults/r02-package-final.log；独立还原目录TestResults/package-validation/e2b0d53c4b4a4880b643a9bfaf723532。另逐字核对两个包内README与源文件一致，UTF-8无BOM/CRLF及diff检查通过。单元证书与包还原采用正常Windows TLS权限，未禁用审计或降低TLS校验。
 
 R02仅完成本地材料和本地验证，状态保持进行中；G4同步为进行中、仍0/2，C08仍因真实证据缺失而阻塞。R01项目许可证/来源/包名审查、G0/G1及完整G3/真实版本矩阵均未关闭，未发布、未推送。真实数据库与非Windows验收继续按约定暂缓；A04待真实/跨平台验收、A05公开MySQL模式可信判定缺口和C01池重置白名单不变。
+
+## R02 Windows .NET 8/9 完整本地回归补验（2026-10-19）
+
+沿用当前 master 和既有产品五目标/DI三目标、CPM及统一0.1.0-alpha，不新增旧目标日常测试工程。临时同时传入 TargetFrameworks/TargetFramework 构建现有 Unit/DI 套件，随后恢复整个 slnx 默认还原和构建；所有测试工程声明仍为net10.0。deps图确认net8使用Logging8.0.3、DI8.0.1/Abstractions8.0.2，net9均9.0.10；没有用net10依赖替代旧目标依赖。
+
+本轮修复三处测试兼容问题：net8不具备X509CertificateLoader，证书夹具按目标使用对应PFX导入API；PrepareAsync隔离回归改为Standard2.1及当前运行时对应现代资产，保持原异步协议断言；五处MeterListener都提供非抛出MeasurementsCompleted回调。后者来自net8首轮完整Unit1197通过/9失败，以及诊断定向24通过/9失败，涉及残留抛出回调污染后续采集和分配断言。核对实际8.0.31 runtime源码，Dispose只在完成回调非空分支中解除instrument订阅；加空完成回调后诊断33/33及完整1206/1206通过，没有放宽任何断言或修改产品诊断逻辑。README与架构§2.6明确宿主监听器所有权及已验证补丁版本的清理要求。
+
+| 实际Windows运行时 | Unit | Consumer | DI | 失败/跳过 |
+| --- | --- | --- | --- | --- |
+| .NET 8.0.31 | 1206 | 五资产包消费另验 | 8 | 0/0 |
+| .NET 9.0.20 | 1206 | 五资产包消费另验 | 8 | 0/0 |
+| .NET 10.0.12（恢复默认） | 1206 | 152 | 8 | 0/0 |
+
+证据：TestResults/runtime8-unit-final.trx、runtime8-di.trx、runtime9-unit.trx、runtime9-di.trx和runtime10-{unit,consumer,di}-final.trx。TRX诊断输出记录实际运行时，runtime{8,9,10}-host.json另保留testhost的coreclr.dll加载路径；runtime-matrix-dependencies.json保留旧目标依赖核对。红绿记录保留runtime8-prepare-{red,green}.trx、runtime8-unit.trx、runtime8-diagnostics-{red,green}.trx及runtime8-listeners-red.trx。源码依据为 https://raw.githubusercontent.com/dotnet/runtime/v8.0.31/src/libraries/System.Diagnostics.DiagnosticSource/src/System/Diagnostics/Metrics/MeterListener.cs ，本地留存TestResults/runtime8.0.31-MeterListener.cs。失败轮次不折算为通过，不推广到所有net8补丁。
+
+恢复默认Release slnx核心五/DI三目标编译0警告0错误（TestResults/runtime-matrix-build-final.log）。重新pack到TestResults/runtime-matrix-pack，Verify-Packages使用独立缓存7161e6b0c911479bb53cdc0c460d9ea0核对双包内容、同版本和精确核心依赖、8/9/10依赖组及实际五资产消费，全部通过（TestResults/runtime-matrix-package-final.log）；Standard2.0/2.1包消费仍在net10隔离宿主执行，不冒充Framework4.8。正常Windows证书存储/NuGet TLS权限运行，未禁用审计或降低TLS校验。
+
+修改过的独立BatchRuntimeConsumerSample另按三个现代参考程序集重新编译，实际8.0.31/9.0.20/10.0.12批次/诊断断言均通过（TestResults/runtime{8,9,10}-batch-final.log）。首次调用遗漏夹具参数造成的命令错误单独保留runtime8-batch-invocation-error.log，补齐参数后通过，不归为产品故障。独立只读闭环复核核对全部七份最终TRX、实际运行时、依赖图、默认目标、编译和包内README，无剩余需修复项；git diff --check及UTF-8无BOM/CRLF检查通过。
+
+本轮不新增产品功能；先前11类走查问题及TCP借用等待句柄缺陷已修复，本轮补齐旧运行时测试发现的夹具问题和进度证据。R02仍进行中、G4仍0/2；真实数据库与非Windows按约定暂缓，Framework4.8、完整兼容矩阵及许可/来源/包名审核未完成。A04真实/跨平台验收、A05可信公共MySQL模式判定和C01完整重置白名单仍开放，不发布、不推送。
