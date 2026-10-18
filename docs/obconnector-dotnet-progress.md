@@ -1,6 +1,6 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-18 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间及 B06 reader 字段元数据。事务、目录元数据和宽精度扩展尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
+基线日期：2026-10-17。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。2026-10-18 已续接 A 阶段握手/物理会话、B01 宿主接入、B02 无参文本命令/逐行 reader/多结果、B03/B04 名称绑定/服务端预处理、B05 低精度数值/provider-specific 访问/常见日期时间、B06 reader 字段元数据及 B07 本地事务/关闭回滚。完整故障矩阵、目录元数据和宽精度扩展尚未实现，真实互通无证据，不能将夹具通过等同于阶段门槛关闭。
 
 ## 进度口径
 
@@ -28,7 +28,7 @@
 | --- | --- | --- | --- | --- |
 | G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
 | G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04 本地实现完成、待真实/跨平台验收；A05 还缺可信 MySQL 模式判定规则及版本/插件验收；A07 缺环境与可信版本矩阵；G0 未关闭 |
-| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B06 本地实现待真实环境验证；B07-B09 及五目标旧运行时消费/双模式实测仍待完成 |
+| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B07 本地实现待真实环境验证；B08-B09 及五目标旧运行时消费/双模式实测仍待完成 |
 | G3 生产连接 C | W18-W34 | 0/8 | 未开始 | C01-C08 + 池化白名单/精确类型/MySQL `ChangeDatabase`/内存故障实测 |
 | G4 发布候选 R | W35-W37 | 0/2 | 未开始 | R01-R02 + 包/许可证/兼容矩阵 |
 | D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
@@ -55,7 +55,7 @@
 | B04 | W9-W12 | 服务端 prepare/execute、二进制结果和 statement ID | 待验证 | 本地实现及 Windows 协议/环回、五目标编译、消费/DI 测试通过；双模式实库、旧运行时和非 Windows 待补 |
 | B05 | W10-W13 | 基础值、低精度 `OceanBaseDecimal`、Oracle DATE 与未支持类型拒绝 | 待验证 | Codex，2026-10-18：本地精确数值/日期编解码、公开 provider-specific 访问、五目标消费及 Windows 协议/环回通过；双模式实库、旧运行时及非 Windows 待补，完整字段元数据留 B06 |
 | B06 | W11-W14 | 逐行 reader、字段元数据及低精度 provider-specific 访问 | 待验证 | Codex，2026-10-18：两套字段 schema/独立快照、多结果和生命周期、本地五目标编译及 Windows 单元/消费/DI 均通过；独立走查无需修复项。双模式真实元数据、非 Windows 和旧运行时待补，ProviderType 契约留 B09 审核 |
-| B07 | W13-W15 | 本地事务及环境事务拒绝 | 未开始 | 待记录 |
+| B07 | W13-W15 | 本地事务及环境事务拒绝 | 待验证 | Codex，2026-10-18：本地显式绑定、逐模式隔离映射、同步/异步事务与关闭回滚、日志和未知结果已实现；Unit455/Consumer34/DI8、五目标编译及独立复查通过；实库、非 Windows 和旧运行时待补 |
 | B08 | W14-W16 | 取消、超时、结果未知和故障注入 | 未开始 | 待记录 |
 | B09 | W17（待重估） | 五目标消费、数据源/DI/日志生命周期、低精度 provider-specific 数值和双模式 G2 验收 | 未开始 | 待记录 |
 
@@ -197,3 +197,9 @@ B06 测试与走查：公开文本/二进制、同步/异步四例先因 schema 
 B06 最终 Windows 验证：dotnet build OceanBaseConnector.slnx -c Release --no-restore 核心五目标/DI 三目标 0 警告、0 错误；UnitTests 410、ConsumerTests 29、DependencyInjection.Tests 8 全通过，报告 TestResults/b06-unit.trx、b06-consumer.trx、b06-di.trx。format whitespace --verify-no-changes、git diff --check、两包 pack 通过；ZIP/XML 校验 5/3 目标资产、8 个依赖组、统一 0.1.0-alpha、精确核心依赖及 Standard/net8→8.x、net9→9.x、net10→10.x 依赖分组通过。包 README 提示仍归 R01。全部测试宿主仍 net10.0，隔离加载资产不等于旧运行时通过。
 
 B06 保持待验证、G2 保持进行中，下一模块为 B07 本地事务。依用户要求继续暂缓实库及非 Windows，旧运行时亦无验收证据；MySQL 可信模式版本矩阵及 Oracle 字符长度/真实空字符串语义仍待环境。不改变 A04/A05、G0/G1 的缺口，不因字段 schema 已实现声称数据库目录 GetSchema 或两模式实库兼容已完成。
+
+2026-10-18 B07 本地事务：沿 Java 会话隔离/自动提交协议，固定原物理会话并显式校验命令事务；默认 MySQL RepeatableRead / Oracle ReadCommitted，Oracle 只开放 ReadCommitted/Serializable。完整提交/回滚 OK 已确认后恢复自动提交失败时销毁会话并保留已确认结果；断线/取消无终态则报告结果未知，绝不重放。事务释放、连接关闭及 CloseConnection reader 的现代异步清理走真实异步回滚；忙会话销毁，环境事务中仍可清理。关闭事件先于旧会话回滚，延迟清理不会影响新会话。
+
+验证：`dotnet build OceanBaseConnector.slnx -c Release --no-restore` 五目标核心/三目标 DI 0 警告/错误；Windows 单元455、消费34、DI8 全部通过（`TestResults/b07-unit.trx`、`b07-consumer.trx`、`b07-di.trx`）；事务新增45项，其中首批6项由桩失败转通过。独立走查发现的 reader 异步清理同步回滚、重开后迟到 Closed 事件均经失败后通过的回归修复，复查无剩余需修复项。五资产经公共 ADO.NET 事务接口消费，现代三资产延迟响应验证异步 Begin/End；两个 Standard 资产仅同步事务入口，未作为旧运行时验收。日志使用独立 Transaction 类别并在执行前创建 logger，后端失败不改变已确认结果。格式/diff 检查、双包生成和 ZIP/XML 资产5/3组、依赖8组、统一0.1.0-alpha与 DI 精确核心依赖检查通过；无新增依赖，Microsoft.Extensions 仍按目标8/9/10分组。NuGet README 提示仍留 R01。
+
+B07 保持待验证，G2 仍0/9、进行中，下一模块 B08。MySQL 仅有内部隔离映射测试，公共握手仍受 A05 可信版本规则缺口阻止；实库及非 Windows 按用户要求暂缓，旧运行时未验证。A04/A05、G0/G1 缺口不变。

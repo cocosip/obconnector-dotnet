@@ -160,7 +160,7 @@ C07 使用 `System.Diagnostics.DiagnosticSource` 支持旧资产的 Activity API
 | C01 | 数据源拥有池；重置、租户/模式/TLS/凭据隔离；数据源关闭后归还即销毁；禁止跨数据源共享物理会话 |
 | C06/C07 | C06 只补 batch 和数据源 batch 入口；C07 追踪、指标、禁用开销和性能验收，不重新实现数据源/基础日志 |
 
-B01 已实现统一公开连接/工厂、现代无池数据源、可选 DI 和基础连接日志；B02 已增加无参文本命令、逐行 reader、多结果、更新计数与命令日志；B03/B04 已增加 Oracle 名称绑定和服务端预处理、基础二进制参数/结果；B05 已增加低精度精确数值、provider-specific 访问及模式感知日期时间；B06 已增加 reader 的两套字段 schema 和结果切换快照。事务和故障矩阵仍按 B07/B08 交付。A 阶段的 G0/G1、MySQL 模式可信版本矩阵与真实租户测试仍是阻塞项。DI 注册成功不能作为双模式连接或 SQL 兼容的证据。依用户要求，暂不执行实库及非 Windows 运行测试，保留验收项。
+B01 已实现统一公开连接/工厂、现代无池数据源、可选 DI 和基础连接日志；B02 已增加无参文本命令、逐行 reader、多结果、更新计数与命令日志；B03/B04 已增加 Oracle 名称绑定和服务端预处理、基础二进制参数/结果；B05 已增加低精度精确数值、provider-specific 访问及模式感知日期时间；B06 已增加 reader 的两套字段 schema 和结果切换快照；B07 已增加显式本地事务及同步/异步关闭回滚。完整故障矩阵仍按 B08 交付。A 阶段的 G0/G1、MySQL 模式可信版本矩阵与真实租户测试仍是阻塞项。DI 注册成功不能作为双模式连接或 SQL 兼容的证据。依用户要求，暂不执行实库及非 Windows 运行测试，保留验收项。
 
 ## 3. 分层与状态所有权
 
@@ -198,6 +198,12 @@ flowchart TD
 6. 首版只支持显式本地 `DbTransaction`。`Open`/`OpenAsync` 在建连前检查 `System.Transactions.Transaction.Current`；已打开连接的所有调用方发起的协议操作，在公共发送入口再次检查，包括命令执行与预处理、`BeginTransaction`、`Commit`、`Rollback`、`ChangeDatabase`、`GetSchema` 及其异步入口。存在环境事务时，在发包前抛 `NotSupportedException`；`EnlistTransaction` 也始终显式拒绝。内部关闭、回滚清理和销毁会话不得因这个检查被阻止，清理失败则销毁物理会话。这样即使连接在进入 `TransactionScope` 前打开，也不会悄然执行自动提交或改变会话状态。未来只有完成加入、提交/回滚、跨连接升级和恢复测试后才改变此契约；显式 XA API 与 `TransactionScope` 是不同能力。
 
 B04 本地实现：自动准备与执行共用一个物理会话租约和超时预算；只在实际发送 COM_QUERY/COM_STMT_EXECUTE 后报告 SQL 结果未知。准备响应中断销毁会话，但不声称 SQL 已执行；可信终态 ERR 不触发回退。statement ID 由命令和物理会话共同拥有，只在改写后的 SQL 与会话均不变时复用；改 SQL、重连或释放命令使旧 ID 失效。空闲时发送无响应 COM_STMT_CLOSE，其他 reader 占用时排队到下一命令前；清理取消只影响所属租约。Prepare 成功但绑定数不匹配时关闭新 ID、保留会话并报参数错误。基础输入参数支持 bool、有/无符号整数、浮点、普通 UTF-8 字符串、byte[] 和 NULL，B05 再扩展 §5 的数值与日期时间；未显式设置 DbType 时按 Value 推断，ResetDbType 恢复推断，显式类型要求 CLR 值匹配，每次执行重发类型。national charset 和 LOB 扩展仍待后续模块，执行入口在发送其准备/执行包前拒绝未支持的显式参数类型和值不匹配；显式 Prepare/PrepareAsync 只校验 SQL 与绑定结构，不检查 Value 编码。
+
+B07 本地事务沿 Java 的会话协议设置隔离和自动提交（[自动提交](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L1949)、[隔离级别](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L2080)），使用 `SET SESSION TRANSACTION ISOLATION LEVEL ...` 后 `set autocommit = 0`；实际事务由首条业务语句隐式开始。Unspecified 固定为 MySQL RepeatableRead / Oracle ReadCommitted；MySQL 映射 ReadUncommitted/ReadCommitted/RepeatableRead/Serializable，Oracle 仅开放 ReadCommitted/Serializable，其他值发送前拒绝。Java 对 Oracle RepeatableRead 的允许不能代替实测，因此暂不开放。每次 Begin 都显式设置隔离级别，不声称恢复应用通过原始 SQL 修改的会话状态；完整池化重置仍属 C01。
+
+提交/回滚与恢复 `set autocommit = 1` 共用独占租约。控制响应仅接受单个合法 OK，拒绝多结果、未结束事务或自动提交状态不符；完整 ERR 仍保留活动事务供调用方回滚。终态 COMMIT/ROLLBACK 已确认后，恢复失败只销毁物理会话并记录恢复失败，保留该已确认结果；响应未确认时才报告该事务操作结果未知。Dispose/Close 内部回滚不受环境事务阻止；忙 reader/事务操作不能被插入回滚包，直接销毁原会话。现代 reader CloseAsync/DisposeAsync 的 CloseConnection 路径也必须等待异步回滚。关闭时先发布逻辑 Closed，再清理捕获的旧会话，重开后的会话不受旧清理影响。事务日志使用独立类别及 1200/1201 完成/失败事件，只有已脱敏的结构化字段。
+
+五资产公共事务消费已在 .NET 10 宿主通过，现代资产有延迟响应验证异步 Begin/End，Windows 环回另覆盖取消/结果未知、清理及状态事件。两个 Standard 资产仅实现其参考 API 中的同步事务入口；.NET 10 宿主消费不能证明旧运行时兼容。真实双模式隔离与提交语义、OBProxy、非 Windows 及旧运行时证据仍待补；缺 Oracle 模式位的公共握手安全门槛不变。
 
 ## 5. 值与元数据契约
 
@@ -284,4 +290,4 @@ ADO.NET 不替 provider 自动管理物理连接。`Pooling=false` 是默认值�
 3. 首发最低 OceanBase/OBProxy 版本与两种兼容模式的实际测试环境；它们决定可对外承诺的功能矩阵。
 4. 首个正式版本是否必须包含经验证的池化与 Oracle 高精度/纳秒 provider-specific 值；本设计将它们列为 C 阶段交付门槛，而不是协议原型门槛。无法完整重置的服务端组合只承诺直连。
 
-本文定义目标架构。2026-10-18 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果、B05 低精度数值/provider-specific 访问和常见日期时间，以及 B06 reader 字段元数据；宽精度扩展、目录元数据和事务仍未实现，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。
+本文定义目标架构。2026-10-18 已具备 A 阶段工程、传输、握手原型与物理会话，B01 宿主接入、B02 无参文本执行/逐行 reader/多结果、B03/B04 名称绑定与服务端预处理/基础二进制参数/结果、B05 低精度数值/provider-specific 访问和常见日期时间，B06 reader 字段元数据，以及 B07 本地事务和关闭回滚；宽精度扩展、目录元数据和 B08 完整故障矩阵仍未实现，真实互通尚未验证，状态见进度台账。当前没有已验证的服务端版本矩阵，认证 OK 未设置 Oracle 模式位时一律拒绝，不以 ExpectedMode 覆盖；取得 G0/G1 版本证据后再开放对应 MySQL 模式组合。

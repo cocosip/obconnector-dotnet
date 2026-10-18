@@ -125,15 +125,15 @@ namespace OceanBaseConnector
                 if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseCommand));
                 if (_execution != null) throw new InvalidOperationException("The command already has an active operation.");
                 OceanBaseConnection.RejectAmbientTransaction();
-                if (CommandType != CommandType.Text || _transaction != null)
-                    throw new NotSupportedException("Only text commands without transactions are supported at this stage.");
+                if (CommandType != CommandType.Text)
+                    throw new NotSupportedException("Only text commands are supported at this stage.");
                 if ((behavior & ~CommandBehavior.CloseConnection) != 0)
                     throw new NotSupportedException("This CommandBehavior is not supported yet.");
                 var text = CommandText;
                 if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("CommandText is required.");
                 token.ThrowIfCancellationRequested();
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
-                var session = connection.GetOpenSession();
+                var session = connection.GetCommandSession(_transaction);
                 var length = ResultColumn.Utf8.GetByteCount(text);
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
                 var bindings = ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
@@ -144,7 +144,7 @@ namespace OceanBaseConnector
                 { _prepared.Release(); _prepared = null; }
                 if (_prepared != null && _prepared.ParameterCount != bindings.Parameters.Length) throw ParameterCountMismatch();
                 CommandExchange? execution = null;
-                execution = new CommandExchange(session, connection.Log, _timeout, token, () =>
+                execution = connection.StartCommand(session, _transaction, _timeout, token, () =>
                 {
                     lock (_gate) { if (ReferenceEquals(_execution, execution)) _execution = null; }
                 });
@@ -182,7 +182,7 @@ namespace OceanBaseConnector
             }
         }
 
-        private static byte[] SqlPacket(string text, byte code)
+        internal static byte[] SqlPacket(string text, byte code)
         {
             var bytes = ResultColumn.Utf8.GetBytes(text);
             var packet = new byte[bytes.Length + 1];

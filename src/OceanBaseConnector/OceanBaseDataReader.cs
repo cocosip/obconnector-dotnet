@@ -161,8 +161,19 @@ namespace OceanBaseConnector
         }
         protected override void Dispose(bool disposing) { if (disposing) Close(); base.Dispose(disposing); }
 #if NET8_0_OR_GREATER
-        public override Task CloseAsync() { Close(); return Task.CompletedTask; }
-        public override ValueTask DisposeAsync() { Dispose(); return default; }
+        public override async Task CloseAsync()
+        {
+            if (_closed) return;
+            _closed = true;
+            try { _query.Dispose(); }
+            finally { if (_closeConnection) await _connection.CloseAsync().ConfigureAwait(false); }
+        }
+        public override async ValueTask DisposeAsync()
+        {
+            await CloseAsync().ConfigureAwait(false);
+            base.Dispose(true);
+            GC.SuppressFinalize(this);
+        }
 #endif
         private ResultColumn Column(int ordinal)
         {

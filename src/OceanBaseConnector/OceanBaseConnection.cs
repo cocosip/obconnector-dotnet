@@ -11,7 +11,7 @@ using OceanBaseConnector.Internal.Session;
 
 namespace OceanBaseConnector
 {
-    public sealed class OceanBaseConnection : DbConnection
+    public sealed partial class OceanBaseConnection : DbConnection
     {
         private readonly object _gate = new object();
         private readonly ConnectionLog _log;
@@ -182,24 +182,33 @@ namespace OceanBaseConnector
 
         public override void Close()
         {
-            PhysicalSession? session;
-            ConnectionState previous;
-            string? endpoint;
-            lock (_gate)
+            var closing = DetachForClose();
+            try
             {
-                previous = State;
-                session = _session;
-                endpoint = _options?.Endpoint;
-                _session = null;
+                if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
+                if (closing.Exchange != null) CleanupTransaction(closing.Transaction!, closing.Exchange);
             }
-            session?.Dispose();
-            if (previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(previous, ConnectionState.Closed));
-            if (session != null) _log.Closed(endpoint!);
+            finally { closing.Exchange?.Dispose(); FinishClose(closing.Session, closing.Endpoint); }
         }
 
 #if NET8_0_OR_GREATER
-        public override Task CloseAsync() { Close(); return Task.CompletedTask; }
-        public override ValueTask DisposeAsync() { Dispose(); return default; }
+        public override async Task CloseAsync()
+        {
+            var closing = DetachForClose();
+            try
+            {
+                if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
+                if (closing.Exchange != null) await CleanupTransactionAsync(closing.Transaction!, closing.Exchange).ConfigureAwait(false);
+            }
+            finally { closing.Exchange?.Dispose(); FinishClose(closing.Session, closing.Endpoint); }
+        }
+        public override async ValueTask DisposeAsync()
+        {
+            lock (_gate) _disposed = true;
+            await CloseAsync().ConfigureAwait(false);
+            base.Dispose(true);
+            GC.SuppressFinalize(this);
+        }
         public override Task ChangeDatabaseAsync(string databaseName, CancellationToken cancellationToken = default) => Task.FromException(Unsupported());
 #endif
         protected override void Dispose(bool disposing)
@@ -214,7 +223,6 @@ namespace OceanBaseConnector
 
         public override void ChangeDatabase(string databaseName) => throw Unsupported();
         public override void EnlistTransaction(Transaction? transaction) => throw new NotSupportedException("Ambient and distributed transactions are not supported.");
-        protected override DbTransaction BeginDbTransaction(System.Data.IsolationLevel isolationLevel) => throw Unsupported();
         protected override DbCommand CreateDbCommand()
         {
             lock (_gate) { ThrowIfDisposed(); return new OceanBaseCommand { Connection = this, CommandTimeout = _builder.CommandTimeout }; }

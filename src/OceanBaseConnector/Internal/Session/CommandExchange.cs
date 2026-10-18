@@ -22,17 +22,20 @@ namespace OceanBaseConnector.Internal.Session
         private readonly object _gate = new object();
         private bool _responsePending;
         private bool _sqlSent;
+        private bool _anySqlSent;
+        private readonly bool _logCommand;
         private uint[] _statementCloses;
         private bool _terminal;
         private int _finished;
         private int _packets;
 
-        internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release)
+        internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release, bool logCommand = true)
         {
             _session = session;
             _log = log;
             _release = release;
             _caller = caller;
+            _logCommand = logCommand;
             _budget = CancellationTokenSource.CreateLinkedTokenSource(caller, _cancel.Token);
             try
             {
@@ -73,10 +76,12 @@ namespace OceanBaseConnector.Internal.Session
                 _channel.BeginCommand();
                 _responsePending = true;
                 _sqlSent |= executesSql;
+                _anySqlSent |= executesSql;
             }
         }
 
-        internal void ResponseComplete() { lock (_gate) _responsePending = false; }
+        internal bool HasSentSql { get { lock (_gate) return _anySqlSent; } }
+        internal void ResponseComplete() { lock (_gate) { _responsePending = false; _sqlSent = false; } }
 
         internal void Send(byte[] request, bool executesSql = true)
         {
@@ -177,7 +182,7 @@ namespace OceanBaseConnector.Internal.Session
             _budget.Dispose();
             _cancel.Dispose();
             _release();
-            _log.CommandFinished(_session.Endpoint, _session.Info!.Mode, _elapsed.ElapsedMilliseconds, error);
+            if (_logCommand) _log.CommandFinished(_session.Endpoint, _session.Info!.Mode, _elapsed.ElapsedMilliseconds, error);
         }
 
         public void Dispose()

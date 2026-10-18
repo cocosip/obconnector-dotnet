@@ -186,7 +186,7 @@ B03 当前支持 ASCII `[A-Za-z_][A-Za-z0-9_$#]*` 名称（ParameterName 可带�
 - [x] Windows 环回确认 net10.0 和隔离加载的 netstandard2.1 资产 PrepareAsync 等待网络，不退回同步 I/O；覆盖执行、同步/异步释放和忙会话延迟关闭。
 - [ ] 两模式运行真实预处理 CRUD、目标运行时非同步退化与类型往返测试；依用户要求实库、非 Windows 和旧运行时暂缓，缺 Oracle 模式位的握手仍安全拒绝。
 
-B04 交付基础 bool/整数/浮点/普通 UTF-8 字符串/byte[]/NULL 编解码，B05 已扩展精确数值/日期；执行入口在发送其准备/执行包前拒绝显式 DbType 与 CLR 值不匹配及未支持类型，显式 Prepare/PrepareAsync 不检查 Value 编码。语句 ID 仅在同一命令、相同改写 SQL 和同一物理会话复用；变更、重连和释放时失效，空闲关闭或忙时排队到下次命令前。服务端参数数不符不执行 SQL，准备元数据 ERR 关闭已知 ID，终态执行 ERR 保留可复用会话；未消费响应则销毁会话。B06 已补 reader 字段元数据，B07 事务及 B08 故障矩阵仍未完成，不据此关闭 G2。
+B04 交付基础 bool/整数/浮点/普通 UTF-8 字符串/byte[]/NULL 编解码，B05 已扩展精确数值/日期；执行入口在发送其准备/执行包前拒绝显式 DbType 与 CLR 值不匹配及未支持类型，显式 Prepare/PrepareAsync 不检查 Value 编码。语句 ID 仅在同一命令、相同改写 SQL 和同一物理会话复用；变更、重连和释放时失效，空闲关闭或忙时排队到下次命令前。服务端参数数不符不执行 SQL，准备元数据 ERR 关闭已知 ID，终态执行 ERR 保留可复用会话；未消费响应则销毁会话。B06 已补 reader 字段元数据、B07 已接入本地事务；B08 完整故障矩阵及真实环境验收仍未完成，不据此关闭 G2。
 
 ### B05 基础值、字符集与不支持类型
 
@@ -218,10 +218,15 @@ B06 本地实现边界见架构 §5：GetColumnSchema/GetSchemaTable 已有跨�
 
 **产物：**`BeginTransaction`、隔离级别逐模式映射、显式 `DbCommand.Transaction` 绑定、提交/回滚/释放；现代事务异步入口真实异步。`TransactionScope`/`EnlistTransaction` 在发包前拒绝。
 
-- [ ] 测试遗漏、错误连接、已结束事务、重复开启、隔离级别错误、关闭时回滚及回滚失败销毁。
-- [ ] 测试连接打开前/后进入 `TransactionScope`，所有调用方协议入口拒绝但内部清理可继续。
-- [ ] 两模式运行提交、回滚、断线后结果未知测试。
-- [ ] 沿用 B01 日志上下文，覆盖事务完成/失败及结果未知；不记录 SQL/参数或原始服务端错误文本，日志异常不能掩盖提交结果。
+B07 本地实现：沿 Java 的 `SET SESSION TRANSACTION ISOLATION LEVEL ...`、`set autocommit = 0` 会话路径，在第一条业务语句时由服务端实际开始事务；不向 Oracle 模式发送 PL/SQL `BEGIN`。Unspecified 明确选择 MySQL RepeatableRead / Oracle ReadCommitted；MySQL 支持四个常规隔离级别，Oracle 首先只开放 ReadCommitted/Serializable（Java 允许 RepeatableRead 不能代替实库证据）。提交/回滚后恢复 `set autocommit = 1`。终态提交/回滚已确认但恢复失败时销毁会话并保留已确认结果，单独记录恢复失败；终态 ERR 保留活动事务供回滚，未确认响应则销毁。关闭/释放清理复用该路径，忙会话直接销毁，不向未读响应插入回滚。模式映射有内部测试；公共握手仍只接受已认证 Oracle 模式，不能据此宣称 MySQL 事务已互通。
+
+- [x] Windows 环回测试遗漏、错误连接、已结束事务、重复开启、隔离级别错误、关闭时回滚及回滚失败销毁。
+- [x] Windows 环回测试连接打开前/后进入 `TransactionScope`，已实现的调用方协议入口拒绝但内部清理可继续。
+- [x] Oracle 合成环回验证同步/异步提交、回滚、断线/取消后结果未知，以及五资产公开事务消费；现代资产延迟响应证明 Begin/End 不阻塞调用线程。
+- [ ] 两模式实库提交、回滚、隔离级别及断线验收；实库、非 Windows 及旧运行时暂缓。
+- [x] 沿用 B01 日志上下文，覆盖事务完成/失败及结果未知；不记录 SQL/参数或原始服务端错误文本，日志异常不能掩盖提交结果。
+
+2026-10-18 本地验证：五目标核心/三目标 DI Release build 0 警告/错误；Windows Unit455、Consumer34、DI8 通过（`TestResults/b07-{unit,consumer,di}.trx`）。独立走查指出的 reader 异步释放同步回滚、延迟关闭后重开事件顺序已有失败后通过的回归；日志工厂在事务执行前创建类别，避免惰性创建重入。CloseConnection reader 的现代异步清理沿用连接异步回滚；关闭先发布逻辑 Closed，旧会话清理不能销毁新会话。格式、双包和资产/依赖版本检查通过。整体仍待验证，G2 不关闭；下一模块 B08。
 
 ### B08 取消、超时与结果未知
 

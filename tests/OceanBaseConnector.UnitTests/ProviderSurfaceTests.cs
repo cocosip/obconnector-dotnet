@@ -26,7 +26,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Throws<NotSupportedException>(() => factory.CreateBatch());
             Assert.Null(factory.CreateDataAdapter());
             Assert.Null(factory.CreateCommandBuilder());
-            Assert.Throws<NotSupportedException>(() => connection.BeginTransaction());
+            Assert.Throws<InvalidOperationException>(() => connection.BeginTransaction());
             Assert.Throws<NotSupportedException>(() => connection.ChangeDatabase("other"));
             Assert.Throws<NotSupportedException>(() => connection.EnlistTransaction(null));
         }
