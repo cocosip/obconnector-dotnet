@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值及MySQL/Oracle固定会话、显式阶段与完整恢复快照已本地接入，真实协调器及两模式实库验收仍开放；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA、mysql_old_password及Ed25519路径已有本地实现，dialog/PAM、GSSAPI及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值及MySQL/Oracle固定会话、显式阶段与完整恢复快照已本地接入，真实协调器及两模式实库验收仍开放；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA、mysql_old_password、Ed25519及dialog/PAM路径已有本地实现，GSSAPI及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -21,7 +21,7 @@
 | D12 | MySQL JSON 文本/预处理读写、元数据及字段流本地实现，记录见末尾 | 真实 JSON 列往返、语法验证和版本/OBProxy矩阵 |
 | D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
-| D15 | SHA-2 fast/TLS、固定RSA、显式公钥获取、old password及Ed25519本地实现，验证见末尾 | dialog/PAM、GSSAPI、私有CA成功链及两模式实库矩阵 |
+| D15 | SHA-2 fast/TLS、固定RSA、显式公钥获取、old password、Ed25519及PAM本地实现，验证见末尾 | GSSAPI、私有CA成功链及两模式实库矩阵 |
 | D01 | OB20帧/校验、显式协商与标准回退、流式传输及脱敏完整链路追踪已有本地实现，记录见末尾 | OB20经TLS环回、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
@@ -199,7 +199,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D12 | 本地先行，实库延期 | MySQL JSON | 待验证 | 本地文本/二进制读写、元数据和字段流，验证见末尾；真实 JSON 列往返仍开放 |
 | D13 | 本地先行，实库延期 | MySQL BIT | 待验证 | 本地编解码/位宽/参数及测试记录见末尾；真实 BIT 列往返仍开放 |
 | D14 | 本地先行，实库延期 | MySQL YEAR | 待验证 | 本地实现/测试/走查记录见末尾；真实 YEAR 列往返仍开放 |
-| D15 | 本地先行，实库延期 | 新认证插件 | 进行中 | SHA-2 fast/TLS、固定RSA、显式取钥、old password及Ed25519本地实现；dialog/PAM、GSSAPI、私有CA及两模式实库余项开放，验证见末尾 |
+| D15 | 本地先行，实库延期 | 新认证插件 | 进行中 | SHA-2 fast/TLS、固定RSA、显式取钥、old password、Ed25519及PAM本地实现；GSSAPI、私有CA及两模式实库余项开放，验证见末尾 |
 
 ## 兼容矩阵记录模板
 
@@ -1379,3 +1379,28 @@ mysql_old_password复用既有TLS后的AuthenticationConversation、PacketChanne
 已解析最终TRX并与旧密码基线逐案例比较：Unit新增24、Consumer新增60，均无移除，DI仍8。README/架构/方案/台账同步，UTF8无BOM/CRLF和diff检查后当前master本地提交。
 
 D15仍进行中，dialog/PAM与GSSAPI继续按Java推进；真实两模式/OceanBase/OBProxy、可信TLS成功链及异机验收按要求延期，Framework本轮未执行。A05、C01、许可/来源/发布及其他真实环境关口继续开放。global.json保持删除，不推送，整体goal未完成。
+
+
+## D15 dialog/PAM本地实现（2026-10-19）
+
+从a3e6d66继续，沿固定Java SendPamAuthPacket接入dialog初始及命名切换，先主Password，随后每个非OK/ERR/FE继续包按Password2、Password3等发送，不解释服务端提示、不做回调。每轮VerifyFull、严格UTF8、空密码也加NUL；缺下一编号脱敏失败。最终结果、一次切换、模式确认和连接预算继续共享既有握手路径，没有新依赖或TLS降级。
+
+Builder索引器/连接串接受无前导零的PasswordN（2..Int32.MaxValue），不按最大编号分配数组。ToSanitizedConnectionString(false)、选项ToString和默认DataSource去除全部密码；builder.ConnectionString及显式ToSanitizedConnectionString(true)仍按既有语义完整往返，应当保护。不可变选项复制只读字典，ForEndpoint保留附加凭据，修改builder不影响既有连接快照。
+
+TDD初批21项为13失败/8通过（TestResults/pam-red/*.trx），缺口为未知PasswordN和dialog。首次实现后17通过/4失败（pam-green）：两个NUL输入实际在ADO.NET索引器入口已被拒绝，另两个未配对代理字符在xUnit InlineData传输时变成替代字符，未测试到目标。修正为在测试内构造代理字符，并分别断言配置入口NUL拒绝和认证UTF8拒绝，21通过（pam-green-final），未据测试问题放宽产品校验。追加Required TLS初始/切换同步/异步拒绝后25通过（pam-local）；五资产公开配置全串往返/全部秘密脱敏/Disabled拒绝20通过（pam-assets）。再补主密码空/Unicode字节和重复切换断言，纳入完整回归。
+
+独立走查逐行对照Java和builder/options/共享认证调用，未发现产品阻断；指出文档应限定ToSanitizedConnectionString(false)脱敏，不能笼统声称builder.ConnectionString不含秘密，已澄清。可信TLS多轮成功仅为状态/编码证据；Required与Disabled环回只证明拒绝，不安装/删除信任根或宣称实库兼容。
+
+| 验证 | 结果 | 证据 |
+| --- | --- | --- |
+| Release核心五/DI三及测试项目构建 | 0警告/错误 | TestResults/pam-build-final.log |
+| 完整Unit | 2875通过，0失败/跳过 | TestResults/pam-unit-final/*.trx |
+| 完整Consumer | 1139通过，0失败/跳过 | TestResults/pam-consumer-final/*.trx |
+| 完整DI | 8通过，0失败/跳过 | TestResults/pam-di-final/*.trx |
+| 首批PAM定向及Required拒绝 | 25通过 | TestResults/pam-local/*.trx |
+| 五资产公开PAM配置/秘密/拒绝 | 20通过 | TestResults/pam-assets/*.trx |
+| 范围格式校验 | 退出0 | TestResults/pam-format-final.log |
+
+完整测试命令沿上节，目录换为pam-unit-final/pam-consumer-final/pam-di-final；最终TRX逐案例对比Ed25519基线：Unit新增27、Consumer新增20，无移除，DI仍8。README/架构/方案/台账同步，独立复查无剩余阻断，UTF8无BOM/CRLF及git diff --check通过。
+
+D15仍进行中，下一项按Java推进GSSAPI。A05、C01、许可/来源/发布、真实两模式/OceanBase/OBProxy/可信TLS成功链及异机验收继续开放；真实服务端和其他机器测试按要求暂缓。本轮未重跑打包、旧运行时或Framework；Ed25519实际包证据保留在上节，不能当作PAM实库证据。global.json保持删除，当前master本地提交不推送，整体goal未完成。

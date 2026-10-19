@@ -14,7 +14,8 @@ namespace OceanBaseConnector
     /// <c>ExpectedMode</c>, <c>Pooling</c>, <c>Server RSA Public Key</c> and
     /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
     /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c> and <c>Load Balance</c>; the only synonyms are
-    /// <c>Host</c>, <c>Uid</c> and <c>Pwd</c>. Unknown keys, synonym conflicts
+    /// <c>Host</c>, <c>Uid</c> and <c>Pwd</c>. PAM accepts secret <c>PasswordN</c> keys for N >= 2.
+    /// Unknown keys, synonym conflicts
     /// and malformed values are rejected instead of being silently accepted.
     /// </summary>
     public sealed class OceanBaseConnectionStringBuilder : DbConnectionStringBuilder
@@ -284,6 +285,10 @@ namespace OceanBaseConnector
 
             if (EnableFullLinkTrace && !UseOb20) throw new ArgumentException("Full-link tracing requires Use OB20=true.");
             if (UseLobLocators && !UseOraclePrepareExecute) throw new ArgumentException("LOB locators require Use Oracle Prepare Execute=true.");
+            var additionalPasswords = new Dictionary<int, string>();
+            foreach (string key in Keys)
+                if (TryGetPasswordNumber(key, out var number)) additionalPasswords.Add(number, GetString(key)!);
+
             return new OceanBaseConnectionOptions(
                 Server,
                 Port,
@@ -304,10 +309,11 @@ namespace OceanBaseConnector
                 UseOraclePrepareExecute,
                 UseLobLocators,
                 LoadBalance,
-                ToSanitizedConnectionString(includeSecrets: false));
+                ToSanitizedConnectionString(includeSecrets: false),
+                additionalPasswords);
         }
 
-        // Serialization order for sanitized output; also the complete public key list.
+        // Serialization order for fixed keys; additional PAM passwords are secrets.
         private static readonly string[] AllCanonicalKeys =
         {
             ServerKey,
@@ -342,7 +348,7 @@ namespace OceanBaseConnector
             var serializer = new DbConnectionStringBuilder();
             foreach (var key in AllCanonicalKeys)
             {
-                if (!includeSecrets && SecretKeys.Contains(key))
+                if (!includeSecrets && IsSecretKey(key))
                 {
                     continue;
                 }
@@ -352,6 +358,10 @@ namespace OceanBaseConnector
                     serializer[key] = text;
                 }
             }
+
+            if (includeSecrets)
+                foreach (string key in Keys)
+                    if (TryGetPasswordNumber(key, out _)) serializer[key] = base[key];
 
             return serializer.ConnectionString;
         }
@@ -447,6 +457,7 @@ namespace OceanBaseConnector
                     return value;
 
                 default:
+                    if (TryGetPasswordNumber(canonicalKey, out _)) return value;
                     throw CreateKeywordError($"Unknown connection string keyword '{canonicalKey}'.", canonicalKey, includeValue: false, value: null);
             }
         }
@@ -458,7 +469,7 @@ namespace OceanBaseConnector
                 throw CreateKeywordError(
                     $"'{canonicalKey}' must be a non-negative integer.",
                     canonicalKey,
-                    includeValue: !SecretKeys.Contains(canonicalKey),
+                    includeValue: !IsSecretKey(canonicalKey),
                     value: value);
             }
 
@@ -576,6 +587,11 @@ namespace OceanBaseConnector
                     canonical = LoadBalanceKey;
                     return true;
                 default:
+                    if (TryGetPasswordNumber(keyword.Trim(), out var number))
+                    {
+                        canonical = PasswordKey + number.ToString(CultureInfo.InvariantCulture);
+                        return true;
+                    }
                     if (Synonyms.TryGetValue(keyword.Trim(), out var synonymCanonical))
                     {
                         canonical = synonymCanonical;
@@ -587,9 +603,20 @@ namespace OceanBaseConnector
             }
         }
 
+        private static bool TryGetPasswordNumber(string keyword, out int number)
+        {
+            number = 0;
+            if (!keyword.StartsWith(PasswordKey, StringComparison.OrdinalIgnoreCase) || keyword.Length <= PasswordKey.Length)
+                return false;
+            var suffix = keyword.Substring(PasswordKey.Length);
+            return suffix[0] != '0' && int.TryParse(suffix, NumberStyles.None, CultureInfo.InvariantCulture, out number) && number >= 2;
+        }
+
+        private static bool IsSecretKey(string keyword) => SecretKeys.Contains(keyword) || TryGetPasswordNumber(keyword, out _);
+
         private static ArgumentException CreateKeywordError(string message, string keyword, bool includeValue, string? value)
         {
-            if (includeValue && value is not null && !SecretKeys.Contains(keyword))
+            if (includeValue && value is not null && !IsSecretKey(keyword))
             {
                 message = $"{message} (value: '{value}')";
             }

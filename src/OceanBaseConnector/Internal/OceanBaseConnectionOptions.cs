@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace OceanBaseConnector.Internal
 {
@@ -31,13 +32,18 @@ namespace OceanBaseConnector.Internal
             bool useOraclePrepareExecute,
             bool useLobLocators,
             OceanBaseLoadBalance loadBalance,
-            string sanitizedConnectionString)
+            string sanitizedConnectionString,
+            IReadOnlyDictionary<int, string>? additionalPasswords = null)
         {
             Server = server;
             Port = port;
             Endpoints = Array.AsReadOnly(OceanBaseEndpoint.Parse(server, port));
             UserId = userId;
             Password = password;
+            var passwords = new Dictionary<int, string>();
+            if (additionalPasswords is not null)
+                foreach (var entry in additionalPasswords) passwords.Add(entry.Key, entry.Value);
+            AdditionalPasswords = new ReadOnlyDictionary<int, string>(passwords);
             Database = database;
             ConnectionTimeoutSeconds = connectionTimeoutSeconds;
             CommandTimeoutSeconds = commandTimeoutSeconds;
@@ -64,11 +70,13 @@ namespace OceanBaseConnector.Internal
 
         internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
             endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, LoadBalance, SanitizedConnectionString);
+            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, LoadBalance, SanitizedConnectionString, AdditionalPasswords);
 
         public string UserId { get; }
 
         public string Password { get; }
+
+        internal IReadOnlyDictionary<int, string> AdditionalPasswords { get; }
 
         public string Database { get; }
 

@@ -618,6 +618,15 @@ D15其他插件范围修订（2026-10-19，依据用户补充）：不再由用�
 
 D15 Ed25519子模块实施（2026-10-19）：沿固定Java Ed25519PasswordPlugin的client_ed25519行为，严格32字节二进制挑战、UTF8密码SHA512展开、Ed25519签名64字节；空密码为空响应。使用BouncyCastle.Cryptography 2.7.0公开ExpandedKey签名API（MIT，五目标可用），不用32字节seed API二次散列密码，不手写曲线运算或移植Java源码。包版本只在CPM固定，核心引用与第三方清单同步。初始/命名切换接入，挑战尾零不得当字符串终止符裁剪；现有一次切换、最终OK/ERR、模式门槛、超时取消与TLS策略保留。先用独立执行Java所得向量及尾零/畸形挑战证明缺口，再覆盖同步/异步公开握手、五资产消费、错误/中断/边界和依赖的实际包交付；全目标编译、完整本地回归及独立走查后提交。其他PAM/GSSAPI及真实部署验收仍开放。
 
+### D15 dialog/PAM本地实施（2026-10-19）
+
+沿固定Java SendPamAuthPacket：初始/命名切换先发主Password加NUL，后续每个非OK/ERR/FE包触发Password2、Password3等顺序凭据；不根据服务端提示猜选密码或增加回调。每轮RequireVerifiedTls，密码严格UTF8且拒绝NUL/无效Unicode；保留一次切换、最终结果、连接总预算及脱敏。空密码加NUL；缺下一凭据明确失败，配置数自然限制响应轮数。
+
+- [x] 先在tests/OceanBaseConnector.UnitTests/Session/HandshakeFlowTests.Pam.cs写失败测试：多轮固定字节、缺号、空/Unicode/恶意密码、TLS先决条件、切换/最终结果；新增PamConfigurationTests.cs覆盖大小写、合法整数2..Int32.MaxValue、拒绝前导零/溢出、全串往返、秘密脱敏及冻结/ForEndpoint。
+- [x] 最小修改OceanBaseConnectionStringBuilder：索引器接收规范PasswordN动态键，不增加大量typed属性；在ToSanitizedConnectionString中仅includeSecrets=true保留附加密码，false全部移除；builder.ConnectionString继续完整往返。OceanBaseConnectionOptions构造复制只读字典，端点副本保留，避免按最大后缀分配数组。未知键拒绝保持。
+- [x] AuthenticationConversation增加dialog主密码和顺序继续，复用严格编码/终止密码helper；协议数据按Java不解释提示，敏感值不进入异常；FE仍走既有切换。测试先RED后GREEN，不改TLS实现。
+- [x] 新增PAM Required/Disabled公开拒绝环回和五资产配置/秘密/拒绝消费；可信TLS成功路径仅状态/编码证据，不装信任根。独立走查后修复，核心五/DI三Release与完整Unit/Consumer/DI、格式/diff通过，README/架构/台账同步后本地提交。GSSAPI与实库/异机仍独立后续。
+
 ### D01 OB20 报文与校验子模块（2026-10-19）
 
 先实现内部报文层，D01 在能力协商、流式传输和完整链路追踪接入前保持进行中。依据固定 Java 基线 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` 的 `OceanBaseProtocolV20`、`Ob20PacketInputStream` / `Ob20PacketOutputStream` 和 `OceanBaseCRC16` / `OceanBaseCRC32C`；只核对线协议，不复制实现或查表常量。

@@ -17,6 +17,7 @@ namespace OceanBaseConnector.Internal.Session
         private bool _awaitingFinalResult;
         private bool _awaitingPublicKey;
         private byte[] _seed;
+        private int _pamPasswordNumber;
 
         public AuthenticationConversation(OceanBaseConnectionOptions options, string? pluginName, byte[] seed)
         {
@@ -49,6 +50,13 @@ namespace OceanBaseConnector.Internal.Session
                 var request = AuthSwitchRequest.Parse(packet);
                 PluginName = request.PluginName;
                 return BuildResponse(request.Seed);
+            }
+            if (PluginName == "dialog" && packet.Length != 0)
+            {
+                RequireVerifiedTls();
+                if (_pamPasswordNumber == int.MaxValue || !_options.AdditionalPasswords.TryGetValue(++_pamPasswordNumber, out var password))
+                    throw new OceanBaseException($"PAM authentication requires configured Password{_pamPasswordNumber}.");
+                return TerminatedPassword(password);
             }
             if (_awaitingPublicKey)
             {
@@ -85,6 +93,10 @@ namespace OceanBaseConnector.Internal.Session
                     return OldPassword.Respond(_options.Password, seed);
                 case InitialHandshakePacket.Ed25519PasswordPluginName:
                     return Ed25519Response(seed);
+                case "dialog":
+                    RequireVerifiedTls();
+                    _pamPasswordNumber = 1;
+                    return TerminatedPassword();
                 case InitialHandshakePacket.ClearPasswordPluginName:
                     RequireVerifiedTls();
                     return Encoding.UTF8.GetBytes(_options.Password + "\0");
@@ -152,19 +164,20 @@ namespace OceanBaseConnector.Internal.Session
             throw new OceanBaseException($"SHA-2 authentication at {_options.Endpoint} requires TLS Mode=VerifyFull or an explicitly configured RSA public key or public key retrieval.");
         }
 
-        private byte[] TerminatedPassword()
+        private byte[] TerminatedPassword(string? value = null)
         {
-            var password = EncodePassword();
+            var password = EncodePassword(value);
             var response = new byte[password.Length + 1];
             Buffer.BlockCopy(password, 0, response, 0, password.Length);
             return response;
         }
 
-        private byte[] EncodePassword()
+        private byte[] EncodePassword(string? value = null)
         {
-            if (_options.Password.IndexOf('\0') >= 0)
+            var password = value ?? _options.Password;
+            if (password.IndexOf('\0') >= 0)
                 throw new OceanBaseException("Authentication passwords cannot contain NUL characters.");
-            try { return StrictUtf8.GetBytes(_options.Password); }
+            try { return StrictUtf8.GetBytes(password); }
             catch (EncoderFallbackException)
             {
                 throw new OceanBaseException("Authentication requires a valid Unicode password.");
