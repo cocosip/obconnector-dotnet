@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D09 尚未开发；D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02–D09 尚未开发；D01 的内部OB20报文/校验模块已实现，协商与传输/追踪未接入。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -22,7 +22,8 @@
 | D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D15 | SHA-2 fast/TLS、固定RSA及显式公钥获取本地实现，验证记录见末尾 | 其他插件、私有CA成功链及两模式实库矩阵 |
-| D01–D09 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA等继续逐项评估本地实施 |
+| D01 | 内部OB20单帧编解码及CRC16/CRC32C已实现；未启用网络路径 | 能力协商、流式传输、完整链路追踪及真实矩阵 |
+| D02–D09 | 尚未开发 | 过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA等继续逐项评估本地实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -181,7 +182,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | --- | --- | --- | --- | --- |
 | R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-19 本地包/五资产消费完成，另补Windows Framework4.8.1上net48宿主的Standard2.0基础包消费及绑定重定向；独立走查见末尾，正式Framework支持/许可/来源/包名审查仍开放，不发布 |
 | R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | README本地交付材料及独立走查已完成；Windows实际8.0.31/9.0.20各Unit1206/DI8、默认10.0.12 Unit1206/Consumer152/DI8与五资产包消费通过；最终真实矩阵与发布审查待验收，不关闭候选版门槛 |
-| D01 | G4 后 | OB20、校验与完整链路追踪 | 未开始 | 待记录 |
+| D01 | 本地部分继续；真实验收待环境 | OB20、校验与完整链路追踪 | 进行中 | 内部单帧编解码/校验记录见末尾；协商、传输及追踪未接入 |
 | D02 | G4 后 | Oracle 过程及 OUT/RETURNING | 未开始 | 待记录 |
 | D03 | G4 后 | REF CURSOR | 未开始 | 待记录 |
 | D04 | G4 后 | LOB locator 与流式 LOB | 未开始 | 待记录 |
@@ -682,3 +683,24 @@ RsaPassword复用ByteCursor校验SPKI DER，仅RSA OID、规范长度/正整数�
 | DI | 8通过，0失败/跳过 | `TestResults/rsa-di-full/*.trx` |
 
 TRX已解析核对实际新增案例和零失败/跳过；UTF8无BOM/CRLF和git diff --check通过，当前master本地提交不推送。D15仍进行中，其他插件、私有CA成功链及真实两模式/OBProxy版本矩阵未完成；A05、C01和D01–D09仍开放。未操作信任根、部署数据库或其他电脑，未重跑打包/旧运行时/Framework；本地RSA环回不替代实库或生产验收。
+
+## D01 OB20报文与校验子模块（2026-10-19）
+
+从`8ba667b`继续D01，先实现内部Ob20Packet及Ob20Checksum，不改变连接选项、标准PacketChannel或握手行为。单帧7+24字节头与4字节尾、24位外长/请求ID、CRC16/ARC和raw CRC32C；ParseHeader在正文分配前核对身份、序号、头校验及正文上限。正文包含extra长度前缀与内容；严格检查extra边界，以借用原帧视图分别返回extra和MySQL字节，不二次复制正文。不解释legacy/new extra内容或未知flags/reserved，不把外层序号强行等同内层序号；实际压缩、last/reroute及追踪语义由后续模块处理。
+
+独立夹具依据固定Java提交`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的协议字段和原CRC类。用本机JDK21将只读参考CRC类编译到`TestResults/ob20-reference`，独立小端组装13字节MySQL帧，输出固定48字节OB20报文；同时确认ASCII输入123456789的CRC16为bb3d、raw CRC32C为58e3fa20。仓库仅保留字节/数值夹具，未复制参考实现或查表常量、未增加依赖；原校验器与产品往返不是同一实现。
+
+首轮先写测试，因尚缺Ob20Packet/Ob20Checksum而编译失败（`TestResults/ob20-red.log`），并未执行测试或生成TRX。实现后首批31项定向通过（`ob20-targeted/*.trx`）；分析器指出ArraySegment不宜用Assert.Empty，改为Count断言，补足边界后最终完整回归零警告且40项全部实际执行。测试覆盖固定编码/解码、分段CRC、全位置截断/尾随、头/正文/尾篡改、独立关闭校验仍验证结构、恶意UInt32长度、空值、extra包含在上限内、24位极限、请求/序号边界、未知标志/保留字段和原帧视图。独立只读走查对照固定Java及关联协议检查，无必须修复项。
+
+最终证据（Windows / SDK10.0.402 / .NET10.0.13）：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release核心五目标、DI三目标 | 0警告、0错误 | `TestResults/ob20-build.log` |
+| 完整Unit（OB20新增40项） | 1636通过，0失败/跳过 | `TestResults/ob20-unit-full/*.trx` |
+| 完整Consumer（既有公共路径） | 332通过，0失败/跳过 | `TestResults/ob20-consumer-full/*.trx` |
+| DI | 8通过，0失败/跳过 | `TestResults/ob20-di-full/*.trx` |
+
+编译命令`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试命令同前节，替换上述结果目录，最终TRX已解析核对计数及新增40项实际通过。格式/diff检查通过后本地提交，不推送。
+
+D01保持进行中：能力协商、PacketChannel流式收发、取消/分片/last/reroute生命周期和完整链路追踪尚未接入；本地编解码不代表公开连接已支持OB20。后续继续这些可本地开发项，真实OceanBase/OBProxy与异机验收暂缓。未操作信任根、未部署数据库、未重跑打包/旧运行时/Framework，项目整体目标未完成。

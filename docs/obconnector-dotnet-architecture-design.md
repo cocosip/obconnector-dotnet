@@ -207,6 +207,8 @@ flowchart TD
 
 包读写层只负责帧、长度、序号、上限与校验；命令层处理握手、`COM_QUERY`、`COM_STMT_*`、OK/ERR、列/行、多结果和状态变更；模式感知编解码处理同一类型码在两种模式下的不同解释。OB20 是经协商后替换/包裹包流的能力，不是另一个公开驱动。所有长度、计数、压缩后大小和响应包数在分配内存前校验；对 LOCAL INFILE 等会触及客户端文件系统的服务端请求默认拒绝，未来若开放需显式授权和路径策略。
 
+D01首个内部子模块为Ob20Packet/Ob20Checksum，当前尚未接入连接或PacketChannel。头为7字节外头加24字节OB20头，外层长度必须为正文长度加28，单帧正文（含extra长度前缀及extra）最多0xFFFFFF−28字节。ParseHeader在正文分配前校验magic/version、连接ID、24位请求ID、OB20序号、长度及调用方上限；外层压缩序号独立保留，不假设与OB20序号相等。非零uncompressed length拒绝，不隐式解压。头CRC16/ARC覆盖前29字节，尾为初始0且无最终异或的CRC32C，二者各自以0字段表示关闭；关闭校验仍须满足结构和身份检查。完整帧解析严格拒绝截断/尾随数据，extra存在时先核对4字节长度，再将extra与内层MySQL字节分离为借用原帧的ArraySegment，调用方不得在消费完成前修改该缓冲区。flags/reserved保留，legacy/new extra不透明内容、last/reroute语义由后续传输/追踪层处理；不把单帧解析通过当作这些语义已支持。固定Java基线的独立CRC执行输出用于字节夹具，只有本地编码/边界证据；能力协商、跨帧流、取消及完整链路追踪仍待接入。
+
 D15 SHA-2本地实现：TLS流程成功返回后才创建AuthenticationConversation并构造认证响应；它保存当前插件、一次切换、取钥/最终结果状态和当前挑战，不承担I/O。`caching_sha2_password` 使用20字节挑战和SHA256 token（空密码为空token），`01 03`后不发包并继续等OK/ERR；完整认证只在VerifyFull后发送非空密码明文，否则必须显式配置RSA。SHA-2空密码使用无密码标记，不做RSA；严格UTF8拒绝无效Unicode，连接串基类拒绝内嵌NUL；native/clear保留既有编码契约。初始响应（含初始sha256取钥请求）后允许一次账户插件切换，切换清除旧取钥状态；caching full取钥时拒绝切换。收到key后只允许最终OK/ERR，取钥完成前OK拒绝，畸形或重复消息立即失败。同步/异步共享决策、PacketChannel序号、总连接预算和安全错误映射；A05模式门槛不变。
 
 `Server RSA Public Key`为调用方提供的SPKI PEM，不引入文件I/O；固定key优先，无效不回退。`Allow Public Key Retrieval`默认false，显式开启且无固定key时sha256请求01、caching full请求02，再读01前缀PEM（可带一个NUL终止符）。只接受最长16KiB、2048–8192位RSA和3以上的正奇数指数（最多64位）；BCL RSA.ImportParameters/Encrypt跨五目标，内部最小DER解析复用ByteCursor，要求RSA OID、规范长度/正整数/完整消费，拒绝私钥或其他算法。对严格UTF8密码加NUL按20字节seed循环XOR后使用协议指定OAEP-SHA1；含NUL明文限密钥字节数减42。SHA256初始密文超过255字节时依赖已协商lenenc客户端认证数据，缺失时拒绝。PEM与密码从默认脱敏连接串排除；导入/加密失败不附可回显材料的内部异常。
