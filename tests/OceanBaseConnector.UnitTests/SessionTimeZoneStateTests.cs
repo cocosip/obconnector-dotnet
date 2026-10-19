@@ -14,16 +14,25 @@ namespace OceanBaseConnector.UnitTests
 {
     public sealed partial class TextCommandTests
     {
-        private static byte[] TimeZoneOk(string? zone, byte header = 0, byte status = 6)
+        internal static byte[] TimeZoneOk(string? zone, byte header = 0, byte status = 6)
         {
             if (zone == null) { var plain = Ok(status: status); plain[0] = header; return plain; }
-            var name = Encoding.UTF8.GetBytes("time_zone"); var value = Encoding.UTF8.GetBytes(zone);
+            return SessionVariablesOk(new NationalCharacterSet("utf8mb4", "utf8mb4", "utf8mb4").Variables(zone), header, status);
+        }
+
+        private static byte[] SessionVariablesOk(System.Collections.Generic.Dictionary<string, string> values, byte header = 0, byte status = 6)
+        {
+            using var state = new MemoryStream();
+            foreach (var pair in values)
+            {
+                var name = Encoding.UTF8.GetBytes(pair.Key); var value = Encoding.UTF8.GetBytes(pair.Value);
+                state.WriteByte(0); state.WriteByte((byte)(2 + name.Length + value.Length));
+                state.WriteByte((byte)name.Length); state.Write(name);
+                state.WriteByte((byte)value.Length); state.Write(value);
+            }
             using var stream = new MemoryStream();
             stream.Write(new byte[] { header, 0, 0, status, 64, 0, 0, 0 });
-            stream.WriteByte((byte)(4 + name.Length + value.Length));
-            stream.WriteByte(0); stream.WriteByte((byte)(2 + name.Length + value.Length));
-            stream.WriteByte((byte)name.Length); stream.Write(name);
-            stream.WriteByte((byte)value.Length); stream.Write(value);
+            stream.Write(WithLength(state.ToArray()));
             return stream.ToArray();
         }
 

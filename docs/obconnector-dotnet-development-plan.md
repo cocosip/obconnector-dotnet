@@ -487,6 +487,18 @@ C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/re
 
 先写失败编解码/元数据/参数测试，再实现共用路径，补齐同步/异步、文本/预处理、默认/顺序读取、Unicode/宽精度文本、NULL/多结果/后续字段、字段流及生命周期、五资产公共 API 消费。全目标编译、完整 Unit/Consumer/DI 与独立走查通过后本地提交。协议依据为固定 Java 基线 `ColumnType.JSON` 及两种 RowProtocol 的字符串读取，以及[固定 OceanBase json_cell_str](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp) 将内部 JSON 打印为长度编码文本；只参考行为，不复制源码。真实 JSON 列 INSERT/SELECT、语法拒绝和目标版本/OBProxy 往返另行验收，A05 公共 MySQL 门槛不变。
 
+### D10 本地实现范围及步骤（2026-10-19）
+
+Oracle 207/208 对应 NVARCHAR2/NCHAR，标准及 provider-specific 值为 string，显式 provider 参数映射 DbType.String；普通 string 参数不隐式变为 national 参数。两种行协议共用长度编码字节，NCHAR 尾部空格及 Unicode 原样保留。按当前会话 NCHARACTER_SET_CONNECTION 解码/绑定，支持 UTF8/UTF8MB4 和无 BOM 的严格 UTF16BE；不按列的存储字符集猜测线上编码。national 为 NULL/binary 时，参数回退到报告的 CHARACTER_SET_CONNECTION，结果回退到 CHARACTER_SET_RESULTS；results 为 NULL/binary 时根据列的源 collation 解码，未知编码明确拒绝，不替换乱码。Size 按 CLR UTF-16 code unit 计数并拒绝超长，不截断；Precision/Scale 只允许0。NULL 结果保留字段类型身份且不需要解码；NULL 参数沿用既有类型6/NULL位图。Oracle 列长度已由服务端换算为字符数，Schema 直接保留。
+
+会话事实沿用现有时区的租约、查询、发送前失效和每结果快照模式：只有三个 charset 变量均有会话报告时才能复用，否则在 Oracle 业务执行前用同租约/总预算查询 `SELECT @@NCHARACTER_SET_CONNECTION, @@CHARACTER_SET_RESULTS, @@CHARACTER_SET_CONNECTION FROM DUAL`。查询必须是三个字符串列、一行、单结果；不支持的合法编码只在实际 national 值访问/参数绑定时拒绝，避免阻断普通列。每次 SQL 发送和每结果起始使旧事实失效，无报告的后续结果不猜测编码。national 查询保留先前只读时区查询的结果；不增加连接选项、不修改用户会话、不缓存完整业务结果。参数先在取得租约前验证类型/Unicode/Size，再用已识别编码在 prepare 前编码并检查字节预算。
+
+- [x] 先运行失败 metadata/参数回归，再实现 national 编码、会话查询/快照/失效、参数与顺序字符流。
+- [x] 覆盖 UTF8/UTF16BE、fallback、NULL、坏 Unicode、发包前拒绝、两种结果/同步异步/顺序访问、会话变更及错误取消，补五资产公共 API 消费。
+- [x] Release 全目标、完整 Unit/Consumer/DI、独立走查和 diff 检查通过后本地提交。真实 NCHAR/NVARCHAR2 列往返、目标版本/OBProxy 与跨平台仍单列延期。
+
+协议参考固定 Java 基线 `AbstractConnectProtocol`、`OBNStringParameter` 和 `RowProtocol`；固定 OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343` 的 `ObMPStmtExecute::parse_basic_param_value`、`ObQueryDriver::convert_string_value_charset` 与 `ObMySQLResultSet::to_mysql_field`。前两者分别按会话 national 编码处理输入/结果，后者将 national 列 length 按存储字符集最大宽度换算成字符数。仅参考行为，不复制第三方源码。
+
 ### D11 本地实现范围及步骤（2026-10-19）
 
 新增不可变 `OceanBaseIntervalYearToMonth` / `OceanBaseIntervalDayToSecond`，标准/provider-specific 均返回精确值，DbType.Object，沿用枚举值 5/6。分量为非负 magnitude 加独立符号，前导精度 0–9（0 仅允许前导分量为零）、年月/天不超过 999999999、月 0–11、时/分/秒 0–23/59/59、纳秒 0–999999999，DS scale 0–9，不允许舍入。默认结构值为合法零；ToString 使用不受当前区域影响的明确符号文本，保留声明精度；DS 的 ToTimeSpan 仅在 ticks 精度和范围内精确转换。

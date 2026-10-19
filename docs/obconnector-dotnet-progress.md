@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON 本地实现；D11 Oracle INTERVAL 本地实现也已完成，验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D10/D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D09/D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -20,7 +20,8 @@
 | D13 | MySQL BIT(1–64) 本地实现，验证记录见末尾；真实验收开放 | 真实 BIT 列往返、版本/OBProxy矩阵 |
 | D12 | MySQL JSON 文本/预处理读写、元数据及字段流本地实现，记录见末尾 | 真实 JSON 列往返、语法验证和版本/OBProxy矩阵 |
 | D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
-| D01–D10/D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及其他扩展类型等继续逐项评估本地实施 |
+| D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
+| D01–D09/D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及新认证插件等继续逐项评估本地实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -188,7 +189,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D07 | G4 后 | 按需客户端预处理回退 | 未开始 | 待记录 |
 | D08 | G4 后 | 拓扑发现与负载均衡 | 未开始 | 待记录 |
 | D09 | G4 后 | 显式 XA | 未开始 | 待记录 |
-| D10 | G4 后 | Oracle NCHAR/national charset | 未开始 | 待记录 |
+| D10 | G4 后 | Oracle NCHAR/national charset | 待验证 | Codex，2026-10-19：独立会话编码、两种结果/参数读写、顺序字符流及五资产本地实现，验证见末尾；真实列往返和版本/OBProxy 暂缓 |
 | D11 | 本地先行，实库延期 | Oracle INTERVAL | 待验证 | 精确值/编解码/参数/Schema及公共消费本地完成，完整测试与独立走查记录见末尾；真实往返开放 |
 | D12 | 本地先行，实库延期 | MySQL JSON | 待验证 | 本地文本/二进制读写、元数据和字段流，验证见末尾；真实 JSON 列往返仍开放 |
 | D13 | 本地先行，实库延期 | MySQL BIT | 待验证 | 本地编解码/位宽/参数及测试记录见末尾；真实 BIT 列往返仍开放 |
@@ -613,3 +614,26 @@ Oracle 类型码 204/205 在文本及预处理行中均读取长度编码的 7/1
 完整测试命令同前节，替换结果目录；定向附加 `--filter FullyQualifiedName~IntervalConsumerTests`。覆盖 0–9 全部前导精度与小数精度组合、正负最大值、默认零、精确 TimeSpan 边界、区域无关文本、畸形数据、声明精度/类型拒绝、同步/异步×文本/预处理×默认/顺序读取、NULL/后续字段/多结果 Schema 快照及参数重用。五资产通过实际加载的产品程序集和 DbConnection/DbDataReader 公共 API 读取并写回两种精确值。独立只读走查核对完整模块和时区夹具修正，未发现需修复问题；`git diff --check` 通过。
 
 D11 本地实现完成，正式状态保持待验证。真实 INTERVAL 列 INSERT/SELECT、精度转换及 OceanBase/OBProxy 版本矩阵暂缓；未操作信任根或部署其他电脑/数据库，未重跑打包、旧运行时或 Framework。A05、C01 和 D01–D10/D15 等整体余项继续开放，不发布、不推送。
+
+## D10 Oracle NCHAR/NVARCHAR2 本地实现（2026-10-19）
+
+从 `8a21dbd` 继续实现 national 字符类型。沿用 OceanBaseDbType.NChar/NVarchar2（枚举值3/4）和 string/DbType.String，不增加公开类型或依赖。Oracle208/207在文本、预处理结果和参数中使用长度编码字节；独立会话 NCHARACTER_SET_CONNECTION 决定 UTF8/UTF8MB4 或无 BOM 的严格 UTF16BE 编解码，保留补充平面字符、显式 BOM 字符及 NCHAR 尾部空格。national 为 NULL/binary 时输入按报告的 connection 编码、输出按 results 编码；results 为 NULL/binary 时使用列源 collation（支持既有 UTF8 和 UTF16 的54/55/101）。未知编码不猜测，普通 string 参数仍用UTF8。Schema保持两个provider身份及服务端字符长度，不填数值精度/scale；NULL字段保留身份且不需编码，NULL参数沿用类型6/位图。
+
+NationalCharacterSet 保存不可变会话快照；复用 PhysicalSession、CommandExchange 和 QueryResult 的独占、发送前失效及每结果快照规则。Oracle业务执行前，只有完整的三个charset报告可复用，否则同租约/总预算查询三个会话值，严格限定一行三字符串列、单结果；内部查询按其列的UTF8/UTF16编码读取名称，不修改会话。查询恢复已解析的时区，矛盾报告清除事实并拒绝；多结果缺少新完整报告时，后续非NULL national值明确失败。读取整值与SequentialAccess/GetChars/GetTextReader共用列编码，原流生命周期、取消和内存规则保持一致。显式参数在取得租约前验证类型、Unicode、Size（CLR UTF16 code unit）及Precision/Scale=0，之后按实际会话编码在prepare前限字节；不以UTF8大小误拒绝合法UTF16参数。
+
+协议依据见开发方案D10，固定Java和OceanBase源码仅用于核对行为，不复制代码或替代实库证据。同步更新既有会话报告与探测夹具，不改变公共A05 MySQL模式门槛、TLS策略或池化拒绝。
+
+红绿与走查证据：首批4项均因未支持类型失败（`TestResults/nchar-red/*.trx`），实现后14项codec通过，扩展公共读写后30项通过。已有命令回归首次1049通过/9失败，包含1项过时的不支持断言、2项夹具未沿用协商EOF格式、6项沙箱TLS私钥权限失败；修正断言/夹具后，以既有完整Unit权限运行，未操作信任根。新增空探测结果回归先失败：完整响应已消费，原共享Fail契约允许会话保持Open，测试改为拒绝操作但不要求销毁已同步会话；未读响应仍必须Broken。独立走查发现内部探测UTF16解码和national预校验UTF8字节预算问题，均修正并补回归；后续复查无剩余问题。最终55项定向全部通过（`nchar-reviewed-targeted/*.trx`）。Consumer曾有条件表达式类型推断编译错误，显式声明Encoding后修复；未将该次编译计为通过。
+
+最终证据（Windows / .NET10.0.13）：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx核心五目标、DI三目标 | 0警告、0错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
+| 完整Unit（含national55项） | 1442通过，0失败/跳过 | `TestResults/nchar-unit-full/*.trx` |
+| 完整Consumer（含national五资产40项） | 252通过，0失败/跳过 | `TestResults/nchar-consumer-full/*.trx` |
+| DI | 8通过，0失败/跳过 | `TestResults/nchar-di-full/*.trx` |
+
+完整测试命令同前节，替换结果目录；最终TRX已解析核对总数及55/40项新测试实际执行。覆盖同步/异步×文本/预处理×默认/顺序读取，跨解码缓冲区的字符值、不同存储/线上编码、坏Unicode、NULL/后续普通列、参数重用/发包前拒绝、编码修改与不可变结果快照、完整/缺失/冲突报告、UTF16名称探测、大CJK字符串预校验、非法形状、总超时与取消。五资产消费通过实际产品程序集及DbConnection/DbDataReader公开入口，运行宿主为net10，不冒充五套运行时。独立走查复查和`git diff --check`通过。
+
+D10本地实现完成，正式状态保持待验证；真实NCHAR/NVARCHAR2列INSERT/SELECT、服务端字符长度/空字符串语义及目标版本/OBProxy矩阵暂缓。未部署其他电脑/数据库、未操作信任根，未重跑打包、旧运行时或Framework。A05、C01及D01–D09/D15等余项仍开放，项目整体未完成，不发布、不推送。

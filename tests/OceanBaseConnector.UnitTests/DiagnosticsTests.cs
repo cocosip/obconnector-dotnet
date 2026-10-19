@@ -32,10 +32,10 @@ namespace OceanBaseConnector.UnitTests
             await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
             await channel.ReadPacketAsync(); await channel.WritePacketAsync(TimeZone()); channel.BeginCommand(); await action(channel);
         });
-        private static byte[] TimeZone() => new byte[] { 0, 0, 0, 6, 64, 0, 0, 0, 19, 0, 17, 9, 116, 105, 109, 101, 95, 122, 111, 110, 101, 6, 43, 48, 48, 58, 48, 48 };
+        private static byte[] TimeZone() => TextCommandTests.TimeZoneOk("+00:00");
         private static async Task Request(PacketChannel channel, string sql)
         {
-            var request = await channel.ReadPacketAsync(); Assert.Equal(3, request[0]);
+            var request = await TextCommandTests.ReadClientCommand(channel); Assert.Equal(3, request[0]);
             Assert.Equal(sql, System.Text.Encoding.UTF8.GetString(request, 1, request.Length - 1));
         }
 
@@ -232,11 +232,7 @@ namespace OceanBaseConnector.UnitTests
                 if (large.Length != 0) { Array.Fill(large, (byte)42); large[0] = 253; large[1] = 0; large[2] = 0; large[3] = 64; }
                 for (var i = 0; i < repetitions + 1; i++)
                 {
-                    var request = await channel.ReadPacketAsync();
-                    if (request[0] == 3 && System.Text.Encoding.UTF8.GetString(request, 1, request.Length - 1) == "SELECT SESSIONTIMEZONE FROM DUAL")
-                    {
-                        await StringResult(channel, new byte[] { 6, 43, 48, 48, 58, 48, 48 }, false); channel.BeginCommand(); request = await channel.ReadPacketAsync();
-                    }
+                    var request = await TextCommandTests.ReadClientCommand(channel);
                     Assert.Equal(workload == "prepared" ? 23 : 3, request[0]); executions++;
                     if (workload == "large") await StringResult(channel, large, true);
                     else

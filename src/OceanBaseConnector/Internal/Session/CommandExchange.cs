@@ -67,6 +67,7 @@ namespace OceanBaseConnector.Internal.Session
 
         internal CapabilityFlags Capabilities => _session.Info!.Capabilities.Effective;
         internal string? SessionTimeZone { get; private set; }
+        internal NationalCharacterSet? NationalCharacterSet { get; private set; }
         internal OceanBaseCompatibilityMode Mode => _session.Info!.Mode;
         internal void EnsureReading()
         {
@@ -81,7 +82,11 @@ namespace OceanBaseConnector.Internal.Session
             lock (_gate)
             {
                 _budget.Token.ThrowIfCancellationRequested();
-                if (executesSql) SessionTimeZone = _session.TakeSessionTimeZone(_lease);
+                if (executesSql)
+                {
+                    SessionTimeZone = _session.TakeSessionTimeZone(_lease);
+                    NationalCharacterSet = _session.TakeNationalCharacterSet(_lease);
+                }
                 _channel.BeginCommand();
                 _responsePending = true;
                 _sqlSent |= executesSql;
@@ -97,8 +102,19 @@ namespace OceanBaseConnector.Internal.Session
             return value;
         }
 
+        internal NationalCharacterSet? CaptureResultNationalCharacterSet()
+        {
+            var value = NationalCharacterSet;
+            NationalCharacterSet = null;
+            _session.TakeNationalCharacterSet(_lease);
+            return value;
+        }
+
         internal void ObserveSessionState(OkPacket? ok)
-            => SessionTimeZone = _session.ApplySessionVariables(_lease, ok?.SessionVariables);
+        {
+            SessionTimeZone = _session.ApplySessionVariables(_lease, ok?.SessionVariables);
+            NationalCharacterSet = _session.NationalCharacterSet;
+        }
 
         internal void OwnCursor() => _cursorOwned = true;
 #if NET8_0_OR_GREATER

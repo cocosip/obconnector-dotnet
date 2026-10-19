@@ -7,7 +7,7 @@ namespace OceanBaseConnector.Internal.Protocol
 {
     internal static class PreparedParameters
     {
-        internal static byte[] Encode(OceanBaseParameter[] parameters, OceanBaseCompatibilityMode mode = OceanBaseCompatibilityMode.MySql)
+        internal static byte[] Encode(OceanBaseParameter[] parameters, OceanBaseCompatibilityMode mode = OceanBaseCompatibilityMode.MySql, NationalCharacterSet? nationalCharacterSet = null, bool validateOnly = false)
         {
             if (parameters.Length == 0) return Array.Empty<byte>();
             if (parameters.Length > ushort.MaxValue) throw new ArgumentException("The prepared parameter count exceeds the protocol limit.");
@@ -33,6 +33,19 @@ namespace OceanBaseConnector.Internal.Protocol
                     stream.Position--;
                     writer.Write((byte)(bits | (1 << (i % 8))));
                     stream.Position = end;
+                }
+                else if (type == 207 || type == 208)
+                {
+                    if (!(value is string text)) throw new ArgumentException("A national character parameter requires a string.");
+                    if (parameter.Size > 0 && text.Length > parameter.Size) throw new ArgumentException("The national string exceeds its declared Size.");
+                    // The byte budget depends on the session encoding, which is resolved after prevalidation.
+                    if (validateOnly) _ = ResultColumn.Utf8.GetByteCount(text);
+                    else
+                    {
+                        var encoding = (nationalCharacterSet ?? throw new NotSupportedException("The session national character set is unknown.")).ParameterEncoding;
+                        CheckLength(writer, encoding.GetByteCount(text));
+                        WriteBytes(writer, encoding.GetBytes(text));
+                    }
                 }
                 else if (type == 204 || type == 205)
                     IntervalCodec.Write(writer, value, type == 205, parameter.Precision, parameter.DeclaredScale);
@@ -112,6 +125,12 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private static ushort TypeCode(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode)
         {
+            if (parameter.OceanBaseDbType == OceanBaseDbType.NChar || parameter.OceanBaseDbType == OceanBaseDbType.NVarchar2)
+            {
+                if (mode != OceanBaseCompatibilityMode.Oracle || parameter.Size < 0 || parameter.Precision != 0 || parameter.Scale != 0)
+                    throw new NotSupportedException("National character parameters require Oracle mode and zero Precision/Scale.");
+                return parameter.OceanBaseDbType == OceanBaseDbType.NChar ? (ushort)208 : (ushort)207;
+            }
             var interval = parameter.OceanBaseDbType;
             if (!interval.HasValue && parameter.DbType == DbType.Object)
             {

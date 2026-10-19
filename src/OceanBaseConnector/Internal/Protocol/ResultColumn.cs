@@ -9,10 +9,11 @@ namespace OceanBaseConnector.Internal.Protocol
     {
         internal static readonly Encoding Utf8 = new UTF8Encoding(false, true);
         private ResultColumn(string database, string table, string originalTable, string name, string originalName,
-            byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode, string? sessionTimeZone)
+            byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode, string? sessionTimeZone, NationalCharacterSet? nationalCharacterSet)
         {
             Database = database; Table = table; OriginalTable = originalTable; OriginalName = originalName; Length = length; Flags = flags;
             SessionTimeZone = sessionTimeZone;
+            NationalCharacterSet = nationalCharacterSet;
             Name = name; TypeCode = type; Charset = charset; Unsigned = (flags & 32) != 0; Mode = mode;
             Scale = mode == OceanBaseCompatibilityMode.Oracle ? unchecked((sbyte)scale) : scale;
             Precision = mode == OceanBaseCompatibilityMode.Oracle ? precision : (long)length - (Unsigned ? 0 : 1) - (scale > 0 ? 1 : 0);
@@ -24,6 +25,9 @@ namespace OceanBaseConnector.Internal.Protocol
             if (mode == OceanBaseCompatibilityMode.Oracle && type == 3 && precision == 0 && scale == 0) Precision = 10;
         }
         internal string? SessionTimeZone { get; }
+        private NationalCharacterSet? NationalCharacterSet { get; }
+        internal Encoding TextEncoding => TypeCode == 207 || TypeCode == 208
+            ? (NationalCharacterSet ?? throw new NotSupportedException("The result has no trusted national character set.")).ResultEncoding(Charset) : Utf8;
         internal string Name { get; }
         internal string Database { get; }
         internal string Table { get; }
@@ -49,7 +53,7 @@ namespace OceanBaseConnector.Internal.Protocol
             return TemporalCodec.DecodeTimestamp(value, Scale);
         }
 
-        internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode, string? sessionTimeZone = null)
+        internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode, string? sessionTimeZone = null, NationalCharacterSet? nationalCharacterSet = null)
         {
             var cursor = new ByteCursor(payload);
             cursor.ReadLengthEncodedBytes(); // Protocol catalog marker, not the database catalog name.
@@ -68,7 +72,7 @@ namespace OceanBaseConnector.Internal.Protocol
             var precision = cursor.ReadUInt8();
             cursor.ReadUInt8();
             if (cursor.HasRemaining) throw new NotSupportedException("Extended column metadata is not supported yet.");
-            return new ResultColumn(database, table, originalTable, name, originalName, type, charset, flags, length, scale, precision, mode, sessionTimeZone);
+            return new ResultColumn(database, table, originalTable, name, originalName, type, charset, flags, length, scale, precision, mode, sessionTimeZone, nationalCharacterSet);
         }
 
         internal string DataTypeName
@@ -100,6 +104,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 203: return "RAW";
                     case 204: return "INTERVAL YEAR TO MONTH";
                     case 205: return "INTERVAL DAY TO SECOND";
+                    case 207: return "NVARCHAR2";
+                    case 208: return "NCHAR";
                     case 15: return Charset == 63 ? "VARBINARY" : "VARCHAR";
                     case 253: return Charset == 63 ? "VARBINARY" : Mode == OceanBaseCompatibilityMode.Oracle ? "VARCHAR2" : "VARCHAR";
                     case 254: return Charset == 63 ? "BINARY" : "CHAR";
@@ -165,6 +171,10 @@ namespace OceanBaseConnector.Internal.Protocol
                         if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > (TypeCode == 204 ? 9 : 99))
                             throw new NotSupportedException("The Oracle INTERVAL metadata is not supported.");
                         return TypeCode == 204 ? typeof(OceanBaseIntervalYearToMonth) : typeof(OceanBaseIntervalDayToSecond);
+                    case 207:
+                    case 208:
+                        if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("National character types require Oracle mode.");
+                        return typeof(string);
                     case 245:
                         if (Mode != OceanBaseCompatibilityMode.MySql || Charset != 63 && !HasUtf8Charset)
                             throw new NotSupportedException("Only MySQL JSON text with a supported UTF-8 or binary collation is supported.");
@@ -211,6 +221,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 203: return OceanBaseDbType.Binary;
                     case 204: return OceanBaseDbType.IntervalYearToMonth;
                     case 205: return OceanBaseDbType.IntervalDayToSecond;
+                    case 207: return OceanBaseDbType.NVarchar2;
+                    case 208: return OceanBaseDbType.NChar;
                     case 15:
                     case 253:
                     case 254:
@@ -242,7 +254,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (TypeCode == 202) return TemporalCodec.DecodeBinary(TypeCode, Mode, value, Scale);
             if (IsTemporal) return TemporalCodec.DecodeText(TypeCode, Mode, Utf8.GetString(value));
             if (fieldType == typeof(byte[])) return (byte[])value.Clone();
-            var text = Utf8.GetString(value);
+            var text = TextEncoding.GetString(value);
             switch (TypeCode)
             {
                 case 1: return Unsigned ? (object)byte.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture) : sbyte.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture);

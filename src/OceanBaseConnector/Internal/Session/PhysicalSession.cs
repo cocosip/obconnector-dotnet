@@ -26,6 +26,7 @@ namespace OceanBaseConnector.Internal.Session
         private object? _reservation;
         private ConnectResult? _info;
         private string? _sessionTimeZone;
+        private NationalCharacterSet? _nationalCharacterSet;
         private readonly HashSet<uint> _statementCloses = new HashSet<uint>();
 
         public PhysicalSession(OceanBaseConnectionOptions options) { _options = options; _endpoint = options.Endpoint; _database = options.Database; }
@@ -41,6 +42,7 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
         internal string? SessionTimeZone { get { lock (_gate) return _sessionTimeZone; } }
+        internal NationalCharacterSet? NationalCharacterSet { get { lock (_gate) return _nationalCharacterSet; } }
         internal string Endpoint { get { lock (_gate) return _endpoint; } }
 
         public void Open()
@@ -166,6 +168,7 @@ namespace OceanBaseConnector.Internal.Session
                 if (_state != SessionState.Connecting) throw new OperationCanceledException(_closing.Token);
                 _info = info;
                 _sessionTimeZone = ReportedTimeZone(info.SessionVariables);
+                _nationalCharacterSet = NationalCharacterSet.FromVariables(info.SessionVariables);
                 _state = SessionState.Open;
             }
         }
@@ -228,6 +231,7 @@ namespace OceanBaseConnector.Internal.Session
             {
                 if (_state != SessionState.Busy || !ReferenceEquals(_lease, lease)) return null;
                 _sessionTimeZone = variables == null ? null : ReportedTimeZone(variables);
+                _nationalCharacterSet = NationalCharacterSet.FromVariables(variables);
                 return _sessionTimeZone;
             }
         }
@@ -238,6 +242,17 @@ namespace OceanBaseConnector.Internal.Session
                 if (string.Equals(variable.Key, "time_zone", StringComparison.OrdinalIgnoreCase))
                     return string.IsNullOrWhiteSpace(variable.Value) ? null : variable.Value;
             return null;
+        }
+
+        internal NationalCharacterSet? TakeNationalCharacterSet(CommandLease lease)
+        {
+            lock (_gate)
+            {
+                if (_state != SessionState.Busy || !ReferenceEquals(_lease, lease)) return null;
+                var value = _nationalCharacterSet;
+                _nationalCharacterSet = null;
+                return value;
+            }
         }
 
         internal void QueueStatementClose(uint id)
@@ -283,6 +298,7 @@ namespace OceanBaseConnector.Internal.Session
         {
             _statementCloses.Clear();
             _sessionTimeZone = null;
+            _nationalCharacterSet = null;
             _channel?.Close();
             _transport?.Dispose();
             _transport = null;

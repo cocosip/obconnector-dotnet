@@ -76,6 +76,8 @@ namespace OceanBaseConnector
                 case global::OceanBaseConnector.OceanBaseDbType.Double: return DbType.Double;
                 case global::OceanBaseConnector.OceanBaseDbType.Boolean: return DbType.Boolean;
                 case global::OceanBaseConnector.OceanBaseDbType.Json:
+                case global::OceanBaseConnector.OceanBaseDbType.NChar:
+                case global::OceanBaseConnector.OceanBaseDbType.NVarchar2:
                 case global::OceanBaseConnector.OceanBaseDbType.String: return DbType.String;
                 case global::OceanBaseConnector.OceanBaseDbType.Binary: return DbType.Binary;
                 case global::OceanBaseConnector.OceanBaseDbType.DateTime: return DbType.DateTime;

@@ -22,12 +22,15 @@ namespace OceanBaseConnector.UnitTests
             await channel.WritePacketAsync(deprecated ? TimeZoneOk(null, 254) : Eof());
         }
 
-        private static async Task<byte[]> ReadClientCommand(PacketChannel channel, bool deprecated = false)
+        internal static async Task<byte[]> ReadClientCommand(PacketChannel channel, bool deprecated = false)
         {
             var request = await channel.ReadPacketAsync();
-            if (request[0] == 3 && Encoding.UTF8.GetString(request, 1, request.Length - 1) == SessionTimeZoneSql)
+            while (request[0] == 3)
             {
-                await TimeZoneReply(channel, deprecated: deprecated);
+                var sql = Encoding.UTF8.GetString(request, 1, request.Length - 1);
+                if (sql == SessionTimeZoneSql) await TimeZoneReply(channel, deprecated: deprecated);
+                else if (sql == NationalCharacterSetSql) await NationalCharacterSetReply(channel, deprecated: deprecated);
+                else break;
                 channel.BeginCommand();
                 request = await channel.ReadPacketAsync();
             }
@@ -62,7 +65,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(SessionTimeZoneSql, Encoding.UTF8.GetString(query, 1, query.Length - 1));
                 Assert.Equal(3, query[0]);
                 await TimeZoneReply(channel, "Asia/Tokyo", deprecated);
-                channel.BeginCommand(); await Query(channel, "business");
+                channel.BeginCommand(); await Query(channel, "business", deprecated);
                 await channel.WritePacketAsync(Ok(3));
             }, deprecated, reportTimeZone: false);
             using var connection = new OceanBaseConnection(Configuration(server.Port));

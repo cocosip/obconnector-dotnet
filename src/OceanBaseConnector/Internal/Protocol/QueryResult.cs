@@ -22,6 +22,7 @@ namespace OceanBaseConnector.Internal.Protocol
         }
         internal bool IsBinary { get; }
         internal string? SessionTimeZone { get; private set; }
+        private NationalCharacterSet? NationalCharacterSet { get; set; }
         internal ResultColumn[] Columns { get; private set; } = Array.Empty<ResultColumn>();
         internal byte[]?[]? Row { get; private set; }
         internal bool HasRows { get; private set; }
@@ -33,6 +34,7 @@ namespace OceanBaseConnector.Internal.Protocol
             try
             {
                 SessionTimeZone = _query.CaptureResultTimeZone();
+                NationalCharacterSet = _query.CaptureResultNationalCharacterSet();
                 if (!Header(_query.Receive())) return;
                 for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(_query.Receive());
                 if (CursorMetadataOmitsEof) BeginCursorWithoutEof();
@@ -50,6 +52,7 @@ namespace OceanBaseConnector.Internal.Protocol
             try
             {
                 SessionTimeZone = _query.CaptureResultTimeZone();
+                NationalCharacterSet = _query.CaptureResultNationalCharacterSet();
                 if (!Header(await _query.ReceiveAsync(token).ConfigureAwait(false))) return;
                 for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(await _query.ReceiveAsync(token).ConfigureAwait(false));
                 if (CursorMetadataOmitsEof) BeginCursorWithoutEof();
@@ -96,7 +99,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             if (packet.Length > 4 * 1024 * 1024 - _metadataBytes) throw new ProtocolException("Result metadata size limit exceeded.");
             _metadataBytes += packet.Length;
-            return ResultColumn.Parse(packet, _query.Mode, SessionTimeZone);
+            return ResultColumn.Parse(packet, _query.Mode, SessionTimeZone, NationalCharacterSet);
         }
         private void End(ServerStatusFlags flags, OkPacket? ok = null)
         {
@@ -106,7 +109,7 @@ namespace OceanBaseConnector.Internal.Protocol
             _more = (flags & ServerStatusFlags.MoreResultsExists) != 0;
             if (!_completeExchange)
             {
-                if (_more) throw new ProtocolException("The session time zone query returned multiple results.");
+                if (_more) throw new ProtocolException("The session state query returned multiple results.");
                 _query.ResponseComplete();
             }
             else if (!_more) _query.Complete();

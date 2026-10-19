@@ -72,9 +72,12 @@ namespace OceanBaseConnector
             {
                 var zone = execution.EnsureSessionTimeZone();
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
+                var national = execution.EnsureNationalCharacterSet();
+                var parameters = HasNationalParameters(operation.Bindings.Parameters)
+                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
                 var statement = operation.Binary ? EnsurePrepared(operation) : null;
                 ValidateCursorStatement(operation.FetchSize, statement);
-                execution.Send(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters, operation.FetchSize > 0));
+                execution.Send(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0));
                 var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize);
                 result.Start();
@@ -117,9 +120,12 @@ namespace OceanBaseConnector
             {
                 var zone = await execution.EnsureSessionTimeZoneAsync(cancellationToken).ConfigureAwait(false);
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
+                var national = await execution.EnsureNationalCharacterSetAsync(cancellationToken).ConfigureAwait(false);
+                var parameters = HasNationalParameters(operation.Bindings.Parameters)
+                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
                 var statement = operation.Binary ? await EnsurePreparedAsync(operation, cancellationToken).ConfigureAwait(false) : null;
                 ValidateCursorStatement(operation.FetchSize, statement);
-                await execution.SendAsync(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, operation.Parameters, operation.FetchSize > 0)).ConfigureAwait(false);
+                await execution.SendAsync(statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0)).ConfigureAwait(false);
                 var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize);
                 await result.StartAsync(cancellationToken).ConfigureAwait(false);
@@ -168,7 +174,7 @@ namespace OceanBaseConnector
                 var fetchSize = prepareOnly ? 0 : _fetchSize;
                 if (prepareOnly) _explicitPreparation = true;
                 var binary = _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
-                var parameters = binary && !prepareOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info.Mode) : Array.Empty<byte>();
+                var parameters = binary && !prepareOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info.Mode, validateOnly: true) : Array.Empty<byte>();
                 if (_prepared != null && (!binary || !ReferenceEquals(_prepared.Session, session) || _prepared.CommandText != bindings.CommandText))
                 { _prepared.Release(); _prepared = null; }
                 if (_prepared != null && _prepared.ParameterCount != bindings.Parameters.Length) throw ParameterCountMismatch();
@@ -184,6 +190,13 @@ namespace OceanBaseConnector
                 _execution = execution;
                 return (execution, session, connection, bindings, parameters, binary, fetchSize);
             }
+        }
+
+        private static bool HasNationalParameters(OceanBaseParameter[] parameters)
+        {
+            foreach (var parameter in parameters)
+                if (parameter.OceanBaseDbType == OceanBaseDbType.NChar || parameter.OceanBaseDbType == OceanBaseDbType.NVarchar2) return true;
+            return false;
         }
 
         private PreparedStatement EnsurePrepared((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize) operation)

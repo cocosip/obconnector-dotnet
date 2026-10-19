@@ -93,7 +93,7 @@ namespace OceanBaseConnector.Internal.Protocol
             private readonly char[] _one = new char[1];
             private bool _disposed;
             internal FieldTextReader(SequentialRow row, int ordinal)
-            { _row = row; _ordinal = ordinal; _inner = new StreamReader(new FieldStream(row, ordinal), ResultColumn.Utf8, false, 1024); }
+            { _row = row; _ordinal = ordinal; _inner = new StreamReader(new FieldStream(row, ordinal), row._columns[ordinal].TextEncoding, false, 1024); }
             internal long Position { get; private set; }
             private void Validate()
             {

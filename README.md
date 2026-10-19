@@ -26,7 +26,7 @@
 - MySQL BIT(1–64) 已实现本地编解码、元数据及参数支持：统一使用 `ulong`，BIT(1) 也不转 bool。显式 `OceanBaseDbType.Bit` 参数的 `Size` 为位宽，0 表示 64；超出声明位宽在发包前失败，`Precision`/`Scale` 仅支持 0。真实往返待验收，公共 MySQL 建连仍受 A05 门槛限制。
 - MySQL JSON 已实现本地文本/预处理读写与元数据，使用 `string` 和严格 UTF-8，保留 JSON 文本 `null` 与 SQL NULL 的区别；支持顺序 `GetTextReader`。显式 `OceanBaseDbType.Json` 仅接受字符串/NULL，`Precision`/`Scale` 仅支持 0；语法由服务端验证，不隐式序列化对象。真实往返待验收，公共 MySQL 建连仍受 A05 门槛限制。
 - Oracle INTERVAL 的本地编解码、元数据和参数支持使用 `OceanBaseIntervalYearToMonth` / `OceanBaseIntervalDayToSecond` 精确值，保留符号、前导精度和纳秒；标准/provider-specific 访问均返回对应结构。显式类型或 `DbType.Object` 下的精确值可绑定，`Precision`/`Scale` 不允许舍入；`ToTimeSpan()` 只在范围与 ticks 精度内成功，年月区间不转固定时长。真实往返待验收。
-- Oracle NCHAR 仍为规划能力，未支持类型会显式失败。
+- Oracle NCHAR/NVARCHAR2 已实现本地文本/预处理读写及顺序字符流：按独立会话 national 编码处理 UTF-8/UTF-16BE，保留尾部空格，未知编码明确失败；真实列往返及版本兼容性仍待验收。
 
 ## 使用入口
 
