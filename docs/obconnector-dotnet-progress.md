@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；最近完成的是 R01/R02 包消费及运行时验证工具，代码基线为 `1aeba69`。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，本轮从 `451402e` 增补 A04 静默 TLS 握手中断回归并重新验证本地范围，见下节。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -20,7 +20,7 @@
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
-最近一次已执行的Windows验证结果如下（本次进度更新仅核对已有报告，未重跑）：
+上一轮 Windows 验证结果如下（历史运行时快照；本轮新结果见后文“本轮本地范围复核”）：
 
 | 实际运行时 | Unit通过 | Consumer通过 | DI通过 | 失败/跳过 |
 | --- | --- | --- | --- | --- |
@@ -32,7 +32,38 @@
 
 最近已提交：`d8d7072`修复同步TCP等待句柄；`0e8229b`补齐8/9完整本地回归并修复测试兼容；`1aeba69`新增可选Windows Framework包消费及生成工程重建修复。已报告走查问题的修复和红绿证据见后文。
 
-后文阶段计数按正式验收完成项统计，B/C显示0项通过关口不代表没有实现；各模块落地时的测试数量为历史快照，最新全量结果以上表为准。
+后文阶段计数按正式验收完成项统计，B/C显示0项通过关口不代表没有实现；各模块落地时的测试数量为历史快照，最新全量结果以本轮复核表为准。
+
+## 本轮本地范围复核（2026-10-19）
+
+按“暂不部署其他电脑或数据库服务端”的要求，逐项核对开发方案所有未勾选项及源码中的未支持入口。本轮只补齐 A04 的本地 TLS 握手中断验证；没有放行缺少真实依据的 MySQL 模式或池化，也没有将延期扩展写成已支持。
+
+新增 `PhysicalSessionTests.SilentTlsHandshakeIsInterruptedAndClosesTransport` 五项回归：服务端先接收 SSLRequest 和 TLS 握手记录，再保持静默；同步/异步总连接超时、同步/异步关闭及异步调用方取消均须结束建连，对端须在测试主动清理前观察到断开。测试还校验最终状态、调用方 token、无认证后会话信息及不可取得命令租约。产品已有实现通过，无需改动产品代码。独立只读走查核对了 PhysicalSession、TLS 升级及环回资源路径，未发现需修复问题。
+
+私有 CA 测试尝试触发 Windows 安装/删除信任根的人工确认，用户要求停止后，已终止测试进程、撤销全部相关代码并清除唯一残留的专用测试根证书，重新枚举确认无残留。该尝试的通过/失败/中止报告均不作为本轮完成证据；今后默认单元测试不安装或删除信任根。可信私有 CA 成功链和名称验证继续待专用环境验收。
+
+本轮实际环境为 Windows、SDK 10.0.402、.NET 10.0.13。已重新执行：
+
+| 检查 | 本轮结果 | 证据 |
+| --- | --- | --- |
+| Release slnx，核心五目标/DI三目标 | 0 警告、0 错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；`TestResults/local-scope-build-reviewed.log` |
+| A04 静默 TLS 中断定向回归 | 5 通过，0 失败/跳过 | `TestResults/tls-interruption-final/*.trx` |
+| 完整 Unit | 1211 通过，0 失败/跳过 | `TestResults/tls-interruption-unit-full/*.trx` |
+| 五资产 Consumer | 152 通过，0 失败/跳过 | `TestResults/tls-interruption-consumer/*.trx` |
+| DI | 8 通过，0 失败/跳过 | `TestResults/tls-interruption-di/*.trx` |
+| 双包及五目标实际包消费 | 两包内容/依赖/哈希与全部消费通过；现代资产实际运行时 8.0.32/9.0.21/10.0.13，Standard 资产宿主 10.0.13 | `TestResults/local-scope-package-verification.log`；`TestResults/package-validation/c33a1bda8cc848fc982dffcddcee342d/` |
+
+测试命令为 `dotnet test tests/<对应工程>/<对应工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/<上表目录>`；定向回归另加 `--filter FullyQualifiedName~SilentTlsHandshakeIsInterruptedAndClosesTransport`。包命令为 `dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/local-scope-packages` 和 `pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/local-scope-packages`。正常 Windows TLS/私钥权限下执行，不更改驱动证书验证策略。首次沙箱还原/TLS权限失败、测试夹具试验和并发构建文件锁失败均不计为通过；还原使用仓库内 `TestResults/nuget-packages` 及 `NUGET_SCRATCH=TestResults/nuget-scratch`，最终恢复固定的 xunit.runner.visualstudio 2.8.2，不采用离线近似版本。未重新执行历史 .NET 8/9 完整 Unit/DI 或 Framework 矩阵；上述实际8/9包样例只补基础消费证据。
+
+剩余范围逐项归属如下；排除这些明确暂缓/待决定项后，本轮未发现可独立继续实施的产品功能模块。项目整体仍未完成，原阶段验收状态保持开放。
+
+| 剩余项 | 本轮处理及原因 |
+| --- | --- |
+| A04 私有 CA、非 Windows，A07/B09/C08/R02 真实互通与故障矩阵 | 需人工信任配置、其他电脑或 OceanBase/OBProxy 环境，暂缓 |
+| A05 公共 MySQL 模式判定 | 缺少真实版本/模式/插件证据，不能用缺失 Oracle 位猜测 MySQL，继续安全拒绝 |
+| C01 池与完整重置、C07 池性能 | 缺少服务端完整重置与隔离证明，继续拒绝 Pooling=true |
+| D01–D15 独立扩展 | 开发方案规定 G4 后逐项实施且环境缺失时保持未开始；每项均需目标服务端/模式往返或拓扑/协调器证明，本轮不绕过前置条件 |
+| G0 产品决定、R01 许可证/来源/包名与正式 Framework 支持 | 需要维护者决定或发布审查，不能由本地编译/夹具替代；不发布或推送 |
 
 ## 中断走查问题核销（2026-10-19）
 
