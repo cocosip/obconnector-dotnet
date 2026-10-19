@@ -7,19 +7,19 @@ namespace OceanBaseConnector.Internal.Sql
 {
     internal sealed class ParameterBindingPlan
     {
-        private ParameterBindingPlan(string commandText, OceanBaseParameter[] parameters)
+        internal ParameterBindingPlan(string commandText, OceanBaseParameter[] parameters)
         { CommandText = commandText; Parameters = parameters; }
 
         internal string CommandText { get; }
         internal OceanBaseParameter[] Parameters { get; }
 
-        internal static ParameterBindingPlan Create(string sql, OceanBaseCompatibilityMode mode, OceanBaseParameterCollection parameters)
+        internal static ParameterBindingPlan Create(string sql, OceanBaseCompatibilityMode mode, OceanBaseParameterCollection parameters, bool allowOutputs = false)
         {
             var supplied = new OceanBaseParameter[parameters.Count];
             for (var i = 0; i < supplied.Length; i++)
             {
                 supplied[i] = (OceanBaseParameter)parameters[i];
-                if (supplied[i].Direction != ParameterDirection.Input)
+                if (supplied[i].Direction != ParameterDirection.Input && (!allowOutputs || mode != OceanBaseCompatibilityMode.Oracle))
                     throw new NotSupportedException("Only input parameters are supported at this stage.");
             }
             // MySQL SQL_MODE can change quoting; only the server counts positional parameters.
@@ -71,6 +71,8 @@ namespace OceanBaseConnector.Internal.Sql
                 if (position < sql.Length && IsIdentifierPart(sql[position])) throw UnsupportedSyntax();
                 var name = sql.Substring(start + 1, position - start - 1);
                 if (!names.TryGetValue(name, out var index)) throw new ArgumentException("A required Oracle parameter is missing.");
+                if (used[index] && supplied[index].Direction != ParameterDirection.Input)
+                    throw new ArgumentException("An Oracle output parameter cannot occupy multiple binding positions.");
                 if (!used[index]) { used[index] = true; usedCount++; }
                 ordered.Add(supplied[index]);
                 rewritten ??= new StringBuilder();

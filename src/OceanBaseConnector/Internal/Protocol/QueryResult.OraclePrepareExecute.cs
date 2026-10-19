@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
+using OceanBaseConnector.Internal.Sql;
 
 namespace OceanBaseConnector.Internal.Protocol
 {
@@ -8,6 +9,8 @@ namespace OceanBaseConnector.Internal.Protocol
         private readonly int? _oracleParameterCount;
         private bool _oracleHeaderPending;
         private bool _oracleTailPending;
+        private readonly OracleCommandPlan? _oraclePlan;
+        private bool _oracleOutputResult;
         internal OraclePrepareExecutePacket? OracleHeader { get; private set; }
 
         private OraclePrepareExecutePacket BeginOracleMetadata(byte[] bytes)
@@ -16,6 +19,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (header.ParameterCount != _oracleParameterCount || header.HasResultSet && header.ColumnCount == 0)
                 throw new ProtocolException("Oracle PrepareExecute metadata counts do not match the request.");
             OracleHeader = header;
+            _oracleOutputResult = _oraclePlan?.BeginResponse(header) == true;
             _oracleHeaderPending = false; _oracleTailPending = true;
             _metadataBytes = 0; _ended = false; _more = false; HasRows = false; Row = _pending = null;
             Columns = header.HasResultSet ? new ResultColumn[header.ColumnCount] : System.Array.Empty<ResultColumn>();
@@ -51,5 +55,22 @@ namespace OceanBaseConnector.Internal.Protocol
             _oracleTailPending = false;
             End(ok.StatusFlags, ok);
         }
+
+        private void ReadOracleOutput()
+        {
+            byte[]?[]? row;
+            while ((row = ParseRow(_query.Receive())) != null) _oraclePlan!.CaptureOutput(Columns, row);
+            _oraclePlan!.FinishOutput(); ReadOracleTail(); ClearOracleOutput();
+        }
+
+        private async Task ReadOracleOutputAsync(CancellationToken token)
+        {
+            byte[]?[]? row;
+            while ((row = ParseRow(await _query.ReceiveAsync(token).ConfigureAwait(false))) != null) _oraclePlan!.CaptureOutput(Columns, row);
+            _oraclePlan!.FinishOutput(); await ReadOracleTailAsync(token).ConfigureAwait(false); ClearOracleOutput();
+        }
+
+        private void ClearOracleOutput()
+        { _oracleOutputResult = false; Columns = System.Array.Empty<ResultColumn>(); Row = _pending = null; HasRows = false; }
     }
 }

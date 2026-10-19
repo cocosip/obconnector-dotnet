@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Session;
+using OceanBaseConnector.Internal.Sql;
 
 namespace OceanBaseConnector.Internal.Protocol
 {
@@ -15,12 +16,13 @@ namespace OceanBaseConnector.Internal.Protocol
         private long _affected = -1;
         private bool _faulted;
         private int _metadataBytes;
-        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true, bool sequential = false, uint? cursorId = null, int fetchSize = 0, int? oracleParameterCount = null)
+        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true, bool sequential = false, uint? cursorId = null, int fetchSize = 0, int? oracleParameterCount = null, OracleCommandPlan? oraclePlan = null)
         {
             _query = query; IsBinary = binary; _completeExchange = completeExchange; _sequential = sequential; _cursorId = cursorId; _fetchSize = fetchSize;
             if (oracleParameterCount.HasValue && (!binary || cursorId.HasValue || query.Mode != OceanBaseCompatibilityMode.Oracle || (uint)oracleParameterCount.Value > ushort.MaxValue))
                 throw new ArgumentException("Oracle PrepareExecute requires a binary Oracle response without a fetch cursor.", nameof(oracleParameterCount));
             _oracleParameterCount = oracleParameterCount; _oracleHeaderPending = oracleParameterCount.HasValue;
+            _oraclePlan = oraclePlan;
             if (cursorId.HasValue) query.OwnCursor();
         }
         internal bool IsBinary { get; }
@@ -45,6 +47,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 else if (_cursorId.HasValue) BeginCursor(_query.Receive());
                 else if (!DeprecatedEof) EndColumns(_query.Receive());
                 if (_ended) return;
+                if (_oracleOutputResult) { ReadOracleOutput(); return; }
                 if (_sequential) { _pendingSequential = OpenSequential(); HasRows = _pendingSequential != null; }
                 else { _pending = ReadBufferedRow(); HasRows = _pending != null; }
             }
@@ -64,6 +67,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 else if (_cursorId.HasValue) BeginCursor(await _query.ReceiveAsync(token).ConfigureAwait(false));
                 else if (!DeprecatedEof) EndColumns(await _query.ReceiveAsync(token).ConfigureAwait(false));
                 if (_ended) return;
+                if (_oracleOutputResult) { await ReadOracleOutputAsync(token).ConfigureAwait(false); return; }
                 if (_sequential) { _pendingSequential = await OpenSequentialAsync(token).ConfigureAwait(false); HasRows = _pendingSequential != null; }
                 else { _pending = await ReadBufferedRowAsync(token).ConfigureAwait(false); HasRows = _pending != null; }
             }

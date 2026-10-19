@@ -129,6 +129,7 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         internal void OwnCursor() => _cursorOwned = true;
+        internal Action? BeforeSuccessfulCompletion { get; set; }
 #if NET8_0_OR_GREATER
         internal System.Data.Common.DbBatchCommand? BatchCommand { get; set; }
         internal Action? BatchFailed { get; set; }
@@ -211,7 +212,13 @@ namespace OceanBaseConnector.Internal.Session
         {
             lock (_gate)
             {
+                if (error == null && BeforeSuccessfulCompletion != null)
+                {
+                    _budget.Token.ThrowIfCancellationRequested();
+                    if (_session.State != SessionState.Busy) throw new InvalidOperationException("The output parameter session is no longer active.");
+                }
                 if (_session.State == SessionState.Busy) _channel.CompleteResponse();
+                if (error == null) BeforeSuccessfulCompletion?.Invoke();
                 _terminal = true; _responsePending = false;
             }
             _lease.CompleteIfActive();

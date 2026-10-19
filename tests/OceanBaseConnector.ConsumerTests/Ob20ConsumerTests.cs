@@ -15,7 +15,7 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed class Ob20ConsumerTests
+    public sealed partial class Ob20ConsumerTests
     {
         public static IEnumerable<object[]> Cases()
         {
@@ -87,12 +87,13 @@ namespace OceanBaseConnector.ConsumerTests
             await ObserveClose(stream, token);
         }
 
-        private static async Task Handshake(PacketChannel channel, string kind, CancellationToken token)
+        private static async Task Handshake(PacketChannel channel, string kind, CancellationToken token, bool deprecated = false)
         {
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
             var upper = Array.IndexOf(greeting, (byte)0, 1) + 1 + 4 + 8 + 1 + 2 + 1 + 2;
             if (kind != "no-attributes") greeting[upper] |= 16;
+            if (deprecated) greeting[upper + 1] |= 1;
             await channel.WritePacketAsync(greeting, token);
             var handshake = new ByteCursor(await channel.ReadPacketAsync(token)); handshake.Skip(32);
             Assert.Equal("u", handshake.ReadNullTerminatedAscii()); handshake.ReadLengthEncodedBytes(); handshake.ReadNullTerminatedAscii();

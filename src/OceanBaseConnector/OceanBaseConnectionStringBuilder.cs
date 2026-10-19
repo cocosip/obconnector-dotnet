@@ -12,7 +12,8 @@ namespace OceanBaseConnector
     /// <c>Database</c>, <c>Connection Timeout</c>, <c>Command Timeout</c>,
     /// <c>TLS Mode</c>, <c>TLS Server Name</c>, <c>Persist Security Info</c>,
     /// <c>ExpectedMode</c>, <c>Pooling</c>, <c>Server RSA Public Key</c> and
-    /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c> and <c>Enable Full Link Trace</c>; the only synonyms are
+    /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
+    /// <c>Use Oracle Prepare Execute</c>; the only synonyms are
     /// <c>Host</c>, <c>Uid</c> and <c>Pwd</c>. Unknown keys, synonym conflicts
     /// and malformed values are rejected instead of being silently accepted.
     /// </summary>
@@ -34,6 +35,7 @@ namespace OceanBaseConnector
         public const string AllowPublicKeyRetrievalKey = "Allow Public Key Retrieval";
         public const string UseOb20Key = "Use OB20";
         public const string EnableFullLinkTraceKey = "Enable Full Link Trace";
+        public const string UseOraclePrepareExecuteKey = "Use Oracle Prepare Execute";
 
         public const int DefaultPort = 2881;
         public const int DefaultConnectionTimeoutSeconds = 15;
@@ -183,6 +185,13 @@ namespace OceanBaseConnector
             set => this[EnableFullLinkTraceKey] = value ? "true" : "false";
         }
 
+        /// <summary>Enables Oracle procedures and output bindings using PrepareExecute after version discovery.</summary>
+        public bool UseOraclePrepareExecute
+        {
+            get => GetBoolean(UseOraclePrepareExecuteKey) ?? false;
+            set => this[UseOraclePrepareExecuteKey] = value ? "true" : "false";
+        }
+
         public override object? this[string keyword]
         {
             get
@@ -275,6 +284,7 @@ namespace OceanBaseConnector
                 AllowPublicKeyRetrieval,
                 UseOb20,
                 EnableFullLinkTrace,
+                UseOraclePrepareExecute,
                 ToSanitizedConnectionString(includeSecrets: false));
         }
 
@@ -297,6 +307,7 @@ namespace OceanBaseConnector
             AllowPublicKeyRetrievalKey,
             UseOb20Key,
             EnableFullLinkTraceKey,
+            UseOraclePrepareExecuteKey,
         };
 
         /// <summary>
@@ -396,6 +407,7 @@ namespace OceanBaseConnector
                 case AllowPublicKeyRetrievalKey:
                 case UseOb20Key:
                 case EnableFullLinkTraceKey:
+                case UseOraclePrepareExecuteKey:
                     ParseBooleanValue(canonicalKey, value);
                     return value;
 
@@ -527,6 +539,9 @@ namespace OceanBaseConnector
                     return true;
                 case "ENABLE FULL LINK TRACE":
                     canonical = EnableFullLinkTraceKey;
+                    return true;
+                case "USE ORACLE PREPARE EXECUTE":
+                    canonical = UseOraclePrepareExecuteKey;
                     return true;
                 default:
                     if (Synonyms.TryGetValue(keyword.Trim(), out var synonymCanonical))

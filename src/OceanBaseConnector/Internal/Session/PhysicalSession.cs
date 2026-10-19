@@ -28,6 +28,8 @@ namespace OceanBaseConnector.Internal.Session
         private string? _sessionTimeZone;
         private NationalCharacterSet? _nationalCharacterSet;
         private readonly HashSet<uint> _statementCloses = new HashSet<uint>();
+        internal bool UseOraclePrepareExecute => _options.UseOraclePrepareExecute;
+        internal bool? OraclePrepareExecuteSupported { get; set; }
 
         public PhysicalSession(OceanBaseConnectionOptions options) { _options = options; _endpoint = options.Endpoint; _database = options.Database; }
 
