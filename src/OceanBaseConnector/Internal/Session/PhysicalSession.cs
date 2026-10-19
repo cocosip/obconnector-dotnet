@@ -226,7 +226,8 @@ namespace OceanBaseConnector.Internal.Session
         private Exception MapOpenError(Exception exception, CancellationTokenSource budget, CancellationToken caller)
         {
             if (caller.IsCancellationRequested) return new OperationCanceledException("Connection opening canceled.", exception, caller);
-            if (_closing.IsCancellationRequested) return new OperationCanceledException("Session closed during opening.", exception, _closing.Token);
+            if (_closing.IsCancellationRequested || State == SessionState.Closed)
+                return new OperationCanceledException("Session closed during opening.", exception, _closing.Token);
             if (budget.IsCancellationRequested || exception is TimeoutException)
                 return new TimeoutException($"Connection to {Endpoint} timed out.", exception);
             if (exception is OceanBaseException) return exception;
