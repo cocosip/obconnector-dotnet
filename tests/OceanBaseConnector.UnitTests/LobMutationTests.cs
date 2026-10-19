@@ -59,12 +59,14 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
-        private static async Task LobMutationReply(PacketChannel channel, byte type, byte[]? locator, bool error = false, int parameters = 4)
+        private static async Task LobMutationReply(PacketChannel channel, byte type, byte[]? locator, bool error = false, int parameters = 4, bool rejectType = false)
         {
             await channel.WritePacketAsync(OracleExecuteHeader((ushort)parameters, 1, 4));
             for (var i = 0; i < parameters; i++) await channel.WritePacketAsync(Column("p" + i, 253));
-            await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(Column("lob", type)); await channel.WritePacketAsync(Eof());
+            await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(Column("lob", type));
+            await channel.WritePacketAsync(Eof());
             await channel.WritePacketAsync(locator == null ? new byte[] { 0, 4 } : new byte[] { 0, 0 }.Concat(WithLength(locator)).ToArray());
+            if (rejectType) { Assert.Equal(0, await channelStreamRead(channel)); return; }
             await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(error ? Error() : Ok());
         }
 
@@ -163,7 +165,7 @@ namespace OceanBaseConnector.UnitTests
                 await StatementCommand(channel, 25); channel.BeginCommand(); await StatementCommand(channel, 0xa1);
                 if (fault == "disconnect") return;
                 await LobMutationReply(channel, fault == "wrong-type" ? (byte)211 : (byte)210,
-                    fault == "null" ? null : fault == "malformed" ? new byte[] { 1, 2, 3 } : ExternalLob(40000), fault == "error");
+                    fault == "null" ? null : fault == "malformed" ? new byte[] { 1, 2, 3 } : ExternalLob(40000), fault == "error", rejectType: fault == "wrong-type");
                 if (fault == "error")
                 {
                     await StatementCommand(channel, 25); channel.BeginCommand(); await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));
@@ -176,6 +178,7 @@ namespace OceanBaseConnector.UnitTests
                 using var lob = (OceanBaseLob)(await command.ExecuteScalarAsync())!;
                 var error = await Assert.ThrowsAsync<OceanBaseException>(() => lob.WriteBytesAsync(0, new byte[40000], 0, 40000));
                 Assert.Equal(fault == "disconnect" || fault == "wrong-type" || fault == "malformed", error.IsExecutionOutcomeUnknown); Assert.Equal(32767, lob.ByteLength);
+                if (fault == "wrong-type") Assert.Equal("LOB output metadata must match its declared BLOB or CLOB type.", Assert.IsType<ProtocolException>(error.InnerException).Message);
                 Assert.Throws<ObjectDisposedException>(() => lob.OpenRead());
                 if (fault == "error") { using var after = connection.CreateCommand(); after.CommandText = "after"; Assert.Equal(1, await after.ExecuteNonQueryAsync()); }
                 else Assert.Equal(ConnectionState.Broken, connection.State);
