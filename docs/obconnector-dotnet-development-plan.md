@@ -597,6 +597,15 @@ R02 Windows Framework 包消费补验（2026-10-19；仅本地证据，不作正
 
 本轮SHA-2子模块已完成本地实现、独立走查及验证：核心五/DI三目标Release编译0警告0错误，完整Unit1514（新增SHA-2为72）、Consumer292（新增SHA-2为40）、DI8全部通过且无跳过；红绿和夹具修正记录见进度台账。D15保持进行中，未实现项和真实验收仍开放，不发布、不推送。
 
+### D15 RSA 后续实施（2026-10-19）
+
+1. 增加规范连接键 `Server RSA Public Key`（默认空，PEM SubjectPublicKeyInfo PUBLIC KEY文本）和 `Allow Public Key Retrieval`（默认false）。固定PEM由调用方提供，避免驱动引入文件读取或五目标不同的PEM文件API；冻结选项、多地址副本、序列化/脱敏和公共builder同步覆盖。默认日志/公开脱敏连接串不包含PEM，完整builder序列化可往返。无效固定key不回退检索。
+2. 非VerifyFull的SHA-2完整认证在配置固定key时使用RSA OAEP-SHA1加密严格UTF8密码加NUL、与20字节seed循环XOR后的内容。无固定key只有显式Allow选项才请求：sha256初始/切换发01，caching full阶段发02，等待01前缀的PEM，再发送密文等待最终OK/ERR。初始sha256取钥请求后仍允许一次账户插件切换；切换后/full阶段严格等待key，无key不得OK。空密码发送无密码标记，不请求key或加密；已验证TLS仍优先现有非空密码路径，clear插件不因RSA选项开放。
+3. 新增最小内部RsaPassword，用BCL RSA.ImportParameters/Encrypt保证Standard2.0兼容；复用ByteCursor严格解析SPKI DER，仅RSA OID、正整数、完整无尾随数据、16KiB PEM上限、2048–8192位模数、正奇数且不超过64位指数。拒绝私钥、弱key、非规范DER、过长密码、乱序/重复/缺失key，错误不回显key/password。公钥获取本身无身份验证，README明确中间人风险和默认关闭；TLS Disabled不加密业务SQL。
+4. TDD先以公开握手环回/独立RSA私钥解密验证未支持失败，再覆盖两插件、初始/切换、固定/获取、同步/异步、空/Unicode/边界密码、恶意DER/PEM、取消/超时/最终ERR及五资产公开消费。独立走查、全目标编译及完整Unit/Consumer/DI通过后更新证据并本地提交；实库、异机和VerifyFull成功链仍暂缓，其他插件保持余项，不据本轮关闭D15或项目。
+
+RSA子模块已完成本地实现与独立复查：修复初始sha256取钥后账户插件切换，补齐空密码无密码标记；依据MySQL8服务端sha256入口接受空包/单NUL的规则，不把RSA密文NUL当作空密码线协议。最终五/三目标Release编译0警告0错误，Unit1596（新增82）、Consumer332（新增40）、DI8全通过；红绿、沙箱TLS权限失败与最终证据见台账。D15其他插件及真实关口仍开放。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

@@ -24,6 +24,8 @@ namespace OceanBaseConnector.Internal
             bool persistSecurityInfo,
             OceanBaseCompatibilityMode? expectedMode,
             bool pooling,
+            string serverRsaPublicKey,
+            bool allowPublicKeyRetrieval,
             string sanitizedConnectionString)
         {
             Server = server;
@@ -39,6 +41,8 @@ namespace OceanBaseConnector.Internal
             PersistSecurityInfo = persistSecurityInfo;
             ExpectedMode = expectedMode;
             Pooling = pooling;
+            ServerRsaPublicKey = serverRsaPublicKey;
+            AllowPublicKeyRetrieval = allowPublicKeyRetrieval;
             SanitizedConnectionString = sanitizedConnectionString;
         }
 
@@ -50,7 +54,7 @@ namespace OceanBaseConnector.Internal
 
         internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
             endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, SanitizedConnectionString);
+            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, SanitizedConnectionString);
 
         public string UserId { get; }
 
@@ -71,6 +75,10 @@ namespace OceanBaseConnector.Internal
         public OceanBaseCompatibilityMode? ExpectedMode { get; }
 
         public bool Pooling { get; }
+
+        public string ServerRsaPublicKey { get; }
+
+        public bool AllowPublicKeyRetrieval { get; }
 
         /// <summary>Connection string without the password; safe for logs and exceptions.</summary>
         public string SanitizedConnectionString { get; }

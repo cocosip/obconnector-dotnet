@@ -137,6 +137,7 @@ namespace OceanBaseConnector.Internal.Session
             switch (packet[0])
             {
                 case 0x00:
+                    authentication.ValidateSuccess();
                     var negotiated = new NegotiatedCapabilities(clientCapabilities, handshake.Capabilities);
                     var ok = OkPacket.Parse(packet, negotiated.Effective);
                     var mode = DetermineMode(handshake, ok.StatusFlags, options);

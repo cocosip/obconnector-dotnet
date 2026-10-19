@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D09 尚未开发；D15 的 SHA-2 路径已有部分本地实现，RSA/其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D09 尚未开发；D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -21,7 +21,7 @@
 | D12 | MySQL JSON 文本/预处理读写、元数据及字段流本地实现，记录见末尾 | 真实 JSON 列往返、语法验证和版本/OBProxy矩阵 |
 | D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
-| D15 | SHA-2 fast auth与受VerifyFull限制的完整密码路径本地实现，验证记录见末尾 | RSA/其他插件、私有CA成功链及两模式实库矩阵 |
+| D15 | SHA-2 fast/TLS、固定RSA及显式公钥获取本地实现，验证记录见末尾 | 其他插件、私有CA成功链及两模式实库矩阵 |
 | D01–D09 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA等继续逐项评估本地实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
@@ -195,7 +195,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D12 | 本地先行，实库延期 | MySQL JSON | 待验证 | 本地文本/二进制读写、元数据和字段流，验证见末尾；真实 JSON 列往返仍开放 |
 | D13 | 本地先行，实库延期 | MySQL BIT | 待验证 | 本地编解码/位宽/参数及测试记录见末尾；真实 BIT 列往返仍开放 |
 | D14 | 本地先行，实库延期 | MySQL YEAR | 待验证 | 本地实现/测试/走查记录见末尾；真实 YEAR 列往返仍开放 |
-| D15 | 本地先行，实库延期 | 新认证插件 | 进行中 | SHA-2 fast/TLS路径本地实现；RSA/其他插件、私有CA及两模式实库余项开放，验证见末尾 |
+| D15 | 本地先行，实库延期 | 新认证插件 | 进行中 | SHA-2 fast/TLS、固定RSA及显式取钥本地实现；其他插件、私有CA及两模式实库余项开放，验证见末尾 |
 
 ## 兼容矩阵记录模板
 
@@ -659,3 +659,26 @@ D10本地实现完成，正式状态保持待验证；真实NCHAR/NVARCHAR2列IN
 | DI | 8通过，0失败/跳过 | `TestResults/sha2-di-full/*.trx` |
 
 完整测试命令同前节，替换结果目录；TRX已解析核对实际新增案例和零失败/跳过。UTF8无BOM/CRLF及git diff --check通过，当前master本地提交不推送。D15状态保持进行中：RSA公钥配置/检索、其他插件及真实两模式/OBProxy/TLS矩阵仍开放；A05、C01及D01–D09未完成。异机/实库继续暂缓，未重跑打包、旧运行时或Framework，没有据本地测试关闭项目整体或生产发布关口。
+
+## D15 RSA认证后续本地实现（2026-10-19）
+
+从 `5db7b98` 补齐SHA-2固定RSA公钥与显式公钥获取路径。新增连接键/属性Server RSA Public Key/ServerRsaPublicKey（默认空的SPKI PEM文本）及Allow Public Key Retrieval/AllowPublicKeyRetrieval（默认false）；冻结快照、多地址副本、大小写、序列化往返、默认PEM脱敏和长度/布尔验证均覆盖，不引入文件I/O或依赖。已验证TLS优先原密码路径；非空密码在无VerifyFull时必须有固定公钥或显式取钥选项，clear插件仍拒绝弱通道。固定key优先，无效不回退检索；默认不请求服务端key，不隐式降低TLS。获取key无身份验证且可被中间人替换，README明确风险；Disabled下业务SQL/结果仍为明文。
+
+RsaPassword复用ByteCursor校验SPKI DER，仅RSA OID、规范长度/正整数、无尾随数据，最长16KiB PEM、2048–8192位模数、至少3且不超过64位的正奇数指数；拒绝私钥、非RSA和弱/畸形key。BCL RSA.ImportParameters/Encrypt跨五目标使用协议OAEP-SHA1，对严格UTF8密码加NUL与20字节挑战循环XOR后加密，明文含NUL不超过密钥字节数减42。解析/导入/加密失败不附可能含key材料的内部异常。sha256取钥请求01、caching full请求02；读01前缀PEM（允许一个NUL终止符）后发密文，仅等最终OK/ERR。key未到就OK、重复key/挑战或完整认证阶段切换均失败；错误/取消/超时沿用总连接预算、无重试和传输清理。
+
+红绿记录：首批8项固定key公开握手先因未知连接键失败（`TestResults/rsa-red/*.trx`），实现后8项通过（`rsa-green/*.trx`），再扩为固定/获取×初始/切换×同步/异步16项。首次混合RSA/SHA-2回归101通过/8失败（`rsa-options-and-flow/*.trx`），失败均为在普通沙箱下运行TLS环回的Windows凭据访问限制；未修改证书策略，最终以既有完整Unit执行权限全部通过。RSA边界定向71项通过（`rsa-boundaries/*.trx`，过滤含既有匹配项）。
+
+独立走查发现初始sha256取钥后错误拒绝首次账户插件切换；4项反向协商网络回归先失败（`rsa-switch-review-red/*.trx`）。调整为初始阶段允许一次FE并清旧取钥状态，caching full阶段保留final锁；定向92项通过（`rsa-reviewed-targeted/*.trx`）。复查同时提示空密码线上语义：固定Java空包规则和MySQL8服务端sha256入口接受空包/单NUL作为无密码标记。新增4项初始握手测试先2失败/2通过（`rsa-empty-red/*.trx`），SHA-2完整密码路径对空密码优先返回NUL，不受key/检索配置干扰；caching初始仍空token，非空密码安全边界不变。最终完整回归中四项全部通过。独立修复复查无剩余产品问题。
+
+新增82项Unit包含选项冻结/多地址/脱敏、RSA独立私钥解密与Unicode/最大OAEP明文、恶意PEM/DER/算法/尺寸/指数、固定key无效不回退、TLS优先、取钥顺序、early OK/服务端ERR、两插件网络超时/关闭/取消、账户插件切换及空密码。五资产新增40项DbConnection/DbCommand公开消费，固定/获取×两插件×同步/异步，独立服务端解密确认Unicode密码并执行精确业务SQL；定向40项通过（`rsa-consumer-targeted/*.trx`）。消费宿主为net10，Standard2.0异步入口沿用基类，不称为五运行时验收。
+
+最终证据（Windows / SDK10.0.402 / .NET10.0.13）：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx核心五目标、DI三目标 | 0警告、0错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
+| 完整Unit（RSA新增82项） | 1596通过，0失败/跳过 | `TestResults/rsa-unit-full/*.trx` |
+| 完整Consumer（RSA新增40项） | 332通过，0失败/跳过 | `TestResults/rsa-consumer-full/*.trx` |
+| DI | 8通过，0失败/跳过 | `TestResults/rsa-di-full/*.trx` |
+
+TRX已解析核对实际新增案例和零失败/跳过；UTF8无BOM/CRLF和git diff --check通过，当前master本地提交不推送。D15仍进行中，其他插件、私有CA成功链及真实两模式/OBProxy版本矩阵未完成；A05、C01和D01–D09仍开放。未操作信任根、部署数据库或其他电脑，未重跑打包/旧运行时/Framework；本地RSA环回不替代实库或生产验收。

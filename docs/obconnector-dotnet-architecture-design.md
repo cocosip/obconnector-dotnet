@@ -207,9 +207,11 @@ flowchart TD
 
 包读写层只负责帧、长度、序号、上限与校验；命令层处理握手、`COM_QUERY`、`COM_STMT_*`、OK/ERR、列/行、多结果和状态变更；模式感知编解码处理同一类型码在两种模式下的不同解释。OB20 是经协商后替换/包裹包流的能力，不是另一个公开驱动。所有长度、计数、压缩后大小和响应包数在分配内存前校验；对 LOCAL INFILE 等会触及客户端文件系统的服务端请求默认拒绝，未来若开放需显式授权和路径策略。
 
-D15 SHA-2本地实现：TLS流程成功返回后才创建AuthenticationConversation并构造认证响应；它只保存当前插件、是否已经切换及是否等待最终结果，不承担I/O。`caching_sha2_password` 使用20字节挑战和SHA256 token（空密码为空token），`01 03`后不发包并继续等OK/ERR；`01 04`和`sha256_password`仅在VerifyFull后发送严格UTF8密码及NUL。拒绝无效Unicode，连接串基类拒绝内嵌NUL；native/clear保留既有编码契约。初始响应后允许一次账户插件切换，fast/full后仅接受最终OK/ERR，畸形或重复挑战/切换立即失败。同步/异步共享这些决策及现有PacketChannel序号、总连接预算和安全错误映射；A05模式门槛不变。
+D15 SHA-2本地实现：TLS流程成功返回后才创建AuthenticationConversation并构造认证响应；它保存当前插件、一次切换、取钥/最终结果状态和当前挑战，不承担I/O。`caching_sha2_password` 使用20字节挑战和SHA256 token（空密码为空token），`01 03`后不发包并继续等OK/ERR；完整认证只在VerifyFull后发送非空密码明文，否则必须显式配置RSA。SHA-2空密码使用无密码标记，不做RSA；严格UTF8拒绝无效Unicode，连接串基类拒绝内嵌NUL；native/clear保留既有编码契约。初始响应（含初始sha256取钥请求）后允许一次账户插件切换，切换清除旧取钥状态；caching full取钥时拒绝切换。收到key后只允许最终OK/ERR，取钥完成前OK拒绝，畸形或重复消息立即失败。同步/异步共享决策、PacketChannel序号、总连接预算和安全错误映射；A05模式门槛不变。
 
-完整密码的TLS先决条件比固定Java基线的useSsl检查更严格，不把Required当作身份验证。RSA配置/公钥检索和其他插件未实现，禁止自动降级；D15仍有余项。VerifyFull完整密码分支只有状态/编码证据，Required TLS环回只证明加密通道的fast auth及完整密码拒绝，不替代私有CA成功链或两模式实库验收。
+`Server RSA Public Key`为调用方提供的SPKI PEM，不引入文件I/O；固定key优先，无效不回退。`Allow Public Key Retrieval`默认false，显式开启且无固定key时sha256请求01、caching full请求02，再读01前缀PEM（可带一个NUL终止符）。只接受最长16KiB、2048–8192位RSA和3以上的正奇数指数（最多64位）；BCL RSA.ImportParameters/Encrypt跨五目标，内部最小DER解析复用ByteCursor，要求RSA OID、规范长度/正整数/完整消费，拒绝私钥或其他算法。对严格UTF8密码加NUL按20字节seed循环XOR后使用协议指定OAEP-SHA1；含NUL明文限密钥字节数减42。SHA256初始密文超过255字节时依赖已协商lenenc客户端认证数据，缺失时拒绝。PEM与密码从默认脱敏连接串排除；导入/加密失败不附可回显材料的内部异常。
+
+公钥获取无身份验证且可被中间人替换，必须由用户显式开启，不由握手自动降级；RSA仅保护密码，Disabled下业务内容仍明文。空密码标记依据固定Java空包规则及MySQL8服务端`sql/auth/sql_authentication.cc`的sha256认证入口（接受空包/单NUL）；不把本地源码核对当作OceanBase互通验收。非空明文密码的TLS先决条件比Java useSsl更严格，Required不等于身份验证。其他插件及真实矩阵仍属D15余项；VerifyFull完整密码分支仅状态/编码证据，Required环回和RSA环回不替代私有CA成功链或两模式实库验收。
 
 ## 4. 执行、事务与取消
 

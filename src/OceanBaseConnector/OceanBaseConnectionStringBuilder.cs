@@ -11,7 +11,8 @@ namespace OceanBaseConnector
     /// <c>Server</c>, <c>Port</c>, <c>User ID</c>, <c>Password</c>,
     /// <c>Database</c>, <c>Connection Timeout</c>, <c>Command Timeout</c>,
     /// <c>TLS Mode</c>, <c>TLS Server Name</c>, <c>Persist Security Info</c>,
-    /// <c>ExpectedMode</c> and <c>Pooling</c>; the only synonyms are
+    /// <c>ExpectedMode</c>, <c>Pooling</c>, <c>Server RSA Public Key</c> and
+    /// <c>Allow Public Key Retrieval</c>; the only synonyms are
     /// <c>Host</c>, <c>Uid</c> and <c>Pwd</c>. Unknown keys, synonym conflicts
     /// and malformed values are rejected instead of being silently accepted.
     /// </summary>
@@ -29,6 +30,8 @@ namespace OceanBaseConnector
         public const string PersistSecurityInfoKey = "Persist Security Info";
         public const string ExpectedModeKey = "ExpectedMode";
         public const string PoolingKey = "Pooling";
+        public const string ServerRsaPublicKeyKey = "Server RSA Public Key";
+        public const string AllowPublicKeyRetrievalKey = "Allow Public Key Retrieval";
 
         public const int DefaultPort = 2881;
         public const int DefaultConnectionTimeoutSeconds = 15;
@@ -43,7 +46,7 @@ namespace OceanBaseConnector
             };
 
         private static readonly HashSet<string> SecretKeys =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { PasswordKey };
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { PasswordKey, ServerRsaPublicKeyKey };
 
         // Canonical key -> raw keyword last used to set it; detects conflicts
         // such as "Server=a;Host=b" even when the values are identical.
@@ -150,6 +153,20 @@ namespace OceanBaseConnector
             set => this[PoolingKey] = value ? "true" : "false";
         }
 
+        /// <summary>Trusted RSA SubjectPublicKeyInfo PEM for SHA-2 authentication without verified TLS.</summary>
+        public string ServerRsaPublicKey
+        {
+            get => GetString(ServerRsaPublicKeyKey) ?? string.Empty;
+            set => this[ServerRsaPublicKeyKey] = value;
+        }
+
+        /// <summary>Explicitly allow unauthenticated server RSA key retrieval; disabled by default.</summary>
+        public bool AllowPublicKeyRetrieval
+        {
+            get => GetBoolean(AllowPublicKeyRetrievalKey) ?? false;
+            set => this[AllowPublicKeyRetrievalKey] = value ? "true" : "false";
+        }
+
         public override object? this[string keyword]
         {
             get
@@ -237,6 +254,8 @@ namespace OceanBaseConnector
                 PersistSecurityInfo,
                 ExpectedMode,
                 Pooling,
+                ServerRsaPublicKey,
+                AllowPublicKeyRetrieval,
                 ToSanitizedConnectionString(includeSecrets: false));
         }
 
@@ -255,6 +274,8 @@ namespace OceanBaseConnector
             PersistSecurityInfoKey,
             ExpectedModeKey,
             PoolingKey,
+            ServerRsaPublicKeyKey,
+            AllowPublicKeyRetrievalKey,
         };
 
         /// <summary>
@@ -351,7 +372,13 @@ namespace OceanBaseConnector
 
                 case PersistSecurityInfoKey:
                 case PoolingKey:
+                case AllowPublicKeyRetrievalKey:
                     ParseBooleanValue(canonicalKey, value);
+                    return value;
+
+                case ServerRsaPublicKeyKey:
+                    if (value.Length > 16384)
+                        throw CreateKeywordError("RSA public key exceeds 16 KiB.", canonicalKey, includeValue: false, value: null);
                     return value;
 
                 case ExpectedModeKey:
@@ -465,6 +492,12 @@ namespace OceanBaseConnector
                     return true;
                 case "POOLING":
                     canonical = PoolingKey;
+                    return true;
+                case "SERVER RSA PUBLIC KEY":
+                    canonical = ServerRsaPublicKeyKey;
+                    return true;
+                case "ALLOW PUBLIC KEY RETRIEVAL":
+                    canonical = AllowPublicKeyRetrievalKey;
                     return true;
                 default:
                     if (Synonyms.TryGetValue(keyword.Trim(), out var synonymCanonical))
