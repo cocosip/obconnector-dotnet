@@ -28,7 +28,7 @@
 
 | 位置 | 职责 |
 | --- | --- |
-| `OceanBaseConnector.slnx`、`global.json` | .NET 10 SDK 的统一解决方案和 SDK 主版本约束 |
+| `OceanBaseConnector.slnx` | 统一解决方案；使用支持 net10.0 的已安装 SDK，不固定 SDK 版本 |
 | `Directory.Build.props` | 全部产品、程序集与包版本唯一来源 Version |
 | `Directory.Packages.props` | 中央包管理：全部 NuGet 包版本的唯一来源，传递依赖钉扎 |
 | `src/OceanBaseConnector/OceanBaseConnector.csproj` | 唯一核心 provider 程序集和五目标条件编译；日志仅依赖标准抽象 |
