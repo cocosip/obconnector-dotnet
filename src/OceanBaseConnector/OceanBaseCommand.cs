@@ -26,6 +26,7 @@ namespace OceanBaseConnector
         internal object? SessionOwner { get; set; }
         internal long? RequiredTransactionEpoch { get; set; }
         internal bool IsLobRead { get; set; }
+        internal bool HasSentSql { get; private set; }
         internal Func<CancellationToken>? CancellationOrigin { get; set; }
 #if NET8_0_OR_GREATER
         internal DbBatchCommand? BatchCommand { get; set; }
@@ -173,6 +174,7 @@ namespace OceanBaseConnector
             {
                 if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseCommand));
                 if (_execution != null) throw new InvalidOperationException("The command already has an active operation.");
+                HasSentSql = false;
                 OceanBaseConnection.RejectAmbientTransaction();
                 if (CommandType != CommandType.Text && CommandType != CommandType.StoredProcedure)
                     throw new NotSupportedException("This CommandType is not supported.");
@@ -206,7 +208,11 @@ namespace OceanBaseConnector
                 execution = connection.StartCommand(session, _transaction, _timeout, token, () =>
                 {
                     oracle?.Cursors?.EndExecution();
-                    lock (_gate) { if (ReferenceEquals(_execution, execution)) _execution = null; }
+                    lock (_gate)
+                    {
+                        if (ReferenceEquals(_execution, execution))
+                        { HasSentSql = execution!.HasSentSql; _execution = null; }
+                    }
                 }, SessionOwner, CancellationOrigin, RequiredTransactionEpoch, bindings.Parameters);
 #if NET8_0_OR_GREATER
                 execution.BatchCommand = BatchCommand;

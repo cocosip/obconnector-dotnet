@@ -27,6 +27,16 @@ namespace OceanBaseConnector.Internal.Session
             command.Parameters.Add(new OceanBaseParameter { ParameterName = "length", Value = length });
             return Execute(command, async, token, caller);
         }
+        internal Task Free(bool async, CancellationToken token, CancellationToken caller)
+        {
+            var command = Command("DBMS_LOB.FREETEMPORARY"); command.CommandType = CommandType.Text;
+            // FREETEMPORARY marks its locator invalid; return a scalar acknowledgement instead.
+            command.CommandText = "DECLARE lob_value " + (_lob.IsCharacter ? "CLOB" : "BLOB") +
+                " := :lob; BEGIN DBMS_LOB.FREETEMPORARY(lob_value); :released := '1'; END;";
+            command.Parameters[0].Direction = ParameterDirection.Input;
+            command.Parameters.Add(new OceanBaseParameter { ParameterName = "released", Direction = ParameterDirection.Output, DbType = DbType.String });
+            return Execute(command, async, token, caller, freeing: true);
+        }
         private OceanBaseCommand Command(string procedure)
         {
             var context = _lob.Context;
@@ -40,7 +50,7 @@ namespace OceanBaseConnector.Internal.Session
                 OceanBaseDbType = _lob.IsCharacter ? OceanBaseDbType.Clob : OceanBaseDbType.Blob, Value = _lob });
             return command;
         }
-        private async Task Execute(OceanBaseCommand command, bool async, CancellationToken token, CancellationToken caller)
+        private async Task Execute(OceanBaseCommand command, bool async, CancellationToken token, CancellationToken caller, bool freeing = false)
         {
             command.CancellationOrigin = () => caller;
             try
@@ -52,6 +62,12 @@ namespace OceanBaseConnector.Internal.Session
                     do { while (reader.Read()) { } } while (reader.NextResult());
                 }
                 token.ThrowIfCancellationRequested(); _lob.ThrowIfDisposed(); _lob.Context.Connection.ValidateLobContext(_lob.Context, this);
+                if (freeing)
+                {
+                    if (!(command.Parameters[1].Value is string marker) || marker != "1")
+                    { _lob.Context.Session.Break(); throw new OceanBaseException("Temporary LOB release completed without its acknowledgement."); }
+                    _lob.Dispose(); return;
+                }
                 if (!(command.Parameters[0].Value is OceanBaseLob updated))
                 {
                     _lob.Context.Session.Break(); _lob.Dispose();

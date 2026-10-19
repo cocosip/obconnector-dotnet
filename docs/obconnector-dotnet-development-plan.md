@@ -702,6 +702,20 @@ D03本地输出/读取实现及独立走查修复已完成：修后Release核心
 - [x] 覆盖同步/异步、Unicode跨块、>Int32位置、空输入/预取消、活动reader/流、事务结束/连接重开、已知ERR/部分前缀/尾中断/超时和Dispose。WRITE/TRIM具有副作用，未确认终态保留既有结果未知语义；多块非原子，不自动回滚已成功前缀或重放失败块。
 - [x] 补五资产公共消费，独立只读走查并修复，Release核心五/DI三目标编译、完整Unit/Consumer/DI通过后同步README/架构/台账并本地提交。临时对象创建/所有权管理按后续子模块推进，实库资源语义、OBProxy、TLS扩展和异机联调暂缓。
 
+### D04 临时 LOB 创建与显式所有权（2026-10-19）
+
+沿用现有选项、Oracle PrepareExecute和原会话/事务代次契约。连接新增CreateTemporaryLob(OceanBaseDbType, OceanBaseTransaction?)及Async入口，只接受Blob/Clob；显式事务按命令相同规则绑定，使用连接CommandTimeout。固定PL/SQL块声明BLOB/CLOB局部变量，再调用CREATETEMPORARY，cache=FALSE、dur=DBMS_LOB.SESSION，避免NULL协议类型无法选择重载及猜测PL/SQL BOOLEAN线上编码；最后赋给OUT locator。完整终态后创建拥有释放权的新handle，失败不交付所有权。创建SQL开始发送后失败（包括尾ERR）或成功后无法安全交付，销毁原会话避免遗留资源；未发送创建SQL的版本探测可信ERR/不支持版本保留可用会话。
+
+创建者handle新增FreeTemporary/FreeTemporaryAsync，普通查询/输出handle没有释放权。释放持原预约、复用修改取消/超时/未知结果策略。固定类型的PL/SQL局部变量接收输入locator并调用FREETEMPORARY，另返回固定字符串完成标记；不把服务端释放后标记invalid的locator交给普通解析器。成功后客户端handle失效，在途失败沿修改契约失效；不能跨连接、事务代次或活动流使用。Dispose保持现有客户端清理契约，必须在事务结束及Dispose前显式FreeTemporary；未显式释放或释放失败的SESSION临时对象可能保留至原会话结束，不引入后台清理或自动提交。
+
+协议依据为OceanBase官方文档固定提交`2a5ae3a23a51729d065cec716508eb26cb064106`的Oracle DBMS_LOB CREATETEMPORARY/FREETEMPORARY/ISTEMPORARY说明（固定链接见架构D04临时对象段）；Java createBlob/createClob只创建本地空对象，不作服务端临时创建依据。官方文档证明接口契约，本地夹具不替代实库资源验收。
+
+- [x] 首先固定创建/释放同步异步、BLOB/CLOB、typed局部变量及OUT空值/完整输出、显式所有权拒绝和未释放Dispose无数据库调用的失败测试。
+- [x] 实现连接工厂、所有权标记及原会话Free操作，覆盖事务/连接重开、活动流、取消/超时、尾ERR/NULL/坏输出与创建交付终态竞态；创建后尾ERR回收、版本探测失败保留会话回归已通过。
+- [x] 补五资产标准/OB20成功与尾包拒绝消费，Release全目标及完整Unit/Consumer/DI通过，独立走查修复及文档同步完成；本地验证见进度台账，不推送。实库和异机继续暂缓。
+
+本地验证：Release核心五/DI三目标0警告/错误，完整Unit2054（新增46项）、Consumer724（新增80项）、DI8全通过且零跳过。独立走查修复typed局部变量重载及创建后尾ERR无主资源问题，红绿证据见台账；D04本地范围已接入，状态待验证，真实资源/版本/OBProxy与扩展经TLS关口保持开放。后续推进D05，整体目标未完成。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

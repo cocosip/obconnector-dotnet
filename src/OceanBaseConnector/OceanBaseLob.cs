@@ -17,14 +17,15 @@ namespace OceanBaseConnector
         private int _disposed;
         private LobReadStream? _stream;
         private LobMutation? _mutation;
+        private readonly bool _ownsTemporary;
         internal LobSession Context { get; }
         internal LobLocator Locator { get; private set; }
         /// <summary>True for CLOB, false for BLOB.</summary>
         public bool IsCharacter { get; }
         /// <summary>Byte length reported by the locator; CLOB character counts may differ.</summary>
         public long ByteLength => Locator.ByteLength;
-        internal OceanBaseLob(LobSession context, byte[] bytes, bool character)
-        { Context = context; _bytes = bytes; IsCharacter = character; Locator = LobLocator.Parse(bytes); }
+        internal OceanBaseLob(LobSession context, byte[] bytes, bool character, bool ownsTemporary = false)
+        { Context = context; _bytes = bytes; IsCharacter = character; _ownsTemporary = ownsTemporary; Locator = LobLocator.Parse(bytes); }
 
         /// <summary>Opens a BLOB once, after its originating reader is consumed. Dispose the stream to release the session.</summary>
         public Stream OpenRead()

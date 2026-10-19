@@ -82,6 +82,24 @@ namespace OceanBaseConnector
         }
         private static void ValidateWriteOffset(long offset, int count)
         { if (offset < 0 || offset > long.MaxValue - count) throw new ArgumentOutOfRangeException(nameof(offset)); }
+
+        /// <summary>Explicitly frees a temporary LOB created by CreateTemporaryLob, then invalidates this handle.</summary>
+        public void FreeTemporary() => FreeTemporaryCore(false, CancellationToken.None).GetAwaiter().GetResult();
+        /// <summary>Asynchronously frees a temporary LOB on its original session before disposing its handle.</summary>
+        public Task FreeTemporaryAsync(CancellationToken cancellationToken = default) => FreeTemporaryCore(true, cancellationToken);
+        private async Task FreeTemporaryCore(bool async, CancellationToken token)
+        {
+            ThrowIfDisposed();
+            if (!_ownsTemporary) throw new InvalidOperationException("Only the handle returned by CreateTemporaryLob owns temporary LOB release.");
+            token.ThrowIfCancellationRequested(); var operation = BeginMutation();
+            try
+            {
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, operation.Token);
+                await operation.Free(async, linked.Token, token).ConfigureAwait(false);
+            }
+            finally { await EndMutation(operation, async).ConfigureAwait(false); }
+        }
+
         private LobMutation BeginMutation()
         {
             ThrowIfDisposed(); var operation = new LobMutation(this);
