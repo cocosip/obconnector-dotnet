@@ -687,6 +687,12 @@ Ruling: 使用Transient连接，每次解析创建关闭实例，默认注册具
 
 本地补验完成：新增Consumer80项，完整Consumer1243、Unit2912、DI14全部通过，零失败/跳过；核心五/DI五目标Release零警告错误，独立走查无阻断。首次错误CanRead假设已按既有契约修正并保留失败报告；正常CRC反向校验十项准确拒绝、最终恢复畸形CRC后的完整报告覆盖全部新用例。五资产均由net10宿主隔离消费，不当作旧运行时或可信TLS身份验收；详细命令/证据见台账，D01真实验收仍开放。
 
+### D01 完整链路追踪经TLS补验（2026-10-20）
+
+复用Ob20TraceConsumerTests的既有断言和协议脚本，保留原70项明文用例，新增同范围70项Required TLS用例：五资产同步/异步下的modern/legacy、关闭追踪、缺能力和无监听者50项；当前目标的prepare/execute、游标分页、statement关闭及事务控制4项；畸形extra、64KiB上限、CRC和部分响应取消16项。TLS脚本先验证32字节CLIENT_SSL请求及加密状态，升级同一PacketChannel并保持序号；不新增产品接口、依赖或系统信任根操作。先验证未接入TLS升级时新测试会失败，再接入升级并运行定向/完整回归，独立走查后记录结果并本地提交。五资产由net10宿主消费，不视作五运行时验收；Required不证明VerifyFull、可信CA或实库采样/SHOW TRACE，LOB/XA经TLS仍属独立缺口。
+
+本地验证完成：Release核心五/DI五及测试工程零警告错误，完整Unit2912、Consumer1313、DI14全部通过，零失败/跳过；定向明文/TLS共140项通过。与上一模块完整Consumer逐名比较新增70、删除0，新增70项在完整报告均通过。独立只读代码走查无阻断，红绿、格式和最终证据见进度台账；不以本轮结果关闭真实验收或整体目标。
+
 ### D01 完整链路追踪本地实施（2026-10-19）
 
 沿用既有五目标、ActivitySource及单租约OB20通道，不新增依赖或独立日志系统。协议参考固定Java基线FullLinkTrace、OceanBaseProtocolV20、ObObj和OceanBaseSerialize，仅核对行为与字段，不复制实现。

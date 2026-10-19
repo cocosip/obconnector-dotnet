@@ -221,7 +221,7 @@ Ob20Stream单所有者，以64KiB写缓冲分帧、8KiB暂存缓冲跳过extra�
 
 Enable Full Link Trace/EnableFullLinkTrace默认false且要求UseOb20；服务端确认FULL_LINK_TRACE后启用单物理连接Ob20TraceContext，缺能力保留普通OB20。按NEW_EXTRA_INFO能力选择输出嵌套TLV或legacy ObObj varchar键值，接收两格式；单帧追踪extra上限64KiB，在尾CRC通过后才解析并原子发布控制策略。逐层长度、有界varint、终止符、已知字段重复及标量校验，未知TLV跳过；legacy键忽略大小写且接受参考实现的有界非最短长度编码。level按有符号byte解释，负值不启用普通采样；SHOW可独立启用。每请求保存策略快照，响应中的策略供下一请求使用。
 
-CommandExchange复用现有Activity上下文，缺少本地span时使用环境上下文或内部W3C上下文，prepare/状态探测/游标共用trace；事务控制传递外层Activity上下文。每线协议请求独立128位wire span，trace ID按canonical字节线序发送。仅首请求帧携带extra；完成后只保留一个有界driver记录，下一请求携带driver/SHOW TLV，不增加SQL，不在连接关闭时刷新末条记录。日志只含固定模块oceanbase_dotnet、ID、微秒时间，不含SQL、参数、凭据、端点及任意Activity标签/baggage。服务端query时间字段只校验，不导出指标；未增加AppInfo定制API。真实采样及SHOW TRACE输出仍须目标服务器验收。
+CommandExchange复用现有Activity上下文，缺少本地span时使用环境上下文或内部W3C上下文，prepare/状态探测/游标共用trace；事务控制传递外层Activity上下文。每线协议请求独立128位wire span，trace ID按canonical字节线序发送。仅首请求帧携带extra；完成后只保留一个有界driver记录，下一请求携带driver/SHOW TLV，不增加SQL，不在连接关闭时刷新末条记录。日志只含固定模块oceanbase_dotnet、ID、微秒时间，不含SQL、参数、凭据、端点及任意Activity标签/baggage。服务端query时间字段只校验，不导出指标；未增加AppInfo定制API。2026-10-20新增Required TLS本地消费：五资产modern/legacy关联、脱敏及回退；当前目标prepare/游标/事务控制及畸形extra、上限、CRC、部分响应取消。既有70项明文与新增70项TLS定向用例均通过；五资产由net10宿主隔离消费。自签名Required不证明VerifyFull信任链，真实采样及SHOW TRACE输出仍须目标服务器验收。
 
 D15 SHA-2本地实现：TLS流程成功返回后才创建AuthenticationConversation并构造认证响应；它保存当前插件、一次切换、取钥/最终结果状态和当前挑战，不承担I/O。`caching_sha2_password` 使用20字节挑战和SHA256 token（空密码为空token），`01 03`后不发包并继续等OK/ERR；完整认证只在VerifyFull后发送非空密码明文，否则必须显式配置RSA。SHA-2空密码使用无密码标记，不做RSA；严格UTF8拒绝无效Unicode，连接串基类拒绝内嵌NUL；native/clear保留既有编码契约。初始响应（含初始sha256取钥请求）后允许一次账户插件切换，切换清除旧取钥状态；caching full取钥时拒绝切换。收到key后只允许最终OK/ERR，取钥完成前OK拒绝，畸形或重复消息立即失败。同步/异步共享决策、PacketChannel序号、总连接预算和安全错误映射；A05模式门槛不变。
 

@@ -22,7 +22,7 @@
 | D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D15 | SHA-2 fast/TLS、固定RSA、显式公钥获取、old password、Ed25519、PAM及现代资产Kerberos GSSAPI本地实现，验证见末尾 | Standard GSSAPI、其他系统机制、真实KDC/私有CA及两模式实库矩阵 |
-| D01 | OB20帧/校验、协商/回退、流式传输及脱敏追踪已有本地实现；新增五资产经Required TLS执行、公开部分字段消费后的故障销毁验证，见末尾 | VerifyFull信任链、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
+| D01 | OB20帧/校验、协商/回退、流式传输及脱敏追踪已有本地实现；五资产Required TLS执行、部分字段消费故障销毁及完整链路追踪TLS补验见末尾 | VerifyFull信任链、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
 | D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流、WRITE/TRIM及临时对象显式创建/释放已本地接入，验证见末尾 | 真实版本/OBProxy、资源生命周期及扩展经TLS验收仍开放 |
@@ -1514,3 +1514,27 @@ net9完整首轮2911通过/1失败（current-runtime9-unit/*.trx）：复杂字�
 命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；Unit/Consumer/DI分别执行dotnet test对应工程-c Release --no-build --no-restore --logger trx --results-directory对应目录。定向过滤两个新公开TLS方法；反向校验过滤部分消费方法并限制DisplayName~crc。解析TRX核对计数、失败原因和旧案例保留（ob20-tls-final-summary.json、ob20-tls-case-comparison.json）。测试运行时未重建产品，未引入依赖包或改变产品源码。
 
 最终证据和文档经独立只读复核，UTF8无BOM/CRLF及diff检查后本地提交，不推送。未重跑实际打包、旧运行时或Framework；本轮五资产消费的宿主为.NET10。D01正式状态仍待真实验收，A05/C01、D15余项及许可/发布关口保持开放，整体goal未完成。
+
+## D01 完整链路追踪经TLS补验（2026-10-20）
+
+沿用Ob20TraceConsumerTests的原协议脚本和断言，保留原70项明文用例及案例名称，新增70项Required TLS用例：五资产同步/异步modern/legacy关联、关闭追踪、缺能力及无监听者50项；当前目标prepare/execute、两页cursor、无响应statement关闭、事务隔离/提交及autocommit恢复4项；modern/legacy同步/异步畸形extra、64KiB上限、CRC和部分响应取消16项。关联用例在解密后的extra内确认trace/span、parent、driver/SHOW记录及无SQL/凭据/baggage值；故障用例确认Broken、结果未知、调用方token及对端断连，无额外请求。部分响应取消只记录服务端已发送范围，不据此声称客户端消费了正文；公开字段消费位置的证据仍以上一模块为准。
+
+三个测试入口共享原有脚本主体，仅参数化是否加密；无TLS的旧70项不创建证书。每例TLS脚本独立拥有临时自签名证书和SslStream，先读取32字节带CLIENT_SSL的SSLRequest，服务端加密升级后替换同一PacketChannel底层流、保留包序号，后续报文均经过TLS。复用既有证书fixture，不改产品源码、配置、依赖或信任根，不复制另一套追踪断言。
+
+先加入TLS测试但未接入脚本升级时，net10 modern同步/异步两项均在TLS建连失败（TestResults/trace-tls-red/*.trx）；这是夹具缺少TLS升级的预期失败，不是产品缺陷。接入升级后定向140项全部通过（trace-tls-focused/*.trx），逐名对比上一模块完整Consumer，原70项追踪测试无删除、新增70项TLS测试全部通过（trace-tls-focused-comparison.json）。独立只读代码走查无必须修复项，覆盖序号、TLS读写路径、原断言保留、所有权、异常和无重放边界。
+
+最终本地验证如下，原始TRX计数及案例身份已逐项解析核对（TestResults/trace-tls-final-summary.json、trace-tls-case-comparison.json）：
+
+| 验证 | 结果 | 证据 |
+| --- | --- | --- |
+| 核心五/DI五及测试工程Release | 0警告/错误 | TestResults/trace-tls-build.log |
+| 完整Unit | 2912通过，0失败/跳过 | TestResults/trace-tls-unit-final/*.trx |
+| 完整Consumer | 1313通过，0失败/跳过；相对上一模块1243新增70、移除0；新增70项均通过 | TestResults/trace-tls-consumer-final/*.trx、trace-tls-case-comparison.json |
+| 完整DI | 14通过，0失败/跳过 | TestResults/trace-tls-di-final/*.trx |
+| 追踪定向 | 原明文70及新增TLS70全部通过 | TestResults/trace-tls-focused/*.trx、trace-tls-focused-comparison.json |
+| 未接入TLS升级的红灯 | net10 modern同步/异步2项均在TLS建连失败 | TestResults/trace-tls-red/*.trx |
+| 范围格式检查 | 退出0，0文件需更改 | TestResults/trace-tls-format.log |
+
+命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；三个完整测试分别dotnet test对应工程-c Release --no-build --no-restore --logger trx --results-directory对应目录；定向另加--filter FullyQualifiedName~Ob20TraceConsumerTests，红灯限制EveryAssetCorrelatesFullLinkTraceOverTls、net10.0和modern。格式检查为Consumer工程dotnet format whitespace --no-restore --verify-no-changes --include本轮测试文件绝对路径。完整测试期间不重建产品。
+
+五资产仍由net10宿主隔离消费，不是五运行时验收。Required只证明本机加密传输，VerifyFull、实库采样/SHOW TRACE、版本/OBProxy、LOB/XA经TLS及其他机器仍待验收；本轮未重跑打包、Framework和旧运行时，产品源码未改。不关闭D01、A05/C01/D15余项或整体goal；最终证据独立复核及UTF8无BOM/CRLF、diff检查后本地提交，不推送。

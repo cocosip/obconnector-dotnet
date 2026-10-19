@@ -6,13 +6,16 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.Loader;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
+using OceanBaseConnector.UnitTests.Transport;
 using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
@@ -29,8 +32,17 @@ namespace OceanBaseConnector.ConsumerTests
 
         [Theory]
         [MemberData(nameof(Cases))]
-        public async Task EveryAssetCorrelatesFullLinkTraceWithoutSendingApplicationData(string target, bool async, string kind)
+        public Task EveryAssetCorrelatesFullLinkTraceWithoutSendingApplicationData(string target, bool async, string kind)
+            => CorrelatesFullLinkTrace(target, async, kind, encrypted: false);
+
+        [Theory]
+        [MemberData(nameof(Cases))]
+        public Task EveryAssetCorrelatesFullLinkTraceOverTlsWithoutSendingApplicationData(string target, bool async, string kind)
+            => CorrelatesFullLinkTrace(target, async, kind, encrypted: true);
+
+        private static async Task CorrelatesFullLinkTrace(string target, bool async, string kind, bool encrypted)
         {
+            using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(12));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             var active = kind == "modern" || kind == "legacy" || kind == "no-listener"; var modern = kind != "legacy";
@@ -45,8 +57,11 @@ namespace OceanBaseConnector.ConsumerTests
             using var parent = new Activity("application").SetIdFormat(ActivityIdFormat.W3C).Start(); parent.AddBaggage("private_baggage", "private_payload");
             var serving = Task.Run(async () =>
             {
-                using var peer = await listener.AcceptTcpClientAsync(budget.Token); var wire = peer.GetStream(); var channel = new PacketChannel(wire);
-                await Handshake(channel, kind, budget.Token);
+                using var peer = await listener.AcceptTcpClientAsync(budget.Token);
+                using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
+                Stream wire = tls is null ? peer.GetStream() : tls;
+                var channel = new PacketChannel(peer.GetStream());
+                await Handshake(channel, kind, budget.Token, tls, certificate);
                 for (uint request = 0; request < 3; request++)
                 {
                     var packet = await ReadFrame(wire, request, budget.Token);
@@ -83,7 +98,7 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
                 using var connection = (DbConnection)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!)!;
-                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Use OB20=true;Enable Full Link Trace={kind != "disabled"}";
+                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode={(encrypted ? "Required" : "Disabled")};Use OB20=true;Enable Full Link Trace={kind != "disabled"}";
                 if (async) await connection.OpenAsync(budget.Token); else connection.Open();
                 for (var i = 0; i < 3; i++)
                 {
@@ -101,10 +116,25 @@ namespace OceanBaseConnector.ConsumerTests
             finally { budget.Cancel(); listener.Stop(); context.Unload(); }
         }
 
-        [Theory]
-        [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
-        public async Task FullLinkTraceCoversPrepareCursorAndTransactionControl(bool async, bool modern)
+        public static IEnumerable<object[]> ControlCases()
         {
+            foreach (var async in new[] { false, true })
+                foreach (var modern in new[] { false, true }) yield return new object[] { async, modern };
+        }
+
+        [Theory]
+        [MemberData(nameof(ControlCases))]
+        public Task FullLinkTraceCoversPrepareCursorAndTransactionControl(bool async, bool modern)
+            => TracePrepareCursorAndTransactionControl(async, modern, encrypted: false);
+
+        [Theory]
+        [MemberData(nameof(ControlCases))]
+        public Task FullLinkTraceOverTlsCoversPrepareCursorAndTransactionControl(bool async, bool modern)
+            => TracePrepareCursorAndTransactionControl(async, modern, encrypted: true);
+
+        private static async Task TracePrepareCursorAndTransactionControl(bool async, bool modern, bool encrypted)
+        {
+            using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(12));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             using var parent = new Activity("application").SetIdFormat(ActivityIdFormat.W3C).Start();
@@ -119,8 +149,11 @@ namespace OceanBaseConnector.ConsumerTests
             var column = new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 110, 1, 110, 12, 45, 0, 255, 0, 0, 0, 8, 0, 0, 0, 0, 0 };
             var serving = Task.Run(async () =>
             {
-                using var peer = await listener.AcceptTcpClientAsync(budget.Token); var wire = peer.GetStream(); var channel = new PacketChannel(wire);
-                await Handshake(channel, modern ? "modern" : "legacy", budget.Token);
+                using var peer = await listener.AcceptTcpClientAsync(budget.Token);
+                using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
+                Stream wire = tls is null ? peer.GetStream() : tls;
+                var channel = new PacketChannel(peer.GetStream());
+                await Handshake(channel, modern ? "modern" : "legacy", budget.Token, tls, certificate);
                 var spans = new HashSet<string>();
                 for (uint request = 0; request < 10; request++)
                 {
@@ -167,7 +200,7 @@ namespace OceanBaseConnector.ConsumerTests
                 }
                 Assert.Equal(0, await wire.ReadAsync(new byte[1], budget.Token));
             });
-            using var connection = new OceanBaseConnection($"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Use OB20=true;Enable Full Link Trace=true");
+            using var connection = new OceanBaseConnection($"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode={(encrypted ? "Required" : "Disabled")};Use OB20=true;Enable Full Link Trace=true");
             try
             {
                 if (async) await connection.OpenAsync(budget.Token); else connection.Open();
@@ -194,24 +227,36 @@ namespace OceanBaseConnector.ConsumerTests
             finally { budget.Cancel(); listener.Stop(); }
         }
 
-        [Theory]
-        [InlineData(false, false, "malformed")] [InlineData(true, false, "malformed")]
-        [InlineData(false, true, "malformed")] [InlineData(true, true, "malformed")]
-        [InlineData(false, false, "limit")] [InlineData(true, false, "limit")]
-        [InlineData(false, true, "limit")] [InlineData(true, true, "limit")]
-        [InlineData(false, false, "crc")] [InlineData(true, false, "crc")]
-        [InlineData(false, true, "crc")] [InlineData(true, true, "crc")]
-        [InlineData(false, false, "partial-cancel")] [InlineData(true, false, "partial-cancel")]
-        [InlineData(false, true, "partial-cancel")] [InlineData(true, true, "partial-cancel")]
-        public async Task TraceExtraFaultsAndPartialBodyCancellationBreakConnectionWithoutReplay(bool async, bool modern, string kind)
+        public static IEnumerable<object[]> FaultCases()
         {
+            foreach (var async in new[] { false, true })
+                foreach (var modern in new[] { false, true })
+                    foreach (var kind in new[] { "malformed", "limit", "crc", "partial-cancel" }) yield return new object[] { async, modern, kind };
+        }
+
+        [Theory]
+        [MemberData(nameof(FaultCases))]
+        public Task TraceExtraFaultsAndPartialBodyCancellationBreakConnectionWithoutReplay(bool async, bool modern, string kind)
+            => TraceFaultsAndPartialBodyCancellation(async, modern, kind, encrypted: false);
+
+        [Theory]
+        [MemberData(nameof(FaultCases))]
+        public Task TraceOverTlsExtraFaultsAndPartialBodyCancellationBreakConnectionWithoutReplay(bool async, bool modern, string kind)
+            => TraceFaultsAndPartialBodyCancellation(async, modern, kind, encrypted: true);
+
+        private static async Task TraceFaultsAndPartialBodyCancellation(bool async, bool modern, string kind, bool encrypted)
+        {
+            using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10)); using var caller = new CancellationTokenSource();
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var serving = Task.Run(async () =>
             {
-                using var peer = await listener.AcceptTcpClientAsync(budget.Token); var wire = peer.GetStream(); var channel = new PacketChannel(wire);
-                await Handshake(channel, modern ? "modern" : "legacy", budget.Token); Assert.Equal(0, (await ReadFrame(wire, 0, budget.Token)).ExtraInfo.Count);
+                using var peer = await listener.AcceptTcpClientAsync(budget.Token);
+                using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
+                Stream wire = tls is null ? peer.GetStream() : tls;
+                var channel = new PacketChannel(peer.GetStream());
+                await Handshake(channel, modern ? "modern" : "legacy", budget.Token, tls, certificate); Assert.Equal(0, (await ReadFrame(wire, 0, budget.Token)).ExtraInfo.Count);
                 var extra = kind == "limit" ? new byte[65537] : Wrap(kind == "malformed" ? new byte[] { 211, 7, 255, 255, 255, 255 } : Control(), modern);
                 var bytes = Ob20Packet.Build(1234, 0, 1, Frame(1, Ob20ConsumerTests.Report(false, 1)), extra, flags: modern ? 10u : 2u);
                 if (kind == "crc") bytes[bytes.Length - 1] ^= 1;
@@ -220,7 +265,7 @@ namespace OceanBaseConnector.ConsumerTests
                 waiting.SetResult();
                 try { Assert.Equal(0, await wire.ReadAsync(new byte[1], budget.Token)); } catch (IOException) { }
             });
-            using var connection = new OceanBaseConnection($"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Use OB20=true;Enable Full Link Trace=true");
+            using var connection = new OceanBaseConnection($"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode={(encrypted ? "Required" : "Disabled")};Use OB20=true;Enable Full Link Trace=true");
             try
             {
                 if (async) await connection.OpenAsync(budget.Token); else connection.Open();
@@ -240,12 +285,22 @@ namespace OceanBaseConnector.ConsumerTests
             finally { budget.Cancel(); listener.Stop(); }
         }
 
-        private static async Task Handshake(PacketChannel channel, string kind, CancellationToken token)
+        private static async Task Handshake(PacketChannel channel, string kind, CancellationToken token, SslStream? tls = null, X509Certificate2? certificate = null)
         {
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
             var upper = Array.IndexOf(greeting, (byte)0, 1) + 1 + 4 + 8 + 1 + 2 + 1 + 2; greeting[upper] |= 16;
-            await channel.WritePacketAsync(greeting, token); var handshake = new ByteCursor(await channel.ReadPacketAsync(token));
+            await channel.WritePacketAsync(greeting, token);
+            if (tls is not null)
+            {
+                var request = await channel.ReadPacketAsync(token);
+                Assert.Equal(32, request.Length);
+                Assert.NotEqual(0, request[1] & 8);
+                await tls.AuthenticateAsServerAsync(new SslServerAuthenticationOptions { ServerCertificate = certificate }, token);
+                Assert.True(tls.IsEncrypted);
+                channel.ReplaceUnderlyingStream(tls);
+            }
+            var handshake = new ByteCursor(await channel.ReadPacketAsync(token));
             handshake.Skip(32); Assert.Equal("u", handshake.ReadNullTerminatedAscii()); handshake.ReadLengthEncodedBytes(); handshake.ReadNullTerminatedAscii();
             var attributes = new ByteCursor(handshake.ReadLengthEncodedBytes()); var values = new Dictionary<string, string>();
             while (attributes.HasRemaining) values.Add(Encoding.UTF8.GetString(attributes.ReadLengthEncodedBytes()), Encoding.UTF8.GetString(attributes.ReadLengthEncodedBytes()));
