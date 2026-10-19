@@ -135,7 +135,8 @@ namespace OceanBaseConnector.UnitTests.Transport
                 var port = ((IPEndPoint)listener.LocalEndpoint).Port;
                 var workers = new Task[8];
                 for (var worker = 0; worker < workers.Length; worker++)
-                    workers[worker] = Task.Run(() =>
+                    // Keep blocking clients off the pool needed by the async server continuations.
+                    workers[worker] = Task.Factory.StartNew(() =>
                     {
                         for (var i = 0; i < 1024; i++)
                         {
@@ -144,7 +145,7 @@ namespace OceanBaseConnector.UnitTests.Transport
                             Assert.Equal(42, transport.Stream.ReadByte());
                             transport.Stream.WriteByte(1);
                         }
-                    });
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
                 await Task.WhenAll(workers);
                 workersCompleted = true;
             }

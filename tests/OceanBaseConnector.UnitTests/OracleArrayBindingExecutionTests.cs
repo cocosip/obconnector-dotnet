@@ -180,7 +180,13 @@ namespace OceanBaseConnector.UnitTests
                 }
                 var error = await Assert.ThrowsAsync<OceanBaseException>(() => running.WaitAsync(TimeSpan.FromSeconds(10)));
                 Assert.True(error.IsExecutionOutcomeUnknown); Assert.False(command.ArrayBindingResult!.IsComplete); Assert.Null(command.ArrayBindingResult.RecordsAffected);
-                Assert.Equal(fault == "metadata" ? OceanBaseArrayBindingStatus.Unknown : OceanBaseArrayBindingStatus.Succeeded, command.ArrayBindingResult.Items[0].Status);
+                // The server's write does not prove the client consumed that row before Cancel/Close.
+                if (fault == "cancel" || fault == "close")
+                {
+                    Assert.Contains(command.ArrayBindingResult.Items[0].Status, new[] { OceanBaseArrayBindingStatus.Unknown, OceanBaseArrayBindingStatus.Succeeded });
+                    Assert.Equal(OceanBaseArrayBindingStatus.Unknown, command.ArrayBindingResult.Items[1].Status);
+                }
+                else Assert.Equal(fault == "metadata" ? OceanBaseArrayBindingStatus.Unknown : OceanBaseArrayBindingStatus.Succeeded, command.ArrayBindingResult.Items[0].Status);
                 Assert.DoesNotContain("secret", error.ToString());
                 if (fault == "timeout") Assert.IsType<TimeoutException>(error.InnerException);
                 Assert.NotEqual(ConnectionState.Open, connection.State);

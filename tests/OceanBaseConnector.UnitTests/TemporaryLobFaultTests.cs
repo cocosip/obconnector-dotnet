@@ -1,6 +1,5 @@
 using System;
 using System.Data;
-using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,13 +22,9 @@ namespace OceanBaseConnector.UnitTests
             {
                 await OracleVersionReply(channel, "4.3.5.0"); await TemporaryLobCreateRequest(channel, false);
                 if (fault == "disconnect") return;
-                try
-                {
-                    await LobMutationReply(channel, fault == "wrong-type" ? (byte)211 : (byte)210,
-                        fault == "null" ? null : fault == "malformed" ? new byte[] { 1, 2, 3 } : InlineLob(Array.Empty<byte>()), fault == "error", parameters: 1);
-                }
-                // Invalid output can close the transport before the fixture sends its remaining terminators.
-                catch (IOException) when (fault == "wrong-type" || fault == "malformed") { }
+                await LobMutationReply(channel, fault == "wrong-type" ? (byte)211 : (byte)210,
+                    fault == "null" ? null : fault == "malformed" ? new byte[] { 1, 2, 3 } : InlineLob(Array.Empty<byte>()), fault == "error", parameters: 1,
+                    rejectOutput: fault == "wrong-type" || fault == "malformed");
                 if (fault == "error" || fault == "null") await StatementCommand(channel, 25);
             }, lobLocators: true);
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
@@ -39,6 +34,7 @@ namespace OceanBaseConnector.UnitTests
                 var error = await Assert.ThrowsAsync<OceanBaseException>(async () =>
                 { using var lob = async ? await connection.CreateTemporaryLobAsync(OceanBaseDbType.Blob) : connection.CreateTemporaryLob(OceanBaseDbType.Blob); });
                 Assert.Equal(fault != "error" && fault != "null", error.IsExecutionOutcomeUnknown);
+                if (fault == "wrong-type" || fault == "malformed") Assert.IsType<ProtocolException>(error.InnerException);
                 Assert.Equal(ConnectionState.Broken, connection.State);
             }
             catch { if (server.Completion.IsFaulted) await server.Completion; throw; }
@@ -58,7 +54,7 @@ namespace OceanBaseConnector.UnitTests
                 await TemporaryLobFreeRequest(channel, false, locator);
                 if (fault == "disconnect") return;
                 await LobMutationReply(channel, fault == "lob" ? (byte)210 : (byte)253,
-                    fault == "null" ? null : fault == "lob" ? locator : Encoding.UTF8.GetBytes(fault == "marker" ? "0" : "1"), fault == "error", parameters: 2);
+                    fault == "null" ? null : fault == "lob" ? locator : Encoding.UTF8.GetBytes(fault == "marker" ? "0" : "1"), fault == "error", parameters: 2, rejectOutput: fault == "lob");
                 if (fault == "error")
                 { await StatementCommand(channel, 25); channel.BeginCommand(); await Query(channel, "after"); await channel.WritePacketAsync(Ok(1)); }
             }, lobLocators: true);
@@ -68,6 +64,7 @@ namespace OceanBaseConnector.UnitTests
                 await connection.OpenAsync(); using var lob = await connection.CreateTemporaryLobAsync(OceanBaseDbType.Blob);
                 var error = await Assert.ThrowsAsync<OceanBaseException>(() => lob.FreeTemporaryAsync());
                 Assert.Equal(fault == "lob" || fault == "disconnect", error.IsExecutionOutcomeUnknown);
+                if (fault == "lob") Assert.IsType<ProtocolException>(error.InnerException);
                 Assert.Throws<ObjectDisposedException>(() => lob.FreeTemporary()); Assert.Throws<ObjectDisposedException>(() => lob.OpenRead());
                 if (fault == "error") { using var after = connection.CreateCommand(); after.CommandText = "after"; Assert.Equal(1, await after.ExecuteNonQueryAsync()); }
                 else Assert.Equal(ConnectionState.Broken, connection.State);
