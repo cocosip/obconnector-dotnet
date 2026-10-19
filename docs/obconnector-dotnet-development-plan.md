@@ -479,6 +479,14 @@ C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/re
 
 长度依据：[固定 OceanBase 源码的 bit_cell_str](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp) 在 TEXT/BINARY 两分支均发送 `(bit_len + 7) / 8` 字节；Java 固定基线 `RowProtocol.parseBit` 以大端解释。只作为协议行为依据，不将源码核对计作真实服务端验证。
 
+### D12 本地实现范围（2026-10-19）
+
+沿用 `OceanBaseDbType.Json`（枚举值 7），标准及 provider-specific 访问为 `string` / `DbType.String`。MySQL 结果类型码 245，文本与二进制行中均为长度编码的 UTF-8 JSON 文本，不是数据库内部二进制 JSON。接受 binary collation 63（JSON 线上文本的特殊情况）及已支持的 UTF-8 collation，拒绝其他字符集和 Oracle 模式，NULL 也先验证元数据；非数值类型的 scale 不按数值精度解释（含字符串常见标记 31）。JSON 字符串 `null`、空 JSON 字符串 `""` 与 SQL NULL 独立；返回文本不再序列化、不转 double/decimal，不丢失宽精度数字或空白。Schema 为 JSON/Json/string，IsLong=true；Length 不能可靠给出 JSON 文本的字符上限，ColumnSize 不填，NumericPrecision/Scale 不填。
+
+显式 Json 参数使用现有 UTF-8 VAR_STRING 编码，mode=MySQL、Precision/Scale=0，接受 string/null/DBNull，不猜测对象或 JsonDocument 序列化；语法/目标列转换由服务端验证，不新增客户端 JSON 解析器。参数化保留现有长度限制和严格 UTF-8，异常在发包前抛出；普通 string 参数仍不自动变为 Json。默认与 SequentialAccess 结果复用现有 GetString/GetChars/GetTextReader 和异步字段读取，不复制流/取消/资源管理逻辑。
+
+先写失败编解码/元数据/参数测试，再实现共用路径，补齐同步/异步、文本/预处理、默认/顺序读取、Unicode/宽精度文本、NULL/多结果/后续字段、字段流及生命周期、五资产公共 API 消费。全目标编译、完整 Unit/Consumer/DI 与独立走查通过后本地提交。协议依据为固定 Java 基线 `ColumnType.JSON` 及两种 RowProtocol 的字符串读取，以及[固定 OceanBase json_cell_str](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp) 将内部 JSON 打印为长度编码文本；只参考行为，不复制源码。真实 JSON 列 INSERT/SELECT、语法拒绝和目标版本/OBProxy 往返另行验收，A05 公共 MySQL 门槛不变。
+
 ## Java 模块到任务索引
 
 该索引用来检查[Java M01-M16 模块](obconnector-j-architecture-outline.md)是否有明确 .NET 落点；索引中的 D 项是有意延后，不代表首版功能缺失被忽略。

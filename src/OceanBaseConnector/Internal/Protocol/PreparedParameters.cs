@@ -117,6 +117,9 @@ namespace OceanBaseConnector.Internal.Protocol
                     throw new NotSupportedException("The provider-specific parameter type is not supported yet.");
                 if (providerType == OceanBaseDbType.OracleDate && mode != OceanBaseCompatibilityMode.Oracle)
                     throw new NotSupportedException("OracleDate requires Oracle mode.");
+                if (providerType == OceanBaseDbType.Json &&
+                    (mode != OceanBaseCompatibilityMode.MySql || parameter.Precision != 0 || parameter.Scale != 0))
+                    throw new NotSupportedException("JSON requires MySQL mode and zero Precision/Scale.");
                 if (providerType == OceanBaseDbType.Year)
                 {
                     if (mode != OceanBaseCompatibilityMode.MySql || parameter.Scale != 0 || parameter.Precision != 0 && parameter.Precision != 4)

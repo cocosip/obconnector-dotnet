@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -206,7 +207,7 @@ namespace OceanBaseConnector.UnitTests
         [Fact]
         public void UnsupportedProviderTypeCannotMasqueradeAsStringEvenForNull()
         {
-            foreach (var type in new[] { OceanBaseDbType.NChar, OceanBaseDbType.NVarchar2, OceanBaseDbType.Json, OceanBaseDbType.IntervalYearToMonth, OceanBaseDbType.IntervalDayToSecond })
+            foreach (var type in new[] { OceanBaseDbType.NChar, OceanBaseDbType.NVarchar2, OceanBaseDbType.IntervalYearToMonth, OceanBaseDbType.IntervalDayToSecond })
             {
                 var parameter = new OceanBaseParameter { Value = DBNull.Value, OceanBaseDbType = type };
                 Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle));
@@ -370,10 +371,15 @@ namespace OceanBaseConnector.UnitTests
 
         private static byte[] WithLength(byte[] value)
         {
-            var wire = new byte[value.Length + 1];
-            wire[0] = (byte)value.Length;
-            value.CopyTo(wire, 1);
-            return wire;
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream);
+            var length = value.Length;
+            if (length < 251) writer.Write((byte)length);
+            else if (length <= ushort.MaxValue) { writer.Write((byte)252); writer.Write((ushort)length); }
+            else if (length <= 0xFFFFFF) { writer.Write((byte)253); writer.Write((byte)length); writer.Write((byte)(length >> 8)); writer.Write((byte)(length >> 16)); }
+            else { writer.Write((byte)254); writer.Write((ulong)length); }
+            writer.Write(value);
+            return stream.ToArray();
         }
     }
 }

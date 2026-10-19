@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6` 完成 D14 YEAR 本地实现。本轮继续 D13 MySQL BIT，进度见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D12/D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。本轮继续 D12 MySQL JSON，进度见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D11/D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -18,7 +18,8 @@
 | R01/R02 | 同版本双包、五资产实际包消费、故障/回退README、8/9完整本地Unit/DI及Windows Framework基础包消费工具已完成 | 许可证/来源/包名审核、正式Framework支持决定、真实兼容矩阵和最终发布审核 |
 | D14 | 四位 MySQL YEAR 本地实现，验证记录见末尾；真实验收开放 | 真实 YEAR 列往返、版本/OBProxy矩阵 |
 | D13 | MySQL BIT(1–64) 本地实现，验证记录见末尾；真实验收开放 | 真实 BIT 列往返、版本/OBProxy矩阵 |
-| D01–D12/D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及其他扩展类型等继续逐项评估本地实施 |
+| D12 | MySQL JSON 文本/预处理读写、元数据及字段流本地实现，记录见末尾 | 真实 JSON 列往返、语法验证和版本/OBProxy矩阵 |
+| D01–D11/D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及其他扩展类型等继续逐项评估本地实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -130,7 +131,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09本地实现/走查完成；实际8/9各Unit1206/DI8、10 Unit1206/Consumer152/DI8及五资产包消费通过；真实双模式/跨平台及完整支持矩阵未验收 |
 | G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02-C07本地实现完成待真实环境验证，C04真实资源/性能与版本矩阵、C07池性能仍待验收；C08因真实环境证据缺失而阻塞，关口未关闭 |
 | G4 发布候选 R | W35-W37 | 0/2 | 进行中 | R01/R02本地双包/五资产、8/9完整本地回归、Framework4.8.1基础消费及交付材料已完成；许可/来源/包名、正式支持范围及真实矩阵未验收 |
-| D 独立扩展 | 本地可独立部分继续，实库验收延期 | 0/15 | 进行中 | D13/D14 本地实现和验证见末尾；其余逐项实施；每项真实版本和模式证据仍须补齐，不计入 G4 |
+| D 独立扩展 | 本地可独立部分继续，实库验收延期 | 0/15 | 进行中 | D12–D14 本地实现和验证见末尾；其余逐项实施；每项真实版本和模式证据仍须补齐，不计入 G4 |
 
 ## A. 协议基础任务
 
@@ -188,7 +189,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D09 | G4 后 | 显式 XA | 未开始 | 待记录 |
 | D10 | G4 后 | Oracle NCHAR/national charset | 未开始 | 待记录 |
 | D11 | G4 后 | Oracle INTERVAL | 未开始 | 待记录 |
-| D12 | G4 后 | MySQL JSON | 未开始 | 待记录 |
+| D12 | 本地先行，实库延期 | MySQL JSON | 待验证 | 本地文本/二进制读写、元数据和字段流，验证见末尾；真实 JSON 列往返仍开放 |
 | D13 | 本地先行，实库延期 | MySQL BIT | 待验证 | 本地编解码/位宽/参数及测试记录见末尾；真实 BIT 列往返仍开放 |
 | D14 | 本地先行，实库延期 | MySQL YEAR | 待验证 | 本地实现/测试/走查记录见末尾；真实 YEAR 列往返仍开放 |
 | D15 | G4 后 | 新认证插件 | 未开始 | 待记录 |
@@ -566,3 +567,24 @@ D14 本地实现完成，正式状态保持待验证：真实 YEAR 列 INSERT/SE
 完整测试命令同上节，替换结果目录；定向分别附加 `--filter FullyQualifiedName~TextCommandTests.Bit` 和 `--filter FullyQualifiedName~BitAndYearConsumerTests`。覆盖全部 64 种位宽的零/最高位/最大值，符号边界与原始字节解释，NULL、精度/长度/位宽错误、参数类型及重置；公共环回覆盖同步/异步、文本/预处理、默认/SequentialAccess、后续字段、预处理重用、NULL 参数和会话复用。独立只读走查核对参数预校验、两种结果/顺序帧路径、无符号边界、Schema、消费者及文档，未发现需修复问题。`git diff --check` 通过。
 
 D13 本地实现完成，正式状态保持待验证。真实 BIT 列 INSERT/SELECT（含服务端目标位宽转换）、OceanBase/OBProxy 版本及模式矩阵未执行，公共 MySQL 仍由 A05 拒绝。未操作信任根、未部署其他电脑/数据库，未重跑打包/旧运行时/Framework。其余 A05、C01、D01–D12/D15 继续开放。
+
+## D12 MySQL JSON 本地实现（2026-10-19）
+
+从 `31b2c7a` 继续实现 JSON。沿用 `OceanBaseDbType.Json`（枚举值 7），标准/provider-specific 值为 string，DbType.String；MySQL 类型码 245 的文本和二进制行都复用长度编码严格 UTF-8 字符串读取。接受 binary collation 63 及现有 UTF-8 collation，Oracle 和其他字符集在 NULL 读取前也验证。JSON 是非数值列，不限制或解释服务端 scale；Schema 为 JSON/Json/string、IsLong=true，ColumnSize/NumericPrecision/NumericScale 均不填。原始 Unicode、空白和宽精度数字文本保持不变，JSON 文本 null、空 JSON 字符串与 SQL NULL 分别处理。
+
+显式 Json 参数仅接受 string/null/DBNull，要求 MySQL 且 Precision/Scale=0，复用 VAR_STRING 编码和既有长度限制，不隐式序列化对象。语法和目标列转换交由服务端验证；环回回归发送非法 JSON 文本并返回 ERR 3140/22032 后，证明同一 statement/session 可继续执行，不把合成 ERR 当作实库语法验证。默认/SequentialAccess、GetChars/GetTextReader、异步及生命周期复用现有字符串路径，没有新增解析器、依赖或公开值类型。协议依据见开发方案 D12 的固定 Java/OceanBase 源码引用，只参考行为，不复制代码。
+
+红绿证据：`TestResults/json-red/*.trx` 中 15 项因 JSON 未支持失败、4 项非法元数据拒绝通过。大字段回归发现共享 WithLength 夹具只生成单字节长度，将其修正为完整长度编码前缀后定向 37 项通过；`json-targeted/*.trx` 保留此前四项失败。随后新增非数值 scale 回归，在旧限制下失败（`json-scale-red/*.trx`），移除错误限制后最终完整回归通过，五资产消费使用 scale=31 验证。没有放宽严格 UTF-8、模式或参数精度检查。
+
+最终证据（Windows / .NET 10.0.13）：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx 核心五目标、DI 三目标 | 0 警告、0 错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
+| 完整 Unit（含 JSON 37 项） | 1358 通过，0 失败/跳过 | `TestResults/json-unit-full/*.trx` |
+| 完整 Consumer（含 JSON 五资产 20 项） | 192 通过，0 失败/跳过 | `TestResults/json-consumer-full/*.trx` |
+| DI | 8 通过，0 失败/跳过 | `TestResults/json-di-full/*.trx` |
+
+完整测试命令同上节，替换结果目录。最终 TRX 已解析核对总数和 JSON 用例实际执行；覆盖同步/异步、文本/预处理、默认/顺序读取、多结果与独立 Schema、Unicode/宽数字、NULL、参数写回、坏 UTF-8 和 8KB 字段流。独立只读走查核对参数预校验/编码、两种结果协议、Schema、顺序字段流、测试及文档，未发现需修复问题。`git diff --check` 通过。
+
+D12 本地实现完成，正式状态保持待验证。真实 JSON 列 INSERT/SELECT、服务端语法拒绝及目标 OceanBase/OBProxy 版本矩阵未执行，A05 公共 MySQL 门槛未修改。未操作信任根、未部署其他电脑/数据库，未重跑打包、旧运行时或 Framework；A05、C01 和 D01–D11/D15 仍未完成，项目整体目标保持开放。

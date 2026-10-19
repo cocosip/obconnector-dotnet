@@ -34,6 +34,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal byte TypeCode { get; }
         internal ushort Charset { get; }
         internal bool Unsigned { get; }
+        private bool HasUtf8Charset => Charset == 33 || Charset == 45 || Charset == 46 || Charset == 83 || Charset == 224 || Charset == 255;
         internal OceanBaseCompatibilityMode Mode { get; }
         internal long Precision { get; }
         internal int Scale { get; }
@@ -93,6 +94,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 12: return Mode == OceanBaseCompatibilityMode.Oracle ? "DATE" : "DATETIME";
                     case 13: return "YEAR";
                     case 16: return "BIT";
+                    case 245: return "JSON";
                     case 200: return "TIMESTAMP WITH TIME ZONE";
                     case 201: return "TIMESTAMP WITH LOCAL TIME ZONE";
                     case 203: return "RAW";
@@ -156,13 +158,17 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 203:
                         if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("RAW is only defined in Oracle mode.");
                         return typeof(byte[]);
+                    case 245:
+                        if (Mode != OceanBaseCompatibilityMode.MySql || Charset != 63 && !HasUtf8Charset)
+                            throw new NotSupportedException("Only MySQL JSON text with a supported UTF-8 or binary collation is supported.");
+                        return typeof(string);
                     case 15:
                     case 253:
                     case 254:
                     case 252:
                         if (Charset == 63) return typeof(byte[]);
                         // Only the negotiated UTF-8 families are decoded; never substitute another charset.
-                        if (Charset == 33 || Charset == 45 || Charset == 46 || Charset == 83 || Charset == 224 || Charset == 255)
+                        if (HasUtf8Charset)
                             return typeof(string);
                         throw new NotSupportedException("The column character set is not supported yet.");
                     default: throw new NotSupportedException("The column type is not supported by the text reader yet.");
@@ -187,6 +193,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 6: return OceanBaseDbType.Null;
                     case 13: return OceanBaseDbType.Year;
                     case 16: return OceanBaseDbType.Bit;
+                    case 245: return OceanBaseDbType.Json;
                     case 7:
                     case 202: return OceanBaseDbType.Timestamp;
                     case 10: return OceanBaseDbType.Date;
