@@ -55,6 +55,17 @@ public static class PackageConsumer
         var number = new OceanBaseDecimal(12.34m);
         parameter.Value = number;
         Check(parameter.DbType == DbType.Decimal && number.ToDecimal() == 12.34m, "Public decimal contract");
+        var xid = new OceanBaseXid(42, new byte[] { 0, 255 }, new byte[] { 1 });
+        Check(xid.FormatId == 42 && xid.Equals(new OceanBaseXid(42, new byte[] { 0, 255 }, new byte[] { 1 })), "Public XA identity contract");
+        var globalId = xid.GetGlobalTransactionId();
+        globalId[0] = 1;
+        Check(xid.GetGlobalTransactionId()[0] == 0 && xid.GetBranchQualifier()[0] == 1, "XA identity copy contract");
+        Check(typeof(OceanBaseException).GetProperty(nameof(OceanBaseException.XaErrorCode))!.PropertyType == typeof(int?), "Public XA error contract");
+        OceanBaseXaResource? resource = null;
+        var xaRejected = false;
+        try { resource = ((OceanBaseConnection)connection).GetXaResource(); }
+        catch (InvalidOperationException) { xaRejected = true; }
+        Check(xaRejected && resource == null && connection.State == ConnectionState.Closed, "Closed connection must reject XA without connecting");
         foreach (var type in new[] { "OceanBaseDataSource", "OceanBaseDataSourceBuilder", "OceanBaseBatch", "OceanBaseBatchCommand" })
             Check((assembly.GetType("OceanBaseConnector." + type) != null) == modern, type + " visibility");
         Check(typeof(ILogger).Assembly.GetName().Version!.Major == major, "Logging assembly major");

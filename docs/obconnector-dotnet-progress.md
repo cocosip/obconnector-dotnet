@@ -1314,3 +1314,13 @@ Oracle XA首轮完整Unit得到2801通过/2失败/0跳过（TestResults/xa-oracl
 | 范围格式、UTF8无BOM/CRLF及diff | 通过 | TestResults/xa-oracle-format.log、xa-oracle-test-format.log及提交前检查 |
 
 D09约定本地两模式范围完成，正式状态待验证；真实协调器、OceanBase/OBProxy、异机及扩展经TLS验收仍按要求暂缓，本轮未重跑打包或旧运行时/Framework矩阵。A05公开MySQL身份门槛、C01完整重置/池、D15其他插件、许可/发布及各环境关口继续开放，TransactionScope仍拒绝，整体goal未完成。global.json已在ea7fde9按用户要求删除，本轮确认未恢复；不推送。
+
+## R01 XA公开契约实际包消费复核（2026-10-19）
+
+沿既有eng/Verify-Packages.ps1和tests/PackageConsumer/Program.cs，补充不可变XID身份/返回数组复制、OceanBaseException.XaErrorCode可空类型及关闭连接GetXaResource拒绝的消费断言。不打开连接，不调用XA阶段，不修改产品实现或增加依赖。
+
+- 旧c07包先因缺少README被既有内容检查拒绝；旧R02包通过内容检查，首次还原遇NuGet漏洞元数据访问失败。正常网络权限重试后还原成功，五目标均因缺少XA公开API编译失败，见TestResults/xa-package-old-red.log；环境失败不计红灯证据。
+- dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/xa-final-pack成功生成同版本双包，见TestResults/xa-package-pack.log。产品沿D09最终已编译资产，本轮未重编译产品。
+- ./eng/Verify-Packages.ps1 -PackageDirectory TestResults/xa-final-pack退出0，见TestResults/xa-package-final.log（走查修正后最终复验）。验证器检查五/三资产、文档、依赖组和精确核心版本，在独立缓存核对本次nupkg的SHA512和选中资产；五目标消费编译0警告/错误，本机.NET8.0.31、9.0.20、10.0.12运行通过，两个Standard资产在.NET10.0.12隔离宿主通过。未关闭漏洞审计或放宽警告。
+
+本轮不重跑未改动产品的完整Unit/Consumer/DI，最近完整证据仍为上节2803/1029/8。独立只读走查发现关闭连接断言未区分正常返回null与抛异常，已增加仅在catch设置的拒绝标记并在catch外断言，最终五资产复验全部通过。代码走查后本地提交，不推送；实库、异机及Framework未执行，R01许可/来源/包名与发布关口保持开放，global.json保持删除。D15其他插件后续以固定Java参考驱动为依据继续核查。
