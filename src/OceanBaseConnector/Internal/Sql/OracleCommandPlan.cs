@@ -25,12 +25,14 @@ namespace OceanBaseConnector.Internal.Sql
         internal OceanBaseParameter[] Outputs { get; }
         internal Action<uint>? StatementCreated { get; set; }
         internal OracleCursorOwner? Cursors { get; set; }
+        internal OracleArrayBindingPlan? ArrayBinding { get; private set; }
         private object[]? _values;
         private readonly OceanBaseDbType?[] _outputTypes;
         private readonly OceanBaseComplexType?[] _outputComplexTypes;
 
         internal void ValidateOutputColumn(int ordinal, ResultColumn column)
         {
+            if (ArrayBinding != null) { ArrayBinding.ValidateColumn(ordinal, column); return; }
             var expected = _outputComplexTypes[ordinal];
             if (expected == null)
             {
@@ -42,6 +44,13 @@ namespace OceanBaseConnector.Internal.Sql
         internal bool BeginResponse(OraclePrepareExecutePacket header)
         {
             StatementCreated?.Invoke(header.StatementId);
+            if (ArrayBinding != null)
+            {
+                if (!header.HasResultSet || header.ColumnCount != Outputs.Length + 3 ||
+                    !ArrayBinding.AcceptsFlags(header.ExtendFlags))
+                    throw new ProtocolException("Oracle array binding metadata does not match the request.");
+                return true;
+            }
             if (header.ExtendFlags != 0 && header.ExtendFlags != 1 && header.ExtendFlags != 3 && header.ExtendFlags != 4)
                 throw new NotSupportedException("This Oracle PrepareExecute extension is not supported.");
             var output = header.ExtendFlags != 0;
@@ -52,6 +61,7 @@ namespace OceanBaseConnector.Internal.Sql
 
         internal void CaptureOutput(ResultColumn[] columns, byte[]?[] row)
         {
+            if (ArrayBinding != null) { ArrayBinding.Capture(columns, row); return; }
             if (_values != null) throw new NotSupportedException("Scalar Oracle output parameters cannot contain multiple rows.");
             var values = new object[Outputs.Length];
             for (var i = 0; i < values.Length; i++)
@@ -73,6 +83,7 @@ namespace OceanBaseConnector.Internal.Sql
 
         internal void FinishOutput()
         {
+            if (ArrayBinding != null) return;
             if (_values != null) return;
             _values = new object[Outputs.Length];
             for (var i = 0; i < _values.Length; i++) _values[i] = DBNull.Value;
@@ -80,14 +91,33 @@ namespace OceanBaseConnector.Internal.Sql
 
         internal void PublishOutputs()
         {
+            if (ArrayBinding != null)
+            {
+                var result = ArrayBinding.Completed ?? throw new ProtocolException("Array binding has no terminal result.");
+                var values = new object[Outputs.Length][][];
+                for (var i = 0; i < values.Length; i++) values[i] = new object[result.Items.Count][];
+                for (var j = 0; j < result.Items.Count; j++)
+                {
+                    var rows = result.Items[j].OutputRows;
+                    for (var i = 0; i < values.Length; i++)
+                    {
+                        values[i][j] = new object[rows.Count];
+                        for (var k = 0; k < rows.Count; k++) values[i][j][k] = rows[k][i];
+                    }
+                }
+                for (var i = 0; i < values.Length; i++) Outputs[i].Value = values[i];
+                ArrayBinding.Published = true;
+                return;
+            }
             if (Outputs.Length == 0) return;
             if (_values == null) throw new ProtocolException("Oracle execution completed without its bound output values.");
             Cursors?.Publish();
             for (var i = 0; i < _values.Length; i++) Outputs[i].Value = _values[i];
         }
 
-        internal static OracleCommandPlan Create(string text, CommandType type, OceanBaseParameterCollection parameters)
+        internal static OracleCommandPlan Create(string text, CommandType type, OceanBaseParameterCollection parameters, int arrayCount = 0)
         {
+            var pl = arrayCount != 0 && (type == CommandType.StoredProcedure || IsArrayPl(text));
             OceanBaseParameter? returned = null;
             foreach (OceanBaseParameter parameter in parameters)
             {
@@ -129,13 +159,56 @@ namespace OceanBaseConnector.Internal.Sql
                         throw new ArgumentException("A complex Output or ReturnValue requires ComplexType.");
                     copy.Value = null;
                 }
+                if (arrayCount != 0)
+                {
+                    copy.Direction = ParameterDirection.Input;
+                    var arrayType = PreparedParameters.GetComplexType(copy);
+                    if (arrayType == null || !arrayType.IsAnonymous || arrayType.Context == null)
+                        throw new ArgumentException("Array binding parameters require a factory anonymous array type.");
+                    copy.ComplexType = arrayType;
+                    if (parameter.Direction == ParameterDirection.Output || parameter.Direction == ParameterDirection.ReturnValue)
+                        copy.Value = new OceanBaseComplexValue(arrayType, new object?[arrayCount]);
+                    if (!(copy.Value is OceanBaseComplexValue arrayValue) || arrayValue.Count != arrayCount)
+                        throw new ArgumentException("Array binding columns must match the requested positive row count.");
+                }
                 if (parameter.OceanBaseDbType == OceanBaseDbType.RefCursor) copy.OceanBaseDbType = OceanBaseDbType.Null;
                 var complex = PreparedParameters.GetComplexType(copy);
                 if (complex != null) copy.ComplexType = complex;
                 if (parameter.Direction != ParameterDirection.Input) { outputs.Add(parameter); complexTypes.Add(complex); }
                 copy.Direction = ParameterDirection.Input;
             }
-            return new OracleCommandPlan(new ParameterBindingPlan(original.CommandText, inputs), outputs.ToArray(), complexTypes.ToArray());
+            var plan = new OracleCommandPlan(new ParameterBindingPlan(original.CommandText, inputs), outputs.ToArray(), complexTypes.ToArray());
+            if (arrayCount != 0)
+            {
+                if (inputs.Length == 0) throw new ArgumentException("Array binding requires parameter columns.");
+                var outputArrays = new OceanBaseComplexType[complexTypes.Count];
+                for (var i = 0; i < outputArrays.Length; i++) outputArrays[i] = complexTypes[i]!;
+                plan.ArrayBinding = new OracleArrayBindingPlan(arrayCount, pl, outputArrays);
+            }
+            return plan;
+        }
+
+        private static bool IsArrayPl(string text)
+        {
+            var start = 0;
+            while (start < text.Length)
+            {
+                if (char.IsWhiteSpace(text[start])) { start++; continue; }
+                if (start + 1 < text.Length && text[start] == '-' && text[start + 1] == '-')
+                { while (start < text.Length && text[start] != '\n' && text[start] != '\r') start++; continue; }
+                if (start + 1 < text.Length && text[start] == '/' && text[start + 1] == '*')
+                {
+                    var end = text.IndexOf("*/", start + 2, StringComparison.Ordinal);
+                    if (end < 0) throw new ArgumentException("Unterminated SQL comment.");
+                    start = end + 2; continue;
+                }
+                break;
+            }
+            var position = start; while (position < text.Length && IsPart(text[position])) position++;
+            var keyword = text.Substring(start, position - start).ToUpperInvariant();
+            if (keyword == "BEGIN" || keyword == "DECLARE" || keyword == "CALL") return true;
+            if (keyword == "INSERT" || keyword == "UPDATE" || keyword == "DELETE" || keyword == "MERGE") return false;
+            throw new NotSupportedException("Array binding supports Oracle DML and PL statements.");
         }
 
         private static string BindingName(string name) => name.Length > 0 && name[0] == ':' ? name.Substring(1) : name;

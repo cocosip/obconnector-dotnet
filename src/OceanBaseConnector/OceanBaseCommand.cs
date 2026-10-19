@@ -9,7 +9,7 @@ using OceanBaseConnector.Internal.Sql;
 
 namespace OceanBaseConnector
 {
-    public sealed class OceanBaseCommand : DbCommand
+    public sealed partial class OceanBaseCommand : DbCommand
     {
         private readonly OceanBaseParameterCollection _parameters = new OceanBaseParameterCollection();
         private OceanBaseConnection? _connection;
@@ -67,9 +67,9 @@ namespace OceanBaseConnector
         }
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
             => ExecuteReaderCore(behavior, CancellationToken.None);
-        internal DbDataReader ExecuteReaderCore(CommandBehavior behavior, CancellationToken token)
+        internal DbDataReader ExecuteReaderCore(CommandBehavior behavior, CancellationToken token, int arrayCount = 0)
         {
-            var operation = Start(behavior, token, false);
+            var operation = Start(behavior, token, false, arrayCount);
             var execution = operation.Exchange;
             execution.StartDiagnostics("execute");
             try
@@ -83,7 +83,8 @@ namespace OceanBaseConnector
                 var statement = operation.Binary && operation.Oracle == null ? EnsurePrepared(operation) : null;
                 ValidateCursorStatement(operation.FetchSize, statement);
                 execution.BeforeSuccessfulCompletion = operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
-                execution.Send(operation.Oracle != null ? OraclePrepareExecutePacket.Build(0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
+                execution.Send(operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(0, operation.Bindings.CommandText, operation.Bindings.Parameters)
+                    : operation.Oracle != null ? OraclePrepareExecutePacket.Build(0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
                     : statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0), executesSql: !IsLobRead);
                 var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize,
@@ -119,9 +120,11 @@ namespace OceanBaseConnector
             while (await reader.NextResultAsync(cancellationToken).ConfigureAwait(false));
             return value;
         }
-        protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+        protected override Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+            => ExecuteReaderCoreAsync(behavior, cancellationToken);
+        private async Task<DbDataReader> ExecuteReaderCoreAsync(CommandBehavior behavior, CancellationToken cancellationToken, int arrayCount = 0)
         {
-            var operation = Start(behavior, cancellationToken, false);
+            var operation = Start(behavior, cancellationToken, false, arrayCount);
             var execution = operation.Exchange;
             execution.StartDiagnostics("execute");
             try
@@ -135,7 +138,8 @@ namespace OceanBaseConnector
                 var statement = operation.Binary && operation.Oracle == null ? await EnsurePreparedAsync(operation, cancellationToken).ConfigureAwait(false) : null;
                 ValidateCursorStatement(operation.FetchSize, statement);
                 execution.BeforeSuccessfulCompletion = operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
-                await execution.SendAsync(operation.Oracle != null ? OraclePrepareExecutePacket.Build(0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
+                await execution.SendAsync(operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(0, operation.Bindings.CommandText, operation.Bindings.Parameters)
+                    : operation.Oracle != null ? OraclePrepareExecutePacket.Build(0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
                     : statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0), executesSql: !IsLobRead).ConfigureAwait(false);
                 var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize,
@@ -168,7 +172,7 @@ namespace OceanBaseConnector
             _oracleSession = null;
         }
         private (CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle)
-            Start(CommandBehavior behavior, CancellationToken token, bool prepareOnly)
+            Start(CommandBehavior behavior, CancellationToken token, bool prepareOnly, int arrayCount = 0)
         {
             lock (_gate)
             {
@@ -185,12 +189,14 @@ namespace OceanBaseConnector
                 if (token.IsCancellationRequested) { CancellationOrigin?.Invoke().ThrowIfCancellationRequested(); token.ThrowIfCancellationRequested(); }
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
                 var session = connection.GetCommandSession(_transaction, SessionOwner);
+                if (arrayCount != 0 && (!session.UseOraclePrepareExecute || session.Info!.Mode != OceanBaseCompatibilityMode.Oracle || _transaction == null))
+                    throw new NotSupportedException("Array binding requires Oracle mode, Use Oracle Prepare Execute=true and an explicit transaction.");
                 if (RequiredSession != null && !ReferenceEquals(session, RequiredSession))
                     throw new InvalidOperationException("The connection's physical session changed before the operation started.");
                 var length = ResultColumn.Utf8.GetByteCount(text);
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
                 var oracle = session.UseOraclePrepareExecute && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle &&
-                    (CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters) : null;
+                    (arrayCount != 0 || CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters, arrayCount) : null;
                 if (oracle == null && CommandType != CommandType.Text) throw new NotSupportedException("Oracle stored procedures require Use Oracle Prepare Execute=true.");
                 if (oracle != null && (prepareOnly || _fetchSize > 0)) throw new NotSupportedException("PrepareExecute prepares during execution and does not support standalone Prepare or FetchSize.");
                 var bindings = oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
@@ -201,6 +207,7 @@ namespace OceanBaseConnector
                 if (prepareOnly) _explicitPreparation = true;
                 var binary = oracle != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
                 var parameters = binary && !prepareOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true) : Array.Empty<byte>();
+                if (arrayCount != 0) _ = OraclePrepareExecutePacket.BuildArray(0, bindings.CommandText, bindings.Parameters);
                 if (_prepared != null && (oracle != null || !binary || !ReferenceEquals(_prepared.Session, session) || _prepared.CommandText != bindings.CommandText))
                 { _prepared.Release(); _prepared = null; }
                 if (_prepared != null && _prepared.ParameterCount != bindings.Parameters.Length) throw ParameterCountMismatch();
@@ -211,7 +218,12 @@ namespace OceanBaseConnector
                     lock (_gate)
                     {
                         if (ReferenceEquals(_execution, execution))
-                        { HasSentSql = execution!.HasSentSql; _execution = null; }
+                        {
+                            HasSentSql = execution!.HasSentSql;
+                            if (oracle?.ArrayBinding != null) ArrayBindingResult = oracle.ArrayBinding.Published ? oracle.ArrayBinding.Completed
+                                : execution.HasSentSql ? oracle.ArrayBinding.Snapshot() : null;
+                            _execution = null;
+                        }
                     }
                 }, SessionOwner, CancellationOrigin, RequiredTransactionEpoch, bindings.Parameters, validateComplexTypes: !prepareOnly);
 #if NET8_0_OR_GREATER
@@ -219,6 +231,7 @@ namespace OceanBaseConnector
                 execution.BatchFailed = BatchFailed;
 #endif
                 _execution = execution;
+                if (arrayCount != 0) ArrayBindingResult = null;
                 if (oracle != null)
                 {
                     oracle.Cursors = new OracleCursorOwner(connection, session, _transaction, _timeout);

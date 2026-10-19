@@ -16,6 +16,7 @@ namespace OceanBaseConnector
     {
         private readonly CommandExchange _query;
         private readonly QueryResult _result;
+        internal OceanBaseArrayBindingResult? ArrayBindingResult => _result.ArrayBindingResult;
         private readonly OceanBaseConnection _connection;
         private readonly PhysicalSession _session;
         private readonly bool _closeConnection;

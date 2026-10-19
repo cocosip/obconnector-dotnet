@@ -31,6 +31,29 @@ namespace OceanBaseConnector.Internal.Protocol
         internal static OraclePrepareExecutePacket ParseHeader(byte[] bytes) => new OraclePrepareExecutePacket(new ByteCursor(bytes));
 
         internal static byte[] Build(uint statementId, string sql, int parameterCount, byte[] parameters)
+            => BuildCore(statementId, sql, parameterCount, parameters, 1, 0);
+
+        internal static byte[] BuildArray(uint statementId, string sql, OceanBaseParameter[] columns)
+        {
+            if (columns == null) throw new ArgumentNullException(nameof(columns));
+            if (columns.Length == 0 || columns.Length > ushort.MaxValue) throw new ArgumentOutOfRangeException(nameof(columns));
+            var count = 0;
+            foreach (var column in columns)
+            {
+                if (column == null) throw new ArgumentException("An array binding column is required.", nameof(columns));
+                if (column.Direction != System.Data.ParameterDirection.Input)
+                    throw new NotSupportedException("Array binding columns must be normalized input snapshots.");
+                var type = PreparedParameters.GetComplexType(column);
+                if (type == null || !type.IsAnonymous || !(column.Value is OceanBaseComplexValue value) || value.Count == 0)
+                    throw new ArgumentException("Array binding requires nonempty anonymous array values.", nameof(columns));
+                if (count != 0 && count != value.Count) throw new ArgumentException("Array binding columns must have equal row counts.", nameof(columns));
+                count = value.Count;
+            }
+            // OCI_BATCH_ERRORS disables aggregated DML optimization, preserving per-item results.
+            return BuildCore(statementId, sql, columns.Length, PreparedParameters.Encode(columns, OceanBaseCompatibilityMode.Oracle), 2, 0x80);
+        }
+
+        private static byte[] BuildCore(uint statementId, string sql, int parameterCount, byte[] parameters, uint iterations, uint executeMode)
         {
             if (sql == null) throw new ArgumentNullException(nameof(sql));
             if (parameters == null) throw new ArgumentNullException(nameof(parameters));
@@ -49,11 +72,11 @@ namespace OceanBaseConnector.Internal.Protocol
             writer.Write((byte)0xa1);
             writer.Write(statementId);
             writer.Write((byte)0); // Procedure/RETURNING execution does not request a fetch cursor.
-            writer.Write(1u);
+            writer.Write(iterations);
             PreparedParameters.WriteBytes(writer, text);
             writer.Write((uint)parameterCount);
             writer.Write(parameters);
-            writer.Write(0u); // Default execution mode; array binding is a separate extension.
+            writer.Write(executeMode);
             writer.Write(0u); // No bundled statement closes.
             writer.Write(Ob20Checksum.Payload(0, text, 0, text.Length));
             writer.Write(0u);

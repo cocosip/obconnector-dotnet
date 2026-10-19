@@ -776,6 +776,31 @@ D03本地输出/读取实现及独立走查修复已完成：修后Release核心
 
 本轮结果：Release核心五/DI三目标0警告/错误，完整Unit2434（新增71、移除0）、Consumer744、DI8全通过且零跳过。独立走查及完整D05需求对应复核无阻断；本地约定范围实现完成，正式状态待验证，下一本地模块D06。匿名复杂元素无身份输出限制仍符合既有未知布局拒绝契约；真实字典/DDL、OceanBase/OBProxy及异机验收继续暂缓，整体目标未完成。
 
+### D06 数组绑定本地实施
+
+完整目标仍包括bulk/array binding、部分成功、失败位置、逐条更新计数，以及D02移交的多行OUT/RETURNING；C06逐条DbBatch不能替代此功能。先按协议请求、响应/结果、公开执行及完整矩阵分模块交付，每模块完整验证并提交；D06在公开链路及全部本地约定功能完成前保持进行中。
+
+固定OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343` 的obmp_stmt_prexecute.cpp（L72、L173、L336、L1135、L1155、L1180、L1306）及obmp_stmt_execute.cpp（L239、L1742）为主要依据，Java固定基线ComStmtPrepareExecute.writeCmdArrayBinding仅辅助核对。PrepareExecute数组绑定由iteration-count=2触发，不使用旧COM_STMT_EXECUTE的0x08/0x10头标志；所有参数为相同正行数的匿名集合，根不为NULL，元素可NULL，头先于各列正文。一个元素也使用iteration=2。DML使用exec_mode=0x80（OCI_BATCH_ERRORS）保留逐项响应并禁用服务端聚合batch优化，不沿用Java的0x01而伪造逐行计数；PL不支持save-exception，沿服务器停止/输出语义处理。
+
+DML成功响应首列是该项影响行数；错误响应首列是0起始失败位置；PL成功首列也是位置，不能解释成更新数。响应依序携带error_code、可选多列输出和末列error_message，尾OK给出累计影响数。后续结果模块须核验列结构、行数/位置、错误代码、NULL和终态，保留可证明的成功前缀及结果未知，不自动提交/回滚或重放；公开执行须要求Oracle、显式事务及现有PrepareExecute版本门槛，并使用原会话/取消/超时/statement清理，不另建连接。多行OUT/RETURNING不能强塞入D02单行输出容器。
+
+#### D06 请求编码子模块
+
+- [x] 在OracleArrayBindingRequestTests.cs先固定缺API红编译：精确六标量/混合列/位图跨字节/全部元素NULL/单行/命名复杂元素、完整独立报文、同正行数及无效声明；保留D02普通报文不变。
+- [x] OraclePrepareExecutePacket.BuildArray接受已冻结且归一化为Input的列快照，复用PreparedParameters和集合codec，验证非空参数列、工厂匿名描述、非NULL根及一致正行数；增加OceanBaseComplexValue内部Count避免为计数复制整数组。共享BuildCore只改变iteration2和exec_mode0x80，复用SQL UTF8长度、CRC及最终整包预算，此内部方法不直接开放公共入口，完整执行接入见下节。
+- [x] 请求编码只负责列形状和字节，原连接/事务/缓存核验由后续公共StartCommand执行，不能据内部编码宣称公共数组绑定或实库兼容。完整执行模块已接入逐项成功/失败、多行输出、公开同步/异步和五资产标准/OB20、事务/故障/取消边界矩阵，D06整体不因请求编码关闭。
+- [x] Release全目标编译、完整Unit/Consumer/DI、独立只读走查、文档同步与diff检查后本地提交。真实数据库/OBProxy及异机仍暂缓。
+
+#### D06 完整执行链路（本轮暂停边界）
+
+用户要求完成整个D06后再更新进度、提交并暂停，不在内部请求编码子模块处停止。
+
+- [x] 公开五资产均提供`OceanBaseCommand.ExecuteArray(rowCount)`及`ExecuteArrayAsync(rowCount, token)`。要求1–65535行、Oracle模式、显式事务及Use Oracle Prepare Execute；复用既有版本门槛、原会话、类型缓存代次、命令租约、取消/超时及延迟statement关闭，不另建连接，不自动提交/回滚或重放。
+- [x] 参数按Oracle绑定顺序冻结；Input/InputOutput使用工厂匿名集合值，Output/ReturnValue显式声明工厂匿名集合类型并生成NULL元素占位。根和长度严格验证；支持D05六标量及已预载命名复杂元素；输出按元素类型核验，不能把多行输出塞回D02标量容器。
+- [x] 内部消费`sql_no,error_code,[outputs],error_message`，DML无RETURNING逐项计数与尾累计数核对；PL成功与RETURNING首列按位置处理，逐项计数为null，避免伪造计数。多行输出按输入位置分组、保留NULL和零行；错误码保留，服务端消息不公开，避免泄露绑定值。支持返回行内负数内部错误码；失败及未知项不填更新数。
+- [x] 公开不可变`OceanBaseArrayBindingResult.Items`及完整终态累计数；`ArrayBindingResult`保留最近已启动数组执行的可证明部分结果，未发送SQL时为null，未知后缀为Unknown。完整响应及OB20边界、取消与Busy状态验证前不发布参数；成功后每个输出参数Value为object[][]，第一维输入位置、第二维该位置返回的多行。快照独立复制RAW字节，结果输出总值数最多65535、原始字段总字节受既有包上限约束。
+- [x] 测试请求独立字节、响应形状/位置/计数/NULL/预算、多行输出和原子终态，公开同步/异步、部分错误、PL停止、事务绑定、无效声明不发包、取消/超时/断流；五资产隔离消费覆盖标准协议及OB20成功/尾附加数据。Release全目标及完整Unit/Consumer/DI通过、独立走查、同步README/架构/台账并提交；之后按用户要求暂停，下次从D07等开放模块继续。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

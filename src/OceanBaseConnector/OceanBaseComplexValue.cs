@@ -30,6 +30,7 @@ namespace OceanBaseConnector
             }
         }
         public OceanBaseComplexType Type { get; }
+        internal int Count => _values.Length;
         internal int TotalMembers { get; }
         internal static OceanBaseComplexValue FromResult(OceanBaseComplexType type, object?[] values)
         {

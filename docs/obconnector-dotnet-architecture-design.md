@@ -229,7 +229,7 @@ D15 SHA-2本地实现：TLS流程成功返回后才创建AuthenticationConversat
 
 D02已接入显式启用的Oracle公开过程与标量输出执行；OraclePrepareExecutePacket负责扩展报文。请求为0xA1、32位statement ID、非游标标记、iteration=1、长度编码UTF-8 SQL、32位参数数目、既有PreparedParameters参数块及四个32位尾字段（默认executeMode=0、closeCount=0、原SQL raw CRC32C、reserved=0）。共享既有长度前缀写入和Ob20Checksum的raw CRC，不复制编码器或引入依赖。完整逻辑包分配前限制64MiB，参数最多65535，检查编码块最小维度；SQL的UTF-8字节长度决定前缀与CRC，不用字符数。
 
-扩展响应头固定17字节，保留statement ID、列/参数数目、warning、uint extend flags及hasResultSet；在分配元数据数组前拒绝坏marker/filler、截断/尾随、非法布尔和超过4096列，未知flags保留给后续执行层判断。该头OK不是SQL执行终态。内部QueryResult的Oracle二进制响应路径已消费参数定义及可选EOF，直接读取头指定的列定义、二进制行和行终结；参数和结果元数据共享4MiB预算。有/无结果均继续消费独立最终OK/ERR，行终结不释放租约；最终OK累计更新计数和会话报告，其MoreResults才决定继续普通结果或完成交换。同步/异步及SequentialAccess共用终态逻辑，可信ERR保留既有复用语义，取消/超时/畸形及未读尾包时提前关闭沿既有未决响应清理。公开执行仅接受extend flags 0、1、3、4；1/3的RETURNING和4的PL OUT作为内部标量输出隐藏，2的array binding及未知flags明确拒绝。
+扩展响应头固定17字节，保留statement ID、列/参数数目、warning、uint extend flags及hasResultSet；在分配元数据数组前拒绝坏marker/filler、截断/尾随、非法布尔和超过4096列，未知flags保留给后续执行层判断。该头OK不是SQL执行终态。内部QueryResult的Oracle二进制响应路径已消费参数定义及可选EOF，直接读取头指定的列定义、二进制行和行终结；参数和结果元数据共享4MiB预算。有/无结果均继续消费独立最终OK/ERR，行终结不释放租约；最终OK累计更新计数和会话报告，其MoreResults才决定继续普通结果或完成交换。同步/异步及SequentialAccess共用终态逻辑，可信ERR保留既有复用语义，取消/超时/畸形及未读尾包时提前关闭沿既有未决响应清理。普通D02执行仅接受extend flags 0、1、3、4；1/3的RETURNING和4的PL OUT作为内部标量输出隐藏，2的array binding及未知flags明确拒绝。
 
 D02公开入口使用默认false的`Use Oracle Prepare Execute`（builder属性UseOraclePrepareExecute），冻结配置及多地址选项共享。仅已认证Oracle会话的StoredProcedure或含非Input参数的Text走扩展；首次执行在同一租约/预算内查询`select ob_version() from dual`，严格解析数字点分版本并要求至少2.2.76，不信握手MySQL兼容版本。成功探测结果缓存物理会话，ERR不缓存；探测失败不标记用户SQL结果未知，无故障回退。过程名须安全限定标识符，生成BEGIN块；单个ReturnValue生成函数赋值。复用绑定词法器，输入值快照，InputOutput发送原值，纯Output/ReturnValue发送NULL，重复输出占位符发包前拒绝。
 
@@ -287,6 +287,16 @@ D03 REF CURSOR本地契约：Oracle类型163的非NULL二进制输出为固定4�
 OceanBaseRefCursor.GetDataReader/GetDataReaderAsync返回既有OceanBaseDataReader，每个对象只打开一次；默认fetchSize128，必须为正数，可用Default/SequentialAccess/CloseConnection。获取租约失败和调用时token已取消不消耗单次机会。对象固定原物理会话、事务引用与连接事务代次，读取前在连接锁内复核，事务结束或后来事务周期、连接重开均不能复用旧游标。同一连接同时只允许一个reader，多个输出游标须依次读取。fetch使用9字节COM_STMT_FETCH及独立命令序号，首响应先取得metadata后直接读行，后续页复用既有metadata一致性/进展/行数/LastRowSent检查及流式Sequential路径，不重新执行SQL或缓存整个结果。每次打开独立使用原命令超时预算；获取结果状态沿既有会话时区/national编码探测和每页状态快照规则。
 
 每次扩展执行的OracleCursorOwner在所有输出游标释放前保留父statement；command.Dispose只清理已可释放资源。读尽、失败或游标Dispose均原子一次入延迟关闭队列，最后释放再排父statement关闭，空闲Dispose刷新队列；别名ID共享同一对象，避免重复关闭。未读取对象必须Dispose，连接关闭释放服务端资源；重执行不隐式释放旧参数值。未读完的reader/游标关闭、fetch ERR或协议/网络错误销毁原会话。后续fetch不再执行业务SQL，取消/超时及故障不将已成功完成的原过程改判结果未知；仍保留真实错误码/取消token。上述为本地实现，真实目标版本/OBProxy、TLS扩展执行及异机矩阵待验收。
+
+### D06 数组批量执行
+
+五资产的OceanBaseCommand提供ExecuteArray(rowCount)/ExecuteArrayAsync(rowCount, token)，明确与现代DbBatch逐条执行区分。要求Oracle、Use Oracle Prepare Execute、现有版本门槛、显式绑定当前事务；rowCount为1–65535，支持INSERT/UPDATE/DELETE/MERGE、BEGIN/DECLARE/CALL及StoredProcedure。沿既有名称绑定顺序冻结参数，Input/InputOutput必须为同正行数的工厂匿名集合；Output/ReturnValue声明工厂匿名集合类型，生成同长度NULL占位。复用六标量及已预载命名复杂元素，验证原会话、事务代次和缓存身份，拒绝只读结果描述及FetchSize，不额外建连。
+
+协议依据固定OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343` 的[obmp_stmt_prexecute.cpp](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/observer/mysql/obmp_stmt_prexecute.cpp#L1124)及[obmp_stmt_execute.cpp](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/observer/mysql/obmp_stmt_execute.cpp#L136)。iteration-count=2触发数组绑定（单项也为2），头flag为0，exec_mode=0x80保存DML行内错误并禁用聚合batch优化，复用匿名集合类型头和bit0位图；不照搬Java mode1后伪造逐项计数。
+
+OracleArrayBindingPlan内部消费sql_no,error_code,[outputs],error_message，核验名称/类型、列数、NULL、位置、顺序及逐项计数。无RETURNING DML成功首列是更新数，失败首列是位置；PL和RETURNING成功首列也是位置，逐项计数保持null。无输出DML逐项计数与最终累计数一致，否则破坏会话。PL无输出位置必须连续，有输出不得跳过位置；DML RETURNING可有零行或多行，按位置分组。错误码保留，包括RETURNING可能返回的负数内部码，错误消息严格解码但不公开或记录绑定信息。输出累计最多65535个值及既有64MiB包上限的原始字段字节；命名复杂元素仍按字典身份核验。
+
+公开不可变OceanBaseArrayBindingResult提供Items、IsComplete和可空累计RecordsAffected，逐项状态为Succeeded/Failed/Unknown。ArrayBindingResult在原命令释放租约、日志回调前发布；尾ERR/断流/取消/超时留下已收到的可证明前缀，未确认后缀保持Unknown，不把收到OK等同于已通过OB20边界。完整响应边界、取消及Busy状态均通过后才原子发布参数：每个输出Value为object[][]，第一维输入位置、第二维该位置返回行；结果OutputRows按SQL输出绑定顺序，独立复制RAW字节。PL不支持服务端save-exception，按服务器停止及尾ERR处理；异常不自动回滚或重放，事务保持调用者所有。扩展statement沿原延迟关闭队列清理；普通D02/D05执行不改变。本地环回与五资产消费证据不能替代真实数据库、OBProxy及异机联调。
 
 ## 5. 值与元数据契约
 

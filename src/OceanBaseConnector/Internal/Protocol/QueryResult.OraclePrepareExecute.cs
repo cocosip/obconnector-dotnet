@@ -12,6 +12,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private readonly OracleCommandPlan? _oraclePlan;
         private bool _oracleOutputResult;
         internal OraclePrepareExecutePacket? OracleHeader { get; private set; }
+        internal OceanBaseArrayBindingResult? ArrayBindingResult => _oraclePlan?.ArrayBinding?.Published == true ? _oraclePlan.ArrayBinding.Completed : null;
 
         private OraclePrepareExecutePacket BeginOracleMetadata(byte[] bytes)
         {
@@ -51,6 +52,11 @@ namespace OceanBaseConnector.Internal.Protocol
         private void EndOracleTail(byte[] packet)
         {
             var ok = OkPacket.Parse(packet, _query.Capabilities);
+            if (_oraclePlan?.ArrayBinding != null)
+            {
+                if ((ok.StatusFlags & ServerStatusFlags.MoreResultsExists) != 0) throw new ProtocolException("Array binding returned unexpected additional results.");
+                _oraclePlan.ArrayBinding.Finish(ok.AffectedRows);
+            }
             _affected = checked(System.Math.Max(0, _affected) + ok.AffectedRows);
             _oracleTailPending = false;
             End(ok.StatusFlags, ok);

@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06–D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07–D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -190,7 +190,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D03 | 本地先行，实库延期 | REF CURSOR | 待验证 | REF CURSOR输出、流式分页及所有权本地实现/完整回归/独立走查修复完成，见末尾；真实版本/OBProxy互通开放 |
 | D04 | 本地先行，实库延期 | LOB locator、分块读写及临时对象 | 待验证 | locator解析、公开读取/绑定、WRITE/TRIM及临时对象显式创建/释放本地实现、完整回归及独立走查修复完成，见末尾；真实资源验收仍开放 |
 | D05 | 本地先行，实库延期 | ARRAY/STRUCT 与类型字典 | 待验证 | 约定本地范围实现及完整复核通过，见末尾；真实字典/DDL、往返及版本/OBProxy资源语义验收继续延期 |
-| D06 | G4 后 | bulk/array binding | 未开始 | 待记录 |
+| D06 | 本地先行，实库延期 | bulk/array binding及多行输出 | 待验证 | 公开同步/异步、部分失败/位置/逐项DML计数、多行OUT/RETURNING及五资产矩阵本地完成，见末尾；按用户要求提交后暂停 |
 | D07 | G4 后 | 按需客户端预处理回退 | 未开始 | 待记录 |
 | D08 | G4 后 | 拓扑发现与负载均衡 | 未开始 | 待记录 |
 | D09 | G4 后 | 显式 XA | 未开始 | 待记录 |
@@ -1126,3 +1126,27 @@ OracleCommandPlan保存执行时的输出描述，Output/ReturnValue清旧Value�
 | 匿名标量结果、工厂标量/命名元素输入和标量输出 | ComplexColumnMetadata、CreateArrayType、anonymous测试及五资产消费 |
 
 独立完整性复核未发现文档明确要求但尚未实现的本地D05功能；匿名复杂元素无身份结果/输出拒绝、LOB/cursor/national charset成员及循环图拒绝均为既有明确边界，未缩小要求。D05约定本地范围实现完成，正式状态改为待验证，下一本地模块D06；真实字典/DDL可见性、OceanBase/OBProxy往返及资源语义、扩展经TLS和异机验收继续延期。README、架构、计划及台账同步，UTF8无BOM/CRLF和diff检查后本地提交，不推送。本轮未重跑打包或旧运行时/Framework矩阵，整体目标保持开放。
+
+## D06数组绑定及多行输出：本地完成并暂停（2026-10-19）
+
+从0330193继续，按用户要求完成整个D06后统一更新进度、提交并暂停。五资产均提供OceanBaseCommand.ExecuteArray(rowCount)/ExecuteArrayAsync(rowCount, token)，要求Oracle、显式绑定当前事务、Use Oracle Prepare Execute及既有2.2.76版本门槛。支持INSERT/UPDATE/DELETE/MERGE、BEGIN/DECLARE/CALL及StoredProcedure；Input/InputOutput使用同会话工厂匿名集合、长度一致，Output/ReturnValue声明工厂匿名集合类型。六标量及预载命名对象/集合元素已接入，不引入LOB/cursor/national charset集合成员。D02移交的多行OUT/RETURNING使用独立数组入口，普通D02/D05标量语义保留。
+
+沿固定OceanBase 5e8a63d29dae9fde5e962b8fcc7b167d438fc343的obmp_stmt_prexecute.cpp/obmp_stmt_execute.cpp实现iteration2、mode128，保留逐项DML结果并禁用聚合优化。响应array标志2、RETURNING 3、PL OUT 6/7；无RETURNING DML成功首列按更新数，失败/PL/RETURNING按位置。逐项错误保留错误码，不公开可能带绑定值的错误文本；无输出DML逐项数核对尾累计数，PL/RETURNING逐项数为null，完整响应仍保留服务端累计数，不伪造计数。
+
+OceanBaseArrayBindingResult按输入位置提供不可变状态、错误码及多行输出；ArrayBindingResult在原租约释放和日志回调前保存完整或可证明的部分结果，未知后缀为Unknown，未发送SQL时为null。完整响应、OB20边界、取消及Busy状态核验成功后，输出参数才发布为object[][]（输入位置→多行），NULL为DBNull、零行为空数组；尾ERR/取消/超时/断流保留旧值。事务保持调用者所有，不提交、回滚、重放或另建连接，沿原会话/事务代次/缓存身份及延迟statement关闭路径。输出最多4093列、65535个值、64MiB原始字段字节，超限明确失败。
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx核心五/DI三目标 | 0警告/错误，退出0 | TestResults/array-binding-full-build-final.log |
+| 完整Unit | 2555通过，0失败/跳过；新增121、移除0 | TestResults/array-binding-full-unit-final/*.trx |
+| 完整五资产Consumer | 774通过，0失败/跳过；新增30 | TestResults/array-binding-full-consumer-final/*.trx |
+| DI | 8通过，0失败/跳过 | TestResults/array-binding-full-di-final/*.trx |
+| D06定向 | 121通过；最终列数上限也由完整Unit覆盖 | TestResults/array-binding-reviewed-focus/*.trx |
+
+编译命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false。Unit/Consumer/DI分别执行dotnet test -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/array-binding-full-{unit,consumer,di}-final，保存原退出码后输出日志，全部退出0。完整Unit使用正常Windows TLS凭据权限，无信任根操作或验证降级。五资产消费覆盖同步/异步、标准协议和OB20、多行RETURNING、部分错误及尾附加数据不发布；单元另覆盖六标量三输出方向、命名元素身份、PL停止前缀、事务、声明失败不发包、取消/关闭/超时/断流、预算和RAW快照。
+
+独立请求走查无阻断；完整D06走查提出真实array响应标志缺失、按输出列反复复制整组RAW两项，均以红绿回归修复：真实标志先复现8项失败，再通过2/3/6/7及六标量三方向矩阵；200输出列/256KiB RAW分配回归先捕获约50MiB分配，改为按输入项一次复制后低于8MiB上限。另补零行标量元数据、坏行不修改已证明状态、PL缺项和列数上限校验。测试夹具修正标准statement-close后序号重置、坏第三行后的断开等待，不以产品重试掩盖。作者最终走查及完整回归无未解决阻断。
+
+本地要求对应：请求/整包预算→OraclePrepareExecutePacket及RequestTests；部分成功/失败位置/逐项计数→OracleArrayBindingPlan及ResultTests；多行OUT/RETURNING/原子发布→OracleCommandPlan及ExecutionTests；原会话/事务/取消清理→共享StartCommand/CommandExchange及故障测试；五资产标准/OB20→ArrayBindingConsumerTests。README、架构、计划和台账同步，UTF8无BOM/CRLF与diff检查后本地提交，不推送。
+
+本次提交后按用户要求暂停，不启动D07。下次从D07客户端预处理回退继续；A05公共MySQL可信判定、C01池及完整重置、D08拓扑/负载、D09 XA、D15其他插件和发布审核仍开放。D06本地约定范围完成，正式状态为待验证；真实数据库/OBProxy、异机及扩展经TLS联调仍暂缓，本轮未重跑打包或旧运行时/Framework矩阵。本地夹具不能证明实库兼容，整体goal未完成。
