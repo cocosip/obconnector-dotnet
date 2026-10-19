@@ -58,7 +58,12 @@ namespace OceanBaseConnector.Internal.Protocol
             while (_ordinal < ordinal)
             {
                 Skip(_remaining); NextColumn();
-                try { SetLength(FieldLength()); }
+                try
+                {
+                    if (_columns[_ordinal].TypeCode == 160 && !IsBinaryNull)
+                    { _columns[_ordinal].RequireComplexResult(_binary); MaterializeComplex(false, CancellationToken.None).GetAwaiter().GetResult(); }
+                    else SetLength(FieldLength());
+                }
                 catch (Exception error) when (error is ProtocolException || error is NotSupportedException)
                 { throw _payload.Fault("Invalid or unsupported sequential field framing."); }
             }
@@ -70,7 +75,12 @@ namespace OceanBaseConnector.Internal.Protocol
             while (_ordinal < ordinal)
             {
                 await SkipAsync(_remaining, token).ConfigureAwait(false); NextColumn();
-                try { SetLength(await FieldLengthAsync(token).ConfigureAwait(false)); }
+                try
+                {
+                    if (_columns[_ordinal].TypeCode == 160 && !IsBinaryNull)
+                    { _columns[_ordinal].RequireComplexResult(_binary); await MaterializeComplex(true, token).ConfigureAwait(false); }
+                    else SetLength(await FieldLengthAsync(token).ConfigureAwait(false));
+                }
                 catch (Exception error) when (error is ProtocolException || error is NotSupportedException)
                 { throw _payload.Fault("Invalid or unsupported sequential field framing."); }
             }

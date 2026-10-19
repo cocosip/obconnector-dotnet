@@ -53,6 +53,9 @@ namespace OceanBaseConnector
                 if (parameters != null) foreach (var parameter in parameters)
                     if (parameter.Value is OceanBaseLob lob) lob.ValidateBinding(this, session, transaction, owner);
                 var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin);
+                if (_complexTypeContext != null && ReferenceEquals(_complexTypeContext.Session, session) &&
+                    ReferenceEquals(_complexTypeContext.Transaction, transaction) && _complexTypeContext.Epoch == _transactionEpoch)
+                    exchange.ComplexTypes = _complexTypes;
                 if (session.UseLobLocators) exchange.Lobs = new LobSession(this, session, transaction, _transactionEpoch, timeout);
                 return exchange;
             }

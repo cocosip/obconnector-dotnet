@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using OceanBaseConnector.Internal.Values;
@@ -9,6 +10,14 @@ namespace OceanBaseConnector.Internal.Protocol
     {
         internal static readonly Encoding Utf8 = new UTF8Encoding(false, true);
         private OceanBaseConnector.Internal.Session.LobSession? Lobs { get; set; }
+        internal ComplexColumnMetadata? ComplexMetadata { get; private set; }
+        internal OceanBaseComplexType? ComplexType { get; private set; }
+        internal void RequireComplexResult(bool binary)
+        {
+            if (TypeCode != 160) return;
+            if (!binary) throw new NotSupportedException("Complex columns require the binary result protocol.");
+            _ = FieldType;
+        }
         private ResultColumn(string database, string table, string originalTable, string name, string originalName,
             byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode, string? sessionTimeZone, NationalCharacterSet? nationalCharacterSet)
         {
@@ -54,7 +63,8 @@ namespace OceanBaseConnector.Internal.Protocol
             return TemporalCodec.DecodeTimestamp(value, Scale);
         }
 
-        internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode, string? sessionTimeZone = null, NationalCharacterSet? nationalCharacterSet = null, OceanBaseConnector.Internal.Session.LobSession? lobs = null)
+        internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode, string? sessionTimeZone = null, NationalCharacterSet? nationalCharacterSet = null, OceanBaseConnector.Internal.Session.LobSession? lobs = null,
+            IReadOnlyDictionary<(string, string), OceanBaseComplexType>? complexTypes = null)
         {
             var cursor = new ByteCursor(payload);
             cursor.ReadLengthEncodedBytes(); // Protocol catalog marker, not the database catalog name.
@@ -72,8 +82,16 @@ namespace OceanBaseConnector.Internal.Protocol
             var scale = cursor.ReadUInt8();
             var precision = cursor.ReadUInt8();
             cursor.ReadUInt8();
+            var result = new ResultColumn(database, table, originalTable, name, originalName, type, charset, flags, length, scale, precision, mode, sessionTimeZone, nationalCharacterSet) { Lobs = lobs };
+            if (type == 160)
+            {
+                if (mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Complex columns require Oracle mode.");
+                result.ComplexMetadata = ComplexColumnMetadata.Parse(cursor);
+                if (complexTypes != null && complexTypes.TryGetValue((result.ComplexMetadata.Schema, result.ComplexMetadata.Name), out var description))
+                    result.ComplexType = description;
+            }
             if (cursor.HasRemaining) throw new NotSupportedException("Extended column metadata is not supported yet.");
-            return new ResultColumn(database, table, originalTable, name, originalName, type, charset, flags, length, scale, precision, mode, sessionTimeZone, nationalCharacterSet) { Lobs = lobs };
+            return result;
         }
 
         internal string DataTypeName
@@ -103,6 +121,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 200: return "TIMESTAMP WITH TIME ZONE";
                     case 201: return "TIMESTAMP WITH LOCAL TIME ZONE";
                     case 203: return "RAW";
+                    case 160: return ComplexType?.TypeName ?? throw new NotSupportedException("Preload the named complex type on the command's session and transaction.");
                     case 163: return "REF CURSOR";
                     case 210: return "BLOB";
                     case 211: return "CLOB";
@@ -170,6 +189,10 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 163:
                         if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("REF CURSOR requires Oracle mode.");
                         return typeof(OceanBaseRefCursor);
+                    case 160:
+                        if (Mode != OceanBaseCompatibilityMode.Oracle || ComplexType == null)
+                            throw new NotSupportedException("Preload the named complex type on the command's session and transaction; anonymous complex results are not supported yet.");
+                        return typeof(OceanBaseComplexValue);
                     case 210:
                     case 211:
                         if (Mode != OceanBaseCompatibilityMode.Oracle || Lobs == null || TypeCode == 211 && !HasUtf8Charset)
@@ -232,6 +255,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 201: return OceanBaseDbType.TimestampLocalTimeZone;
                     case 203: return OceanBaseDbType.Binary;
                     case 163: return OceanBaseDbType.RefCursor;
+                    case 160: return ComplexType?.IsCollection == true ? OceanBaseDbType.Array : OceanBaseDbType.Struct;
                     case 210: return OceanBaseDbType.Blob;
                     case 211: return OceanBaseDbType.Clob;
                     case 204: return OceanBaseDbType.IntervalYearToMonth;
@@ -249,6 +273,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
         internal object Decode(byte[]? value)
         {
+            RequireComplexResult(false);
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
             if (TypeCode == 163) throw new NotSupportedException("REF CURSOR values require an Oracle output parameter.");
@@ -289,6 +314,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal byte[] ReadBinaryField(ByteCursor cursor)
         {
             _ = FieldType;
+            if (TypeCode == 160) return ComplexValueCodec.ReadResultField(cursor, ComplexType!.Layout, Mode);
             if (IsTemporal) return TemporalCodec.ReadField(cursor, TypeCode);
             var length = BinaryFixedLength;
             return length < 0 ? cursor.ReadLengthEncodedBytes() : cursor.ReadBytes(length);
@@ -319,6 +345,13 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
+            if (TypeCode == 160)
+            {
+                var complex = new ByteCursor(value);
+                var values = ComplexValueCodec.DecodeResult(complex, ComplexType!.Layout, Mode);
+                if (complex.HasRemaining) throw new ProtocolException("Trailing complex value bytes.");
+                return OceanBaseComplexValue.FromResult(ComplexType, values);
+            }
             if (TypeCode == 163) throw new NotSupportedException("REF CURSOR values require an Oracle output parameter.");
             if (TypeCode == 13) return YearCodec.Decode(value, true);
             if (TypeCode == 16) return BitCodec.Decode(value, (int)Length);

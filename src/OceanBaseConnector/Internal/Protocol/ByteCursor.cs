@@ -49,6 +49,13 @@ namespace OceanBaseConnector.Internal.Protocol
         public int Remaining => _length - _position;
 
         public bool HasRemaining => _position < _length;
+        internal int Position => _position;
+        internal byte[] CopyConsumed(int start)
+        {
+            if ((uint)start > (uint)_position) throw new ArgumentOutOfRangeException(nameof(start));
+            var result = new byte[_position - start];
+            Buffer.BlockCopy(_data, _offset + start, result, 0, result.Length); return result;
+        }
 
         public byte ReadUInt8()
         {

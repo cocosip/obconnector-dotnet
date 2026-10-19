@@ -45,6 +45,7 @@ namespace OceanBaseConnector.Internal.Sql
             var values = new object[Outputs.Length];
             for (var i = 0; i < values.Length; i++)
             {
+                if (columns[i].TypeCode == 160) throw new NotSupportedException("Complex output parameters require an explicit type contract and are not supported yet.");
                 var declared = _outputTypes[i];
                 if (row[i] != null && ((declared == OceanBaseDbType.Blob && columns[i].TypeCode != 210) ||
                     (declared == OceanBaseDbType.Clob && columns[i].TypeCode != 211) ||

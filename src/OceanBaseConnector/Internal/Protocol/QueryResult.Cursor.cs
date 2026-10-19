@@ -109,7 +109,8 @@ namespace OceanBaseConnector.Internal.Protocol
             if (column.TypeCode != expected.TypeCode || column.Charset != expected.Charset || column.Flags != expected.Flags ||
                 column.Length != expected.Length || column.Precision != expected.Precision || column.Scale != expected.Scale ||
                 column.Name != expected.Name || column.OriginalName != expected.OriginalName || column.Database != expected.Database ||
-                column.Table != expected.Table || column.OriginalTable != expected.OriginalTable)
+                column.Table != expected.Table || column.OriginalTable != expected.OriginalTable ||
+                (column.ComplexMetadata == null ? expected.ComplexMetadata != null : !column.ComplexMetadata.Matches(expected.ComplexMetadata)))
                 throw new ProtocolException("Cursor fetch metadata changed.");
         }
 

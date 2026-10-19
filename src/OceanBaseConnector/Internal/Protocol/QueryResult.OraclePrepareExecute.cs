@@ -29,7 +29,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private bool StartOracleMetadata()
         {
             var header = BeginOracleMetadata(_query.Receive());
-            for (var i = 0; i < header.ParameterCount; i++) ParseColumn(_query.Receive());
+            for (var i = 0; i < header.ParameterCount; i++) ParseColumn(_query.Receive(), parameter: true);
             if (header.ParameterCount > 0 && !DeprecatedEof) ReadEof(_query.Receive());
             if (header.HasResultSet) return true;
             ReadOracleTail(); return false;
@@ -38,7 +38,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private async Task<bool> StartOracleMetadataAsync(CancellationToken token)
         {
             var header = BeginOracleMetadata(await _query.ReceiveAsync(token).ConfigureAwait(false));
-            for (var i = 0; i < header.ParameterCount; i++) ParseColumn(await _query.ReceiveAsync(token).ConfigureAwait(false));
+            for (var i = 0; i < header.ParameterCount; i++) ParseColumn(await _query.ReceiveAsync(token).ConfigureAwait(false), parameter: true);
             if (header.ParameterCount > 0 && !DeprecatedEof) ReadEof(await _query.ReceiveAsync(token).ConfigureAwait(false));
             if (header.HasResultSet) return true;
             await ReadOracleTailAsync(token).ConfigureAwait(false); return false;

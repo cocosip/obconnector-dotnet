@@ -31,6 +31,12 @@ namespace OceanBaseConnector
         }
         public OceanBaseComplexType Type { get; }
         internal int TotalMembers { get; }
+        internal static OceanBaseComplexValue FromResult(OceanBaseComplexType type, object?[] values)
+        {
+            for (var i = 0; i < values.Length; i++)
+                if (values[i] is object?[] nested) values[i] = FromResult(type.Members[type.IsCollection ? 0 : i].ComplexType!, nested);
+            return new OceanBaseComplexValue(type, values);
+        }
         /// <summary>Returns a new array and independent RAW bytes. Nested values are immutable snapshots.</summary>
         public object?[] GetValues()
         {

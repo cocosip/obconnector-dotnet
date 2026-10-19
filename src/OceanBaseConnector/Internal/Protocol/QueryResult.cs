@@ -106,11 +106,15 @@ namespace OceanBaseConnector.Internal.Protocol
             return (ServerStatusFlags)(packet[3] | (packet[4] << 8));
         }
         private static void EndColumns(byte[] packet) => ReadEof(packet);
-        private ResultColumn ParseColumn(byte[] packet)
+        private ResultColumn ParseColumn(byte[] packet, bool parameter = false)
         {
             if (packet.Length > 4 * 1024 * 1024 - _metadataBytes) throw new ProtocolException("Result metadata size limit exceeded.");
             _metadataBytes += packet.Length;
-            return ResultColumn.Parse(packet, _query.Mode, SessionTimeZone, NationalCharacterSet, _query.Lobs);
+            var column = ResultColumn.Parse(packet, _query.Mode, SessionTimeZone, NationalCharacterSet, _query.Lobs, _query.ComplexTypes);
+            if (!parameter && _oracleOutputResult && column.TypeCode == 160)
+                throw new NotSupportedException("Complex output parameters require an explicit type contract and are not supported yet.");
+            if (!parameter) column.RequireComplexResult(IsBinary);
+            return column;
         }
         private void End(ServerStatusFlags flags, OkPacket? ok = null)
         {

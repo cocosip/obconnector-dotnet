@@ -16,6 +16,12 @@ namespace OceanBaseConnector.Internal.Values
             ValidateRoot(type, mode); var budget = MaximumMembers;
             return Read(cursor, type, 0, ref budget, cursor.Remaining);
         }
+        internal static byte[] ReadResultField(ByteCursor cursor, ComplexType type, OceanBaseCompatibilityMode mode)
+        {
+            ValidateRoot(type, mode); var budget = MaximumMembers; var position = cursor.Position;
+            Read(cursor, type, 0, ref budget, cursor.Remaining, materialize: false);
+            return cursor.CopyConsumed(position);
+        }
 
         internal static byte[] EncodeParameter(ComplexType type, object?[] values, OceanBaseCompatibilityMode mode)
         {
@@ -31,7 +37,7 @@ namespace OceanBaseConnector.Internal.Values
             if (type.TypeCode != 160) throw new ArgumentException("A complex value requires an object or collection layout.", nameof(type));
         }
 
-        private static object?[] Read(ByteCursor cursor, ComplexType type, int depth, ref int budget, int start)
+        private static object?[] Read(ByteCursor cursor, ComplexType type, int depth, ref int budget, int start, bool materialize = true)
         {
             if (depth >= MaximumDepth) throw new ProtocolException("Complex nesting exceeds the supported depth.");
             var count = type.IsCollection ? cursor.ReadLengthEncodedInteger() : type.Members.Count;
@@ -39,18 +45,27 @@ namespace OceanBaseConnector.Internal.Values
             budget -= (int)count;
             // Result bitmaps reserve two bits at every nesting level, unlike parameter bitmaps.
             var bitmap = ReadBytes(cursor, ((int)count + 9) / 8, start);
-            var values = new object?[count];
-            for (var i = 0; i < values.Length; i++)
+            var values = materialize ? new object?[count] : System.Array.Empty<object?>();
+            for (var i = 0; i < count; i++)
             {
                 if ((bitmap[(i + 2) / 8] & 1 << ((i + 2) % 8)) != 0) continue;
                 var member = type.Members[type.IsCollection ? 0 : i];
-                if (member.TypeCode == 160) values[i] = Read(cursor, member, depth + 1, ref budget, start);
+                if (member.TypeCode == 160)
+                {
+                    var nested = Read(cursor, member, depth + 1, ref budget, start, materialize);
+                    if (materialize) values[i] = nested;
+                }
                 else
                 {
                     var length = cursor.ReadLengthEncodedInteger();
                     if (length > int.MaxValue || member.TypeCode == 0 && length > 512)
                         throw new ProtocolException("Invalid complex scalar length.");
                     if (member.TypeCode == 12 || member.TypeCode == 202) TemporalCodec.ValidateFieldLength(member.TypeCode, length);
+                    if (!materialize)
+                    {
+                        if (length > MaximumBytes - (start - cursor.Remaining)) throw new ProtocolException("Complex data exceeds the supported byte limit.");
+                        cursor.Skip((int)length); continue;
+                    }
                     var bytes = ReadBytes(cursor, (int)length, start);
                     switch (member.TypeCode)
                     {

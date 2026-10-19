@@ -12,7 +12,8 @@ namespace OceanBaseConnector
 {
     public sealed partial class OceanBaseConnection
     {
-        private readonly Dictionary<(string Schema, string Name), OceanBaseComplexType> _complexTypes = new Dictionary<(string, string), OceanBaseComplexType>();
+        // Published dictionaries are immutable so active/completed readers can retain their exact snapshot.
+        private Dictionary<(string Schema, string Name), OceanBaseComplexType> _complexTypes = new Dictionary<(string, string), OceanBaseComplexType>();
         private ComplexTypeContext? _complexTypeContext;
         private int _complexTypeMembers, _complexTypeDictionaryBytes;
         private static readonly string[] ComplexHeaderColumns = { "TYPE_SCHEMA", "TYPE_NAME", "TYPE_KIND", "MEMBER_COUNT" };
@@ -31,7 +32,7 @@ namespace OceanBaseConnector
             RejectAmbientTransaction();
             lock (_gate)
             {
-                RequireComplexSession(transaction); _complexTypes.Clear(); _complexTypeContext = null;
+                RequireComplexSession(transaction); _complexTypes = new Dictionary<(string, string), OceanBaseComplexType>(); _complexTypeContext = null;
                 _complexTypeMembers = _complexTypeDictionaryBytes = 0;
             }
         }
@@ -66,7 +67,7 @@ namespace OceanBaseConnector
                 if (_complexTypeContext == null || !ReferenceEquals(_complexTypeContext.Session, session) ||
                     !ReferenceEquals(_complexTypeContext.Transaction, transaction) || _complexTypeContext.Epoch != _transactionEpoch)
                 {
-                    _complexTypes.Clear(); _complexTypeContext = new ComplexTypeContext(this, session, transaction, _transactionEpoch, _builder.CommandTimeout);
+                    _complexTypes = new Dictionary<(string, string), OceanBaseComplexType>(); _complexTypeContext = new ComplexTypeContext(this, session, transaction, _transactionEpoch, _builder.CommandTimeout);
                     _complexTypeMembers = _complexTypeDictionaryBytes = 0;
                 }
                 context = _complexTypeContext;
@@ -87,7 +88,9 @@ namespace OceanBaseConnector
                     if (!ReferenceEquals(session, context.Session) || context.Epoch != _transactionEpoch || !ReferenceEquals(_complexTypeContext, context))
                         throw new InvalidOperationException("The complex type dictionary context changed while loading.");
                     if (loader.Types.Count > ComplexValueCodec.MaximumMembers - _complexTypes.Count) throw new NotSupportedException("The type cache exceeds its supported size.");
-                    foreach (var entry in loader.Types) _complexTypes.Add(entry.Key, entry.Value);
+                    var published = new Dictionary<(string, string), OceanBaseComplexType>(_complexTypes);
+                    foreach (var entry in loader.Types) published.Add(entry.Key, entry.Value);
+                    _complexTypes = published;
                     _complexTypeMembers = loader.MemberCount; _complexTypeDictionaryBytes = loader.DictionaryBytes;
                 }
                 return result;

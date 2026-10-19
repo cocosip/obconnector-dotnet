@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典及公开值构造已落地（验证见末尾），复杂列/参数/输出接入及D06–D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造及命名复杂结果读取已落地（验证见末尾），匿名集合、复杂参数/输出接入及D06–D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -26,7 +26,7 @@
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
 | D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流、WRITE/TRIM及临时对象显式创建/释放已本地接入，验证见末尾 | 真实版本/OBProxy、资源生命周期及扩展经TLS验收仍开放 |
-| D05 | 内部嵌套编解码、同会话类型字典、整批缓存失效及公开值构造已有本地实现，验证见末尾 | 复杂列/参数/输出接入、顺序边界及完整公开读写继续实施 |
+| D05 | 内部嵌套编解码、同会话类型字典、缓存失效、公开值构造及命名复杂列普通/顺序读取已有本地实现，验证见末尾 | 匿名集合、复杂参数/输出接入及完整公开读写继续实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -995,3 +995,31 @@ ComplexType新增不可变成员布局，ComplexValueCodec按完整布局递归�
 编译命令沿上一节；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/complex-dictionary-<unit|consumer|di>-final`。已解析TRX核对执行/通过及新增/移除计数。完整Unit使用正常Windows TLS凭据权限，不安装/删除信任根或改变TLS策略；四份公开/设计/进度文档同步，UTF8无BOM/CRLF和git diff --check后本地提交，不推送。
 
 本子模块完成，D05整体仍进行中：复杂列扩展metadata、二进制行/SequentialAccess边界、参数附加type header、D02原子输出和完整公开读写继续实施。当前公共命令仍拒绝ARRAY/STRUCT值。真实字典/DDL可见性、OceanBase/OBProxy、异机及扩展经TLS未验收，本轮未重跑打包或旧运行时/Framework矩阵；不据局部实现关闭D05或整体目标。
+
+## D05命名复杂结果读取（2026-10-19）
+
+从`f49de3a`继续，接入type160列扩展schema/type/version解析、同会话预载字典、普通二进制行及SequentialAccess单字段读取。名称严格UTF8、无NUL、最多512字节；version保留非负Int64，不伪造字典版本。执行开始时在连接锁下检查原物理会话/事务/epoch并捕获已发布字典，缓存改为成功后复制发布/整体失效；reader只用原快照，不另发字典查询或每次复制整份缓存。
+
+命名列返回OceanBaseComplexValue，嵌套值保留对应描述，RAW及GetValues输出独立；GetValue及泛型同步/异步getter均接入。ProviderType在枚举末尾追加Array/Struct，DataTypeName保留类型名，ColumnSize未知。二进制行按完整布局扫描出精确字段区间；顺序路径按每层bit2位图、深度/累计成员/长度及字节预算物化当前字段，后续大字段保持流式。空集合、NULL、嵌套跳过及后续定长列分别验证；普通服务端游标与REF CURSOR的共享分页路径核对扩展schema/type/version，变化后废弃未消费会话。
+
+文本复杂结果、匿名集合和缺失/失效字典在结果metadata阶段拒绝，NULL不能绕过。公共复杂参数/输出尚未接入；D02在输出metadata及CaptureOutput均显式拒绝160（含NULL），防止新增通用decoder绕过输出声明边界。字典无法自动感知外部DDL，仍须由调用方清缓存并重载；本轮不宣称version与字典布局具有服务端一致性证明。
+
+红绿与走查证据：
+
+- 缺列metadata/描述/枚举API的初始红编译见`complex-results-red.log`，首批9项读取/边界回归通过后继续扩展。
+- 独立走查发现复杂decoder意外放行普通Oracle输出。两项NULL/非NULL回归修前均未抛异常（`complex-results-output-red/*.trx`），双入口拒绝修复后通过；复查无剩余必须修复项。
+- 首轮边界8失败来自已发SQL错误应映射OceanBaseException/结果未知的断言，修正后另2项事务夹具仍错误报告autocommit开启；修正第二条控制响应后通过，未改变产品错误契约。新增分页首轮4失败来自prepare夹具未声明结果列，补columns=1后通过。
+- 最终48项定向全部通过（`complex-results-targeted-final/*.trx`），覆盖身份/version边界、畸形/超限metadata、RAW及嵌套快照、普通/顺序读取与跳过、NULL、字典清空/事务代次、超限集合拒绝、在途取消/连接关闭及分页版本变化。最终又收紧9项畸形metadata断言到具体异常类型，纳入完整回归。
+- 延迟大字段测试在4MiB后续字段尚未发送时完成当前复杂值getter，随后流式读尽该字段；同步drain托管分配少于1MiB。这仅证明本地夹具边界及该段分配，不代表实库内存峰值或吞吐。
+- 扩展既有20项五资产×同步/异步×标准/OB20消费：在字典和值快照断言之外，增加普通及顺序二进制读取、实际资产公共类型身份、精确值、NULL与后续列。全部由net10宿主运行，不替代五套运行时验收。
+
+最终编译/完整测试结果核对后记录于下表；本子模块只关闭命名结果读取，D05整体继续进行中。匿名集合、复杂参数type header及输出声明/原子发布继续下一子模块；真实数据库/OBProxy、外部DDL可见性、扩展经TLS和异机验收按要求暂缓，本轮未重跑打包及旧运行时/Framework矩阵，不推送。
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/complex-results-build-final.log` |
+| 完整Unit | 2207通过，0失败/跳过；新增48项、移除0项 | `TestResults/complex-results-unit-reviewed/*.trx` |
+| 五资产Consumer | 744通过，0失败/跳过；既有20项字典消费扩展复杂列读取 | `TestResults/complex-results-consumer-final/*.trx` |
+| DI | 8通过，0失败/跳过 | `TestResults/complex-results-di-final/*.trx` |
+
+编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试沿上一节命令，结果目录换为上表路径。最后收紧畸形metadata异常类型断言后重新编译并重跑完整Unit，2207项仍全部通过；TRX已解析核对计数及与上次提交的新增/移除。完整Unit沿正常Windows TLS凭据权限，不安装/删除信任根或修改TLS验证。独立只读走查修复后两次复查均无剩余必须修复项；README/架构/计划/台账同步，UTF8无BOM/CRLF和git diff --check后本地提交。

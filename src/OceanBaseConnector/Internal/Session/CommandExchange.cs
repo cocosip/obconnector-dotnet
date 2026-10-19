@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -75,6 +76,7 @@ namespace OceanBaseConnector.Internal.Session
         internal NationalCharacterSet? NationalCharacterSet { get; private set; }
         internal OceanBaseCompatibilityMode Mode => _session.Info!.Mode;
         internal LobSession? Lobs { get; set; }
+        internal IReadOnlyDictionary<(string, string), OceanBaseComplexType>? ComplexTypes { get; set; }
         internal void EnsureReading()
         {
             if (_terminal) return;

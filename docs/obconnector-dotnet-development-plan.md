@@ -726,7 +726,8 @@ D03本地输出/读取实现及独立走查修复已完成：修后Release核心
 本子模块实施决定：公开GetComplexType/GetComplexTypeAsync(schemaName, typeName, transaction)和ClearComplexTypeCache(transaction)，名称按字典原样精确绑定，不解析SQL标识符或同义词。OceanBaseComplexType/Members保存不可变完整布局，CreateValue构造OceanBaseComplexValue并检查成员/嵌套类型、精确标量、字节与成员预算；RAW及返回数组复制，嵌套必须使用对应描述构造的值。仅Oracle模式；当前不支持LOB/cursor/national charset成员及循环类型图，明确拒绝。
 
 同一物理会话预约覆盖ALL_TYPES及ALL_TYPE_ATTRS/ALL_COLL_TYPES所有查询；显式绑定当前事务，固定原会话/事务epoch，每个查询沿用连接CommandTimeout，异步入口使用真实异步I/O及调用方取消。活动reader/预约/环境事务不发包；结果列形状、owner/name/kind、对象属性总数与连续序号、集合唯一元素均核验。类型图最多32层；当前会话缓存累计最多65535成员、65535命名类型及4MiB字典UTF8文本，额度满时可清空重载。失败不发布部分缓存或扣减额度。缓存键为区分大小写的schema+type二元组；关闭重开、事务切换及显式清空使全部旧描述/值失效，清空同时处理父子依赖。外部DDL不自动感知，业务须在无活动reader时清空并重载；不伪造服务端类型version。公开值快照可以在失效后检查，但不能再构造或绑定。该子模块独立测试/五资产消费、全量build/Unit/Consumer/DI及只读走查后提交；公共复杂列/参数仍由下一协议子模块接入。
-- [ ] 协议及公开接入：复杂列元数据/类型信息、二进制行边界与顺序读取、参数附加类型头、D02输出原子发布及五资产同步/异步标准/OB20消费。文本协议没有可信复杂值定义时明确拒绝，不能当byte[]/string跳过。每层保留原会话错误/取消/结果未知契约。
+- [x] 命名复杂结果读取：列扩展metadata、执行时原会话字典快照、二进制行边界、SequentialAccess当前字段物化、分页metadata一致性及五资产同步/异步标准/OB20消费。schema/type精确匹配执行前预载的字典，不在reader内查询；保留线上version而不假装字典能证明版本，外部DDL仍须显式刷新。文本复杂结果明确拒绝，包括NULL；未预载/失效字典拒绝，不按byte[]/string跳过。新增48项单测、扩展20项五资产消费，完整编译/Unit/Consumer/DI及独立走查见进度台账。每层保留原会话错误/取消/结果未知契约。
+- [ ] 匿名集合、参数附加类型头及D02输出声明/原子发布；接入前复杂参数/输出（含NULL）继续拒绝，不能由结果decoder意外放行。D05在这些子项全部交付前保持进行中。
 - [ ] 复核完整D05后同步README/架构/台账，本地完整验证和独立走查通过后提交；真实字典/DDL可见性、服务端往返和版本/OBProxy资源语义单独延期，不因局部codec通过关闭D05。
 
 ## 执行与进度规则

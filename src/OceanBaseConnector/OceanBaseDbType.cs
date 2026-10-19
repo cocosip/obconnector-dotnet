@@ -35,5 +35,7 @@ namespace OceanBaseConnector
         RefCursor,
         Blob,
         Clob,
+        Array,
+        Struct,
     }
 }
