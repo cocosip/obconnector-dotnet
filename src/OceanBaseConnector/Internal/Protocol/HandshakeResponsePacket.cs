@@ -30,7 +30,8 @@ namespace OceanBaseConnector.Internal.Protocol
             CapabilityFlags serverCapabilities,
             byte charset,
             string authenticationPluginName,
-            string? serverHost)
+            string? serverHost,
+            bool requestOb20 = false)
         {
             var writer = new MemoryStream();
             WriteUInt32(writer, (uint)clientCapabilities);
@@ -81,7 +82,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
             if ((serverCapabilities & CapabilityFlags.ClientConnectAttrs) != 0)
             {
-                WriteConnectAttributes(writer, serverHost);
+                WriteConnectAttributes(writer, serverHost, requestOb20);
             }
 
             return writer.ToArray();
@@ -92,13 +93,14 @@ namespace OceanBaseConnector.Internal.Protocol
             return authenticationData;
         }
 
-        private static void WriteConnectAttributes(MemoryStream writer, string? serverHost)
+        private static void WriteConnectAttributes(MemoryStream writer, string? serverHost, bool requestOb20)
         {
             using var attributes = new MemoryStream();
             WriteLengthString(attributes, ClientNameAttribute, DriverName);
             WriteLengthString(attributes, ClientVersionAttribute, typeof(HandshakeResponsePacket)
                 .Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
             WriteLengthString(attributes, ServerHostAttribute, serverHost ?? string.Empty);
+            if (requestOb20) WriteLengthString(attributes, "__proxy_capability_flag", "256");
 
             var attributeBytes = attributes.ToArray();
             WriteLengthEncodedInteger(writer, attributeBytes.Length);

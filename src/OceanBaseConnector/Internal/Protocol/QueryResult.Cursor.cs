@@ -67,6 +67,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private void FetchCursor()
         {
             if (!_cursorNeedsFetch) return;
+            _query.ValidateResponseBoundary();
             _query.Send(FetchPacket(), executesSql: false); _cursorNeedsFetch = false; _cursorRows = 0;
             if (_query.Mode != OceanBaseCompatibilityMode.Oracle) return;
             ValidateFetchHeader(_query.Receive());
@@ -78,6 +79,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             if (!_cursorNeedsFetch) return;
             token.ThrowIfCancellationRequested();
+            _query.ValidateResponseBoundary();
             await _query.SendAsync(FetchPacket(), executesSql: false, readerToken: token).ConfigureAwait(false); _cursorNeedsFetch = false; _cursorRows = 0;
             if (_query.Mode != OceanBaseCompatibilityMode.Oracle) return;
             ValidateFetchHeader(await _query.ReceiveAsync(token).ConfigureAwait(false));

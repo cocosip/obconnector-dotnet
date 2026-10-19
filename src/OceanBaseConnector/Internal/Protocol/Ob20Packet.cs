@@ -81,16 +81,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (length > MaxPayloadLength) throw new ArgumentException("OB20 frame exceeds the 24-bit outer length limit.");
             if (extraInfo != null) flags |= ExtraInfoFlag;
             var bytes = new byte[HeaderLength + (int)length + 4];
-            Write(bytes, 0, (uint)length + 28, 3);
-            bytes[3] = sequence;
-            Write(bytes, 7, 0x20ab, 2);
-            Write(bytes, 9, 20, 2);
-            Write(bytes, 11, connectionId, 4);
-            Write(bytes, 15, requestId, 3);
-            bytes[18] = sequence;
-            Write(bytes, 19, (uint)length, 4);
-            Write(bytes, 23, flags, 4);
-            if (checksum) Write(bytes, 29, Ob20Checksum.Header(bytes, 0, 29), 2);
+            WriteHeader(bytes, connectionId, requestId, sequence, (int)length, flags, checksum);
             var offset = HeaderLength;
             if (extraInfo != null)
             {
@@ -101,6 +92,24 @@ namespace OceanBaseConnector.Internal.Protocol
             Buffer.BlockCopy(payload, 0, bytes, offset, payload.Length);
             if (checksum) Write(bytes, bytes.Length - 4, Ob20Checksum.Payload(0, bytes, HeaderLength, (int)length), 4);
             return bytes;
+        }
+
+        internal static void WriteHeader(byte[] bytes, uint connectionId, uint requestId, byte sequence, int length, uint flags, bool checksum)
+        {
+            if (bytes == null) throw new ArgumentNullException(nameof(bytes));
+            if (bytes.Length < HeaderLength || (uint)length > MaxPayloadLength || requestId > 0xffffff)
+                throw new ArgumentOutOfRangeException(nameof(length));
+            Array.Clear(bytes, 0, HeaderLength);
+            Write(bytes, 0, (uint)length + 28, 3);
+            bytes[3] = sequence;
+            Write(bytes, 7, 0x20ab, 2);
+            Write(bytes, 9, 20, 2);
+            Write(bytes, 11, connectionId, 4);
+            Write(bytes, 15, requestId, 3);
+            bytes[18] = sequence;
+            Write(bytes, 19, (uint)length, 4);
+            Write(bytes, 23, flags, 4);
+            if (checksum) Write(bytes, 29, Ob20Checksum.Header(bytes, 0, 29), 2);
         }
 
         private static void Write(byte[] bytes, int offset, uint value, int count)

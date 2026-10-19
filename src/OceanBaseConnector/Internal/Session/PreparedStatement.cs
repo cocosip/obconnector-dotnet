@@ -87,7 +87,7 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 foreach (var id in session.TakeStatementCloses())
-                { budget.Token.ThrowIfCancellationRequested(); lease.Channel.BeginCommand(); lease.Channel.WritePacket(ClosePacket(id)); }
+                { budget.Token.ThrowIfCancellationRequested(); lease.Channel.BeginCommand(); lease.Channel.WritePacket(ClosePacket(id)); lease.Channel.CompleteResponse(expectsResponse: false); }
                 lease.CompleteIfActive();
             }
             catch { session.Break(); }
@@ -103,7 +103,7 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 foreach (var id in session.TakeStatementCloses())
-                { lease.Channel.BeginCommand(); await lease.Channel.WritePacketAsync(ClosePacket(id), budget.Token).ConfigureAwait(false); }
+                { lease.Channel.BeginCommand(); await lease.Channel.WritePacketAsync(ClosePacket(id), budget.Token).ConfigureAwait(false); lease.Channel.CompleteResponse(expectsResponse: false); }
                 lease.CompleteIfActive();
             }
             catch { session.Break(); }

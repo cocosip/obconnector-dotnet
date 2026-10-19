@@ -59,7 +59,7 @@ namespace OceanBaseConnector.Internal.Session
             return HandshakeResponsePacket.Build(options.UserId,
                 authentication.InitialResponse,
                 options.Database, capabilities, handshake.Capabilities, SslRequestPacket.DefaultCharsetId,
-                authentication.PluginName, options.Server);
+                authentication.PluginName, options.Server, options.UseOb20);
         }
 
         private static InitialHandshakePacket ParseInitialHandshake(byte[] packet, OceanBaseConnectionOptions options)

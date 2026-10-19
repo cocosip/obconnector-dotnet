@@ -207,7 +207,13 @@ flowchart TD
 
 包读写层只负责帧、长度、序号、上限与校验；命令层处理握手、`COM_QUERY`、`COM_STMT_*`、OK/ERR、列/行、多结果和状态变更；模式感知编解码处理同一类型码在两种模式下的不同解释。OB20 是经协商后替换/包裹包流的能力，不是另一个公开驱动。所有长度、计数、压缩后大小和响应包数在分配内存前校验；对 LOCAL INFILE 等会触及客户端文件系统的服务端请求默认拒绝，未来若开放需显式授权和路径策略。
 
-D01首个内部子模块为Ob20Packet/Ob20Checksum，当前尚未接入连接或PacketChannel。头为7字节外头加24字节OB20头，外层长度必须为正文长度加28，单帧正文（含extra长度前缀及extra）最多0xFFFFFF−28字节。ParseHeader在正文分配前校验magic/version、连接ID、24位请求ID、OB20序号、长度及调用方上限；外层压缩序号独立保留，不假设与OB20序号相等。非零uncompressed length拒绝，不隐式解压。头CRC16/ARC覆盖前29字节，尾为初始0且无最终异或的CRC32C，二者各自以0字段表示关闭；关闭校验仍须满足结构和身份检查。完整帧解析严格拒绝截断/尾随数据，extra存在时先核对4字节长度，再将extra与内层MySQL字节分离为借用原帧的ArraySegment，调用方不得在消费完成前修改该缓冲区。flags/reserved保留，legacy/new extra不透明内容、last/reroute语义由后续传输/追踪层处理；不把单帧解析通过当作这些语义已支持。固定Java基线的独立CRC执行输出用于字节夹具，只有本地编码/边界证据；能力协商、跨帧流、取消及完整链路追踪仍待接入。
+D01内部报文层为Ob20Packet/Ob20Checksum。头为7字节外头加24字节OB20头，外层长度必须为正文长度加28，单帧正文（含extra长度前缀及extra）最多0xFFFFFF−28字节。ParseHeader在正文分配前校验magic/version、连接ID、24位请求ID、OB20序号、长度及调用方上限；外层压缩序号独立保留，不假设与OB20序号相等。非零uncompressed length拒绝，不隐式解压。头CRC16/ARC覆盖前29字节，尾为初始0且无最终异或的CRC32C，二者各自以0字段表示关闭；关闭校验仍须满足结构和身份检查。完整帧解析严格拒绝截断/尾随数据，extra存在时先核对4字节长度，再将extra与内层MySQL字节分离为借用原帧的ArraySegment，调用方不得在消费完成前修改该缓冲区。单帧层保留flags/reserved，流层另约束实际支持的标志。固定Java基线的独立CRC执行输出用于字节夹具；不将本地编码/边界证据等同实库互通。
+
+Use OB20/UseOb20默认false；请求时仅在协商CLIENT_CONNECT_ATTRS的握手响应写入`__proxy_capability_flag=256`。认证及TLS升级仍使用标准帧；认证完成、模式确定且服务端ob_capability_flag含OB_PROTOCOL_V2后，PhysicalSession才用Ob20Stream包装PacketChannel当前的标准/TLS流，能力不足则保持标准流，不绕过A05。协议选择对该物理连接固定，后续会话状态报告不切换帧格式。
+
+Ob20Stream单所有者，以64KiB写缓冲分帧、8KiB暂存缓冲跳过extra，读取按上层需求推进而不整帧预读。每个逻辑请求独立24位request ID并回绕，OB20序号从0起、响应接续并按字节回绕；内层MySQL分片/空终结及序号由原PacketChannel负责。正文最后一段返回前先校验尾CRC；每页fetch、prepare、内部状态探测、命令终结均要求已消费完整且带last的外层响应。COM_STMT_CLOSE显式完成无响应请求；cursor分页只验证边界，保留已发送SQL标记，后续故障仍报告执行结果未知。完整可信ERR可复用普通会话，游标错误沿既有策略销毁会话。
+
+流层支持extra/last/new-extra标志，extra仅校验长度并跳过且参与CRC；未请求session sync或完整链路追踪，不解释extra内容。reroute/未知标志、实际压缩、身份/序号/CRC错误、截断、未结束或带尾随正文的响应均失败并关闭，不重放SQL。每请求响应上限100万外帧，原逻辑包大小与命令包计数上限仍有效；取消、超时和关闭沿用CommandExchange总预算及结果未知映射。同步/异步分离底层I/O，本地环回覆盖协商/回退、预处理、游标及故障边界；完整链路追踪、OB20经TLS环回、正文部分读取后取消和真实版本/OBProxy矩阵仍待验证或实现。
 
 D15 SHA-2本地实现：TLS流程成功返回后才创建AuthenticationConversation并构造认证响应；它保存当前插件、一次切换、取钥/最终结果状态和当前挑战，不承担I/O。`caching_sha2_password` 使用20字节挑战和SHA256 token（空密码为空token），`01 03`后不发包并继续等OK/ERR；完整认证只在VerifyFull后发送非空密码明文，否则必须显式配置RSA。SHA-2空密码使用无密码标记，不做RSA；严格UTF8拒绝无效Unicode，连接串基类拒绝内嵌NUL；native/clear保留既有编码契约。初始响应（含初始sha256取钥请求）后允许一次账户插件切换，切换清除旧取钥状态；caching full取钥时拒绝切换。收到key后只允许最终OK/ERR，取钥完成前OK拒绝，畸形或重复消息立即失败。同步/异步共享决策、PacketChannel序号、总连接预算和安全错误映射；A05模式门槛不变。
 

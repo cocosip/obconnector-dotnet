@@ -124,14 +124,16 @@ namespace OceanBaseConnector.Internal.Session
         internal void SetDatabase(string database) => _session.SetDatabase(_lease, database);
 
         internal bool HasSentSql { get { lock (_gate) return _anySqlSent; } }
-        internal void ResponseComplete() { lock (_gate) { _responsePending = false; _sqlSent = false; } }
+        internal void ValidateResponseBoundary() => _channel.CompleteResponse();
+        internal void ResponseComplete(bool expectsResponse = true)
+        { lock (_gate) { _channel.CompleteResponse(expectsResponse); _responsePending = false; _sqlSent = false; } }
 
         internal void Send(byte[] request, bool executesSql = true)
         {
             try
             {
                 foreach (var id in _statementCloses)
-                { BeginSend(false); _channel.WritePacket(PreparedStatement.ClosePacket(id)); ResponseComplete(); }
+                { BeginSend(false); _channel.WritePacket(PreparedStatement.ClosePacket(id)); ResponseComplete(expectsResponse: false); }
                 _statementCloses = Array.Empty<uint>();
                 BeginSend(executesSql);
                 _channel.WritePacket(request);
@@ -145,7 +147,7 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 foreach (var id in _statementCloses)
-                { BeginSend(false); await _channel.WritePacketAsync(PreparedStatement.ClosePacket(id), _budget.Token).ConfigureAwait(false); ResponseComplete(); }
+                { BeginSend(false); await _channel.WritePacketAsync(PreparedStatement.ClosePacket(id), _budget.Token).ConfigureAwait(false); ResponseComplete(expectsResponse: false); }
                 _statementCloses = Array.Empty<uint>();
                 BeginSend(executesSql);
                 await _channel.WritePacketAsync(request, _budget.Token).ConfigureAwait(false);
@@ -195,7 +197,11 @@ namespace OceanBaseConnector.Internal.Session
 
         internal void Complete(Exception? error = null)
         {
-            lock (_gate) { _terminal = true; _responsePending = false; }
+            lock (_gate)
+            {
+                if (_session.State == SessionState.Busy) _channel.CompleteResponse();
+                _terminal = true; _responsePending = false;
+            }
             _lease.CompleteIfActive();
             Finish(error);
         }

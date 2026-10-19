@@ -166,6 +166,9 @@ namespace OceanBaseConnector.Internal.Session
             {
                 token.ThrowIfCancellationRequested();
                 if (_state != SessionState.Connecting) throw new OperationCanceledException(_closing.Token);
+                if (_options.UseOb20 && (info.Capabilities.Effective & CapabilityFlags.ClientConnectAttrs) != 0 &&
+                    (info.ObCapabilityFlag & OceanBaseCapabilityFlags.ObCapObProtocolV2) != 0)
+                    _channel!.EnableOb20(info.ConnectionId);
                 _info = info;
                 _sessionTimeZone = ReportedTimeZone(info.SessionVariables);
                 _nationalCharacterSet = NationalCharacterSet.FromVariables(info.SessionVariables);

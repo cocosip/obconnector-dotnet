@@ -12,7 +12,7 @@ namespace OceanBaseConnector
     /// <c>Database</c>, <c>Connection Timeout</c>, <c>Command Timeout</c>,
     /// <c>TLS Mode</c>, <c>TLS Server Name</c>, <c>Persist Security Info</c>,
     /// <c>ExpectedMode</c>, <c>Pooling</c>, <c>Server RSA Public Key</c> and
-    /// <c>Allow Public Key Retrieval</c>; the only synonyms are
+    /// <c>Allow Public Key Retrieval</c> and <c>Use OB20</c>; the only synonyms are
     /// <c>Host</c>, <c>Uid</c> and <c>Pwd</c>. Unknown keys, synonym conflicts
     /// and malformed values are rejected instead of being silently accepted.
     /// </summary>
@@ -32,6 +32,7 @@ namespace OceanBaseConnector
         public const string PoolingKey = "Pooling";
         public const string ServerRsaPublicKeyKey = "Server RSA Public Key";
         public const string AllowPublicKeyRetrievalKey = "Allow Public Key Retrieval";
+        public const string UseOb20Key = "Use OB20";
 
         public const int DefaultPort = 2881;
         public const int DefaultConnectionTimeoutSeconds = 15;
@@ -167,6 +168,13 @@ namespace OceanBaseConnector
             set => this[AllowPublicKeyRetrievalKey] = value ? "true" : "false";
         }
 
+        /// <summary>Request OB20 framing when confirmed by server negotiation; disabled by default.</summary>
+        public bool UseOb20
+        {
+            get => GetBoolean(UseOb20Key) ?? false;
+            set => this[UseOb20Key] = value ? "true" : "false";
+        }
+
         public override object? this[string keyword]
         {
             get
@@ -256,6 +264,7 @@ namespace OceanBaseConnector
                 Pooling,
                 ServerRsaPublicKey,
                 AllowPublicKeyRetrieval,
+                UseOb20,
                 ToSanitizedConnectionString(includeSecrets: false));
         }
 
@@ -276,6 +285,7 @@ namespace OceanBaseConnector
             PoolingKey,
             ServerRsaPublicKeyKey,
             AllowPublicKeyRetrievalKey,
+            UseOb20Key,
         };
 
         /// <summary>
@@ -373,6 +383,7 @@ namespace OceanBaseConnector
                 case PersistSecurityInfoKey:
                 case PoolingKey:
                 case AllowPublicKeyRetrievalKey:
+                case UseOb20Key:
                     ParseBooleanValue(canonicalKey, value);
                     return value;
 
@@ -498,6 +509,9 @@ namespace OceanBaseConnector
                     return true;
                 case "ALLOW PUBLIC KEY RETRIEVAL":
                     canonical = AllowPublicKeyRetrievalKey;
+                    return true;
+                case "USE OB20":
+                    canonical = UseOb20Key;
                     return true;
                 default:
                     if (Synonyms.TryGetValue(keyword.Trim(), out var synonymCanonical))

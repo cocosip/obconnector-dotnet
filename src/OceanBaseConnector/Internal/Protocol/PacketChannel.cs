@@ -27,6 +27,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private Stream _stream;
         private int _sequence;
+        private Ob20Stream? _ob20;
 
         public PacketChannel(Stream stream, long maxPacketSize = DefaultMaxPacketSize)
         {
@@ -48,6 +49,16 @@ namespace OceanBaseConnector.Internal.Protocol
 
         public void Close() { _closed = true; _stream.Dispose(); }
 
+        internal void EnableOb20(uint connectionId)
+        {
+            EnsureIdle();
+            if (_ob20 != null) throw new InvalidOperationException("OB20 is already enabled.");
+            _stream = _ob20 = new Ob20Stream(_stream, connectionId);
+        }
+
+        internal void CompleteResponse(bool expectsResponse = true)
+        { EnsureIdle(); _ob20?.CompleteResponse(expectsResponse); }
+
         /// <summary>
         /// Swaps the underlying stream after a TLS upgrade. Sequence counters
         /// are preserved: the TLS handshake is invisible to the packet
@@ -56,6 +67,7 @@ namespace OceanBaseConnector.Internal.Protocol
         public void ReplaceUnderlyingStream(Stream stream)
         {
             EnsureIdle();
+            if (_ob20 != null) throw new InvalidOperationException("The transport cannot change after OB20 negotiation.");
             if (stream is null)
             {
                 throw new ArgumentNullException(nameof(stream));
@@ -101,6 +113,8 @@ namespace OceanBaseConnector.Internal.Protocol
             EnsureIdle();
             ValidateRange(payload, offset, count);
 
+            _ob20?.BeginRequest();
+
             var position = offset;
             var remaining = count;
             while (true)
@@ -112,6 +126,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
                 if (chunk < MaxFramePayload)
                 {
+                    _ob20?.FinishRequest();
                     return;
                 }
 
@@ -119,6 +134,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 {
                     // Exact multiple of the frame maximum: empty terminator frame.
                     WriteFrame(payload, position, 0);
+                    _ob20?.FinishRequest();
                     return;
                 }
             }
@@ -139,6 +155,8 @@ namespace OceanBaseConnector.Internal.Protocol
             EnsureIdle();
             ValidateRange(payload, offset, count);
 
+            _ob20?.BeginRequest();
+
             var position = offset;
             var remaining = count;
             while (true)
@@ -150,6 +168,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
                 if (chunk < MaxFramePayload)
                 {
+                    if (_ob20 != null) await _ob20.FinishRequestAsync(cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -157,6 +176,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 {
                     // Exact multiple of the frame maximum: empty terminator frame.
                     await WriteFrameAsync(payload, position, 0, cancellationToken).ConfigureAwait(false);
+                    if (_ob20 != null) await _ob20.FinishRequestAsync(cancellationToken).ConfigureAwait(false);
                     return;
                 }
             }
