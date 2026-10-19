@@ -471,6 +471,14 @@ C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/re
 
 实施顺序：失败编解码/边界及公共环回测试 → 共用结果/参数/Schema 路径实现 → 五资产公共 API 消费 → Release 全目标、完整 Unit/Consumer/DI → 独立走查、修复、文档和本地提交。同步/异步、文本/预处理、默认/SequentialAccess、后续字段及会话复用均覆盖。协议行为参考固定 Java 基线的 `BinaryRowProtocol` YEAR 两字节读取及 `ShortParameter` SMALLINT 写入，不复制其源码。真实 OceanBase YEAR 列 INSERT/SELECT、版本/OBProxy 验收另行保留；A05 公共 MySQL 模式门槛不变，本地测试仅注入认证后的模式事实。
 
+### D13 本地实现范围（2026-10-19）
+
+沿用 `OceanBaseDbType.Bit`（枚举值 8），标准及 provider-specific 访问统一为 `ulong` / `DbType.UInt64`，BIT(1) 也不隐式转 bool。结果类型码 16，列 Length 为位数，只支持 1–64 位、scale=0；两个行协议都以长度编码包裹大端原始字节，要求字节数为 ceil(位数/8)，未使用高位必须为零。保留 2^63 和 UInt64.MaxValue，不按有符号整数解释或解码为文本。Schema 的 ColumnSize 为位数；NumericPrecision/NumericScale 不填十进制精度。
+
+显式 Bit 参数只接受 UInt64，Size=0 表示 64 位，Size=1–64 声明位宽；验证范围且不截断，Precision/Scale 仅支持 0，Oracle 模式含 NULL 预先拒绝。复用现有 unsigned BIGINT 参数编码，不假定执行请求支持 BIT 类型码；服务端目标列位宽和转换仍须实库验证。普通 UInt64 参数不受此位宽规则影响。先写全位宽/符号边界失败测试，再实现共享编解码、元数据和参数映射，覆盖同步/异步、文本/预处理、默认/SequentialAccess、NULL、后续字段及会话复用、五资产公共 API 消费；全目标编译、完整测试与独立走查通过后本地提交。协议参考固定 Java 基线 RowProtocol.parseBit 的大端解释，不复制源码；真实 BIT 列 INSERT/SELECT 与模式/版本矩阵另行验收，A05 公共 MySQL 判定不变。
+
+长度依据：[固定 OceanBase 源码的 bit_cell_str](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp) 在 TEXT/BINARY 两分支均发送 `(bit_len + 7) / 8` 字节；Java 固定基线 `RowProtocol.parseBit` 以大端解释。只作为协议行为依据，不将源码核对计作真实服务端验证。
+
 ## Java 模块到任务索引
 
 该索引用来检查[Java M01-M16 模块](obconnector-j-architecture-outline.md)是否有明确 .NET 落点；索引中的 D 项是有意延后，不代表首版功能缺失被忽略。

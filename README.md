@@ -23,7 +23,8 @@
 - 首批 `GetSchema` 集合为 `MetaDataCollections`、`DataSourceInformation`、`Tables`、`Columns`；Oracle 模式不支持 `ChangeDatabase`。
 - batch 逐条执行，不隐式创建事务，没有整批原子性保证。需要原子性时由调用方显式绑定本地事务。
 - MySQL 四位 YEAR 已实现本地编解码、元数据及参数支持：`ushort`，0 或 1901–2155，显式参数类型 `OceanBaseDbType.Year`；无两位年份推断。真实往返待验收，公共 MySQL 建连仍受 A05 门槛限制。
-- Oracle NCHAR/INTERVAL、MySQL JSON/BIT 仍为规划能力，未支持类型会显式失败。
+- MySQL BIT(1–64) 已实现本地编解码、元数据及参数支持：统一使用 `ulong`，BIT(1) 也不转 bool。显式 `OceanBaseDbType.Bit` 参数的 `Size` 为位宽，0 表示 64；超出声明位宽在发包前失败，`Precision`/`Scale` 仅支持 0。真实往返待验收，公共 MySQL 建连仍受 A05 门槛限制。
+- Oracle NCHAR/INTERVAL、MySQL JSON 仍为规划能力，未支持类型会显式失败。
 
 ## 使用入口
 

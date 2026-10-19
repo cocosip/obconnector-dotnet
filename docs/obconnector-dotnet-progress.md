@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归。本轮继续 D14 MySQL YEAR 本地实现，进度见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D13/D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6` 完成 D14 YEAR 本地实现。本轮继续 D13 MySQL BIT，进度见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D12/D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -17,7 +17,8 @@
 | C01/C08 | 未开放Pooling=true，公开入口明确拒绝；生产验收缺口已列明 | 连接池及完整重置实现、可信版本/模式白名单、生产矩阵与G3验收 |
 | R01/R02 | 同版本双包、五资产实际包消费、故障/回退README、8/9完整本地Unit/DI及Windows Framework基础包消费工具已完成 | 许可证/来源/包名审核、正式Framework支持决定、真实兼容矩阵和最终发布审核 |
 | D14 | 四位 MySQL YEAR 本地实现，验证记录见末尾；真实验收开放 | 真实 YEAR 列往返、版本/OBProxy矩阵 |
-| D01–D13/D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及其他扩展类型等继续逐项评估本地实施 |
+| D13 | MySQL BIT(1–64) 本地实现，验证记录见末尾；真实验收开放 | 真实 BIT 列往返、版本/OBProxy矩阵 |
+| D01–D12/D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及其他扩展类型等继续逐项评估本地实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -129,7 +130,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09本地实现/走查完成；实际8/9各Unit1206/DI8、10 Unit1206/Consumer152/DI8及五资产包消费通过；真实双模式/跨平台及完整支持矩阵未验收 |
 | G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02-C07本地实现完成待真实环境验证，C04真实资源/性能与版本矩阵、C07池性能仍待验收；C08因真实环境证据缺失而阻塞，关口未关闭 |
 | G4 发布候选 R | W35-W37 | 0/2 | 进行中 | R01/R02本地双包/五资产、8/9完整本地回归、Framework4.8.1基础消费及交付材料已完成；许可/来源/包名、正式支持范围及真实矩阵未验收 |
-| D 独立扩展 | 本地可独立部分继续，实库验收延期 | 0/15 | 进行中 | D14 本地实现和验证见末尾；其余逐项实施；每项真实版本和模式证据仍须补齐，不计入 G4 |
+| D 独立扩展 | 本地可独立部分继续，实库验收延期 | 0/15 | 进行中 | D13/D14 本地实现和验证见末尾；其余逐项实施；每项真实版本和模式证据仍须补齐，不计入 G4 |
 
 ## A. 协议基础任务
 
@@ -188,7 +189,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D10 | G4 后 | Oracle NCHAR/national charset | 未开始 | 待记录 |
 | D11 | G4 后 | Oracle INTERVAL | 未开始 | 待记录 |
 | D12 | G4 后 | MySQL JSON | 未开始 | 待记录 |
-| D13 | G4 后 | MySQL BIT | 未开始 | 待记录 |
+| D13 | 本地先行，实库延期 | MySQL BIT | 待验证 | 本地编解码/位宽/参数及测试记录见末尾；真实 BIT 列往返仍开放 |
 | D14 | 本地先行，实库延期 | MySQL YEAR | 待验证 | 本地实现/测试/走查记录见末尾；真实 YEAR 列往返仍开放 |
 | D15 | G4 后 | 新认证插件 | 未开始 | 待记录 |
 
@@ -542,3 +543,26 @@ R02仅完成本地材料和本地验证，状态保持进行中；G4同步为进
 测试命令沿用 `dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/<上述目录>`；定向分别附加 `--filter FullyQualifiedName~Year` 和 `--filter FullyQualifiedName~YearConsumerTests`。覆盖同步/异步、默认/SequentialAccess、文本/二进制、正常/零/NULL、后续字段对齐、参数重用及无效参数发包前拒绝；五资产均经 DbConnection/DbDataReader 公共 API 实际读取和参数写入。独立只读走查核对编解码、参数、reader、顺序帧边界、Schema、测试与文档，未发现需修复问题。`git diff --check` 通过。
 
 D14 本地实现完成，正式状态保持待验证：真实 YEAR 列 INSERT/SELECT、目标 OceanBase/OBProxy 版本及模式矩阵未执行，公共 MySQL 建连仍受 A05 门槛限制。未操作信任根，未部署其他电脑/数据库，未重新验证打包、旧运行时或 Framework。C01、A05 及 D01–D13/D15 仍未完成，不能将本模块通过解释为项目全部完成。
+
+## D13 MySQL BIT 本地实现（2026-10-19）
+
+从 `da03fe6` 继续实现 BIT(1–64)。`OceanBaseDbType.Bit` 保持枚举值 8，映射 `ulong` / `DbType.UInt64`，BIT(1) 也不转 bool。结果类型码 16，列 Length 表示位宽；文本/二进制均为长度编码的大端原始字节，精确要求 ceil(位宽/8) 字节，并拒绝超出位宽的高位，保留 2^63 和 UInt64.MaxValue。标准/provider-specific 类型一致，Schema ColumnSize 为位数，NumericPrecision/Scale 不填十进制精度。Oracle、非法位宽/scale 含 NULL 均拒绝。显式 Bit 参数只接受 UInt64，Size=0 为 64 位、1–64 为声明位宽，Precision/Scale=0，超界在 prepare 前拒绝；复用无符号 BIGINT 绑定，不改变普通 UInt64 的行为。
+
+仅增加内部 BitCodec，复用 ResultColumn、PreparedParameters、顺序/默认 reader 和既有 Schema 路径，无新依赖或公开值类型。长度规则另对照固定 OceanBase 源码 `bit_cell_str`（见开发方案链接），大端解释对照固定 Java `RowProtocol.parseBit`；仅参考行为，不复制源码，也不将源码阅读作为实库验收。
+
+先运行失败测试：`TestResults/bit-red/*.trx` 中 66 项因 BIT 尚未实现失败、5 项非法元数据拒绝通过；实现后修正测试对“多一字节”与“未使用高位非零”异常的区分，71 项通过。随后增加公共环回读写/预先拒绝，最终定向 Unit 81 项通过。复用并扩展五资产 YEAR 消费测试为 `BitAndYearConsumerTests`，原 10 项 YEAR 保留，新增 10 项 BIT，避免重复整套握手/模式夹具。
+
+最终证据（Windows / .NET 10.0.13）：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx 核心五目标、DI 三目标 | 0 警告、0 错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
+| BIT 定向 Unit | 81 通过，0 失败/跳过 | `TestResults/bit-targeted/*.trx` |
+| BIT/YEAR 五资产公共 API 消费 | 20 通过，0 失败/跳过 | `TestResults/bit-year-consumer-targeted/*.trx` |
+| 完整 Unit | 1321 通过，0 失败/跳过 | `TestResults/bit-unit-full/*.trx` |
+| 完整 Consumer | 172 通过，0 失败/跳过 | `TestResults/bit-consumer-full/*.trx` |
+| DI | 8 通过，0 失败/跳过 | `TestResults/bit-di-full/*.trx` |
+
+完整测试命令同上节，替换结果目录；定向分别附加 `--filter FullyQualifiedName~TextCommandTests.Bit` 和 `--filter FullyQualifiedName~BitAndYearConsumerTests`。覆盖全部 64 种位宽的零/最高位/最大值，符号边界与原始字节解释，NULL、精度/长度/位宽错误、参数类型及重置；公共环回覆盖同步/异步、文本/预处理、默认/SequentialAccess、后续字段、预处理重用、NULL 参数和会话复用。独立只读走查核对参数预校验、两种结果/顺序帧路径、无符号边界、Schema、消费者及文档，未发现需修复问题。`git diff --check` 通过。
+
+D13 本地实现完成，正式状态保持待验证。真实 BIT 列 INSERT/SELECT（含服务端目标位宽转换）、OceanBase/OBProxy 版本及模式矩阵未执行，公共 MySQL 仍由 A05 拒绝。未操作信任根、未部署其他电脑/数据库，未重跑打包/旧运行时/Framework。其余 A05、C01、D01–D12/D15 继续开放。

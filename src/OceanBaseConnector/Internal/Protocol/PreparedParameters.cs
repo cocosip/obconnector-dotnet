@@ -125,6 +125,14 @@ namespace OceanBaseConnector.Internal.Protocol
                         (!(parameter.Value is ushort year) || !YearCodec.IsValid(year)))
                         throw new ArgumentException("A YEAR parameter requires a UInt16 value of zero or 1901 through 2155.");
                 }
+                if (providerType == OceanBaseDbType.Bit)
+                {
+                    if (mode != OceanBaseCompatibilityMode.MySql || parameter.Size < 0 || parameter.Size > 64 || parameter.Precision != 0 || parameter.Scale != 0)
+                        throw new NotSupportedException("BIT requires MySQL mode, Size of zero or 1 through 64 bits, and zero Precision/Scale.");
+                    if (parameter.Value != null && parameter.Value != DBNull.Value &&
+                        (!(parameter.Value is ulong bits) || !BitCodec.Fits(bits, parameter.Size == 0 ? 64 : parameter.Size)))
+                        throw new ArgumentException("A BIT parameter requires a UInt64 value within its declared bit width.");
+                }
                 if (providerType == OceanBaseDbType.Null)
                 {
                     if (parameter.Value != null && parameter.Value != DBNull.Value)
