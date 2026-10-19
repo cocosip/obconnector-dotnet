@@ -479,6 +479,14 @@ Load Balance枚举Sequential（默认）/RoundRobin在连接串严格按名称�
 
 地址来源不授予服务端身份：新会话继续TLS、认证、模式及能力初始化，TLS/认证/模式/协议失败不切换；A05的MySQL确认门槛保留。发现和轮转只发生在显式Open前，不迁移事务/statement/reader/locator，已发送SQL未知结果销毁会话且不自动重放。真实拓扑及版本/OBProxy适配仍待验收。
 
+### D09 XID身份基础
+
+核心五目标的OceanBaseXid是sealed不可变值类，以有符号Int32 FormatId、1–64字节globalTransactionId和0–64字节branchQualifier表示一个XA分支。FormatId仅拒绝保留的NULLXID -1，其他负值不改变位模式；两段不可null。构造及GetGlobalTransactionId()/GetBranchQualifier()防御复制，身份比较包含格式号、两段各自长度和完整字节，散列与相等一致；默认对象字符串不提供身份正文，没有字符串/Guid隐式转换。协调器可在外部按自己的持久化格式保存返回副本。
+
+结构及长度以固定Java基线OceanBaseXid/OceanBaseXaResource和OceanBase 5e8a63d29dae9fde5e962b8fcc7b167d438fc343的ObXATransID为依据，不复制Java保留可变输入数组的行为。后续MySQL命令须按Java基线的32位无符号位模式编码FormatId，Oracle传有符号值；服务端内部Int64范围更大，恢复不得截断/静默丢失不在公开域中的身份。该值对象不发包、不开始/加入事务；固定物理会话、显式阶段操作和恢复入口仍需后续D09模块接入，TransactionScope继续拒绝，真实协调器/两模式往返验收仍开放。
+
+### 错误与诊断
+
 数据库/协议错误使用 `OceanBaseException : DbException`，保留服务端错误码、SQLSTATE 和 `IsExecutionOutcomeUnknown`，现代目标通过继承的 `BatchCommand` 关联批次条目；异常不提供模式或端点属性，安全端点和模式通过日志/诊断关联；发送前的调用方取消遵循 `OperationCanceledException`。B01 接入 `Microsoft.Extensions.Logging.Abstractions`，由数据源 builder 的 `UseLoggerFactory` 配置，默认无日志，不使用可变全局工厂；命令/事务日志随 B02/B07 实现。日志与追踪不写入默认 SQL、绑定值、凭据或原始服务端错误文本，日志后端异常不能改变执行与资源清理结果。C07 已用 `ActivitySource`、`Meter` 暴露本地操作和聚合指标，两个Standard资产显式DiagnosticSource8.0.1、现代资产运行时API的五目标边界已本地验证；不预先叠加多套事件设施。本地追踪不依赖 OB20，经服务端协商的完整链路追踪归 D01。日志与协议抓包分开，抓包必须显式开启并擦除认证和参数内容。事件、安全和生命周期细则见 §2.6。
 
 ## 7. 实施阶段与验收

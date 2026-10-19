@@ -835,6 +835,19 @@ DML成功响应首列是该项影响行数；错误响应首列是0起始失败�
 
 本地范围完成：Release核心五/DI三目标0警告/错误，完整Unit2653（新增56）、Consumer844（新增40）、DI8均通过且零失败/跳过；旧案例移除0项。独立走查发现的锁内取消回调和异常释放问题已用红绿回归修复，发现后重置预算的变异也被测试检出。详细证据见台账。D08正式状态待验证，真实拓扑/数据库/OBProxy及异机继续暂缓，D09及其他开放项继续推进。
 
+### D09 XID值基础模块
+
+D09完整目标仍为显式XA、固定物理会话、阶段控制与恢复，真实事务协调器和两模式实库验收延期，TransactionScope继续拒绝。本模块先交付可独立消费和校验的不可变XID值，不把值类型存在等同于公开XA执行已支持；后续固定会话/阶段执行和恢复必须继续完成。依据固定Java基线OceanBaseXid及OceanBaseXaResource和OceanBase服务端5e8a63d29dae9fde5e962b8fcc7b167d438fc343的ObXATransID（src/storage/tx/ob_xa_define.h/.cpp），借鉴身份结构与两段各64字节上限，不复制实现。Java基线直接保留/返回输入数组，本驱动改为防御复制，防止协调器已登记的身份被外部修改。
+
+本模块设计决定：五目标公开sealed OceanBaseXid : IEquatable<OceanBaseXid>，唯一构造OceanBaseXid(int formatId, byte[] globalTransactionId, byte[] branchQualifier)，FormatId只读。FormatId保留完整有符号Int32格式号，仅拒绝XA保留的NULLXID -1；不擅自将其他负数当非法，后续MySQL编码按Java基线保留其32位无符号位模式、Oracle保留有符号值。gtrid为1–64字节，bqual为0–64字节，二者不可null且保留所有字节（含NUL/高位字节）。GetGlobalTransactionId()/GetBranchQualifier()返回新数组。Equals/GetHashCode按格式号、两段独立边界和完整字节定义身份，不依赖当前区域、不将文本当XID；默认对象字符串不输出身份正文，不增加隐式字符串/Guid转换或自定义序列化。后续恢复遇超出此公开域的身份必须明确失败，不截断或静默丢弃；服务端内部的Int64身份不据此宣称全部可用于XA协调器；恢复层须精确验证目标模式的32位表示。
+
+文件范围：新增src/OceanBaseConnector/OceanBaseXid.cs；tests/OceanBaseConnector.UnitTests/XidTests.cs固定边界/不可变/相等散列/任意字节；tests/OceanBaseConnector.ConsumerTests/XidConsumerTests.cs隔离加载五资产的公开API，既有ConsumerTests.NetStandard/NetStandardConsumerSample.cs补基线编译消费。沿原工程/依赖，无新配置、依赖或数据库访问；同名类不暴露执行入口。
+
+- [x] 先写XidTests，执行dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 -nr:false --filter FullyQualifiedName~Xid，确认缺API红编译；实现最小值对象后定向全绿。校验null/长度/格式号、输入及输出数组修改、两段拼接相同但边界不同、不同格式/字节/长度、null/其他对象、字典查找及64+64全字节快照。
+- [x] 五资产实际公开消费验证边界、数组隔离、IEquatable/Equals/GetHashCode与默认字符串不泄露，Standard2.0辅助工程直接编译使用API；本机net10宿主不替代五运行时或异机验收。
+- [x] 完整Release五目标/DI三目标编译、完整Unit/Consumer/DI，独立只读代码及范围走查，修复必要问题并重验；同步README/架构/台账、UTF8无BOM/CRLF和diff检查后本地提交，不推送。D09仍进行中，下一模块接固定会话与控制阶段/恢复，不能因本模块通过关闭整体目标。
+本基础模块完成：Release核心五目标/DI三目标0警告/错误，完整Unit2664（新增11）、Consumer849（新增5）、DI8全部通过，0失败/跳过、旧案例移除0；独立只读走查无阻断。本轮全量另捕获D08关闭映射竞态和既有批次早关夹具竞态，均经定向/完整验证及走查修复，分别提交9493278/e601e23；详见台账。D09整体仍进行中，固定会话/控制阶段/恢复与真实验收继续开放。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

@@ -20,6 +20,12 @@ namespace OceanBaseConnector.ConsumerTests.NetStandard
                     "netstandard2.0 asset must not report modern ADO.NET APIs.");
             }
 
+            var xid = new OceanBaseXid(1, new byte[] { 1 }, Array.Empty<byte>());
+            var sameXid = new OceanBaseXid(1, new byte[] { 1 }, Array.Empty<byte>());
+            if (xid.FormatId != 1 || xid.GetGlobalTransactionId()[0] != 1 || xid.GetBranchQualifier().Length != 0 ||
+                !((IEquatable<OceanBaseXid>)xid).Equals(sameXid) || xid.GetHashCode() != sameXid.GetHashCode())
+                throw new InvalidOperationException("The baseline XID value contract is unavailable.");
+
             return "netstandard2.0 consumer compiles against the baseline asset.";
         }
     }
