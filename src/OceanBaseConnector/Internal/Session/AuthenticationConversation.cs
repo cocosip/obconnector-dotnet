@@ -7,7 +7,7 @@ using Org.BouncyCastle.Math.EC.Rfc8032;
 namespace OceanBaseConnector.Internal.Session
 {
     /// <summary>Authentication decisions only; constructed after the selected TLS upgrade succeeds.</summary>
-    internal sealed class AuthenticationConversation
+    internal sealed class AuthenticationConversation : IDisposable
     {
         internal const string CachingSha2 = "caching_sha2_password";
         internal const string Sha256 = "sha256_password";
@@ -18,10 +18,14 @@ namespace OceanBaseConnector.Internal.Session
         private bool _awaitingPublicKey;
         private byte[] _seed;
         private int _pamPasswordNumber;
+        private GssapiAuthentication? _gssapi;
+        private readonly Func<string, IGssapiContext>? _gssapiContextFactory;
 
-        public AuthenticationConversation(OceanBaseConnectionOptions options, string? pluginName, byte[] seed)
+        public AuthenticationConversation(OceanBaseConnectionOptions options, string? pluginName, byte[] seed,
+            Func<string, IGssapiContext>? gssapiContextFactory = null)
         {
             _options = options;
+            _gssapiContextFactory = gssapiContextFactory;
             _seed = (byte[])seed.Clone();
             PluginName = pluginName ?? InitialHandshakePacket.NativePasswordPluginName;
             InitialResponse = BuildResponse(seed);
@@ -32,6 +36,7 @@ namespace OceanBaseConnector.Internal.Session
 
         public void ValidateSuccess()
         {
+            _gssapi?.ValidateSuccess();
             if (_awaitingPublicKey) throw new ProtocolException("Authentication ended before the requested RSA public key arrived.");
         }
 
@@ -42,6 +47,7 @@ namespace OceanBaseConnector.Internal.Session
             {
                 if (_switched) throw new ProtocolException("Repeated authentication plugin switch.");
                 _switched = true; _awaitingPublicKey = false;
+                _gssapi?.Dispose(); _gssapi = null;
                 if (packet.Length == 1)
                 {
                     PluginName = OldPassword.PluginName;
@@ -50,6 +56,12 @@ namespace OceanBaseConnector.Internal.Session
                 var request = AuthSwitchRequest.Parse(packet);
                 PluginName = request.PluginName;
                 return BuildResponse(request.Seed);
+            }
+            if (_gssapi is not null)
+            {
+                var response = _gssapi.Advance(packet);
+                _awaitingFinalResult = _gssapi.IsComplete;
+                return response;
             }
             if (PluginName == "dialog" && packet.Length != 0)
             {
@@ -93,6 +105,11 @@ namespace OceanBaseConnector.Internal.Session
                     return OldPassword.Respond(_options.Password, seed);
                 case InitialHandshakePacket.Ed25519PasswordPluginName:
                     return Ed25519Response(seed);
+                case "auth_gssapi_client":
+                    RequireVerifiedTls();
+                    _gssapi = GssapiAuthentication.Create(seed, _options.ServicePrincipalName, _gssapiContextFactory);
+                    _awaitingFinalResult = _gssapi.IsComplete;
+                    return _gssapi.InitialResponse;
                 case "dialog":
                     RequireVerifiedTls();
                     _pamPasswordNumber = 1;
@@ -183,6 +200,8 @@ namespace OceanBaseConnector.Internal.Session
                 throw new OceanBaseException("Authentication requires a valid Unicode password.");
             }
         }
+
+        public void Dispose() => _gssapi?.Dispose();
 
         private void RequireVerifiedTls()
         {

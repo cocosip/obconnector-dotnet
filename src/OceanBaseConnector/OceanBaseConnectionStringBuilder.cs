@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
 using OceanBaseConnector.Internal;
+using OceanBaseConnector.Internal.Protocol;
 
 namespace OceanBaseConnector
 {
@@ -13,7 +14,7 @@ namespace OceanBaseConnector
     /// <c>TLS Mode</c>, <c>TLS Server Name</c>, <c>Persist Security Info</c>,
     /// <c>ExpectedMode</c>, <c>Pooling</c>, <c>Server RSA Public Key</c> and
     /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
-    /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c> and <c>Load Balance</c>; the only synonyms are
+    /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c>, <c>Load Balance</c> and <c>Service Principal Name</c>; the only synonyms are
     /// <c>Host</c>, <c>Uid</c> and <c>Pwd</c>. PAM accepts secret <c>PasswordN</c> keys for N >= 2.
     /// Unknown keys, synonym conflicts
     /// and malformed values are rejected instead of being silently accepted.
@@ -39,6 +40,7 @@ namespace OceanBaseConnector
         public const string UseOraclePrepareExecuteKey = "Use Oracle Prepare Execute";
         public const string UseLobLocatorsKey = "Use Lob Locators";
         public const string LoadBalanceKey = "Load Balance";
+        public const string ServicePrincipalNameKey = "Service Principal Name";
 
         public const int DefaultPort = 2881;
         public const int DefaultConnectionTimeoutSeconds = 15;
@@ -209,6 +211,13 @@ namespace OceanBaseConnector
             set => this[UseLobLocatorsKey] = value ? "true" : "false";
         }
 
+        /// <summary>Optional trusted Kerberos service principal overriding the server's GSSAPI challenge.</summary>
+        public string ServicePrincipalName
+        {
+            get => GetString(ServicePrincipalNameKey) ?? string.Empty;
+            set => this[ServicePrincipalNameKey] = value;
+        }
+
         public override object? this[string keyword]
         {
             get
@@ -310,7 +319,8 @@ namespace OceanBaseConnector
                 UseLobLocators,
                 LoadBalance,
                 ToSanitizedConnectionString(includeSecrets: false),
-                additionalPasswords);
+                additionalPasswords,
+                ServicePrincipalName);
         }
 
         // Serialization order for fixed keys; additional PAM passwords are secrets.
@@ -335,6 +345,7 @@ namespace OceanBaseConnector
             UseOraclePrepareExecuteKey,
             UseLobLocatorsKey,
             LoadBalanceKey,
+            ServicePrincipalNameKey,
         };
 
         /// <summary>
@@ -445,6 +456,11 @@ namespace OceanBaseConnector
                 case UseOraclePrepareExecuteKey:
                 case UseLobLocatorsKey:
                     ParseBooleanValue(canonicalKey, value);
+                    return value;
+
+                case ServicePrincipalNameKey:
+                    if (value.Length != 0 && !GssapiChallenge.IsValidPrincipal(value))
+                        throw CreateKeywordError("Service principal name must be valid Unicode, at most 1024 characters, without control characters.", canonicalKey, includeValue: false, value: null);
                     return value;
 
                 case ServerRsaPublicKeyKey:
@@ -582,6 +598,9 @@ namespace OceanBaseConnector
                     return true;
                 case "USE LOB LOCATORS":
                     canonical = UseLobLocatorsKey;
+                    return true;
+                case "SERVICE PRINCIPAL NAME":
+                    canonical = ServicePrincipalNameKey;
                     return true;
                 case "LOAD BALANCE":
                     canonical = LoadBalanceKey;

@@ -1,10 +1,10 @@
 # OceanBase Connector for .NET 开发进度台账
 
-基线日期：2026-10-17；当前进度更新：2026-10-19。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。
+基线日期：2026-10-17；当前进度更新：2026-10-20。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值及MySQL/Oracle固定会话、显式阶段与完整恢复快照已本地接入，真实协调器及两模式实库验收仍开放；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA、mysql_old_password、Ed25519及dialog/PAM路径已有本地实现，GSSAPI及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值及MySQL/Oracle固定会话、显式阶段与完整恢复快照已本地接入，真实协调器及两模式实库验收仍开放；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA、mysql_old_password、Ed25519、dialog/PAM及现代资产Kerberos GSSAPI路径已有本地实现，Standard GSSAPI、Java Windows native其他机制及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -21,7 +21,7 @@
 | D12 | MySQL JSON 文本/预处理读写、元数据及字段流本地实现，记录见末尾 | 真实 JSON 列往返、语法验证和版本/OBProxy矩阵 |
 | D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
-| D15 | SHA-2 fast/TLS、固定RSA、显式公钥获取、old password、Ed25519及PAM本地实现，验证见末尾 | GSSAPI、私有CA成功链及两模式实库矩阵 |
+| D15 | SHA-2 fast/TLS、固定RSA、显式公钥获取、old password、Ed25519、PAM及现代资产Kerberos GSSAPI本地实现，验证见末尾 | Standard GSSAPI、其他系统机制、真实KDC/私有CA及两模式实库矩阵 |
 | D01 | OB20帧/校验、显式协商与标准回退、流式传输及脱敏完整链路追踪已有本地实现，记录见末尾 | OB20经TLS环回、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
@@ -199,7 +199,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D12 | 本地先行，实库延期 | MySQL JSON | 待验证 | 本地文本/二进制读写、元数据和字段流，验证见末尾；真实 JSON 列往返仍开放 |
 | D13 | 本地先行，实库延期 | MySQL BIT | 待验证 | 本地编解码/位宽/参数及测试记录见末尾；真实 BIT 列往返仍开放 |
 | D14 | 本地先行，实库延期 | MySQL YEAR | 待验证 | 本地实现/测试/走查记录见末尾；真实 YEAR 列往返仍开放 |
-| D15 | 本地先行，实库延期 | 新认证插件 | 进行中 | SHA-2 fast/TLS、固定RSA、显式取钥、old password、Ed25519及PAM本地实现；GSSAPI、私有CA及两模式实库余项开放，验证见末尾 |
+| D15 | 本地先行，实库延期 | 新认证插件 | 进行中 | SHA-2 fast/TLS、固定RSA、显式取钥、old password、Ed25519、PAM及现代资产Kerberos GSSAPI本地实现；Standard/其他机制、真实KDC/私有CA及两模式实库余项开放，验证见末尾 |
 
 ## 兼容矩阵记录模板
 
@@ -1404,3 +1404,32 @@ TDD初批21项为13失败/8通过（TestResults/pam-red/*.trx），缺口为未�
 完整测试命令沿上节，目录换为pam-unit-final/pam-consumer-final/pam-di-final；最终TRX逐案例对比Ed25519基线：Unit新增27、Consumer新增20，无移除，DI仍8。README/架构/方案/台账同步，独立复查无剩余阻断，UTF8无BOM/CRLF及git diff --check通过。
 
 D15仍进行中，下一项按Java推进GSSAPI。A05、C01、许可/来源/发布、真实两模式/OceanBase/OBProxy/可信TLS成功链及异机验收继续开放；真实服务端和其他机器测试按要求暂缓。本轮未重跑打包、旧运行时或Framework；Ed25519实际包证据保留在上节，不能当作PAM实库证据。global.json保持删除，当前master本地提交不推送，整体goal未完成。
+
+
+## D15 GSSAPI认证本地实现（2026-10-19至20）
+
+从e5af6ff继续，逐项核对固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的SendGssApiAuthPacket、StandardGssapiAuthentication、WindowsNativeSspiAuthentication及GssUtility，不复制源码。初始/命名切换接入auth_gssapi_client，双NUL字段按严格UTF8解析为SPN与mechanism，保留切换数据尾零，总长不超过16KiB且额外数据只能为零。空mechanism默认Kerberos，NTLM/Negotiate/未知机制明确拒绝；Service Principal Name覆盖SPN，最长1024字符、无控制符/无效Unicode，不改realm、不做反向DNS，选项冻结和ForEndpoint保留。
+
+首批仅net8/net9/net10直接使用系统NegotiateAuthentication与当前系统票据，无新依赖、反射桥或自编SSPI。两个Standard资产即使运行于现代host也明确拒绝此插件。VerifyFull后才创建上下文；token直接交PacketChannel，不加01或NegotiateStream帧。系统Completed、IsAuthenticated、IsMutuallyAuthenticated及实际Kerberos全部满足后仍等待数据库最终OK，提前OK及完成后FE/续轮拒绝；系统错误脱敏。AuthenticationConversation持有上下文，两个握手入口using覆盖成功、异常、取消和切换释放；确定性工厂每会话传入，无全局测试钩子。
+
+系统同步协商可能等待KDC，CancellationToken无法强制中断原生调用。驱动在原生调用前后及网络阶段检查连接预算，不并发Dispose仍在执行的上下文。Java Windows native其他机制和Standard支持仍开放，不能据此声称完整Java兼容。未读取真实凭据缓存或连接KDC；本地替身、分发阶段环回及弱TLS拒绝不能证明真实Kerberos或可信TLS成功链。
+
+TDD首次gssapi-red.log为缺类型/属性的编译失败，不算断言RED；API骨架阶段18项为16失败/2通过（gssapi-contract-red），状态骨架阶段24项为6失败/18通过（gssapi-state-red），随后24通过（gssapi-green）。独立走查发现完成后FE可逃离GSS最终态，已将初始及续轮IsComplete同步到共享最终态；同时补系统Security/DllNotFound/EntryPointNotFound异常脱敏。新增5项分发场景覆盖提前OK、完成后FE、最终ERR、离开GSS时立即释放及成功；另2项同步/异步读取阶段在平台步骤返回时主动取消，验证不发送返回token且释放上下文（gssapi-dispatch七项通过）。这些是确定性平台替身与读取阶段证据，不是真实TLS/Kerberos会话。
+
+临时删除两处最终态同步的变异检查使complete-fe准确失败（gssapi-final-gate-red：1失败/4通过），finally恢复源码后重新构建，全部GSSAPI定向Unit37、Consumer22通过。首次完整Unit在1064通过后测试宿主退出，结果为中断，不能算完整通过（gssapi-unit-final.log及对应TRX）；未取得失败断言或系统应用崩溃事件。随后开启--blame-crash及--diag保留诊断并重跑，最终结果见下表。
+
+| 验证 | 结果 | 证据 |
+| --- | --- | --- |
+| Release核心五/DI三及测试项目构建 | 0警告/错误 | TestResults/gssapi-build-final.log |
+| GSSAPI定向Unit | 37通过，0失败/跳过 | TestResults/gssapi-unit-targeted/*.trx |
+| 五资产配置/秘密/弱TLS拒绝及Standard能力拒绝 | 22通过，0失败/跳过 | TestResults/gssapi-consumer-targeted/*.trx |
+| 完整Unit诊断重跑 | 2912通过，0失败/跳过，退出0，未复现宿主退出 | TestResults/gssapi-unit-verified/*.trx、gssapi-unit-verified.log、gssapi-unit-diagnostic.log |
+| 完整Consumer | 1161通过，0失败/跳过 | TestResults/gssapi-consumer-final/*.trx |
+| 完整DI | 8通过，0失败/跳过 | TestResults/gssapi-di-final/*.trx |
+| 范围格式校验 | 退出0 | TestResults/gssapi-format-final.log |
+
+构建为dotnet build OceanBaseConnector.slnx -c Release --no-restore；完整测试为dotnet test各Unit/Consumer/DI工程-c Release --no-build --no-restore --logger trx --results-directory对应路径，Unit诊断轮另加--blame-crash --diag TestResults/gssapi-unit-diagnostic.log。Unit使用正常Windows证书私钥权限，不操作信任根；测试运行中未重建产品。解析TRX与PAM基线逐案例比较：Unit新增37、Consumer新增22，无移除，DI仍8。首次宿主退出原因未确定，未据后续通过将其归因于环境或声称已修复。
+
+独立只读复查确认最终态保护、原始token、每会话工厂、分发/取消测试和释放路径无剩余阻断；README/架构/台账的现代/Standard支持范围、原生取消限制与未验收项一致。方案完成项、UTF8无BOM/CRLF及diff检查后当前master本地提交，不推送。global.json保持删除。
+
+D15保持进行中：Standard GSSAPI、Java Windows native其他机制、真实票据/KDC/可信TLS成功链及两模式实库矩阵仍开放；A05、C01、许可/来源/发布等余项不据此关闭。本轮未重跑实际包、旧运行时或Framework；不执行真实数据库服务端、其他机器及真实凭据/KDC测试，整体goal未完成。

@@ -33,13 +33,15 @@ namespace OceanBaseConnector.Internal
             bool useLobLocators,
             OceanBaseLoadBalance loadBalance,
             string sanitizedConnectionString,
-            IReadOnlyDictionary<int, string>? additionalPasswords = null)
+            IReadOnlyDictionary<int, string>? additionalPasswords = null,
+            string servicePrincipalName = "")
         {
             Server = server;
             Port = port;
             Endpoints = Array.AsReadOnly(OceanBaseEndpoint.Parse(server, port));
             UserId = userId;
             Password = password;
+            ServicePrincipalName = servicePrincipalName;
             var passwords = new Dictionary<int, string>();
             if (additionalPasswords is not null)
                 foreach (var entry in additionalPasswords) passwords.Add(entry.Key, entry.Value);
@@ -70,13 +72,15 @@ namespace OceanBaseConnector.Internal
 
         internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
             endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, LoadBalance, SanitizedConnectionString, AdditionalPasswords);
+            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName);
 
         public string UserId { get; }
 
         public string Password { get; }
 
         internal IReadOnlyDictionary<int, string> AdditionalPasswords { get; }
+
+        internal string ServicePrincipalName { get; }
 
         public string Database { get; }
 

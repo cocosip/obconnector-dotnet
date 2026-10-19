@@ -627,6 +627,17 @@ D15 Ed25519子模块实施（2026-10-19）：沿固定Java Ed25519PasswordPlugin
 - [x] AuthenticationConversation增加dialog主密码和顺序继续，复用严格编码/终止密码helper；协议数据按Java不解释提示，敏感值不进入异常；FE仍走既有切换。测试先RED后GREEN，不改TLS实现。
 - [x] 新增PAM Required/Disabled公开拒绝环回和五资产配置/秘密/拒绝消费；可信TLS成功路径仅状态/编码证据，不装信任根。独立走查后修复，核心五/DI三Release与完整Unit/Consumer/DI、格式/diff通过，README/架构/台账同步后本地提交。GSSAPI与实库/异机仍独立后续。
 
+### D15 GSSAPI本地实施（2026-10-19）
+
+依据固定Java SendGssApiAuthPacket和StandardGssapiAuthentication的当前票据/Kerberos及mutual认证，原始token直接经PacketChannel传输，不使用NegotiateStream额外帧、不复制Java源码。Service Principal Name选项覆盖服务端SPN；严格有界UTF8双NUL字段（SPN及mechanism），保留原始切换数据尾零。空mechanism默认Kerberos，首批仅Kerberos，未知/NTLM拒绝，不把任意服务端package名交给系统。完整认证前要求VerifyFull，完成时必须系统Completed、IsAuthenticated、IsMutuallyAuthenticated和实际Package=Kerberos，再接受数据库最终OK。
+
+Ruling: 首批仅net8/net9/net10直接使用系统NegotiateAuthentication，两个Standard资产明确拒绝该插件 — Standard参考API缺失且暂无旧host需求/真实凭据验收，不引入反射/新依赖/自编SSPI；代价是Standard资产即使在现代host运行也不提供GSSAPI。Java Windows native的NTLM/任意mechanism范围不属于本子模块，不据此声称完整Java互通。系统同步SSPI/GSS协商可能等待KDC，取消无法强制中断原生调用；连接预算在驱动控制的步骤/网络中生效，真实凭据/KDC及异机均暂缓。
+
+- [x] TDD新增GssapiChallengeTests覆盖双NUL/UTF8/尾零/畸形/长度/override，GssapiConfigurationTests覆盖规范配置/冻结/端点副本；验证现有未支持缺口。SPN最长1024字符，不含控制符/无效Unicode，不做realm改写或反向DNS。
+- [x] 最小接入GssapiChallenge、GssapiAuthentication与系统上下文适配器，接口隔离原生token提供方；先用确定性上下文替身验证协商状态、token原样、最终OK门槛、错误/构造/切换/Dispose生命周期，不能称Kerberos互通证明。
+- [x] AuthenticationConversation持有并Dispose上下文，HandshakeFlow同步/异步using；初始/命名切换、一次切换、最终ERR、取消/超时沿既有网络路径；每次OS调用返回后检查调用方取消，不能并发Dispose仍在执行的原生调用。
+- [x] 弱TLS环回及五资产公开配置/拒绝消费，本机系统API形状验证但不获取票据/连接KDC；独立走查、完整本地Unit/Consumer/DI和核心五/DI三Release、格式/diff通过，同步README/架构/台账后本地提交。实库、KDC/凭据缓存、可信TLS成功链/原生阻塞及Standard支持仍开放。
+
 ### D01 OB20 报文与校验子模块（2026-10-19）
 
 先实现内部报文层，D01 在能力协商、流式传输和完整链路追踪接入前保持进行中。依据固定 Java 基线 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` 的 `OceanBaseProtocolV20`、`Ob20PacketInputStream` / `Ob20PacketOutputStream` 和 `OceanBaseCRC16` / `OceanBaseCRC32C`；只核对线协议，不复制实现或查表常量。

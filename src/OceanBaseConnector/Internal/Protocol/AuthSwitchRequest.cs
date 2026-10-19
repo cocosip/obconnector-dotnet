@@ -28,7 +28,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (cursor.ReadUInt8() != 0xFE) throw new ProtocolException("Not an authentication switch.");
             var pluginName = cursor.ReadNullTerminatedAscii();
             var seed = cursor.HasRemaining ? cursor.ReadRemaining() : Array.Empty<byte>();
-            if (pluginName != InitialHandshakePacket.Ed25519PasswordPluginName && seed.Length > 0 && seed[seed.Length - 1] == 0)
+            if (pluginName != InitialHandshakePacket.Ed25519PasswordPluginName && pluginName != "auth_gssapi_client" && seed.Length > 0 && seed[seed.Length - 1] == 0)
                 Array.Resize(ref seed, seed.Length - 1);
             return new AuthSwitchRequest(pluginName, seed);
         }

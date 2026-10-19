@@ -24,16 +24,20 @@ namespace OceanBaseConnector.Internal.Session
         public static ConnectResult Authenticate(
             TcpTransport transport,
             PacketChannel channel,
-            OceanBaseConnectionOptions options)
+            OceanBaseConnectionOptions options,
+            CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var handshake = ParseInitialHandshake(channel.ReadPacket(), options);
             var clientCapabilities = ClientCapabilities.Build(handshake.Capabilities, options);
 
             TlsHandshakeFlow.Apply(transport, channel, handshake.Capabilities, clientCapabilities, options);
 
-            var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
+            cancellationToken.ThrowIfCancellationRequested();
+            using var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
+            cancellationToken.ThrowIfCancellationRequested();
             channel.WritePacket(BuildHandshakeResponse(handshake, clientCapabilities, options, authentication));
-            return ReadAuthenticationResult(channel, handshake, clientCapabilities, options, authentication);
+            return ReadAuthenticationResult(channel, handshake, clientCapabilities, options, authentication, cancellationToken);
         }
 
         public static async Task<ConnectResult> AuthenticateAsync(
@@ -45,7 +49,9 @@ namespace OceanBaseConnector.Internal.Session
             var capabilities = ClientCapabilities.Build(handshake.Capabilities, options);
             await TlsHandshakeFlow.ApplyAsync(transport, channel, handshake.Capabilities, capabilities, options, cancellationToken)
                 .ConfigureAwait(false);
-            var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
+            cancellationToken.ThrowIfCancellationRequested();
+            using var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
+            cancellationToken.ThrowIfCancellationRequested();
             await channel.WritePacketAsync(BuildHandshakeResponse(handshake, capabilities, options, authentication), cancellationToken)
                 .ConfigureAwait(false);
             return await ReadAuthenticationResultAsync(channel, handshake, capabilities, options, authentication, cancellationToken)
@@ -72,17 +78,21 @@ namespace OceanBaseConnector.Internal.Session
             return handshake;
         }
 
-        private static ConnectResult ReadAuthenticationResult(
+        internal static ConnectResult ReadAuthenticationResult(
             PacketChannel channel,
             InitialHandshakePacket handshake,
             CapabilityFlags clientCapabilities,
             OceanBaseConnectionOptions options,
-            AuthenticationConversation authentication)
+            AuthenticationConversation authentication,
+            CancellationToken cancellationToken)
         {
             while (true)
             {
                 var packet = channel.ReadPacket();
-                if (TryFinishAuthentication(packet, handshake, clientCapabilities, options, authentication, out var result, out var authenticationData))
+                cancellationToken.ThrowIfCancellationRequested();
+                var finished = TryFinishAuthentication(packet, handshake, clientCapabilities, options, authentication, out var result, out var authenticationData);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (finished)
                 {
                     return result!;
                 }
@@ -91,7 +101,7 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
-        private static async Task<ConnectResult> ReadAuthenticationResultAsync(
+        internal static async Task<ConnectResult> ReadAuthenticationResultAsync(
             PacketChannel channel,
             InitialHandshakePacket handshake,
             CapabilityFlags clientCapabilities,
@@ -102,7 +112,10 @@ namespace OceanBaseConnector.Internal.Session
             while (true)
             {
                 var packet = await channel.ReadPacketAsync(cancellationToken).ConfigureAwait(false);
-                if (TryFinishAuthentication(packet, handshake, clientCapabilities, options, authentication, out var result, out var authenticationData))
+                cancellationToken.ThrowIfCancellationRequested();
+                var finished = TryFinishAuthentication(packet, handshake, clientCapabilities, options, authentication, out var result, out var authenticationData);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (finished)
                 {
                     return result!;
                 }
@@ -117,7 +130,7 @@ namespace OceanBaseConnector.Internal.Session
         /// the final result on OK; otherwise returns false with an optional
         /// response (null means keep reading without sending a packet).
         /// </summary>
-        private static bool TryFinishAuthentication(
+        internal static bool TryFinishAuthentication(
             byte[] packet,
             InitialHandshakePacket handshake,
             CapabilityFlags clientCapabilities,

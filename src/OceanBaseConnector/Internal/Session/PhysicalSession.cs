@@ -74,7 +74,7 @@ namespace OceanBaseConnector.Internal.Session
                     catch (IOException error) when (CanTryNext(error, i, endpoints.Count, budget)) { continue; }
                     Attach(transport);
                     using var registration = budget.Token.Register(CancelOpeningTransport);
-                    FinishOpen(HandshakeFlow.Authenticate(transport, _channel!, options), budget.Token);
+                    FinishOpen(HandshakeFlow.Authenticate(transport, _channel!, options, budget.Token), budget.Token);
                     return;
                 }
             }
