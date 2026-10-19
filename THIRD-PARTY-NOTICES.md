@@ -6,6 +6,7 @@ The NuGet packages declare their runtime dependencies rather than embedding thos
 
 | Dependency | Version / target | License / source |
 | --- | --- | --- |
+| BouncyCastle.Cryptography | 2.7.0 for all core assets | MIT, https://github.com/bcgit/bc-csharp; used through its public expanded-key Ed25519 API |
 | Microsoft.Extensions.Logging.Abstractions | 8.0.3 for both Standard assets and net8; 9.0.10 for net9; 10.0.0 for net10 | MIT, https://github.com/dotnet/runtime |
 | Microsoft.Extensions.DependencyInjection.Abstractions | 8.0.2 for Standard / net8; 9.0.10 for net9; 10.0.0 for net10. The core package promotes the logging dependency through central transitive pinning; the DI package also references it directly. | MIT, https://github.com/dotnet/runtime |
 | System.Diagnostics.DiagnosticSource | 8.0.1 for both Standard assets; modern assets use the runtime API | MIT, https://github.com/dotnet/runtime |

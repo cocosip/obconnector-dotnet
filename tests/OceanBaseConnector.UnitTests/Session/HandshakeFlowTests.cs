@@ -103,7 +103,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 CapabilityFlags.ClientSessionTrack) >> 16) & 0xFFFF);
             buffer.WriteByte((byte)capsUpper);
             buffer.WriteByte((byte)(capsUpper >> 8));
-            buffer.WriteByte(21);
+            buffer.WriteByte((byte)(seed.Length + 1));
             buffer.Write(new byte[6], 0, 6);
             buffer.Write(new byte[4], 0, 4);
             buffer.Write(seed, 8, seed.Length - 8);

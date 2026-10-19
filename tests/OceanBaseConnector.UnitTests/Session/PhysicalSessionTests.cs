@@ -182,7 +182,10 @@ namespace OceanBaseConnector.UnitTests.Session
                 if (interruption == "close") session.Close();
                 if (interruption == "cancel") caller.Cancel();
                 if (interruption == "timeout")
+                {
                     await Assert.ThrowsAsync<TimeoutException>(() => opening.WaitAsync(TimeSpan.FromSeconds(10)));
+                    Assert.True(opening.IsFaulted, "Open must time out before the test watchdog.");
+                }
                 else
                 {
                     var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => opening.WaitAsync(TimeSpan.FromSeconds(10)));

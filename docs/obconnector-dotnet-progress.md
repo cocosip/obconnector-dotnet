@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值及MySQL/Oracle固定会话、显式阶段与完整恢复快照已本地接入，真实协调器及两模式实库验收仍开放；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA及mysql_old_password路径已有本地实现，dialog/PAM、Ed25519、GSSAPI及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值及MySQL/Oracle固定会话、显式阶段与完整恢复快照已本地接入，真实协调器及两模式实库验收仍开放；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA、mysql_old_password及Ed25519路径已有本地实现，dialog/PAM、GSSAPI及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -21,7 +21,7 @@
 | D12 | MySQL JSON 文本/预处理读写、元数据及字段流本地实现，记录见末尾 | 真实 JSON 列往返、语法验证和版本/OBProxy矩阵 |
 | D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
-| D15 | SHA-2 fast/TLS、固定RSA、显式公钥获取及old password本地实现，验证见末尾 | dialog/PAM、Ed25519、GSSAPI、私有CA成功链及两模式实库矩阵 |
+| D15 | SHA-2 fast/TLS、固定RSA、显式公钥获取、old password及Ed25519本地实现，验证见末尾 | dialog/PAM、GSSAPI、私有CA成功链及两模式实库矩阵 |
 | D01 | OB20帧/校验、显式协商与标准回退、流式传输及脱敏完整链路追踪已有本地实现，记录见末尾 | OB20经TLS环回、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
@@ -199,7 +199,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D12 | 本地先行，实库延期 | MySQL JSON | 待验证 | 本地文本/二进制读写、元数据和字段流，验证见末尾；真实 JSON 列往返仍开放 |
 | D13 | 本地先行，实库延期 | MySQL BIT | 待验证 | 本地编解码/位宽/参数及测试记录见末尾；真实 BIT 列往返仍开放 |
 | D14 | 本地先行，实库延期 | MySQL YEAR | 待验证 | 本地实现/测试/走查记录见末尾；真实 YEAR 列往返仍开放 |
-| D15 | 本地先行，实库延期 | 新认证插件 | 进行中 | SHA-2 fast/TLS、固定RSA、显式取钥及old password本地实现；dialog/PAM、Ed25519、GSSAPI、私有CA及两模式实库余项开放，验证见末尾 |
+| D15 | 本地先行，实库延期 | 新认证插件 | 进行中 | SHA-2 fast/TLS、固定RSA、显式取钥、old password及Ed25519本地实现；dialog/PAM、GSSAPI、私有CA及两模式实库余项开放，验证见末尾 |
 
 ## 兼容矩阵记录模板
 
@@ -1351,3 +1351,31 @@ mysql_old_password复用既有TLS后的AuthenticationConversation、PacketChanne
 | 范围格式校验 | 退出0 | TestResults/old-password-format.log |
 
 构建与测试命令沿D09，结果目录使用上表；最终Unit使用正常Windows证书私钥权限，没有安装/删除信任根或降低TLS验证。已解析TRX比较案例名称和计数；独立文档复核无阻断。README/架构/方案/台账同步，UTF8无BOM/CRLF及diff检查后在当前master本地提交，不推送。D15继续进行中，剩余dialog/PAM、Ed25519、GSSAPI；A05、C01、许可/发布及真实两模式/OBProxy/TLS/异机关口保持开放，本轮未重跑打包、旧运行时或Framework。global.json保持删除，整体goal未完成。
+
+
+## D15 Ed25519认证本地实现（2026-10-19）
+
+按固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的Ed25519PasswordPlugin实现client_ed25519初始及命名切换。严格32字节原始挑战，命名切换保留尾零（不接受33字节含所谓终止符）；严格UTF8密码SHA512展开后签名64字节，空密码为空响应。无效Unicode/NUL脱敏拒绝，编码密码及展开密钥在finally清除。使用BouncyCastle.Cryptography 2.7.0公开ExpandedKey.Sign，避免普通seed API二次散列；CPM固定版本，五资产声明运行时依赖及MIT来源，不复制Java实现或自编曲线运算。沿用最终OK/ERR、一次切换、模式门槛及连接总预算；签名认证不替代业务TLS。
+
+先写15项测试观察14失败/1通过（TestResults/ed25519-red/*.trx），失败源于未支持插件；其中无效Unicode最初宽泛异常断言误匹配未支持异常，已收紧为消息包含Unicode后取得15通过（ed25519-green）。原Java算法在忽略目录独立执行，ASCII/Unicode/单字符及挑战尾零四向量见TestResults/java-auth-reference-vectors.log；未将参考源码加入受跟踪文件。扩展后新增24项Unit覆盖恶意长度、重复切换、最终ERR/意外继续、取消/关闭/产品超时；五资产公开Consumer新增60项，覆盖同步/异步、初始/切换、ASCII/Unicode/空密码并执行本地协议SQL，未连接数据库。
+
+独立只读走查发现新超时测试可能误把WaitAsync测试看门狗当产品超时，已在finally关闭前加入opening.IsFaulted；同步修正SHA2、RSA及静默TLS同类断言，未改变产品。复查确认原问题关闭、算法不二次散列、尾零/文档/依赖范围一致，无剩余阻断。首次格式检查包含既有RSA/SHA2/TLS测试文件时报告历史多语句空白；只格式化本轮新增文件，并以范围校验和diff检查确认，未批量重排旧测试。
+
+| 验证 | 结果 | 证据 |
+| --- | --- | --- |
+| 带NuGet审计还原 | 成功 | TestResults/ed25519-restore.log |
+| Release核心五/DI三及测试项目构建 | 0警告/错误 | TestResults/ed25519-build-final.log |
+| 扩展Ed25519针对测试 | 24通过 | TestResults/ed25519-local/*.trx |
+| 五资产公开Ed25519消费 | 60通过 | TestResults/ed25519-assets/*.trx |
+| 旧包缺加密依赖反向检查 | 正确拒绝 | TestResults/ed25519-missing-dependency-red.log |
+| 本轮双NuGet包及五资产真实还原/运行 | 全通过 | TestResults/ed25519-pack.log、ed25519-package-final.log |
+| 完整Unit | 2848通过，0失败/跳过 | TestResults/ed25519-unit-final/*.trx |
+| 完整Consumer | 1119通过，0失败/跳过 | TestResults/ed25519-consumer-final/*.trx |
+| 完整DI | 8通过，0失败/跳过 | TestResults/ed25519-di-final/*.trx |
+| 新源码/新增测试/包消费范围格式校验 | 退出0 | TestResults/ed25519-format-final.log |
+
+构建：dotnet build OceanBaseConnector.slnx -c Release --no-restore；测试：dotnet test各Unit/Consumer/DI项目-c Release --no-build --no-restore --logger trx --results-directory上表路径。实际包通过dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/ed25519-pack和eng/Verify-Packages.ps1 -PackageDirectory TestResults/ed25519-pack验证，干净缓存按SHA512核对本轮包、五目标编译0警告/错误、本机.NET8/9/10及Standard隔离host通过，包含实际传递依赖的固定Java签名。Unit使用正常Windows证书私钥权限，没有操作信任根或降低TLS验证。
+
+已解析最终TRX并与旧密码基线逐案例比较：Unit新增24、Consumer新增60，均无移除，DI仍8。README/架构/方案/台账同步，UTF8无BOM/CRLF和diff检查后当前master本地提交。
+
+D15仍进行中，dialog/PAM与GSSAPI继续按Java推进；真实两模式/OceanBase/OBProxy、可信TLS成功链及异机验收按要求延期，Framework本轮未执行。A05、C01、许可/来源/发布及其他真实环境关口继续开放。global.json保持删除，不推送，整体goal未完成。

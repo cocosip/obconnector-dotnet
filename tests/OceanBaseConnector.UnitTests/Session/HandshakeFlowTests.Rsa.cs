@@ -269,7 +269,11 @@ namespace OceanBaseConnector.UnitTests.Session
                 await waiting.Task.WaitAsync(TimeSpan.FromSeconds(10));
                 if (interruption == "close") session.Close();
                 if (interruption == "cancel") caller.Cancel();
-                if (interruption == "timeout") await Assert.ThrowsAsync<TimeoutException>(() => opening.WaitAsync(TimeSpan.FromSeconds(10)));
+                if (interruption == "timeout")
+                {
+                    await Assert.ThrowsAsync<TimeoutException>(() => opening.WaitAsync(TimeSpan.FromSeconds(10)));
+                    Assert.True(opening.IsFaulted, "Open must time out before the test watchdog.");
+                }
                 else await Assert.ThrowsAnyAsync<OperationCanceledException>(() => opening.WaitAsync(TimeSpan.FromSeconds(10)));
                 Assert.NotEqual(SessionState.Open, session.State); Assert.Null(session.Info);
             }

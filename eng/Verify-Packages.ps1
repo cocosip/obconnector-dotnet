@@ -12,6 +12,8 @@ $repository = Split-Path $PSScriptRoot -Parent
 $feed = (Resolve-Path -LiteralPath $PackageDirectory).Path
 [xml]$rootProperties = Get-Content -LiteralPath (Join-Path $repository 'Directory.Build.props') -Raw
 $version = [string]$rootProperties.Project.PropertyGroup.Version
+[xml]$packageVersions = Get-Content -LiteralPath (Join-Path $repository 'Directory.Packages.props') -Raw
+$cryptoVersion = [string]($packageVersions.SelectSingleNode('//PackageVersion[@Include="BouncyCastle.Cryptography"]')).Version
 $targets = @('netstandard2.0', 'netstandard2.1', 'net8.0', 'net9.0', 'net10.0')
 $packages = @('OceanBaseConnector', 'OceanBaseConnector.DependencyInjection')
 $hashes = @{}
@@ -64,6 +66,8 @@ foreach ($id in $packages) {
                 $core = @($dependencies | Where-Object id -eq $packages[0])
                 Assert-Package ($core.Count -eq 1 -and $core[0].version -eq "[$version]") 'DI must pin the exact matching core version.'
             } else {
+                $cryptography = @($dependencies | Where-Object id -eq 'BouncyCastle.Cryptography')
+                Assert-Package ($cryptography.Count -eq 1 -and $cryptography[0].version -eq $cryptoVersion) "$target must declare the centrally managed cryptography dependency."
                 $diagnostics = @($dependencies | Where-Object id -eq 'System.Diagnostics.DiagnosticSource')
                 if ($target -like 'netstandard*') {
                     Assert-Package ($diagnostics.Count -eq 1 -and $diagnostics[0].version -eq '8.0.1') "$target must reference DiagnosticSource 8.0.1."

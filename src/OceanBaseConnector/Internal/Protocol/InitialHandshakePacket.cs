@@ -16,6 +16,7 @@ namespace OceanBaseConnector.Internal.Protocol
         public const byte SupportedProtocolVersion = 10;
         public const string NativePasswordPluginName = "mysql_native_password";
         public const string ClearPasswordPluginName = "mysql_clear_password";
+        public const string Ed25519PasswordPluginName = "client_ed25519";
 
         private InitialHandshakePacket(
             byte protocolVersion,

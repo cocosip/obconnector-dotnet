@@ -4,6 +4,8 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using OceanBaseConnector;
@@ -66,6 +68,17 @@ public static class PackageConsumer
         try { resource = ((OceanBaseConnection)connection).GetXaResource(); }
         catch (InvalidOperationException) { xaRejected = true; }
         Check(xaRejected && resource == null && connection.State == ConnectionState.Closed, "Closed connection must reject XA without connecting");
+        // Exercise the actual restored transitive dependency, including its Standard implementation.
+        using (var hash = SHA512.Create())
+        {
+            var expandedKey = hash.ComputeHash(Encoding.UTF8.GetBytes("secretpw"));
+            var challenge = new byte[32];
+            for (var i = 0; i < challenge.Length; i++) challenge[i] = (byte)i;
+            var signature = new byte[64];
+            Org.BouncyCastle.Math.EC.Rfc8032.Ed25519.ExpandedKey.Sign(expandedKey, 0, challenge, 0, challenge.Length, signature, 0);
+            Check(BitConverter.ToString(signature).Replace("-", "").ToLowerInvariant() ==
+                "15181d233cb3f7c3f7457e36e3d7b7412fc5d3a473a3086de5a814a14345aa6e3ab148d593ba6dcfd7f64679039f19fb35a845a7f053ed46c73c01451769bd03", "Packaged Ed25519 dependency contract");
+        }
         foreach (var type in new[] { "OceanBaseDataSource", "OceanBaseDataSourceBuilder", "OceanBaseBatch", "OceanBaseBatchCommand" })
             Check((assembly.GetType("OceanBaseConnector." + type) != null) == modern, type + " visibility");
         Check(typeof(ILogger).Assembly.GetName().Version!.Major == major, "Logging assembly major");

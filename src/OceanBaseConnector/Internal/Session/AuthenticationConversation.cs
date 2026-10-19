@@ -2,6 +2,7 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 using OceanBaseConnector.Internal.Protocol;
+using Org.BouncyCastle.Math.EC.Rfc8032;
 
 namespace OceanBaseConnector.Internal.Session
 {
@@ -82,6 +83,8 @@ namespace OceanBaseConnector.Internal.Session
                 case OldPassword.PluginName:
                     RequireVerifiedTls();
                     return OldPassword.Respond(_options.Password, seed);
+                case InitialHandshakePacket.Ed25519PasswordPluginName:
+                    return Ed25519Response(seed);
                 case InitialHandshakePacket.ClearPasswordPluginName:
                     RequireVerifiedTls();
                     return Encoding.UTF8.GetBytes(_options.Password + "\0");
@@ -90,7 +93,7 @@ namespace OceanBaseConnector.Internal.Session
                     return FullSha2Password(1);
                 case CachingSha2:
                     SetSeed(seed);
-                    var password = EncodeSha2Password();
+                    var password = EncodePassword();
                     if (password.Length == 0) return Array.Empty<byte>();
                     using (var hash = SHA256.Create())
                     {
@@ -114,6 +117,26 @@ namespace OceanBaseConnector.Internal.Session
             _seed = (byte[])seed.Clone();
         }
 
+        private byte[] Ed25519Response(byte[] seed)
+        {
+            if (seed.Length != 32) throw new ProtocolException("Ed25519 authentication requires a 32-byte challenge.");
+            var password = EncodePassword();
+            if (password.Length == 0) return Array.Empty<byte>();
+            var expandedKey = Array.Empty<byte>();
+            try
+            {
+                using (var hash = SHA512.Create()) expandedKey = hash.ComputeHash(password);
+                var signature = new byte[Ed25519.SignatureSize];
+                Ed25519.ExpandedKey.Sign(expandedKey, 0, seed, 0, seed.Length, signature, 0);
+                return signature;
+            }
+            finally
+            {
+                Array.Clear(password, 0, password.Length);
+                Array.Clear(expandedKey, 0, expandedKey.Length);
+            }
+        }
+
         private byte[] FullSha2Password(byte keyRequest)
         {
             if (_options.Password.Length == 0) return new byte[] { 0 };
@@ -122,7 +145,7 @@ namespace OceanBaseConnector.Internal.Session
                 return RsaPassword.Encrypt(TerminatedPassword(), _seed, _options.ServerRsaPublicKey);
             if (_options.AllowPublicKeyRetrieval)
             {
-                _ = EncodeSha2Password();
+                _ = EncodePassword();
                 _awaitingPublicKey = true;
                 return new[] { keyRequest };
             }
@@ -131,20 +154,20 @@ namespace OceanBaseConnector.Internal.Session
 
         private byte[] TerminatedPassword()
         {
-            var password = EncodeSha2Password();
+            var password = EncodePassword();
             var response = new byte[password.Length + 1];
             Buffer.BlockCopy(password, 0, response, 0, password.Length);
             return response;
         }
 
-        private byte[] EncodeSha2Password()
+        private byte[] EncodePassword()
         {
             if (_options.Password.IndexOf('\0') >= 0)
-                throw new OceanBaseException("SHA-2 authentication passwords cannot contain NUL characters.");
+                throw new OceanBaseException("Authentication passwords cannot contain NUL characters.");
             try { return StrictUtf8.GetBytes(_options.Password); }
             catch (EncoderFallbackException)
             {
-                throw new OceanBaseException("SHA-2 authentication requires a valid Unicode password.");
+                throw new OceanBaseException("Authentication requires a valid Unicode password.");
             }
         }
 

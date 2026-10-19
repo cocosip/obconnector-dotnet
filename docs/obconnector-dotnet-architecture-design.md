@@ -225,7 +225,9 @@ D15 SHA-2本地实现：TLS流程成功返回后才创建AuthenticationConversat
 
 公钥获取无身份验证且可被中间人替换，必须由用户显式开启，不由握手自动降级；RSA仅保护密码，Disabled下业务内容仍明文。空密码标记依据固定Java空包规则及MySQL8服务端`sql/auth/sql_authentication.cc`的sha256认证入口（接受空包/单NUL）；不把本地源码核对当作OceanBase互通验收。非空明文密码的TLS先决条件比Java useSsl更严格，Required不等于身份验证。其他插件及真实矩阵仍属D15余项；VerifyFull完整密码分支仅状态/编码证据，Required环回和RSA环回不替代私有CA成功链或两模式实库验收。
 
-D15 Java注册插件后续：范围依据固定提交`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的[META-INF/services注册表](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/resources/META-INF/services/com.oceanbase.jdbc.authentication.AuthenticationPlugin)，余项为old password、dialog/PAM、Ed25519和GSSAPI，不依赖用户重新选型。mysql_old_password复用AuthenticationConversation及既有TLS/总预算/错误脱敏：显式初始/命名切换使用其挑战，单FE旧切换使用独立保存的初始挑战，一次切换上限不变，完整SHA2阶段不得切换。沿Java OldPasswordPlugin核对3.23算法，不复制源码；前8字节挑战必须ASCII且不补零，密码按UTF16字符散列、忽略空格/制表符，64位溢出及低31位结果保持Java语义。空密码返回空包，非空为8字节加NUL。弱旧散列仅在VerifyFull允许，RSA不能放行，不增加降级配置或pre41握手支持。状态/固定向量与实际Required TLS拒绝、五资产Disabled拒绝分开记录，均不宣称可信TLS成功链或实库已验证；另三个插件仍未接入。
+D15 Java注册插件后续：范围依据固定提交`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的[META-INF/services注册表](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/resources/META-INF/services/com.oceanbase.jdbc.authentication.AuthenticationPlugin)，余项为old password、dialog/PAM、Ed25519和GSSAPI，不依赖用户重新选型。mysql_old_password复用AuthenticationConversation及既有TLS/总预算/错误脱敏：显式初始/命名切换使用其挑战，单FE旧切换使用独立保存的初始挑战，一次切换上限不变，完整SHA2阶段不得切换。沿Java OldPasswordPlugin核对3.23算法，不复制源码；前8字节挑战必须ASCII且不补零，密码按UTF16字符散列、忽略空格/制表符，64位溢出及低31位结果保持Java语义。空密码返回空包，非空为8字节加NUL。弱旧散列仅在VerifyFull允许，RSA不能放行，不增加降级配置或pre41握手支持。状态/固定向量与实际Required TLS拒绝、五资产Disabled拒绝分开记录，均不宣称可信TLS成功链或实库已验证；dialog/PAM与GSSAPI仍未接入。
+
+client_ed25519按Java固定基线接受严格32字节原始挑战，初始及命名切换均保留尾零，不接受额外终止符。密码使用严格UTF8（无效Unicode/NUL拒绝）、SHA512展开，BouncyCastle.Cryptography 2.7.0的公开Ed25519.ExpandedKey.Sign生成64字节签名，finally清除编码密码和展开密钥；空密码为空响应。不能调用普通32字节seed签名API再次散列；不移植Java源码或自编曲线运算。CPM固定MIT依赖并在核心五资产声明，包消费验证实际传递加载。沿用一次切换、最终OK/ERR、模式门槛、连接总预算和TLS策略；签名不替代TLS业务加密，可信证书与两模式实库验收仍开放。
 
 ## 4. 执行、事务与取消
 
