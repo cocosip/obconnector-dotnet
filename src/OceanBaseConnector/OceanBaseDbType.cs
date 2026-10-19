@@ -1,6 +1,6 @@
 namespace OceanBaseConnector
 {
-    /// <summary>Provider scalar families; database type names remain available through reader metadata.</summary>
+    /// <summary>Provider value types; database type names remain available through reader metadata.</summary>
     public enum OceanBaseDbType
     {
         Decimal,
@@ -32,5 +32,6 @@ namespace OceanBaseConnector
         Null,
         TimestampWithTimeZone,
         TimestampLocalTimeZone,
+        RefCursor,
     }
 }

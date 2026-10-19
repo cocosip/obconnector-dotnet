@@ -125,6 +125,8 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private static ushort TypeCode(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode)
         {
+            if (parameter.OceanBaseDbType == OceanBaseDbType.RefCursor)
+                throw new NotSupportedException("REF CURSOR is only supported as an Oracle PrepareExecute output.");
             if (parameter.OceanBaseDbType == OceanBaseDbType.NChar || parameter.OceanBaseDbType == OceanBaseDbType.NVarchar2)
             {
                 if (mode != OceanBaseCompatibilityMode.Oracle || parameter.Size < 0 || parameter.Precision != 0 || parameter.Scale != 0)

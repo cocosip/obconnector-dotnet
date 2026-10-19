@@ -29,6 +29,8 @@ namespace OceanBaseConnector.Internal.Session
         private uint[] _statementCloses;
         private bool _terminal;
         private bool _cursorOwned;
+        // REF CURSOR fetch is independent of the already completed procedure.
+        private bool _refCursorCompletion;
         private int _finished;
         private int _packets;
         private DriverDiagnostics.Operation? _diagnostics;
@@ -128,7 +130,12 @@ namespace OceanBaseConnector.Internal.Session
             NationalCharacterSet = _session.NationalCharacterSet;
         }
 
-        internal void OwnCursor() => _cursorOwned = true;
+        internal void OwnCursor(bool refCursor = false) { _cursorOwned = true; _refCursorCompletion |= refCursor; }
+        internal void CaptureCursorSession()
+        {
+            SessionTimeZone = _session.TakeSessionTimeZone(_lease);
+            NationalCharacterSet = _session.TakeNationalCharacterSet(_lease);
+        }
         internal Action? BeforeSuccessfulCompletion { get; set; }
 #if NET8_0_OR_GREATER
         internal System.Data.Common.DbBatchCommand? BatchCommand { get; set; }
@@ -212,10 +219,10 @@ namespace OceanBaseConnector.Internal.Session
         {
             lock (_gate)
             {
-                if (error == null && BeforeSuccessfulCompletion != null)
+                if (error == null && (BeforeSuccessfulCompletion != null || _refCursorCompletion))
                 {
                     _budget.Token.ThrowIfCancellationRequested();
-                    if (_session.State != SessionState.Busy) throw new InvalidOperationException("The output parameter session is no longer active.");
+                    if (_session.State != SessionState.Busy) throw new InvalidOperationException("The result session is no longer active.");
                 }
                 if (_session.State == SessionState.Busy) _channel.CompleteResponse();
                 if (error == null) BeforeSuccessfulCompletion?.Invoke();

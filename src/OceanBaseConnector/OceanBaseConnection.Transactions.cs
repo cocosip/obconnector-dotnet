@@ -13,6 +13,18 @@ namespace OceanBaseConnector
     public sealed partial class OceanBaseConnection
     {
         private OceanBaseTransaction? _transaction;
+        private long _transactionEpoch;
+        internal long TransactionEpoch { get { lock (_gate) return _transactionEpoch; } }
+
+        internal CommandExchange StartRefCursor(PhysicalSession session, OceanBaseTransaction? transaction, long epoch, int timeout, CancellationToken token, Action release)
+        {
+            RejectAmbientTransaction();
+            lock (_gate)
+            {
+                if (epoch != _transactionEpoch) throw new InvalidOperationException("The REF CURSOR transaction context has changed.");
+                return StartCommand(session, transaction, timeout, token, release);
+            }
+        }
 
         internal PhysicalSession GetCommandSession(OceanBaseTransaction? transaction, object? owner = null)
         {
@@ -74,6 +86,7 @@ namespace OceanBaseConnector
                 var isolation = TransactionIsolation(session.Info!.Mode, level);
                 var exchange = new CommandExchange(session, _log, _builder.CommandTimeout, token, () => { }, logCommand: false);
                 var transaction = new OceanBaseTransaction(this, session, isolation.Level, _builder.CommandTimeout) { InProgress = true };
+                _transactionEpoch++;
                 _transaction = transaction;
                 return (transaction, exchange, isolation.Sql);
             }

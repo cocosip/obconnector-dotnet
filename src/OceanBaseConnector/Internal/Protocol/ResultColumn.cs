@@ -102,6 +102,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 200: return "TIMESTAMP WITH TIME ZONE";
                     case 201: return "TIMESTAMP WITH LOCAL TIME ZONE";
                     case 203: return "RAW";
+                    case 163: return "REF CURSOR";
                     case 204: return "INTERVAL YEAR TO MONTH";
                     case 205: return "INTERVAL DAY TO SECOND";
                     case 207: return "NVARCHAR2";
@@ -163,6 +164,9 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 202:
                         if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > 9) throw new NotSupportedException("The timestamp metadata is not supported.");
                         return Scale <= 7 ? typeof(DateTime) : typeof(OceanBaseTimestamp);
+                    case 163:
+                        if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("REF CURSOR requires Oracle mode.");
+                        return typeof(OceanBaseRefCursor);
                     case 203:
                         if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("RAW is only defined in Oracle mode.");
                         return typeof(byte[]);
@@ -219,6 +223,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 200: return OceanBaseDbType.TimestampWithTimeZone;
                     case 201: return OceanBaseDbType.TimestampLocalTimeZone;
                     case 203: return OceanBaseDbType.Binary;
+                    case 163: return OceanBaseDbType.RefCursor;
                     case 204: return OceanBaseDbType.IntervalYearToMonth;
                     case 205: return OceanBaseDbType.IntervalDayToSecond;
                     case 207: return OceanBaseDbType.NVarchar2;
@@ -236,6 +241,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
+            if (TypeCode == 163) throw new NotSupportedException("REF CURSOR values require an Oracle output parameter.");
             if (TypeCode == 13) return YearCodec.Decode(value, false);
             if (TypeCode == 16) return BitCodec.Decode(value, (int)Length);
             if (TypeCode == 204 || TypeCode == 205) return IntervalCodec.Decode(value, TypeCode == 205, Scale);
@@ -288,6 +294,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 13: return 2;
                     case 3:
                     case 9:
+                    case 163:
                     case 4: return 4;
                     case 8:
                     case 5: return 8;
@@ -301,6 +308,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
+            if (TypeCode == 163) throw new NotSupportedException("REF CURSOR values require an Oracle output parameter.");
             if (TypeCode == 13) return YearCodec.Decode(value, true);
             if (TypeCode == 16) return BitCodec.Decode(value, (int)Length);
             if (IsDecimal)

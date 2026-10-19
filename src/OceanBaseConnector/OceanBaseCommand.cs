@@ -195,6 +195,7 @@ namespace OceanBaseConnector
                 CommandExchange? execution = null;
                 execution = connection.StartCommand(session, _transaction, _timeout, token, () =>
                 {
+                    oracle?.Cursors?.EndExecution();
                     lock (_gate) { if (ReferenceEquals(_execution, execution)) _execution = null; }
                 }, SessionOwner, CancellationOrigin);
 #if NET8_0_OR_GREATER
@@ -202,7 +203,12 @@ namespace OceanBaseConnector
                 execution.BatchFailed = BatchFailed;
 #endif
                 _execution = execution;
-                if (oracle != null) { oracle.StatementCreated = session.QueueStatementClose; _oracleSession = session; }
+                if (oracle != null)
+                {
+                    oracle.Cursors = new OracleCursorOwner(connection, session, _transaction, _timeout);
+                    oracle.StatementCreated = oracle.Cursors.SetStatement;
+                    _oracleSession = session;
+                }
                 return (execution, session, connection, bindings, parameters, binary, fetchSize, oracle);
             }
         }

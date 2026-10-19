@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03–D09尚未开发；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04–D09尚未开发；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -24,7 +24,8 @@
 | D15 | SHA-2 fast/TLS、固定RSA及显式公钥获取本地实现，验证记录见末尾 | 其他插件、私有CA成功链及两模式实库矩阵 |
 | D01 | OB20帧/校验、显式协商与标准回退、流式传输及脱敏完整链路追踪已有本地实现，记录见末尾 | OB20经TLS环回、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
-| D03–D09 | 尚未开发 | REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA等继续逐项实施 |
+| D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
+| D04–D09 | 尚未开发 | LOB/复杂类型、批量优化、客户端回退、拓扑/XA继续逐项实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -185,7 +186,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | README本地交付材料及独立走查已完成；Windows实际8.0.31/9.0.20各Unit1206/DI8、默认10.0.12 Unit1206/Consumer152/DI8与五资产包消费通过；最终真实矩阵与发布审查待验收，不关闭候选版门槛 |
 | D01 | 本地实现已有；真实验收待环境 | OB20、校验与完整链路追踪 | 待验证 | OB20编解码/校验、协商、流式传输和脱敏追踪已有本地实现；TLS环回、真实采样/SHOW TRACE与版本矩阵仍开放，关闭不刷新末条记录 |
 | D02 | 本地先行，实库延期 | Oracle 过程及 OUT/RETURNING | 进行中 | 公开过程及标量OUT/RETURNING已接入，完整回归/走查见末尾；保留标量范围及独立Prepare/FetchSize限制，真实互通开放 |
-| D03 | G4 后 | REF CURSOR | 未开始 | 待记录 |
+| D03 | 本地先行，实库延期 | REF CURSOR | 待验证 | REF CURSOR输出、流式分页及所有权本地实现/完整回归/独立走查修复完成，见末尾；真实版本/OBProxy互通开放 |
 | D04 | G4 后 | LOB locator 与流式 LOB | 未开始 | 待记录 |
 | D05 | G4 后 | ARRAY/STRUCT 与类型字典 | 未开始 | 待记录 |
 | D06 | G4 后 | bulk/array binding | 未开始 | 待记录 |
@@ -811,3 +812,34 @@ wire trace ID关联已有Activity；无监听者时使用环境上下文或内�
 完整Unit使用正常Windows TLS凭据权限，未安装/删除信任根或改变验证策略；本轮未重跑打包、旧运行时/Framework，也未做扩展执行经TLS环回、实库或异机验证。D02保持进行中，不宣称无限制过程或复杂输出兼容；后续REF CURSOR、LOB、复杂类型与数组绑定分属D03–D06。A05、C01、D03–D09、D15其他插件及发布门槛仍开放，整体目标未完成，不推送。
 
 最终独立文档/增量复查通过，无必须修复项；复查者另行只读解析完整TRX及4项发布竞态，核对版本门槛、输出边界与标量/Prepare/FetchSize限制一致，未扩大实库声明。
+
+
+## D03 REF CURSOR 输出与流式读取（2026-10-19）
+
+从`efb2ac3`继续，实现Oracle REF CURSOR输出的本地公开路径：追加OceanBaseDbType.RefCursor（DbType.Object），Output/ReturnValue且Size/Precision/Scale为0；拒绝输入与输入输出，纯输出发NULL。Oracle类型163使用固定4字节LE游标ID，非NULL输出暂存为OceanBaseRefCursor，和标量一起等待所有响应/协议边界成功后原子发布；NULL或零行输出仍为DBNull。普通结果列非NULL cursor值明确拒绝，不把ID当普通整数使用。
+
+GetDataReader/GetDataReaderAsync每个对象只打开一次reader，默认128行每页，正fetchSize，可用Default/SequentialAccess/CloseConnection。固定原物理会话、事务引用和连接事务代次，复用现有独占租约；获取租约失败或调用时token已取消不消耗打开机会。事务结束、后来事务周期及连接关闭重开后不得复用旧游标；多个游标依次读取，重复ID输出别名共享同一对象。独立fetch沿原命令超时，复用时区/national状态探测与逐页状态快照。9字节COM_STMT_FETCH首响应直接消费metadata和行，后续页继续既有元数据一致性、进展、行数和LastRowSent检查；默认/Sequential不缓存整个结果。
+
+OracleCursorOwner保留父statement直到本次所有游标释放，parent command.Dispose不破坏已返回游标；读尽、失败和Dispose原子一次释放，先游标ID再最后父statement进入既有延迟关闭队列，空闲Dispose刷新。未读取对象须Dispose，重执行不替调用方释放旧输出；连接关闭释放服务端资源。未读尽即关闭reader/游标、fetch ERR或畸形/断网均销毁原会话。后续fetch不再执行业务SQL，其取消、超时和错误不把已完成的过程改判结果未知，真实ERR保留错误码。
+
+协议依据为只读Java固定提交`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`：ColumnType.CURSOR=163，BinaryRowProtocol.getInternalComplexCursor读取4字节ID，RefCursor/JDBC4ServerPreparedStatement使用独立COM_STMT_FETCH/COM_STMT_CLOSE。只核对行为及字段，不复制Java实现，不将本地夹具声称为真实互通。
+
+TDD首轮因缺RefCursor类型/对象编译失败（`TestResults/ref-cursor-red.log`），基础8项绿后补32项所有权/故障覆盖（`ref-cursor-ownership/*.trx`）。独立走查发现终态竞态：最终fetch包已接收，取消或关闭先破坏会话，旧Complete会跳过边界并成功结束。新4项确定性同步/异步×取消/关闭修前全失败；OwnCursor新增仅REF CURSOR独立fetch的终态保护，与已有输出hook共享预算/Busy检查，保持C04用户SQL可信终态优先规则。修后新4项及原C04终态4项全部通过，见`TestResults/ref-cursor-terminal-{red,green}.log`及TRX；独立复查接受修复。
+
+新增五资产30项Consumer覆盖同步/异步、标准/OB20及最后fetch尾包夹带额外内层包拒绝；父command已释放后仍可读取，精确核对fetch和游标/父statement关闭。首次10失败来自测试服务端连续两个无响应close间未重置标准包序号，仅修夹具；最终定向30项全过，见`TestResults/ref-cursor-consumer-{first,fixed}.log`及TRX，不改变产品序号或边界验证。
+
+
+修后最终验证如下：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/ref-cursor-build-reviewed.log` |
+| 完整Unit | 1876通过，0失败/跳过 | `TestResults/ref-cursor-unit-reviewed/*.trx`；新增REF CURSOR 36项均Passed |
+| 五资产Consumer | 524通过，0失败/跳过 | `TestResults/ref-cursor-consumer-reviewed/*.trx`；新增30项 |
+| DI | 8通过，0失败/跳过 | `TestResults/ref-cursor-di-reviewed/*.trx` |
+
+编译为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`，测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/ref-cursor-<unit|consumer|di>-reviewed`。已逐项解析TRX确认新36项及4项终态竞态均实际执行；Unit涵盖原D02输出提交与C04可信SQL终态契约。完整Unit使用正常Windows TLS凭据权限，未操作信任根或改变验证策略。
+
+D03本地输出契约已实现，正式状态待验证；实库、扩展经TLS、异机、打包和旧运行时/Framework本轮均未执行。不支持REF CURSOR输入/输入输出和普通结果列非NULL cursor值；LOB/复杂类型/批量绑定/客户端回退/拓扑/XA仍按D04–D09继续，A05/C01/D15余项和发布验收仍开放，整体目标未完成，不推送。
+
+最终独立代码/文档复查通过，无必须修复项；复查者只读核实修后完整报告、36项REF CURSOR与4项终态竞态，确认声明和未验收边界一致。

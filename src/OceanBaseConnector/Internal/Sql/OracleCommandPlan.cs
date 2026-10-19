@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Text;
 using OceanBaseConnector.Internal.Protocol;
+using OceanBaseConnector.Internal.Session;
 
 namespace OceanBaseConnector.Internal.Sql
 {
@@ -14,6 +15,7 @@ namespace OceanBaseConnector.Internal.Sql
         internal ParameterBindingPlan Bindings { get; }
         internal OceanBaseParameter[] Outputs { get; }
         internal Action<uint>? StatementCreated { get; set; }
+        internal OracleCursorOwner? Cursors { get; set; }
         private object[]? _values;
 
         internal bool BeginResponse(OraclePrepareExecutePacket header)
@@ -31,7 +33,14 @@ namespace OceanBaseConnector.Internal.Sql
         {
             if (_values != null) throw new NotSupportedException("Scalar Oracle output parameters cannot contain multiple rows.");
             var values = new object[Outputs.Length];
-            for (var i = 0; i < values.Length; i++) values[i] = columns[i].DecodeBinary(row[i]);
+            for (var i = 0; i < values.Length; i++)
+            {
+                if (Outputs[i].OceanBaseDbType == OceanBaseDbType.RefCursor && columns[i].TypeCode != 163 && row[i] != null)
+                    throw new ProtocolException("A REF CURSOR output requires cursor metadata.");
+                values[i] = columns[i].TypeCode == 163 && row[i] != null
+                    ? (object)(Cursors ?? throw new NotSupportedException("A REF CURSOR requires its originating command.")).Create(new ByteCursor(row[i]!).ReadUInt32())
+                    : columns[i].DecodeBinary(row[i]);
+            }
             _values = values;
         }
 
@@ -46,6 +55,7 @@ namespace OceanBaseConnector.Internal.Sql
         {
             if (Outputs.Length == 0) return;
             if (_values == null) throw new ProtocolException("Oracle execution completed without its bound output values.");
+            Cursors?.Publish();
             for (var i = 0; i < _values.Length; i++) Outputs[i].Value = _values[i];
         }
 
@@ -81,9 +91,13 @@ namespace OceanBaseConnector.Internal.Sql
             for (var i = 0; i < inputs.Length; i++)
             {
                 var parameter = original.Parameters[i];
+                if (parameter.OceanBaseDbType == OceanBaseDbType.RefCursor &&
+                    (parameter.Direction == ParameterDirection.Input || parameter.Direction == ParameterDirection.InputOutput || parameter.Size != 0 || parameter.Precision != 0 || parameter.Scale != 0))
+                    throw new NotSupportedException("REF CURSOR parameters require Output or ReturnValue and no scalar size or precision.");
                 var copy = inputs[i] = parameter.Snapshot();
                 if (parameter.Direction != ParameterDirection.Input) outputs.Add(parameter);
                 if (parameter.Direction == ParameterDirection.Output || parameter.Direction == ParameterDirection.ReturnValue) copy.Value = null;
+                if (parameter.OceanBaseDbType == OceanBaseDbType.RefCursor) copy.OceanBaseDbType = OceanBaseDbType.Null;
                 copy.Direction = ParameterDirection.Input;
             }
             return new OracleCommandPlan(new ParameterBindingPlan(original.CommandText, inputs), outputs.ToArray());

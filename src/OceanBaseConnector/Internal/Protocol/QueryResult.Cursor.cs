@@ -7,6 +7,9 @@ namespace OceanBaseConnector.Internal.Protocol
     internal sealed partial class QueryResult
     {
         private readonly uint? _cursorId;
+        private bool _refCursorInitial;
+
+        private void BeginRefCursorRows() { _refCursorInitial = false; _cursorActive = true; }
         private readonly int _fetchSize;
         private bool _cursorActive;
         private bool _cursorNeedsFetch;
@@ -59,7 +62,12 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private byte[] FetchPacket()
         {
-            var id = _cursorId!.Value; var count = (uint)_fetchSize;
+            return CursorFetchPacket(_cursorId!.Value, _fetchSize);
+        }
+
+        internal static byte[] CursorFetchPacket(uint id, int rows)
+        {
+            var count = (uint)rows;
             return new byte[] { 28, (byte)id, (byte)(id >> 8), (byte)(id >> 16), (byte)(id >> 24),
                 (byte)count, (byte)(count >> 8), (byte)(count >> 16), (byte)(count >> 24) };
         }
