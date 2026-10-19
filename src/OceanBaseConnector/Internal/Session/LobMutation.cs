@@ -1,0 +1,74 @@
+using System;
+using System.Data;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OceanBaseConnector.Internal.Session
+{
+    internal sealed class LobMutation : IDisposable
+    {
+        private readonly OceanBaseLob _lob;
+        private readonly object _gate = new object();
+        private readonly CancellationTokenSource _stop = new CancellationTokenSource();
+        private bool _disposed;
+        internal LobMutation(OceanBaseLob lob) => _lob = lob;
+        internal CancellationToken Token => _stop.Token;
+        internal Task Write(object buffer, int amount, long offset, bool async, CancellationToken token, CancellationToken caller)
+        {
+            var command = Command("DBMS_LOB.WRITE");
+            command.Parameters.Add(new OceanBaseParameter { ParameterName = "amount", Value = amount });
+            command.Parameters.Add(new OceanBaseParameter { ParameterName = "offset", Value = checked(offset + 1) });
+            command.Parameters.Add(new OceanBaseParameter { ParameterName = "buffer", Value = buffer });
+            return Execute(command, async, token, caller);
+        }
+        internal Task Trim(long length, bool async, CancellationToken token, CancellationToken caller)
+        {
+            var command = Command("DBMS_LOB.TRIM");
+            command.Parameters.Add(new OceanBaseParameter { ParameterName = "length", Value = length });
+            return Execute(command, async, token, caller);
+        }
+        private OceanBaseCommand Command(string procedure)
+        {
+            var context = _lob.Context;
+            var command = new OceanBaseCommand
+            {
+                Connection = context.Connection, Transaction = context.Transaction, CommandTimeout = context.Timeout,
+                CommandType = CommandType.StoredProcedure, CommandText = procedure, RequiredSession = context.Session,
+                RequiredTransactionEpoch = context.Epoch, SessionOwner = this,
+            };
+            command.Parameters.Add(new OceanBaseParameter { ParameterName = "lob", Direction = ParameterDirection.InputOutput,
+                OceanBaseDbType = _lob.IsCharacter ? OceanBaseDbType.Clob : OceanBaseDbType.Blob, Value = _lob });
+            return command;
+        }
+        private async Task Execute(OceanBaseCommand command, bool async, CancellationToken token, CancellationToken caller)
+        {
+            command.CancellationOrigin = () => caller;
+            try
+            {
+                if (async) await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                else
+                {
+                    using var reader = command.ExecuteReaderCore(CommandBehavior.Default, token);
+                    do { while (reader.Read()) { } } while (reader.NextResult());
+                }
+                token.ThrowIfCancellationRequested(); _lob.ThrowIfDisposed(); _lob.Context.Connection.ValidateLobContext(_lob.Context, this);
+                if (!(command.Parameters[0].Value is OceanBaseLob updated))
+                {
+                    _lob.Context.Session.Break(); _lob.Dispose();
+                    throw new OceanBaseException("The LOB mutation completed without a valid locator.");
+                }
+                using (updated) _lob.ReplaceLocator(updated);
+            }
+            // A failed mutation may have changed the server object without returning a usable locator.
+            catch { _lob.Dispose(); throw; }
+            finally { if (async) await command.DisposeCoreAsync().ConfigureAwait(false); else command.Dispose(); }
+        }
+        internal void Cancel()
+        { lock (_gate) { if (!_disposed) _stop.Cancel(); } }
+        public void Dispose()
+        {
+            lock (_gate) { if (_disposed) return; _disposed = true; _stop.Dispose(); }
+            _lob.Context.Session.ReleaseReservation(this);
+        }
+    }
+}

@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定及原会话分块流（验证见末尾），修改/临时对象API仍开放，D05–D09尚未开发；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流及WRITE/TRIM修改（验证见末尾），临时对象API仍开放，D05–D09尚未开发；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -25,7 +25,7 @@
 | D01 | OB20帧/校验、显式协商与标准回退、流式传输及脱敏完整链路追踪已有本地实现，记录见末尾 | OB20经TLS环回、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
-| D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出及原会话/事务代次绑定分块流已本地接入，验证见末尾 | LOB修改/临时对象API及真实资源语义仍开放 |
+| D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流和WRITE/TRIM修改已本地接入，验证见末尾 | 临时对象API及真实资源语义仍开放 |
 | D05–D09 | 尚未开发 | 复杂类型、批量优化、客户端回退、拓扑/XA继续逐项实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
@@ -188,7 +188,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D01 | 本地实现已有；真实验收待环境 | OB20、校验与完整链路追踪 | 待验证 | OB20编解码/校验、协商、流式传输和脱敏追踪已有本地实现；TLS环回、真实采样/SHOW TRACE与版本矩阵仍开放，关闭不刷新末条记录 |
 | D02 | 本地先行，实库延期 | Oracle 过程及 OUT/RETURNING | 进行中 | 公开过程及标量OUT/RETURNING已接入，完整回归/走查见末尾；保留标量范围及独立Prepare/FetchSize限制，真实互通开放 |
 | D03 | 本地先行，实库延期 | REF CURSOR | 待验证 | REF CURSOR输出、流式分页及所有权本地实现/完整回归/独立走查修复完成，见末尾；真实版本/OBProxy互通开放 |
-| D04 | G4 后 | LOB locator 与流式 LOB | 进行中 | 内部locator解析见末尾；公开绑定与流尚未接入 |
+| D04 | 本地先行，实库延期 | LOB locator、流式读取及WRITE/TRIM | 进行中 | locator解析、公开读取/绑定和WRITE/TRIM本地实现、完整回归及独立走查修复完成，见末尾；临时对象API与真实资源验收仍开放 |
 | D05 | G4 后 | ARRAY/STRUCT 与类型字典 | 未开始 | 待记录 |
 | D06 | G4 后 | bulk/array binding | 未开始 | 待记录 |
 | D07 | G4 后 | 按需客户端预处理回退 | 未开始 | 待记录 |
@@ -897,3 +897,24 @@ BLOB按字节、CLOB按Unicode标量推进offset；每块最多32767字节或819
 独立只读最终复查未发现新的必须修复项，核对CTS生命周期、在途取消、预约及物理会话/事务epoch、类型快照、异步清理、畸形getter与README/架构边界。同步开发方案、架构、README和本台账，UTF8无BOM/CRLF及git diff --check通过后本地提交，不推送。
 
 本子模块仅完成本地公开读取/绑定；D04整体仍进行中。未提供LOB修改、临时对象创建或数据库所有权管理API，Dispose仅释放客户端handle/流，不擅自FREETEMPORARY。真实OceanBase/OBProxy、扩展经TLS、异机、打包和旧运行时/Framework矩阵本轮未验收；LOB资源语义及其他A05/C01/D05–D09/D15和发布余项继续开放，整体目标未完成。
+
+## D04 LOB WRITE/TRIM 修改（2026-10-19）
+
+从`57b7c4a`继续，OceanBaseLob新增WriteBytes/WriteText/Truncate及异步入口，原会话执行DBMS_LOB.WRITE/TRIM并绑定原事务/epoch/timeout。公开位置从0开始，协议加1并保留Int64；BLOB按字节、CLOB按Unicode标量，分块上限分别32767字节/8191标量，保持surrogate pair。首包前校验全部UTF16、片段和位置范围，空输入不发SQL但仍校验上下文。整个修改持预约，块间即使命令已释放租约，也不能插入其他命令、事务、修改或流。
+
+每块完整终态和协议边界成功后才用返回locator更新源handle；后续块、参数及读取使用新值。错误使源handle失效，ByteLength保留最后成功快照；可信ERR允许继续使用原连接，NULL输出在已确认终态后破坏会话，畸形或未确认响应保留修改结果未知。Dispose/DisposeAsync取消在途修改，异步命令释放使用异步I/O。多块修改非原子，不自动提交、回滚成功前缀或重放失败块。接口参数顺序参考固定Java基线Blob/Clob的DBMS_LOB.WRITE/TRIM行为，不复制实现；未把DBMS_LOB_MANAGER管理包当作LOB读写或临时对象创建依据。
+
+先添加公开入口失败测试，缺Write API的红编译见`TestResults/lob-write-red.log`。分块首批4项通过后，故障用例证明失败后旧locator仍可用，`lob-write-fault-red`为2失败/1通过；失败时使源handle失效后已通过。独立走查另发现行内读取在预约前捕获旧payload：线程等待连接锁期间完成同长覆盖，随后取得预约仍读旧值。BLOB/CLOB确定性测试修前均返回old而非new（`lob-write-snapshot-red.log`及TRX）；将流初始化移到成功预约之后，两项修后通过。测试只用既有连接锁协调实际公开操作，没有产品测试hook。
+
+补充原事务/后续事务结束、连接重开后的修改拒绝；在首块成功命令的完成日志内重入，直接验证块间空闲租约仍受修改预约保护；覆盖同步/异步DisposeAsync、错类型/畸形输出。最终LOB相关136项定向通过，见`TestResults/lob-write-lifecycle/*.trx`。独立只读复查接受并发修复，核对新生命周期测试、五目标Consumer及README/架构，没有剩余必须修复项。
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/lob-write-build-final.log` |
+| 完整Unit | 2008通过，0失败/跳过；新增28项修改/并发回归全部执行 | `TestResults/lob-write-unit-final/*.trx` |
+| 五资产Consumer | 644通过，0失败/跳过；新增60项修改消费全部执行 | `TestResults/lob-write-consumer-final/*.trx` |
+| DI | 8通过，0失败/跳过 | `TestResults/lob-write-di-final/*.trx` |
+
+编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/lob-write-<unit|consumer|di>-final`。已解析TRX核对实际执行/通过计数；Consumer覆盖同步/异步、标准/OB20成功、WRITE后TRIM与读取新值、OB20尾OK后夹带包拒绝且旧ByteLength不更新。完整Unit使用正常Windows TLS凭据权限，未安装/删除信任根或改变TLS验证策略。UTF8无BOM/CRLF及diff检查后本地提交，不推送。
+
+本轮仅关闭D04的WRITE/TRIM本地修改子模块。临时对象创建/所有权管理仍未实现，D04和整体目标保持进行中；A05/C01/D05–D09/D15其他插件及发布审查余项继续开放。真实数据库/OBProxy、异机、扩展经TLS和临时对象资源语义未验收，本轮未重跑打包或旧运行时/Framework矩阵；按要求暂缓的环境工作不计为已完成，也不阻止后续本地模块开发。

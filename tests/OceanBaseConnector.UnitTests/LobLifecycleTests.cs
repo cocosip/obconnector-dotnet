@@ -135,6 +135,8 @@ namespace OceanBaseConnector.UnitTests
                 using var later = insideTransaction ? null : await connection.BeginTransactionAsync();
                 await (initial ?? later!).RollbackAsync();
                 Assert.Throws<InvalidOperationException>(() => lob.OpenRead());
+                Assert.Throws<InvalidOperationException>(() => lob.WriteBytes(0, new byte[] { 2 }, 0, 1));
+                await Assert.ThrowsAsync<InvalidOperationException>(() => lob.TruncateAsync(0));
                 using var bound = connection.CreateCommand(); bound.CommandText = "select :lob from dual"; bound.Parameters.Add(new OceanBaseParameter { ParameterName = "lob", Value = lob });
                 Assert.Throws<InvalidOperationException>(() => bound.ExecuteScalar());
                 using var after = connection.CreateCommand(); after.CommandText = "after"; Assert.Equal(1, after.ExecuteNonQuery());

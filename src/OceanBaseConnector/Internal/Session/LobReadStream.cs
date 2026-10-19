@@ -19,11 +19,11 @@ namespace OceanBaseConnector.Internal.Session
         private int _disposed;
         private readonly object _gate = new object();
         private readonly CancellationTokenSource _stop = new CancellationTokenSource();
-        internal LobReadStream(OceanBaseLob lob)
+        internal LobReadStream(OceanBaseLob lob) => _lob = lob;
+        internal void Initialize()
         {
-            _lob = lob;
-            if (lob.Locator.HasInlineData)
-            { var data = lob.Locator.InlineData; _buffer = data.Array!; _index = data.Offset; _end = data.Offset + data.Count; }
+            if (_lob.Locator.HasInlineData)
+            { var data = _lob.Locator.InlineData; _buffer = data.Array!; _index = data.Offset; _end = data.Offset + data.Count; }
         }
         public override bool CanRead => Volatile.Read(ref _disposed) == 0;
         public override bool CanSeek => false;

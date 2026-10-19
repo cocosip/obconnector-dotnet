@@ -46,7 +46,12 @@ namespace OceanBaseConnector.UnitTests
                 var target = reopen ? original : other; using var bound = target.CreateCommand(); bound.CommandText = "select :lob from dual";
                 bound.Parameters.Add(new OceanBaseParameter { ParameterName = "lob", Value = lob });
                 Assert.Throws<InvalidOperationException>(() => bound.ExecuteScalar());
-                if (reopen) Assert.Throws<InvalidOperationException>(() => lob.OpenRead());
+                if (reopen)
+                {
+                    Assert.Throws<InvalidOperationException>(() => lob.OpenRead());
+                    Assert.Throws<InvalidOperationException>(() => lob.WriteBytes(0, new byte[] { 2 }, 0, 1));
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => lob.TruncateAsync(0));
+                }
                 lob.Dispose(); Assert.Throws<ObjectDisposedException>(() => bound.ExecuteScalar());
                 using var after = target.CreateCommand(); after.CommandText = "after"; Assert.Equal(1, await after.ExecuteNonQueryAsync());
             }

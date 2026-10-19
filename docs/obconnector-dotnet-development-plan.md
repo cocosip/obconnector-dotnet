@@ -693,6 +693,15 @@ D03本地输出/读取实现及独立走查修复已完成：修后Release核心
 
 已补输出/返回值/输入输出、NULL/尾ERR、错误类型、畸形locator、跨连接/重开/事务代次、Dispose、取消/原timeout、有界Unicode分块及五资产标准/OB20边界测试；失败回归、全量验证及独立复查证据见进度台账末尾。D04整体仍进行中，LOB修改和临时对象API的本地可实施部分继续评估；实库、OBProxy、扩展经TLS、异机及发布矩阵暂缓，不据本子模块关闭整体目标。
 
+### D04 LOB 修改本地实施（2026-10-19）
+
+本轮沿现有读取/绑定契约增加原会话WRITE/TRIM，参考固定Java Blob.updateBlobToServer/trimBlobToServer和Clob对应方法的DBMS_LOB参数方向，仅参考行为。公开OceanBaseLob.WriteBytes/WriteBytesAsync（byte[]片段）、WriteText/WriteTextAsync（严格UTF8文本）及Truncate/TruncateAsync；位置为.NET常用的0起始offset，BLOB单位字节、CLOB单位Unicode标量，TRIM长度沿相同单位。同步路径同步I/O，异步路径直接异步I/O，不引入依赖或新连接。
+
+- [x] 先固定失败用例：WRITE每块BLOB最多32767字节/CLOB最多8191标量；请求使用上一块成功返回的locator，输出只在完整终态后更新handle；TRIM参数和后续读取使用新locator。
+- [x] 实现共享内部LobMutation，预约原会话覆盖整个多块修改，绑定原事务epoch/timeout；handle Dispose取消在途修改。输入范围、UTF16有效性和Int64偏移溢出全部在首包前校验。完整成功后更新locator，NULL/不匹配输出破坏会话并使旧handle失效。
+- [x] 覆盖同步/异步、Unicode跨块、>Int32位置、空输入/预取消、活动reader/流、事务结束/连接重开、已知ERR/部分前缀/尾中断/超时和Dispose。WRITE/TRIM具有副作用，未确认终态保留既有结果未知语义；多块非原子，不自动回滚已成功前缀或重放失败块。
+- [x] 补五资产公共消费，独立只读走查并修复，Release核心五/DI三目标编译、完整Unit/Consumer/DI通过后同步README/架构/台账并本地提交。临时对象创建/所有权管理按后续子模块推进，实库资源语义、OBProxy、TLS扩展和异机联调暂缓。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

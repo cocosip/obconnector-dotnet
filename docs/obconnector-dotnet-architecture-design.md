@@ -351,7 +351,9 @@ D04公开读取/绑定：新增默认关闭的UseLobLocators，冻结配置要�
 
 OceanBaseLob保留原连接、物理会话、显式事务及事务epoch和原command timeout。原reader完整消费后，OpenRead/OpenTextReader只允许打开一次；取预约失败可重试，成功后流独占原会话，释放handle会取消在途读取并释放预约。连接关闭重开、原事务或后续事务结束均使handle失效。参数只绑定原locator，在连接锁内再次验证来源及epoch；输入可按DbType.Object推断Blob/Clob，InputOutput的输出期望类型在创建计划时冻结，Output/ReturnValue需显式声明类型。非空LOB输出的类型码必须与声明匹配，所有输出沿D02原子发布，NULL保留DBNull，不按locator长度分配正文。
 
-行内流借用locator payload；行外流通过同一会话`DBMS_LOB.READ`有界读取，复用D02版本门槛和错误收尾。BLOB amount/offset按字节，每块最多32767；CLOB按Unicode标量，每块最多8191，严格UTF8最多32764字节，保留BOM。总字节数受locator ByteLength约束，amount支持精确整数NUMBER且拒绝小数、溢出、无进展或不匹配buffer。调用方取消/原timeout作用于实际网络读取，破坏未完成会话；内部READ不把已完成的原SQL重新标为结果未知，不重放。异步文本入口和stream/handle及内部命令释放使用异步I/O；Standard2.0无IAsyncDisposable公共契约但内部异步清理仍可用。Dispose仅释放客户端资源，不擅自FREETEMPORARY；LOB修改和临时对象创建/所有权API尚未实现，真实版本/OBProxy、临时生命周期与扩展经TLS验收保持开放。
+行内流取得预约后才借用locator payload，避免读取等待期间完成的修改仍返回旧值；行外流通过同一会话`DBMS_LOB.READ`有界读取，复用D02版本门槛和错误收尾。BLOB amount/offset按字节，每块最多32767；CLOB按Unicode标量，每块最多8191，严格UTF8最多32764字节，保留BOM。总字节数受locator ByteLength约束，amount支持精确整数NUMBER且拒绝小数、溢出、无进展或不匹配buffer。调用方取消/原timeout作用于实际网络读取，破坏未完成会话；内部READ不把已完成的原SQL重新标为结果未知，不重放。异步文本入口和stream/handle及内部命令释放使用异步I/O；Standard2.0无IAsyncDisposable公共契约但内部异步清理仍可用。Dispose仅释放客户端资源，不擅自FREETEMPORARY；临时对象创建/所有权API尚未实现，真实版本/OBProxy、临时生命周期与扩展经TLS验收保持开放。
+
+D04修改：OceanBaseLob的WriteBytes/WriteText/Truncate及异步入口在原会话执行DBMS_LOB.WRITE/TRIM，lob为INOUT，WRITE另绑定amount、offset和buffer，TRIM绑定length。公开offset从0开始，协议加1，位置保留Int64；BLOB按字节、CLOB按Unicode标量，沿用32767字节/8191标量块上限并保留surrogate pair。首包前验证全部UTF16、片段及offset+count范围，空输入不发SQL但仍校验上下文/预约。多块间保持同一预约，活动reader/流、其他命令、并发修改及事务结束不能插入；每块沿用原事务epoch/command timeout。完整终态及协议边界成功后才采用返回的新locator，后续块及绑定使用新值。失败使源handle失效，ByteLength只保留最后成功快照；NULL locator在已确认终态后破坏会话并报已知失败，可信ERR保留可用会话，畸形/未确认响应沿既有结果未知策略销毁会话。多块修改非原子，不自动提交、回滚成功前缀或重放；Dispose/DisposeAsync取消在途修改，异步命令清理仍使用异步I/O。
 
 
 C05首批目录集合（2026-10-19本地实现，真实字典版本/权限仍待验收）：五目标提供三个同步GetSchema重载；现代三目标覆写三个GetSchemaAsync重载，后者使用异步执行、逐行/结果读取及释放，不调用基类同步回退。每次返回独立的InvariantCulture DataTable，空结果保留列形状；未支持集合抛NotSupportedException，不静默返回空集。
@@ -399,7 +401,7 @@ reader 在响应尚未消费完时独占物理会话，终态完整读取后释�
 | 本地事务/取消 | 会话绑定、两模式隔离映射、结果未知不重放；环境事务始终拒绝 | B07/B08；Oracle RepeatableRead、XA/TransactionScope 不照搬 Java 支持范围 |
 | 诊断 | Connection 1000..1003、Command 1100/1101、Transaction 1200/1201 分类别；预先安全创建 logger，后端异常不改变结果 | B09 修复原命令事件误入 Connection 类别，4项类别过滤回归先失败后通过；C07补充五资产ActivitySource/Meter、固定标签及禁用开销基线，Windows单元/隔离消费与实际8/9/10样例通过；实库、池性能和跨平台仍待验收 |
 | 现代 batch | C06 逐条执行、流式结果、各条计数/失败归属和显式事务，现代 factory/connection/source 入口共用；两个 Standard 资产不含 batch 类型 | Windows 协议/隔离消费及 .NET8/9/10 独立运行时消费；真实双模式批量互通尚未验收 |
-| 扩展/发布 | 不宣称 adapter/command builder、池化、LOB修改等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
+| 扩展/发布 | 不宣称 adapter/command builder、池化、临时LOB创建等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
 
 Windows 实际运行时冒烟源为 `tests/OceanBaseConnector.ConsumerTests/RuntimeConsumerSample.cs`，从 xUnit 编译项排除以保持全部日常测试宿主 net10.0。用 SDK10 的 csc 对相应运行时 reference pack 和单个产品资产编译独立可执行文件，使用该资产 project.assets.json 对应包的私有 DLL，runtimeconfig 的 Microsoft.NETCore.App 主版本固定、rollForward=LatestPatch；样例断言实际 Environment.Version/日志程序集主版本，并通过公开预取消、已认证 Oracle 环回查询、NUMBER(6,2) 读取、两套 ProviderType 和 CloseConnection。
 

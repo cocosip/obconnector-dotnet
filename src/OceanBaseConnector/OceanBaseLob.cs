@@ -7,17 +7,18 @@ using OceanBaseConnector.Internal.Session;
 namespace OceanBaseConnector
 {
     /// <summary>An Oracle LOB locator bound to its original physical session and transaction.</summary>
-    public sealed class OceanBaseLob : IDisposable
+    public sealed partial class OceanBaseLob : IDisposable
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
         , IAsyncDisposable
 #endif
     {
-        private readonly byte[] _bytes;
+        private byte[] _bytes;
         private int _opened;
         private int _disposed;
         private LobReadStream? _stream;
+        private LobMutation? _mutation;
         internal LobSession Context { get; }
-        internal LobLocator Locator { get; }
+        internal LobLocator Locator { get; private set; }
         /// <summary>True for CLOB, false for BLOB.</summary>
         public bool IsCharacter { get; }
         /// <summary>Byte length reported by the locator; CLOB character counts may differ.</summary>
@@ -45,6 +46,7 @@ namespace OceanBaseConnector
             try
             {
                 Context.Connection.ValidateLobContext(Context, stream, reserve: true);
+                stream.Initialize();
                 Interlocked.Exchange(ref _stream, stream); ThrowIfDisposed(); return stream;
             }
             catch { stream.Dispose(); Interlocked.Exchange(ref _stream, null); Volatile.Write(ref _opened, 0); throw; }
@@ -58,16 +60,18 @@ namespace OceanBaseConnector
                 throw new InvalidOperationException("LOB parameters must use their original connection and transaction.");
             connection.ValidateLobContext(Context, owner);
         }
-        /// <summary>Releases the client handle and any open stream; database temporary LOB ownership stays with its creator.</summary>
+        /// <summary>Releases the client handle, cancels pending operations, and leaves temporary LOB ownership with its creator.</summary>
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _disposed, 1) == 0) Interlocked.Exchange(ref _stream, null)?.Dispose();
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            { Volatile.Read(ref _mutation)?.Cancel(); Interlocked.Exchange(ref _stream, null)?.Dispose(); }
         }
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
-        /// <summary>Asynchronously releases the client handle and any open stream.</summary>
+        /// <summary>Cancels pending operations and asynchronously releases any open stream.</summary>
         public async System.Threading.Tasks.ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            Volatile.Read(ref _mutation)?.Cancel();
             var stream = Interlocked.Exchange(ref _stream, null);
             if (stream != null) await stream.CloseAsync().ConfigureAwait(false);
         }
