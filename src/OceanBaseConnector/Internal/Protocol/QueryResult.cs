@@ -15,9 +15,12 @@ namespace OceanBaseConnector.Internal.Protocol
         private long _affected = -1;
         private bool _faulted;
         private int _metadataBytes;
-        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true, bool sequential = false, uint? cursorId = null, int fetchSize = 0)
+        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true, bool sequential = false, uint? cursorId = null, int fetchSize = 0, int? oracleParameterCount = null)
         {
             _query = query; IsBinary = binary; _completeExchange = completeExchange; _sequential = sequential; _cursorId = cursorId; _fetchSize = fetchSize;
+            if (oracleParameterCount.HasValue && (!binary || cursorId.HasValue || query.Mode != OceanBaseCompatibilityMode.Oracle || (uint)oracleParameterCount.Value > ushort.MaxValue))
+                throw new ArgumentException("Oracle PrepareExecute requires a binary Oracle response without a fetch cursor.", nameof(oracleParameterCount));
+            _oracleParameterCount = oracleParameterCount; _oracleHeaderPending = oracleParameterCount.HasValue;
             if (cursorId.HasValue) query.OwnCursor();
         }
         internal bool IsBinary { get; }
@@ -35,7 +38,8 @@ namespace OceanBaseConnector.Internal.Protocol
             {
                 SessionTimeZone = _query.CaptureResultTimeZone();
                 NationalCharacterSet = _query.CaptureResultNationalCharacterSet();
-                if (!Header(_query.Receive())) return;
+                if (_oracleHeaderPending) { if (!StartOracleMetadata()) return; }
+                else if (!Header(_query.Receive())) return;
                 for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(_query.Receive());
                 if (CursorMetadataOmitsEof) BeginCursorWithoutEof();
                 else if (_cursorId.HasValue) BeginCursor(_query.Receive());
@@ -53,7 +57,8 @@ namespace OceanBaseConnector.Internal.Protocol
             {
                 SessionTimeZone = _query.CaptureResultTimeZone();
                 NationalCharacterSet = _query.CaptureResultNationalCharacterSet();
-                if (!Header(await _query.ReceiveAsync(token).ConfigureAwait(false))) return;
+                if (_oracleHeaderPending) { if (!await StartOracleMetadataAsync(token).ConfigureAwait(false)) return; }
+                else if (!Header(await _query.ReceiveAsync(token).ConfigureAwait(false))) return;
                 for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(await _query.ReceiveAsync(token).ConfigureAwait(false));
                 if (CursorMetadataOmitsEof) BeginCursorWithoutEof();
                 else if (_cursorId.HasValue) BeginCursor(await _query.ReceiveAsync(token).ConfigureAwait(false));
@@ -106,6 +111,8 @@ namespace OceanBaseConnector.Internal.Protocol
             _query.ObserveSessionState(ok);
             if (_cursorActive && !EndCursorBatch(flags)) return;
             _ended = true;
+            // PrepareExecute always has a final execution OK/ERR after its row terminator.
+            if (_oracleTailPending) { _more = false; return; }
             _more = (flags & ServerStatusFlags.MoreResultsExists) != 0;
             if (!_completeExchange)
             {

@@ -23,7 +23,7 @@
 | D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D15 | SHA-2 fast/TLS、固定RSA及显式公钥获取本地实现，验证记录见末尾 | 其他插件、私有CA成功链及两模式实库矩阵 |
 | D01 | OB20帧/校验、显式协商与标准回退、流式传输及脱敏完整链路追踪已有本地实现，记录见末尾 | OB20经TLS环回、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
-| D02 | 内部PrepareExecute请求及扩展响应头已有本地实现，见末尾；尚未接公开执行 | 过程/OUT/RETURNING执行、结果及尾包、输出原子发布和事务/资源清理 |
+| D02 | 内部PrepareExecute请求、参数/结果元数据、流式二进制结果及最终OK/ERR已有本地实现，见末尾；尚未接公开执行 | 过程/OUT/RETURNING公开执行、内部输出结果解释、输出原子发布和事务/statement资源接入 |
 | D03–D09 | 尚未开发 | REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA等继续逐项实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
@@ -184,7 +184,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-19 本地包/五资产消费完成，另补Windows Framework4.8.1上net48宿主的Standard2.0基础包消费及绑定重定向；独立走查见末尾，正式Framework支持/许可/来源/包名审查仍开放，不发布 |
 | R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | README本地交付材料及独立走查已完成；Windows实际8.0.31/9.0.20各Unit1206/DI8、默认10.0.12 Unit1206/Consumer152/DI8与五资产包消费通过；最终真实矩阵与发布审查待验收，不关闭候选版门槛 |
 | D01 | 本地实现已有；真实验收待环境 | OB20、校验与完整链路追踪 | 待验证 | OB20编解码/校验、协商、流式传输和脱敏追踪已有本地实现；TLS环回、真实采样/SHOW TRACE与版本矩阵仍开放，关闭不刷新末条记录 |
-| D02 | 本地先行，实库延期 | Oracle 过程及 OUT/RETURNING | 进行中 | 内部PrepareExecute报文层已落地，公开执行及OUT/RETURNING生命周期未接入，见末尾 |
+| D02 | 本地先行，实库延期 | Oracle 过程及 OUT/RETURNING | 进行中 | 内部PrepareExecute请求及扩展响应流已落地，公开执行及OUT/RETURNING生命周期未接入，见末尾 |
 | D03 | G4 后 | REF CURSOR | 未开始 | 待记录 |
 | D04 | G4 后 | LOB locator 与流式 LOB | 未开始 | 待记录 |
 | D05 | G4 后 | ARRAY/STRUCT 与类型字典 | 未开始 | 待记录 |
@@ -768,3 +768,21 @@ wire trace ID关联已有Activity；无监听者时使用环境上下文或内�
 编译命令沿用上一节；测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/oracle-prepare-execute-<unit|consumer|di>-full`。已解析TRX确认新增21项均实际执行；本轮没有新的公开Consumer案例，完整Consumer通过只证明既有功能未回归，不代表Oracle PrepareExecute网络执行通过。完整Unit使用正常Windows TLS凭据访问，未操作信任根，未重跑打包/旧运行时/Framework。
 
 报文子模块已本地实现、测试及独立走查；D02保持进行中。后续继续参数/列元数据、内部/普通结果及最终OK/ERR、输出原子发布、事务/reader/statement所有权与故障清理，公开存储过程/OUT/RETURNING仍不支持，不能据此关闭D02或项目。实库和异机联调按要求暂缓，不推送。
+
+## D02 扩展响应流与执行终态（2026-10-19）
+
+从`8c4877d`继续D02，内部QueryResult新增显式Oracle参数数量入口，仅允许Oracle二进制非游标响应。消费17字节扩展头、核对参数数目，参数定义与结果定义共享4MiB预算，处理可选参数/列EOF，直接读取头指定的列和二进制行。有/无结果均须读取独立最终OK/ERR；普通及SequentialAccess的行终结不提前释放租约，尾OK累计更新计数并观察会话，尾MoreResults继续普通结果。现有可信ERR保持已知结果并允许复用；畸形、取消、超时和提前关闭未读尾包沿既有未决交换清理，不重放SQL。
+
+先添加环回测试，缺少构造参数及OracleHeader导致编译失败，见`TestResults/oracle-execute-response-red.log`。新增48项响应回归，覆盖同步/异步、两EOF格式、普通/顺序、有/无结果、尾包前租约保持、错误响应、可信尾ERR后复用、后续多结果/更新计数、会话时区快照、提前关闭、取消/超时及对端断开。初次6项取消/超时测试失败是夹具只捕获EndOfStreamException，而PacketChannel将EOF映射为ProtocolException，TCP重置为IOException；修正测试断言后通过，不修改产品异常映射。新增早关闭测试曾与服务端写行终结竞争，已用发送完成屏障消除竞争，取消夹具同样等待该屏障，不以主动清理后的断开作为证据。
+
+| 本轮检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx核心五目标/DI三目标 | 0警告、0错误 | `TestResults/oracle-execute-response-build.log` |
+| 定向报文/响应 | 69通过，0失败/跳过 | `TestResults/oracle-execute-response-reviewed/*.trx` |
+| 完整Unit（本轮新增响应48项） | 1758通过，0失败/跳过 | `TestResults/oracle-execute-response-unit-full/*.trx` |
+| 完整Consumer | 464通过，0失败/跳过 | `TestResults/oracle-execute-response-consumer-full/*.trx` |
+| 完整DI | 8通过，0失败/跳过 | `TestResults/oracle-execute-response-di-full/*.trx` |
+
+编译命令沿用上一节；测试使用`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/oracle-execute-response-<unit|consumer|di>-full`。独立只读走查核对Java响应布局、同步/异步和顺序读取、尾包租约、MoreResults、ERR/未知结果、会话快照及默认路径，未发现必须修复项。完整Unit使用正常Windows TLS凭据访问，未修改证书信任或验证策略；Consumer为既有公开功能回归，不能证明公开PrepareExecute支持。
+
+内部响应子模块已实现并本地验证；尚未解释内部输出结果标志或发布OUT值，公开CommandType.StoredProcedure和非Input参数方向仍拒绝。后续继续公开入口、可信版本/选项门槛、输出原子发布及事务/statement所有权接入。未验证PrepareExecute的OB20环回、实库、异机、打包/旧运行时/Framework，本轮不把这些列为通过；D02及整体目标保持进行中，不推送。

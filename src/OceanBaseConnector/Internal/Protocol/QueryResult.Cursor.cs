@@ -110,6 +110,7 @@ namespace OceanBaseConnector.Internal.Protocol
             do
             {
                 FetchCursor(); var row = ParseRow(_query.Receive());
+                if (row == null && _oracleTailPending) ReadOracleTail();
                 if (row != null || !_cursorNeedsFetch) return row;
             } while (true);
         }
@@ -119,6 +120,7 @@ namespace OceanBaseConnector.Internal.Protocol
             do
             {
                 await FetchCursorAsync(token).ConfigureAwait(false); var row = ParseRow(await _query.ReceiveAsync(token).ConfigureAwait(false));
+                if (row == null && _oracleTailPending) await ReadOracleTailAsync(token).ConfigureAwait(false);
                 if (row != null || !_cursorNeedsFetch) return row;
             } while (true);
         }
