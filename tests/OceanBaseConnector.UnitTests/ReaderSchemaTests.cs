@@ -217,7 +217,8 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(SchemaColumn("n", 3, 11));
                 await channel.WritePacketAsync(Eof());
                 await channel.WritePacketAsync(new byte[] { 0, 0, 1, 0, 0, 0 });
-                await channel.WritePacketAsync(Eof());
+                // Keep the terminal response pending when testing early reader close.
+                if (consume) await channel.WritePacketAsync(Eof());
                 var closed = await Record.ExceptionAsync(() => channel.ReadPacketAsync());
                 Assert.True(closed is ProtocolException || closed is IOException); // Unread TCP data may close with RST instead of FIN.
             });

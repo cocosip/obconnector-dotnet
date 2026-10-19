@@ -1275,3 +1275,10 @@ Recover仅在Idle返回完整独立快照；四列类型、ASCII无符号数值�
 编译命令为dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；完整测试为dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/xa-encoding-<unit|consumer|di>-full。解析最终TRX核对全部执行/通过，并与XID模块最后报告逐案例比较确认新增及零移除。完整Unit使用正常Windows证书私钥权限，没有安装/删除信任根或降低TLS验证。独立代码及文档最终复查无阻断，README/架构/方案/台账同步，UTF8无BOM/CRLF和diff检查后在当前master本地提交，不推送；global.json仍保持删除。
 
 D09仍进行中，下一模块接Oracle DBMS_XA结构化身份绑定、返回码与恢复；真实协调器、OceanBase/OBProxy及异机测试按用户要求延期。本轮未重跑打包、旧运行时/Framework或扩展经TLS矩阵，本地MySQL注入夹具不证明公共MySQL建连或实库XA兼容；A05、C01、D15其他插件和发布关口继续开放，整体goal未完成。
+
+
+## 二进制reader早关夹具竞态修复（2026-10-19）
+
+Oracle XA首轮完整Unit得到2801通过/2失败/0跳过（TestResults/xa-oracle-unit-full/*.trx），其中既有BinaryReaderOwnsResponseAndCloseConnectionHonorsBothConsumptionPaths(consume=false, asynchronous=false)在ReaderSchemaTests写末尾EOF时遇到客户端CloseConnection已关闭传输。与XA产品路径无关：测试本就要求提前关闭丢弃未消费响应，服务端继续写终态造成竞态。
+
+仅在consume=true时发送末尾EOF，未消费路径保留未完成响应；reader独占、元数据、完整读取及关闭连接断言保留，不吞异常或改产品。独立只读走查通过；四种reader组合及86项Oracle XA共90项定向通过（TestResults/xa-oracle-local-accepted/*.trx），最终完整Unit2803通过/0失败/0跳过（TestResults/xa-oracle-unit-accepted/*.trx）。本记录中的完整运行基于当时Oracle XA工作区，Oracle新增及其超限恢复夹具修正另见后文；reader夹具单独提交，不据此宣称XA实库兼容。
