@@ -91,6 +91,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 10: return "DATE";
                     case 11: return "TIME";
                     case 12: return Mode == OceanBaseCompatibilityMode.Oracle ? "DATE" : "DATETIME";
+                    case 13: return "YEAR";
                     case 200: return "TIMESTAMP WITH TIME ZONE";
                     case 201: return "TIMESTAMP WITH LOCAL TIME ZONE";
                     case 203: return "RAW";
@@ -125,6 +126,10 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 4: return typeof(float);
                     case 5: return typeof(double);
                     case 6: return typeof(DBNull);
+                    case 13:
+                        if (Mode != OceanBaseCompatibilityMode.MySql || Length != 4 || Scale != 0)
+                            throw new NotSupportedException("Only four-digit MySQL YEAR columns are supported.");
+                        return typeof(ushort);
                     case 7:
                     case 10:
                     case 11:
@@ -175,6 +180,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 4: return OceanBaseDbType.Single;
                     case 5: return OceanBaseDbType.Double;
                     case 6: return OceanBaseDbType.Null;
+                    case 13: return OceanBaseDbType.Year;
                     case 7:
                     case 202: return OceanBaseDbType.Timestamp;
                     case 10: return OceanBaseDbType.Date;
@@ -196,6 +202,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
+            if (TypeCode == 13) return YearCodec.Decode(value, false);
             if (IsDecimal)
             {
                 var number = DecodeDecimal(value, false);
@@ -241,7 +248,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 switch (TypeCode)
                 {
                     case 1: return 1;
-                    case 2: return 2;
+                    case 2:
+                    case 13: return 2;
                     case 3:
                     case 9:
                     case 4: return 4;
@@ -257,6 +265,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
+            if (TypeCode == 13) return YearCodec.Decode(value, true);
             if (IsDecimal)
             {
                 var number = DecodeDecimal(value, true);

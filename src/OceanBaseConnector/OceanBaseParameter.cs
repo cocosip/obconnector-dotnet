@@ -65,6 +65,7 @@ namespace OceanBaseConnector
                 case global::OceanBaseConnector.OceanBaseDbType.SByte: return DbType.SByte;
                 case global::OceanBaseConnector.OceanBaseDbType.Byte: return DbType.Byte;
                 case global::OceanBaseConnector.OceanBaseDbType.Int16: return DbType.Int16;
+                case global::OceanBaseConnector.OceanBaseDbType.Year:
                 case global::OceanBaseConnector.OceanBaseDbType.UInt16: return DbType.UInt16;
                 case global::OceanBaseConnector.OceanBaseDbType.Int32: return DbType.Int32;
                 case global::OceanBaseConnector.OceanBaseDbType.UInt32: return DbType.UInt32;

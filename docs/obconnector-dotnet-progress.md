@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，本轮从 `451402e` 增补 A04 静默 TLS 握手中断回归并重新验证本地范围，见下节。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归。本轮继续 D14 MySQL YEAR 本地实现，进度见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D13/D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -16,7 +16,8 @@
 | C05–C07 | MySQL ChangeDatabase、首批四个GetSchema集合/现代异步入口；逐条DbBatch及数据源入口；ActivitySource/Meter、脱敏及Windows协议性能基线已实现并走查 | 真实目录权限/字典、切库、批次及诊断验收；池借还性能尚无实现基础 |
 | C01/C08 | 未开放Pooling=true，公开入口明确拒绝；生产验收缺口已列明 | 连接池及完整重置实现、可信版本/模式白名单、生产矩阵与G3验收 |
 | R01/R02 | 同版本双包、五资产实际包消费、故障/回退README、8/9完整本地Unit/DI及Windows Framework基础包消费工具已完成 | 许可证/来源/包名审核、正式Framework支持决定、真实兼容矩阵和最终发布审核 |
-| D01–D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及扩展类型等按原计划另行实施 |
+| D14 | 四位 MySQL YEAR 本地实现，验证记录见末尾；真实验收开放 | 真实 YEAR 列往返、版本/OBProxy矩阵 |
+| D01–D13/D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及其他扩展类型等继续逐项评估本地实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -55,14 +56,14 @@
 
 测试命令为 `dotnet test tests/<对应工程>/<对应工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/<上表目录>`；定向回归另加 `--filter FullyQualifiedName~SilentTlsHandshakeIsInterruptedAndClosesTransport`。包命令为 `dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/local-scope-packages` 和 `pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/local-scope-packages`。正常 Windows TLS/私钥权限下执行，不更改驱动证书验证策略。首次沙箱还原/TLS权限失败、测试夹具试验和并发构建文件锁失败均不计为通过；还原使用仓库内 `TestResults/nuget-packages` 及 `NUGET_SCRATCH=TestResults/nuget-scratch`，最终恢复固定的 xunit.runner.visualstudio 2.8.2，不采用离线近似版本。未重新执行历史 .NET 8/9 完整 Unit/DI 或 Framework 矩阵；上述实际8/9包样例只补基础消费证据。
 
-剩余范围逐项归属如下；排除这些明确暂缓/待决定项后，本轮未发现可独立继续实施的产品功能模块。项目整体仍未完成，原阶段验收状态保持开放。
+此前本地范围复核将 D 阶段整体归为环境阻塞，判断过宽：用户暂缓的是异机/数据库部署联调，可独立实现和本地测试的扩展仍须继续。下表保留真实环境和发布门槛，D 项改为逐项推进本地实现；项目整体仍未完成，原阶段验收状态保持开放。
 
 | 剩余项 | 本轮处理及原因 |
 | --- | --- |
 | A04 私有 CA、非 Windows，A07/B09/C08/R02 真实互通与故障矩阵 | 需人工信任配置、其他电脑或 OceanBase/OBProxy 环境，暂缓 |
 | A05 公共 MySQL 模式判定 | 缺少真实版本/模式/插件证据，不能用缺失 Oracle 位猜测 MySQL，继续安全拒绝 |
 | C01 池与完整重置、C07 池性能 | 缺少服务端完整重置与隔离证明，继续拒绝 Pooling=true |
-| D01–D15 独立扩展 | 开发方案规定 G4 后逐项实施且环境缺失时保持未开始；每项均需目标服务端/模式往返或拓扑/协调器证明，本轮不绕过前置条件 |
+| D01–D15 独立扩展 | 从 D14 本地编解码、参数、元数据开始推进；其余本地可实现部分继续评估，不以 G4 或环境缺失整体搁置；目标服务端/模式往返和拓扑/协调器证明单独延期 |
 | G0 产品决定、R01 许可证/来源/包名与正式 Framework 支持 | 需要维护者决定或发布审查，不能由本地编译/夹具替代；不发布或推送 |
 
 ## 中断走查问题核销（2026-10-19）
@@ -128,7 +129,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09本地实现/走查完成；实际8/9各Unit1206/DI8、10 Unit1206/Consumer152/DI8及五资产包消费通过；真实双模式/跨平台及完整支持矩阵未验收 |
 | G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02-C07本地实现完成待真实环境验证，C04真实资源/性能与版本矩阵、C07池性能仍待验收；C08因真实环境证据缺失而阻塞，关口未关闭 |
 | G4 发布候选 R | W35-W37 | 0/2 | 进行中 | R01/R02本地双包/五资产、8/9完整本地回归、Framework4.8.1基础消费及交付材料已完成；许可/来源/包名、正式支持范围及真实矩阵未验收 |
-| D 独立扩展 | G4 后按需求 | 0/15 | 未开始 | 每项独立功能、版本和模式证据；不计入 G4 |
+| D 独立扩展 | 本地可独立部分继续，实库验收延期 | 0/15 | 进行中 | D14 本地实现和验证见末尾；其余逐项实施；每项真实版本和模式证据仍须补齐，不计入 G4 |
 
 ## A. 协议基础任务
 
@@ -188,7 +189,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D11 | G4 后 | Oracle INTERVAL | 未开始 | 待记录 |
 | D12 | G4 后 | MySQL JSON | 未开始 | 待记录 |
 | D13 | G4 后 | MySQL BIT | 未开始 | 待记录 |
-| D14 | G4 后 | MySQL YEAR | 未开始 | 待记录 |
+| D14 | 本地先行，实库延期 | MySQL YEAR | 待验证 | 本地实现/测试/走查记录见末尾；真实 YEAR 列往返仍开放 |
 | D15 | G4 后 | 新认证插件 | 未开始 | 待记录 |
 
 ## 兼容矩阵记录模板
@@ -520,3 +521,24 @@ R02仅完成本地材料和本地验证，状态保持进行中；G4同步为进
 独立只读走查已复核五文件差异、实际包SHA512/Standard2.0资产、8.x依赖及生成绑定重定向、默认/可选两份最终日志、父工程红绿重建和包内README一致性，无剩余需修复项。git diff --check、UTF-8无BOM/CRLF及两个包README逐字节核对通过。
 
 只增加工程验证与文档，没有修改产品或既有单元测试源码，因此未重复运行刚通过的完整Unit1206/Consumer152/DI8；本轮实际测试是两个包验证路径、真实Framework消费和生成工程的重建回归。真实数据库、非Windows和原版Framework4.8均未执行，完整SQL/TLS/核心API及Framework正式支持决定仍开放。R01/R02继续进行中，G4仍0/2，A05可信MySQL判定及C01完整重置门槛不变，不发布、不推送。
+
+## D14 MySQL YEAR 本地实现（2026-10-19）
+
+从 `7a70bd6` 继续实现四位 YEAR。`OceanBaseDbType.Year` 保持枚举值 9，映射 `ushort` / `DbType.UInt16`；结果类型码 13，文本四位 ASCII、二进制固定两字节小端，允许 0 或 1901–2155。标准/provider-specific 值和字段类型一致，Schema 提供 YEAR、ProviderType=9、precision=4、scale=0。Oracle 模式、YEAR(2)、非法精度、非法文本/范围及 CLR 类型不匹配均明确拒绝，不做两位年份推断或日期转换。显式 Year 参数在 prepare 前验证（含 NULL），复用无符号 SMALLINT 编码；普通 UInt16 保留完整范围。
+
+复用现有 ResultColumn、PreparedParameters、ResultDbColumn 和顺序读取路径，仅增加内部 YearCodec，未引入依赖或公开值类型。失败用例先运行，27 项因未支持 YEAR 失败（`TestResults/year-red/*.trx`）；实现后修正夹具的命令序号边界并通过。五资产消费夹具首次未带认证后 Oracle 状态位，被既有 A05 安全拒绝；修正夹具状态位后，仅在测试内注入认证后 MySQL 模式，产品认证门槛未修改。
+
+最终证据（Windows / .NET 10.0.13）：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx 核心五目标、DI 三目标 | 0 警告、0 错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
+| YEAR 定向 Unit | 29 通过，0 失败/跳过 | `TestResults/year-targeted/*.trx` |
+| YEAR 五资产公共 API 消费（文本/预处理） | 10 通过，0 失败/跳过 | `TestResults/year-consumer-targeted-final/*.trx` |
+| 完整 Unit | 1240 通过，0 失败/跳过 | `TestResults/year-unit-full/*.trx` |
+| 完整 Consumer | 162 通过，0 失败/跳过 | `TestResults/year-consumer-full/*.trx` |
+| DI | 8 通过，0 失败/跳过 | `TestResults/year-di-full/*.trx` |
+
+测试命令沿用 `dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/<上述目录>`；定向分别附加 `--filter FullyQualifiedName~Year` 和 `--filter FullyQualifiedName~YearConsumerTests`。覆盖同步/异步、默认/SequentialAccess、文本/二进制、正常/零/NULL、后续字段对齐、参数重用及无效参数发包前拒绝；五资产均经 DbConnection/DbDataReader 公共 API 实际读取和参数写入。独立只读走查核对编解码、参数、reader、顺序帧边界、Schema、测试与文档，未发现需修复问题。`git diff --check` 通过。
+
+D14 本地实现完成，正式状态保持待验证：真实 YEAR 列 INSERT/SELECT、目标 OceanBase/OBProxy 版本及模式矩阵未执行，公共 MySQL 建连仍受 A05 门槛限制。未操作信任根，未部署其他电脑/数据库，未重新验证打包、旧运行时或 Framework。C01、A05 及 D01–D13/D15 仍未完成，不能将本模块通过解释为项目全部完成。

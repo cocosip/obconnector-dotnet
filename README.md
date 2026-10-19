@@ -22,7 +22,8 @@
 - 只支持文本命令和输入参数，参数化执行使用服务端 prepare；不自动回退客户端 SQL 插值。不支持环境 `TransactionScope`、存储过程/OUT、REF CURSOR、locator LOB、ARRAY/STRUCT、XA、OB20 或拓扑发现。
 - 首批 `GetSchema` 集合为 `MetaDataCollections`、`DataSourceInformation`、`Tables`、`Columns`；Oracle 模式不支持 `ChangeDatabase`。
 - batch 逐条执行，不隐式创建事务，没有整批原子性保证。需要原子性时由调用方显式绑定本地事务。
-- Oracle NCHAR/INTERVAL、MySQL JSON/BIT/YEAR 仍为规划能力，未支持类型会显式失败。
+- MySQL 四位 YEAR 已实现本地编解码、元数据及参数支持：`ushort`，0 或 1901–2155，显式参数类型 `OceanBaseDbType.Year`；无两位年份推断。真实往返待验收，公共 MySQL 建连仍受 A05 门槛限制。
+- Oracle NCHAR/INTERVAL、MySQL JSON/BIT 仍为规划能力，未支持类型会显式失败。
 
 ## 使用入口
 

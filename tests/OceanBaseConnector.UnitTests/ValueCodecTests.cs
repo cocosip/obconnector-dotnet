@@ -206,7 +206,7 @@ namespace OceanBaseConnector.UnitTests
         [Fact]
         public void UnsupportedProviderTypeCannotMasqueradeAsStringEvenForNull()
         {
-            foreach (var type in new[] { OceanBaseDbType.NChar, OceanBaseDbType.NVarchar2, OceanBaseDbType.Json, OceanBaseDbType.Bit, OceanBaseDbType.Year, OceanBaseDbType.IntervalYearToMonth, OceanBaseDbType.IntervalDayToSecond })
+            foreach (var type in new[] { OceanBaseDbType.NChar, OceanBaseDbType.NVarchar2, OceanBaseDbType.Json, OceanBaseDbType.Bit, OceanBaseDbType.IntervalYearToMonth, OceanBaseDbType.IntervalDayToSecond })
             {
                 var parameter = new OceanBaseParameter { Value = DBNull.Value, OceanBaseDbType = type };
                 Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle));

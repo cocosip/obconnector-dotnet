@@ -37,6 +37,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 {
                     case 1: NumericPrecision = 3; break;
                     case 2: NumericPrecision = 5; break;
+                    case 13: NumericPrecision = 4; break;
                     case 3: NumericPrecision = 10; break;
                     case 9: NumericPrecision = column.Unsigned ? 8 : 7; break;
                     case 8: NumericPrecision = column.Unsigned ? 20 : 19; break;

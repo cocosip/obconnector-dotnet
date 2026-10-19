@@ -117,6 +117,14 @@ namespace OceanBaseConnector.Internal.Protocol
                     throw new NotSupportedException("The provider-specific parameter type is not supported yet.");
                 if (providerType == OceanBaseDbType.OracleDate && mode != OceanBaseCompatibilityMode.Oracle)
                     throw new NotSupportedException("OracleDate requires Oracle mode.");
+                if (providerType == OceanBaseDbType.Year)
+                {
+                    if (mode != OceanBaseCompatibilityMode.MySql || parameter.Scale != 0 || parameter.Precision != 0 && parameter.Precision != 4)
+                        throw new NotSupportedException("YEAR requires MySQL mode and four-digit, zero-scale metadata.");
+                    if (parameter.Value != null && parameter.Value != DBNull.Value &&
+                        (!(parameter.Value is ushort year) || !YearCodec.IsValid(year)))
+                        throw new ArgumentException("A YEAR parameter requires a UInt16 value of zero or 1901 through 2155.");
+                }
                 if (providerType == OceanBaseDbType.Null)
                 {
                     if (parameter.Value != null && parameter.Value != DBNull.Value)
