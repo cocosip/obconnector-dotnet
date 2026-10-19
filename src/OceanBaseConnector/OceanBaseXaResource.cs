@@ -8,7 +8,7 @@ namespace OceanBaseConnector
     public enum OceanBaseXaEndMode { Success, Fail, Suspend }
     public enum OceanBaseXaVote { Prepared = 0, ReadOnly = 3 }
 
-    /// <summary>A dedicated explicit XA resource bound to one physical MySQL session until Close.
+    /// <summary>A dedicated explicit XA resource bound to one physical session until Close.
     /// It never enlists ambient transactions, replays work or performs implicit completion.</summary>
     public sealed class OceanBaseXaResource
     {
@@ -20,6 +20,7 @@ namespace OceanBaseConnector
         internal OceanBaseXid? Xid { get; set; }
         internal bool RollbackOnly { get; set; }
         internal bool InProgress { get; set; }
+        internal bool OracleInitialized { get; set; }
         internal bool AllowsCommands => State == XaState.Active && !InProgress;
         internal OceanBaseXaResource(OceanBaseConnection connection, PhysicalSession session, int timeout)
         { _connection = connection; Session = session; Timeout = timeout; }
@@ -33,9 +34,9 @@ namespace OceanBaseConnector
         public Task EndAsync(OceanBaseXid xid, OceanBaseXaEndMode mode = OceanBaseXaEndMode.Success, CancellationToken cancellationToken = default)
             => _connection.ExecuteXa(this, XaOperation.End, xid, (int)mode, true, cancellationToken);
         public OceanBaseXaVote Prepare(OceanBaseXid xid)
-        { _connection.ExecuteXa(this, XaOperation.Prepare, xid, 0, false, CancellationToken.None).GetAwaiter().GetResult(); return OceanBaseXaVote.Prepared; }
-        public async Task<OceanBaseXaVote> PrepareAsync(OceanBaseXid xid, CancellationToken cancellationToken = default)
-        { await _connection.ExecuteXa(this, XaOperation.Prepare, xid, 0, true, cancellationToken).ConfigureAwait(false); return OceanBaseXaVote.Prepared; }
+            => _connection.ExecuteXa(this, XaOperation.Prepare, xid, 0, false, CancellationToken.None).GetAwaiter().GetResult();
+        public Task<OceanBaseXaVote> PrepareAsync(OceanBaseXid xid, CancellationToken cancellationToken = default)
+            => _connection.ExecuteXa(this, XaOperation.Prepare, xid, 0, true, cancellationToken);
         public void Commit(OceanBaseXid xid, bool onePhase = false)
             => _connection.ExecuteXa(this, XaOperation.Commit, xid, onePhase ? 1 : 0, false, CancellationToken.None).GetAwaiter().GetResult();
         public Task CommitAsync(OceanBaseXid xid, bool onePhase = false, CancellationToken cancellationToken = default)

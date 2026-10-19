@@ -19,16 +19,21 @@ namespace OceanBaseConnector
             int serverErrorCode = 0,
             string? sqlState = null,
             bool isExecutionOutcomeUnknown = false,
-            Exception? innerException = null)
+            Exception? innerException = null,
+            int? xaErrorCode = null)
             : base(message, innerException)
         {
             ServerErrorCode = serverErrorCode;
             _sqlState = sqlState;
             IsExecutionOutcomeUnknown = isExecutionOutcomeUnknown;
+            XaErrorCode = xaErrorCode;
         }
 
         /// <summary>Server error code; 0 when the error is client-local.</summary>
         public int ServerErrorCode { get; }
+
+        /// <summary>DBMS_XA function return code; null for errors without a trusted XA return value.</summary>
+        public int? XaErrorCode { get; }
 
         /// <summary>Server SQLSTATE; null when not supplied.</summary>
 #if NET8_0_OR_GREATER

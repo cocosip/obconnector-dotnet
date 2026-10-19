@@ -12,6 +12,8 @@ namespace OceanBaseConnector.ConsumerTests.NetStandard
     /// </summary>
     public static class NetStandardConsumerSample
     {
+        public static int? GetXaError(OceanBaseException error) => error.XaErrorCode;
+
         public static async System.Threading.Tasks.Task CompleteXa(OceanBaseConnection connection, OceanBaseXid xid, System.Threading.CancellationToken token)
         {
             var resource = connection.GetXaResource();

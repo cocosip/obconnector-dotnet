@@ -483,11 +483,11 @@ Load Balance枚举Sequential（默认）/RoundRobin在连接串严格按名称�
 
 核心五目标的OceanBaseXid是sealed不可变值类，以有符号Int32 FormatId、1–64字节globalTransactionId和0–64字节branchQualifier表示一个XA分支。FormatId仅拒绝保留的NULLXID -1，其他负值不改变位模式；两段不可null。构造及GetGlobalTransactionId()/GetBranchQualifier()防御复制，身份比较包含格式号、两段各自长度和完整字节，散列与相等一致；默认对象字符串不提供身份正文，没有字符串/Guid隐式转换。协调器可在外部按自己的持久化格式保存返回副本。
 
-结构及长度以固定Java基线OceanBaseXid/OceanBaseXaResource和OceanBase 5e8a63d29dae9fde5e962b8fcc7b167d438fc343的ObXATransID为依据，不复制Java保留可变输入数组的行为。MySQL命令按Java基线的32位无符号位模式编码FormatId，后续Oracle传有符号值；服务端内部Int64范围更大，恢复不得截断/静默丢失不在公开域中的身份。该值对象本身不发包、不开始/加入事务；下述MySQL模块接入固定物理会话、显式阶段操作和恢复，Oracle仍待后续接入。TransactionScope继续拒绝，真实协调器/两模式往返验收仍开放。
+结构及长度以固定Java基线OceanBaseXid/OceanBaseXaResource和OceanBase 5e8a63d29dae9fde5e962b8fcc7b167d438fc343的ObXATransID为依据，不复制Java保留可变输入数组的行为。MySQL命令按Java基线的32位无符号位模式编码FormatId，Oracle传有符号值；服务端内部Int64范围更大，恢复不得截断/静默丢失不在公开域中的身份。该值对象本身不发包、不开始/加入事务；下述MySQL及Oracle模块接入固定物理会话、显式阶段操作和恢复。TransactionScope继续拒绝，真实协调器/两模式往返验收仍开放。
 
 ### D09 MySQL XA阶段与恢复模块
 
-在现有XID基础上增加五目标公开`OceanBaseConnection.GetXaResource()`，返回绑定当前物理会话的sealed `OceanBaseXaResource`，同一会话复用同一个资源。该入口只能用于空闲、没有本地事务的MySQL会话；Oracle暂明确拒绝，后续单独接入DBMS_XA，不发明未核实的SQL构造器。A05公开MySQL身份确认门槛不变，本模块本地夹具显式提供认证后的MySQL事实，不作为真实MySQL建连证据。
+在现有XID基础上增加五目标公开`OceanBaseConnection.GetXaResource()`，返回绑定当前物理会话的sealed `OceanBaseXaResource`，同一会话复用同一个资源。MySQL路径要求空闲、没有本地事务的会话；Oracle扩展条件见下述DBMS_XA模块。A05公开MySQL身份确认门槛不变，本模块本地夹具显式提供认证后的MySQL事实，不作为真实MySQL建连证据。
 
 这是本轮实现选择：获取资源后，该连接直到Close专用于XA，不提供Dispose或隐式提交/回滚。普通命令、预处理及批次仅在Active阶段允许，Transaction属性为null；本地BeginTransaction和ChangeDatabase始终拒绝。Close仅销毁传输，不发本地ROLLBACK或XA阶段指令；新Open可取得新资源，旧资源所有操作拒绝，不迁移到新会话。原有LOB/复杂类型上下文随成功阶段变化递增事务epoch而失效。直接发送事务控制SQL绕过驱动阶段API不受支持，应用必须使用资源入口。
 
@@ -497,7 +497,21 @@ Load Balance枚举Sequential（默认）/RoundRobin在连接串严格按名称�
 
 MySQL使用固定XA关键字和`0x<gtrid>,0x<bqual>,0x<uint32 format bit pattern>`，不插入用户文本。空bqual使用X''，不复制Java生成裸0x的错误；格式号始终八位十六进制，包括0x00000000，不复制Java零值空正文。固定服务端sql_parser_mysql_mode.l:730要求0x后至少一位十六进制，而X''允许零位；yacc的text_string/xa_xid与ulong_num分别确认空分支和格式号语法。该源码核对不替代实库互通。End(Fail)发送普通XA END，客户端保留rollback-only约束；不假称服务端支持TMFAIL标志。Recover按四列formatID/gtrid_length/bqual_length/data解析原始字节，数值只接受ASCII无符号十进制：格式号0..UInt32.MaxValue但排除保留-1的位模式；负数或更宽值明确拒绝，不能将两个服务端Int64身份折叠为一个公开XID。两段长度分别1..64/0..64，原始data长度必须精确匹配，NULL/额外列/多结果/非法元数据或身份均失败，不返回部分列表。最多65536个分支，超过则失败，避免无界分配。异常沿用OceanBaseException保留服务端码/SQLSTATE及结果未知标记；不记录SQL或身份正文。
 
-本模块只建立上述MySQL路径的本地可验证契约；Oracle类型绑定/返回码/恢复、真实协调器、两模式数据库/OBProxy及异机验收仍开放，D09整体不据此完成。
+该子模块建立MySQL路径的本地可验证契约，Oracle类型绑定/返回码/恢复见下一节；真实协调器、两模式数据库/OBProxy及异机验收仍开放。
+
+### D09 Oracle DBMS_XA阶段与恢复模块
+
+延续同一GetXaResource/Start/End/Prepare/Commit/Rollback/Recover API及原会话/单分支阶段规则，Oracle需显式Use Oracle Prepare Execute=true；复用既有版本检查与0xa1执行，不增加SQL构造器、TABLE表达式或用户开关。技术栈沿原五目标C#与CommandExchange/QueryResult/OracleCommandPlan/复杂类型编解码。固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的OceanBaseXaResource以SYS.DBMS_XA_XID（NUMBER formatid、RAW gtrid、RAW bqual）绑定各函数，useLocalXID路径给出固定描述；恢复使用PL/SQL的DBMS_XA_XID_ARRAY输出。本模块借鉴这些调用契约，不复制Java代码或仅检查负返回值的缺陷。固定OceanBase头ob_dbms_xa.h和Oracle DBMS_XA文档核对码值/签名，实库互通仍待验证。
+
+这是本模块实现选择：内置SYS.DBMS_XA_XID及SYS.DBMS_XA_XID_ARRAY私有描述，仅用于当前XA交换，不注册到公共类型字典、不返回复杂类型对象、不绕过公共复杂类型的上下文验证。输入身份通过现有结构化参数编码，格式号保留有符号Int32和两段原始字节，空分支保留零长度RAW。函数固定为select DBMS_XA.XA_START/END/PREPARE/COMMIT/ROLLBACK对应参数from dual，Start传TMNOFLAGS=0/TMJOIN=0x00200000/TMRESUME=0x08000000；End传TMSUCCESS=0x04000000/TMSUSPEND=0x02000000，Fail按Java/文档映射TMSUCCESS且保留客户端rollback-only。Commit第二参数为Boolean，不拼入用户SQL。
+
+每个资源首次Oracle操作，在同一exchange/预算下先检查PrepareExecute版本，再确认set autocommit = 0，初始化及最终执行OK须零影响行/插入ID且无自动提交、额外结果、游标和输出标志，初始化还须无活动事务。连接已专用于XA，整个资源寿命保持关闭自动提交，不在End之后自动恢复或隐式提交；Close仍只销毁传输。初始化完整成功才记录，下次阶段不重做；初始化或阶段失败均不透明重连/重放。阶段成功及Prepare返回ReadOnly都在连接锁内核对原会话并更新epoch；ReadOnly释放本地分支并恢复Idle，协调器应视为已完成、无需Commit；单阶段Commit不再允许，Idle的两阶段Commit仍是按持久化身份恢复的入口，不保留身份墓碑。
+
+函数响应必须有恰好一个数值列、一个非NULL整数返回码、完整行终态和最终执行OK，不能在第一行或EOF提前发布新阶段。0才是一般成功；Prepare额外接受3并返回ReadOnly。其他所有返回码（包括100–107回滚、4重试、5–8启发式、9不可迁移、负XAER和未知值）都抛OceanBaseException，新增nullable XaErrorCode保留实际返回值，ServerErrorCode仍只表示ERR服务端码；不将可信返回码错误标成传输结果未知。为避免不明确的服务端阶段继续用于业务，返回码错误保守废弃会话，由协调器按持久化XID在新连接恢复/处理；不将XA_RETRY自动重试或将启发式结果当作正常提交。完整ERR沿已有服务端错误契约；不能证明完整响应的中断/坏边界仍结果未知并销毁会话。
+
+Recover仅Idle，使用固定Java观察到的declare x DBMS_XA_XID_ARRAY := DBMS_XA_XID_ARRAY(); BEGIN x := DBMS_XA.XA_RECOVER(); :recovered := x; END;，由现有命名绑定计划生成占位符，隐藏输出/尾包验证后读取私有数组。返回独立OceanBaseXid[]，不得使用SELECT TABLE或构造器代替未验证路径。数组必须非NULL，元素必须为三属性对象、格式号为有符号Int32且非-1、gtrid为1–64字节、bqual为0–64字节；Oracle RAW的NULL分支规范为零长度，NULL全局ID仍失败。超出公开格式域、NULL元素、畸形/多行输出、额外结果或中断都失败，不返回部分结果。沿复杂值65535总成员预算，每个分支占一集合元素加三属性，Oracle快照上限16383个（MySQL仍65536），不为XA放宽全局编解码预算。所有0xa1响应已创建statement均排队关闭，不持有服务端statement缓存。
+
+五目标公开同步/异步生命周期与XaErrorCode消费、标准/OB20夹具覆盖阶段/只读/错误码/恢复/错误边界，保留MySQL既有回归。日志和诊断不输出身份/SQL/参数，仅六种xa.*操作。D09的本地两模式范围由本模块继续补齐；真实协调器、OceanBase/OBProxy、TLS扩展及异机/旧运行时验收仍开放，TransactionScope和池化门槛不变。
 
 ### 错误与诊断
 

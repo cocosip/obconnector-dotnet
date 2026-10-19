@@ -861,6 +861,19 @@ D09完整目标仍为显式XA、固定物理会话、阶段控制与恢复，真
 
 本模块完成：Release零警告/错误，最终完整Unit2717（新增53）、Consumer929（新增80）、DI8全部通过，零失败/跳过、旧案例移除0。走查修复可信XA回滚错误后的会话销毁、空恢复响应的公开异常映射、六个阶段诊断名称及空分支X''编码；红绿及最终证据见台账。D09仍进行中，下一模块继续Oracle DBMS_XA类型绑定、返回码与恢复；A05公开MySQL门槛、TransactionScope拒绝、实库/异机延期不变。
 
+### D09 Oracle DBMS_XA模块实施
+
+目标、技术栈及接口按架构第6节“D09 Oracle DBMS_XA阶段与恢复模块”。本人逐步实现，独立只读设计/代码复查；继续当前master，不推送、不执行实库/异机测试。新增OceanBaseConnection.XaOracle.cs集中私有描述、初始化、0xa1交换和返回码/恢复校验；Xa.cs与OceanBaseXaResource.cs复用阶段发布并返回Prepare票值，OceanBaseException.cs公开XaErrorCode。新增OracleXaTests.cs和OracleXaConsumerTests.cs，既有Standard2.0辅助工程补异常属性编译消费，README/架构/方案/台账同步；不改变公共类型字典或业务命令校验。
+
+走查重点：自动提交仅首次确认关闭、同一总预算；0/3/正负错误码语义不同且不得提前发布阶段；私有结构描述不泄入公共类型缓存；statement生命周期和OB20边界；恢复完整快照、精确Int32及16383总成员上限；关闭重开旧资源不得迁移。所有对外XaErrorCode必须来自完整可信响应。
+
+- [x] 先写Oracle生命周期/ReadOnly和恢复夹具，运行dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 -nr:false --filter FullyQualifiedName~OracleXa确认因现有Oracle拒绝而红。分别检查输入结构的有符号格式/原始字节、Start/End标志及Commit Boolean；恢复使用手工复杂结果字节，不用产品编码器生成期望。
+- [x] 实现最小Oracle执行及共享阶段票值；定向测试单/两阶段、Join/Resume/Suspend/Fail、ReadOnly后Idle、版本/选项拒绝、初始化与阶段的ERR/返回码、互斥/Close/重开、超时/取消/断流、畸形尾包/额外结果。新非零返回码通过新回归确认修前失败，保留错误码并废弃会话，不重放。
+- [x] 实现完整恢复，测试空数组、任意字节/空及NULL分支、有符号格式边界、宽/分数/NULL格式、非法长度/NULL元素/多行/缺输出/不匹配类型、成员上限、尾包前中断；无部分结果，无公共类型缓存污染。
+- [x] 五资产同步/异步×标准/OB20实际消费阶段/ReadOnly/恢复、可信错误码/断流/坏边界；辅助工程直接编译消费XaErrorCode。完整Release核心五目标/DI三目标、Unit/Consumer/DI及独立代码和文档走查，修复并复验；UTF8无BOM/CRLF和diff检查后本地提交。按实有证据更新台账及D09状态，环境验收和其他开放任务不得提前关闭。
+
+本模块约定本地范围完成：Release核心五/DI三目标0警告/错误，完整Unit2803（新增86）、Consumer1029（新增100）、DI8全部通过，零失败/跳过、旧案例移除0；独立走查及红绿修复记录见台账。D09正式状态待验证，实库/协调器/异机及其他开放项继续保留，整体goal未完成，不推送。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

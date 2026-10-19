@@ -12,6 +12,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private readonly OracleCommandPlan? _oraclePlan;
         private bool _oracleOutputResult;
         internal OraclePrepareExecutePacket? OracleHeader { get; private set; }
+        internal OkPacket? OracleCompletion { get; private set; }
         internal OceanBaseArrayBindingResult? ArrayBindingResult => _oraclePlan?.ArrayBinding?.Published == true ? _oraclePlan.ArrayBinding.Completed : null;
 
         private OraclePrepareExecutePacket BeginOracleMetadata(byte[] bytes)
@@ -60,6 +61,7 @@ namespace OceanBaseConnector.Internal.Protocol
             _affected = checked(System.Math.Max(0, _affected) + ok.AffectedRows);
             _oracleTailPending = false;
             End(ok.StatusFlags, ok);
+            OracleCompletion = ok;
         }
 
         private void ReadOracleOutput()

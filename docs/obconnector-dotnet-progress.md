@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值及MySQL固定会话/显式阶段/完整恢复快照已接入，Oracle DBMS_XA与真实协调器验收仍开放；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值及MySQL/Oracle固定会话、显式阶段与完整恢复快照已本地接入，真实协调器及两模式实库验收仍开放；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -193,7 +193,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D06 | 本地先行，实库延期 | bulk/array binding及多行输出 | 待验证 | 公开同步/异步、部分失败/位置/逐项DML计数、多行OUT/RETURNING及五资产矩阵本地完成，见末尾；按用户要求提交后暂停 |
 | D07 | 本地先行，实库延期 | 按需客户端预处理回退 | 待验证 | 命令显式开关、精准prepare首错误、基础标量安全编码、原租约/事务/总预算及五资产本地覆盖；MySQL非NULL字符串等待可信collation；见末尾 |
 | D08 | 本地先行，实库延期 | 拓扑发现与负载均衡 | 待验证 | 应用地址源、按数据源/连接实例轮转、共享总预算及逐会话模式/TLS重验；只在TCP建连失败时尝试候选，已发送SQL不重放；见末尾 |
-| D09 | 本地先行，实库延期 | 显式 XA | 进行中 | 不可变XID及MySQL固定物理会话、显式阶段与恢复快照已接入；Oracle DBMS_XA、真实协调器及两模式验收仍开放，见末尾 |
+| D09 | 本地先行，实库延期 | 显式 XA | 待验证 | 不可变XID及两模式固定会话、阶段与恢复本地范围完成；Oracle需显式PrepareExecute，Unit2803/Consumer1029/DI8通过；真实协调器及两模式实库验收仍开放，见末尾 |
 | D10 | G4 后 | Oracle NCHAR/national charset | 待验证 | Codex，2026-10-19：独立会话编码、两种结果/参数读写、顺序字符流及五资产本地实现，验证见末尾；真实列往返和版本/OBProxy 暂缓 |
 | D11 | 本地先行，实库延期 | Oracle INTERVAL | 待验证 | 精确值/编解码/参数/Schema及公共消费本地完成，完整测试与独立走查记录见末尾；真实往返开放 |
 | D12 | 本地先行，实库延期 | MySQL JSON | 待验证 | 本地文本/二进制读写、元数据和字段流，验证见末尾；真实 JSON 列往返仍开放 |
@@ -1282,3 +1282,35 @@ D09仍进行中，下一模块接Oracle DBMS_XA结构化身份绑定、返回码
 Oracle XA首轮完整Unit得到2801通过/2失败/0跳过（TestResults/xa-oracle-unit-full/*.trx），其中既有BinaryReaderOwnsResponseAndCloseConnectionHonorsBothConsumptionPaths(consume=false, asynchronous=false)在ReaderSchemaTests写末尾EOF时遇到客户端CloseConnection已关闭传输。与XA产品路径无关：测试本就要求提前关闭丢弃未消费响应，服务端继续写终态造成竞态。
 
 仅在consume=true时发送末尾EOF，未消费路径保留未完成响应；reader独占、元数据、完整读取及关闭连接断言保留，不吞异常或改产品。独立只读走查通过；四种reader组合及86项Oracle XA共90项定向通过（TestResults/xa-oracle-local-accepted/*.trx），最终完整Unit2803通过/0失败/0跳过（TestResults/xa-oracle-unit-accepted/*.trx）。本记录中的完整运行基于当时Oracle XA工作区，Oracle新增及其超限恢复夹具修正另见后文；reader夹具单独提交，不据此宣称XA实库兼容。
+
+
+## D09 Oracle DBMS_XA阶段、返回码与完整恢复（2026-10-19）
+
+从5e8f51f继续，复用GetXaResource及六种同步/异步API、原物理会话/单分支状态、互斥和事务epoch。Oracle要求Use Oracle Prepare Execute=true及既有2.2.76版本门槛，首次操作在同一预算内确认set autocommit = 0，保持至Close。SYS.DBMS_XA_XID/DBMS_XA_XID_ARRAY固定私有描述通过原复杂类型编码器和0xa1执行，不注册公共类型缓存；Start/End传固定标志，Commit传Boolean。Close不隐式完成事务，新Open重新初始化，旧资源不得迁移。
+
+返回码必须来自恰好一列、一行、非NULL的精确Int32及完整终态；0成功，Prepare另接受3并返回ReadOnly、释放本地分支。其他正负返回码由OceanBaseException.XaErrorCode保留，ServerErrorCode仍专属于ERR；可信码错误unknown=false并保守销毁会话，不自动重试。ReadOnly后无需Commit，Idle两阶段Commit仍是按协调器持久化XID恢复的入口。初始化及最终OK严格检查零计数、自动提交/额外结果/游标/输出标志，初始化还拒绝活动事务。未收到可信完整终态的取消/超时/断流/关闭或坏OB20边界仍按结果未知处理。
+
+恢复使用固定Java基线观察到的PL/SQL数组OUT路径，完整尾包后才读取私有输出并返回独立OceanBaseXid[]。格式为有符号Int32且非-1，全局ID为1–64字节，分支为0–64字节；Oracle NULL RAW分支规范为空，全局NULL仍拒绝。沿65535复杂成员总预算，最多16383分支；NULL数组/元素、畸形身份、宽值/分数、错误类型、缺少/多行输出或中断均不返回部分结果。测试用手工结构和独立请求解码核对字节，不用产品编码器生成期望。
+
+走查及红绿记录：
+
+- 起始6项Oracle公开调用因原NotSupportedException全部失败（TestResults/xa-oracle-red/*.trx）；实现后基础及返回码用例通过。
+- 尾包状态校验回归修前4失败/1通过（xa-oracle-tail-red），增加仅在完整End成功后可读取的OracleCompletion及严格OK检查后通过。
+- 独立走查发现初始化复用宽松Control校验。初版测试未重置序号，错误地将ProtocolException视为断开；修正BeginCommand后5项真实失败且观察到106字节XA阶段请求（xa-oracle-init-red2）。收紧初始化校验后无阶段请求，41项定向通过（xa-oracle-init-green）。
+- 初期畸形scalar/type/多行/超成员测试在客户端已拒绝后继续写尾包，出现夹具SocketException；改为停在触发拒绝的数据包并等待关闭，不吞写入错误。根异常断言核对协议/数值错误；多行沿既有OracleCommandPlan的NotSupportedException，超时/IO均不能冒充预期拒绝。完整首轮2801通过/2失败另捕获既有reader早关竞态，已单独修复提交32a7fc8；没有将失败计为通过。
+- 独立只读设计、产品代码、五资产Consumer、最终夹具及README/架构复查均无剩余阻断。覆盖单/两阶段、Join/Resume/Suspend/Fail、ReadOnly、版本与发前取消、初始化及阶段ERR显式重试、25种正负码、标量畸形、尾包前中断/互斥、恢复边界/成员上限、公共字典隔离及关闭重开。
+
+最终本机Windows证据（日常宿主.NET10，不代表五个运行时验收）：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx，核心五目标/DI三目标 | 0警告、0错误；集成工程仅编译未运行 | TestResults/xa-oracle-build-final.log |
+| 夹具修正后Unit重编译 | 0警告、0错误 | TestResults/xa-oracle-unit-rebuild.log及xa-oracle-local-accepted.log |
+| Oracle定向及reader四种组合 | 90通过，0失败/跳过（Oracle新增86项） | TestResults/xa-oracle-local-accepted/*.trx |
+| Oracle五资产同步/异步×标准/OB20 | 100通过，0失败/跳过 | TestResults/xa-oracle-assets/*.trx |
+| 最终完整Unit | 2803通过，0失败/跳过；相对MySQL模块新增86、移除0 | TestResults/xa-oracle-unit-accepted/*.trx |
+| 完整五资产Consumer | 1029通过，0失败/跳过；相对MySQL模块新增100、移除0 | TestResults/xa-oracle-consumer-full/*.trx |
+| 完整DI | 8通过，0失败/跳过 | TestResults/xa-oracle-di-full/*.trx |
+| 范围格式、UTF8无BOM/CRLF及diff | 通过 | TestResults/xa-oracle-format.log、xa-oracle-test-format.log及提交前检查 |
+
+D09约定本地两模式范围完成，正式状态待验证；真实协调器、OceanBase/OBProxy、异机及扩展经TLS验收仍按要求暂缓，本轮未重跑打包或旧运行时/Framework矩阵。A05公开MySQL身份门槛、C01完整重置/池、D15其他插件、许可/发布及各环境关口继续开放，TransactionScope仍拒绝，整体goal未完成。global.json已在ea7fde9按用户要求删除，本轮确认未恢复；不推送。

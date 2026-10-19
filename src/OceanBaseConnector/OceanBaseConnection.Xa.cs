@@ -12,7 +12,7 @@ namespace OceanBaseConnector
     {
         private OceanBaseXaResource? _xaResource;
 
-        /// <summary>Dedicates the current MySQL session to explicit XA until Close.
+        /// <summary>Dedicates the current session to explicit XA until Close.
         /// Business commands require an active branch; local transactions are then rejected.</summary>
         public OceanBaseXaResource GetXaResource()
         {
@@ -21,8 +21,8 @@ namespace OceanBaseConnector
             {
                 var session = GetOpenSession();
                 if (_transaction != null) throw new InvalidOperationException("A local transaction is already active.");
-                if (session.Info!.Mode != OceanBaseCompatibilityMode.MySql)
-                    throw new NotSupportedException("Oracle DBMS_XA operations are not implemented.");
+                if (session.Info!.Mode == OceanBaseCompatibilityMode.Oracle && !session.UseOraclePrepareExecute)
+                    throw new NotSupportedException("Oracle DBMS_XA requires Use Oracle Prepare Execute=true.");
                 if (_xaResource == null)
                 {
                     _xaResource = new OceanBaseXaResource(this, session, _builder.CommandTimeout);
@@ -69,40 +69,16 @@ namespace OceanBaseConnector
             }
         }
 
-        internal async Task ExecuteXa(OceanBaseXaResource resource, XaOperation operation, OceanBaseXid xid, int mode, bool asynchronous, CancellationToken token)
+        internal async Task<OceanBaseXaVote> ExecuteXa(OceanBaseXaResource resource, XaOperation operation, OceanBaseXid xid, int mode, bool asynchronous, CancellationToken token)
         {
             using var exchange = StartXa(resource, operation, xid, mode, token);
             exchange.StartDiagnostics("xa." + operation.ToString().ToLowerInvariant());
             try
             {
-                var branch = xid.GetBranchQualifier();
-                var identity = "0x" + XaHex(xid.GetGlobalTransactionId()) +
-                    "," + (branch.Length == 0 ? "X''" : "0x" + XaHex(branch)) +
-                    ",0x" + unchecked((uint)xid.FormatId).ToString("x8", CultureInfo.InvariantCulture);
-                string sql;
-                switch (operation)
-                {
-                    case XaOperation.Start: sql = "XA START " + identity + (mode == 1 ? " JOIN" : mode == 2 ? " RESUME" : ""); break;
-                    case XaOperation.End: sql = "XA END " + identity + (mode == 2 ? " SUSPEND" : ""); break;
-                    case XaOperation.Prepare: sql = "XA PREPARE " + identity; break;
-                    case XaOperation.Commit: sql = "XA COMMIT " + identity + (mode == 1 ? " ONE PHASE" : ""); break;
-                    default: sql = "XA ROLLBACK " + identity; break;
-                }
-                var request = OceanBaseCommand.SqlPacket(sql, 3);
-                byte[] response;
-                if (asynchronous)
-                {
-                    await exchange.SendAsync(request).ConfigureAwait(false);
-                    response = await exchange.ReceiveAsync(CancellationToken.None).ConfigureAwait(false);
-                }
-                else { exchange.Send(request); response = exchange.Receive(); }
-                var ok = OkPacket.Parse(response, exchange.Capabilities);
-                if (ok.AffectedRows != 0 || ok.LastInsertId != 0 ||
-                    (ok.StatusFlags & (ServerStatusFlags.MoreResultsExists | ServerStatusFlags.PsOutParameters | ServerStatusFlags.CursorExists | ServerStatusFlags.LastRowSent)) != 0)
-                    throw new ProtocolException("Invalid XA control completion.");
-                exchange.ObserveSessionState(ok);
-                // Validate the final OB20 boundary before publishing a new branch phase.
-                exchange.ResponseComplete();
+                var vote = OceanBaseXaVote.Prepared;
+                if (exchange.Mode == OceanBaseCompatibilityMode.Oracle)
+                    vote = await ExecuteOracleXa(resource, exchange, operation, xid, mode, asynchronous).ConfigureAwait(false);
+                else await ExecuteMySqlXa(exchange, operation, xid, mode, asynchronous).ConfigureAwait(false);
                 lock (_gate)
                 {
                     RequireCurrentXa(resource);
@@ -112,15 +88,48 @@ namespace OceanBaseConnector
                         case XaOperation.End:
                             resource.State = mode == 2 ? XaState.Suspended : XaState.Ended;
                             resource.RollbackOnly |= mode == 1; break;
-                        case XaOperation.Prepare: resource.State = XaState.Prepared; break;
+                        case XaOperation.Prepare when vote != OceanBaseXaVote.ReadOnly: resource.State = XaState.Prepared; break;
                         default: resource.State = XaState.Idle; resource.Xid = null; resource.RollbackOnly = false; break;
                     }
                     _transactionEpoch++;
                     exchange.Complete();
                 }
+                return vote;
             }
             catch (Exception error) { throw exchange.Fail(error); }
             finally { lock (_gate) resource.InProgress = false; }
+        }
+
+        private static async Task ExecuteMySqlXa(CommandExchange exchange, XaOperation operation, OceanBaseXid xid, int mode, bool asynchronous)
+        {
+            var branch = xid.GetBranchQualifier();
+            var identity = "0x" + XaHex(xid.GetGlobalTransactionId()) +
+                "," + (branch.Length == 0 ? "X''" : "0x" + XaHex(branch)) +
+                ",0x" + unchecked((uint)xid.FormatId).ToString("x8", CultureInfo.InvariantCulture);
+            string sql;
+            switch (operation)
+            {
+                case XaOperation.Start: sql = "XA START " + identity + (mode == 1 ? " JOIN" : mode == 2 ? " RESUME" : ""); break;
+                case XaOperation.End: sql = "XA END " + identity + (mode == 2 ? " SUSPEND" : ""); break;
+                case XaOperation.Prepare: sql = "XA PREPARE " + identity; break;
+                case XaOperation.Commit: sql = "XA COMMIT " + identity + (mode == 1 ? " ONE PHASE" : ""); break;
+                default: sql = "XA ROLLBACK " + identity; break;
+            }
+            var request = OceanBaseCommand.SqlPacket(sql, 3);
+            byte[] response;
+            if (asynchronous)
+            {
+                await exchange.SendAsync(request).ConfigureAwait(false);
+                response = await exchange.ReceiveAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            else { exchange.Send(request); response = exchange.Receive(); }
+            var ok = OkPacket.Parse(response, exchange.Capabilities);
+            if (ok.AffectedRows != 0 || ok.LastInsertId != 0 ||
+                (ok.StatusFlags & (ServerStatusFlags.MoreResultsExists | ServerStatusFlags.PsOutParameters | ServerStatusFlags.CursorExists | ServerStatusFlags.LastRowSent)) != 0)
+                throw new ProtocolException("Invalid XA control completion.");
+            exchange.ObserveSessionState(ok);
+            // Validate the final OB20 boundary before publishing a new branch phase.
+            exchange.ResponseComplete();
         }
 
         internal async Task<OceanBaseXid[]> RecoverXa(OceanBaseXaResource resource, bool asynchronous, CancellationToken token)
@@ -129,6 +138,12 @@ namespace OceanBaseConnector
             exchange.StartDiagnostics("xa.recover");
             try
             {
+                if (exchange.Mode == OceanBaseCompatibilityMode.Oracle)
+                {
+                    var recovered = await RecoverOracleXa(resource, exchange, asynchronous).ConfigureAwait(false);
+                    lock (_gate) { RequireCurrentXa(resource); exchange.Complete(); }
+                    return recovered;
+                }
                 var request = OceanBaseCommand.SqlPacket("XA RECOVER", 3);
                 if (asynchronous) await exchange.SendAsync(request).ConfigureAwait(false); else exchange.Send(request);
                 var result = new QueryResult(exchange, completeExchange: false);
