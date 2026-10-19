@@ -28,7 +28,7 @@
 | D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流、WRITE/TRIM及临时对象显式创建/释放已本地接入，验证见末尾 | 真实版本/OBProxy、资源生命周期及扩展经TLS验收仍开放 |
 | D05 | 内部嵌套编解码、同会话字典、值构造、命名结果/参数/输出、匿名标量结果/输入/输出及完整本地复核完成，验证见末尾 | 真实字典/DDL、往返及版本/OBProxy资源语义验收 |
 
-工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
+工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
 上一轮 Windows 验证结果如下（历史运行时快照；本轮新结果见后文“本轮本地范围复核”）：
 
@@ -1441,3 +1441,29 @@ D15保持进行中：Standard GSSAPI、Java Windows native其他机制、真实�
 Ed25519历史包反向检查首次因NuGet审计源访问失败未完成（TestResults/pam-gssapi-package-old-red.log），保持审计后重跑，五目标因缺ServicePrincipalName/ServicePrincipalNameKey而编译失败，准确拒绝旧API资产（pam-gssapi-package-old-red-verified.log），不冒充运行时断言RED。本轮双包由dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/pam-gssapi-pack生成（pam-gssapi-pack.log）。eng/Verify-Packages.ps1验证两包内容/依赖组、唯一缓存SHA512还原及五资产选择，最终消费者编译0警告/错误，实际.NET8.0.31/9.0.20/10.0.12和两个Standard隔离宿主全部通过（pam-gssapi-package-final.log，生成目录TestResults/package-validation/166ba5126a304a4fb7aaa69f2cdbf06a）。
 
 本轮仅包消费断言和文档，未重复已通过的产品完整回归；范围编译/断言、独立走查和diff检查后本地提交。没有数据库/KDC、可信TLS或异机验收，没有发布/推送或安装信任根；Framework本轮未执行，不能用这些配置契约推断原生GSSAPI已互通。global.json保持删除；用户指出的DI缺少Standard目标另行修正。
+## B01/R01 DI Standard目标与连接注册修正（2026-10-20）
+
+用户指出OceanBaseConnector.DependencyInjection缺少Standard目标。先前把整个DI包限制为现代DbDataSource适配范围过窄：DI抽象本身提供Standard资产，已有OceanBaseConnection五目标亦足以实现连接注册。本轮两个包统一为netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0；不把现代DbDataSource类型扩到缺少参考API的Standard，也不发布空DI资产。
+
+五目标新增AddOceanBaseConnection(IServiceCollection,string)，每次解析创建独立关闭的Transient连接，未被其他provider占用时提供DbConnection转发工厂，不覆盖其注册。注册先规范化配置、检查重复具体类型后才新增描述符，失败不留下部分注册；懒实例化时注入可选宿主ILoggerFactory，由容器/作用域释放连接，外部日志工厂归原所有者。沿直接连接的可变配置和打开前凭据可见性，不共享一个请求级连接、不隐式池化、不添加生命周期选项或keyed连接API。现代数据源注册的单例/key/别名与回调契约保持独立，仍不会隐式注册连接。
+
+六项新回归在缺入口时全失败（TestResults/di-standard-red/*.trx，反射定位入口避免编译失败冒充断言RED），实现后改为直接静态调用以验证公开编译契约，完整DI14全通过；覆盖懒创建、独立实例、配置隔离、作用域释放、宿主logger不被驱动释放、既有generic服务、重复/无效输入不部分注册。DependencyVersionTests新增两个Standard目标，十项目标restore/PE依赖图检查通过，未抬高旧资产到10.x。
+
+包验证器同步两包五资产及十依赖组、Standard测试容器8.0.1、精确同版核心和唯一缓存SHA512校验，实际包消费者所有目标执行注册/配置/独立连接/作用域释放；现代数据源与key测试继续执行，Standard明确检查没有现代数据源注册方法。Framework可选分支也核对两个本轮包的SHA512与Standard2.0资产。旧五/三资产包被验证器准确拒绝（di-standard-assets-red.log），不能由缓存或空包满足新目标。
+
+| 验证 | 结果 | 证据 |
+| --- | --- | --- |
+| CPM还原，保持NuGet审计 | 成功 | TestResults/di-standard-restore.log |
+| 核心五/DI五目标及测试工程Release | 0警告/错误 | TestResults/di-standard-build-final.log |
+| 完整DI | 14通过，0失败/跳过；相对原8项新增6，无移除 | TestResults/di-standard-final/*.trx |
+| 核心五/DI五目标restore和PE依赖版本 | 10通过，0失败/跳过 | TestResults/di-standard-dependencies-final/*.trx |
+| 双NuGet包 | 两包各五资产及五依赖组，DI精确引用同版核心 | TestResults/di-standard-pack.log、di-standard-package-final.log |
+| 实际五资产包消费 | .NET8.0.31/9.0.20/10.0.12和两个Standard隔离host全通过，编译0警告/错误 | TestResults/di-standard-package-final.log |
+| 本机Framework消费 | net48宿主实际Framework4.8.1、Release533509，两个Standard2.0包及基本DI配置/释放通过，编译0警告/错误 | 同上；TestResults/package-validation/6b891c0c43d641d5aba7c1af6676d8f8/ |
+| 范围格式校验 | 退出0、0文件需改；首次workspace加载提示后诊断复跑无警告/错误 | TestResults/di-standard-format-final.log |
+
+命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；dotnet test tests/OceanBaseConnector.DependencyInjection.Tests -c Release --no-build --no-restore --logger trx --results-directory TestResults/di-standard-final；Consumer同参数另加--filter FullyQualifiedName~DependencyVersionTests。dotnet pack使用--no-build --no-restore及-o TestResults/di-standard-pack；pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/di-standard-pack -VerifyNetFramework执行本轮实际包验收。测试期间未重建产品。
+
+独立代码走查确认Transient连接/别名所有权、条件编译、重复注册原子性和宿主日志归属无阻断；README、架构、方案及本台账当前目标已同步五/五，历史五/三记录保持原始日期。UTF8无BOM/CRLF及diff检查后在master本地提交，不推送。global.json保持删除。
+
+未修改核心协议/会话代码，未重复上一模块已经通过的完整Unit2912/Consumer1161；本轮运行完整DI、十目标依赖检查和实际包消费。没有真实数据库、异机、可信TLS或KDC测试；Framework证据仅是本机4.8.1基本包/DI消费，不代表原版4.8或完整SQL/TLS兼容，其他旧运行时矩阵仍开放。A05/C01及真实验收/许可/发布关口不因此关闭，整体goal未完成。

@@ -33,7 +33,7 @@
 | `Directory.Packages.props` | 中央包管理：全部 NuGet 包版本的唯一来源，传递依赖钉扎 |
 | `src/OceanBaseConnector/OceanBaseConnector.csproj` | 唯一核心 provider 程序集和五目标条件编译；日志仅依赖标准抽象 |
 | `src/OceanBaseConnector/OceanBaseDataSource*.cs` | B01 的现代 builder/数据源、冻结配置与生命周期；C01 后拥有独立可选池 |
-| `src/OceanBaseConnector.DependencyInjection/` | B01 新增的可选集成包，目标 net8.0/net9.0/net10.0；容器工厂创建统一数据源并接入宿主日志，无模式分支 |
+| `src/OceanBaseConnector.DependencyInjection/` | B01 新增的可选集成包，目标 netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0；五目标注册独立连接，现代目标另创建统一数据源并接入宿主日志，无模式分支 |
 | `src/OceanBaseConnector/OceanBaseConnection*.cs`、`OceanBaseCommand*.cs`、`OceanBaseDataReader*.cs`、`OceanBaseTransaction*.cs` | ADO.NET 公共对象；拆分文件按对象职责，不复制多套协议 |
 | `src/OceanBaseConnector/OceanBaseParameter*.cs`、`OceanBaseProviderFactory.cs`、`OceanBaseConnectionStringBuilder.cs` | 参数、工厂和配置的公开契约 |
 | `src/OceanBaseConnector/Internal/Transport/` | TCP、SSLRequest、TLS、同步/异步字节流与关闭取消 |
@@ -637,6 +637,16 @@ Ruling: 首批仅net8/net9/net10直接使用系统NegotiateAuthentication，两�
 - [x] 最小接入GssapiChallenge、GssapiAuthentication与系统上下文适配器，接口隔离原生token提供方；先用确定性上下文替身验证协商状态、token原样、最终OK门槛、错误/构造/切换/Dispose生命周期，不能称Kerberos互通证明。
 - [x] AuthenticationConversation持有并Dispose上下文，HandshakeFlow同步/异步using；初始/命名切换、一次切换、最终ERR、取消/超时沿既有网络路径；每次OS调用返回后检查调用方取消，不能并发Dispose仍在执行的原生调用。
 - [x] 弱TLS环回及五资产公开配置/拒绝消费，本机系统API形状验证但不获取票据/连接KDC；独立走查、完整本地Unit/Consumer/DI和核心五/DI三Release、格式/diff通过，同步README/架构/台账后本地提交。实库、KDC/凭据缓存、可信TLS成功链/原生阻塞及Standard支持仍开放。
+
+### B01/R01 DI Standard修正（2026-10-20）
+
+用户指出DI包缺少Standard目标。原先仅封装现代数据源的实现不能代表DI本身的平台要求：两个Standard资产同样可使用现有连接和DI抽象。本模块将DI包与核心统一五目标，保留现代DataSource API的平台边界，所有目标新增AddOceanBaseConnection；不伪造DbDataSource，也不只增加无实际功能的包资产。
+
+Ruling: 使用Transient连接，每次解析创建关闭实例，默认注册具体类型和无冲突时的DbConnection转发工厂，由容器/作用域释放，注入宿主可选ILoggerFactory。注册先规范化配置和检查重复具体类型，再写描述符；已有泛型连接服务保留。沿直接连接的配置可变性/凭据可见性，不提供生命周期参数或keyed连接；数据源API不隐式注册连接。代价是一次作用域内多次解析得到独立连接，不能将直接注入视为共享请求连接或池化。
+
+- [x] 先证明注册缺口，补连接懒创建/独立解析/作用域释放、宿主日志不被驱动释放、已有泛型服务保留、重复/无效配置无部分注册。
+- [x] 核心与DI五目标Release、DI完整及五目标依赖测试通过；包验证器两包均查五资产、十依赖组及精确同版核心，Standard消费者明确引入测试容器8.x。
+- [x] 实际包在.NET8/9/10及Standard隔离宿主、可选本机Framework4.8.1执行基本DI配置/释放，独立走查后同步公开文档和进度并提交。实库/异机与完整旧运行时仍不执行，global.json保持删除。
 
 ### D15 PAM/GSSAPI包交付复核（2026-10-20）
 

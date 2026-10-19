@@ -23,7 +23,7 @@
 
 ## 2. 运行目标和公开契约
 
-单个核心 provider 工程和包，`TargetFrameworks=netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`；另设可选 `OceanBaseConnector.DependencyInjection` 集成包，目标为 `net8.0;net9.0;net10.0`，不按兼容模式拆包。核心引入标准日志抽象，两个Standard资产另通过DiagnosticSource提供诊断API；不依赖容器实现或日志后端。仓库统一使用 NuGet 中央包管理(CPM):根目录 `Directory.Packages.props` 以 `ManagePackageVersionsCentrally` 固定全部包版本并开启传递依赖钉扎,任何工程不得在自身 `PackageReference` 上内联 `Version`;产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性给出,csproj 内不得声明各自版本；核心和集成包同版本统一发布并验证包间依赖。`netstandard2.0` 是最低 API 基线,不等于保证每一个实现该标准的旧运行时都已通过集成测试。项目使用支持 net10.0 的已安装 SDK 和 `OceanBaseConnector.slnx` 构建五目标；全部测试及消费宿主统一使用 `net10.0`，仓库不固定 SDK 版本；旧运行时的专门消费验证保留为 B09/R01 发布验收;正式支持的运行时遵循微软生命周期,.NET 9 已结束官方支持时仍可提供目标资产,但不承诺修复其运行时本身的问题。若现代目标没有需要独立实现的 API,优先共享源码和行为,不分叉协议栈。
+单个核心 provider 工程和包，`TargetFrameworks=netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`；另设可选 `OceanBaseConnector.DependencyInjection` 集成包，目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，不按兼容模式拆包。核心引入标准日志抽象，两个Standard资产另通过DiagnosticSource提供诊断API；不依赖容器实现或日志后端。仓库统一使用 NuGet 中央包管理(CPM):根目录 `Directory.Packages.props` 以 `ManagePackageVersionsCentrally` 固定全部包版本并开启传递依赖钉扎,任何工程不得在自身 `PackageReference` 上内联 `Version`;产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性给出,csproj 内不得声明各自版本；核心和集成包同版本统一发布并验证包间依赖。`netstandard2.0` 是最低 API 基线,不等于保证每一个实现该标准的旧运行时都已通过集成测试。项目使用支持 net10.0 的已安装 SDK 和 `OceanBaseConnector.slnx` 构建五目标；全部测试及消费宿主统一使用 `net10.0`，仓库不固定 SDK 版本；旧运行时的专门消费验证保留为 B09/R01 发布验收;正式支持的运行时遵循微软生命周期,.NET 9 已结束官方支持时仍可提供目标资产,但不承诺修复其运行时本身的问题。若现代目标没有需要独立实现的 API,优先共享源码和行为,不分叉协议栈。
 
 | 范围 | 建议类型 / 行为 |
 | --- | --- |
@@ -76,7 +76,7 @@ DI 只装配应用级对象。`PhysicalSession`、包流、认证处理、命令
 | 包 / 工程 | 目标 | 依赖与职责 |
 | --- | --- | --- |
 | `OceanBaseConnector` | 保持 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` | 唯一 provider 与协议实现；引用 `Microsoft.Extensions.Logging.Abstractions`，两个Standard资产另引用 `System.Diagnostics.DiagnosticSource`，现代资产使用运行时诊断API。不依赖容器实现、配置系统或日志后端 |
-| `OceanBaseConnector.DependencyInjection` | `net8.0;net9.0;net10.0` | 引用核心及 `Microsoft.Extensions.DependencyInjection.Abstractions`；装配数据源并取得核心日志抽象中的 `ILoggerFactory`，不引用完整容器实现 |
+| `OceanBaseConnector.DependencyInjection` | `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` | 引用核心及 `Microsoft.Extensions.DependencyInjection.Abstractions`；五目标连接注册、现代目标数据源注册及宿主 `ILoggerFactory`，不引用完整容器实现 |
 | DI 与消费测试 | `net10.0` | 测试工程可引用完整内置 DI 容器，验证作用域、释放、key、日志与包消费；发布时另取 .NET 8/9 运行时证据 |
 
 将原先的“单个产品包/程序集”修订为“单个核心 provider 包 + 可选宿主集成包”。它们不是两个模式的驱动。两个包都从 `Directory.Build.props` 取同一 `Version`，在同一次发布中构建、验证和发布；所有依赖版本仍只写在 `Directory.Packages.props`，解决方案继续使用 slnx。集成包的核心依赖使用当前根版本的精确 NuGet 区间（如 `[0.1.0-alpha]`，由根 Version 派生，不在项目复制版本字面量），打包时核对 nuspec，不各自发布不同版本。
@@ -114,7 +114,9 @@ R01 本地打包固定以上两个现有包 ID；`src/Directory.Build.props` 显
 
 ### 2.5 DI 注册契约
 
-计划提供两种注册，配置回调统一为可选的 `Action<IServiceProvider, OceanBaseDataSourceBuilder>`：
+五目标提供 `services.AddOceanBaseConnection(connectionString)`：Transient具体连接，未被其他provider占用时另登记Transient的DbConnection工厂，转发解析具体类型；每次解析均为独立关闭连接，由容器/作用域跟踪释放。注册时验证并规范化连接串、检查重复具体连接后才一次性添加描述符；重复失败不留下半套注册。首次解析时取得可选宿主ILoggerFactory，缺省沿核心NullLoggerFactory，不自行构建容器、不打开网络、不创建池。连接的可变配置和打开前凭据可见性沿直接连接契约；单次业务按作用域使用，不能将同一连接共享给并行命令。仅注入连接不要求平台DbDataSource，不扩展自定义平台类型，不新增生命周期配置或keyed连接API。
+
+现代三目标另提供两种数据源注册，配置回调统一为可选的 `Action<IServiceProvider, OceanBaseDataSourceBuilder>`：
 
 ```csharp
 services.AddOceanBaseDataSource(connectionString, (sp, builder) => { /* 可选配置 */ });
@@ -123,9 +125,9 @@ services.AddKeyedOceanBaseDataSource("reporting", reportingConnectionString);
 
 普通注册提供 Singleton `OceanBaseDataSource`；未被其他 provider 占用时再提供指向它的 `DbDataSource` 别名，不覆盖其他数据库的注册。带 key 的注册提供同 key 的具体类型和 `DbDataSource` 别名，均指向同一实例；key 不能为空。多个 OceanBase 数据源要求使用不同 key，重复普通注册或重复 key 在注册时明确失败。若同 key 的 `DbDataSource` 已被其他 provider 占用，也须失败而不覆盖；所有冲突检查在新增本次服务描述符之前完成，不能留下半套注册。泛型数据库消费代码须明确其绑定，业务默认优先注入具体类型。
 
-注册阶段只登记工厂并验证必要参数；首次解析时，容器工厂创建 builder，取得可选的 `ILoggerFactory`，调用 `UseLoggerFactory`，再执行应用配置回调并 `Build()`。应用回调可显式覆盖日志设置；宿主没注册日志时使用 `NullLoggerFactory`，不隐式添加日志提供程序。不得调用 `BuildServiceProvider()` 创建第二个容器，不在注册时打开网络连接。
+数据源注册阶段只登记工厂并验证必要参数；首次解析时，容器工厂创建 builder，取得可选的 `ILoggerFactory`，调用 `UseLoggerFactory`，再执行应用配置回调并 `Build()`。应用回调可显式覆盖日志设置；宿主没注册日志时使用 `NullLoggerFactory`，不隐式添加日志提供程序。不得调用 `BuildServiceProvider()` 创建第二个容器，不在注册时打开网络连接。
 
-默认不注册 `OceanBaseConnection`/`DbConnection`，避免把可变连接变成共享服务；也不注册 command、reader 或事务。首版不增加连接生命周期参数、自动配置热重载、宿主后台服务、健康检查或自定义 options 管线。连接字符串由应用读取 `IConfiguration` 后传入，不使驱动强依赖配置和 Options 包。Singleton 的配置回调不能捕获 Scoped 服务，测试应开启 scope validation。
+数据源API默认不注册 `OceanBaseConnection`/`DbConnection`，避免把可变连接变成共享服务；五目标可单独显式使用上述连接API。两种入口均不注册command、reader或事务。不增加连接生命周期参数、自动配置热重载、宿主后台服务、健康检查或自定义options管线。连接字符串由应用读取 `IConfiguration` 后传入，不使驱动强依赖配置和Options包。Singleton数据源的配置回调不能捕获Scoped服务，测试应开启scope validation。
 
 使用示意（计划 API，尚不能在当前代码运行）：
 

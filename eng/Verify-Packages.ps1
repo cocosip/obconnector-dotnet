@@ -45,7 +45,7 @@ foreach ($id in $packages) {
             Assert-Package ($null -ne $entry -and $entry.Length -gt 0) "$id is missing $document."
         }
         Assert-Package ($metadata.repository.type -eq 'git' -and $metadata.repository.url -eq 'https://github.com/cocosip/obconnector-dotnet') "$id repository metadata mismatch."
-        $packageTargets = if ($id -eq $packages[0]) { $targets } else { $targets[2..4] }
+        $packageTargets = $targets
         $actualAssets = @($archive.Entries.FullName | Where-Object { $_ -like 'lib/*/*.dll' })
         $expectedAssets = @($packageTargets | ForEach-Object { "lib/$_/$id.dll" })
         Assert-Package (@(Compare-Object $actualAssets $expectedAssets).Count -eq 0) "$id has unexpected lib assets."
@@ -122,6 +122,7 @@ Write-ConsumerFile 'Directory.Packages.props' @"
   <ItemGroup>
     <PackageVersion Include="OceanBaseConnector" Version="[$version]" />
     <PackageVersion Include="OceanBaseConnector.DependencyInjection" Version="[$version]" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
   </ItemGroup>
 </Project>
 "@
@@ -137,9 +138,12 @@ Write-ConsumerFile 'PackageConsumer.csproj' @'
   <ItemGroup>
     <Compile Remove="framework-host/**/*.cs" />
     <PackageReference Include="OceanBaseConnector" />
+    <PackageReference Include="OceanBaseConnector.DependencyInjection" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' Or '$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0' Or '$(TargetFramework)' == 'net9.0' Or '$(TargetFramework)' == 'net10.0'">
-    <PackageReference Include="OceanBaseConnector.DependencyInjection" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 </Project>
@@ -151,7 +155,6 @@ $restored = Get-Content -LiteralPath (Join-Path $run 'obj/project.assets.json') 
 foreach ($target in $targets) {
     $graph = $restored.targets.$target
     foreach ($id in $packages) {
-        if ($target -like 'netstandard*' -and $id -eq $packages[1]) { continue }
         $key = "$id/$version"
         $library = $restored.libraries.$key
         Assert-Package ($library.type -eq 'package' -and $library.sha512 -ceq $hashes[$id]) "$target did not restore this run's $id package."
@@ -185,6 +188,8 @@ if ($VerifyNetFramework) {
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="OceanBaseConnector" />
+    <PackageReference Include="OceanBaseConnector.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <Reference Include="PackageConsumer"><HintPath>../bin/Release/netstandard2.0/PackageConsumer.dll</HintPath></Reference>
   </ItemGroup>
 </Project>
@@ -209,12 +214,14 @@ internal static class Program
     $frameworkProject = Join-Path $frameworkDirectory 'FrameworkHost.csproj'
     Invoke-Dotnet @('restore', $frameworkProject, '--configfile', (Join-Path $run 'NuGet.Config'), '--packages', (Join-Path $run 'packages'))
     $frameworkAssets = Get-Content -LiteralPath (Join-Path $frameworkDirectory 'obj/project.assets.json') -Raw | ConvertFrom-Json
-    $coreKey = "$($packages[0])/$version"
     $frameworkGraph = $frameworkAssets.targets.net48
-    $coreLibrary = $frameworkAssets.libraries.$coreKey
-    Assert-Package ($coreLibrary.type -eq 'package' -and $coreLibrary.sha512 -ceq $hashes[$packages[0]]) "Framework host did not restore this run's core package."
-    $selected = @($frameworkGraph.$coreKey.compile.PSObject.Properties.Name)
-    Assert-Package ($selected.Count -eq 1 -and $selected[0] -eq 'lib/netstandard2.0/OceanBaseConnector.dll') 'Framework host must select the netstandard2.0 asset.'
+    foreach ($id in $packages) {
+        $key = "$id/$version"
+        $library = $frameworkAssets.libraries.$key
+        Assert-Package ($library.type -eq 'package' -and $library.sha512 -ceq $hashes[$id]) "Framework host did not restore this run's $id package."
+        $selected = @($frameworkGraph.$key.compile.PSObject.Properties.Name)
+        Assert-Package ($selected.Count -eq 1 -and $selected[0] -eq "lib/netstandard2.0/$id.dll") "Framework host must select the $id netstandard2.0 asset."
+    }
     foreach ($dependency in $frameworkGraph.PSObject.Properties.Name | Where-Object { $_ -like 'Microsoft.Extensions.*' }) {
         Assert-Package ($dependency.Split('/')[1].StartsWith('8.')) "Framework host resolved an incompatible $dependency."
     }

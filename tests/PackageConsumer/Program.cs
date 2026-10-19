@@ -8,11 +8,11 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using OceanBaseConnector;
 #if NET8_0_OR_GREATER
 using System.IO;
 using System.Runtime.Loader;
-using Microsoft.Extensions.DependencyInjection;
 #endif
 
 public static class PackageConsumer
@@ -111,6 +111,25 @@ public static class PackageConsumer
             Check(error.ToString().IndexOf("secret", StringComparison.Ordinal) < 0, "Cancellation error redaction");
             Check(connection.State == ConnectionState.Closed, "Pre-canceled open state");
         }
+        Check(typeof(OceanBaseServiceCollectionExtensions).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()!.FrameworkName == target, "DI target identity");
+        Check((typeof(OceanBaseServiceCollectionExtensions).GetMethod("AddOceanBaseDataSource") != null) == modern, "DI data source platform boundary");
+        var connectionServices = new ServiceCollection();
+        connectionServices.AddOceanBaseConnection(connectionString);
+        using var connectionProvider = connectionServices.BuildServiceProvider();
+        var connectionScope = connectionProvider.CreateScope();
+        var injected = connectionScope.ServiceProvider.GetRequiredService<OceanBaseConnection>();
+        var another = connectionScope.ServiceProvider.GetRequiredService<OceanBaseConnection>();
+        var alias = connectionScope.ServiceProvider.GetRequiredService<DbConnection>();
+        Check(!ReferenceEquals(injected, another) && !ReferenceEquals(injected, alias) && alias is OceanBaseConnection,
+            "Packaged transient DI connections");
+        Check(injected.State == ConnectionState.Closed &&
+            new OceanBaseConnectionStringBuilder(injected.ConnectionString).ServicePrincipalName == "mariadb/trusted@REALM", "DI resolution must not connect and preserves configuration");
+        connectionScope.Dispose();
+        foreach (var disposedConnection in new DbConnection[] { injected, another, alias })
+        {
+            try { disposedConnection.ConnectionString = connectionString; throw new InvalidOperationException("DI did not dispose its connection."); }
+            catch (ObjectDisposedException) { }
+        }
 #if NET8_0_OR_GREATER
         var services = new ServiceCollection();
         services.AddOceanBaseDataSource(connectionString);
@@ -123,7 +142,6 @@ public static class PackageConsumer
             new OceanBaseConnectionStringBuilder(source.ConnectionString).ServicePrincipalName == "mariadb/trusted@REALM", "Data source PAM redaction preserves principal");
         var keyed = provider.GetRequiredKeyedService<OceanBaseDataSource>("secondary");
         Check(!ReferenceEquals(source, keyed) && ReferenceEquals(keyed, provider.GetRequiredKeyedService<DbDataSource>("secondary")), "Keyed DI identity");
-        Check(typeof(OceanBaseServiceCollectionExtensions).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()!.FrameworkName == target, "DI target identity");
         using var ownedConnection = source.CreateConnection();
         Check(ownedConnection is OceanBaseConnection && ownedConnection.State == ConnectionState.Closed, "Data source factory");
         Check(factory.CanCreateBatch && connection.CanCreateBatch, "Batch support");
