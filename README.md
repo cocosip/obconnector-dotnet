@@ -20,7 +20,8 @@
 - 公共握手目前只接受能通过认证后状态确认的 Oracle 模式。**缺少可信的 MySQL 模式判定规则，公共 MySQL 模式连接仍被拒绝。** MySQL 的本地测试使用显式认证后夹具；设置 `ExpectedMode=MySql` 不会绕过判定。
 - `Pooling=true` 被拒绝，完整会话重置及版本白名单尚未验证。默认不使用连接池。
 - 只支持文本命令和输入参数，参数化执行使用服务端 prepare；不自动回退客户端 SQL 插值。不支持环境 `TransactionScope`、存储过程/OUT、REF CURSOR、locator LOB、ARRAY/STRUCT、XA 或拓扑发现。
-- `Use OB20=true`（builder 属性 `UseOb20`，默认 false）请求 OB20；仅在握手连接属性和服务端 OB20 能力均确认后启用，否则保留标准报文。支持流式分帧、CRC 校验、逐命令边界和游标分页；协议错误销毁连接，不重放已发送 SQL。完整链路追踪尚未实现，真实 OceanBase/OBProxy 互通待验收。
+- `Use OB20=true`（builder 属性 `UseOb20`，默认 false）请求 OB20；仅在握手连接属性和服务端 OB20 能力均确认后启用，否则保留标准报文。支持流式分帧、CRC 校验、逐命令边界和游标分页；协议错误销毁连接，不重放已发送 SQL。真实 OceanBase/OBProxy 互通待验收。
+- `Enable Full Link Trace=true`（builder 属性 `EnableFullLinkTrace`，默认 false）要求同时启用 OB20，并由服务端确认追踪能力；缺能力时继续普通 OB20。支持 legacy/new-extra 格式，按服务端控制策略采样及记录，关联现有 Activity 的 trace ID；无监听者也可使用环境上下文或内部生成 ID。仅发送固定模块、ID 和时间，不发送 SQL、参数、凭据、端点或任意 Activity 标签/baggage。完成记录随下一请求发送，关闭连接不额外刷新最后一条记录；真实采样及 SHOW TRACE 结果待验收。
 - 首批 `GetSchema` 集合为 `MetaDataCollections`、`DataSourceInformation`、`Tables`、`Columns`；Oracle 模式不支持 `ChangeDatabase`。
 - batch 逐条执行，不隐式创建事务，没有整批原子性保证。需要原子性时由调用方显式绑定本地事务。
 - MySQL 四位 YEAR 已实现本地编解码、元数据及参数支持：`ushort`，0 或 1901–2155，显式参数类型 `OceanBaseDbType.Year`；无两位年份推断。真实往返待验收，公共 MySQL 建连仍受 A05 门槛限制。

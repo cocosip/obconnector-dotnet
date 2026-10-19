@@ -32,7 +32,10 @@ namespace OceanBaseConnector.Internal.Session
         private int _finished;
         private int _packets;
         private DriverDiagnostics.Operation? _diagnostics;
-        internal void StartDiagnostics(string operation) => _diagnostics = DriverDiagnostics.Start(operation);
+        private ActivityContext _traceContext;
+        internal void SetTraceContext(ActivityContext context) => _traceContext = context;
+        internal void StartDiagnostics(string operation)
+        { _diagnostics = DriverDiagnostics.Start(operation); _traceContext = _diagnostics?.Context ?? default; }
 
         internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release, bool logCommand = true, object? owner = null, Func<CancellationToken>? cancellationOrigin = null)
         {
@@ -88,6 +91,15 @@ namespace OceanBaseConnector.Internal.Session
                     NationalCharacterSet = _session.TakeNationalCharacterSet(_lease);
                 }
                 _channel.BeginCommand();
+                if (_channel.FullLinkTraceEnabled)
+                {
+                    if (_traceContext.TraceId == default)
+                    {
+                        _traceContext = Activity.Current?.Context ?? default;
+                        if (_traceContext.TraceId == default) _traceContext = new ActivityContext(ActivityTraceId.CreateRandom(), ActivitySpanId.CreateRandom(), ActivityTraceFlags.None);
+                    }
+                    _channel.SetTraceContext(_traceContext);
+                }
                 _responsePending = true;
                 _sqlSent |= executesSql;
                 _anySqlSent |= executesSql;

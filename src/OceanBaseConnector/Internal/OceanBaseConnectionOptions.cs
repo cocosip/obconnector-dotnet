@@ -27,6 +27,7 @@ namespace OceanBaseConnector.Internal
             string serverRsaPublicKey,
             bool allowPublicKeyRetrieval,
             bool useOb20,
+            bool enableFullLinkTrace,
             string sanitizedConnectionString)
         {
             Server = server;
@@ -45,6 +46,7 @@ namespace OceanBaseConnector.Internal
             ServerRsaPublicKey = serverRsaPublicKey;
             AllowPublicKeyRetrieval = allowPublicKeyRetrieval;
             UseOb20 = useOb20;
+            EnableFullLinkTrace = enableFullLinkTrace;
             SanitizedConnectionString = sanitizedConnectionString;
         }
 
@@ -56,7 +58,7 @@ namespace OceanBaseConnector.Internal
 
         internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
             endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, SanitizedConnectionString);
+            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, SanitizedConnectionString);
 
         public string UserId { get; }
 
@@ -83,6 +85,7 @@ namespace OceanBaseConnector.Internal
         public bool AllowPublicKeyRetrieval { get; }
 
         public bool UseOb20 { get; }
+        public bool EnableFullLinkTrace { get; }
 
         /// <summary>Connection string without the password; safe for logs and exceptions.</summary>
         public string SanitizedConnectionString { get; }

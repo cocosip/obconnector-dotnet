@@ -191,7 +191,7 @@ namespace OceanBaseConnector.UnitTests.Protocol
         private static Task Finish(Ob20Stream stream, bool async)
         { if (async) return stream.FinishRequestAsync(CancellationToken.None); stream.FinishRequest(); return Task.CompletedTask; }
 
-        private sealed class Wire : Stream
+        internal sealed class Wire : Stream
         {
             private readonly MemoryStream _input;
             public MemoryStream Output { get; } = new MemoryStream();

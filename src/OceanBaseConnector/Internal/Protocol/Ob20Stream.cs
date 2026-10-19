@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +11,10 @@ namespace OceanBaseConnector.Internal.Protocol
     {
         private readonly Stream _inner;
         private readonly uint _connectionId;
+        private readonly Ob20TraceContext? _trace;
+        private byte[]? _readExtra;
+        private bool _readModern;
+        private bool _writeExtra;
         private readonly byte[] _writeBuffer = new byte[64 * 1024];
         private readonly byte[] _header = new byte[Ob20Packet.HeaderLength];
         private readonly byte[] _scratch = new byte[8192];
@@ -26,16 +31,26 @@ namespace OceanBaseConnector.Internal.Protocol
         private bool _pending;
         private bool _closed;
 
-        public Ob20Stream(Stream inner, uint connectionId)
-        { _inner = inner ?? throw new ArgumentNullException(nameof(inner)); _connectionId = connectionId; }
+        public Ob20Stream(Stream inner, uint connectionId, Ob20TraceContext? trace = null)
+        { _inner = inner ?? throw new ArgumentNullException(nameof(inner)); _connectionId = connectionId; _trace = trace; }
 
-        public void BeginRequest()
+        internal bool FullLinkTraceEnabled => _trace != null;
+
+        public void BeginRequest(ActivityContext context = default)
         {
             EnsureOpen();
             if (_pending) throw new InvalidOperationException("The previous OB20 response has not ended.");
             _requestId = _nextRequestId; _nextRequestId = (_nextRequestId + 1) & 0xffffff;
             _sequence = 0; _frames = 0; _remaining = 0; _writeCount = 0;
             _readStarted = _last = false; _pending = _writing = true;
+            var extra = _trace?.BeginRequest(context);
+            _writeExtra = extra != null && extra.Length != 0;
+            if (_writeExtra)
+            {
+                if (extra!.Length > _writeBuffer.Length - 4) throw new ProtocolException("OB20 request trace info exceeds its limit.");
+                for (var i = 0; i < 4; i++) _writeBuffer[i] = (byte)(extra.Length >> (8 * i));
+                Buffer.BlockCopy(extra, 0, _writeBuffer, 4, extra.Length); _writeCount = extra.Length + 4;
+            }
         }
 
         public void FinishRequest()
@@ -59,6 +74,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (_writing || (expectsResponse ? !_readStarted || !_last || _remaining != 0 : _readStarted))
                     throw new ProtocolException("The OB20 response did not end at the command boundary.");
                 _pending = false;
+                _trace?.CompleteRequest();
             }
             catch { Abort(); throw; }
         }
@@ -98,7 +114,8 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private void PrepareWriteFrame(bool last)
         {
-            Ob20Packet.WriteHeader(_header, _connectionId, _requestId, _sequence, _writeCount, last ? 2u : 0u, true);
+            var flags = (last ? 2u : 0u) | (_writeExtra ? 1u : 0u) | (_trace?.UsesModernFormat == true ? 8u : 0u);
+            Ob20Packet.WriteHeader(_header, _connectionId, _requestId, _sequence, _writeCount, flags, true);
             _sequence = (byte)((_sequence + 1) & 255);
             var crc = Ob20Checksum.Payload(0, _writeBuffer, 0, _writeCount);
             for (var i = 0; i < 4; i++) _scratch[i] = (byte)(crc >> (8 * i));
@@ -108,7 +125,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             PrepareWriteFrame(last);
             _inner.Write(_header, 0, _header.Length); _inner.Write(_writeBuffer, 0, _writeCount); _inner.Write(_scratch, 0, 4);
-            _writeCount = 0;
+            _writeCount = 0; _writeExtra = false;
         }
 
         private async Task WriteFrameAsync(bool last, CancellationToken token)
@@ -116,7 +133,7 @@ namespace OceanBaseConnector.Internal.Protocol
             PrepareWriteFrame(last);
             await _inner.WriteAsync(_header, 0, _header.Length, token).ConfigureAwait(false);
             await _inner.WriteAsync(_writeBuffer, 0, _writeCount, token).ConfigureAwait(false);
-            await _inner.WriteAsync(_scratch, 0, 4, token).ConfigureAwait(false); _writeCount = 0;
+            await _inner.WriteAsync(_scratch, 0, 4, token).ConfigureAwait(false); _writeCount = 0; _writeExtra = false;
         }
 
         public override int Read(byte[] buffer, int offset, int count)
@@ -162,6 +179,8 @@ namespace OceanBaseConnector.Internal.Protocol
             _sequence = (byte)((_sequence + 1) & 255);
             _remaining = header.PayloadLength; _crc = 0; _readStarted = true;
             _last = (header.Flags & Ob20Packet.LastPacketFlag) != 0;
+            _readModern = (header.Flags & 8u) != 0;
+            _readExtra = null;
             return (header.Flags & Ob20Packet.ExtraInfoFlag) != 0;
         }
 
@@ -170,6 +189,11 @@ namespace OceanBaseConnector.Internal.Protocol
             Consume(_scratch, 0, 4);
             var length = new ByteCursor(_scratch, 0, 4).ReadUInt32();
             if (length > (uint)_remaining) throw new ProtocolException("OB20 extra info exceeds the frame payload.");
+            if (_trace != null)
+            {
+                if (length > Ob20TraceContext.MaxExtraLength) throw new ProtocolException("OB20 trace extra info exceeds its limit.");
+                _readExtra = new byte[(int)length];
+            }
             return (int)length;
         }
 
@@ -180,7 +204,9 @@ namespace OceanBaseConnector.Internal.Protocol
             {
                 if (_remaining < 4) throw new ProtocolException("Truncated OB20 extra info length.");
                 ReadWireExactly(_scratch, 0, 4); var extra = ExtraLength();
-                while (extra > 0)
+                if (_readExtra != null)
+                { ReadWireExactly(_readExtra, 0, extra); Consume(_readExtra, 0, extra); }
+                else while (extra > 0)
                 {
                     var size = Math.Min(extra, _scratch.Length); ReadWireExactly(_scratch, 0, size);
                     Consume(_scratch, 0, size); extra -= size;
@@ -196,7 +222,9 @@ namespace OceanBaseConnector.Internal.Protocol
             {
                 if (_remaining < 4) throw new ProtocolException("Truncated OB20 extra info length.");
                 await ReadWireExactlyAsync(_scratch, 0, 4, token).ConfigureAwait(false); var extra = ExtraLength();
-                while (extra > 0)
+                if (_readExtra != null)
+                { await ReadWireExactlyAsync(_readExtra, 0, extra, token).ConfigureAwait(false); Consume(_readExtra, 0, extra); }
+                else while (extra > 0)
                 {
                     var size = Math.Min(extra, _scratch.Length);
                     await ReadWireExactlyAsync(_scratch, 0, size, token).ConfigureAwait(false);
@@ -212,6 +240,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var crc = new ByteCursor(_scratch, 0, 4).ReadUInt32();
             if (crc != 0 && crc != _crc) throw new ProtocolException("OB20 payload checksum mismatch.");
+            if (_readExtra != null) { _trace!.ReadExtra(_readExtra, _readModern); _readExtra = null; }
         }
         private void ReadTail() { ReadWireExactly(_scratch, 0, 4); CheckTail(); }
         private async Task ReadTailAsync(CancellationToken token)

@@ -318,11 +318,11 @@ namespace OceanBaseConnector.ConsumerTests
             return result.ToArray();
         }
 
-        private static byte[] Report(bool ob20, byte affected)
+        internal static byte[] Report(bool ob20, byte affected, string? capability = null)
         {
             using var state = new MemoryStream();
             var names = new[] { "time_zone", "ncharacter_set_connection", "character_set_results", "character_set_connection", "ob_capability_flag" };
-            var values = new[] { "+00:00", "utf8mb4", "utf8mb4", "utf8mb4", ob20 ? "256" : "0" };
+            var values = new[] { "+00:00", "utf8mb4", "utf8mb4", "utf8mb4", capability ?? (ob20 ? "256" : "0") };
             for (var i = 0; i < names.Length; i++)
             {
                 state.WriteByte(0); state.WriteByte((byte)(2 + names[i].Length + values[i].Length));

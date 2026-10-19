@@ -626,6 +626,17 @@ RSA子模块已完成本地实现与独立复查：修复初始sha256取钥后�
 
 本轮协商/传输子模块已实现并通过本地验证：核心五/DI三目标Release编译0警告/错误，完整Unit1662（OB20共66，流式新增26）、Consumer394（OB20新增62）、DI8全部通过且无跳过。独立走查发现握手属性名遗漏`_flag`，已用固定Java常量复核并先复现20失败后修复；再次走查无必须修复项。公开测试含可信ERR后普通连接复用及状态探测、三页cursor、第二页CRC/缺last和等待fetch响应时取消；未覆盖OB20经TLS环回或读取部分正文后的取消，不作这两项已验证声明。证据见进度台账末尾；D01完整链路追踪与真实矩阵仍开放，不关闭项目目标。
 
+### D01 完整链路追踪本地实施（2026-10-19）
+
+沿用既有五目标、ActivitySource及单租约OB20通道，不新增依赖或独立日志系统。协议参考固定Java基线FullLinkTrace、OceanBaseProtocolV20、ObObj和OceanBaseSerialize，仅核对行为与字段，不复制实现。
+
+1. 连接键`Enable Full Link Trace`/builder属性EnableFullLinkTrace默认false，开启时要求Use OB20=true。冻结/多地址/序列化接入；握手请求FULL_LINK_TRACE、NEW_EXTRA_INFO与SHOW_TRACE，只有服务端确认OB20及FULL_LINK_TRACE才生效，缺失追踪能力继续普通OB20。支持legacy ObObj varchar键值及new-extra TLV两种格式，不依赖新格式能力才能追踪。
+2. 内部Ob20TraceContext负责两格式extra与嵌套TLV、服务器control采样/记录策略、span及driver/show-trace日志；复用ByteCursor并逐层限定长度。启用追踪时单帧extra上限64KiB，仅在尾CRC验证后应用控制信息；无追踪时仍按原路径分段跳过。拒绝已知字段畸形长度、重复、非法数值/策略，跳过未知TLV，校验legacy字符串终止符及有界变长整数。不因服务端文本而分配不受控内存或写日志。
+3. PacketChannel/Ob20Stream每请求首帧附加extra，CRC包含extra，分片/请求/last/无响应关闭语义不变。CommandExchange在execute/prepare/探测/cursor共享本地Activity的trace ID，每线协议请求独立128位span；无监听者时生成内部上下文，事务控制传递外层Activity上下文。driver记录仅固定模块、随机ID及微秒时间戳，下一请求发出，单个待发记录有界；不采集SQL、参数、凭据、端点、任意Activity标签或baggage，不创建额外SQL或重放操作。
+4. TDD先固定TLV/legacy/UUID线序、控制与上下文测试的失败证据，再实现并补真实公开环回、同步/异步、五资产、采样0/1、关闭/缺能力回退、错误/CRC/extra上限、prepare/游标/事务及故障清理。独立走查并修复、Release全目标编译及完整Unit/Consumer/DI通过后同步现有文档和本地提交。真实服务端采样/SHOW TRACE、版本/代理矩阵与异机继续暂缓；不以夹具关闭生产验收。
+
+本轮本地实现、独立走查修复及回归已完成：核心五/DI三目标Release编译0警告/错误，完整Unit1689（新增追踪27）、Consumer464（新增追踪70）、DI8全部通过且无跳过。修复legacy大小写/有界非最短varint、未知重复TLV及signed level，红绿证据见进度台账末尾。完成记录仅随下一请求发送，关闭不刷新最后一条；query时间只校验，未导出指标或新增AppInfo定制API。D01正式状态待验证，OB20经TLS环回、真实采样/SHOW TRACE和版本矩阵仍开放；其他未实现模块不据本轮关闭。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

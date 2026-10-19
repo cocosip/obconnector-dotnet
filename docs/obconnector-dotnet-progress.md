@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02–D09 尚未开发；D01 的OB20报文/校验、能力协商和流式传输已有本地实现，完整链路追踪未实现。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02–D09 尚未开发；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -22,7 +22,7 @@
 | D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D15 | SHA-2 fast/TLS、固定RSA及显式公钥获取本地实现，验证记录见末尾 | 其他插件、私有CA成功链及两模式实库矩阵 |
-| D01 | OB20帧/校验、显式协商与标准回退、流式传输及公开命令/游标故障边界已有本地实现，记录见末尾 | 完整链路追踪、OB20经TLS环回和真实矩阵 |
+| D01 | OB20帧/校验、显式协商与标准回退、流式传输及脱敏完整链路追踪已有本地实现，记录见末尾 | OB20经TLS环回、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
 | D02–D09 | 尚未开发 | 过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA等继续逐项评估本地实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
@@ -182,7 +182,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | --- | --- | --- | --- | --- |
 | R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-19 本地包/五资产消费完成，另补Windows Framework4.8.1上net48宿主的Standard2.0基础包消费及绑定重定向；独立走查见末尾，正式Framework支持/许可/来源/包名审查仍开放，不发布 |
 | R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | README本地交付材料及独立走查已完成；Windows实际8.0.31/9.0.20各Unit1206/DI8、默认10.0.12 Unit1206/Consumer152/DI8与五资产包消费通过；最终真实矩阵与发布审查待验收，不关闭候选版门槛 |
-| D01 | 本地部分继续；真实验收待环境 | OB20、校验与完整链路追踪 | 进行中 | OB20编解码/校验、协商和流式传输已有本地实现，记录见末尾；完整链路追踪、TLS环回与真实矩阵仍开放 |
+| D01 | 本地实现已有；真实验收待环境 | OB20、校验与完整链路追踪 | 待验证 | OB20编解码/校验、协商、流式传输和脱敏追踪已有本地实现；TLS环回、真实采样/SHOW TRACE与版本矩阵仍开放，关闭不刷新末条记录 |
 | D02 | G4 后 | Oracle 过程及 OUT/RETURNING | 未开始 | 待记录 |
 | D03 | G4 后 | REF CURSOR | 未开始 | 待记录 |
 | D04 | G4 后 | LOB locator 与流式 LOB | 未开始 | 待记录 |
@@ -725,3 +725,26 @@ Ob20Stream以固定64KiB写缓冲分帧、8KiB缓冲跳过extra，按调用方�
 | DI | 8通过，0失败/跳过 | `TestResults/ob20-stream-di-full/*.trx` |
 
 编译及完整测试命令沿用上一节，仅替换结果目录；TRX已解析核对总数及66/62项OB20实际执行。独立修复复查未发现必须修复项，文档与代码边界另复核后本地提交，不推送。未操作信任根或部署数据库/异机，未重跑打包/旧运行时/Framework；OB20经TLS的实际环回、完整链路追踪及真实版本/OBProxy矩阵仍开放。D01保持进行中，下一步继续可本地实现的完整链路追踪；A05/C01及其他D项、发布关口不据本轮关闭。
+
+## D01 完整链路追踪本地实现（2026-10-19）
+
+从`540689c`接入显式Enable Full Link Trace选项、握手扩展能力、Ob20TraceContext及现有命令/事务Activity上下文。默认关闭，要求Use OB20；仅请求时发送311552，服务端缺FULL_LINK_TRACE则保留普通OB20。legacy ObObj varchar和new-extra嵌套TLV均支持；首请求帧附加extra、CRC覆盖extra、响应尾CRC通过后才原子应用策略，单帧接收extra上限64KiB。level按signed byte解释，普通采样受level/采样率/记录策略约束，SHOW可独立启用；响应策略只影响后续请求，当前记录使用开始时快照。
+
+wire trace ID关联已有Activity；无监听者时使用环境上下文或内部生成ID，prepare/探测/分页共享trace，每请求wire span独立；事务控制关联已有外层Activity。driver/SHOW记录只含固定模块、ID及时间，不发送SQL、参数、凭据、端点或任意Activity标签/baggage。只保留一个有界待发记录，随下一请求发送；关闭连接不额外刷新最后记录，不新增SQL或重放。服务端query时间字段只做边界校验，未导出指标或新增AppInfo定制API。
+
+独立协议依据为固定Java基线`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的FullLinkTrace、OceanBaseProtocolV20、ObObj和OceanBaseSerialize；只核对行为，不复制实现。用JDK21对原ObObj/OceanBaseSerialize及最小临时Buffer夹具执行，得到独立legacy/new-extra固定字节，输出`TestResults/ob20-trace-reference-output.log`，临时源码只存TestResults。
+
+红绿证据：初始缺类型/选项编译失败见`ob20-trace-red.log`；未接入握手和资产时Consumer36失败/4通过见`ob20-trace-consumer-red/*.trx`。独立走查发现legacy键需忽略大小写、Java长度69采用C5 00有界非最短varint；先3失败后6通过见`ob20-trace-legacy-review-{red,green}/*.trx`。未知重复TLV误拒绝先2失败/11通过后13通过见`ob20-trace-boundaries-{red,green}/*.trx`。再次走查发现level无符号解释会将128/255启用，先4失败/2通过，再改signed byte，27项追踪定向全通过，见`ob20-trace-level-{red,green}/*.trx`。曾并发隐式build发生MSB3026重试及测试Read返回值CA2022，已改顺序build并修断言，最终编译无警告。
+
+新增Unit27项覆盖独立Java字节、trace线序、冻结/依赖、逐字节截断、原子策略、恶意标量/重复/未知、0/1采样及SHOW、legacy长度/终止符、CRC后发布和128KiB三帧首帧extra。新增Consumer70项：五资产×同步/异步×legacy/modern/关闭/缺追踪能力/无监听者50项；prepare/两页cursor/无响应close/事务4项；畸形/超限/CRC/服务端仅发送部分正文后的在途取消16项（未确认客户端消费位置），确认Broken、结果未知、token及无重放。Consumer均为net10宿主，不能当作五运行时验收。
+
+| 本轮检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx核心五目标/DI三目标 | 0警告、0错误 | `TestResults/ob20-trace-build-final.log` |
+| 完整Unit（本轮新增27项） | 1689通过，0失败/跳过 | `TestResults/ob20-trace-unit-final/*.trx` |
+| 完整Consumer（本轮新增70项） | 464通过，0失败/跳过 | `TestResults/ob20-trace-consumer-final/*.trx` |
+| 完整DI | 8通过，0失败/跳过 | `TestResults/ob20-trace-di-final/*.trx` |
+
+编译使用`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；测试使用`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/ob20-trace-<unit|consumer|di>-final`。已解析TRX确认27/70项新回归均执行通过。完整Unit使用正常Windows TLS凭据访问，未修改信任库或证书策略；未重跑打包/旧运行时/Framework。
+
+最终独立文档复查已将取消证据收窄到服务端发送位置，不宣称客户端已读两字节。D01本地追踪实现、编译、回归及独立走查已完成，正式状态待验证：真实采样/SHOW TRACE、OB20经TLS环回与目标版本/OBProxy矩阵仍开放；最后待发记录不在关闭时刷新。异机及数据库部署按要求暂缓。A05公共MySQL判定、C01池、D02–D09、D15其他插件和发布审查仍未完成，整体目标不关闭，不推送。

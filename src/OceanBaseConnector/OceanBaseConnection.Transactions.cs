@@ -84,6 +84,7 @@ namespace OceanBaseConnector
             var operation = StartTransaction(isolationLevel, CancellationToken.None);
             var timer = Stopwatch.StartNew();
             var diagnostics = DriverDiagnostics.Start("transaction.begin");
+            operation.Exchange.SetTraceContext(diagnostics?.Context ?? default);
             try
             {
                 Control(operation.Exchange, operation.IsolationSql);
@@ -102,6 +103,7 @@ namespace OceanBaseConnector
             var operation = StartTransaction(isolationLevel, cancellationToken);
             var timer = Stopwatch.StartNew();
             var diagnostics = DriverDiagnostics.Start("transaction.begin");
+            operation.Exchange.SetTraceContext(diagnostics?.Context ?? default);
             try
             {
                 await ControlAsync(operation.Exchange, operation.IsolationSql).ConfigureAwait(false);
@@ -161,6 +163,7 @@ namespace OceanBaseConnector
         {
             var timer = Stopwatch.StartNew();
             var diagnostics = DriverDiagnostics.Start(commit ? "transaction.commit" : "transaction.rollback");
+            exchange.SetTraceContext(diagnostics?.Context ?? default);
             Exception? restoreError = null;
             try
             {
@@ -180,6 +183,7 @@ namespace OceanBaseConnector
         {
             var timer = Stopwatch.StartNew();
             var diagnostics = DriverDiagnostics.Start(commit ? "transaction.commit" : "transaction.rollback");
+            exchange.SetTraceContext(diagnostics?.Context ?? default);
             Exception? restoreError = null;
             try
             {

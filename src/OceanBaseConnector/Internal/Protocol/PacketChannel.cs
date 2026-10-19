@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,6 +29,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private Stream _stream;
         private int _sequence;
         private Ob20Stream? _ob20;
+        private ActivityContext _traceContext;
 
         public PacketChannel(Stream stream, long maxPacketSize = DefaultMaxPacketSize)
         {
@@ -49,12 +51,17 @@ namespace OceanBaseConnector.Internal.Protocol
 
         public void Close() { _closed = true; _stream.Dispose(); }
 
-        internal void EnableOb20(uint connectionId)
+        internal void EnableOb20(uint connectionId, bool fullLinkTrace = false, bool modernExtra = false)
         {
             EnsureIdle();
             if (_ob20 != null) throw new InvalidOperationException("OB20 is already enabled.");
-            _stream = _ob20 = new Ob20Stream(_stream, connectionId);
+            _stream = _ob20 = new Ob20Stream(_stream, connectionId, fullLinkTrace ? new Ob20TraceContext(modernExtra) : null);
         }
+
+        internal bool FullLinkTraceEnabled => _ob20?.FullLinkTraceEnabled == true;
+        internal void SetTraceContext(ActivityContext context) => _traceContext = context;
+        private void BeginOb20Request()
+        { _ob20?.BeginRequest(_traceContext); _traceContext = default; }
 
         internal void CompleteResponse(bool expectsResponse = true)
         { EnsureIdle(); _ob20?.CompleteResponse(expectsResponse); }
@@ -113,7 +120,7 @@ namespace OceanBaseConnector.Internal.Protocol
             EnsureIdle();
             ValidateRange(payload, offset, count);
 
-            _ob20?.BeginRequest();
+            BeginOb20Request();
 
             var position = offset;
             var remaining = count;
@@ -155,7 +162,7 @@ namespace OceanBaseConnector.Internal.Protocol
             EnsureIdle();
             ValidateRange(payload, offset, count);
 
-            _ob20?.BeginRequest();
+            BeginOb20Request();
 
             var position = offset;
             var remaining = count;

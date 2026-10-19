@@ -57,6 +57,7 @@ namespace OceanBaseConnector.Internal
             private readonly long _started = Stopwatch.GetTimestamp();
             private int _finished;
             internal Operation(string name, Activity? activity) { _name = name; _activity = activity; }
+            internal ActivityContext Context => _activity?.Context ?? default;
             internal void Finish(OceanBaseCompatibilityMode? mode, Exception? error)
             {
                 if (Interlocked.Exchange(ref _finished, 1) != 0) return;
