@@ -41,7 +41,8 @@ namespace OceanBaseConnector.UnitTests
                 {
                     using var command = new OceanBaseCommand { CommandText = "pkg.p", CommandType = CommandType.StoredProcedure };
                     command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", ComplexType = type, Value = value, Direction = direction });
-                    Assert.Throws<NotSupportedException>(() => OracleCommandPlan.Create(command.CommandText, command.CommandType, (OceanBaseParameterCollection)command.Parameters));
+                    var plan = OracleCommandPlan.Create(command.CommandText, command.CommandType, (OceanBaseParameterCollection)command.Parameters);
+                    Assert.Same(type, Assert.Single(plan.Bindings.Parameters).ComplexType);
                 }
                 connection.ClearComplexTypeCache(); Assert.Throws<InvalidOperationException>(() => type.CreateValue(item));
                 Assert.Single(value.GetValues());
@@ -70,6 +71,12 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(expected, PreparedParameters.Encode(new[] { new OceanBaseParameter { Value = value } }, OceanBaseCompatibilityMode.Oracle));
                 Assert.Throws<ArgumentException>(() => type.CreateValue(new object?[] { new object?[] { new byte[] { 42 } } }));
                 Assert.Throws<NotSupportedException>(() => connection.CreateArrayType(type));
+                foreach (var direction in new[] { ParameterDirection.Output, ParameterDirection.InputOutput, ParameterDirection.ReturnValue })
+                {
+                    var parameters = new OceanBaseParameterCollection();
+                    parameters.Add(new OceanBaseParameter { ParameterName = "p", ComplexType = type, Value = value, Direction = direction });
+                    Assert.Throws<NotSupportedException>(() => OracleCommandPlan.Create("pkg.p", CommandType.StoredProcedure, parameters));
+                }
                 connection.ClearComplexTypeCache(); Assert.Throws<InvalidOperationException>(() => type.CreateValue(nested));
                 Assert.Throws<InvalidOperationException>(() => connection.CreateArrayType(element));
                 using var after = connection.CreateCommand(); after.CommandText = "after"; Assert.Equal(1, await after.ExecuteNonQueryAsync());

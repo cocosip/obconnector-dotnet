@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入已本地接入，匿名输出及完整复核、D06–D09仍未完成；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06–D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -26,7 +26,7 @@
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
 | D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流、WRITE/TRIM及临时对象显式创建/释放已本地接入，验证见末尾 | 真实版本/OBProxy、资源生命周期及扩展经TLS验收仍开放 |
-| D05 | 内部嵌套编解码、同会话字典、值构造、命名结果/参数/输出、匿名标量结果及工厂输入已有本地实现，验证见末尾 | 匿名输出及完整D05复核继续实施 |
+| D05 | 内部嵌套编解码、同会话字典、值构造、命名结果/参数/输出、匿名标量结果/输入/输出及完整本地复核完成，验证见末尾 | 真实字典/DDL、往返及版本/OBProxy资源语义验收 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -189,7 +189,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D02 | 本地先行，实库延期 | Oracle 过程及 OUT/RETURNING | 进行中 | 公开过程及标量OUT/RETURNING已接入，完整回归/走查见末尾；保留标量范围及独立Prepare/FetchSize限制，真实互通开放 |
 | D03 | 本地先行，实库延期 | REF CURSOR | 待验证 | REF CURSOR输出、流式分页及所有权本地实现/完整回归/独立走查修复完成，见末尾；真实版本/OBProxy互通开放 |
 | D04 | 本地先行，实库延期 | LOB locator、分块读写及临时对象 | 待验证 | locator解析、公开读取/绑定、WRITE/TRIM及临时对象显式创建/释放本地实现、完整回归及独立走查修复完成，见末尾；真实资源验收仍开放 |
-| D05 | 本地先行，实库延期 | ARRAY/STRUCT 与类型字典 | 进行中 | 字典/缓存、命名结果/参数/输出、匿名标量结果及工厂输入本地实现见末尾；匿名输出及完整复核继续实施 |
+| D05 | 本地先行，实库延期 | ARRAY/STRUCT 与类型字典 | 待验证 | 约定本地范围实现及完整复核通过，见末尾；真实字典/DDL、往返及版本/OBProxy资源语义验收继续延期 |
 | D06 | G4 后 | bulk/array binding | 未开始 | 待记录 |
 | D07 | G4 后 | 按需客户端预处理回退 | 未开始 | 待记录 |
 | D08 | G4 后 | 拓扑发现与负载均衡 | 未开始 | 待记录 |
@@ -1098,3 +1098,31 @@ OracleCommandPlan保存执行时的输出描述，Output/ReturnValue清旧Value�
 编译命令沿用dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；完整测试使用对应csproj的dotnet test -c Release --no-build --no-restore -m:1 -nr:false --logger trx。已解析TRX核对计数并比较上一轮案例名。完整Unit使用正常Windows TLS凭据权限，未操作信任根。独立只读走查核对工厂上下文、命名缓存身份、方向归一化前检查、协议头/正文、预算及测试，无阻断问题；另修正ComplexType属性XML的named-only过时说明。README、架构、计划及台账同步，UTF8无BOM/CRLF及diff检查后本地提交，不推送。
 
 本模块完成；匿名输出及完整D05复核、D06–D09等继续开放，整体目标未完成。真实数据库/OBProxy与异机验收按要求暂缓，本轮未重跑打包或旧运行时/Framework矩阵，本地夹具不能证明实库兼容。
+
+## D05匿名标量集合输出及完整本地复核（2026-10-19）
+
+从ace6a99继续，工厂六标量集合开放PrepareExecute的Output/InputOutput/ReturnValue。Output/ReturnValue显式声明ComplexType，InputOutput可从原工厂值推断；只读结果描述仍不可绑定。metadata阶段核验匿名布局并绑定执行快照描述，NUMBER元素0/3/246沿既有规则规范化；原线上metadata的schema/元素码/version保留，无命名类型身份的schema不作为工厂身份。命名输出继续要求字典描述引用一致。匿名复杂元素输出缺少完整命名身份，发包前拒绝，不从声明猜测未知结果结构。
+
+36项六标量×三方向×同步/异步先因旧Input-only限制失败（anonymous-outputs-red），实现后首轮定向76项通过（anonymous-outputs-green）。最终新增71项：六标量公开往返36、混合输出/NULL/空/零行/尾ERR/错误metadata22、取消/关闭4、NUMBER别名3、失效描述三方向同步/异步6。原工厂案例保留并改为验证标量输出声明，命名复杂元素工厂补三个输出方向拒绝；未移除既有案例。扩展原20项五资产标准/OB20消费，检查命名和匿名混合输出的完整发送字节、NULL声明、结果值及原描述引用。元数据错误在行前拒绝，夹具在该边界等待断开，避免以发送/关闭竞态掩盖拒绝路径。取消/关闭夹具仅以服务端已发输出EOF为时序点，不宣称客户端已消费。
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx核心五目标/DI三目标 | 0警告/错误，退出0 | TestResults/anonymous-outputs-build-first.log |
+| 完整Unit | 2434通过，0失败/跳过；新增71、移除0 | TestResults/anonymous-outputs-unit-first/*.trx |
+| 五资产Consumer | 744通过，0失败/跳过 | TestResults/anonymous-outputs-consumer-first/*.trx |
+| DI | 8通过，0失败/跳过 | TestResults/anonymous-outputs-di-first/*.trx |
+
+编译与测试命令沿用上一节，仅更换anonymous-outputs结果目录；已解析TRX并比较前轮案例名。完整Unit使用正常Windows TLS凭据权限，无信任根操作。独立只读走查核对输出快照、metadata身份、原会话/事务/缓存校验、预算及错误/取消/终态，无阻断问题。跨连接/重开/事务输出边界沿用相同StartCommand校验，现有输入边界回归及新增输出Clear回归覆盖共享路径；未将其称为新增逐组合输出测试。
+
+完整D05需求对应复核如下：
+
+| 本地约定要求 | 实现及验证对应 |
+| --- | --- |
+| OBJECT/COLLECTION嵌套、精确六标量、方向位图及预算 | ComplexType、ComplexValueCodec和codec测试 |
+| 精确字典、嵌套装载、同会话预约、失败不发布 | OceanBaseConnection.ComplexTypes、dictionary测试 |
+| 原会话/事务代次、缓存失效和不可变快照 | ValidateComplexBinding、StartCommand及边界测试 |
+| 命名普通/顺序/分页结果和后续字段 | ResultColumn、SequentialRow.Complex、QueryResult.Cursor及result测试 |
+| 命名参数/输出、声明快照、NULL/零行及原子发布 | PreparedParameters、OracleCommandPlan、QueryResult及parameter测试 |
+| 匿名标量结果、工厂标量/命名元素输入和标量输出 | ComplexColumnMetadata、CreateArrayType、anonymous测试及五资产消费 |
+
+独立完整性复核未发现文档明确要求但尚未实现的本地D05功能；匿名复杂元素无身份结果/输出拒绝、LOB/cursor/national charset成员及循环图拒绝均为既有明确边界，未缩小要求。D05约定本地范围实现完成，正式状态改为待验证，下一本地模块D06；真实字典/DDL可见性、OceanBase/OBProxy往返及资源语义、扩展经TLS和异机验收继续延期。README、架构、计划及台账同步，UTF8无BOM/CRLF和diff检查后本地提交，不推送。本轮未重跑打包或旧运行时/Framework矩阵，整体目标保持开放。

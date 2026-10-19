@@ -30,7 +30,7 @@ namespace OceanBaseConnector
                 if (value != global::OceanBaseConnector.OceanBaseDbType.Array && value != global::OceanBaseConnector.OceanBaseDbType.Struct) _complexType = null;
             }
         }
-        /// <summary>A session-bound Oracle type. Required for NULL and output complex values; anonymous types are Input-only.</summary>
+        /// <summary>A session-bound Oracle type. Required for NULL and output complex values; anonymous complex elements are Input-only.</summary>
         public OceanBaseComplexType? ComplexType
         {
             get => _complexType;

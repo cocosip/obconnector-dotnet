@@ -134,8 +134,8 @@ namespace OceanBaseConnector.Internal.Protocol
             if (type == null && !declared && (provider.HasValue || parameter.DbType != DbType.Object || value == null)) return null;
             type ??= value?.Type;
             if (type == null) throw new ArgumentException("A NULL complex parameter requires ComplexType.");
-            if (type.IsAnonymous && (type.Context == null || parameter.Direction != ParameterDirection.Input))
-                throw new NotSupportedException("Anonymous arrays require a connection factory descriptor and Input direction.");
+            if (type.IsAnonymous && (type.Context == null || parameter.Direction != ParameterDirection.Input && type.Members[0].ComplexType != null))
+                throw new NotSupportedException("Anonymous arrays require a connection factory descriptor; complex elements are Input-only.");
             if (parameter.Size != 0 || parameter.Precision != 0 || parameter.Scale != 0)
                 throw new ArgumentException("Complex parameters cannot declare scalar size or precision.");
             if (declared && type.IsCollection != (provider == OceanBaseDbType.Array))

@@ -36,8 +36,7 @@ namespace OceanBaseConnector.Internal.Sql
             {
                 if (column.TypeCode == 160) throw new NotSupportedException("A complex output requires an explicit type declaration.");
             }
-            else if (column.TypeCode != 160 || !ReferenceEquals(column.ComplexType, expected))
-                throw new ProtocolException("Complex output metadata must match its declared named type.");
+            else column.BindComplexOutput(expected);
         }
 
         internal bool BeginResponse(OraclePrepareExecutePacket header)

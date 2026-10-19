@@ -121,14 +121,14 @@ namespace OceanBaseConnector.ConsumerTests
                 if (!ob20) channel.BeginCommand();
                 var outputRequest = new ByteCursor(await ReadRequest(stream, channel, ob20, 11, budget.Token));
                 Assert.Equal(0xa1, outputRequest.ReadUInt8()); outputRequest.Skip(9);
-                Assert.Equal("BEGIN pkg.p(?); END;", Encoding.UTF8.GetString(outputRequest.ReadLengthEncodedBytes())); Assert.Equal(1u, outputRequest.ReadUInt32());
-                var outputHeader = new byte[] { 1, 1, 160, 0, (byte)complexName.Length }.Concat(complexName)
-                    .Concat(new byte[] { 10 }).Concat(Encoding.UTF8.GetBytes("Mixed_Type")).Concat(new byte[] { 0 }).ToArray();
+                Assert.Equal("BEGIN pkg.p(?, ?); END;", Encoding.UTF8.GetString(outputRequest.ReadLengthEncodedBytes())); Assert.Equal(2u, outputRequest.ReadUInt32());
+                var outputHeader = new byte[] { 3, 1, 160, 0, (byte)complexName.Length }.Concat(complexName)
+                    .Concat(new byte[] { 10 }).Concat(Encoding.UTF8.GetBytes("Mixed_Type")).Concat(new byte[] { 0, 160, 0, 0, 0, 0, 203 }).ToArray();
                 Assert.Equal(outputHeader, outputRequest.ReadBytes(outputHeader.Length));
-                var outputReply = Frame(1, new byte[] { 0, 20, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 1 })
-                    .Concat(Frame(2, complexColumn)).Concat(Frame(3, complexColumn))
-                    .Concat(Frame(4, new byte[] { 0, 0, 0, 2, 51, 49, 2, 1, 2 }))
-                    .Concat(Frame(5, versionEof)).Concat(Frame(6, Report(false, 2))).ToArray();
+                var outputReply = Frame(1, new byte[] { 0, 20, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0, 4, 0, 0, 0, 1 })
+                    .Concat(Frame(2, complexColumn)).Concat(Frame(3, anonymousColumn)).Concat(Frame(4, complexColumn)).Concat(Frame(5, anonymousColumn))
+                    .Concat(Frame(6, new byte[] { 0, 0, 0, 2, 51, 49, 2, 1, 2, 2, 8, 2, 8, 9 }))
+                    .Concat(Frame(7, versionEof)).Concat(Frame(8, Report(false, 2))).ToArray();
                 await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 11, 1, outputReply) : outputReply, budget.Token);
                 if (!ob20) channel.BeginCommand();
                 Assert.Equal(new byte[] { 25, 20, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 12, budget.Token));
@@ -201,10 +201,15 @@ namespace OceanBaseConnector.ConsumerTests
                     command.CommandText = "pkg.p"; command.CommandType = CommandType.StoredProcedure;
                     var output = command.CreateParameter(); output.ParameterName = "p"; output.Direction = ParameterDirection.Output; output.Value = "old";
                     output.GetType().GetProperty("ComplexType")!.SetValue(output, type); command.Parameters.Add(output);
+                    var arrayOutput = command.CreateParameter(); arrayOutput.ParameterName = "a"; arrayOutput.Direction = ParameterDirection.Output; arrayOutput.Value = "old";
+                    arrayOutput.GetType().GetProperty("ComplexType")!.SetValue(arrayOutput, arrayType); command.Parameters.Add(arrayOutput);
                     Assert.Equal(2, async ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
                     Assert.Same(type, output.Value!.GetType().GetProperty("Type")!.GetValue(output.Value));
                     var fields = (object?[])(await Call(output.Value, "GetValues", Array.Empty<object?>()))!;
                     Assert.Equal("31", fields[0]!.ToString()); Assert.Equal(new byte[] { 1, 2 }, fields[1]);
+                    Assert.Same(arrayType, arrayOutput.Value!.GetType().GetProperty("Type")!.GetValue(arrayOutput.Value));
+                    var elements = (object?[])(await Call(arrayOutput.Value, "GetValues", Array.Empty<object?>()))!;
+                    Assert.Equal(new byte[] { 8, 9 }, elements[0]); Assert.Null(elements[1]);
                 }
                 await Call(connection, "ClearComplexTypeCache", new object?[] { null });
                 await Assert.ThrowsAsync<InvalidOperationException>(() => Call(type, "CreateValue", new object?[] { values }));

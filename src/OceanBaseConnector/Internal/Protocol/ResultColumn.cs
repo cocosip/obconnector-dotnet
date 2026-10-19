@@ -12,6 +12,15 @@ namespace OceanBaseConnector.Internal.Protocol
         private OceanBaseConnector.Internal.Session.LobSession? Lobs { get; set; }
         internal ComplexColumnMetadata? ComplexMetadata { get; private set; }
         internal OceanBaseComplexType? ComplexType { get; private set; }
+        internal void BindComplexOutput(OceanBaseComplexType expected)
+        {
+            var actual = ComplexType;
+            if (TypeCode != 160 || actual == null || (expected.IsAnonymous
+                ? !actual.IsAnonymous || expected.Members[0].ComplexType != null || actual.Members[0].Layout.TypeCode != expected.Members[0].Layout.TypeCode
+                : !ReferenceEquals(actual, expected)))
+                throw new ProtocolException("Complex output metadata must match its declared type.");
+            ComplexType = expected;
+        }
         internal void RequireComplexResult(bool binary)
         {
             if (TypeCode != 160) return;
