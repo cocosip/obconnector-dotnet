@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04–D09尚未开发；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已开始内部locator解析，D05–D09尚未开发；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -25,7 +25,8 @@
 | D01 | OB20帧/校验、显式协商与标准回退、流式传输及脱敏完整链路追踪已有本地实现，记录见末尾 | OB20经TLS环回、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
-| D04–D09 | 尚未开发 | LOB/复杂类型、批量优化、客户端回退、拓扑/XA继续逐项实施 |
+| D04 | 内部V1/V2 locator解析已实施，验证记录见末尾；公开LOB入口尚未接入 | 原会话/事务绑定、类型/参数/输出、分块流及真实资源语义继续实施 |
+| D05–D09 | 尚未开发 | 复杂类型、批量优化、客户端回退、拓扑/XA继续逐项实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -187,7 +188,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D01 | 本地实现已有；真实验收待环境 | OB20、校验与完整链路追踪 | 待验证 | OB20编解码/校验、协商、流式传输和脱敏追踪已有本地实现；TLS环回、真实采样/SHOW TRACE与版本矩阵仍开放，关闭不刷新末条记录 |
 | D02 | 本地先行，实库延期 | Oracle 过程及 OUT/RETURNING | 进行中 | 公开过程及标量OUT/RETURNING已接入，完整回归/走查见末尾；保留标量范围及独立Prepare/FetchSize限制，真实互通开放 |
 | D03 | 本地先行，实库延期 | REF CURSOR | 待验证 | REF CURSOR输出、流式分页及所有权本地实现/完整回归/独立走查修复完成，见末尾；真实版本/OBProxy互通开放 |
-| D04 | G4 后 | LOB locator 与流式 LOB | 未开始 | 待记录 |
+| D04 | G4 后 | LOB locator 与流式 LOB | 进行中 | 内部locator解析见末尾；公开绑定与流尚未接入 |
 | D05 | G4 后 | ARRAY/STRUCT 与类型字典 | 未开始 | 待记录 |
 | D06 | G4 后 | bulk/array binding | 未开始 | 待记录 |
 | D07 | G4 后 | 按需客户端预处理回退 | 未开始 | 待记录 |
@@ -843,3 +844,23 @@ TDD首轮因缺RefCursor类型/对象编译失败（`TestResults/ref-cursor-red.
 D03本地输出契约已实现，正式状态待验证；实库、扩展经TLS、异机、打包和旧运行时/Framework本轮均未执行。不支持REF CURSOR输入/输入输出和普通结果列非NULL cursor值；LOB/复杂类型/批量绑定/客户端回退/拓扑/XA仍按D04–D09继续，A05/C01/D15余项和发布验收仍开放，整体目标未完成，不推送。
 
 最终独立代码/文档复查通过，无必须修复项；复查者只读核实修后完整报告、36项REF CURSOR与4项终态竞态，确认声明和未验收边界一致。
+
+
+## D04 LOB locator 内部解析（2026-10-19）
+
+从`e4af17b`开始D04，新增内部LobLocator，仅处理协议边界和数据位置，不改变握手能力、210/211结果列、参数或公开流接口。V1核对固定Java例子的40字节头与17字节rowid，支持空/兼容locator；V2核对固定服务端ObLobCommon/内存头，覆盖simple、extern、未初始化/初始化disk、disk行外但payload行内、纯行外及空extern synthetic头。内联值保留原数组的ArraySegment，不复制正文；纯行外仅保留Int64字节长度，超过4GiB和Int64最大值不据此申请正文内存。TEMP_FULL可解析，TEMP_DELTA/未知布局和V1非零storage option明确拒绝，不猜测老V2 magic布局。
+
+先加入测试并记录缺少LobLocator的编译失败（TestResults/lob-locator-red.log），实现后首轮31通过/2失败：xUnit把默认ArraySegment当集合枚举而抛错，已将测试改为分别断言Array=null与Count=0，产品没有为该错误断言调整。再补空extern两个合法偏移与TEMP_FULL/DELTA后，最终37项定向全部通过（TestResults/lob-locator-green/*.trx）。回归包括所有固定长度locator的逐字节截断、偏移溢出/重叠、尾随数据、畸形memory/disk flags、freed、负snapshot、Int64溢出、元数据与实际payload长度不符及opaque扩展/rowkey边界。
+
+独立只读走查核对全部实现、测试与固定C++的fill/get_inrow_data/get_lob_data_byte_len，确认空extern两种偏移、借用视图始终绕过metadata及偏移算术边界，无必须修复项。Java checkout实际HEAD为6adc311ba5db8b2f19f98f3e6e4734667fdfdda1，服务端引用固定为5e8a63d29dae9fde5e962b8fcc7b167d438fc343；只参考协议行为，没有复制第三方实现。
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release核心五目标/DI三目标 | 0警告、0错误 | TestResults/lob-locator-build.log |
+| 完整Unit | 1913通过，0失败/跳过，包含新增37项 | TestResults/lob-locator-unit/*.trx |
+| 五资产Consumer | 524通过，0失败/跳过 | TestResults/lob-locator-consumer/*.trx |
+| DI | 8通过，0失败/跳过 | TestResults/lob-locator-di/*.trx |
+
+编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试命令为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/lob-locator-<unit|consumer|di>`。已解析TRX核对实际通过/执行计数，Unit使用正常Windows TLS凭据权限，未安装/删除信任根或改变TLS策略。UTF8无BOM/CRLF、git diff --check及独立走查通过后本地提交，不推送。
+
+D04整体仍进行中，下一步继续显式能力/选项、210/211类型及参数/输出对象、原物理会话/事务绑定、DBMS_LOB.READ分块流与公开消费。未验证实库/OBProxy、异机或扩展经TLS；本轮未重新打包或执行旧运行时/Framework矩阵。内部解析不能证明公开LOB可用或完整D04已交付，整体目标保持开放。

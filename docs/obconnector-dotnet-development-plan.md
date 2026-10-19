@@ -674,6 +674,17 @@ TDD以真实TCP环回覆盖两EOF格式、有/无结果、普通/顺序、同步
 
 D03本地输出/读取实现及独立走查修复已完成：修后Release核心五/DI三目标0警告/错误，完整Unit1876（新增36）、Consumer524（新增30）、DI8全通过、零跳过。终态取消/关闭竞态4项先红后绿，连既有C04终态契约4项一起验证通过；详情见台账末尾。正式状态待验证，实库、扩展经TLS、异机及新打包/旧运行时矩阵未执行，输入/输入输出及普通结果列cursor值未支持。后续继续D04，不关闭整体目标。
 
+### D04 本地实施顺序（2026-10-19）
+
+沿用现有字段流、Oracle PrepareExecute和原会话独占规则，不迁移locator，不通过第二条连接读取旧事务的数据。分为下列可独立走查的交付；每项先有失败测试，再实现、编译、完整单测、走查和本地提交，D04整体在全部接入前保持进行中。
+
+1. 内部`LobLocator.Parse(byte[])`：识别V1的40字节头及V2的8字节内存头，返回版本、字节长度、内联数据的借用视图或行外标记。严格验证版本、头长度、长度/偏移、扩展与rowkey边界；不按未受信长度分配数据，不将locator当普通BLOB/CLOB。覆盖空值、V1兼容locator、V2 simple/extern/disk、行内/行外、截断、溢出及大行外长度。此步不改变握手或公开支持声明。
+2. 在握手能力和显式选项门槛后接入210/211类型、元数据、参数及D02输出；公开LOB对象绑定物理会话和事务代次，校验输出原子发布、连接重开、事务结束、Dispose和reader独占。默认未启用时继续拒绝locator类型，不把协议夹具当作实库互通。
+3. 使用原会话执行DBMS_LOB.READ的有界分块Stream/TextReader，同步/异步取消、超时、Unicode字符与字节偏移分别验证，复用既有命令预算和错误清理；明确原reader消费/释放后才能获取独占租约，不缓冲整LOB或另建连接规避占用。补齐LOB输入/输出、流式读取及五资产公开消费。
+4. 复核全部D04契约，更新README、架构和台账。真实版本/OBProxy、LOB写入/临时对象服务端语义、扩展经TLS与异机验收单独保留；实现范围不足时不得将D04改为完成。
+
+协议依据仅参考行为：固定Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的`Lob.java`、`Blob.java`、`Clob.java`，及固定OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343`的`deps/oblib/src/common/object/ob_object.h/.cpp`（ObLobLocator、ObMemLobCommon、ObLobCommon、get_inrow_data/get_lob_data_byte_len）。V2前4字节在该服务端基线中是带is_mem_loc标记的ObLobCommon，不是V1的LOB! magic；不照搬Java忽略该头的宽松处理。未知布局明确拒绝，后续按版本证据扩展。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

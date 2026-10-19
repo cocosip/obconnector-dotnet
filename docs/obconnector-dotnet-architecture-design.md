@@ -345,6 +345,8 @@ Oracle业务命令执行前复用有效time_zone报告；缺失、SYSTEM或非�
 
 `DbDataReader` 通过 `IDbColumnSchemaGenerator` 支持 `GetColumnSchema()`，并提供 `GetSchemaTable()`；字段类型、列名、长度、精度和可空性基于实际列定义。数据库对象元数据通过 `DbConnection.GetSchema()` 实现，MySQL 模式使用相应 `SHOW`/`INFORMATION_SCHEMA`，Oracle 模式使用其兼容数据字典。字段元数据和数据库目录元数据分别验证，不用一套 SQL 混用。LOB locator、REF CURSOR 和复杂类型值若依赖连接/事务，公开对象必须说明失效点和 `Dispose` 义务；首个里程碑可先支持安全的内联字节/文本值，不能把 locator 当普通 `byte[]` 误解码。
 
+D04内部解析子模块：`LobLocator.Parse`只返回版本、字节长度和内联payload借用视图或行外标记，不建立会话、不读取服务端、不复制payload。V1严格验证`LOB!`/版本1、40字节固定头、非负snapshot、未支持的storage option及rowid/payload完整长度，兼容空/伪locator；V2按固定服务端的`ObLobCommon`+内存version/type/flags解析，区分simple、extern及disk行内/行外布局。extern扩展体与rowkey只验证边界并跳过，不解释未知内部内容；freed/矛盾标志、非法common/reserved、长度与偏移重叠、截断及多余payload均拒绝。行外字节长度使用Int64，可大于4GiB且不分配相应正文；TEMP_FULL可解析，TEMP_DELTA明确拒绝。V2早期其他头布局没有兼容证据，不猜测解码。本子模块尚未接入210/211结果列、握手、参数或公开LOB对象，不能据此宣称locator LOB/流已支持；会话绑定及分块操作继续按开发方案D04实施。
+
 C05首批目录集合（2026-10-19本地实现，真实字典版本/权限仍待验收）：五目标提供三个同步GetSchema重载；现代三目标覆写三个GetSchemaAsync重载，后者使用异步执行、逐行/结果读取及释放，不调用基类同步回退。每次返回独立的InvariantCulture DataTable，空结果保留列形状；未支持集合抛NotSupportedException，不静默返回空集。
 
 | 集合 | 固定列形状（按顺序） | 限制参数顺序 |
