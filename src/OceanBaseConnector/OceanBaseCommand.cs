@@ -24,6 +24,8 @@ namespace OceanBaseConnector
         private int _fetchSize;
         internal PhysicalSession? RequiredSession { get; set; }
         internal object? SessionOwner { get; set; }
+        internal long? RequiredTransactionEpoch { get; set; }
+        internal bool IsLobRead { get; set; }
         internal Func<CancellationToken>? CancellationOrigin { get; set; }
 #if NET8_0_OR_GREATER
         internal DbBatchCommand? BatchCommand { get; set; }
@@ -81,7 +83,7 @@ namespace OceanBaseConnector
                 ValidateCursorStatement(operation.FetchSize, statement);
                 execution.BeforeSuccessfulCompletion = operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
                 execution.Send(operation.Oracle != null ? OraclePrepareExecutePacket.Build(0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
-                    : statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0));
+                    : statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0), executesSql: !IsLobRead);
                 var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize,
                     oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle);
@@ -133,7 +135,7 @@ namespace OceanBaseConnector
                 ValidateCursorStatement(operation.FetchSize, statement);
                 execution.BeforeSuccessfulCompletion = operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
                 await execution.SendAsync(operation.Oracle != null ? OraclePrepareExecutePacket.Build(0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
-                    : statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0)).ConfigureAwait(false);
+                    : statement == null ? SqlPacket(operation.Bindings.CommandText, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0), executesSql: !IsLobRead).ConfigureAwait(false);
                 var result = new QueryResult(execution, operation.Binary, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize,
                     oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle);
@@ -153,12 +155,17 @@ namespace OceanBaseConnector
 
         public override async ValueTask DisposeAsync()
         {
-            var statement = DetachStatement();
-            if (statement != null) await PreparedStatement.CloseIdleAsync(statement.Session, _timeout).ConfigureAwait(false);
-            if (_oracleSession != null && !ReferenceEquals(_oracleSession, statement?.Session)) await PreparedStatement.CloseIdleAsync(_oracleSession, _timeout).ConfigureAwait(false);
+            await DisposeCoreAsync().ConfigureAwait(false);
             await base.DisposeAsync().ConfigureAwait(false);
         }
 #endif
+        internal async Task DisposeCoreAsync()
+        {
+            var statement = DetachStatement();
+            if (statement != null) await PreparedStatement.CloseIdleAsync(statement.Session, _timeout).ConfigureAwait(false);
+            if (_oracleSession != null && !ReferenceEquals(_oracleSession, statement?.Session)) await PreparedStatement.CloseIdleAsync(_oracleSession, _timeout).ConfigureAwait(false);
+            _oracleSession = null;
+        }
         private (CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle)
             Start(CommandBehavior behavior, CancellationToken token, bool prepareOnly)
         {
@@ -185,6 +192,9 @@ namespace OceanBaseConnector
                 if (oracle == null && CommandType != CommandType.Text) throw new NotSupportedException("Oracle stored procedures require Use Oracle Prepare Execute=true.");
                 if (oracle != null && (prepareOnly || _fetchSize > 0)) throw new NotSupportedException("PrepareExecute prepares during execution and does not support standalone Prepare or FetchSize.");
                 var bindings = oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
+                foreach (var parameter in bindings.Parameters)
+                    if ((parameter.OceanBaseDbType == OceanBaseDbType.Blob || parameter.OceanBaseDbType == OceanBaseDbType.Clob || parameter.Value is OceanBaseLob) && !session.UseLobLocators)
+                        throw new NotSupportedException("LOB parameters require negotiated Use Lob Locators=true.");
                 var fetchSize = prepareOnly ? 0 : _fetchSize;
                 if (prepareOnly) _explicitPreparation = true;
                 var binary = oracle != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
@@ -197,7 +207,7 @@ namespace OceanBaseConnector
                 {
                     oracle?.Cursors?.EndExecution();
                     lock (_gate) { if (ReferenceEquals(_execution, execution)) _execution = null; }
-                }, SessionOwner, CancellationOrigin);
+                }, SessionOwner, CancellationOrigin, RequiredTransactionEpoch, bindings.Parameters);
 #if NET8_0_OR_GREATER
                 execution.BatchCommand = BatchCommand;
                 execution.BatchFailed = BatchFailed;

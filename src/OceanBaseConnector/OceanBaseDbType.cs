@@ -33,5 +33,7 @@ namespace OceanBaseConnector
         TimestampWithTimeZone,
         TimestampLocalTimeZone,
         RefCursor,
+        Blob,
+        Clob,
     }
 }

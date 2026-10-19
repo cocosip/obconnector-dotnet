@@ -74,6 +74,7 @@ namespace OceanBaseConnector.Internal.Session
         internal string? SessionTimeZone { get; private set; }
         internal NationalCharacterSet? NationalCharacterSet { get; private set; }
         internal OceanBaseCompatibilityMode Mode => _session.Info!.Mode;
+        internal LobSession? Lobs { get; set; }
         internal void EnsureReading()
         {
             if (_terminal) return;

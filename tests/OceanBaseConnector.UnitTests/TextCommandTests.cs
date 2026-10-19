@@ -15,11 +15,12 @@ namespace OceanBaseConnector.UnitTests
     {
         private static string Configuration(int port) => $"Server=127.0.0.1;Port={port};User ID=u;Password=secret;TLS Mode=Disabled;Connection Timeout=5";
 
-        private static LoopbackServer Server(Func<PacketChannel, Task> exchange, bool deprecateEof = false, bool reportTimeZone = true, string nationalCharacterSet = "utf8mb4") => LoopbackServer.Start(async client =>
+        private static LoopbackServer Server(Func<PacketChannel, Task> exchange, bool deprecateEof = false, bool reportTimeZone = true, string nationalCharacterSet = "utf8mb4", bool lobLocators = false) => LoopbackServer.Start(async client =>
         {
             var channel = new PacketChannel(client.GetStream());
             var greeting = (byte[])ProtocolFixture.Load("initial-handshake-oceanbase").Payload.Clone();
             if (deprecateEof) greeting[Array.IndexOf(greeting, (byte)0, 1) + 20] |= 1;
+            if (lobLocators) greeting[Array.IndexOf(greeting, (byte)0, 1) + 20] |= 32;
             await channel.WritePacketAsync(greeting);
             var authentication = await channel.ReadPacketAsync();
             if (deprecateEof) Assert.Equal(1, authentication[3] & 1);

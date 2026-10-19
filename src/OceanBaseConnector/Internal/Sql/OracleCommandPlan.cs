@@ -10,13 +10,23 @@ namespace OceanBaseConnector.Internal.Sql
     internal sealed class OracleCommandPlan
     {
         private OracleCommandPlan(ParameterBindingPlan bindings, OceanBaseParameter[] outputs)
-        { Bindings = bindings; Outputs = outputs; }
+        {
+            Bindings = bindings; Outputs = outputs; _outputTypes = new OceanBaseDbType?[outputs.Length];
+            for (var i = 0; i < outputs.Length; i++)
+            {
+                var parameter = outputs[i]; var type = parameter.OceanBaseDbType;
+                if (!type.HasValue && parameter.Direction == ParameterDirection.InputOutput && parameter.DbType == DbType.Object && parameter.Value is OceanBaseLob lob)
+                    type = lob.IsCharacter ? OceanBaseDbType.Clob : OceanBaseDbType.Blob;
+                _outputTypes[i] = type;
+            }
+        }
 
         internal ParameterBindingPlan Bindings { get; }
         internal OceanBaseParameter[] Outputs { get; }
         internal Action<uint>? StatementCreated { get; set; }
         internal OracleCursorOwner? Cursors { get; set; }
         private object[]? _values;
+        private readonly OceanBaseDbType?[] _outputTypes;
 
         internal bool BeginResponse(OraclePrepareExecutePacket header)
         {
@@ -35,7 +45,12 @@ namespace OceanBaseConnector.Internal.Sql
             var values = new object[Outputs.Length];
             for (var i = 0; i < values.Length; i++)
             {
-                if (Outputs[i].OceanBaseDbType == OceanBaseDbType.RefCursor && columns[i].TypeCode != 163 && row[i] != null)
+                var declared = _outputTypes[i];
+                if (row[i] != null && ((declared == OceanBaseDbType.Blob && columns[i].TypeCode != 210) ||
+                    (declared == OceanBaseDbType.Clob && columns[i].TypeCode != 211) ||
+                    ((columns[i].TypeCode == 210 || columns[i].TypeCode == 211) && declared != OceanBaseDbType.Blob && declared != OceanBaseDbType.Clob)))
+                    throw new ProtocolException("LOB output metadata must match its declared BLOB or CLOB type.");
+                if (declared == OceanBaseDbType.RefCursor && columns[i].TypeCode != 163 && row[i] != null)
                     throw new ProtocolException("A REF CURSOR output requires cursor metadata.");
                 values[i] = columns[i].TypeCode == 163 && row[i] != null
                     ? (object)(Cursors ?? throw new NotSupportedException("A REF CURSOR requires its originating command.")).Create(new ByteCursor(row[i]!).ReadUInt32())

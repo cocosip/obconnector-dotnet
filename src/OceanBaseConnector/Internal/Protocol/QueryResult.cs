@@ -110,7 +110,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             if (packet.Length > 4 * 1024 * 1024 - _metadataBytes) throw new ProtocolException("Result metadata size limit exceeded.");
             _metadataBytes += packet.Length;
-            return ResultColumn.Parse(packet, _query.Mode, SessionTimeZone, NationalCharacterSet);
+            return ResultColumn.Parse(packet, _query.Mode, SessionTimeZone, NationalCharacterSet, _query.Lobs);
         }
         private void End(ServerStatusFlags flags, OkPacket? ok = null)
         {

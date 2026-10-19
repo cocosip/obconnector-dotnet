@@ -85,6 +85,8 @@ namespace OceanBaseConnector
                 case global::OceanBaseConnector.OceanBaseDbType.IntervalYearToMonth:
                 case global::OceanBaseConnector.OceanBaseDbType.IntervalDayToSecond:
                 case global::OceanBaseConnector.OceanBaseDbType.RefCursor:
+                case global::OceanBaseConnector.OceanBaseDbType.Blob:
+                case global::OceanBaseConnector.OceanBaseDbType.Clob:
                 case global::OceanBaseConnector.OceanBaseDbType.Null: return DbType.Object;
                 default: return null;
             }

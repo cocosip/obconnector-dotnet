@@ -31,6 +31,7 @@ namespace OceanBaseConnector.Internal.Session
             {
                 capabilities |= CapabilityFlags.ClientConnectWithDb;
             }
+            if (options.UseLobLocators) capabilities |= CapabilityFlags.ClientSupportLobLocator;
 
             if (options.TlsMode != OceanBaseTlsMode.Disabled)
                 capabilities |= CapabilityFlags.ClientSsl;

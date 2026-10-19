@@ -685,6 +685,14 @@ D03本地输出/读取实现及独立走查修复已完成：修后Release核心
 
 协议依据仅参考行为：固定Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的`Lob.java`、`Blob.java`、`Clob.java`，及固定OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343`的`deps/oblib/src/common/object/ob_object.h/.cpp`（ObLobLocator、ObMemLobCommon、ObLobCommon、get_inrow_data/get_lob_data_byte_len）。V2前4字节在该服务端基线中是带is_mem_loc标记的ObLobCommon，不是V1的LOB! magic；不照搬Java忽略该头的宽松处理。未知布局明确拒绝，后续按版本证据扩展。
 
+### D04 公开读取与绑定本地接入（2026-10-19）
+
+在内部解析提交`cc0cc1d`之后，接入默认关闭的UseLobLocators、ClientSupportLobLocator及独立client属性V2请求，保留OB20/追踪的proxy属性命名空间。公开Blob/Clob类型及OceanBaseLob，标准/provider getter均返回handle；D02输出在完整终态后原子发布，InputOutput按原值推断的类型冻结并与回复匹配。参数和打开流在连接锁内校验原物理会话、事务引用及epoch，旧连接、已结束事务、已释放handle和能力不足均在发包前拒绝。
+
+内联数据借用现有payload；行外BLOB/CLOB通过原会话DBMS_LOB.READ分块读取。每次只持有一块正文，byte/scalar偏移分别推进；NUMBER amount只接受精确正整数并检查实际buffer、进展和总字节长度。原reader须先完整消费；流占用预约，Dispose取消在途读取，异步读取/清理不借同步网络入口。现代公共stream/handle支持异步释放，Standard2.0保留内部异步清理。真实数据库临时对象生命周期和修改语义尚无证据，不新增FREETEMPORARY猜测，也不将客户端Dispose宣称为数据库对象销毁。
+
+已补输出/返回值/输入输出、NULL/尾ERR、错误类型、畸形locator、跨连接/重开/事务代次、Dispose、取消/原timeout、有界Unicode分块及五资产标准/OB20边界测试；失败回归、全量验证及独立复查证据见进度台账末尾。D04整体仍进行中，LOB修改和临时对象API的本地可实施部分继续评估；实库、OBProxy、扩展经TLS、异机及发布矩阵暂缓，不据本子模块关闭整体目标。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

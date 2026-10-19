@@ -32,7 +32,7 @@ namespace OceanBaseConnector.Internal.Protocol
             string authenticationPluginName,
             string? serverHost,
             bool requestOb20 = false,
-            bool requestFullLinkTrace = false)
+            bool requestFullLinkTrace = false, bool requestLobLocators = false)
         {
             var writer = new MemoryStream();
             WriteUInt32(writer, (uint)clientCapabilities);
@@ -83,7 +83,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
             if ((serverCapabilities & CapabilityFlags.ClientConnectAttrs) != 0)
             {
-                WriteConnectAttributes(writer, serverHost, requestOb20, requestFullLinkTrace);
+                WriteConnectAttributes(writer, serverHost, requestOb20, requestFullLinkTrace, requestLobLocators);
             }
 
             return writer.ToArray();
@@ -94,14 +94,16 @@ namespace OceanBaseConnector.Internal.Protocol
             return authenticationData;
         }
 
-        private static void WriteConnectAttributes(MemoryStream writer, string? serverHost, bool requestOb20, bool requestFullLinkTrace)
+        private static void WriteConnectAttributes(MemoryStream writer, string? serverHost, bool requestOb20, bool requestFullLinkTrace, bool requestLobLocators)
         {
             using var attributes = new MemoryStream();
             WriteLengthString(attributes, ClientNameAttribute, DriverName);
             WriteLengthString(attributes, ClientVersionAttribute, typeof(HandshakeResponsePacket)
                 .Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
             WriteLengthString(attributes, ServerHostAttribute, serverHost ?? string.Empty);
-            if (requestOb20) WriteLengthString(attributes, "__proxy_capability_flag", requestFullLinkTrace ? "311552" : "256");
+            var proxyFlags = requestOb20 ? (requestFullLinkTrace ? 311552 : 256) : 0;
+            if (proxyFlags != 0) WriteLengthString(attributes, "__proxy_capability_flag", proxyFlags.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (requestLobLocators) WriteLengthString(attributes, "__ob_client_attribute_capability_flag", "1");
 
             var attributeBytes = attributes.ToArray();
             WriteLengthEncodedInteger(writer, attributeBytes.Length);

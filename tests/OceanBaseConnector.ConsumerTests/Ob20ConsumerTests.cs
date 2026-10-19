@@ -87,13 +87,14 @@ namespace OceanBaseConnector.ConsumerTests
             await ObserveClose(stream, token);
         }
 
-        private static async Task Handshake(PacketChannel channel, string kind, CancellationToken token, bool deprecated = false)
+        private static async Task Handshake(PacketChannel channel, string kind, CancellationToken token, bool deprecated = false, bool lobLocators = false)
         {
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
             var upper = Array.IndexOf(greeting, (byte)0, 1) + 1 + 4 + 8 + 1 + 2 + 1 + 2;
             if (kind != "no-attributes") greeting[upper] |= 16;
             if (deprecated) greeting[upper + 1] |= 1;
+            if (lobLocators) greeting[upper + 1] |= 32;
             await channel.WritePacketAsync(greeting, token);
             var handshake = new ByteCursor(await channel.ReadPacketAsync(token)); handshake.Skip(32);
             Assert.Equal("u", handshake.ReadNullTerminatedAscii()); handshake.ReadLengthEncodedBytes(); handshake.ReadNullTerminatedAscii();
@@ -106,6 +107,7 @@ namespace OceanBaseConnector.ConsumerTests
             Assert.False(handshake.HasRemaining);
             if (kind != "unrequested" && kind != "no-attributes") Assert.Equal("256", attributes["__proxy_capability_flag"]);
             else Assert.False(attributes.ContainsKey("__proxy_capability_flag"));
+            if (lobLocators) Assert.Equal("1", attributes["__ob_client_attribute_capability_flag"]);
             await channel.WritePacketAsync(Report(kind != "unsupported", 0), token); channel.BeginCommand();
         }
 

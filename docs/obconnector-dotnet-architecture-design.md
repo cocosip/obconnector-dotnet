@@ -233,7 +233,7 @@ D02已接入显式启用的Oracle公开过程与标量输出执行；OraclePrepa
 
 D02公开入口使用默认false的`Use Oracle Prepare Execute`（builder属性UseOraclePrepareExecute），冻结配置及多地址选项共享。仅已认证Oracle会话的StoredProcedure或含非Input参数的Text走扩展；首次执行在同一租约/预算内查询`select ob_version() from dual`，严格解析数字点分版本并要求至少2.2.76，不信握手MySQL兼容版本。成功探测结果缓存物理会话，ERR不缓存；探测失败不标记用户SQL结果未知，无故障回退。过程名须安全限定标识符，生成BEGIN块；单个ReturnValue生成函数赋值。复用绑定词法器，输入值快照，InputOutput发送原值，纯Output/ReturnValue发送NULL，重复输出占位符发包前拒绝。
 
-内部输出列数须匹配绑定目标，按服务端元数据解码，至多一行，零行映射DBNull；多行输出归D06，本路径的独立Prepare和FetchSize明确拒绝。输出全部暂存，所有结果及OB20响应边界验证成功后、释放租约及日志回调前一次发布；发布前再次检查取消与有效Busy状态，防止最终OK已接收但会话已关闭时发布。尾ERR、后续结果ERR、取消/超时和未读尽即关闭保留旧值；完整消费时可在reader关闭前发布。事务沿显式绑定规则，扩展statement不复用，标量执行结束后加入延迟关闭队列；返回REF CURSOR时依D03保留到全部游标释放，后续命令或命令空闲清理刷新。上述为本地协议与公共消费能力，不代表实库兼容；REF CURSOR输出的本地接入见下述D03，LOB及复杂输出归后续模块。
+内部输出列数须匹配绑定目标，按服务端元数据解码，至多一行，零行映射DBNull；多行输出归D06，本路径的独立Prepare和FetchSize明确拒绝。输出全部暂存，所有结果及OB20响应边界验证成功后、释放租约及日志回调前一次发布；发布前再次检查取消与有效Busy状态，防止最终OK已接收但会话已关闭时发布。尾ERR、后续结果ERR、取消/超时和未读尽即关闭保留旧值；完整消费时可在reader关闭前发布。事务沿显式绑定规则，扩展statement不复用，标量执行结束后加入延迟关闭队列；返回REF CURSOR时依D03保留到全部游标释放，后续命令或命令空闲清理刷新。上述为本地协议与公共消费能力，不代表实库兼容；REF CURSOR输出的本地接入见下述D03，LOB读取/绑定见D04，复杂输出归后续模块。
 
 1. 普通无参命令走文本协议。参数化命令以服务端 prepare/execute 为首选，维护物理会话内的 statement ID；`Prepare()` 强制准备。首版不隐式回退为客户端参数插值；服务端不支持的语句明确报错。Java 的 `useServerPrepStmts` 默认是 `false`，但游标或 Oracle 扩展执行等选项可在后处理时改为 `true`；因此 .NET 首版对 Java 默认可执行、服务端却不能 prepare 的参数化 SQL 有明确功能差距。B 阶段的 Oracle 占位符词法器识别单/双引号、注释、成对及非成对分隔符的 `q'...'` 字面量及 `:=`，仅将实际 `:name` 绑定映射为服务端预处理的位置占位符，重复名称映射到各位置，无法可靠识别的字面量或绑定语法、缺失绑定均在发包前失败。Oracle `ParameterName` 接受 `name` 或 `:name`，按去掉前缀后的名称不区分大小写匹配；参数集合中规范化后重名的多个项一律在发包前拒绝，SQL 中重复 `:name` 仍使用同一个参数。B03 的命名子集为 ASCII `[A-Za-z_][A-Za-z0-9_$#]*`；数字位置绑定、带引号/Unicode 名称和 Oracle 字面量外的 `?` 暂不支持，明确拒绝而不猜测其含义。普通引号用双写结束符转义，反斜杠不作转义；`q`/`nq` 前缀不区分大小写，分隔符为单个非空白/非控制/非代理项 BMP 字符，成对括号以匹配的右括号结束。行注释到 CR/LF 或 EOF，块注释不嵌套、以首个 `*/` 结束。执行入口在获取命令租约前用已认证模式校验绑定，即使参数集合为空也检测缺失绑定；尚未打开的连接不能靠 `ExpectedMode` 推测模式。B03 完成映射与校验，B04 已接入合法基础参数执行及强制服务端 `Prepare`；普通路径仍拒绝非Input，显式D02路径按下述输出契约处理。MySQL SQL 原样交给服务端 prepare，由其返回的参数个数确定 `?` 位置绑定数量；不在客户端按可能变化的 `SQL_MODE` 猜测问号是否处于字符串内。值始终通过协议参数传送。D 阶段若加入客户端预处理回退，须另行实现并测试安全的文本值编码，仅对明确的“不支持 prepare”错误启用可配置回退，连接错误不能降级。
 2. Oracle `COM_STMT_PREPARE_EXECUTE` 只在模式、选项和版本条件全部满足时启用；Java 当前门槛是 `>=2.2.76`，但 .NET 实现仍须用实际服务端矩阵验证。`DbBatch` 在 C 阶段先逐条执行，保留每条更新计数及失败位置，并明确“已执行前缀”的结果；D 阶段再增加 bulk/array binding 优化。批量不自动获得原子性。
@@ -246,13 +246,13 @@ C04 报文底层已提供内部 OpenPayload/OpenPayloadAsync，只读取当前�
 
 `CommandBehavior.SequentialAccess` 的文本及预处理二进制结果仅预读行前缀/NULL 位图，`HasRows` 不要求读取正文。字段 ordinal 和字段内偏移只能前进；`IsDBNull` 只消费字段头。`GetBytes`/`GetStream` 直接读原始二进制列，`GetChars`/`GetTextReader` 用严格 UTF-8 增量解码字符串列（保留 BOM 和 UTF-16 代理项边界）；NULL 流访问拒绝。跳列、`Read` 和 `NextResult` 用复用的有界缓冲区排空未读正文，不缓存整行。`GetBytes` 的空 buffer 可查询字节长度；`GetChars` 的空 buffer 在顺序模式明确拒绝，避免为统计字符数而消费或缓存整列，调用方可使用 `GetTextReader`。默认模式原有长度查询语义保留。
 
-显式 `GetValue`、typed/provider-specific getter 和 `GetFieldValueAsync<T>` 可完整物化当前字段并重复转换，保留 C03 精度/零日期契约；这是调用方主动请求整值的分配，不把它当作固定内存流接口。整值、字节流和字符流不可在同一字段混用。字段流在换列、换行、换结果或关闭 reader 后失效；提前关闭且响应未读尽时销毁会话，`CloseConnection` 同时关闭逻辑连接。缓存字符和已耗尽流也检查命令取消、超时及连接关闭；字段异步读取 token 纳入相同取消预算。已完整收到的终结 EOF/ERR 在解析前遇到取消仍保留已知服务端结果，未完成响应则标记执行结果未知并禁止重放。异步路径直接使用异步传输，禁止同一 reader/字段流并发操作。COM_STMT_FETCH 分页与顺序字段流可组合使用；locator LOB 仍留 D04。
+显式 `GetValue`、typed/provider-specific getter 和 `GetFieldValueAsync<T>` 可完整物化当前字段并重复转换，保留 C03 精度/零日期契约；这是调用方主动请求整值的分配，不把它当作固定内存流接口。整值、字节流和字符流不可在同一字段混用。字段流在换列、换行、换结果或关闭 reader 后失效；提前关闭且响应未读尽时销毁会话，`CloseConnection` 同时关闭逻辑连接。缓存字符和已耗尽流也检查命令取消、超时及连接关闭；字段异步读取 token 纳入相同取消预算。已完整收到的终结 EOF/ERR 在解析前遇到取消仍保留已知服务端结果，未完成响应则标记执行结果未知并禁止重放。异步路径直接使用异步传输，禁止同一 reader/字段流并发操作。COM_STMT_FETCH 分页与顺序字段流可组合使用；locator LOB 通过D04独立handle在原reader消费完后读取。
 
 C04 服务端游标使用同一个 `OceanBaseCommand.FetchSize`：默认 0 为普通结果流，正数在本次执行快照分页行数并强制服务端 prepare，负数拒绝；预处理元数据无结果列时在 execute 前拒绝。只读 COM_STMT_EXECUTE flag=1，随后发送 9 字节 COM_STMT_FETCH（statement ID 与行数 LE32）；分页不重发 SQL、不更换物理会话、不重置命令总超时。reader 持有独占租约直到 `LastRowSent`。MySQL fetch 直接返回二进制行；Oracle fetch 先重发列元数据，逐列校验名称、来源、类型、字符集、flags、长度、精度和 scale，禁止悄然改变值解释。
 
 MySQL execute 的游标确认必须为旧 EOF 或以 `0xFE` 开头的 FE-OK，二进制行的 `0x00` 不能冒充确认。Oracle 旧 EOF 也以元数据终结状态确认游标；协商 ClientDeprecateEof 时，Oracle execute/fetch 均省略元数据 EOF，依据已认证 Oracle 模式及显式只读游标请求进入首次 fetch，以重复元数据和批次状态验证。空结果也必须 fetch 到 `LastRowSent` 才完成。此模式差别参考固定 Java 2.4.14 的 [readResultSetColumnDef](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L2185) 和 [readResultSet](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L2487)，本地协议夹具不是目标版本互通证据。
 
-继续页必须带 `CursorExists` 且至少返回一行，页内行数不得超过 FetchSize；`LastRowSent` 可结束空最终页。多结果/OUT 标记、不确认游标、元数据变化或无进展均失败并销毁会话，绝不回退重执行。默认与 SequentialAccess 共享分页，HasRows 预取首行（顺序模式只读前缀），NextResult 排空所有页。提前关闭、取消、超时或网络故障销毁原会话；完整 ERR 保留已知服务器错误，但在释放租约和日志回调前先销毁游标会话，避免新命令进入未清理游标。每页终结包更新或失效会话状态，不复用旧报告。完整读尽后原 statement 可在同 SQL/会话复用，FetchSize 改回 0 仍使用该 statement 的普通结果流。offset/滚动游标、LOB locator 及真实版本/模式/OBProxy 验收仍不属于已验证能力；D03的REF CURSOR输出本地接入见下文，A05 的公开 MySQL 握手限制不变。
+继续页必须带 `CursorExists` 且至少返回一行，页内行数不得超过 FetchSize；`LastRowSent` 可结束空最终页。多结果/OUT 标记、不确认游标、元数据变化或无进展均失败并销毁会话，绝不回退重执行。默认与 SequentialAccess 共享分页，HasRows 预取首行（顺序模式只读前缀），NextResult 排空所有页。提前关闭、取消、超时或网络故障销毁原会话；完整 ERR 保留已知服务器错误，但在释放租约和日志回调前先销毁游标会话，避免新命令进入未清理游标。每页终结包更新或失效会话状态，不复用旧报告。完整读尽后原 statement 可在同 SQL/会话复用，FetchSize 改回 0 仍使用该 statement 的普通结果流。offset/滚动游标及真实版本/模式/OBProxy验收仍不属于已验证能力；locator值的独立读取见D04；D03的REF CURSOR输出本地接入见下文，A05 的公开 MySQL 握手限制不变。
 
 C05 数据库切换本地契约：`ChangeDatabase` 只在已认证 MySQL 模式发送 COM_INIT_DB（命令2），名称按严格 UTF-8 原样编码，不拼接 USE SQL、不转义/折叠大小写/裁剪名称。null、空串、NUL、非法 UTF-16 及超出逻辑包上限在取得租约前失败；具体数据库名合法性与权限由服务端判断。Oracle 模式发包前明确报不支持，不把 schema 切换假装为 database 切换。参考 Java [setCatalog](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L1882) 的协议命令和模式边界；.NET 额外严格验证 OK 形态，不照搬 Java 的服务端错误文本回显。
 
@@ -345,7 +345,14 @@ Oracle业务命令执行前复用有效time_zone报告；缺失、SYSTEM或非�
 
 `DbDataReader` 通过 `IDbColumnSchemaGenerator` 支持 `GetColumnSchema()`，并提供 `GetSchemaTable()`；字段类型、列名、长度、精度和可空性基于实际列定义。数据库对象元数据通过 `DbConnection.GetSchema()` 实现，MySQL 模式使用相应 `SHOW`/`INFORMATION_SCHEMA`，Oracle 模式使用其兼容数据字典。字段元数据和数据库目录元数据分别验证，不用一套 SQL 混用。LOB locator、REF CURSOR 和复杂类型值若依赖连接/事务，公开对象必须说明失效点和 `Dispose` 义务；首个里程碑可先支持安全的内联字节/文本值，不能把 locator 当普通 `byte[]` 误解码。
 
-D04内部解析子模块：`LobLocator.Parse`只返回版本、字节长度和内联payload借用视图或行外标记，不建立会话、不读取服务端、不复制payload。V1严格验证`LOB!`/版本1、40字节固定头、非负snapshot、未支持的storage option及rowid/payload完整长度，兼容空/伪locator；V2按固定服务端的`ObLobCommon`+内存version/type/flags解析，区分simple、extern及disk行内/行外布局。extern扩展体与rowkey只验证边界并跳过，不解释未知内部内容；freed/矛盾标志、非法common/reserved、长度与偏移重叠、截断及多余payload均拒绝。行外字节长度使用Int64，可大于4GiB且不分配相应正文；TEMP_FULL可解析，TEMP_DELTA明确拒绝。V2早期其他头布局没有兼容证据，不猜测解码。本子模块尚未接入210/211结果列、握手、参数或公开LOB对象，不能据此宣称locator LOB/流已支持；会话绑定及分块操作继续按开发方案D04实施。
+D04内部解析子模块：`LobLocator.Parse`只返回版本、字节长度和内联payload借用视图或行外标记，不建立会话、不读取服务端、不复制payload。V1严格验证`LOB!`/版本1、40字节固定头、非负snapshot、未支持的storage option及rowid/payload完整长度，兼容空/伪locator；V2按固定服务端的`ObLobCommon`+内存version/type/flags解析，区分simple、extern及disk行内/行外布局。extern扩展体与rowkey只验证边界并跳过，不解释未知内部内容；freed/矛盾标志、非法common/reserved、长度与偏移重叠、截断及多余payload均拒绝。行外字节长度使用Int64，可大于4GiB且不分配相应正文；TEMP_FULL可解析，TEMP_DELTA明确拒绝。V2早期其他头布局没有兼容证据，不猜测解码。公开210/211结果列、握手、参数、D02输出及会话绑定分块流已按下述D04接入；未知布局仍拒绝，真实资源语义待验收。
+
+D04公开读取/绑定：新增默认关闭的UseLobLocators，冻结配置要求同时UseOraclePrepareExecute。握手请求ClientSupportLobLocator，并在独立`__ob_client_attribute_capability_flag=1`请求V2；该位不属于`__proxy_capability_flag`，后者继续只承载原OB20/追踪位。仅显式选项、Oracle模式与有效locator能力均成立时，结果列210/211解码为OceanBaseLob，元数据分别BLOB/CLOB、IsLong=true、ColumnSize未知；CLOB字符集只接受既有UTF8白名单。畸形locator的getter通过原exchange失败清理，不能遗留Busy会话。
+
+OceanBaseLob保留原连接、物理会话、显式事务及事务epoch和原command timeout。原reader完整消费后，OpenRead/OpenTextReader只允许打开一次；取预约失败可重试，成功后流独占原会话，释放handle会取消在途读取并释放预约。连接关闭重开、原事务或后续事务结束均使handle失效。参数只绑定原locator，在连接锁内再次验证来源及epoch；输入可按DbType.Object推断Blob/Clob，InputOutput的输出期望类型在创建计划时冻结，Output/ReturnValue需显式声明类型。非空LOB输出的类型码必须与声明匹配，所有输出沿D02原子发布，NULL保留DBNull，不按locator长度分配正文。
+
+行内流借用locator payload；行外流通过同一会话`DBMS_LOB.READ`有界读取，复用D02版本门槛和错误收尾。BLOB amount/offset按字节，每块最多32767；CLOB按Unicode标量，每块最多8191，严格UTF8最多32764字节，保留BOM。总字节数受locator ByteLength约束，amount支持精确整数NUMBER且拒绝小数、溢出、无进展或不匹配buffer。调用方取消/原timeout作用于实际网络读取，破坏未完成会话；内部READ不把已完成的原SQL重新标为结果未知，不重放。异步文本入口和stream/handle及内部命令释放使用异步I/O；Standard2.0无IAsyncDisposable公共契约但内部异步清理仍可用。Dispose仅释放客户端资源，不擅自FREETEMPORARY；LOB修改和临时对象创建/所有权API尚未实现，真实版本/OBProxy、临时生命周期与扩展经TLS验收保持开放。
+
 
 C05首批目录集合（2026-10-19本地实现，真实字典版本/权限仍待验收）：五目标提供三个同步GetSchema重载；现代三目标覆写三个GetSchemaAsync重载，后者使用异步执行、逐行/结果读取及释放，不调用基类同步回退。每次返回独立的InvariantCulture DataTable，空结果保留列形状；未支持集合抛NotSupportedException，不静默返回空集。
 
@@ -392,7 +399,7 @@ reader 在响应尚未消费完时独占物理会话，终态完整读取后释�
 | 本地事务/取消 | 会话绑定、两模式隔离映射、结果未知不重放；环境事务始终拒绝 | B07/B08；Oracle RepeatableRead、XA/TransactionScope 不照搬 Java 支持范围 |
 | 诊断 | Connection 1000..1003、Command 1100/1101、Transaction 1200/1201 分类别；预先安全创建 logger，后端异常不改变结果 | B09 修复原命令事件误入 Connection 类别，4项类别过滤回归先失败后通过；C07补充五资产ActivitySource/Meter、固定标签及禁用开销基线，Windows单元/隔离消费与实际8/9/10样例通过；实库、池性能和跨平台仍待验收 |
 | 现代 batch | C06 逐条执行、流式结果、各条计数/失败归属和显式事务，现代 factory/connection/source 入口共用；两个 Standard 资产不含 batch 类型 | Windows 协议/隔离消费及 .NET8/9/10 独立运行时消费；真实双模式批量互通尚未验收 |
-| 扩展/发布 | 不宣称 adapter/command builder、池化、LOB 等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
+| 扩展/发布 | 不宣称 adapter/command builder、池化、LOB修改等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
 
 Windows 实际运行时冒烟源为 `tests/OceanBaseConnector.ConsumerTests/RuntimeConsumerSample.cs`，从 xUnit 编译项排除以保持全部日常测试宿主 net10.0。用 SDK10 的 csc 对相应运行时 reference pack 和单个产品资产编译独立可执行文件，使用该资产 project.assets.json 对应包的私有 DLL，runtimeconfig 的 Microsoft.NETCore.App 主版本固定、rollForward=LatestPatch；样例断言实际 Environment.Version/日志程序集主版本，并通过公开预取消、已认证 Oracle 环回查询、NUMBER(6,2) 读取、两套 ProviderType 和 CloseConnection。
 

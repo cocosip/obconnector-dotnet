@@ -8,6 +8,7 @@ namespace OceanBaseConnector.Internal.Protocol
     internal sealed class ResultColumn
     {
         internal static readonly Encoding Utf8 = new UTF8Encoding(false, true);
+        private OceanBaseConnector.Internal.Session.LobSession? Lobs { get; set; }
         private ResultColumn(string database, string table, string originalTable, string name, string originalName,
             byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode, string? sessionTimeZone, NationalCharacterSet? nationalCharacterSet)
         {
@@ -53,7 +54,7 @@ namespace OceanBaseConnector.Internal.Protocol
             return TemporalCodec.DecodeTimestamp(value, Scale);
         }
 
-        internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode, string? sessionTimeZone = null, NationalCharacterSet? nationalCharacterSet = null)
+        internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode, string? sessionTimeZone = null, NationalCharacterSet? nationalCharacterSet = null, OceanBaseConnector.Internal.Session.LobSession? lobs = null)
         {
             var cursor = new ByteCursor(payload);
             cursor.ReadLengthEncodedBytes(); // Protocol catalog marker, not the database catalog name.
@@ -72,7 +73,7 @@ namespace OceanBaseConnector.Internal.Protocol
             var precision = cursor.ReadUInt8();
             cursor.ReadUInt8();
             if (cursor.HasRemaining) throw new NotSupportedException("Extended column metadata is not supported yet.");
-            return new ResultColumn(database, table, originalTable, name, originalName, type, charset, flags, length, scale, precision, mode, sessionTimeZone, nationalCharacterSet);
+            return new ResultColumn(database, table, originalTable, name, originalName, type, charset, flags, length, scale, precision, mode, sessionTimeZone, nationalCharacterSet) { Lobs = lobs };
         }
 
         internal string DataTypeName
@@ -103,6 +104,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 201: return "TIMESTAMP WITH LOCAL TIME ZONE";
                     case 203: return "RAW";
                     case 163: return "REF CURSOR";
+                    case 210: return "BLOB";
+                    case 211: return "CLOB";
                     case 204: return "INTERVAL YEAR TO MONTH";
                     case 205: return "INTERVAL DAY TO SECOND";
                     case 207: return "NVARCHAR2";
@@ -167,6 +170,11 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 163:
                         if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("REF CURSOR requires Oracle mode.");
                         return typeof(OceanBaseRefCursor);
+                    case 210:
+                    case 211:
+                        if (Mode != OceanBaseCompatibilityMode.Oracle || Lobs == null || TypeCode == 211 && !HasUtf8Charset)
+                            throw new NotSupportedException("LOB locators require negotiated Oracle support and a supported CLOB character set.");
+                        return typeof(OceanBaseLob);
                     case 203:
                         if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("RAW is only defined in Oracle mode.");
                         return typeof(byte[]);
@@ -224,6 +232,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 201: return OceanBaseDbType.TimestampLocalTimeZone;
                     case 203: return OceanBaseDbType.Binary;
                     case 163: return OceanBaseDbType.RefCursor;
+                    case 210: return OceanBaseDbType.Blob;
+                    case 211: return OceanBaseDbType.Clob;
                     case 204: return OceanBaseDbType.IntervalYearToMonth;
                     case 205: return OceanBaseDbType.IntervalDayToSecond;
                     case 207: return OceanBaseDbType.NVarchar2;
@@ -242,6 +252,7 @@ namespace OceanBaseConnector.Internal.Protocol
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
             if (TypeCode == 163) throw new NotSupportedException("REF CURSOR values require an Oracle output parameter.");
+            if (TypeCode == 210 || TypeCode == 211) return new OceanBaseLob(Lobs!, value, TypeCode == 211);
             if (TypeCode == 13) return YearCodec.Decode(value, false);
             if (TypeCode == 16) return BitCodec.Decode(value, (int)Length);
             if (TypeCode == 204 || TypeCode == 205) return IntervalCodec.Decode(value, TypeCode == 205, Scale);

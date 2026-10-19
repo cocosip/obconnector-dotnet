@@ -19,9 +19,11 @@
 
 - 公共握手目前只接受能通过认证后状态确认的 Oracle 模式。**缺少可信的 MySQL 模式判定规则，公共 MySQL 模式连接仍被拒绝。** MySQL 的本地测试使用显式认证后夹具；设置 `ExpectedMode=MySql` 不会绕过判定。
 - `Pooling=true` 被拒绝，完整会话重置及版本白名单尚未验证。默认不使用连接池。
-- 默认支持文本命令和输入参数，参数化执行使用服务端 prepare；不自动回退客户端 SQL 插值。不支持环境 `TransactionScope`、locator LOB、ARRAY/STRUCT、XA 或拓扑发现。
+- 默认支持文本命令和输入参数，参数化执行使用服务端 prepare；不自动回退客户端 SQL 插值。不支持环境 `TransactionScope`、ARRAY/STRUCT、XA 或拓扑发现。locator LOB 需显式启用下述选项。
 - `Use Oracle Prepare Execute=true`（builder 属性 `UseOraclePrepareExecute`，默认 false）启用 Oracle `StoredProcedure`、函数 `ReturnValue` 及 Text 的标量 OUT/InputOutput/RETURNING。首次执行查询 `ob_version()` 并要求至少 `2.2.76`；过程名须为限定标识符，值通过二进制绑定。输出按结果列元数据解码，内部输出行不暴露给 reader；所有结果及协议边界成功后一次发布，失败或未读尽即关闭保留旧值。零行输出为 `DBNull`，多行输出、重复 OUT 占位符、此路径的独立 `Prepare()` 和 `FetchSize` 明确拒绝。真实 OceanBase/OBProxy 往返待验收。
 - Oracle REF CURSOR 输出使用 `OceanBaseDbType.RefCursor`（仅 Output/ReturnValue，Size/Precision/Scale 为 0），并启用上述 PrepareExecute。非 NULL 值为 `OceanBaseRefCursor`，调用 `GetDataReader()` / `GetDataReaderAsync()` 读取一次；默认每页 128 行，可传正数 fetchSize 和 SequentialAccess/CloseConnection。对象绑定原连接及事务代次，事务结束、连接关闭重开后不可再打开；父 command 释放不关闭返回的游标。多个游标可依次读取，同一连接只允许一个活动 reader；同一服务端 ID 的输出别名共享对象。读尽自动回收游标，未读取的对象须 Dispose，未读完关闭 reader/游标会销毁原会话。重执行命令不会替调用方释放旧输出对象。REF CURSOR 输入/输入输出及普通结果列读取暂不支持，真实互通待验收。
+- `Use Lob Locators=true`（builder 属性 `UseLobLocators`，默认 false）要求同时启用 PrepareExecute，并由服务端协商 locator 能力。Oracle BLOB/CLOB 列及显式 `OceanBaseDbType.Blob` / `Clob` 输出返回 `OceanBaseLob`，不会把 locator 暴露成正文。`ByteLength` 始终是字节数；BLOB 调用 `OpenRead()`，CLOB 调用严格 UTF-8 的 `OpenTextReader()`，每个 handle 只打开一次，且须先消费完原 reader。原会话分块读取，活动流占用连接；释放流或 handle 后可继续使用连接，读取中取消/超时可能销毁会话。现代资产支持 stream/handle 异步释放。
+- LOB handle 绑定原连接、物理会话和事务代次；连接关闭重开或事务结束后失效。同上下文 handle 可作为输入/输入输出绑定；Output/ReturnValue 须显式声明 Blob/Clob，输出在完整终态后原子发布。BLOB 每块最多 32767 字节，CLOB 每块最多 8191 个 Unicode 标量；不拼接整 LOB，也不另建连接。暂不提供 LOB 修改或临时对象创建/释放 API，handle 的 Dispose 只释放客户端资源；真实 OceanBase/OBProxy 资源语义仍待联调。
 - `Use OB20=true`（builder 属性 `UseOb20`，默认 false）请求 OB20；仅在握手连接属性和服务端 OB20 能力均确认后启用，否则保留标准报文。支持流式分帧、CRC 校验、逐命令边界和游标分页；协议错误销毁连接，不重放已发送 SQL。真实 OceanBase/OBProxy 互通待验收。
 - `Enable Full Link Trace=true`（builder 属性 `EnableFullLinkTrace`，默认 false）要求同时启用 OB20，并由服务端确认追踪能力；缺能力时继续普通 OB20。支持 legacy/new-extra 格式，按服务端控制策略采样及记录，关联现有 Activity 的 trace ID；无监听者也可使用环境上下文或内部生成 ID。仅发送固定模块、ID 和时间，不发送 SQL、参数、凭据、端点或任意 Activity 标签/baggage。完成记录随下一请求发送，关闭连接不额外刷新最后一条记录；真实采样及 SHOW TRACE 结果待验收。
 - 首批 `GetSchema` 集合为 `MetaDataCollections`、`DataSourceInformation`、`Tables`、`Columns`；Oracle 模式不支持 `ChangeDatabase`。

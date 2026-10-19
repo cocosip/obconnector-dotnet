@@ -36,6 +36,7 @@ namespace OceanBaseConnector
         public const string UseOb20Key = "Use OB20";
         public const string EnableFullLinkTraceKey = "Enable Full Link Trace";
         public const string UseOraclePrepareExecuteKey = "Use Oracle Prepare Execute";
+        public const string UseLobLocatorsKey = "Use Lob Locators";
 
         public const int DefaultPort = 2881;
         public const int DefaultConnectionTimeoutSeconds = 15;
@@ -192,6 +193,13 @@ namespace OceanBaseConnector
             set => this[UseOraclePrepareExecuteKey] = value ? "true" : "false";
         }
 
+        /// <summary>Request Oracle LOB locators; requires Oracle PrepareExecute for external reads.</summary>
+        public bool UseLobLocators
+        {
+            get => GetBoolean(UseLobLocatorsKey) ?? false;
+            set => this[UseLobLocatorsKey] = value ? "true" : "false";
+        }
+
         public override object? this[string keyword]
         {
             get
@@ -267,6 +275,7 @@ namespace OceanBaseConnector
             }
 
             if (EnableFullLinkTrace && !UseOb20) throw new ArgumentException("Full-link tracing requires Use OB20=true.");
+            if (UseLobLocators && !UseOraclePrepareExecute) throw new ArgumentException("LOB locators require Use Oracle Prepare Execute=true.");
             return new OceanBaseConnectionOptions(
                 Server,
                 Port,
@@ -285,6 +294,7 @@ namespace OceanBaseConnector
                 UseOb20,
                 EnableFullLinkTrace,
                 UseOraclePrepareExecute,
+                UseLobLocators,
                 ToSanitizedConnectionString(includeSecrets: false));
         }
 
@@ -308,6 +318,7 @@ namespace OceanBaseConnector
             UseOb20Key,
             EnableFullLinkTraceKey,
             UseOraclePrepareExecuteKey,
+            UseLobLocatorsKey,
         };
 
         /// <summary>
@@ -408,6 +419,7 @@ namespace OceanBaseConnector
                 case UseOb20Key:
                 case EnableFullLinkTraceKey:
                 case UseOraclePrepareExecuteKey:
+                case UseLobLocatorsKey:
                     ParseBooleanValue(canonicalKey, value);
                     return value;
 
@@ -542,6 +554,9 @@ namespace OceanBaseConnector
                     return true;
                 case "USE ORACLE PREPARE EXECUTE":
                     canonical = UseOraclePrepareExecuteKey;
+                    return true;
+                case "USE LOB LOCATORS":
+                    canonical = UseLobLocatorsKey;
                     return true;
                 default:
                     if (Synonyms.TryGetValue(keyword.Trim(), out var synonymCanonical))

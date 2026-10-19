@@ -43,13 +43,30 @@ namespace OceanBaseConnector
                 throw new InvalidOperationException("The command must reference the connection's active transaction, or null outside a transaction.");
         }
 
-        internal CommandExchange StartCommand(PhysicalSession session, OceanBaseTransaction? transaction, int timeout, CancellationToken token, Action release, object? owner = null, Func<CancellationToken>? cancellationOrigin = null)
+        internal CommandExchange StartCommand(PhysicalSession session, OceanBaseTransaction? transaction, int timeout, CancellationToken token, Action release, object? owner = null, Func<CancellationToken>? cancellationOrigin = null, long? requiredEpoch = null, OceanBaseParameter[]? parameters = null)
         {
             lock (_gate)
             {
                 ThrowIfDisposed();
                 ValidateCommandTransaction(session, transaction);
-                return new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin);
+                if (requiredEpoch.HasValue && requiredEpoch.Value != _transactionEpoch) throw new InvalidOperationException("The LOB transaction context has changed.");
+                if (parameters != null) foreach (var parameter in parameters)
+                    if (parameter.Value is OceanBaseLob lob) lob.ValidateBinding(this, session, transaction, owner);
+                var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin);
+                if (session.UseLobLocators) exchange.Lobs = new LobSession(this, session, transaction, _transactionEpoch, timeout);
+                return exchange;
+            }
+        }
+
+        internal void ValidateLobContext(LobSession context, object? owner = null, bool reserve = false)
+        {
+            RejectAmbientTransaction();
+            lock (_gate)
+            {
+                if (context.Epoch != _transactionEpoch) throw new InvalidOperationException("The LOB transaction context has changed.");
+                ValidateCommandTransaction(context.Session, context.Transaction);
+                GetOpenSession(owner);
+                if (reserve) context.Session.Reserve(owner!);
             }
         }
 

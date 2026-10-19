@@ -49,6 +49,11 @@ namespace OceanBaseConnector.Internal.Protocol
                 }
                 else if (type == 204 || type == 205)
                     IntervalCodec.Write(writer, value, type == 205, parameter.Precision, parameter.DeclaredScale);
+                else if (type == 210 || type == 211)
+                {
+                    if (!(value is OceanBaseLob lob) || lob.IsCharacter != (type == 211)) throw new ArgumentException("A LOB parameter requires a matching locator value.");
+                    var bytes = lob.BindingBytes(); CheckLength(writer, bytes.Length); WriteBytes(writer, bytes);
+                }
                 else if (type == 201)
                 {
                     if (!(value is OceanBaseTimestampLocalTimeZone local)) throw new ArgumentException("An LTZ parameter requires its provider value.");
@@ -125,6 +130,14 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private static ushort TypeCode(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode)
         {
+            var lobType = parameter.OceanBaseDbType;
+            if (!lobType.HasValue && parameter.DbType == DbType.Object && parameter.Value is OceanBaseLob lob) lobType = lob.IsCharacter ? OceanBaseDbType.Clob : OceanBaseDbType.Blob;
+            if (lobType == OceanBaseDbType.Blob || lobType == OceanBaseDbType.Clob)
+            {
+                if (mode != OceanBaseCompatibilityMode.Oracle || parameter.Size != 0 || parameter.Precision != 0 || parameter.Scale != 0)
+                    throw new NotSupportedException("LOB locators require Oracle mode and no scalar size or precision.");
+                return lobType == OceanBaseDbType.Blob ? (ushort)210 : (ushort)211;
+            }
             if (parameter.OceanBaseDbType == OceanBaseDbType.RefCursor)
                 throw new NotSupportedException("REF CURSOR is only supported as an Oracle PrepareExecute output.");
             if (parameter.OceanBaseDbType == OceanBaseDbType.NChar || parameter.OceanBaseDbType == OceanBaseDbType.NVarchar2)
