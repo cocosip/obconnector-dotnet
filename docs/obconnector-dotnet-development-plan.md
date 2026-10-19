@@ -638,6 +638,13 @@ Ruling: 首批仅net8/net9/net10直接使用系统NegotiateAuthentication，两�
 - [x] AuthenticationConversation持有并Dispose上下文，HandshakeFlow同步/异步using；初始/命名切换、一次切换、最终ERR、取消/超时沿既有网络路径；每次OS调用返回后检查调用方取消，不能并发Dispose仍在执行的原生调用。
 - [x] 弱TLS环回及五资产公开配置/拒绝消费，本机系统API形状验证但不获取票据/连接KDC；独立走查、完整本地Unit/Consumer/DI和核心五/DI三Release、格式/diff通过，同步README/架构/台账后本地提交。实库、KDC/凭据缓存、可信TLS成功链/原生阻塞及Standard支持仍开放。
 
+### D15 PAM/GSSAPI包交付复核（2026-10-20）
+
+复用R01/R02的实际包验证器，不改变产品认证行为。扩展PackageConsumer公开契约，编译并运行五资产的ServicePrincipalName属性/键、Password2及稀疏最大编号、完整连接串往返和全部密码脱敏；预取消不得连接，现代DI数据源仍须去除附加密码、保留SPN。先以Ed25519历史包反向验证新契约无法由旧资产满足，再生成本轮双包并在独立缓存按SHA512还原和运行，现代资产使用实际.NET8/9/10，Standard使用隔离宿主。不连接数据库或真实KDC、不装信任根、不发布。范围编译、断言、独立走查、文档及diff通过后本地提交；本轮未改产品，无需重复数分钟前已通过的完整产品回归。
+
+- [x] 新包消费契约及历史包反向检查。
+- [x] 双包五资产实际还原/运行、独立走查和文档后提交。
+
 ### D01 OB20 报文与校验子模块（2026-10-19）
 
 先实现内部报文层，D01 在能力协商、流式传输和完整链路追踪接入前保持进行中。依据固定 Java 基线 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` 的 `OceanBaseProtocolV20`、`Ob20PacketInputStream` / `Ob20PacketOutputStream` 和 `OceanBaseCRC16` / `OceanBaseCRC32C`；只核对线协议，不复制实现或查表常量。

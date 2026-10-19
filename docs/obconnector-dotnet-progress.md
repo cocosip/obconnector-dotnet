@@ -1433,3 +1433,11 @@ TDD首次gssapi-red.log为缺类型/属性的编译失败，不算断言RED；AP
 独立只读复查确认最终态保护、原始token、每会话工厂、分发/取消测试和释放路径无剩余阻断；README/架构/台账的现代/Standard支持范围、原生取消限制与未验收项一致。方案完成项、UTF8无BOM/CRLF及diff检查后当前master本地提交，不推送。global.json保持删除。
 
 D15保持进行中：Standard GSSAPI、Java Windows native其他机制、真实票据/KDC/可信TLS成功链及两模式实库矩阵仍开放；A05、C01、许可/来源/发布等余项不据此关闭。本轮未重跑实际包、旧运行时或Framework；不执行真实数据库服务端、其他机器及真实凭据/KDC测试，整体goal未完成。
+
+## D15 PAM/GSSAPI实际包交付（2026-10-20）
+
+扩展tests/PackageConsumer/Program.cs的公开契约：SPN typed/indexer读写与序列化、主Password及Password2/Password2147483647完整往返、脱敏时去除全部密码并保留SPN、预取消Open不建连；现代DI数据源及factory数据源同样检查附加密码脱敏。独立走查补充了SPN索引器、完整往返的主密码和SPN断言，产品源码未改变。
+
+Ed25519历史包反向检查首次因NuGet审计源访问失败未完成（TestResults/pam-gssapi-package-old-red.log），保持审计后重跑，五目标因缺ServicePrincipalName/ServicePrincipalNameKey而编译失败，准确拒绝旧API资产（pam-gssapi-package-old-red-verified.log），不冒充运行时断言RED。本轮双包由dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/pam-gssapi-pack生成（pam-gssapi-pack.log）。eng/Verify-Packages.ps1验证两包内容/依赖组、唯一缓存SHA512还原及五资产选择，最终消费者编译0警告/错误，实际.NET8.0.31/9.0.20/10.0.12和两个Standard隔离宿主全部通过（pam-gssapi-package-final.log，生成目录TestResults/package-validation/166ba5126a304a4fb7aaa69f2cdbf06a）。
+
+本轮仅包消费断言和文档，未重复已通过的产品完整回归；范围编译/断言、独立走查和diff检查后本地提交。没有数据库/KDC、可信TLS或异机验收，没有发布/推送或安装信任根；Framework本轮未执行，不能用这些配置契约推断原生GSSAPI已互通。global.json保持删除；用户指出的DI缺少Standard目标另行修正。

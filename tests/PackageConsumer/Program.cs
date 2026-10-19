@@ -84,7 +84,22 @@ public static class PackageConsumer
         Check(typeof(ILogger).Assembly.GetName().Version!.Major == major, "Logging assembly major");
         Check(typeof(ActivitySource).Assembly.GetName().Version!.Major == major, "DiagnosticSource assembly major");
         Check(connection.State == ConnectionState.Closed, "Factory must not connect");
-        const string connectionString = "Server=localhost;User ID=package_sample;Password=package-secret;ExpectedMode=Oracle";
+        const string connectionString = "Server=localhost;User ID=package_sample;Password=package-secret;Password2=second-secret;Password2147483647=last-secret;Service Principal Name=mariadb/trusted@REALM;ExpectedMode=Oracle";
+        var authentication = new OceanBaseConnectionStringBuilder(connectionString);
+        Check(authentication.ServicePrincipalName == "mariadb/trusted@REALM" &&
+            OceanBaseConnectionStringBuilder.ServicePrincipalNameKey == "Service Principal Name", "Packaged GSSAPI principal contract");
+        authentication.ServicePrincipalName = "mariadb/override@REALM";
+        Check((string)authentication[OceanBaseConnectionStringBuilder.ServicePrincipalNameKey]! == "mariadb/override@REALM", "GSSAPI principal indexer read");
+        authentication[OceanBaseConnectionStringBuilder.ServicePrincipalNameKey] = "mariadb/indexed@REALM";
+        Check(authentication.ServicePrincipalName == "mariadb/indexed@REALM", "GSSAPI principal indexer write");
+        authentication.ServicePrincipalName = "mariadb/override@REALM";
+        Check(new OceanBaseConnectionStringBuilder(authentication.ConnectionString).ServicePrincipalName == "mariadb/override@REALM", "GSSAPI principal property serialization");
+        var complete = new OceanBaseConnectionStringBuilder(authentication.ToSanitizedConnectionString(includeSecrets: true));
+        Check(complete.Password == "package-secret" && complete.ServicePrincipalName == "mariadb/override@REALM" &&
+            (string)complete["Password2"]! == "second-secret" && (string)complete["Password2147483647"]! == "last-secret", "Packaged sparse PAM password and principal round trip");
+        var sanitized = authentication.ToSanitizedConnectionString(includeSecrets: false);
+        Check(sanitized.IndexOf("secret", StringComparison.Ordinal) < 0 &&
+            new OceanBaseConnectionStringBuilder(sanitized).ServicePrincipalName == "mariadb/override@REALM", "Packaged PAM redaction preserves principal");
         connection.ConnectionString = connectionString;
         try
         {
@@ -93,7 +108,7 @@ public static class PackageConsumer
         }
         catch (OperationCanceledException error)
         {
-            Check(error.ToString().IndexOf("package-secret", StringComparison.Ordinal) < 0, "Cancellation error redaction");
+            Check(error.ToString().IndexOf("secret", StringComparison.Ordinal) < 0, "Cancellation error redaction");
             Check(connection.State == ConnectionState.Closed, "Pre-canceled open state");
         }
 #if NET8_0_OR_GREATER
@@ -104,7 +119,8 @@ public static class PackageConsumer
         var source = provider.GetRequiredService<OceanBaseDataSource>();
         Check(ReferenceEquals(source, provider.GetRequiredService<DbDataSource>()), "DI alias identity");
         Check(ReferenceEquals(source, provider.GetRequiredService<OceanBaseDataSource>()), "DI singleton");
-        Check(!source.ConnectionString.Contains("package-secret", StringComparison.Ordinal), "Data source password redaction");
+        Check(!source.ConnectionString.Contains("secret", StringComparison.Ordinal) &&
+            new OceanBaseConnectionStringBuilder(source.ConnectionString).ServicePrincipalName == "mariadb/trusted@REALM", "Data source PAM redaction preserves principal");
         var keyed = provider.GetRequiredKeyedService<OceanBaseDataSource>("secondary");
         Check(!ReferenceEquals(source, keyed) && ReferenceEquals(keyed, provider.GetRequiredKeyedService<DbDataSource>("secondary")), "Keyed DI identity");
         Check(typeof(OceanBaseServiceCollectionExtensions).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()!.FrameworkName == target, "DI target identity");
@@ -114,7 +130,7 @@ public static class PackageConsumer
         using var batch = factory.CreateBatch();
         Check(batch is OceanBaseBatch && factory.CreateBatchCommand() is OceanBaseBatchCommand, "Batch type identity");
         using var factorySource = factory.CreateDataSource(connectionString);
-        Check(factorySource is OceanBaseDataSource && !factorySource.ConnectionString.Contains("package-secret", StringComparison.Ordinal), "Factory data source redaction");
+        Check(factorySource is OceanBaseDataSource && !factorySource.ConnectionString.Contains("secret", StringComparison.Ordinal), "Factory data source redaction");
         provider.Dispose();
         foreach (var disposedSource in new[] { source, keyed })
         {
