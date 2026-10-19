@@ -1567,3 +1567,13 @@ net9完整首轮2911通过/1失败（current-runtime9-unit/*.trx）：复杂字�
 命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore --logger trx --results-directory对应目录。定向另加--filter，以七个原公开测试方法名前缀用OR连接，同时匹配原方法及OverTls入口。格式为Consumer工程dotnet format whitespace --no-restore --verify-no-changes --include七文件绝对路径。完整测试期间不重建产品；最终证据独立只读复核、UTF8无BOM/CRLF及diff检查后在当前master本地提交，不推送。
 
 五资产由net10宿主隔离消费，只验证本机Required加密传输；不等同VerifyFull信任链、五运行时或真实OceanBase/OBProxy兼容。LOB全部取消组合、复杂值全部往返、MySQL XA经TLS、真实XA协调器、系统票据及其他机器不在这批脚本覆盖内。本轮产品源码未改，不重复打包/Framework/旧运行时。A05/C01、D15余项、D01真实采样/SHOW TRACE和发布关口仍开放，不关闭整体goal。
+
+## D09 MySQL XA经TLS本地补验及本轮收尾（2026-10-20）
+
+XaConsumerTests保留原80项明文入口、数据和全部阶段/恢复断言，新增80项Required TLS消费：五资产×同步/异步×标准/OB20×成功/可信拒绝/断连/错误边界。复用既有证书及共享Handshake，仅参数化当前脚本传输，不改产品源码、共享helper、依赖或信任根。初始握手仍为Oracle夹具，认证后显式注入MySQL模式事实；这些是本机模拟协议测试，不是真实MySQL认证或服务端兼容证明，不放行A05。
+
+已运行Release核心五/DI五及测试工程编译，零警告/错误（TestResults/xa-tls-build.log）；模块全部160项通过、零失败/跳过（TestResults/xa-tls-focused/*.trx）。逐名对比上一模块完整报告：原80项无删除，新增80项TLS全部通过（xa-tls-case-comparison.json）。范围格式检查退出0、0文件需更改（xa-tls-format.log）。独立只读代码走查未发现阻断，确认TLS升级后标准channel与OB20均使用SslStream、包序号及原异常/阶段/资源断言保留。最终TRX及案例身份由主执行者直接解析核对；本轮未另外委派最终报告复核。
+
+命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；dotnet test Consumer工程-c Release --no-build --no-restore --filter FullyQualifiedName~EveryAssetPinsXaPhasesAndRecoversWithoutReplaying --logger trx --results-directory TestResults/xa-tls-focused；Consumer工程dotnet format whitespace --no-restore --verify-no-changes --include本轮测试文件绝对路径。产品与共享helper未改，故不重复上一模块完整Unit2912/Consumer1693/DI14；该完整报告为此前证据，不能把新增80项写成已跑过的新完整回归。
+
+用户追问测试范围后已明确：最近几轮为代码走查加本机手工协议环回，没有连接真实OceanBase、OBProxy、数据库服务器、KDC或其他机器；涉及真实服务端语义只记录待验证，模拟通过不关闭兼容矩阵。按用户收尾要求，本次只更新文档并提交当前已验证改动，停止继续追加TLS组合测试；后续恢复时回到实际功能缺口核对。A05可信MySQL判定、C01完整重置/池化、D15余项、许可/发布及实库/异机关口仍开放，整体目标未完成。global.json保持不存在；当前master本地提交，不推送。

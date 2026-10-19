@@ -523,7 +523,7 @@ MySQL使用固定XA关键字和`0x<gtrid>,0x<bqual>,0x<uint32 format bit pattern
 
 Recover仅Idle，使用固定Java观察到的declare x DBMS_XA_XID_ARRAY := DBMS_XA_XID_ARRAY(); BEGIN x := DBMS_XA.XA_RECOVER(); :recovered := x; END;，由现有命名绑定计划生成占位符，隐藏输出/尾包验证后读取私有数组。返回独立OceanBaseXid[]，不得使用SELECT TABLE或构造器代替未验证路径。数组必须非NULL，元素必须为三属性对象、格式号为有符号Int32且非-1、gtrid为1–64字节、bqual为0–64字节；Oracle RAW的NULL分支规范为零长度，NULL全局ID仍失败。超出公开格式域、NULL元素、畸形/多行输出、额外结果或中断都失败，不返回部分结果。沿复杂值65535总成员预算，每个分支占一集合元素加三属性，Oracle快照上限16383个（MySQL仍65536），不为XA放宽全局编解码预算。所有0xa1响应已创建statement均排队关闭，不持有服务端statement缓存。
 
-五目标公开同步/异步生命周期与XaErrorCode消费、标准/OB20夹具覆盖阶段/只读/错误码/恢复/错误边界，保留MySQL既有回归。日志和诊断不输出身份/SQL/参数，仅六种xa.*操作。D09的本地两模式范围由本模块继续补齐；Oracle阶段的Required TLS本地补验见下文，MySQL XA经TLS、真实协调器、OceanBase/OBProxy、可信TLS及异机/旧运行时验收仍开放，TransactionScope和池化门槛不变。
+五目标公开同步/异步生命周期与XaErrorCode消费、标准/OB20夹具覆盖阶段/只读/错误码/恢复/错误边界，保留MySQL既有回归。日志和诊断不输出身份/SQL/参数，仅六种xa.*操作。Oracle阶段的Required TLS本地补验见下文；2026-10-20另在既有Oracle握手后注入MySQL模式事实的夹具中，补齐五资产同步/异步、标准/OB20下的MySQL XA阶段/恢复、可信拒绝、断流和错误边界TLS消费80项，连原明文80项全部通过。只证明认证后XA路径的本机Required传输，不证明真实MySQL握手/认证，不放行A05。真实协调器、OceanBase/OBProxy、可信TLS及异机/旧运行时验收仍开放，TransactionScope和池化门槛不变。
 
 ### Oracle扩展经TLS本地消费（2026-10-20）
 

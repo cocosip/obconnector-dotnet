@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.Loader;
@@ -11,6 +13,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
+using OceanBaseConnector.UnitTests.Transport;
 using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
@@ -28,16 +31,28 @@ namespace OceanBaseConnector.ConsumerTests
 
         [Theory]
         [MemberData(nameof(XaAssets))]
-        public async Task EveryAssetPinsXaPhasesAndRecoversWithoutReplaying(string target, bool asynchronous, bool ob20, string kind)
+        public Task EveryAssetPinsXaPhasesAndRecoversWithoutReplaying(string target, bool asynchronous, bool ob20, string kind)
+            => PinsXaPhasesAndRecoversWithoutReplaying(target, asynchronous, ob20, kind, encrypted: false);
+
+        [Theory]
+        [MemberData(nameof(XaAssets))]
+        public Task EveryAssetPinsXaPhasesAndRecoversWithoutReplayingOverTls(string target, bool asynchronous, bool ob20, string kind)
+            => PinsXaPhasesAndRecoversWithoutReplaying(target, asynchronous, ob20, kind, encrypted: true);
+
+        private static async Task PinsXaPhasesAndRecoversWithoutReplaying(string target, bool asynchronous, bool ob20, string kind, bool encrypted)
         {
+            using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             var emptyBranch = kind == "reject";
             var identity = emptyBranch ? "0x0027ff,X'',0x80000000" : "0x0027ff,0x00ff,0x80000000";
             var serving = Task.Run(async () =>
             {
-                using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream();
-                var channel = new PacketChannel(stream); await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token);
+                using var peer = await listener.AcceptTcpClientAsync(budget.Token);
+                using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
+                Stream stream = tls is null ? peer.GetStream() : tls;
+                var channel = new PacketChannel(peer.GetStream());
+                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, tls: tls, certificate: certificate);
                 var commands = new List<string> { "XA START " + identity, "update sample", "XA END " + identity, "XA PREPARE " + identity };
                 if (kind == "reject") commands.Add("XA PREPARE " + identity);
                 if (kind == "success" || kind == "reject") commands.AddRange(new[] { "XA COMMIT " + identity, "XA RECOVER", "XA ROLLBACK " + identity });
@@ -67,7 +82,7 @@ namespace OceanBaseConnector.ConsumerTests
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
                 var connectionType = assembly.GetType("OceanBaseConnector.OceanBaseConnection")!;
                 using var connection = (DbConnection)Activator.CreateInstance(connectionType)!;
-                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Use OB20={ob20}";
+                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode={(encrypted ? "Required" : "Disabled")};Use OB20={ob20}";
                 if (asynchronous) await connection.OpenAsync(budget.Token); else connection.Open();
                 // A05 public MySQL identification remains strict; this is an explicit post-auth fixture.
                 var session = connectionType.GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection)!;
