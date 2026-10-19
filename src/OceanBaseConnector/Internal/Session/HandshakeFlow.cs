@@ -1,5 +1,4 @@
 using System;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
@@ -15,8 +14,8 @@ namespace OceanBaseConnector.Internal.Session
     /// taken from the authenticated OK packet's OB_SERVER_USE_ORACLE_MODE
     /// bit and only for endpoints whose version identifies OceanBase;
     /// unknown endpoints are refused before the session is usable.
-    /// Supported plugins: mysql_native_password always, mysql_clear_password
-    /// only over identity-verified TLS. Anything else fails explicitly. The
+    /// SHA-2 fast authentication is supported; complete passwords are sent
+    /// only over identity-verified TLS. Unknown plugins fail explicitly. The
     /// synchronous and asynchronous entries share parsing and decisions but
     /// never share each other's I/O calls.
     /// </summary>
@@ -32,8 +31,9 @@ namespace OceanBaseConnector.Internal.Session
 
             TlsHandshakeFlow.Apply(transport, channel, handshake.Capabilities, clientCapabilities, options);
 
-            channel.WritePacket(BuildHandshakeResponse(handshake, clientCapabilities, options));
-            return ReadAuthenticationResult(channel, handshake, clientCapabilities, options);
+            var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
+            channel.WritePacket(BuildHandshakeResponse(handshake, clientCapabilities, options, authentication));
+            return ReadAuthenticationResult(channel, handshake, clientCapabilities, options, authentication);
         }
 
         public static async Task<ConnectResult> AuthenticateAsync(
@@ -45,19 +45,21 @@ namespace OceanBaseConnector.Internal.Session
             var capabilities = ClientCapabilities.Build(handshake.Capabilities, options);
             await TlsHandshakeFlow.ApplyAsync(transport, channel, handshake.Capabilities, capabilities, options, cancellationToken)
                 .ConfigureAwait(false);
-            await channel.WritePacketAsync(BuildHandshakeResponse(handshake, capabilities, options), cancellationToken)
+            var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
+            await channel.WritePacketAsync(BuildHandshakeResponse(handshake, capabilities, options, authentication), cancellationToken)
                 .ConfigureAwait(false);
-            return await ReadAuthenticationResultAsync(channel, handshake, capabilities, options, cancellationToken)
+            return await ReadAuthenticationResultAsync(channel, handshake, capabilities, options, authentication, cancellationToken)
                 .ConfigureAwait(false);
         }
 
         private static byte[] BuildHandshakeResponse(
-            InitialHandshakePacket handshake, CapabilityFlags capabilities, OceanBaseConnectionOptions options)
+            InitialHandshakePacket handshake, CapabilityFlags capabilities, OceanBaseConnectionOptions options,
+            AuthenticationConversation authentication)
         {
             return HandshakeResponsePacket.Build(options.UserId,
-                BuildAuthenticationData(handshake.AuthenticationPluginName, options, handshake.Seed),
+                authentication.InitialResponse,
                 options.Database, capabilities, handshake.Capabilities, SslRequestPacket.DefaultCharsetId,
-                ResolvePluginName(handshake.AuthenticationPluginName), options.Server);
+                authentication.PluginName, options.Server);
         }
 
         private static InitialHandshakePacket ParseInitialHandshake(byte[] packet, OceanBaseConnectionOptions options)
@@ -74,17 +76,18 @@ namespace OceanBaseConnector.Internal.Session
             PacketChannel channel,
             InitialHandshakePacket handshake,
             CapabilityFlags clientCapabilities,
-            OceanBaseConnectionOptions options)
+            OceanBaseConnectionOptions options,
+            AuthenticationConversation authentication)
         {
             while (true)
             {
                 var packet = channel.ReadPacket();
-                if (TryFinishAuthentication(packet, channel, handshake, clientCapabilities, options, out var result, out var authenticationData))
+                if (TryFinishAuthentication(packet, handshake, clientCapabilities, options, authentication, out var result, out var authenticationData))
                 {
                     return result!;
                 }
 
-                channel.WritePacket(authenticationData!);
+                if (authenticationData is not null) channel.WritePacket(authenticationData);
             }
         }
 
@@ -93,31 +96,33 @@ namespace OceanBaseConnector.Internal.Session
             InitialHandshakePacket handshake,
             CapabilityFlags clientCapabilities,
             OceanBaseConnectionOptions options,
+            AuthenticationConversation authentication,
             CancellationToken cancellationToken)
         {
             while (true)
             {
                 var packet = await channel.ReadPacketAsync(cancellationToken).ConfigureAwait(false);
-                if (TryFinishAuthentication(packet, channel, handshake, clientCapabilities, options, out var result, out var authenticationData))
+                if (TryFinishAuthentication(packet, handshake, clientCapabilities, options, authentication, out var result, out var authenticationData))
                 {
                     return result!;
                 }
 
-                await channel.WritePacketAsync(authenticationData!, cancellationToken).ConfigureAwait(false);
+                if (authenticationData is not null)
+                    await channel.WritePacketAsync(authenticationData, cancellationToken).ConfigureAwait(false);
             }
         }
 
         /// <summary>
         /// Dispatches one authentication response packet. Returns true with
-        /// the final result on OK; on an authentication switch returns false
-        /// with the response payload to send.
+        /// the final result on OK; otherwise returns false with an optional
+        /// response (null means keep reading without sending a packet).
         /// </summary>
         private static bool TryFinishAuthentication(
             byte[] packet,
-            PacketChannel channel,
             InitialHandshakePacket handshake,
             CapabilityFlags clientCapabilities,
             OceanBaseConnectionOptions options,
+            AuthenticationConversation authentication,
             out ConnectResult? result,
             out byte[]? authenticationData)
         {
@@ -145,18 +150,13 @@ namespace OceanBaseConnector.Internal.Session
                         ok.SessionVariables);
                     return true;
 
-                case 0xFE:
-                    var switchRequest = AuthSwitchRequest.Parse(packet);
-                    authenticationData = BuildAuthenticationData(switchRequest.PluginName, options, switchRequest.Seed);
-                    return false;
-
                 case 0xFF:
                     var error = ErrPacket.Parse(packet);
                     throw CreateServerError(error, options);
 
                 default:
-                    throw new ProtocolException(
-                        $"Unexpected packet header 0x{packet[0]:X2} during authentication.");
+                    authenticationData = authentication.Continue(packet);
+                    return false;
             }
         }
 
@@ -200,38 +200,6 @@ namespace OceanBaseConnector.Internal.Session
             // Defined flags live far below bit 63, so a signed long is a safe
             // transport for the value; widen to the flag enum afterwards.
             return (OceanBaseCapabilityFlags)(ulong)parsed;
-        }
-
-        private static string ResolvePluginName(string? serverPluginName)
-        {
-            return serverPluginName ?? InitialHandshakePacket.NativePasswordPluginName;
-        }
-
-        private static byte[] BuildAuthenticationData(string? pluginName, OceanBaseConnectionOptions options, byte[] seed)
-        {
-            switch (ResolvePluginName(pluginName))
-            {
-                case InitialHandshakePacket.NativePasswordPluginName:
-                    return NativePassword.EncryptPassword(options.Password, seed);
-
-                case InitialHandshakePacket.ClearPasswordPluginName:
-                    RequireVerifiedTlsForClearPassword(options);
-                    return Encoding.UTF8.GetBytes(options.Password + "\0");
-
-                default:
-                    throw new OceanBaseException(
-                        $"Authentication plugin requested by {options.Endpoint} is not supported. " +
-                        "Supported plugins: mysql_native_password; mysql_clear_password over verified TLS.");
-            }
-        }
-
-        private static void RequireVerifiedTlsForClearPassword(OceanBaseConnectionOptions options)
-        {
-            if (options.TlsMode != OceanBaseTlsMode.VerifyFull)
-            {
-                throw new OceanBaseException(
-                    $"mysql_clear_password at {options.Endpoint} requires TLS Mode=VerifyFull; refusing to send the password over a weaker channel.");
-            }
         }
 
         private static OceanBaseException CreateServerError(ErrPacket error, OceanBaseConnectionOptions options)

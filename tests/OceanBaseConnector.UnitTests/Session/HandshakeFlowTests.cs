@@ -23,7 +23,7 @@ namespace OceanBaseConnector.UnitTests.Session
     /// authentication switch, server ERR, ExpectedMode mismatch, non-OceanBase
     /// version refusal, unsupported plugins and the cleartext-over-TLS gate.
     /// </summary>
-    public sealed class HandshakeFlowTests
+    public sealed partial class HandshakeFlowTests
     {
         private const string SeedHex = "01020304050607081112131415161718191a1b1c";
         private const string SwitchSeedHex = "99887766554433221100ffeeddccbbaa9988";
@@ -566,7 +566,7 @@ namespace OceanBaseConnector.UnitTests.Session
             var server = LoopbackServer.Start(async client =>
             {
                 var stream = client.GetStream();
-                await stream.WriteAsync(Frame(0, BuildInitialHandshake(pluginName: "sha256_password")));
+                await stream.WriteAsync(Frame(0, BuildInitialHandshake(pluginName: "unsupported_password")));
                 clientBytesAfterHandshake = await stream.ReadUpToAsync(new byte[64], 64);
             });
 

@@ -91,13 +91,13 @@ using var connection = source.CreateConnection();
 
 OceanBase 和 OBProxy 最低版本均未确定，没有已验证的版本白名单。上述每个部署组合的 TLS/认证互通仍未验证；当前本地实现的限制如下，不代表该组合已通过实库验收：
 
-| TLS 配置 | `mysql_native_password` | `mysql_clear_password` |
-| --- | --- | --- |
-| `VerifyFull`（默认） | 已有本地实现，实库未验证 | 仅允许身份验证通过的 TLS；已有本地实现，实库未验证 |
-| `Required` | 已有本地实现，实库未验证；不验证服务端身份 | 不支持，拒绝发送密码 |
-| `Disabled` | 已有本地实现，实库未验证；不建立 TLS | 不支持，拒绝发送密码 |
+| TLS 配置 | `mysql_native_password` | `mysql_clear_password` / `sha256_password` | `caching_sha2_password` |
+| --- | --- | --- | --- |
+| `VerifyFull`（默认） | 本地实现 | 仅在身份验证通过的 TLS 后发送密码 | fast auth 与 TLS 完整密码路径本地实现 |
+| `Required` | 本地实现，不验证身份 | 拒绝发送密码 | 仅 fast auth；服务端要求完整密码则拒绝 |
+| `Disabled` | 本地实现，不建立 TLS | 拒绝发送密码 | 仅 fast auth；服务端要求完整密码则拒绝 |
 
-其他认证插件（包括 `caching_sha2_password`）尚不支持。证书故障应核对信任链、端点主机名及 `TLS Server Name`，驱动不会自动降低 TLS 要求。即使插件/TLS 条件满足，公共 MySQL 模式判定缺口仍会阻止该模式连接。
+以上均未经实库验证。SHA-2 使用严格 UTF8，拒绝无效 Unicode；连接串拒绝内嵌 NUL。fast auth 成功消息后仍须等待最终 OK，插件切换复用相同安全检查。RSA 公钥认证/检索及其他认证插件尚不支持；SHA-2 的 VerifyFull 完整密码分支目前只有状态/编码测试，没有私有 CA 成功链证据。证书故障应核对信任链、端点主机名及 `TLS Server Name`，驱动不会自动降低 TLS 要求。即使插件/TLS 条件满足，公共 MySQL 模式判定缺口仍会阻止该模式连接。
 
 Windows 上已在实际 .NET 8.0.31、9.0.20 各执行完整本地 Unit 1206 项和 DI 8 项，全部通过且无跳过，另有实际 .NET 8/9/10 包消费样例。日常测试项目仍统一声明 net10.0；8/9 使用临时构建属性验证，Microsoft 通用库依赖分别保持 8/9 主版本。非 Windows、真实数据库和完整旧运行时兼容矩阵尚未验收。.NET Standard 资产的存在不代表所有实现该标准的运行时都已验证。详见仓库 `docs/obconnector-dotnet-progress.md`，设计与实施范围见同目录的架构设计和开发方案。
 

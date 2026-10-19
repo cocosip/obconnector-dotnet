@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D09/D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D09 尚未开发；D15 的 SHA-2 路径已有部分本地实现，RSA/其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -21,7 +21,8 @@
 | D12 | MySQL JSON 文本/预处理读写、元数据及字段流本地实现，记录见末尾 | 真实 JSON 列往返、语法验证和版本/OBProxy矩阵 |
 | D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
-| D01–D09/D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及新认证插件等继续逐项评估本地实施 |
+| D15 | SHA-2 fast auth与受VerifyFull限制的完整密码路径本地实现，验证记录见末尾 | RSA/其他插件、私有CA成功链及两模式实库矩阵 |
+| D01–D09 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA等继续逐项评估本地实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -194,7 +195,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D12 | 本地先行，实库延期 | MySQL JSON | 待验证 | 本地文本/二进制读写、元数据和字段流，验证见末尾；真实 JSON 列往返仍开放 |
 | D13 | 本地先行，实库延期 | MySQL BIT | 待验证 | 本地编解码/位宽/参数及测试记录见末尾；真实 BIT 列往返仍开放 |
 | D14 | 本地先行，实库延期 | MySQL YEAR | 待验证 | 本地实现/测试/走查记录见末尾；真实 YEAR 列往返仍开放 |
-| D15 | G4 后 | 新认证插件 | 未开始 | 待记录 |
+| D15 | 本地先行，实库延期 | 新认证插件 | 进行中 | SHA-2 fast/TLS路径本地实现；RSA/其他插件、私有CA及两模式实库余项开放，验证见末尾 |
 
 ## 兼容矩阵记录模板
 
@@ -637,3 +638,24 @@ NationalCharacterSet 保存不可变会话快照；复用 PhysicalSession、Comm
 完整测试命令同前节，替换结果目录；最终TRX已解析核对总数及55/40项新测试实际执行。覆盖同步/异步×文本/预处理×默认/顺序读取，跨解码缓冲区的字符值、不同存储/线上编码、坏Unicode、NULL/后续普通列、参数重用/发包前拒绝、编码修改与不可变结果快照、完整/缺失/冲突报告、UTF16名称探测、大CJK字符串预校验、非法形状、总超时与取消。五资产消费通过实际产品程序集及DbConnection/DbDataReader公开入口，运行宿主为net10，不冒充五套运行时。独立走查复查和`git diff --check`通过。
 
 D10本地实现完成，正式状态保持待验证；真实NCHAR/NVARCHAR2列INSERT/SELECT、服务端字符长度/空字符串语义及目标版本/OBProxy矩阵暂缓。未部署其他电脑/数据库、未操作信任根，未重跑打包、旧运行时或Framework。A05、C01及D01–D09/D15等余项仍开放，项目整体未完成，不发布、不推送。
+
+## D15 SHA-2认证首批本地实现（2026-10-19）
+
+从 `c4ee8b3` 继续实现 `caching_sha2_password` fast auth与受VerifyFull限制的完整密码路径，以及 `sha256_password` 的VerifyFull响应。新增内部AuthenticationConversation复用现有握手帧、能力、TLS、连接预算、模式判定和异常清理，不新增依赖或公共选项。SHA256固定token向量核对stage2后接seed的顺序；20字节挑战、空密码、Unicode严格UTF8和NUL边界明确验证。`01 03`不写客户端包，必须继续等待最终OK/ERR；`01 04`只在身份验证通过的TLS后发送密码加NUL。初始响应后允许一次账户插件切换，fast/full后拒绝继续挑战或切换；未知插件、畸形/重复消息和截断最终包均失败，不将fast结果误认为可用连接。native/clear、A05公共MySQL拒绝及ExpectedMode检查保持既有路径。
+
+首批6项公共握手测试先因未支持插件失败（`TestResults/sha2-red/*.trx`），实现后6项全部通过（`sha2-green/*.trx`）。边界测试首轮47通过/4失败（`sha2-boundaries/*.trx`）：两项错误期待sha256初始响应后不可切换账户插件，两项NUL在ADO.NET连接串基类先被拒绝；修正测试后58项通过（`sha2-boundaries-green/*.trx`），没有为适配错误断言修改产品。含Required TLS环回的66项全部通过（`sha2-targeted/*.trx`），另补最终包截断和A05/ExpectedMode边界6项，最终完整测试实际执行SHA-2共72项。
+
+五资产公开DbConnection/DbCommand消费首轮10通过/20失败（`sha2-consumer-targeted/*.trx`）：认证成功后的时区probe被新夹具误当业务命令。复用既有SessionTimeZoneFixture处理内部probe并精确断言业务SQL后30项通过（`sha2-consumer-green/*.trx`）；再增加sha256初始弱通道拒绝共40项，在完整Consumer中全部执行。两套Standard和现代三个资产均有同步/异步公开入口消费，Standard2.0的OpenAsync沿用基类入口；宿主统一net10，不冒充五套运行时验收。
+
+独立只读走查覆盖新状态机、握手/TLS/PacketChannel/PhysicalSession和全部新测试，未发现产品缺陷；文档复查指出首页仍称D15未开发，已更正为部分本地实现、余项开放。README、架构及开发方案明确区分状态/编码测试、Required TLS环回和真实可信TLS链。测试不安装/删除信任根、不弹出信任确认；Required TLS只证明加密后的fast认证及完整密码拒绝，VerifyFull完整密码分支仅有状态/编码证据，不宣称私有CA成功链已验证。
+
+最终证据（Windows / SDK10.0.402 / .NET10.0.13）：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx核心五目标、DI三目标 | 0警告、0错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
+| 完整Unit（SHA-2新增72项） | 1514通过，0失败/跳过 | `TestResults/sha2-unit-full/*.trx` |
+| 完整Consumer（SHA-2新增40项） | 292通过，0失败/跳过 | `TestResults/sha2-consumer-full/*.trx` |
+| DI | 8通过，0失败/跳过 | `TestResults/sha2-di-full/*.trx` |
+
+完整测试命令同前节，替换结果目录；TRX已解析核对实际新增案例和零失败/跳过。UTF8无BOM/CRLF及git diff --check通过，当前master本地提交不推送。D15状态保持进行中：RSA公钥配置/检索、其他插件及真实两模式/OBProxy/TLS矩阵仍开放；A05、C01及D01–D09未完成。异机/实库继续暂缓，未重跑打包、旧运行时或Framework，没有据本地测试关闭项目整体或生产发布关口。

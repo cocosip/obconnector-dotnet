@@ -584,6 +584,19 @@ R02 Windows Framework 包消费补验（2026-10-19；仅本地证据，不作正
 
 本地验证已通过；生成Framework子宿主后重建父消费工程暴露源码glob包含子目录的问题，已排除framework-host/**/*.cs并用先失败/后通过重建验证。最终编译、包消费、独立走查及证据登记见进度台账末尾。
 
+## D15 SHA-2 认证本地实施（2026-10-19）
+
+本轮先完成 `caching_sha2_password` 与 `sha256_password` 的 TLS 路径和 caching fast auth；D15 不因此整体关闭。沿用现有连接选项、TLS 验证、PacketChannel 序号、连接总预算、异常脱敏和 A05 模式确认，不新增依赖。RSA 公钥配置/检索、其他认证插件和两模式真实服务端验收仍为余项，禁止自动获取未验证公钥或降低 TLS 要求。
+
+1. 在现有 HandshakeFlow 增加最小内部 AuthenticationConversation，记录当前插件、一次插件切换及等待最终结果状态；同步/异步只共享决策，不互相包装 I/O。caching 初始 token 使用 `SHA256(password) XOR SHA256(SHA256(SHA256(password)) || seed)`，20字节挑战；空密码为空token。新SHA插件拒绝含NUL或无效Unicode的密码，错误不包含凭据。
+2. `01 03` 不发送响应，继续等待最终 OK/ERR；`01 04` 仅在已成功 VerifyFull 的 TLS 后发送严格UTF8密码及NUL。sha256 初始/切换响应同样只允许 VerifyFull；未知插件、畸形/重复AuthMoreData、重复切换或最终阶段再次挑战均明确失败。保持 native/clear 的既有契约及失败即清理传输规则。
+3. 先用公开握手环回测试复现未支持的失败，再覆盖同步/异步、初始/切换、固定token向量、最终OK/ERR、乱序/截断、弱TLS拒绝、取消/超时和脱敏。纯状态测试验证 VerifyFull 分支的编码决策；不得安装信任根、触发信任确认或绕过产品验证冒充成功TLS链。五资产消费走真实DbConnection入口，区分状态测试与真实TLS成功链证据。
+4. 独立走查并修复问题，核心五/DI三目标Release编译和完整Unit/Consumer/DI通过后更新README、架构和进度证据，本地提交不推送。实库、异机和私有CA成功链继续暂缓，A05/C01及完整D15余项保持开放。
+
+协议依据：固定Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` 的 `CachingSha2PasswordPlugin` 与 `Sha256PasswordPlugin`，仅核对协议，不复制实现；相比Java的useSsl判断，发送完整密码保留本项目更严格的VerifyFull边界。
+
+本轮SHA-2子模块已完成本地实现、独立走查及验证：核心五/DI三目标Release编译0警告0错误，完整Unit1514（新增SHA-2为72）、Consumer292（新增SHA-2为40）、DI8全部通过且无跳过；红绿和夹具修正记录见进度台账。D15保持进行中，未实现项和真实验收仍开放，不发布、不推送。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。
