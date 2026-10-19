@@ -487,6 +487,19 @@ C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/re
 
 先写失败编解码/元数据/参数测试，再实现共用路径，补齐同步/异步、文本/预处理、默认/顺序读取、Unicode/宽精度文本、NULL/多结果/后续字段、字段流及生命周期、五资产公共 API 消费。全目标编译、完整 Unit/Consumer/DI 与独立走查通过后本地提交。协议依据为固定 Java 基线 `ColumnType.JSON` 及两种 RowProtocol 的字符串读取，以及[固定 OceanBase json_cell_str](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp) 将内部 JSON 打印为长度编码文本；只参考行为，不复制源码。真实 JSON 列 INSERT/SELECT、语法拒绝和目标版本/OBProxy 往返另行验收，A05 公共 MySQL 门槛不变。
 
+### D11 本地实现范围及步骤（2026-10-19）
+
+新增不可变 `OceanBaseIntervalYearToMonth` / `OceanBaseIntervalDayToSecond`，标准/provider-specific 均返回精确值，DbType.Object，沿用枚举值 5/6。分量为非负 magnitude 加独立符号，前导精度 0–9（0 仅允许前导分量为零）、年月/天不超过 999999999、月 0–11、时/分/秒 0–23/59/59、纳秒 0–999999999，DS scale 0–9，不允许舍入。默认结构值为合法零；ToString 使用不受当前区域影响的明确符号文本，保留声明精度；DS 的 ToTimeSpan 仅在 ticks 精度和范围内精确转换。
+
+Oracle 类型码 204/205，两种行协议均为长度编码的 7/14 字节小端专用数据：符号、年/月/前导精度，或符号、天/时/分/秒/纳秒/前导精度/scale。字段精度须与列 scale 一致：YM scale=前导精度，DS scale=前导精度*10+小数精度。非 Oracle（包括 NULL）、畸形长度/分量/精度/符号明确拒绝，不猜测普通字符串或 TimeSpan。Schema 返回精确 CLR 类型和 provider 身份；不把区间精度当作 NumericPrecision/Scale。
+
+显式参数或 DbType.Object 下的精确值可绑定，NULL 保留既有 null bitmap 规则；Precision=0 表示采用值的前导精度，非零为 1–9 的声明，Scale 未设置采用值的 scale，显式 0 不能截断纳秒。参数改变精度仅在值能精确表示时允许。复用命令预先编码、默认/顺序读取及多结果生命周期，不新增依赖。固定参考为 Java 基线的 INTERVAL 参数和两种 RowProtocol，以及 OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343` 的 `ob_mysql_util.cpp`、`ob_time_convert.cpp`、`ob_timezone_info.h`；只参考协议行为，不复制代码。
+
+- [x] 先运行已有入口上的失败测试，覆盖 7/14 字节、类型身份、NULL、两模式及精度边界。
+- [x] 实现两种精确值、共用 codec、参数和 ResultColumn/Schema 接入，验证正负最大值、所有精度、范围与纳秒拒绝。
+- [x] 补齐同步/异步×文本/预处理×默认/SequentialAccess、参数复用/发包前拒绝、NULL/后续列/多结果及五资产公共 API 消费。
+- [x] Release 全目标编译和完整 Unit/Consumer/DI，通过独立走查及 diff 检查后本地提交。真实 INTERVAL 列往返、目标版本/OBProxy 验收单独延期。
+
 ## Java 模块到任务索引
 
 该索引用来检查[Java M01-M16 模块](obconnector-j-architecture-outline.md)是否有明确 .NET 落点；索引中的 D 项是有意延后，不代表首版功能缺失被忽略。

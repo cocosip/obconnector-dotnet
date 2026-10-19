@@ -80,6 +80,8 @@ namespace OceanBaseConnector
                 case global::OceanBaseConnector.OceanBaseDbType.Binary: return DbType.Binary;
                 case global::OceanBaseConnector.OceanBaseDbType.DateTime: return DbType.DateTime;
                 case global::OceanBaseConnector.OceanBaseDbType.Time: return DbType.Time;
+                case global::OceanBaseConnector.OceanBaseDbType.IntervalYearToMonth:
+                case global::OceanBaseConnector.OceanBaseDbType.IntervalDayToSecond:
                 case global::OceanBaseConnector.OceanBaseDbType.Null: return DbType.Object;
                 default: return null;
             }

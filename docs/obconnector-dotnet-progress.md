@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。本轮继续 D12 MySQL JSON，进度见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D11/D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON 本地实现；D11 Oracle INTERVAL 本地实现也已完成，验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D01–D10/D15 尚未开发。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -19,7 +19,8 @@
 | D14 | 四位 MySQL YEAR 本地实现，验证记录见末尾；真实验收开放 | 真实 YEAR 列往返、版本/OBProxy矩阵 |
 | D13 | MySQL BIT(1–64) 本地实现，验证记录见末尾；真实验收开放 | 真实 BIT 列往返、版本/OBProxy矩阵 |
 | D12 | MySQL JSON 文本/预处理读写、元数据及字段流本地实现，记录见末尾 | 真实 JSON 列往返、语法验证和版本/OBProxy矩阵 |
-| D01–D11/D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及其他扩展类型等继续逐项评估本地实施 |
+| D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
+| D01–D10/D15 | 尚未开发 | OB20、过程/OUT、REF CURSOR、LOB/复杂类型、批量优化、拓扑/XA及其他扩展类型等继续逐项评估本地实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -131,7 +132,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09本地实现/走查完成；实际8/9各Unit1206/DI8、10 Unit1206/Consumer152/DI8及五资产包消费通过；真实双模式/跨平台及完整支持矩阵未验收 |
 | G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02-C07本地实现完成待真实环境验证，C04真实资源/性能与版本矩阵、C07池性能仍待验收；C08因真实环境证据缺失而阻塞，关口未关闭 |
 | G4 发布候选 R | W35-W37 | 0/2 | 进行中 | R01/R02本地双包/五资产、8/9完整本地回归、Framework4.8.1基础消费及交付材料已完成；许可/来源/包名、正式支持范围及真实矩阵未验收 |
-| D 独立扩展 | 本地可独立部分继续，实库验收延期 | 0/15 | 进行中 | D12–D14 本地实现和验证见末尾；其余逐项实施；每项真实版本和模式证据仍须补齐，不计入 G4 |
+| D 独立扩展 | 本地可独立部分继续，实库验收延期 | 0/15 | 进行中 | D11–D14 本地实现和验证见末尾；其余逐项实施；每项真实版本和模式证据仍须补齐，不计入 G4 |
 
 ## A. 协议基础任务
 
@@ -188,7 +189,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D08 | G4 后 | 拓扑发现与负载均衡 | 未开始 | 待记录 |
 | D09 | G4 后 | 显式 XA | 未开始 | 待记录 |
 | D10 | G4 后 | Oracle NCHAR/national charset | 未开始 | 待记录 |
-| D11 | G4 后 | Oracle INTERVAL | 未开始 | 待记录 |
+| D11 | 本地先行，实库延期 | Oracle INTERVAL | 待验证 | 精确值/编解码/参数/Schema及公共消费本地完成，完整测试与独立走查记录见末尾；真实往返开放 |
 | D12 | 本地先行，实库延期 | MySQL JSON | 待验证 | 本地文本/二进制读写、元数据和字段流，验证见末尾；真实 JSON 列往返仍开放 |
 | D13 | 本地先行，实库延期 | MySQL BIT | 待验证 | 本地编解码/位宽/参数及测试记录见末尾；真实 BIT 列往返仍开放 |
 | D14 | 本地先行，实库延期 | MySQL YEAR | 待验证 | 本地实现/测试/走查记录见末尾；真实 YEAR 列往返仍开放 |
@@ -588,3 +589,27 @@ D13 本地实现完成，正式状态保持待验证。真实 BIT 列 INSERT/SEL
 完整测试命令同上节，替换结果目录。最终 TRX 已解析核对总数和 JSON 用例实际执行；覆盖同步/异步、文本/预处理、默认/顺序读取、多结果与独立 Schema、Unicode/宽数字、NULL、参数写回、坏 UTF-8 和 8KB 字段流。独立只读走查核对参数预校验/编码、两种结果协议、Schema、顺序字段流、测试及文档，未发现需修复问题。`git diff --check` 通过。
 
 D12 本地实现完成，正式状态保持待验证。真实 JSON 列 INSERT/SELECT、服务端语法拒绝及目标 OceanBase/OBProxy 版本矩阵未执行，A05 公共 MySQL 门槛未修改。未操作信任根、未部署其他电脑/数据库，未重跑打包、旧运行时或 Framework；A05、C01 和 D01–D11/D15 仍未完成，项目整体目标保持开放。
+
+## D11 Oracle INTERVAL 本地实现（2026-10-19）
+
+从 `808dfed` 继续实现 INTERVAL YEAR TO MONTH / DAY TO SECOND。新增不可变 `OceanBaseIntervalYearToMonth` / `OceanBaseIntervalDayToSecond`，标准及 provider-specific 访问均为对应精确结构，DbType.Object，沿用 provider 枚举值 5/6。保存独立符号、年/月或天/时/分/秒/纳秒、前导精度与 DS 小数精度；默认结构为合法零。年月区间不转换为固定时长，DS ToTimeSpan 在 100ns 和 Int64 ticks 范围内精确转换，包括 TimeSpan.MinValue；超界或纳秒不能整除 100 时抛错。ToString 使用 invariant 带符号文本并保留声明精度。
+
+Oracle 类型码 204/205 在文本及预处理行中均读取长度编码的 7/14 字节专用小端数据；不误作普通字符串或 MySQL temporal 布局。列 scale 分别为前导精度及“前导精度*10+小数精度”，与字段内精度核对。拒绝其他模式（含 NULL）、非法长度/符号/分量/精度及舍入；Schema 提供精确类型和 provider 身份，不把区间精度填作 NumericPrecision/Scale。显式参数或 DbType.Object 下的精确值使用原生类型码，Precision=0 采用值精度、非零为声明前导精度，Scale 未设置采用值 scale、显式 0 不截断纳秒；无效值在 prepare 前拒绝。复用命令预校验、默认/SequentialAccess、多结果和资源管理，未引入依赖或隐式字符串/TimeSpan 转换。
+
+协议依据为固定 Java 基线的 INTERVAL 参数、DataTypeUtilities 和两种 RowProtocol，以及固定 OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343` 的 interval_ym/ds_cell_str、encode_interval_ym/ds、ObIntervalScaleUtil（开发方案已记录文件）。仅参考协议行为，不复制源码；只读源码核对不能代替真实版本验收。
+
+红绿证据：`TestResults/interval-red/*.trx` 的 6 项因类型未支持失败，实现后原 6 项通过（`interval-targeted-initial/*.trx`）。扩展回归首次 27 通过/1 失败，定位为夹具将测试中的非法 YM scale=99 替换为缺省 9；改为可空缺省值后，最终完整 Unit 含全部 30 项 INTERVAL 回归通过。首次完整 Consumer 中原 192 项通过、新 20 项失败，定位为新夹具遗漏 Oracle 时区报告/后续探测；复用既有 SessionTimeZoneFixture 后定向 20 项通过，最终完整 212 项通过。上述失败报告保留，不计入最终通过结果，产品时区行为与认证策略未修改。
+
+最终证据（Windows / .NET 10.0.13）：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx 核心五目标、DI 三目标 | 0 警告、0 错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
+| 完整 Unit（含 INTERVAL 30 项） | 1388 通过，0 失败/跳过 | `TestResults/interval-unit-full/*.trx` |
+| INTERVAL 五资产公共 API 消费 | 20 通过，0 失败/跳过 | `TestResults/interval-consumer-targeted-final/*.trx` |
+| 完整 Consumer | 212 通过，0 失败/跳过 | `TestResults/interval-consumer-full-final/*.trx` |
+| DI | 8 通过，0 失败/跳过 | `TestResults/interval-di-full/*.trx` |
+
+完整测试命令同前节，替换结果目录；定向附加 `--filter FullyQualifiedName~IntervalConsumerTests`。覆盖 0–9 全部前导精度与小数精度组合、正负最大值、默认零、精确 TimeSpan 边界、区域无关文本、畸形数据、声明精度/类型拒绝、同步/异步×文本/预处理×默认/顺序读取、NULL/后续字段/多结果 Schema 快照及参数重用。五资产通过实际加载的产品程序集和 DbConnection/DbDataReader 公共 API 读取并写回两种精确值。独立只读走查核对完整模块和时区夹具修正，未发现需修复问题；`git diff --check` 通过。
+
+D11 本地实现完成，正式状态保持待验证。真实 INTERVAL 列 INSERT/SELECT、精度转换及 OceanBase/OBProxy 版本矩阵暂缓；未操作信任根或部署其他电脑/数据库，未重跑打包、旧运行时或 Framework。A05、C01 和 D01–D10/D15 等整体余项继续开放，不发布、不推送。

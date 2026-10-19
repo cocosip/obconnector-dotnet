@@ -98,6 +98,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 200: return "TIMESTAMP WITH TIME ZONE";
                     case 201: return "TIMESTAMP WITH LOCAL TIME ZONE";
                     case 203: return "RAW";
+                    case 204: return "INTERVAL YEAR TO MONTH";
+                    case 205: return "INTERVAL DAY TO SECOND";
                     case 15: return Charset == 63 ? "VARBINARY" : "VARCHAR";
                     case 253: return Charset == 63 ? "VARBINARY" : Mode == OceanBaseCompatibilityMode.Oracle ? "VARCHAR2" : "VARCHAR";
                     case 254: return Charset == 63 ? "BINARY" : "CHAR";
@@ -158,6 +160,11 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 203:
                         if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("RAW is only defined in Oracle mode.");
                         return typeof(byte[]);
+                    case 204:
+                    case 205:
+                        if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > (TypeCode == 204 ? 9 : 99))
+                            throw new NotSupportedException("The Oracle INTERVAL metadata is not supported.");
+                        return TypeCode == 204 ? typeof(OceanBaseIntervalYearToMonth) : typeof(OceanBaseIntervalDayToSecond);
                     case 245:
                         if (Mode != OceanBaseCompatibilityMode.MySql || Charset != 63 && !HasUtf8Charset)
                             throw new NotSupportedException("Only MySQL JSON text with a supported UTF-8 or binary collation is supported.");
@@ -202,6 +209,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 200: return OceanBaseDbType.TimestampWithTimeZone;
                     case 201: return OceanBaseDbType.TimestampLocalTimeZone;
                     case 203: return OceanBaseDbType.Binary;
+                    case 204: return OceanBaseDbType.IntervalYearToMonth;
+                    case 205: return OceanBaseDbType.IntervalDayToSecond;
                     case 15:
                     case 253:
                     case 254:
@@ -217,6 +226,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (value == null) return DBNull.Value;
             if (TypeCode == 13) return YearCodec.Decode(value, false);
             if (TypeCode == 16) return BitCodec.Decode(value, (int)Length);
+            if (TypeCode == 204 || TypeCode == 205) return IntervalCodec.Decode(value, TypeCode == 205, Scale);
             if (IsDecimal)
             {
                 var number = DecodeDecimal(value, false);

@@ -34,6 +34,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     writer.Write((byte)(bits | (1 << (i % 8))));
                     stream.Position = end;
                 }
+                else if (type == 204 || type == 205)
+                    IntervalCodec.Write(writer, value, type == 205, parameter.Precision, parameter.DeclaredScale);
                 else if (type == 201)
                 {
                     if (!(value is OceanBaseTimestampLocalTimeZone local)) throw new ArgumentException("An LTZ parameter requires its provider value.");
@@ -110,6 +112,18 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private static ushort TypeCode(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode)
         {
+            var interval = parameter.OceanBaseDbType;
+            if (!interval.HasValue && parameter.DbType == DbType.Object)
+            {
+                if (parameter.Value is OceanBaseIntervalYearToMonth) interval = OceanBaseDbType.IntervalYearToMonth;
+                else if (parameter.Value is OceanBaseIntervalDayToSecond) interval = OceanBaseDbType.IntervalDayToSecond;
+            }
+            if (interval == OceanBaseDbType.IntervalYearToMonth || interval == OceanBaseDbType.IntervalDayToSecond)
+            {
+                if (mode != OceanBaseCompatibilityMode.Oracle || parameter.Precision > 9 || parameter.Scale > (interval == OceanBaseDbType.IntervalYearToMonth ? 0 : 9))
+                    throw new NotSupportedException("INTERVAL parameters require Oracle mode and supported leading/fractional precision.");
+                return interval == OceanBaseDbType.IntervalYearToMonth ? (ushort)204 : (ushort)205;
+            }
             if (parameter.OceanBaseDbType.HasValue)
             {
                 var providerType = parameter.OceanBaseDbType.Value;
