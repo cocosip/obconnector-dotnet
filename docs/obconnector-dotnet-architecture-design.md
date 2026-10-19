@@ -166,6 +166,8 @@ span 继承开始时 Activity.Current 的父上下文，但立即恢复调用方
 
 2026-10-19 Windows 本地回归另在实际 .NET8.0.31/9.0.20 各运行完整 Unit1206/DI8，全部通过；仅以临时MSBuild属性构建旧运行时测试宿主，工程声明仍为net10.0，核心五目标/DI三目标及按TFM的8/9/10依赖主版本保持不变。恢复默认后.NET10.0.12完整Unit1206/Consumer152/DI8及实际五资产包消费通过。该证据补齐本地套件的8/9执行，不关闭真实数据库、非Windows、Framework4.8或完整兼容矩阵验收。
 
+2026-10-20 D扩展及DI Standard修正后重新执行当前套件：Windows实际.NET8.0.31/9.0.20各完整Unit2912/DI14全部通过；恢复默认核心五/DI五目标Release零警告错误，.NET10.0.12完整Unit2912/Consumer1163/DI14全通过，均零失败/跳过。测试宿主声明仍为net10.0，8/9临时宿主实际依赖分别保持8.x/9.x。Oracle XA反向字节夹具显式使用LINQ兼容旧目标，错误字典列夹具保留首行预取并等待未完成响应的断连，修复测试端写入竞态；失败与最终证据见台账。本轮不重跑实际包或Framework，不据本地回归关闭真实矩阵。
+
 Windows 包验证可显式增加 `-VerifyNetFramework`，在有4.8 targeting pack的机器上临时编译net48宿主，复用Standard2.0消费库并还原本次核心包；不增加仓库测试目标、产品目标或DI包目标。检查实际包哈希、Standard2.0资产选择和8.x Microsoft.Extensions依赖；宿主使用自动生成的binding redirects，输出桌面CLR描述及注册表Release。2026-10-19本机Framework4.8.1（Release533509、运行时描述4.8.9337.0）通过factory/类型身份/现代API边界/预取消/脱敏基础检查，未验证SQL/TLS及原版4.8；§9/G0正式支持决定仍开放，Standard2.1不宣称兼容Framework。
 
 ### 2.7 当前代码影响与验收
@@ -451,17 +453,17 @@ reader 在响应尚未消费完时独占物理会话，终态完整读取后释�
 
 `OceanBaseDbType` 保持既有 Decimal..Year 的0..9身份，末尾追加 SByte/Byte、Int16/UInt16、Int32/UInt32、Int64/UInt64、Single/Double、Boolean、String/Binary、Date/DateTime/Time 和 Null（10..26）。枚举是 provider 标量族，不是服务端 wire code；两套字段 schema 的 ProviderType 均返回其整数值。MySQL MEDIUMINT 按符号归入 Int32/UInt32，Oracle 优化 NUMBER 归入 Decimal；普通字符列归 String、二进制列及 RAW 归 Binary，具体 CHAR/VARCHAR/TEXT/RAW 名称仍由 DataTypeName 区分。TIMESTAMP 家族归 Timestamp；Oracle DATE 归 OracleDate，MySQL DATE/DATETIME/TIME 分别归 Date/DateTime/Time。
 
-参数设置这些身份复用已实现的严格 DbType 编码；设置 DbType 或 ResetDbType 清除 provider override。Null 固定 DbType.Object，只允许 null/DBNull；模式限制在空值改写前校验，Oracle TIME 即使为空也拒绝，OracleDate 在 MySQL 模式拒绝。Timestamp 的模式敏感参数编码与 B05 相同；ProviderType 是可用于参数的标量身份，不承诺逐个恢复原始列的存储类型。Boolean 是输入便利类型，不根据 TINYINT 宽度/值猜测结果为 bool；结果保持服务器声明的有符号/无符号整数及对应身份。该 B09 历史契约中的延期成员后由 D11–D14 扩展 INTERVAL/Json/Bit/Year；NChar/NVarchar2 仍发包前拒绝。
+参数设置这些身份复用已实现的严格 DbType 编码；设置 DbType 或 ResetDbType 清除 provider override。Null 固定 DbType.Object，只允许 null/DBNull；模式限制在空值改写前校验，Oracle TIME 即使为空也拒绝，OracleDate 在 MySQL 模式拒绝。Timestamp 的模式敏感参数编码与 B05 相同；ProviderType 是可用于参数的标量身份，不承诺逐个恢复原始列的存储类型。Boolean 是输入便利类型，不根据 TINYINT 宽度/值猜测结果为 bool；结果保持服务器声明的有符号/无符号整数及对应身份。该 B09 历史契约中的延期成员后由 D11–D14 扩展 INTERVAL/Json/Bit/Year，D10 接入 Oracle NChar/NVarchar2 的严格字符集编码；各扩展的模式和元数据限制见对应章节。
 
 | 公共入口 | 当前实现和与 Java 的有意差距 | 当前证据/未验收边界 |
 | --- | --- | --- |
-| 连接/factory/现代数据源/可选 DI | 五资产同一 provider；两个 Standard 资产没有现代数据源，核心不引用 DI；配置与日志按实例传递 | 五目标消费、依赖图及现代 DI 生命周期测试；旧运行时 DI 尚未执行 |
+| 连接/factory/现代数据源/可选 DI | 核心与 DI 包各五资产，同一 provider；五目标可注册 Transient 连接，两个 Standard 资产没有现代数据源；配置与日志按实例传递 | 五目标包消费和依赖图、现代 DI 生命周期及本机 Framework4.8.1 基本 DI 消费通过；完整旧运行时矩阵仍开放 |
 | 命令/参数 | 文本无参和默认服务端 prepare；D07可按命令显式启用受限回退；普通路径仅Input/Text；D02显式支持Oracle过程及标量输出，名称绑定限B03子集 | B02-B05/B08 公共环回；不支持 Java 客户端 prepare 默认路径；过程及标量OUT须显式启用D02 |
 | reader/元数据 | 逐行文本/二进制、多结果、两套字段 schema、固定 CLR/provider-specific 类型；typed getter 要求类型匹配，C03 的 decimal/DateTime/DateTimeOffset getter 允许精确转换 | B05/B06/B09；C04 已实现本地 SequentialAccess 字段流及服务端游标；C05首批四个目录集合及现代GetSchemaAsync本地实现；真实大值/游标/字典验收仍开放 |
-| 本地事务/取消 | 会话绑定、两模式隔离映射、结果未知不重放；环境事务始终拒绝 | B07/B08；Oracle RepeatableRead、XA/TransactionScope 不照搬 Java 支持范围 |
+| 本地事务/取消 | 会话绑定、两模式隔离映射、结果未知不重放；D09 显式 XA 固定物理会话及恢复已接入，环境事务始终拒绝 | B07/B08/D09 本地协议验证；Oracle RepeatableRead 仍拒绝，真实 XA 协调器/双模式互通尚未验收 |
 | 诊断 | Connection 1000..1003、Command 1100/1101、Transaction 1200/1201 分类别；预先安全创建 logger，后端异常不改变结果 | B09 修复原命令事件误入 Connection 类别，4项类别过滤回归先失败后通过；C07补充五资产ActivitySource/Meter、固定标签及禁用开销基线，Windows单元/隔离消费与实际8/9/10样例通过；实库、池性能和跨平台仍待验收 |
 | 现代 batch | C06 逐条执行、流式结果、各条计数/失败归属和显式事务，现代 factory/connection/source 入口共用；两个 Standard 资产不含 batch 类型 | Windows 协议/隔离消费及 .NET8/9/10 独立运行时消费；真实双模式批量互通尚未验收 |
-| 扩展/发布 | 不宣称 adapter/command builder、池化、临时LOB创建等未实现能力；无原生依赖 | 工厂能力测试、五/三资产打包检查；真实兼容、许可及 NuGet 发布仍需后续门槛 |
+| 扩展/发布 | D04 临时 BLOB/CLOB 创建和显式释放已接入；adapter/command builder、池化仍未实现；现代 GSSAPI 依赖系统认证组件 | 工厂能力测试、核心五/DI五资产打包检查及本地 LOB 协议测试；真实兼容、许可及 NuGet 发布仍需后续门槛 |
 
 Windows 实际运行时冒烟源为 `tests/OceanBaseConnector.ConsumerTests/RuntimeConsumerSample.cs`，从 xUnit 编译项排除以保持全部日常测试宿主 net10.0。用 SDK10 的 csc 对相应运行时 reference pack 和单个产品资产编译独立可执行文件，使用该资产 project.assets.json 对应包的私有 DLL，runtimeconfig 的 Microsoft.NETCore.App 主版本固定、rollForward=LatestPatch；样例断言实际 Environment.Version/日志程序集主版本，并通过公开预取消、已认证 Oracle 环回查询、NUMBER(6,2) 读取、两套 ProviderType 和 CloseConnection。
 

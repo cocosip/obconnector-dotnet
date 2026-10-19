@@ -531,7 +531,11 @@ namespace OceanBaseConnector.UnitTests
                     await StatementCommand(channel, 25);
                 }
                 await StatementCommand(channel, 22); await Prepared(channel, 172, 2); await StatementCommand(channel, 23);
-                await ComplexDictionaryRows(channel, new[] { "WRONG_COLUMN" }, new[] { "unexpected" });
+                await channel.WritePacketAsync(new byte[] { 1 });
+                await channel.WritePacketAsync(Column("WRONG_COLUMN", 253));
+                await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 0, 0, 10 }.Concat(Encoding.UTF8.GetBytes("unexpected")).ToArray());
+                // The reader prefetches one row; leave its final EOF pending to prove the session is discarded.
                 Assert.Equal(0, await channelStreamRead(channel));
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port));

@@ -424,7 +424,7 @@ namespace OceanBaseConnector.UnitTests
         public async Task OracleXaRecoveryPreservesSignedFormatAndAllRawBytes(int format, bool nullBranch)
         {
             var global = Enumerable.Range(0, 64).Select(i => (byte)(i * 4)).ToArray();
-            var branch = nullBranch ? null : global.Reverse().ToArray();
+            var branch = nullBranch ? null : Enumerable.Reverse(global).ToArray();
             var server = Server(async channel =>
             {
                 await OracleXaInitialize(channel); await OracleXaRequest(channel, "RECOVER");

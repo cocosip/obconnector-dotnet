@@ -183,8 +183,8 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 
 | ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
 | --- | --- | --- | --- | --- |
-| R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-19 本地包/五资产消费完成，另补Windows Framework4.8.1上net48宿主的Standard2.0基础包消费及绑定重定向；独立走查见末尾，正式Framework支持/许可/来源/包名审查仍开放，不发布 |
-| R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | README本地交付材料及独立走查已完成；Windows实际8.0.31/9.0.20各Unit1206/DI8、默认10.0.12 Unit1206/Consumer152/DI8与五资产包消费通过；最终真实矩阵与发布审查待验收，不关闭候选版门槛 |
+| R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-20 核心与DI包各五资产实际消费完成，本机Framework4.8.1的Standard2.0基础包/DI消费及绑定重定向通过；独立走查见末尾，正式Framework支持/许可/来源/包名审查仍开放，不发布 |
+| R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | 2026-10-20 D扩展后Windows实际8.0.31/9.0.20各Unit2912/DI14、恢复默认10.0.12 Unit2912/Consumer1163/DI14全部通过；核心五/DI五Release零警告错误，本轮修复与证据见末尾；最终真实矩阵与发布审查仍开放 |
 | D01 | 本地实现已有；真实验收待环境 | OB20、校验与完整链路追踪 | 待验证 | OB20编解码/校验、协商、流式传输和脱敏追踪已有本地实现；TLS环回、真实采样/SHOW TRACE与版本矩阵仍开放，关闭不刷新末条记录 |
 | D02 | 本地先行，实库延期 | Oracle 过程及 OUT/RETURNING | 进行中 | 公开过程及标量OUT/RETURNING已接入，完整回归/走查见末尾；保留标量范围及独立Prepare/FetchSize限制，真实互通开放 |
 | D03 | 本地先行，实库延期 | REF CURSOR | 待验证 | REF CURSOR输出、流式分页及所有权本地实现/完整回归/独立走查修复完成，见末尾；真实版本/OBProxy互通开放 |
@@ -1467,3 +1467,27 @@ Ed25519历史包反向检查首次因NuGet审计源访问失败未完成（TestR
 独立代码走查确认Transient连接/别名所有权、条件编译、重复注册原子性和宿主日志归属无阻断；README、架构、方案及本台账当前目标已同步五/五，历史五/三记录保持原始日期。UTF8无BOM/CRLF及diff检查后在master本地提交，不推送。global.json保持删除。
 
 未修改核心协议/会话代码，未重复上一模块已经通过的完整Unit2912/Consumer1161；本轮运行完整DI、十目标依赖检查和实际包消费。没有真实数据库、异机、可信TLS或KDC测试；Framework证据仅是本机4.8.1基本包/DI消费，不代表原版4.8或完整SQL/TLS兼容，其他旧运行时矩阵仍开放。A05/C01及真实验收/许可/发布关口不因此关闭，整体goal未完成。
+
+## R02 D扩展后的Windows现代运行时回归（2026-10-20）
+
+前次完整.NET8/9回归停留在Unit1206/DI8；D01–D15本地扩展及DI五目标修正后，本轮重新运行当前完整Unit/DI，不以包消费样例代替完整套件。日常测试工程仍声明net10.0，临时通过TargetFrameworks和TargetFramework双属性构建net8/net9测试宿主；最终恢复默认产品核心五/DI五目标还原和Release构建，global.json保持删除。
+
+net8首轮Unit编译在OracleXaTests.cs:427报CS0023（current-runtime8-unit-build.log）：当前编译器在旧目标引用API下将数组Reverse扩展调用选为返回void的MemoryExtensions.Reverse(Span<T>)。改为显式Enumerable.Reverse(global).ToArray()保留独立反向副本，不修改原全局ID；修后0警告/错误（current-runtime8-unit-build-fixed.log）。初次DI准备因NuGet签名源SSL凭据失败未完成（current-runtime8-di-build.log，其错误上下文标net10），保持签名/审计检查提升重试后实际net8构建通过（current-runtime8-di-build-verified.log），不将准备失败计作测试结果。
+
+net9完整首轮2911通过/1失败（current-runtime9-unit/*.trx）：复杂字典错误列夹具发送首行后，驱动拒绝列形状并销毁未读会话，夹具继续发送最终EOF时遇到连接重置。原用例单独重跑2通过只说明竞态不稳定，不作为修复证据。首次仅保留元数据的修正被独立走查发现遗漏reader首行预取；该轮current-runtime9-unit-fixed尝试已中断、无完整报告，不计通过。最终夹具发送错误元数据及一条合法二进制首行，省略最终EOF后只读断连；保留NotSupportedException、Broken及断连断言，不改产品代码或吞掉服务端写入异常。修后定向2项通过（current-runtime9-dictionary-reviewed/*.trx），完整8/9结果另列如下。
+
+独立只读走查确认显式LINQ保持XID原始字节语义，修正后的夹具满足首行预取及未消费终态，解决了断连后继续写入竞态。当前架构表同步五/五DI、D10 national字符、D09显式XA、D04临时LOB和现代GSSAPI系统组件事实，历史日期下五/三及旧计数保持原始记录。真实数据库/OBProxy、其他机器、可信CA成功链及真实KDC/系统凭据测试继续按约定暂缓，不据本地回归关闭R02真实矩阵或其他关口。
+
+| 验证 | 结果 | 证据 |
+| --- | --- | --- |
+| 实际.NET8.0.31完整Unit/DI | 2912/14通过，零失败/跳过；Unit在最终夹具修正后重建并复验 | TestResults/current-runtime8-unit-final/*.trx、current-runtime8-di/*.trx |
+| 实际.NET9.0.20完整Unit/DI | 2912/14通过，零失败/跳过；首轮失败另保留 | TestResults/current-runtime9-unit-final/*.trx、current-runtime9-di/*.trx |
+| 默认还原及核心五/DI五Release | 成功，0警告/错误；两个产品各五张restore目标图已恢复 | TestResults/current-runtimes-default-restore.log、current-runtimes-default-build.log、current-runtimes-default-graphs.json |
+| 恢复后实际.NET10.0.12完整Unit/Consumer/DI | 2912/1163/14通过，零失败/跳过；Consumer含十目标restore/PE依赖校验 | TestResults/current-runtimes-default-unit/*.trx、current-runtimes-default-consumer/*.trx、current-runtimes-default-di/*.trx |
+| 实际宿主及依赖边界 | TRX诊断stdout确认8.0.31/9.0.20/10.0.12；8/9测试host deps分别为8.x/9.x日志及DI依赖，无10.x混入 | TestResults/current-runtimes-final-summary.json、current-runtimes-dependencies.json及对应bin/Release输出 |
+| 原案例保留 | 三运行时Unit相对GSSAPI基线无增删（归一化运行时参数）；DI14无增删；Consumer相对1161仅新增两个DI Standard依赖案例 | TestResults/current-runtimes-case-comparison.json、current-runtimes-consumer-comparison.json |
+| 范围格式检查 | 退出0，0文件需更改 | TestResults/current-runtimes-format.log |
+
+命令：临时宿主用dotnet build/test各Unit及DI工程-c Release -p:TargetFrameworks=net8.0 -p:TargetFramework=net8.0（net9同理）；test均另带--no-build --no-restore --logger trx --results-directory对应目录。最终dotnet restore OceanBaseConnector.slnx及dotnet build OceanBaseConnector.slnx -c Release --no-restore恢复默认，再对Unit/Consumer/DI执行相同test参数而不带目标覆盖。完整测试期间均未重建产品。格式检查使用dotnet format whitespace Unit工程--no-restore --verify-no-changes --include两处测试文件。
+
+本轮仅测试及文档修正，未重复实际打包、Framework或真实认证验收；双包五资产实际交付仍以上一模块di-standard-package-final为证据。最终证据独立只读复核、UTF8无BOM/CRLF与diff检查后在master本地提交，不推送；R02保持进行中，整体goal不据此关闭。
