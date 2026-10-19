@@ -1239,3 +1239,12 @@ D09基础模块首轮全量回归发现三个既有同步主动关闭案例失�
 编译命令为dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；完整测试沿dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/<上表目录>。最终Unit使用正常Windows证书私钥权限，不安装/删除信任根或降低TLS验证；首轮/第二轮失败不计通过。已解析最终TRX并与D08最后通过报告逐案例比较，确认全部执行/通过、Unit新增11、Consumer新增5且旧案例移除0；Unit最终进程退出0。global.json保持删除。README、架构、方案及台账同步，UTF8无BOM/CRLF与diff检查后在当前master本地提交，不推送。
 
 D09仍为进行中：本模块仅交付身份基础，固定物理会话、显式阶段操作与恢复入口尚未实现，下一模块继续接入；TransactionScope保持拒绝，真实事务协调器、两模式数据库/OBProxy及异机测试按要求延期。本轮未重跑打包、旧运行时/Framework矩阵，不据纯值对象或本地夹具宣称实库XA兼容，整体goal未完成。
+
+
+## SNI环回夹具连接预算修复（2026-10-19）
+
+D09 MySQL XA完整回归两次仅既有MultiAddressTlsUsesActualHostOrExplicitName(asynchronous=true, explicitName=false)耗尽5秒连接预算，异常停在OpenAsync的TLS握手等待。两轮分别为2708通过/1失败（TestResults/xa-unit-final/*.trx）与2712通过/1失败（TestResults/xa-unit-reviewed/*.trx），均未跳过；原方法独立四种组合全通过，但各耗时4.13–4.39秒（TestResults/xa-tls-investigate/*.trx）。没有将失败直接略过或当成通过。
+
+继续检查共享Configuration的5秒预算、TcpTransport与环回监听方式。直接使用本机System.Net.TcpClient测量：访问127.0.0.1未监听但已绑定端口耗时2095ms，localhost连IPv4-only listener耗时2070ms；这两段无TLS的连接行为已合计约4.16秒（TestResults/xa-refused-timing.log），原SNI场景建连余量不足。仅该夹具显式ConnectionTimeout=15；目的仍是检查SSLRequest、认证_server_host=localhost及实际/显式SNI名称，所有断言保留。没有改产品超时/重试、TLS校验或证书信任，没有安装/删除信任根；底层慢握手的全部原因未定位，不宣称排除所有产品性能问题。
+
+修复后上述SNI四种组合及专门整条Open总预算测试两种组合，共6项通过，0失败/跳过（TestResults/xa-tls-budget-green/*.trx）。专用超时测试仍是1秒预算且耗时小于4秒，不借SNI修复放宽。独立只读走查确认仅是非计时场景夹具预算修复；完整复核Unit2713通过、0失败/跳过（TestResults/xa-unit-accepted/*.trx），Consumer929与DI8也通过。此结果基于当时XA工作区版本，XA语法走查后续新增修复及最终结果另见后文。

@@ -318,7 +318,11 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(0, await tls.ReadUpToAsync(new byte[1], 1));
             });
             var builder = new OceanBaseConnectionStringBuilder(Configuration(server.Port))
-            { Server = $"127.0.0.1:{PortOf(refused)},localhost", TlsMode = OceanBaseTlsMode.Required };
+            {
+                Server = $"127.0.0.1:{PortOf(refused)},localhost", TlsMode = OceanBaseTlsMode.Required,
+                // Windows refusal and localhost IPv6 fallback can consume most of five seconds before TLS.
+                ConnectionTimeout = 15,
+            };
             if (explicitName) builder.TlsServerName = "cluster.example.test";
             using var connection = new OceanBaseConnection(builder.ConnectionString);
             try
