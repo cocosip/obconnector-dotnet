@@ -4,8 +4,10 @@ using System.Data.Common;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.Loader;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -59,11 +61,13 @@ namespace OceanBaseConnector.ConsumerTests
             finally { budget.Cancel(); listener.Stop(); context.Unload(); }
         }
 
-        private static async Task Serve(TcpListener listener, string kind, CancellationToken token)
+        private static async Task Serve(TcpListener listener, string kind, CancellationToken token, X509Certificate2? certificate = null)
         {
-            using var peer = await listener.AcceptTcpClientAsync(token); var stream = peer.GetStream();
-            var channel = new PacketChannel(stream);
-            await Handshake(channel, kind, token);
+            using var peer = await listener.AcceptTcpClientAsync(token);
+            using var tls = certificate is null ? null : new SslStream(peer.GetStream());
+            Stream stream = tls is null ? peer.GetStream() : tls;
+            var channel = new PacketChannel(peer.GetStream());
+            await Handshake(channel, kind, token, tls: tls, certificate: certificate);
             var ob20 = kind == "enabled";
             for (uint request = 0; request < 4; request++)
             {
@@ -87,7 +91,7 @@ namespace OceanBaseConnector.ConsumerTests
             await ObserveClose(stream, token);
         }
 
-        private static async Task Handshake(PacketChannel channel, string kind, CancellationToken token, bool deprecated = false, bool lobLocators = false)
+        private static async Task Handshake(PacketChannel channel, string kind, CancellationToken token, bool deprecated = false, bool lobLocators = false, SslStream? tls = null, X509Certificate2? certificate = null)
         {
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
@@ -96,6 +100,15 @@ namespace OceanBaseConnector.ConsumerTests
             if (deprecated) greeting[upper + 1] |= 1;
             if (lobLocators) greeting[upper + 1] |= 32;
             await channel.WritePacketAsync(greeting, token);
+            if (tls is not null)
+            {
+                var request = await channel.ReadPacketAsync(token);
+                Assert.Equal(32, request.Length);
+                Assert.NotEqual(0, request[1] & 8);
+                await tls.AuthenticateAsServerAsync(new SslServerAuthenticationOptions { ServerCertificate = certificate }, token);
+                Assert.True(tls.IsEncrypted);
+                channel.ReplaceUnderlyingStream(tls);
+            }
             var handshake = new ByteCursor(await channel.ReadPacketAsync(token)); handshake.Skip(32);
             Assert.Equal("u", handshake.ReadNullTerminatedAscii()); handshake.ReadLengthEncodedBytes(); handshake.ReadNullTerminatedAscii();
             var attributes = new Dictionary<string, string>();

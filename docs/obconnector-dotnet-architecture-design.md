@@ -217,7 +217,7 @@ Use OB20/UseOb20默认false；请求时仅在协商CLIENT_CONNECT_ATTRS的握手
 
 Ob20Stream单所有者，以64KiB写缓冲分帧、8KiB暂存缓冲跳过extra，读取按上层需求推进而不整帧预读。每个逻辑请求独立24位request ID并回绕，OB20序号从0起、响应接续并按字节回绕；内层MySQL分片/空终结及序号由原PacketChannel负责。正文最后一段返回前先校验尾CRC；每页fetch、prepare、内部状态探测、命令终结均要求已消费完整且带last的外层响应。COM_STMT_CLOSE显式完成无响应请求；cursor分页只验证边界，保留已发送SQL标记，后续故障仍报告执行结果未知。完整可信ERR可复用普通会话，游标错误沿既有策略销毁会话。
 
-流层支持extra/last/new-extra标志，未启用追踪时extra仅校验长度并分段跳过且参与CRC，不请求session sync。reroute/未知标志、实际压缩、身份/序号/CRC错误、截断、未结束或带尾随正文的响应均失败并关闭，不重放SQL。每请求响应上限100万外帧，原逻辑包大小与命令包计数上限仍有效；取消、超时和关闭沿用CommandExchange总预算及结果未知映射。同步/异步分离底层I/O，本地环回覆盖协商/回退、预处理、游标、服务端仅发送部分正文后的在途取消及故障边界（未确认客户端消费位置）；OB20经TLS环回和真实版本/OBProxy矩阵仍待验证。
+流层支持extra/last/new-extra标志，未启用追踪时extra仅校验长度并分段跳过且参与CRC，不请求session sync。reroute/未知标志、实际压缩、身份/序号/CRC错误、截断、未结束或带尾随正文的响应均失败并关闭，不重放SQL。每请求响应上限100万外帧，原逻辑包大小与命令包计数上限仍有效；取消、超时和关闭沿用CommandExchange总预算及结果未知映射。同步/异步分离底层I/O，本地环回覆盖协商/回退、预处理、游标和故障边界。2026-10-20新增五资产同步/异步Required TLS消费：标准握手及SSLRequest保持序号，TLS内协商OB20或保留标准帧，覆盖文本/prepare/execute/无响应关闭；公开SequentialAccess字段流实际读出128/1024字节后验证CRC错误、取消、超时和显式关闭销毁未完成响应。反向校验保留正确CRC时故障断言全部拒绝，详见台账。本地自签名Required TLS不证明VerifyFull信任链、真实版本/OBProxy或其他机器兼容。
 
 Enable Full Link Trace/EnableFullLinkTrace默认false且要求UseOb20；服务端确认FULL_LINK_TRACE后启用单物理连接Ob20TraceContext，缺能力保留普通OB20。按NEW_EXTRA_INFO能力选择输出嵌套TLV或legacy ObObj varchar键值，接收两格式；单帧追踪extra上限64KiB，在尾CRC通过后才解析并原子发布控制策略。逐层长度、有界varint、终止符、已知字段重复及标量校验，未知TLV跳过；legacy键忽略大小写且接受参考实现的有界非最短长度编码。level按有符号byte解释，负值不启用普通采样；SHOW可独立启用。每请求保存策略快照，响应中的策略供下一请求使用。
 

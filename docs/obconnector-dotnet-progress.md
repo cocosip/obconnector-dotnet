@@ -22,7 +22,7 @@
 | D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
 | D15 | SHA-2 fast/TLS、固定RSA、显式公钥获取、old password、Ed25519、PAM及现代资产Kerberos GSSAPI本地实现，验证见末尾 | Standard GSSAPI、其他系统机制、真实KDC/私有CA及两模式实库矩阵 |
-| D01 | OB20帧/校验、显式协商与标准回退、流式传输及脱敏完整链路追踪已有本地实现，记录见末尾 | OB20经TLS环回、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
+| D01 | OB20帧/校验、协商/回退、流式传输及脱敏追踪已有本地实现；新增五资产经Required TLS执行、公开部分字段消费后的故障销毁验证，见末尾 | VerifyFull信任链、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
 | D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流、WRITE/TRIM及临时对象显式创建/释放已本地接入，验证见末尾 | 真实版本/OBProxy、资源生命周期及扩展经TLS验收仍开放 |
@@ -185,7 +185,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | --- | --- | --- | --- | --- |
 | R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-20 核心与DI包各五资产实际消费完成，本机Framework4.8.1的Standard2.0基础包/DI消费及绑定重定向通过；独立走查见末尾，正式Framework支持/许可/来源/包名审查仍开放，不发布 |
 | R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | 2026-10-20 D扩展后Windows实际8.0.31/9.0.20各Unit2912/DI14、恢复默认10.0.12 Unit2912/Consumer1163/DI14全部通过；核心五/DI五Release零警告错误，本轮修复与证据见末尾；最终真实矩阵与发布审查仍开放 |
-| D01 | 本地实现已有；真实验收待环境 | OB20、校验与完整链路追踪 | 待验证 | OB20编解码/校验、协商、流式传输和脱敏追踪已有本地实现；TLS环回、真实采样/SHOW TRACE与版本矩阵仍开放，关闭不刷新末条记录 |
+| D01 | 本地实现已有；真实验收待环境 | OB20、校验与完整链路追踪 | 待验证 | OB20编解码/校验、协商、流式传输和脱敏追踪已有本地实现；五资产Required TLS及部分字段消费故障验证见末尾；可信TLS、真实采样/SHOW TRACE与版本矩阵仍开放 |
 | D02 | 本地先行，实库延期 | Oracle 过程及 OUT/RETURNING | 进行中 | 公开过程及标量OUT/RETURNING已接入，完整回归/走查见末尾；保留标量范围及独立Prepare/FetchSize限制，真实互通开放 |
 | D03 | 本地先行，实库延期 | REF CURSOR | 待验证 | REF CURSOR输出、流式分页及所有权本地实现/完整回归/独立走查修复完成，见末尾；真实版本/OBProxy互通开放 |
 | D04 | 本地先行，实库延期 | LOB locator、分块读写及临时对象 | 待验证 | locator解析、公开读取/绑定、WRITE/TRIM及临时对象显式创建/释放本地实现、完整回归及独立走查修复完成，见末尾；真实资源验收仍开放 |
@@ -1491,3 +1491,26 @@ net9完整首轮2911通过/1失败（current-runtime9-unit/*.trx）：复杂字�
 命令：临时宿主用dotnet build/test各Unit及DI工程-c Release -p:TargetFrameworks=net8.0 -p:TargetFramework=net8.0（net9同理）；test均另带--no-build --no-restore --logger trx --results-directory对应目录。最终dotnet restore OceanBaseConnector.slnx及dotnet build OceanBaseConnector.slnx -c Release --no-restore恢复默认，再对Unit/Consumer/DI执行相同test参数而不带目标覆盖。完整测试期间均未重建产品。格式检查使用dotnet format whitespace Unit工程--no-restore --verify-no-changes --include两处测试文件。
 
 本轮仅测试及文档修正，未重复实际打包、Framework或真实认证验收；双包五资产实际交付仍以上一模块di-standard-package-final为证据。最终证据独立只读复核、UTF8无BOM/CRLF与diff检查后在master本地提交，不推送；R02保持进行中，整体goal不据此关闭。
+
+## D01 OB20经TLS及公开部分响应消费补验（2026-10-20）
+
+补齐D01明确保留的本地传输组合缺口，新增Ob20TlsConsumerTests.cs共80项：五资产×同步/异步×四协商情形40项复用既有服务端脚本，验证Required TLS内的OB20协商、未请求/未支持/无属性时保留标准帧、文本DML、参数化prepare/execute及无响应statement关闭；另40项通过公开SequentialAccess字段流实际读出128/1024字节，再触发CRC错误、取消、命令总超时或显式连接关闭，检查状态、结果未知、异步调用方token及对端断连，任何额外请求都会使服务端断言失败。
+
+测试工程链接现有TestCertificateFactory，独立拥有每例临时自签名证书和SslStream；共享Handshake仅在TLS场景读取32字节带CLIENT_SSL的SSLRequest、升级并替换底层流，保留PacketChannel包序号。全部旧调用沿原默认参数执行，不改变认证、协商或产品源码。Consumer仍是net10隔离加载五资产，不称五运行时验收；Required仅证明加密传输，不证明VerifyFull身份/信任链。不安装/删除信任根，不使用数据库或KDC。
+
+首轮定向70通过/10失败（TestResults/ob20-tls-focused/*.trx）：关闭场景曾额外断言field.CanRead=false，但此属性只反映字段流对象状态，源码及既有契约均未承诺它随连接Close变为false。修正为Closed状态、新命令在本地拒绝及服务端观察断连，保留实际128字节消费证据，不修改产品来满足错误假设。修后完整定向80通过（ob20-tls-focused-fixed/*.trx）。另临时保持正确CRC执行十个CRC故障用例，十项全部按预期以“没有抛出异常”失败（ob20-tls-valid-crc-control/*.trx）；说明正常尾帧可完整消费，不是夹具的其他错误导致故障用例假通过。已恢复CRC破坏后重新构建，控制版本不提交。
+
+独立只读走查核对TLS流/证书所有权、SSLRequest和认证序号、标准回退、prepare关闭、首128字节消费位置及保留外帧尾、取消/超时映射、关闭状态和服务端无重放断言，无阻断。历史“未覆盖TLS/未确认客户端消费位置”的旧模块记录保留，当前能力表及架构已指向本轮新增证据。实库/OBProxy、可信CA、其他机器、完整链路追踪经TLS和LOB/XA扩展经TLS仍不据本轮关闭。
+
+| 验证 | 结果 | 证据 |
+| --- | --- | --- |
+| 核心五/DI五目标及测试工程Release | 0警告/错误 | TestResults/ob20-tls-build-final.log |
+| 完整Unit | 2912通过，0失败/跳过 | TestResults/ob20-tls-unit-final/*.trx |
+| 完整Consumer | 1243通过，0失败/跳过；相对上一轮1163新增80，无移除；新增80项在完整报告中均通过 | TestResults/ob20-tls-consumer-final/*.trx、ob20-tls-case-comparison.json |
+| 完整DI | 14通过，0失败/跳过 | TestResults/ob20-tls-di-final/*.trx |
+| 新增定向及CRC反向校验 | 修后80通过；保持正确CRC时10项全部以未抛异常拒绝，最终源码已恢复错误CRC | TestResults/ob20-tls-focused-fixed/*.trx、ob20-tls-valid-crc-control/*.trx |
+| 范围格式校验 | 退出0，0文件需更改 | TestResults/ob20-tls-format.log |
+
+命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；Unit/Consumer/DI分别执行dotnet test对应工程-c Release --no-build --no-restore --logger trx --results-directory对应目录。定向过滤两个新公开TLS方法；反向校验过滤部分消费方法并限制DisplayName~crc。解析TRX核对计数、失败原因和旧案例保留（ob20-tls-final-summary.json、ob20-tls-case-comparison.json）。测试运行时未重建产品，未引入依赖包或改变产品源码。
+
+最终证据和文档经独立只读复核，UTF8无BOM/CRLF及diff检查后本地提交，不推送。未重跑实际打包、旧运行时或Framework；本轮五资产消费的宿主为.NET10。D01正式状态仍待真实验收，A05/C01、D15余项及许可/发布关口保持开放，整体goal未完成。
