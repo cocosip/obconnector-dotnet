@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值已接入，固定会话/阶段执行与恢复尚未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值及MySQL固定会话/显式阶段/完整恢复快照已接入，Oracle DBMS_XA与真实协调器验收仍开放；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -193,7 +193,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D06 | 本地先行，实库延期 | bulk/array binding及多行输出 | 待验证 | 公开同步/异步、部分失败/位置/逐项DML计数、多行OUT/RETURNING及五资产矩阵本地完成，见末尾；按用户要求提交后暂停 |
 | D07 | 本地先行，实库延期 | 按需客户端预处理回退 | 待验证 | 命令显式开关、精准prepare首错误、基础标量安全编码、原租约/事务/总预算及五资产本地覆盖；MySQL非NULL字符串等待可信collation；见末尾 |
 | D08 | 本地先行，实库延期 | 拓扑发现与负载均衡 | 待验证 | 应用地址源、按数据源/连接实例轮转、共享总预算及逐会话模式/TLS重验；只在TCP建连失败时尝试候选，已发送SQL不重放；见末尾 |
-| D09 | 本地先行，实库延期 | 显式 XA | 进行中 | 不可变XID身份基础已接入并有五资产消费；固定物理会话、阶段执行、恢复及真实协调器验收仍开放，见末尾 |
+| D09 | 本地先行，实库延期 | 显式 XA | 进行中 | 不可变XID及MySQL固定物理会话、显式阶段与恢复快照已接入；Oracle DBMS_XA、真实协调器及两模式验收仍开放，见末尾 |
 | D10 | G4 后 | Oracle NCHAR/national charset | 待验证 | Codex，2026-10-19：独立会话编码、两种结果/参数读写、顺序字符流及五资产本地实现，验证见末尾；真实列往返和版本/OBProxy 暂缓 |
 | D11 | 本地先行，实库延期 | Oracle INTERVAL | 待验证 | 精确值/编解码/参数/Schema及公共消费本地完成，完整测试与独立走查记录见末尾；真实往返开放 |
 | D12 | 本地先行，实库延期 | MySQL JSON | 待验证 | 本地文本/二进制读写、元数据和字段流，验证见末尾；真实 JSON 列往返仍开放 |
@@ -1248,3 +1248,30 @@ D09 MySQL XA完整回归两次仅既有MultiAddressTlsUsesActualHostOrExplicitNa
 继续检查共享Configuration的5秒预算、TcpTransport与环回监听方式。直接使用本机System.Net.TcpClient测量：访问127.0.0.1未监听但已绑定端口耗时2095ms，localhost连IPv4-only listener耗时2070ms；这两段无TLS的连接行为已合计约4.16秒（TestResults/xa-refused-timing.log），原SNI场景建连余量不足。仅该夹具显式ConnectionTimeout=15；目的仍是检查SSLRequest、认证_server_host=localhost及实际/显式SNI名称，所有断言保留。没有改产品超时/重试、TLS校验或证书信任，没有安装/删除信任根；底层慢握手的全部原因未定位，不宣称排除所有产品性能问题。
 
 修复后上述SNI四种组合及专门整条Open总预算测试两种组合，共6项通过，0失败/跳过（TestResults/xa-tls-budget-green/*.trx）。专用超时测试仍是1秒预算且耗时小于4秒，不借SNI修复放宽。独立只读走查确认仅是非计时场景夹具预算修复；完整复核Unit2713通过、0失败/跳过（TestResults/xa-unit-accepted/*.trx），Consumer929与DI8也通过。此结果基于当时XA工作区版本，XA语法走查后续新增修复及最终结果另见后文。
+
+## D09 MySQL固定会话、显式XA阶段与恢复快照（2026-10-19）
+
+接99a82e7的不可变XID基础，在核心五目标提供connection.GetXaResource()与OceanBaseXaResource的Start/End/Prepare/Commit/Rollback/Recover同步及Task异步入口。资源绑定原物理会话，直到Close专用；普通命令/预处理/批次仅Active分支可执行，Transaction为null，本地事务和切库拒绝，环境TransactionScope继续拒绝。Close只销毁传输，不隐式完成分支；重开取得新资源，旧资源不能绑定新会话。Idle/Active/Ended/Suspended/Prepared阶段和XID严格匹配，End(Fail)跨Join/Resume保留rollback-only，必须回滚；允许按持久化XID完成已恢复分支。阶段成功后递增事务epoch，旧LOB/复杂类型上下文失效。沿用CommandExchange/QueryResult的单操作预算、取消、协议边界及结果未知不重放约束，没有新增依赖。
+
+Recover仅在Idle返回完整独立快照；四列类型、ASCII无符号数值、精确原始字节与两段长度均验证。格式号0..0xfffffffe按UInt32位模式还原公开Int32，拒绝负数/更宽Int64/保留-1，不能混淆不同服务端身份。最多65536个分支，超限或畸形/多结果/中断均失败，不返回部分结果。断流/取消/Close回归包括服务端已发送一行后中断，不将发送位置当作客户端已解析证据。A05公共MySQL识别门槛未放宽；本地测试显式注入认证后的MySQL事实。Oracle DBMS_XA当前明确拒绝，仍待后续模块。
+
+实现前缺资源/枚举API红编译见TestResults/xa-red.log；新增53项Unit涵盖单/两阶段、Join/Resume/Suspend/Fail、阶段/XID/参数边界、业务reader/批次互斥、本地/环境事务和切库隔离、Close/重开、可信错误及未知结果、严格恢复域/上限/完整性和安全诊断。新增80项五资产Consumer覆盖同步/异步、标准/OB20、成功/拒绝/断流/坏边界；reject路径使用空分支并恢复bqual_length=0及匹配raw字节，其他路径保留非空分支。Standard2.0辅助工程直接编译消费全部异步API。独立只读多轮走查，未委派实现，修复如下：
+
+- 完整可信的XA_RBROLLBACK/RBTIMEOUT/RBDEADLOCK（1402/1613/1614）不能继续保留本地Active/Ended。阶段及业务交换在验证完整边界后销毁会话，仍保留服务端码及结果已知标记；普通可信拒绝保持原阶段。码值核对固定服务端mysql_errno.h/ob_errno.def；六种错误位置回归通过。
+- 空OK或畸形空元数据的恢复响应曾泄露内部ProtocolException：四项修前失败见TestResults/xa-empty-red/*.trx。恢复层映射为OceanBaseException并废弃会话，完整终态结果不误标未知，未完成响应沿原未知规则；修后回归通过。
+- 六种XA操作的诊断名称曾缺失，监听回归仅得到open span，修前失败见TestResults/xa-diagnostics-red/*.trx。补全显式映射，验证六操作span及成功/失败计数、父子关联与身份不泄露，修后通过。
+- 固定服务端5e8a63d29dae9fde5e962b8fcc7b167d438fc343的sql_parser_mysql_mode.l/.y及XA resolver确认：空bqual必须使用X''，裸0x非法；格式号用小写0x加八位UInt32十六进制，包括0x00000000。未复制Java空分支及零格式号的空正文缺陷。四个格式边界修前实际SQL不匹配（TestResults/xa-empty-branch-reviewed-red/*.trx），修复后定向53项及五资产80项全部通过（xa-encoding-targeted、xa-encoding-consumer）。源码核对不是实库执行证据。
+
+全量期间两轮原SNI夹具预算失败与修复保留在前节，夹具修复独立提交de068af；不把失败计作通过。最终源码版本重新编译和完整回归，所有进程已结束，退出码均为0：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release核心五目标/DI三目标 | 0警告、0错误 | TestResults/xa-encoding-build.log |
+| 完整Unit，默认调度 | 2717通过，0失败/跳过；相对XID模块新增53、移除0 | TestResults/xa-encoding-unit-full/*.trx |
+| 完整五资产Consumer | 929通过，0失败/跳过；相对XID模块新增80、移除0 | TestResults/xa-encoding-consumer-full/*.trx |
+| DI | 8通过，0失败/跳过 | TestResults/xa-encoding-di-full/*.trx |
+| 新增源码/测试空白格式校验 | 退出0 | TestResults/xa-encoding-format.log |
+
+编译命令为dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；完整测试为dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/xa-encoding-<unit|consumer|di>-full。解析最终TRX核对全部执行/通过，并与XID模块最后报告逐案例比较确认新增及零移除。完整Unit使用正常Windows证书私钥权限，没有安装/删除信任根或降低TLS验证。独立代码及文档最终复查无阻断，README/架构/方案/台账同步，UTF8无BOM/CRLF和diff检查后在当前master本地提交，不推送；global.json仍保持删除。
+
+D09仍进行中，下一模块接Oracle DBMS_XA结构化身份绑定、返回码与恢复；真实协调器、OceanBase/OBProxy及异机测试按用户要求延期。本轮未重跑打包、旧运行时/Framework或扩展经TLS矩阵，本地MySQL注入夹具不证明公共MySQL建连或实库XA兼容；A05、C01、D15其他插件和发布关口继续开放，整体goal未完成。

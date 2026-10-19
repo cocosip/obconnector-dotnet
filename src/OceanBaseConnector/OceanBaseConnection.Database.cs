@@ -47,6 +47,7 @@ namespace OceanBaseConnector
             lock (_gate)
             {
                 var session = GetOpenSession();
+                if (_xaResource != null) throw new InvalidOperationException("The connection is dedicated to XA until Close.");
                 if (session.Info!.Mode != OceanBaseCompatibilityMode.MySql) throw new NotSupportedException("Database switching is supported only in MySQL mode.");
                 ValidateCommandTransaction(session, _transaction);
                 return (new CommandExchange(session, _log, _builder.CommandTimeout, token, () => { }), request);

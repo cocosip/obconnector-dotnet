@@ -38,6 +38,8 @@ namespace OceanBaseConnector
 
         private void ValidateCommandTransaction(PhysicalSession session, OceanBaseTransaction? transaction)
         {
+            if (_xaResource != null && !_xaResource.AllowsCommands)
+                throw new InvalidOperationException("XA business commands require an active branch with no phase operation.");
             if (!ReferenceEquals(_session, session) || !ReferenceEquals(_transaction, transaction) ||
                 (transaction != null && (transaction.Disposed || transaction.InProgress || !ReferenceEquals(transaction.Session, session))))
                 throw new InvalidOperationException("The command must reference the connection's active transaction, or null outside a transaction.");
@@ -59,7 +61,7 @@ namespace OceanBaseConnector
                         if (type != null) ValidateComplexBinding(type, session, transaction);
                     }
                 }
-                var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin);
+                var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin) { IsXa = _xaResource != null };
                 if (_complexTypeContext != null && ReferenceEquals(_complexTypeContext.Session, session) &&
                     ReferenceEquals(_complexTypeContext.Transaction, transaction) && _complexTypeContext.Epoch == _transactionEpoch)
                     exchange.ComplexTypes = _complexTypes;
@@ -109,6 +111,7 @@ namespace OceanBaseConnector
             lock (_gate)
             {
                 var session = GetOpenSession();
+                if (_xaResource != null) throw new InvalidOperationException("The connection is dedicated to XA until Close.");
                 if (_transaction != null) throw new InvalidOperationException("A local transaction is already active.");
                 var isolation = TransactionIsolation(session.Info!.Mode, level);
                 var exchange = new CommandExchange(session, _log, _builder.CommandTimeout, token, () => { }, logCommand: false);
@@ -348,6 +351,7 @@ namespace OceanBaseConnector
                 var transaction = _transaction;
                 _session = null;
                 _transaction = null;
+                _xaResource = null;
                 CommandExchange? exchange = null;
                 if (transaction != null && !transaction.InProgress && session?.State == SessionState.Open)
                 {

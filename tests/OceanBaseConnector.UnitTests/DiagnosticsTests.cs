@@ -33,6 +33,42 @@ namespace OceanBaseConnector.UnitTests
             await channel.ReadPacketAsync(); await channel.WritePacketAsync(TimeZone()); channel.BeginCommand(); await action(channel);
         });
         private static byte[] TimeZone() => TextCommandTests.TimeZoneOk("+00:00");
+
+        [Fact]
+        public async Task XaDiagnosticsCoverEveryPhaseAndExcludeBranchIdentity()
+        {
+            using var parent = new Activity("coordinator").Start(); using var capture = new Capture();
+            const string identity = "0x01,0x02,0x00000001";
+            var operations = new[] { "START", "END", "PREPARE", "COMMIT", "RECOVER", "ROLLBACK" };
+            var server = Server(async channel =>
+            {
+                foreach (var operation in operations)
+                {
+                    await Request(channel, "XA " + operation + (operation == "RECOVER" ? "" : " " + identity));
+                    await channel.WritePacketAsync(operation == "RECOVER" ? Error() : Ok()); channel.BeginCommand();
+                }
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync(); var session = connection.GetOpenSession(); var info = session.Info!;
+                typeof(PhysicalSession).GetField("_info", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(session,
+                    new ConnectResult(info.ServerVersion, info.ConnectionId, OceanBaseCompatibilityMode.MySql, info.Capabilities, info.ServerStatus, info.ObCapabilityFlag, info.SessionVariables));
+                var resource = connection.GetXaResource(); var xid = new OceanBaseXid(1, new byte[] { 1 }, new byte[] { 2 });
+                await resource.StartAsync(xid); await resource.EndAsync(xid); await resource.PrepareAsync(xid); await resource.CommitAsync(xid);
+                await Assert.ThrowsAsync<OceanBaseException>(() => resource.RecoverAsync()); await resource.RollbackAsync(xid);
+                Assert.Equal(new[] { "oceanbase.open" }.Concat(operations.Select(x => "oceanbase.xa." + x.ToLowerInvariant())), capture.Spans.Select(x => x.OperationName));
+                foreach (var span in capture.Spans.Skip(1))
+                {
+                    Check(span, span.OperationName.Substring("oceanbase.".Length), "mysql", span.OperationName.EndsWith("recover", StringComparison.Ordinal) ? "error" : "success", false);
+                    Assert.Equal(parent.Id, span.ParentId); Assert.DoesNotContain(identity, string.Join(";", span.TagObjects)); Assert.Empty(span.Events);
+                }
+                Assert.Equal(7, capture.Counts.Count); Assert.Equal(7, capture.Durations.Count); Assert.Same(parent, Activity.Current);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         private static async Task Request(PacketChannel channel, string sql)
         {
             var request = await TextCommandTests.ReadClientCommand(channel); Assert.Equal(3, request[0]);

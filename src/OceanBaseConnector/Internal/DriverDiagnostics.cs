@@ -47,6 +47,12 @@ namespace OceanBaseConnector.Internal
             "transaction.begin" => "oceanbase.transaction.begin",
             "transaction.commit" => "oceanbase.transaction.commit",
             "transaction.rollback" => "oceanbase.transaction.rollback",
+            "xa.start" => "oceanbase.xa.start",
+            "xa.end" => "oceanbase.xa.end",
+            "xa.prepare" => "oceanbase.xa.prepare",
+            "xa.commit" => "oceanbase.xa.commit",
+            "xa.rollback" => "oceanbase.xa.rollback",
+            "xa.recover" => "oceanbase.xa.recover",
             _ => throw new ArgumentOutOfRangeException(nameof(operation))
         };
 

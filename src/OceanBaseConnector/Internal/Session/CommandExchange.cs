@@ -140,6 +140,7 @@ namespace OceanBaseConnector.Internal.Session
             NationalCharacterSet = _session.TakeNationalCharacterSet(_lease);
         }
         internal Action? BeforeSuccessfulCompletion { get; set; }
+        internal bool IsXa { get; set; }
 #if NET8_0_OR_GREATER
         internal System.Data.Common.DbBatchCommand? BatchCommand { get; set; }
         internal Action? BatchFailed { get; set; }
@@ -234,6 +235,9 @@ namespace OceanBaseConnector.Internal.Session
                     if (_session.State != SessionState.Busy) throw new InvalidOperationException("The result session is no longer active.");
                 }
                 if (_session.State == SessionState.Busy) _channel.CompleteResponse();
+                if (IsXa && error is OceanBaseException xaError &&
+                    (xaError.ServerErrorCode == 1402 || xaError.ServerErrorCode == 1613 || xaError.ServerErrorCode == 1614))
+                    _session.Break();
                 if (error == null) BeforeSuccessfulCompletion?.Invoke();
                 _terminal = true; _responsePending = false;
             }

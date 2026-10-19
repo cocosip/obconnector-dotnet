@@ -12,6 +12,15 @@ namespace OceanBaseConnector.ConsumerTests.NetStandard
     /// </summary>
     public static class NetStandardConsumerSample
     {
+        public static async System.Threading.Tasks.Task CompleteXa(OceanBaseConnection connection, OceanBaseXid xid, System.Threading.CancellationToken token)
+        {
+            var resource = connection.GetXaResource();
+            await resource.StartAsync(xid, OceanBaseXaStartMode.New, token);
+            await resource.EndAsync(xid, OceanBaseXaEndMode.Success, token);
+            if (await resource.PrepareAsync(xid, token) == OceanBaseXaVote.Prepared) await resource.CommitAsync(xid, false, token);
+            foreach (var recovered in await resource.RecoverAsync(token)) await resource.RollbackAsync(recovered, token);
+        }
+
         public static string Describe()
         {
             if (OceanBaseTargetSurface.HasModernAdoNetApis)

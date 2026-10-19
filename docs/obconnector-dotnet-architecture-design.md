@@ -483,7 +483,21 @@ Load Balance枚举Sequential（默认）/RoundRobin在连接串严格按名称�
 
 核心五目标的OceanBaseXid是sealed不可变值类，以有符号Int32 FormatId、1–64字节globalTransactionId和0–64字节branchQualifier表示一个XA分支。FormatId仅拒绝保留的NULLXID -1，其他负值不改变位模式；两段不可null。构造及GetGlobalTransactionId()/GetBranchQualifier()防御复制，身份比较包含格式号、两段各自长度和完整字节，散列与相等一致；默认对象字符串不提供身份正文，没有字符串/Guid隐式转换。协调器可在外部按自己的持久化格式保存返回副本。
 
-结构及长度以固定Java基线OceanBaseXid/OceanBaseXaResource和OceanBase 5e8a63d29dae9fde5e962b8fcc7b167d438fc343的ObXATransID为依据，不复制Java保留可变输入数组的行为。后续MySQL命令须按Java基线的32位无符号位模式编码FormatId，Oracle传有符号值；服务端内部Int64范围更大，恢复不得截断/静默丢失不在公开域中的身份。该值对象不发包、不开始/加入事务；固定物理会话、显式阶段操作和恢复入口仍需后续D09模块接入，TransactionScope继续拒绝，真实协调器/两模式往返验收仍开放。
+结构及长度以固定Java基线OceanBaseXid/OceanBaseXaResource和OceanBase 5e8a63d29dae9fde5e962b8fcc7b167d438fc343的ObXATransID为依据，不复制Java保留可变输入数组的行为。MySQL命令按Java基线的32位无符号位模式编码FormatId，后续Oracle传有符号值；服务端内部Int64范围更大，恢复不得截断/静默丢失不在公开域中的身份。该值对象本身不发包、不开始/加入事务；下述MySQL模块接入固定物理会话、显式阶段操作和恢复，Oracle仍待后续接入。TransactionScope继续拒绝，真实协调器/两模式往返验收仍开放。
+
+### D09 MySQL XA阶段与恢复模块
+
+在现有XID基础上增加五目标公开`OceanBaseConnection.GetXaResource()`，返回绑定当前物理会话的sealed `OceanBaseXaResource`，同一会话复用同一个资源。该入口只能用于空闲、没有本地事务的MySQL会话；Oracle暂明确拒绝，后续单独接入DBMS_XA，不发明未核实的SQL构造器。A05公开MySQL身份确认门槛不变，本模块本地夹具显式提供认证后的MySQL事实，不作为真实MySQL建连证据。
+
+这是本轮实现选择：获取资源后，该连接直到Close专用于XA，不提供Dispose或隐式提交/回滚。普通命令、预处理及批次仅在Active阶段允许，Transaction属性为null；本地BeginTransaction和ChangeDatabase始终拒绝。Close仅销毁传输，不发本地ROLLBACK或XA阶段指令；新Open可取得新资源，旧资源所有操作拒绝，不迁移到新会话。原有LOB/复杂类型上下文随成功阶段变化递增事务epoch而失效。直接发送事务控制SQL绕过驱动阶段API不受支持，应用必须使用资源入口。
+
+公开同步/Task异步方法：`Start(xid, OceanBaseXaStartMode mode = New)`、`End(xid, OceanBaseXaEndMode mode = Success)`、`Prepare(xid)`返回`OceanBaseXaVote`、`Commit(xid, bool onePhase = false)`、`Rollback(xid)`及`Recover()`返回独立`OceanBaseXid[]`。异步方法末尾增加可选CancellationToken。StartMode为New/Join/Resume，EndMode为Success/Fail/Suspend；Vote为Prepared=0/ReadOnly=3（MySQL成功只返回Prepared）。不提供协调器超时、Forget无操作、SameRM推断或环境事务接入。
+
+一个资源只跟踪一个分支：Idle允许New/Join；Ended允许同身份Join；Suspended允许同身份Resume；Active仅允许同身份End；Ended允许Prepare或单阶段Commit；Prepared允许两阶段Commit；Ended/Prepared允许Rollback。Idle允许按协调器持久化XID进行两阶段Commit/Rollback，无须先Recover。Prepare及单阶段Commit拒绝End(Fail)标记的rollback-only分支；Fail标记跨Join/Resume保留，必须Rollback。Recover仅允许Idle，返回整个prepared分支快照，没有隐式恢复游标。Active和Suspended不能提交/回滚，必须先正常End。错误不推进本地阶段；普通完整可信服务端拒绝保持当前阶段以便重试或回滚；可信XA_RBROLLBACK/RBTIMEOUT/RBDEADLOCK（1402/1613/1614）表明分支已回滚，阶段及业务命令路径均保守销毁会话，保留原服务端错误且不误标结果未知。码值依据固定服务端src/share/mysql_errno.h及ob_errno.def；结果未知同样销毁会话且不重放。每个操作复用单个CommandExchange预算及已有取消/错误/OB20边界校验；阶段发布在连接锁内并核对原会话身份，资源阶段操作互斥且不能和业务reader交错。
+
+MySQL使用固定XA关键字和`0x<gtrid>,0x<bqual>,0x<uint32 format bit pattern>`，不插入用户文本。空bqual使用X''，不复制Java生成裸0x的错误；格式号始终八位十六进制，包括0x00000000，不复制Java零值空正文。固定服务端sql_parser_mysql_mode.l:730要求0x后至少一位十六进制，而X''允许零位；yacc的text_string/xa_xid与ulong_num分别确认空分支和格式号语法。该源码核对不替代实库互通。End(Fail)发送普通XA END，客户端保留rollback-only约束；不假称服务端支持TMFAIL标志。Recover按四列formatID/gtrid_length/bqual_length/data解析原始字节，数值只接受ASCII无符号十进制：格式号0..UInt32.MaxValue但排除保留-1的位模式；负数或更宽值明确拒绝，不能将两个服务端Int64身份折叠为一个公开XID。两段长度分别1..64/0..64，原始data长度必须精确匹配，NULL/额外列/多结果/非法元数据或身份均失败，不返回部分列表。最多65536个分支，超过则失败，避免无界分配。异常沿用OceanBaseException保留服务端码/SQLSTATE及结果未知标记；不记录SQL或身份正文。
+
+本模块只建立上述MySQL路径的本地可验证契约；Oracle类型绑定/返回码/恢复、真实协调器、两模式数据库/OBProxy及异机验收仍开放，D09整体不据此完成。
 
 ### 错误与诊断
 
