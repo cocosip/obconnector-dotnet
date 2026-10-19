@@ -463,11 +463,21 @@ ADO.NET 不替 provider 自动管理物理连接。`Pooling=false` 是默认值�
 
 归还会话时先关闭或读尽 reader，回滚未结束事务，再执行经过验证的服务端完整重置，并重做必要的字符集、时区、schema/NLS 等初始化；服务端 statement ID 与缓存、游标和 locator 全部失效。验证必须覆盖应用直接执行的 `SET`/`ALTER SESSION`、当前 database/schema、用户变量、临时对象、准备语句和失败中的事务，不能只恢复驱动 API 记录的设置。任何一步失败、遇到不能证明已清理的会话对象，或该版本没有完整重置能力，都销毁物理会话。Java 的 `OceanBaseConnection.reset()` 仅在特定条件下发 `COM_RESET_CONNECTION`，其他时候主要恢复已跟踪状态；它不能作为 OceanBase 完整重置的证明：[Java reset](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/OceanBaseConnection.java#L2463)。
 
-多地址先实现连接建立前顺序尝试；后续负载均衡和发现能力按真实 OceanBase/OBProxy 拓扑扩展。故障后创建的新物理会话必须重新握手、识别模式、初始化状态和准备 statement；不透明恢复 reader、事务或 locator。XA 需要显式 API、固定会话、恢复语义及两种模式不同命令；在真实服务端和事务协调器测试完成前不接入 `System.Transactions`。
+多地址默认在连接建立前顺序尝试；D08按下述约定提供应用地址发现及显式轮转，真实OceanBase/OBProxy拓扑适配仍需验证。故障后创建的新物理会话必须重新握手、识别模式、初始化状态和准备 statement；不透明恢复 reader、事务或 locator。XA 需要显式 API、固定会话、恢复语义及两种模式不同命令；在真实服务端和事务协调器测试完成前不接入 `System.Transactions`。
 
-C02 的 .NET 连接串约定为 `Server=ob1:2881,ob2:2883,[::1]:2881;Port=2881`：候选按声明顺序尝试，省略的端口继承 Port，不带端口的 IPv6 也可使用；带端口的 IPv6 必须加方括号。候选两侧空格忽略，拒绝空候选及非法主机/端口，不接受 JDBC URL 或候选角色语法。整个 Open（全部候选 TCP、TLS、认证、模式初始化）共享 Connection Timeout 预算，0 为无限。仅 TCP 建连的 socket 故障触发下一候选；一旦连通，TLS/认证/协议/模式失败立即返回，不通过切换隐藏身份或配置错误。这比 Java connectWithoutProxy 对 SQLException 的广泛尝试更保守，是本驱动的明确选择。每次显式 Open 创建新会话并重新从首候选开始；业务执行路径没有候选切换。TLS 名称和认证 _server_host 使用本次实际候选主机（显式 TLS Server Name 优先）；DataSource 返回配置列表，成功/关闭/执行诊断使用实际端点。
+C02 的 .NET 连接串约定为 `Server=ob1:2881,ob2:2883,[::1]:2881;Port=2881`：候选默认按声明顺序尝试，省略的端口继承 Port，不带端口的 IPv6 也可使用；带端口的 IPv6 必须加方括号。候选两侧空格忽略，拒绝空候选及非法主机/端口，不接受 JDBC URL 或候选角色语法。整个 Open（全部候选 TCP、TLS、认证、模式初始化）共享 Connection Timeout 预算，0 为无限。仅 TCP 建连的 socket 故障触发下一候选；一旦连通，TLS/认证/协议/模式失败立即返回，不通过切换隐藏身份或配置错误。这比 Java connectWithoutProxy 对 SQLException 的广泛尝试更保守，是本驱动的明确选择。默认每次显式 Open 创建新会话并重新从首候选开始；显式轮转见D08，业务执行路径没有候选切换。TLS 名称和认证 _server_host 使用本次实际候选主机（显式 TLS Server Name 优先）；DataSource 返回配置列表，成功/关闭/执行诊断使用实际端点。
 
 2026-10-19 C02已在共享PhysicalSession路径实现，connection和现代data source共用；Windows60项新增单元、五资产10项同步/异步消费及五次8/9/10独立运行时基础消费提供本地证据。TLS测试记录实际SNI和认证_server_host，VerifyFull拒绝不受信证书且不尝试下一地址；可信私有CA成功链仍未验收。总预算回归只证明整个Open耗时上界，跨候选不重置由单次CreateBudget及同一token传递的源码走查确认，不依赖操作系统拒绝连接的耗时。IPv6有解析证据，真实IPv6网络、两模式直连/OBProxy与非Windows互通仍未验证。C01尚无完整重置白名单，继续拒绝池化。
+
+### D08 地址来源和轮转
+
+Load Balance枚举Sequential（默认）/RoundRobin在连接串严格按名称解析。EndpointSelector用原子计数器轮换每次显式Open的首地址，剩余候选环形各尝试一次；无健康缓存、后台重连或业务SQL重试。计数器按现代数据源共享，直接连接按实例持有，重新赋连接串/地址源时重置；每次取得有效候选快照后消耗一次选址，不以最终成功位置推进。新数据源有独立计数器。
+
+五资产IOceanBaseAddressResolver的Resolve(token)/ResolveAsync(token)返回Server语法的可信同租户地址列表。直接连接AddressResolver关闭时可设置，现代数据源builder UseAddressResolver在Build冻结引用，同源连接不可覆盖。每次Open解析一个新快照，无缓存或静默种子回退，省略端口继承Port；外部结果最多65536字符/256地址，完整验证后才发起网络连接。配置Server仍必填并用于发现前DataSource/日志；发现成功后的日志沿实际候选。应用负责OCP/注册中心等适配、并发安全及resolver资源释放，不内置OCP/TNS/角色路由。
+
+发现位于原PhysicalSession的单次连接预算内，后续TCP/TLS/认证不重置预算。异步等待可以被取消/关闭/超时中断，迟到成功不采用、迟到异常观察；同步resolver须合作取消，异步方法须及时返回Task。用户回调不在驱动锁内运行，取消回调应及时返回且不抛错；Close先标记终态并清理传输，锁外通知取消，回调异常不能跳过清理。resolver异常文本不写驱动日志；调用者仍可通过既有InnerException检查其自行抛出的异常。
+
+地址来源不授予服务端身份：新会话继续TLS、认证、模式及能力初始化，TLS/认证/模式/协议失败不切换；A05的MySQL确认门槛保留。发现和轮转只发生在显式Open前，不迁移事务/statement/reader/locator，已发送SQL未知结果销毁会话且不自动重放。真实拓扑及版本/OBProxy适配仍待验收。
 
 数据库/协议错误使用 `OceanBaseException : DbException`，保留服务端错误码、SQLSTATE 和 `IsExecutionOutcomeUnknown`，现代目标通过继承的 `BatchCommand` 关联批次条目；异常不提供模式或端点属性，安全端点和模式通过日志/诊断关联；发送前的调用方取消遵循 `OperationCanceledException`。B01 接入 `Microsoft.Extensions.Logging.Abstractions`，由数据源 builder 的 `UseLoggerFactory` 配置，默认无日志，不使用可变全局工厂；命令/事务日志随 B02/B07 实现。日志与追踪不写入默认 SQL、绑定值、凭据或原始服务端错误文本，日志后端异常不能改变执行与资源清理结果。C07 已用 `ActivitySource`、`Meter` 暴露本地操作和聚合指标，两个Standard资产显式DiagnosticSource8.0.1、现代资产运行时API的五目标边界已本地验证；不预先叠加多套事件设施。本地追踪不依赖 OB20，经服务端协商的完整链路追踪归 D01。日志与协议抓包分开，抓包必须显式开启并擦除认证和参数内容。事件、安全和生命周期细则见 §2.6。
 

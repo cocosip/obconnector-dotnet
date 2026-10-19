@@ -1,5 +1,14 @@
 namespace OceanBaseConnector
 {
+    /// <summary>Initial endpoint selection for each new physical session.</summary>
+    public enum OceanBaseLoadBalance
+    {
+        /// <summary>Try addresses in their supplied order (default).</summary>
+        Sequential = 0,
+        /// <summary>Rotate the first address per connection or shared data source.</summary>
+        RoundRobin = 1,
+    }
+
     /// <summary>
     /// TLS behavior for a connection. The default is <see cref="VerifyFull"/>,
     /// which encrypts and validates the certificate chain plus the endpoint

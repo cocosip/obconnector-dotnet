@@ -7,10 +7,13 @@ namespace OceanBaseConnector
     public sealed class OceanBaseDataSourceBuilder
     {
         private ILoggerFactory? _loggerFactory;
+        private IOceanBaseAddressResolver? _addressResolver;
         public OceanBaseDataSourceBuilder(string connectionString = "") => ConnectionStringBuilder = new OceanBaseConnectionStringBuilder(connectionString);
         public OceanBaseConnectionStringBuilder ConnectionStringBuilder { get; }
         public OceanBaseDataSourceBuilder UseLoggerFactory(ILoggerFactory? loggerFactory) { _loggerFactory = loggerFactory; return this; }
-        public OceanBaseDataSource Build() => new OceanBaseDataSource(ConnectionStringBuilder.Build(), ConnectionStringBuilder.ConnectionString, new ConnectionLog(_loggerFactory));
+        /// <summary>Use a caller-owned, concurrency-safe address source for each connection Open.</summary>
+        public OceanBaseDataSourceBuilder UseAddressResolver(IOceanBaseAddressResolver? resolver) { _addressResolver = resolver; return this; }
+        public OceanBaseDataSource Build() => new OceanBaseDataSource(ConnectionStringBuilder.Build(), ConnectionStringBuilder.ConnectionString, new ConnectionLog(_loggerFactory), _addressResolver);
     }
 }
 #endif

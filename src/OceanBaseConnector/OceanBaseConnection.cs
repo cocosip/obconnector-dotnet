@@ -21,6 +21,8 @@ namespace OceanBaseConnector
         private PhysicalSession? _session;
         private bool _hidePassword;
         private bool _disposed;
+        private IOceanBaseAddressResolver? _addressResolver;
+        private EndpointSelector _endpointSelector = new EndpointSelector();
 #if NET8_0_OR_GREATER
         private readonly OceanBaseDataSource? _source;
 #endif
@@ -42,6 +44,8 @@ namespace OceanBaseConnector
             _builder = new OceanBaseConnectionStringBuilder(connectionString);
             _hidePassword = true;
             _log = log;
+            _addressResolver = source.AddressResolver;
+            _endpointSelector = source.EndpointSelector;
         }
 #endif
 
@@ -66,6 +70,27 @@ namespace OceanBaseConnector
                     _builder = builder;
                     _options = null;
                     _hidePassword = false;
+                    _endpointSelector = new EndpointSelector();
+                }
+            }
+        }
+
+        /// <summary>Optional caller-owned address source, frozen while open or opening.
+        /// Data-source connections inherit a fixed resolver from their builder.</summary>
+        public IOceanBaseAddressResolver? AddressResolver
+        {
+            get { lock (_gate) return _addressResolver; }
+            set
+            {
+                lock (_gate)
+                {
+                    ThrowIfDisposed();
+#if NET8_0_OR_GREATER
+                    if (_source != null) throw new InvalidOperationException("A data-source connection has fixed configuration.");
+#endif
+                    if (_session != null) throw new InvalidOperationException("Close the connection before changing its address resolver.");
+                    _addressResolver = value;
+                    _endpointSelector = new EndpointSelector();
                 }
             }
         }
@@ -147,7 +172,7 @@ namespace OceanBaseConnector
                 if (_options.Pooling) throw new NotSupportedException("Pooling requires a verified session reset implementation.");
                 _hidePassword = true;
                 options = _options;
-                return _session = new PhysicalSession(options);
+                return _session = new PhysicalSession(options, _addressResolver, _endpointSelector);
             }
         }
 

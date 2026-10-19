@@ -13,12 +13,15 @@ namespace OceanBaseConnector
         private readonly string _connectionString;
         private readonly ConnectionLog _log;
         private bool _disposed;
+        internal IOceanBaseAddressResolver? AddressResolver { get; }
+        internal EndpointSelector EndpointSelector { get; } = new EndpointSelector();
 
-        internal OceanBaseDataSource(OceanBaseConnectionOptions options, string connectionString, ConnectionLog log)
+        internal OceanBaseDataSource(OceanBaseConnectionOptions options, string connectionString, ConnectionLog log, IOceanBaseAddressResolver? addressResolver)
         {
             _options = options;
             _connectionString = connectionString;
             _log = log;
+            AddressResolver = addressResolver;
         }
 
         public override string ConnectionString => _options.PersistSecurityInfo ? _connectionString : _options.SanitizedConnectionString;

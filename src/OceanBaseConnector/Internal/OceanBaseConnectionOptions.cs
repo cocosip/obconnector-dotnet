@@ -30,6 +30,7 @@ namespace OceanBaseConnector.Internal
             bool enableFullLinkTrace,
             bool useOraclePrepareExecute,
             bool useLobLocators,
+            OceanBaseLoadBalance loadBalance,
             string sanitizedConnectionString)
         {
             Server = server;
@@ -51,6 +52,7 @@ namespace OceanBaseConnector.Internal
             EnableFullLinkTrace = enableFullLinkTrace;
             UseOraclePrepareExecute = useOraclePrepareExecute;
             UseLobLocators = useLobLocators;
+            LoadBalance = loadBalance;
             SanitizedConnectionString = sanitizedConnectionString;
         }
 
@@ -62,7 +64,7 @@ namespace OceanBaseConnector.Internal
 
         internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
             endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, SanitizedConnectionString);
+            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, LoadBalance, SanitizedConnectionString);
 
         public string UserId { get; }
 
@@ -92,6 +94,7 @@ namespace OceanBaseConnector.Internal
         public bool EnableFullLinkTrace { get; }
         public bool UseOraclePrepareExecute { get; }
         public bool UseLobLocators { get; }
+        public OceanBaseLoadBalance LoadBalance { get; }
 
         /// <summary>Connection string without the password; safe for logs and exceptions.</summary>
         public string SanitizedConnectionString { get; }

@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08/D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -192,7 +192,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D05 | 本地先行，实库延期 | ARRAY/STRUCT 与类型字典 | 待验证 | 约定本地范围实现及完整复核通过，见末尾；真实字典/DDL、往返及版本/OBProxy资源语义验收继续延期 |
 | D06 | 本地先行，实库延期 | bulk/array binding及多行输出 | 待验证 | 公开同步/异步、部分失败/位置/逐项DML计数、多行OUT/RETURNING及五资产矩阵本地完成，见末尾；按用户要求提交后暂停 |
 | D07 | 本地先行，实库延期 | 按需客户端预处理回退 | 待验证 | 命令显式开关、精准prepare首错误、基础标量安全编码、原租约/事务/总预算及五资产本地覆盖；MySQL非NULL字符串等待可信collation；见末尾 |
-| D08 | G4 后 | 拓扑发现与负载均衡 | 未开始 | 待记录 |
+| D08 | 本地先行，实库延期 | 拓扑发现与负载均衡 | 待验证 | 应用地址源、按数据源/连接实例轮转、共享总预算及逐会话模式/TLS重验；只在TCP建连失败时尝试候选，已发送SQL不重放；见末尾 |
 | D09 | G4 后 | 显式 XA | 未开始 | 待记录 |
 | D10 | G4 后 | Oracle NCHAR/national charset | 待验证 | Codex，2026-10-19：独立会话编码、两种结果/参数读写、顺序字符流及五资产本地实现，验证见末尾；真实列往返和版本/OBProxy 暂缓 |
 | D11 | 本地先行，实库延期 | Oracle INTERVAL | 待验证 | 精确值/编解码/参数/Schema及公共消费本地完成，完整测试与独立走查记录见末尾；真实往返开放 |
@@ -1180,3 +1180,34 @@ OceanBaseArrayBindingResult按输入位置提供不可变状态、错误码及�
 编译及完整测试命令沿上一模块，不加filter或runsettings，结果目录使用上表路径。已解析最终TRX确认全部执行/通过；与当前HEAD测试diff核对原案例未移除。完整Unit使用正常Windows证书私钥权限，没有安装/删除信任根或降低TLS验证；首轮失败及试验配置不计为通过证据。另按用户要求删除global.json，并移除架构/方案中的SDK锁定要求，使用支持net10.0的已安装SDK；删除后Release全解决方案0警告/错误，见`TestResults/sdk-unpin-build-final.log`。
 
 独立只读走查及复查无剩余阻断；源码/测试、README、架构、方案和台账同步，UTF8无BOM/CRLF及diff检查后在当前master本地提交，不推送。D07约定本地范围完成，正式状态待验证；D08/D09、A05、C01、D15其他插件及发布审核保持开放，整体goal未完成。真实数据库/OBProxy及异机测试按要求暂缓，扩展经TLS、打包及旧运行时/Framework矩阵本轮未重跑；本地夹具不作为实库兼容证据。
+
+## D08地址发现与轮转选址（2026-10-19）
+
+从12fa814继续，复用C02的PhysicalSession建连链路。新增连接串Load Balance=Sequential|RoundRobin，默认Sequential；RoundRobin轮换每次显式Open的起点并环形尝试候选一次，仅TCP socket建连失败允许下一候选。线程安全游标按现代数据源共享，直接连接按实例跨Close/Open保留；重新设置连接串或AddressResolver重置直接连接游标，不使用全局游标。
+
+五目标公开IOceanBaseAddressResolver的同步/异步方法，连接AddressResolver仅关闭时可设置，数据源builder.UseAddressResolver在Build冻结引用、其连接不可改写。每次显式Open调用对应方法一次，新结果替换配置候选，按现有Server语法解析并继承Port；最多65536字符、256候选。空值、错误、超限或无效结果立即失败，不回退种子或陈旧快照。接口由应用持有、释放并保证并发安全，同步实现合作取消、异步实现及时返回Task，取消回调须及时返回且不能抛错。配置Server仍必填；本地实现提供适配器入口，没有内置OCP/TNS格式、角色路由、缓存或后台重连。
+
+发现、TCP、TLS及认证共用原总连接预算。异步resolver即使忽略token也可中止等待，迟到成功不建连、迟到异常被观察；用户回调不在驱动锁中调用。新物理会话仍重新认证和检查模式/TLS，A05公共MySQL限制保留。事务及已发送SQL断流后不发现、不切换、不透明重连或重放；调用方只能显式Close/Open创建新会话。应用须保证发现地址属于可信同一逻辑租户。
+
+验证与独立走查：
+
+- 配置API缺失红编译见topology-config-red.log，配置首轮8项通过（topology-config-green）；resolver API缺失红编译见topology-execution-red.log，执行首轮35项通过（topology-execution-green）。新增56项Unit覆盖严格枚举/快照/序列化、轮转环绕/溢出/并发、发现刷新/替换/端口继承、生命周期/冻结、非法结果/抛错、取消/关闭/超时/迟到结果、TLS名称/拒绝、认证/模式失败和事务断流不重放。
+- 首轮边界4项失败：2项事务夹具误写初始化SQL，改为实际SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED和set autocommit = 0；2项来自沙箱证书私钥权限。产品事务/TLS策略未改，正常Windows权限下52项边界通过（topology-boundaries-green）。
+- 独立走查发现Close在session锁内调用取消回调，且回调异常可能阻止资源释放。增加跨线程读取原session状态和抛错回调2项回归，修前失败（topology-close-lock-red、topology-close-callback-red）；改为锁内先关闭传输/置Closed、锁外取消并捕获AggregateException，修后2项通过（topology-close-callback-green）。
+- 发现耗时2秒后静默握手的2项回归验证3秒总预算（topology-shared-budget-green）；临时在发现后重置预算的变异使2项均在约5秒失败（topology-shared-budget-mutation-red），随后恢复源码并完整重编译。最终源码仅CreateBudget设置一次CancelAfter，不以夹具等待时限代替总预算断言。
+- 新增40项五资产×同步/异步×标准/OB20×成功/断流消费，验证公开发现、重开轮转、不同地址结果及未知结果不重连。resolver实现放在既有Standard2.0消费辅助工程，与目标资产一起隔离加载，同时验证基线接口可编译；未使用无法引用collectible接口的DispatchProxy。40项定向通过（topology-consumer-green）。
+- 独立只读走查及多次复查无剩余本地范围阻断；核对共享预算变异、取消回调、公开五资产消费及接口/文档所有权契约。未委派实现。
+
+最终完整验证（进程结束、退出码均为0）：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release核心五目标/DI三目标 | 0警告、0错误 | TestResults/topology-build-final.log |
+| 完整Unit | 2653通过，0失败/跳过；新增56、移除0 | TestResults/topology-unit-final/*.trx |
+| 五资产Consumer | 844通过，0失败/跳过；新增40、移除0 | TestResults/topology-consumer-final/*.trx |
+| DI | 8通过，0失败/跳过 | TestResults/topology-di-final/*.trx |
+| 新增源码/测试空白格式校验 | 退出0 | TestResults/topology-format-final.log |
+
+编译命令为dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；完整测试命令为dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/topology-<unit|consumer|di>-final。已解析最终TRX并与D07最后通过报告比较案例名称，确认全部执行/通过和零移除。完整Unit使用正常Windows证书私钥权限，没有安装/删除信任根或降低TLS验证。global.json仍保持删除。README、架构、方案及台账同步，UTF8无BOM/CRLF与git diff --check通过后在当前master本地提交，不推送。
+
+D08约定本地适配器与选址范围完成，正式状态待验证；真实拓扑服务/OceanBase/OBProxy协调、故障与异机验收按要求暂缓。本轮未重新打包或重跑旧运行时/Framework矩阵，本地TLS夹具不证明真实部署证书兼容。D09、A05、C01、D15其他插件及发布审核继续开放，整体goal未完成。

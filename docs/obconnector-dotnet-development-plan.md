@@ -813,6 +813,28 @@ DML成功响应首列是该项影响行数；错误响应首列是0起始失败�
 
 本地范围完成：Release核心五/DI三目标0警告/错误，完整Unit2597（新增42）、Consumer804（新增30）、DI8全部通过，0失败/跳过；详见台账。MySQL非NULL字符串仍需可信会话collation，特殊类型及输出不回退。D07正式状态待验证，D08/D09及其余环境/发布关口保持开放。
 
+### D08 地址发现与轮转选址实施
+
+目标：落实D08的地址来源、选址、模式重验及已发送SQL不重放要求；复用C02共享PhysicalSession链路，不增加第二套建连流程。技术边界仍为核心五目标/现代数据源三目标、无新依赖、当前分支本地测试/走查后提交，实库及异机暂缓。按架构第6节和D08条目执行，接口细节由本轮实现确定。
+
+设计约定：
+
+- 连接串新增`Load Balance=Sequential|RoundRobin`，默认Sequential保持C02行为。RoundRobin只轮换每次显式Open的首选地址，然后环形遍历剩余候选一次；只有TCP socket建连失败可尝试下一项。游标按数据源共享且线程安全；直接连接按实例跨Close/Open保留，不使用全局静态轮转器。重新设置连接串或地址源重置直接连接轮转器；失败的Open也消耗一次选址。
+- 五目标公开`IOceanBaseAddressResolver.Resolve(CancellationToken): string`和`ResolveAsync(CancellationToken): Task<string>`。直接连接`AddressResolver`仅关闭时可修改；现代builder的`UseAddressResolver(IOceanBaseAddressResolver?)`在Build冻结引用，同源连接不可改写。resolver由调用者持有、释放并保证并发安全；同步方法必须合作取消，异步方法须及时返回Task。驱动不在锁内调用用户代码，也不以同步方法代替异步方法。
+- 每次Open在同一总预算内调用resolver一次，非空结果按现有`Server`语法解析，省略端口继承Port；最多64KiB字符/256候选，完整验证后冻结为本次候选。配置Server仍必填并用于建连前诊断，解析结果替换本次地址列表；空/无效/抛错立即失败，不静默回退种子列表或使用上次结果。异步等待受取消/关闭/超时中断，迟到结果不能建连，迟到异常被观察；同步resolver必须响应传入token，返回后再次核验预算。
+- 地址来源是应用提供的可信服务发现适配器，可接OCP/注册中心；本轮不内置未约定格式的OCP/TNS/角色或只读路由。返回地址必须属于调用者信任的同一逻辑租户，TLS认证及ExpectedMode继续逐新会话核验，不能凭地址或缓存推断模式。驱动不拥有resolver，不记录resolver异常文本；应用抛出的异常仍通过现有InnerException向调用者保留。
+- 不改变已打开会话、事务、reader、statement或locator。断线后不调用resolver、不透明重连、不重放已发送SQL。业务故障后只允许调用者显式Close/Open创建新会话并重新握手/初始化。真实拓扑适配与协调器验收不因本地夹具通过关闭。
+
+文件范围：新增公开resolver接口和内部EndpointSelector；修改ConnectionEnums、ConnectionStringBuilder/Options、PhysicalSession、Connection、DataSource/Builder；新增TopologyTests及五资产TopologyConsumerTests；同步README/架构/台账。
+
+审查重点：动态源空/恶意数据不能发包；共享轮转溢出及并发不失控；取消后迟到结果不能连网；身份/TLS错误不能切换；事务中断不能重放。对应任务如下（本人顺序实现，独立只读审查）：
+
+- [x] 配置/选址先红后绿：严格枚举/默认/序列化/快照、三地址环形次序、计数器溢出和并发公平分配。`dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 -nr:false --filter FullyQualifiedName~Topology`；预期配置/API红编译或断言失败，完成后全部通过。
+- [x] 发现/建连先红后绿：两种Open仅调用匹配resolver方法，端口继承、每次重开刷新、静态列表替换/错误不回退；直接/数据源生命周期及冻结、并发轮转；等待时取消/关闭/超时及迟到结果/异常；认证模式/TLS拒绝、事务内断线结果未知且备用地址无连接。共用原总预算与原错误映射。
+- [x] 五资产同步/异步公开入口消费发现及轮转、标准/OB20成功和执行断流；完整Release/Unit/Consumer/DI、独立走查及必要红绿修复、同步文档/UTF8无BOM/CRLF/diff检查后统一提交D08模块，不推送。明确本地适配器机制与真实部署验收边界。
+
+本地范围完成：Release核心五/DI三目标0警告/错误，完整Unit2653（新增56）、Consumer844（新增40）、DI8均通过且零失败/跳过；旧案例移除0项。独立走查发现的锁内取消回调和异常释放问题已用红绿回归修复，发现后重置预算的变异也被测试检出。详细证据见台账。D08正式状态待验证，真实拓扑/数据库/OBProxy及异机继续暂缓，D09及其他开放项继续推进。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

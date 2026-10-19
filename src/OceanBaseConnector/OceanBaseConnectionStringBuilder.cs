@@ -13,7 +13,7 @@ namespace OceanBaseConnector
     /// <c>TLS Mode</c>, <c>TLS Server Name</c>, <c>Persist Security Info</c>,
     /// <c>ExpectedMode</c>, <c>Pooling</c>, <c>Server RSA Public Key</c> and
     /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
-    /// <c>Use Oracle Prepare Execute</c>; the only synonyms are
+    /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c> and <c>Load Balance</c>; the only synonyms are
     /// <c>Host</c>, <c>Uid</c> and <c>Pwd</c>. Unknown keys, synonym conflicts
     /// and malformed values are rejected instead of being silently accepted.
     /// </summary>
@@ -37,6 +37,7 @@ namespace OceanBaseConnector
         public const string EnableFullLinkTraceKey = "Enable Full Link Trace";
         public const string UseOraclePrepareExecuteKey = "Use Oracle Prepare Execute";
         public const string UseLobLocatorsKey = "Use Lob Locators";
+        public const string LoadBalanceKey = "Load Balance";
 
         public const int DefaultPort = 2881;
         public const int DefaultConnectionTimeoutSeconds = 15;
@@ -78,6 +79,13 @@ namespace OceanBaseConnector
         {
             get => GetInt32(PortKey) ?? DefaultPort;
             set => this[PortKey] = value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>Endpoint order for each Open; defaults to Sequential.</summary>
+        public OceanBaseLoadBalance LoadBalance
+        {
+            get => GetString(LoadBalanceKey) is string value ? ParseEnumValue<OceanBaseLoadBalance>(LoadBalanceKey, value) : OceanBaseLoadBalance.Sequential;
+            set => this[LoadBalanceKey] = value.ToString();
         }
 
         public string UserId
@@ -295,6 +303,7 @@ namespace OceanBaseConnector
                 EnableFullLinkTrace,
                 UseOraclePrepareExecute,
                 UseLobLocators,
+                LoadBalance,
                 ToSanitizedConnectionString(includeSecrets: false));
         }
 
@@ -319,6 +328,7 @@ namespace OceanBaseConnector
             EnableFullLinkTraceKey,
             UseOraclePrepareExecuteKey,
             UseLobLocatorsKey,
+            LoadBalanceKey,
         };
 
         /// <summary>
@@ -399,6 +409,10 @@ namespace OceanBaseConnector
 
                 case TlsModeKey:
                     ParseEnumValue<OceanBaseTlsMode>(canonicalKey, value);
+                    return value;
+
+                case LoadBalanceKey:
+                    ParseEnumValue<OceanBaseLoadBalance>(canonicalKey, value);
                     return value;
 
                 case TlsServerNameKey:
@@ -557,6 +571,9 @@ namespace OceanBaseConnector
                     return true;
                 case "USE LOB LOCATORS":
                     canonical = UseLobLocatorsKey;
+                    return true;
+                case "LOAD BALANCE":
+                    canonical = LoadBalanceKey;
                     return true;
                 default:
                     if (Synonyms.TryGetValue(keyword.Trim(), out var synonymCanonical))
