@@ -5,7 +5,7 @@ using OceanBaseConnector.Internal.Values;
 
 namespace OceanBaseConnector
 {
-    /// <summary>An immutable Oracle OBJECT/COLLECTION descriptor; named types retain their dictionary session.</summary>
+    /// <summary>An immutable Oracle OBJECT/COLLECTION descriptor; dictionary and factory types retain their session.</summary>
     public sealed class OceanBaseComplexType
     {
         internal OceanBaseComplexType(ComplexTypeContext? context, string schema, string name, bool collection, OceanBaseComplexMember[] members)
@@ -23,7 +23,7 @@ namespace OceanBaseConnector
         public string SchemaName { get; }
         public string TypeName { get; }
         public bool IsCollection { get; }
-        /// <summary>True for a collection described by result element metadata rather than a named dictionary type.</summary>
+        /// <summary>True for a collection with an element layout and no named database type identity.</summary>
         public bool IsAnonymous => TypeName.Length == 0;
         /// <summary>Ordered object attributes, or the collection's single element descriptor.</summary>
         public IReadOnlyList<OceanBaseComplexMember> Members { get; }

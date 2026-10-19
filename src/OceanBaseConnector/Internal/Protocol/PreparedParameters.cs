@@ -35,11 +35,12 @@ namespace OceanBaseConnector.Internal.Protocol
                 writer.Write(types[i]);
                 var complex = complexTypes[i];
                 if (complex == null) continue;
-                CheckLength(writer, ResultColumn.Utf8.GetByteCount(complex.SchemaName));
-                WriteBytes(writer, ResultColumn.Utf8.GetBytes(complex.SchemaName));
-                CheckLength(writer, ResultColumn.Utf8.GetByteCount(complex.TypeName));
-                WriteBytes(writer, ResultColumn.Utf8.GetBytes(complex.TypeName));
-                writer.Write((byte)0); // The dictionary has no server version; external DDL requires explicit refresh.
+                WriteComplexIdentity(writer, complex);
+                if (complex.IsAnonymous)
+                {
+                    var element = complex.Members[0]; writer.Write(element.Layout.TypeCode);
+                    if (element.ComplexType != null) WriteComplexIdentity(writer, element.ComplexType);
+                }
             }
             if (stream.Position > PacketChannel.DefaultMaxPacketSize - 10) throw TooLarge();
             for (var i = 0; i < parameters.Length; i++)
@@ -133,7 +134,8 @@ namespace OceanBaseConnector.Internal.Protocol
             if (type == null && !declared && (provider.HasValue || parameter.DbType != DbType.Object || value == null)) return null;
             type ??= value?.Type;
             if (type == null) throw new ArgumentException("A NULL complex parameter requires ComplexType.");
-            if (type.IsAnonymous) throw new NotSupportedException("Anonymous collection parameter binding is not supported.");
+            if (type.IsAnonymous && (type.Context == null || parameter.Direction != ParameterDirection.Input))
+                throw new NotSupportedException("Anonymous arrays require a connection factory descriptor and Input direction.");
             if (parameter.Size != 0 || parameter.Precision != 0 || parameter.Scale != 0)
                 throw new ArgumentException("Complex parameters cannot declare scalar size or precision.");
             if (declared && type.IsCollection != (provider == OceanBaseDbType.Array))
@@ -141,6 +143,15 @@ namespace OceanBaseConnector.Internal.Protocol
             if (parameter.Value != null && parameter.Value != DBNull.Value && (value == null || !ReferenceEquals(value.Type, type)))
                 throw new ArgumentException("The complex parameter value must use its declared type descriptor.");
             return type;
+        }
+
+        private static void WriteComplexIdentity(BinaryWriter writer, OceanBaseComplexType type)
+        {
+            CheckLength(writer, ResultColumn.Utf8.GetByteCount(type.SchemaName));
+            WriteBytes(writer, ResultColumn.Utf8.GetBytes(type.SchemaName));
+            CheckLength(writer, ResultColumn.Utf8.GetByteCount(type.TypeName));
+            WriteBytes(writer, ResultColumn.Utf8.GetBytes(type.TypeName));
+            writer.Write((byte)0); // The dictionary has no server version; external DDL requires explicit refresh.
         }
 
         internal static void ValidateSessionTimeZone(OceanBaseParameter[] parameters, string? sessionTimeZone)

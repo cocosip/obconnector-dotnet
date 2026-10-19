@@ -26,6 +26,45 @@ namespace OceanBaseConnector
         public Task<OceanBaseComplexType> GetComplexTypeAsync(string schemaName, string typeName, OceanBaseTransaction? transaction = null, CancellationToken cancellationToken = default)
             => GetComplexTypeCore(schemaName, typeName, transaction, true, cancellationToken);
 
+        /// <summary>Creates a session-bound anonymous array of NUMBER, VARCHAR2, CHAR, RAW, DATE or TIMESTAMP.</summary>
+        public OceanBaseComplexType CreateArrayType(string elementTypeName, OceanBaseTransaction? transaction = null)
+        {
+            if (elementTypeName == null) throw new ArgumentNullException(nameof(elementTypeName));
+            var name = elementTypeName.ToUpperInvariant(); byte code;
+            switch (name)
+            {
+                case "NUMBER": code = 0; break;
+                case "VARCHAR2": code = 253; break;
+                case "CHAR": code = 254; break;
+                case "RAW": code = 203; break;
+                case "DATE": code = 12; break;
+                case "TIMESTAMP": code = 202; break;
+                default: throw new NotSupportedException("The anonymous array element type is not supported.");
+            }
+            RejectAmbientTransaction();
+            lock (_gate)
+            {
+                var context = EnsureComplexTypeContext(RequireComplexSession(transaction), transaction);
+                return new OceanBaseComplexType(context, "", "", true,
+                    new[] { new OceanBaseComplexMember(null, null, name, null, new ComplexType(code)) });
+            }
+        }
+
+        /// <summary>Creates a session-bound anonymous array whose elements use an already loaded named type.</summary>
+        public OceanBaseComplexType CreateArrayType(OceanBaseComplexType elementType, OceanBaseTransaction? transaction = null)
+        {
+            if (elementType == null) throw new ArgumentNullException(nameof(elementType));
+            if (elementType.IsAnonymous) throw new NotSupportedException("An anonymous element has no named type identity.");
+            RejectAmbientTransaction();
+            lock (_gate)
+            {
+                var session = RequireComplexSession(transaction); ValidateComplexBinding(elementType, session, transaction);
+                if (elementType.NestingDepth >= 32) throw new NotSupportedException("The array would exceed the supported nesting depth.");
+                return new OceanBaseComplexType(elementType.Context, "", "", true,
+                    new[] { new OceanBaseComplexMember(null, elementType.SchemaName, elementType.TypeName, elementType, elementType.Layout) });
+            }
+        }
+
         /// <summary>Invalidates all cached types and their values. Call after external type DDL, then reload.</summary>
         public void ClearComplexTypeCache(OceanBaseTransaction? transaction = null)
         {
@@ -60,8 +99,20 @@ namespace OceanBaseConnector
             var context = type.Context;
             if (context == null || !ReferenceEquals(context.Connection, this) || !ReferenceEquals(context, _complexTypeContext) ||
                 !ReferenceEquals(session, context.Session) || !ReferenceEquals(context.Transaction, transaction) || context.Epoch != _transactionEpoch ||
-                !_complexTypes.TryGetValue((type.SchemaName, type.TypeName), out var cached) || !ReferenceEquals(cached, type))
+                !type.IsAnonymous && (!_complexTypes.TryGetValue((type.SchemaName, type.TypeName), out var cached) || !ReferenceEquals(cached, type)))
                 throw new InvalidOperationException("The complex type's session, transaction or cache generation has changed.");
+        }
+
+        private ComplexTypeContext EnsureComplexTypeContext(PhysicalSession session, OceanBaseTransaction? transaction)
+        {
+            if (_complexTypeContext == null || !ReferenceEquals(_complexTypeContext.Session, session) ||
+                !ReferenceEquals(_complexTypeContext.Transaction, transaction) || _complexTypeContext.Epoch != _transactionEpoch)
+            {
+                _complexTypes = new Dictionary<(string, string), OceanBaseComplexType>();
+                _complexTypeContext = new ComplexTypeContext(this, session, transaction, _transactionEpoch, _builder.CommandTimeout);
+                _complexTypeMembers = _complexTypeDictionaryBytes = 0;
+            }
+            return _complexTypeContext;
         }
 
         private async Task<OceanBaseComplexType> GetComplexTypeCore(string schemaName, string typeName, OceanBaseTransaction? transaction, bool async, CancellationToken token)
@@ -72,13 +123,7 @@ namespace OceanBaseConnector
             lock (_gate)
             {
                 var session = RequireComplexSession(transaction);
-                if (_complexTypeContext == null || !ReferenceEquals(_complexTypeContext.Session, session) ||
-                    !ReferenceEquals(_complexTypeContext.Transaction, transaction) || _complexTypeContext.Epoch != _transactionEpoch)
-                {
-                    _complexTypes = new Dictionary<(string, string), OceanBaseComplexType>(); _complexTypeContext = new ComplexTypeContext(this, session, transaction, _transactionEpoch, _builder.CommandTimeout);
-                    _complexTypeMembers = _complexTypeDictionaryBytes = 0;
-                }
-                context = _complexTypeContext;
+                context = EnsureComplexTypeContext(session, transaction);
                 if (_complexTypes.TryGetValue((schemaName, typeName), out var cached)) return cached;
                 members = _complexTypeMembers; dictionaryBytes = _complexTypeDictionaryBytes;
                 session.Reserve(owner);

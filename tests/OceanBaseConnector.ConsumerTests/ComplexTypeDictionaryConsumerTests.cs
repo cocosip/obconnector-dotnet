@@ -84,8 +84,8 @@ namespace OceanBaseConnector.ConsumerTests
                     if (!ob20) channel.BeginCommand();
                 }
                 var prepared = await ReadRequest(stream, channel, ob20, 6, budget.Token); Assert.Equal(22, prepared[0]);
-                var preparedReply = Frame(1, new byte[] { 0, 19, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0 })
-                    .Concat(Frame(2, Column("p"))).Concat(Frame(3, Column("p"))).ToArray();
+                var preparedReply = Frame(1, new byte[] { 0, 19, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0 })
+                    .Concat(Frame(2, Column("p"))).Concat(Frame(3, Column("p"))).Concat(Frame(4, Column("p"))).Concat(Frame(5, Column("p"))).ToArray();
                 await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 6, 1, preparedReply) : preparedReply, budget.Token);
                 if (!ob20) channel.BeginCommand();
                 var complexColumn = Column("complex"); complexColumn[complexColumn.Length - 6] = 160;
@@ -100,7 +100,9 @@ namespace OceanBaseConnector.ConsumerTests
                     var request = await ReadRequest(stream, channel, ob20, requestId, budget.Token); Assert.Equal(23, request[0]); Assert.Equal(19, request[1]);
                     var typeHeader = new byte[] { 160, 0, (byte)complexName.Length }.Concat(complexName)
                         .Concat(new byte[] { 10 }).Concat(Encoding.UTF8.GetBytes("Mixed_Type")).Concat(new byte[] { 0 }).ToArray();
-                    Assert.Equal(new byte[] { 2, 1 }.Concat(typeHeader).Concat(typeHeader).Concat(new byte[] { 0, 2, 51, 49, 2, 1, 2 }), request.Skip(10));
+                    var anonymousHeader = new byte[] { 160, 0, 0, 0, 0, 203 };
+                    Assert.Equal(new byte[] { 10, 1 }.Concat(typeHeader).Concat(typeHeader).Concat(anonymousHeader).Concat(anonymousHeader)
+                        .Concat(new byte[] { 0, 2, 51, 49, 2, 1, 2, 1, 0, 2, 8, 9 }), request.Skip(10));
                     var eof = Report(false, 0); eof[0] = 254;
                     var packets = new[] { new byte[] { 4 }, complexColumn, trailing, complexColumn, anonymousColumn,
                         new byte[] { 0, 16, 0, 2, 51, 49, 2, 1, 2 }.Concat(BitConverter.GetBytes(42L)).Concat(new byte[] { 2, 0, 2, 8, 9, 0 }).ToArray(), eof };
@@ -158,12 +160,18 @@ namespace OceanBaseConnector.ConsumerTests
                 var first = (object?[])(await Call(value, "GetValues", Array.Empty<object?>()))!;
                 Assert.Equal(31, first[0]); Assert.Equal(new byte[] { 1, 2 }, first[1]); ((byte[])first[1]!)[0] = 8;
                 Assert.Equal(new byte[] { 1, 2 }, ((object?[])(await Call(value, "GetValues", Array.Empty<object?>()))!)[1]);
+                var arrayType = connection.GetType().GetMethod("CreateArrayType", new[] { typeof(string), assembly.GetType("OceanBaseConnector.OceanBaseTransaction")! })!
+                    .Invoke(connection, new object?[] { "RAW", null })!;
+                var arrayValue = (await Call(arrayType, "CreateValue", new object?[] { new object?[] { new byte[] { 8, 9 } } }))!;
                 using (var command = connection.CreateCommand())
                 {
-                    command.CommandText = "read complex :p, :n";
+                    command.CommandText = "read complex :p, :n, :a, :z";
                     var input = command.CreateParameter(); input.ParameterName = "p"; input.Value = value; command.Parameters.Add(input);
                     var typedNull = command.CreateParameter(); typedNull.ParameterName = "n"; typedNull.Value = DBNull.Value;
                     typedNull.GetType().GetProperty("ComplexType")!.SetValue(typedNull, type); command.Parameters.Add(typedNull);
+                    var array = command.CreateParameter(); array.ParameterName = "a"; array.Value = arrayValue; command.Parameters.Add(array);
+                    var arrayNull = command.CreateParameter(); arrayNull.ParameterName = "z"; arrayNull.Value = DBNull.Value;
+                    arrayNull.GetType().GetProperty("ComplexType")!.SetValue(arrayNull, arrayType); command.Parameters.Add(arrayNull);
                     if (async) await command.PrepareAsync(budget.Token); else command.Prepare();
                     foreach (var sequential in new[] { false, true })
                     {
@@ -200,6 +208,7 @@ namespace OceanBaseConnector.ConsumerTests
                 }
                 await Call(connection, "ClearComplexTypeCache", new object?[] { null });
                 await Assert.ThrowsAsync<InvalidOperationException>(() => Call(type, "CreateValue", new object?[] { values }));
+                await Assert.ThrowsAsync<InvalidOperationException>(() => Call(arrayType, "CreateValue", new object?[] { Array.Empty<object?>() }));
                 connection.Close(); await serving.WaitAsync(budget.Token);
             }
             finally { budget.Cancel(); listener.Stop(); context.Unload(); }

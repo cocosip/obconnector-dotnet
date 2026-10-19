@@ -752,6 +752,19 @@ D03本地输出/读取实现及独立走查修复已完成：修后Release核心
 
 本子模块本地实现及独立复查完成：Release核心五/DI三目标编译0警告/错误，完整Unit2331（新增45项、移除0）、Consumer744（扩展既有20项）、DI8全通过且零跳过。复用codec预算并覆盖超限、取消、成功游标页与后续元素/version变化；完整回归发现的既有LOB测试发送/关闭竞态已按真实拒绝边界修复，另加精确协议异常断言。红绿、完整回归及走查证据见进度台账；匿名构造/绑定及D05整体仍开放。
 
+#### D05 匿名集合构造与输入绑定实施
+
+本子模块由连接提供`CreateArrayType(string elementTypeName, OceanBaseTransaction? transaction = null)`，标量名称仅接受不区分大小写的NUMBER、VARCHAR2、CHAR、RAW、DATE、TIMESTAMP，不推断别名或隐式查询字典；另提供`CreateArrayType(OceanBaseComplexType elementType, OceanBaseTransaction? transaction = null)`，将原会话已加载的命名对象/集合包装为匿名集合。根schema/typeName均为空，标量成员保存规范类型名及布局，命名成员保留原描述；不接受没有完整嵌套身份的匿名元素类型。公开值由既有CreateValue构造，RAW复制、NULL/空集合、嵌套精确描述及总预算沿原契约。
+
+协议依据为固定Java基线`OBArrayParameter.storeArrayTypeInfo`与`ComplexUtil.getMysqlType`，以及固定OceanBase服务端`obmp_stmt_execute.cpp`的decode_type_info及L761–806空类型名分支：匿名头使用160、空schema/type、version0及元素字节；命名复杂元素使用160并跟随该元素schema/type/version0。只参考协议行为，不复制源码；不沿用Java以类型名长度填写元素version的实现。值正文仍使用现有集合codec和参数bit0位图，全部类型头先于全部值，头/值共享64MiB-10预算。
+
+- [x] 在`AnonymousCollectionParameterTests.cs`先写缺API红编译与独立字节断言：六标量、NULL/空、混合参数、命名对象/集合元素头、严格成员及无效声明；复用原codec预算测试，不重复底层算法。
+- [x] 修改`OceanBaseConnection.ComplexTypes.cs`的上下文复用和两个工厂；`ValidateComplexBinding`允许同原context的工厂匿名根，但命名类型仍需缓存引用身份。Clear、跨连接、物理会话重开及事务epoch变化均发包前拒绝；活动reader及环境事务不查询或发包。
+- [x] 在`PreparedParameters`编码匿名元素附加头；只有带有效会话context的Input可绑定，结果解码得到的只读匿名描述以及Output/InputOutput/ReturnValue继续明确拒绝，匿名输出契约另行推进。`OceanBaseComplexType`更新公开说明；不新增依赖或伪造字典条目。
+- [x] 同步/异步公开普通预处理及PrepareExecute输入、五资产标准/OB20消费覆盖实际发送与复用；完整Release编译/Unit/Consumer/DI、独立只读走查及修复、文档同步、diff检查后本地提交，不推送。D05整体保持进行中，实库/异机继续暂缓。
+
+本子模块完成本地实现及独立走查：Release核心五/DI三目标0警告/错误，完整Unit2363（新增32、移除0）、Consumer744、DI8全通过且零跳过。同步/异步普通预处理及PrepareExecute、五资产标准/OB20消费，以及Clear/跨连接/重开/事务边界均已覆盖；详细证据见进度台账。匿名输出与完整D05复核继续推进，整体目标未完成。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

@@ -158,6 +158,8 @@ namespace OceanBaseConnector.UnitTests
                 var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection.GetComplexTypeAsync("O", "T", cancellationToken: canceled.Token)); Assert.Equal(canceled.Token, error.CancellationToken);
                 if (mysql)
                 {
+                    Assert.Throws<NotSupportedException>(() => connection.CreateArrayType("RAW"));
+                    Assert.Throws<NotSupportedException>(() => connection.CreateArrayType(ComplexResultType(false)));
                     Assert.Throws<NotSupportedException>(() => connection.GetComplexType("O", "T"));
                     await Assert.ThrowsAsync<NotSupportedException>(() => connection.GetComplexTypeAsync("O", "T"));
                 }
@@ -165,10 +167,14 @@ namespace OceanBaseConnector.UnitTests
                 {
                     using (var lease = connection.GetOpenSession().Acquire())
                     {
+                        Assert.Throws<InvalidOperationException>(() => connection.CreateArrayType("RAW"));
+                        Assert.Throws<InvalidOperationException>(() => connection.CreateArrayType(ComplexResultType(false)));
                         Assert.Throws<InvalidOperationException>(() => connection.GetComplexType("O", "T"));
                         Assert.Throws<InvalidOperationException>(() => connection.ClearComplexTypeCache()); lease.CompleteIfActive();
                     }
                     using var scope = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled);
+                    Assert.Throws<NotSupportedException>(() => connection.CreateArrayType("RAW"));
+                    Assert.Throws<NotSupportedException>(() => connection.CreateArrayType(ComplexResultType(false)));
                     Assert.Throws<NotSupportedException>(() => connection.GetComplexType("O", "T"));
                 }
                 Assert.Empty(transport.Written);
@@ -500,6 +506,9 @@ namespace OceanBaseConnector.UnitTests
                     Assert.Equal(32, types.Count); var value = types[31].CreateValue("leaf");
                     for (var i = 30; i >= 0; i--) value = types[i].CreateValue(value);
                     Assert.Same(root, value.Type);
+                    Assert.Throws<NotSupportedException>(() => connection.CreateArrayType(root));
+                    var arrayType = connection.CreateArrayType(types[1]);
+                    Assert.Equal(32, arrayType.NestingDepth); Assert.Single(arrayType.CreateValue(value.GetValues()[0]).GetValues());
                     var many = types[31].CreateValue(new object?[1024]);
                     Assert.Throws<ArgumentException>(() => types[30].CreateValue(Enumerable.Repeat<object?>(many, 64).ToArray()));
                     var bounded = types[31].CreateValue(new object?[1022]); Assert.Equal(64, types[30].CreateValue(Enumerable.Repeat<object?>(bounded, 64).ToArray()).GetValues().Length);
