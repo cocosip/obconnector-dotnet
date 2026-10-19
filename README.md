@@ -123,7 +123,9 @@ OceanBase 和 OBProxy 最低版本均未确定，没有已验证的版本白名�
 
 RSA 配置优先使用 `Server RSA Public Key`（builder属性 `ServerRsaPublicKey`）提供可信的 SubjectPublicKeyInfo `PUBLIC KEY` PEM 文本；不读取文件，应用可自行加载后赋值。PEM 最长16KiB，支持2048–8192位RSA和不超过64位的正奇数指数。使用协议要求的 OAEP-SHA1，密码UTF8字节加NUL不得超过密钥字节数减42；固定key无效时直接失败，不回退检索。初始SHA256密文超过255字节时需要服务端协商 `CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA`，不满足时明确失败。默认脱敏连接串不含PEM；完整builder序列化保留它。
 
-无固定key时，只有显式设置 `Allow Public Key Retrieval=true`（默认false）才向服务端获取公钥。**获取的公钥没有身份验证，可被中间人替换；优先使用 VerifyFull 或可信固定公钥。** RSA只保护密码，`TLS Mode=Disabled`下的业务SQL与结果仍为明文。其他认证插件尚不支持；SHA-2 的 VerifyFull 完整密码分支目前只有状态/编码测试，没有私有 CA 成功链证据。证书故障应核对信任链、端点主机名及 `TLS Server Name`，驱动不会自动降低 TLS 要求。即使插件/TLS 条件满足，公共 MySQL 模式判定缺口仍会阻止该模式连接。
+无固定key时，只有显式设置 `Allow Public Key Retrieval=true`（默认false）才向服务端获取公钥。**获取的公钥没有身份验证，可被中间人替换；优先使用 VerifyFull 或可信固定公钥。** RSA只保护密码，`TLS Mode=Disabled`下的业务SQL与结果仍为明文。SHA-2 的 VerifyFull 完整密码分支目前只有状态/编码测试，没有私有 CA 成功链证据。证书故障应核对信任链、端点主机名及 `TLS Server Name`，驱动不会自动降低 TLS 要求。即使插件/TLS 条件满足，公共 MySQL 模式判定缺口仍会阻止该模式连接。
+
+`mysql_old_password` 已接入本地认证状态机：支持显式插件及命名/单字节旧切换，散列前8字节ASCII挑战，密码按Java基线的UTF16字符规则（忽略空格/制表符）。空密码为空响应，非空响应8字节加NUL；仍要求protocol41握手。旧散列较弱，仅允许 `VerifyFull`，`Required`/`Disabled`均在发送旧响应前拒绝，不受RSA选项放行。本地成功证据仅为固定向量和状态/编码，TLS环回验证较弱通道拒绝；私有CA成功链及实库互通仍未验收。按固定Java注册表，`dialog`/PAM、`client_ed25519`、`auth_gssapi_client`仍待接入。
 
 Windows 上已在实际 .NET 8.0.31、9.0.20 各执行完整本地 Unit 1206 项和 DI 8 项，全部通过且无跳过，另有实际 .NET 8/9/10 包消费样例。日常测试项目仍统一声明 net10.0；8/9 使用临时构建属性验证，Microsoft 通用库依赖分别保持 8/9 主版本。非 Windows、真实数据库和完整旧运行时兼容矩阵尚未验收。.NET Standard 资产的存在不代表所有实现该标准的运行时都已验证。详见仓库 `docs/obconnector-dotnet-progress.md`，设计与实施范围见同目录的架构设计和开发方案。
 

@@ -4,9 +4,9 @@ namespace OceanBaseConnector.Internal.Protocol
 {
     /// <summary>
     /// Authentication switch request (0xFE): NUL-terminated plugin name
-    /// followed by the new auth seed for the remainder of the packet. An
-    /// empty remainder means the legacy old-password switch, which this
-    /// driver does not support.
+    /// followed by the new auth seed for the remainder of the packet. The
+    /// single-byte legacy old-password switch is handled by the conversation
+    /// using the original handshake challenge, before this parser is called.
     /// </summary>
     internal sealed class AuthSwitchRequest
     {

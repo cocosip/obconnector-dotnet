@@ -15,11 +15,12 @@ namespace OceanBaseConnector.Internal.Session
         private bool _switched;
         private bool _awaitingFinalResult;
         private bool _awaitingPublicKey;
-        private byte[] _seed = Array.Empty<byte>();
+        private byte[] _seed;
 
         public AuthenticationConversation(OceanBaseConnectionOptions options, string? pluginName, byte[] seed)
         {
             _options = options;
+            _seed = (byte[])seed.Clone();
             PluginName = pluginName ?? InitialHandshakePacket.NativePasswordPluginName;
             InitialResponse = BuildResponse(seed);
         }
@@ -39,6 +40,11 @@ namespace OceanBaseConnector.Internal.Session
             {
                 if (_switched) throw new ProtocolException("Repeated authentication plugin switch.");
                 _switched = true; _awaitingPublicKey = false;
+                if (packet.Length == 1)
+                {
+                    PluginName = OldPassword.PluginName;
+                    return BuildResponse(_seed);
+                }
                 var request = AuthSwitchRequest.Parse(packet);
                 PluginName = request.PluginName;
                 return BuildResponse(request.Seed);
@@ -73,6 +79,9 @@ namespace OceanBaseConnector.Internal.Session
             {
                 case InitialHandshakePacket.NativePasswordPluginName:
                     return NativePassword.EncryptPassword(_options.Password, seed);
+                case OldPassword.PluginName:
+                    RequireVerifiedTls();
+                    return OldPassword.Respond(_options.Password, seed);
                 case InitialHandshakePacket.ClearPasswordPluginName:
                     RequireVerifiedTls();
                     return Encoding.UTF8.GetBytes(_options.Password + "\0");

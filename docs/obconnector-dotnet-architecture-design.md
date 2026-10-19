@@ -225,6 +225,8 @@ D15 SHA-2本地实现：TLS流程成功返回后才创建AuthenticationConversat
 
 公钥获取无身份验证且可被中间人替换，必须由用户显式开启，不由握手自动降级；RSA仅保护密码，Disabled下业务内容仍明文。空密码标记依据固定Java空包规则及MySQL8服务端`sql/auth/sql_authentication.cc`的sha256认证入口（接受空包/单NUL）；不把本地源码核对当作OceanBase互通验收。非空明文密码的TLS先决条件比Java useSsl更严格，Required不等于身份验证。其他插件及真实矩阵仍属D15余项；VerifyFull完整密码分支仅状态/编码证据，Required环回和RSA环回不替代私有CA成功链或两模式实库验收。
 
+D15 Java注册插件后续：范围依据固定提交`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的[META-INF/services注册表](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/resources/META-INF/services/com.oceanbase.jdbc.authentication.AuthenticationPlugin)，余项为old password、dialog/PAM、Ed25519和GSSAPI，不依赖用户重新选型。mysql_old_password复用AuthenticationConversation及既有TLS/总预算/错误脱敏：显式初始/命名切换使用其挑战，单FE旧切换使用独立保存的初始挑战，一次切换上限不变，完整SHA2阶段不得切换。沿Java OldPasswordPlugin核对3.23算法，不复制源码；前8字节挑战必须ASCII且不补零，密码按UTF16字符散列、忽略空格/制表符，64位溢出及低31位结果保持Java语义。空密码返回空包，非空为8字节加NUL。弱旧散列仅在VerifyFull允许，RSA不能放行，不增加降级配置或pre41握手支持。状态/固定向量与实际Required TLS拒绝、五资产Disabled拒绝分开记录，均不宣称可信TLS成功链或实库已验证；另三个插件仍未接入。
+
 ## 4. 执行、事务与取消
 
 D02已接入显式启用的Oracle公开过程与标量输出执行；OraclePrepareExecutePacket负责扩展报文。请求为0xA1、32位statement ID、非游标标记、iteration=1、长度编码UTF-8 SQL、32位参数数目、既有PreparedParameters参数块及四个32位尾字段（默认executeMode=0、closeCount=0、原SQL raw CRC32C、reserved=0）。共享既有长度前缀写入和Ob20Checksum的raw CRC，不复制编码器或引入依赖。完整逻辑包分配前限制64MiB，参数最多65535，检查编码块最小维度；SQL的UTF-8字节长度决定前缀与CRC，不用字符数。

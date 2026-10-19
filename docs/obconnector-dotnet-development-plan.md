@@ -608,6 +608,12 @@ R02 Windows Framework 包消费补验（2026-10-19；仅本地证据，不作正
 
 RSA子模块已完成本地实现与独立复查：修复初始sha256取钥后账户插件切换，补齐空密码无密码标记；依据MySQL8服务端sha256入口接受空包/单NUL的规则，不把RSA密文NUL当作空密码线协议。最终五/三目标Release编译0警告0错误，Unit1596（新增82）、Consumer332（新增40）、DI8全通过；红绿、沙箱TLS权限失败与最终证据见台账。D15其他插件及真实关口仍开放。
 
+### D15 Java注册插件本地后续（2026-10-19）
+
+D15其他插件范围修订（2026-10-19，依据用户补充）：不再由用户另选插件，以固定Java提交的AuthenticationPlugin SPI注册表为范围。现有native/clear/SHA256/caching SHA2之外，逐模块推进mysql_old_password、dialog/PAM、client_ed25519及auth_gssapi_client；不同插件的凭据来源、密码编码、交互及TLS前提单独核对，不把注册表当作实库证据。
+
+下一子模块为mysql_old_password：沿Java OldPasswordPlugin的3.23响应行为、前8字节ASCII挑战及UTF16密码字符散列，支持显式初始/命名切换和单字节FE旧切换（后者复用原挑战）。空密码为空响应；非空为8字节响应加NUL。不复制Java源码。由于旧散列保护较弱，本驱动沿完整密码的既有边界要求VerifyFull，不新增降级开关；旧协议握手本身仍要求protocol41/secure connection，不扩大为pre41客户端。用固定向量、状态/编码、恶意挑战、重复切换、弱TLS拒绝及五资产公开消费验证；最后全目标构建、完整本地测试、独立走查、同步文档并提交。私有CA成功链、实库和异机继续暂缓，其余三个插件随后推进，D15保持进行中。
+
 ### D01 OB20 报文与校验子模块（2026-10-19）
 
 先实现内部报文层，D01 在能力协商、流式传输和完整链路追踪接入前保持进行中。依据固定 Java 基线 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` 的 `OceanBaseProtocolV20`、`Ob20PacketInputStream` / `Ob20PacketOutputStream` 和 `OceanBaseCRC16` / `OceanBaseCRC32C`；只核对线协议，不复制实现或查表常量。
