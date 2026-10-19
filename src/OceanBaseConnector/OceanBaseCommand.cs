@@ -213,7 +213,7 @@ namespace OceanBaseConnector
                         if (ReferenceEquals(_execution, execution))
                         { HasSentSql = execution!.HasSentSql; _execution = null; }
                     }
-                }, SessionOwner, CancellationOrigin, RequiredTransactionEpoch, bindings.Parameters);
+                }, SessionOwner, CancellationOrigin, RequiredTransactionEpoch, bindings.Parameters, validateComplexTypes: !prepareOnly);
 #if NET8_0_OR_GREATER
                 execution.BatchCommand = BatchCommand;
                 execution.BatchFailed = BatchFailed;

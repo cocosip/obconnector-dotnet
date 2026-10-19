@@ -25,9 +25,14 @@ namespace OceanBaseConnector.Internal.Values
 
         internal static byte[] EncodeParameter(ComplexType type, object?[] values, OceanBaseCompatibilityMode mode)
         {
-            ValidateRoot(type, mode); var budget = MaximumMembers;
             using var stream = new MemoryStream(); using var writer = new BinaryWriter(stream, ResultColumn.Utf8, leaveOpen: true);
-            Write(writer, type, values, 0, ref budget); return stream.ToArray();
+            WriteParameter(writer, type, values, mode); return stream.ToArray();
+        }
+
+        internal static void WriteParameter(BinaryWriter writer, ComplexType type, object?[] values, OceanBaseCompatibilityMode mode)
+        {
+            ValidateRoot(type, mode); var budget = MaximumMembers;
+            Write(writer, type, values, 0, ref budget);
         }
 
         private static void ValidateRoot(ComplexType type, OceanBaseCompatibilityMode mode)

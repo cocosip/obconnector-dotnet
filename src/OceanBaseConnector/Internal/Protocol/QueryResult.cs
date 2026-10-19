@@ -42,7 +42,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 NationalCharacterSet = _query.CaptureResultNationalCharacterSet();
                 if (_oracleHeaderPending) { if (!StartOracleMetadata()) return; }
                 else if (!Header(_query.Receive())) return;
-                for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(_query.Receive());
+                for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(_query.Receive(), ordinal: i);
                 if (_refCursorInitial) { if (!DeprecatedEof) EndColumns(_query.Receive()); BeginRefCursorRows(); }
                 else if (CursorMetadataOmitsEof) BeginCursorWithoutEof();
                 else if (_cursorId.HasValue) BeginCursor(_query.Receive());
@@ -63,7 +63,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 NationalCharacterSet = _query.CaptureResultNationalCharacterSet();
                 if (_oracleHeaderPending) { if (!await StartOracleMetadataAsync(token).ConfigureAwait(false)) return; }
                 else if (!Header(await _query.ReceiveAsync(token).ConfigureAwait(false))) return;
-                for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(await _query.ReceiveAsync(token).ConfigureAwait(false));
+                for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(await _query.ReceiveAsync(token).ConfigureAwait(false), ordinal: i);
                 if (_refCursorInitial) { if (!DeprecatedEof) EndColumns(await _query.ReceiveAsync(token).ConfigureAwait(false)); BeginRefCursorRows(); }
                 else if (CursorMetadataOmitsEof) BeginCursorWithoutEof();
                 else if (_cursorId.HasValue) BeginCursor(await _query.ReceiveAsync(token).ConfigureAwait(false));
@@ -106,13 +106,12 @@ namespace OceanBaseConnector.Internal.Protocol
             return (ServerStatusFlags)(packet[3] | (packet[4] << 8));
         }
         private static void EndColumns(byte[] packet) => ReadEof(packet);
-        private ResultColumn ParseColumn(byte[] packet, bool parameter = false)
+        private ResultColumn ParseColumn(byte[] packet, bool parameter = false, int ordinal = 0)
         {
             if (packet.Length > 4 * 1024 * 1024 - _metadataBytes) throw new ProtocolException("Result metadata size limit exceeded.");
             _metadataBytes += packet.Length;
             var column = ResultColumn.Parse(packet, _query.Mode, SessionTimeZone, NationalCharacterSet, _query.Lobs, _query.ComplexTypes);
-            if (!parameter && _oracleOutputResult && column.TypeCode == 160)
-                throw new NotSupportedException("Complex output parameters require an explicit type contract and are not supported yet.");
+            if (!parameter && _oracleOutputResult) _oraclePlan!.ValidateOutputColumn(ordinal, column);
             if (!parameter) column.RequireComplexResult(IsBinary);
             return column;
         }

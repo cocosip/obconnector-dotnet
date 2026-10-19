@@ -12,28 +12,47 @@ namespace OceanBaseConnector.Internal.Protocol
             if (parameters.Length == 0) return Array.Empty<byte>();
             if (parameters.Length > ushort.MaxValue) throw new ArgumentException("The prepared parameter count exceeds the protocol limit.");
             var nullBytes = (parameters.Length + 7) / 8;
-            var header = nullBytes + 1 + parameters.Length * 2;
+            var types = new ushort[parameters.Length];
+            var complexTypes = new OceanBaseComplexType?[parameters.Length];
+            var nulls = new byte[nullBytes];
+            for (var i = 0; i < parameters.Length; i++)
+            {
+                complexTypes[i] = GetComplexType(parameters[i]);
+                if (complexTypes[i] != null && mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Complex parameters require Oracle mode.");
+                types[i] = complexTypes[i] != null ? (ushort)160 : TypeCode(parameters[i], mode);
+                if (parameters[i].Value == null || parameters[i].Value == DBNull.Value)
+                {
+                    nulls[i / 8] |= (byte)(1 << (i % 8));
+                    if (complexTypes[i] == null) types[i] = 6;
+                }
+            }
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream, ResultColumn.Utf8, leaveOpen: true);
-            writer.Write(new byte[header]);
-            stream.Position = nullBytes;
+            writer.Write(nulls);
             writer.Write((byte)1); // Send types on every execution, including changed values and NULLs.
-            stream.Position = header;
+            for (var i = 0; i < parameters.Length; i++)
+            {
+                writer.Write(types[i]);
+                var complex = complexTypes[i];
+                if (complex == null) continue;
+                CheckLength(writer, ResultColumn.Utf8.GetByteCount(complex.SchemaName));
+                WriteBytes(writer, ResultColumn.Utf8.GetBytes(complex.SchemaName));
+                CheckLength(writer, ResultColumn.Utf8.GetByteCount(complex.TypeName));
+                WriteBytes(writer, ResultColumn.Utf8.GetBytes(complex.TypeName));
+                writer.Write((byte)0); // The dictionary has no server version; external DDL requires explicit refresh.
+            }
+            if (stream.Position > PacketChannel.DefaultMaxPacketSize - 10) throw TooLarge();
             for (var i = 0; i < parameters.Length; i++)
             {
                 var parameter = parameters[i];
-                var type = TypeCode(parameter, mode);
+                var type = types[i];
                 var value = parameter.Value;
                 if (value == null || value == DBNull.Value)
                 {
-                    type = 6;
-                    var end = stream.Position;
-                    stream.Position = i / 8;
-                    var bits = stream.ReadByte();
-                    stream.Position--;
-                    writer.Write((byte)(bits | (1 << (i % 8))));
-                    stream.Position = end;
+                    continue;
                 }
+                else if (type == 160)
+                    ComplexValueCodec.WriteParameter(writer, complexTypes[i]!.Layout, ((OceanBaseComplexValue)value).WireValues(), mode);
                 else if (type == 207 || type == 208)
                 {
                     if (!(value is string text)) throw new ArgumentException("A national character parameter requires a string.");
@@ -100,13 +119,27 @@ namespace OceanBaseConnector.Internal.Protocol
                     TemporalCodec.WriteTime(writer, time, parameter.DeclaredScale);
                 }
                 else WriteValue(writer, parameter.DbType, value);
-                var position = stream.Position;
-                stream.Position = nullBytes + 1 + i * 2;
-                writer.Write(type);
-                stream.Position = position;
-                if (position > PacketChannel.DefaultMaxPacketSize - 10) throw TooLarge();
+                if (stream.Position > PacketChannel.DefaultMaxPacketSize - 10) throw TooLarge();
             }
             return stream.ToArray();
+        }
+
+        internal static OceanBaseComplexType? GetComplexType(OceanBaseParameter parameter)
+        {
+            var provider = parameter.OceanBaseDbType;
+            var value = parameter.Value as OceanBaseComplexValue;
+            var type = parameter.ComplexType;
+            var declared = provider == OceanBaseDbType.Array || provider == OceanBaseDbType.Struct;
+            if (type == null && !declared && (provider.HasValue || parameter.DbType != DbType.Object || value == null)) return null;
+            type ??= value?.Type;
+            if (type == null) throw new ArgumentException("A NULL complex parameter requires ComplexType.");
+            if (parameter.Size != 0 || parameter.Precision != 0 || parameter.Scale != 0)
+                throw new ArgumentException("Complex parameters cannot declare scalar size or precision.");
+            if (declared && type.IsCollection != (provider == OceanBaseDbType.Array))
+                throw new ArgumentException("The complex parameter kind does not match its declared type.");
+            if (parameter.Value != null && parameter.Value != DBNull.Value && (value == null || !ReferenceEquals(value.Type, type)))
+                throw new ArgumentException("The complex parameter value must use its declared type descriptor.");
+            return type;
         }
 
         internal static void ValidateSessionTimeZone(OceanBaseParameter[] parameters, string? sessionTimeZone)

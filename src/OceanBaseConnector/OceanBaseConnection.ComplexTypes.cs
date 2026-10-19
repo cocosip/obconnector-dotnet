@@ -50,10 +50,17 @@ namespace OceanBaseConnector
             lock (_gate)
             {
                 var context = type.Context; var session = GetCommandSession(context.Transaction);
-                if (!ReferenceEquals(context.Connection, this) || !ReferenceEquals(context, _complexTypeContext) ||
-                    !ReferenceEquals(session, context.Session) || context.Epoch != _transactionEpoch)
-                    throw new InvalidOperationException("The complex type's session, transaction or cache generation has changed.");
+                ValidateComplexBinding(type, session, context.Transaction);
             }
+        }
+
+        private void ValidateComplexBinding(OceanBaseComplexType type, PhysicalSession session, OceanBaseTransaction? transaction)
+        {
+            var context = type.Context;
+            if (context == null || !ReferenceEquals(context.Connection, this) || !ReferenceEquals(context, _complexTypeContext) ||
+                !ReferenceEquals(session, context.Session) || !ReferenceEquals(context.Transaction, transaction) || context.Epoch != _transactionEpoch ||
+                !_complexTypes.TryGetValue((type.SchemaName, type.TypeName), out var cached) || !ReferenceEquals(cached, type))
+                throw new InvalidOperationException("The complex type's session, transaction or cache generation has changed.");
         }
 
         private async Task<OceanBaseComplexType> GetComplexTypeCore(string schemaName, string typeName, OceanBaseTransaction? transaction, bool async, CancellationToken token)

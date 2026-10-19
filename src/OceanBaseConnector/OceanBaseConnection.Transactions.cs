@@ -43,7 +43,7 @@ namespace OceanBaseConnector
                 throw new InvalidOperationException("The command must reference the connection's active transaction, or null outside a transaction.");
         }
 
-        internal CommandExchange StartCommand(PhysicalSession session, OceanBaseTransaction? transaction, int timeout, CancellationToken token, Action release, object? owner = null, Func<CancellationToken>? cancellationOrigin = null, long? requiredEpoch = null, OceanBaseParameter[]? parameters = null)
+        internal CommandExchange StartCommand(PhysicalSession session, OceanBaseTransaction? transaction, int timeout, CancellationToken token, Action release, object? owner = null, Func<CancellationToken>? cancellationOrigin = null, long? requiredEpoch = null, OceanBaseParameter[]? parameters = null, bool validateComplexTypes = true)
         {
             lock (_gate)
             {
@@ -51,7 +51,14 @@ namespace OceanBaseConnector
                 ValidateCommandTransaction(session, transaction);
                 if (requiredEpoch.HasValue && requiredEpoch.Value != _transactionEpoch) throw new InvalidOperationException("The LOB transaction context has changed.");
                 if (parameters != null) foreach (var parameter in parameters)
+                {
                     if (parameter.Value is OceanBaseLob lob) lob.ValidateBinding(this, session, transaction, owner);
+                    if (validateComplexTypes)
+                    {
+                        var type = PreparedParameters.GetComplexType(parameter);
+                        if (type != null) ValidateComplexBinding(type, session, transaction);
+                    }
+                }
                 var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin);
                 if (_complexTypeContext != null && ReferenceEquals(_complexTypeContext.Session, session) &&
                     ReferenceEquals(_complexTypeContext.Transaction, transaction) && _complexTypeContext.Epoch == _transactionEpoch)

@@ -8,6 +8,7 @@ namespace OceanBaseConnector
     {
         private DbType? _dbType;
         private OceanBaseDbType? _providerType;
+        private OceanBaseComplexType? _complexType;
         private byte? _scale;
         private ParameterDirection _direction = ParameterDirection.Input;
         private int _size;
@@ -15,7 +16,7 @@ namespace OceanBaseConnector
         public override DbType DbType
         {
             get => _dbType ?? InferType(Value);
-            set { if (!Enum.IsDefined(typeof(DbType), value)) throw new ArgumentOutOfRangeException(nameof(value)); _dbType = value; _providerType = null; }
+            set { if (!Enum.IsDefined(typeof(DbType), value)) throw new ArgumentOutOfRangeException(nameof(value)); _dbType = value; _providerType = null; _complexType = null; }
         }
         /// <summary>An optional provider-specific type; setting DbType or ResetDbType clears it.</summary>
         public OceanBaseDbType? OceanBaseDbType
@@ -26,6 +27,19 @@ namespace OceanBaseConnector
                 if (value.HasValue && !Enum.IsDefined(typeof(OceanBaseDbType), value.Value)) throw new ArgumentOutOfRangeException(nameof(value));
                 _providerType = value;
                 _dbType = value.HasValue ? ProviderDbType(value.Value) : null;
+                if (value != global::OceanBaseConnector.OceanBaseDbType.Array && value != global::OceanBaseConnector.OceanBaseDbType.Struct) _complexType = null;
+            }
+        }
+        /// <summary>A session-bound named Oracle type. Required for NULL and output complex values.</summary>
+        public OceanBaseComplexType? ComplexType
+        {
+            get => _complexType;
+            set
+            {
+                _complexType = value;
+                _providerType = value == null ? (OceanBaseDbType?)null : value.IsCollection
+                    ? global::OceanBaseConnector.OceanBaseDbType.Array : global::OceanBaseConnector.OceanBaseDbType.Struct;
+                _dbType = value == null ? (DbType?)null : DbType.Object;
             }
         }
         public override ParameterDirection Direction
@@ -50,7 +64,7 @@ namespace OceanBaseConnector
             if (copy.Value is byte[] bytes) copy.Value = (byte[])bytes.Clone();
             return copy;
         }
-        public override void ResetDbType() { _dbType = null; _providerType = null; }
+        public override void ResetDbType() { _dbType = null; _providerType = null; _complexType = null; }
 
         internal static DbType? ProviderDbType(OceanBaseDbType type)
         {
@@ -87,6 +101,8 @@ namespace OceanBaseConnector
                 case global::OceanBaseConnector.OceanBaseDbType.RefCursor:
                 case global::OceanBaseConnector.OceanBaseDbType.Blob:
                 case global::OceanBaseConnector.OceanBaseDbType.Clob:
+                case global::OceanBaseConnector.OceanBaseDbType.Array:
+                case global::OceanBaseConnector.OceanBaseDbType.Struct:
                 case global::OceanBaseConnector.OceanBaseDbType.Null: return DbType.Object;
                 default: return null;
             }

@@ -223,7 +223,7 @@ namespace OceanBaseConnector.UnitTests
 
         [Theory]
         [InlineData(false)] [InlineData(true)]
-        public void ComplexOracleOutputStillRequiresTheFutureExplicitTypeContract(bool isNull)
+        public void ComplexOracleOutputRequiresAnExplicitTypeContract(bool isNull)
         {
             using var command = new OceanBaseCommand { CommandText = "pkg.p", CommandType = CommandType.StoredProcedure };
             command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", Direction = ParameterDirection.Output, Value = "old" });

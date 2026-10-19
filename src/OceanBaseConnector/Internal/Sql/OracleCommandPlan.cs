@@ -9,9 +9,9 @@ namespace OceanBaseConnector.Internal.Sql
 {
     internal sealed class OracleCommandPlan
     {
-        private OracleCommandPlan(ParameterBindingPlan bindings, OceanBaseParameter[] outputs)
+        private OracleCommandPlan(ParameterBindingPlan bindings, OceanBaseParameter[] outputs, OceanBaseComplexType?[] complexTypes)
         {
-            Bindings = bindings; Outputs = outputs; _outputTypes = new OceanBaseDbType?[outputs.Length];
+            Bindings = bindings; Outputs = outputs; _outputTypes = new OceanBaseDbType?[outputs.Length]; _outputComplexTypes = complexTypes;
             for (var i = 0; i < outputs.Length; i++)
             {
                 var parameter = outputs[i]; var type = parameter.OceanBaseDbType;
@@ -27,6 +27,18 @@ namespace OceanBaseConnector.Internal.Sql
         internal OracleCursorOwner? Cursors { get; set; }
         private object[]? _values;
         private readonly OceanBaseDbType?[] _outputTypes;
+        private readonly OceanBaseComplexType?[] _outputComplexTypes;
+
+        internal void ValidateOutputColumn(int ordinal, ResultColumn column)
+        {
+            var expected = _outputComplexTypes[ordinal];
+            if (expected == null)
+            {
+                if (column.TypeCode == 160) throw new NotSupportedException("A complex output requires an explicit type declaration.");
+            }
+            else if (column.TypeCode != 160 || !ReferenceEquals(column.ComplexType, expected))
+                throw new ProtocolException("Complex output metadata must match its declared named type.");
+        }
 
         internal bool BeginResponse(OraclePrepareExecutePacket header)
         {
@@ -45,7 +57,7 @@ namespace OceanBaseConnector.Internal.Sql
             var values = new object[Outputs.Length];
             for (var i = 0; i < values.Length; i++)
             {
-                if (columns[i].TypeCode == 160) throw new NotSupportedException("Complex output parameters require an explicit type contract and are not supported yet.");
+                ValidateOutputColumn(i, columns[i]);
                 var declared = _outputTypes[i];
                 if (row[i] != null && ((declared == OceanBaseDbType.Blob && columns[i].TypeCode != 210) ||
                     (declared == OceanBaseDbType.Clob && columns[i].TypeCode != 211) ||
@@ -104,6 +116,7 @@ namespace OceanBaseConnector.Internal.Sql
             var original = ParameterBindingPlan.Create(text, OceanBaseCompatibilityMode.Oracle, parameters, allowOutputs: true);
             var inputs = new OceanBaseParameter[original.Parameters.Length];
             var outputs = new List<OceanBaseParameter>();
+            var complexTypes = new List<OceanBaseComplexType?>();
             for (var i = 0; i < inputs.Length; i++)
             {
                 var parameter = original.Parameters[i];
@@ -111,12 +124,19 @@ namespace OceanBaseConnector.Internal.Sql
                     (parameter.Direction == ParameterDirection.Input || parameter.Direction == ParameterDirection.InputOutput || parameter.Size != 0 || parameter.Precision != 0 || parameter.Scale != 0))
                     throw new NotSupportedException("REF CURSOR parameters require Output or ReturnValue and no scalar size or precision.");
                 var copy = inputs[i] = parameter.Snapshot();
-                if (parameter.Direction != ParameterDirection.Input) outputs.Add(parameter);
-                if (parameter.Direction == ParameterDirection.Output || parameter.Direction == ParameterDirection.ReturnValue) copy.Value = null;
+                if (parameter.Direction == ParameterDirection.Output || parameter.Direction == ParameterDirection.ReturnValue)
+                {
+                    if (parameter.ComplexType == null && parameter.DbType == DbType.Object && parameter.Value is OceanBaseComplexValue)
+                        throw new ArgumentException("A complex Output or ReturnValue requires ComplexType.");
+                    copy.Value = null;
+                }
                 if (parameter.OceanBaseDbType == OceanBaseDbType.RefCursor) copy.OceanBaseDbType = OceanBaseDbType.Null;
+                var complex = PreparedParameters.GetComplexType(copy);
+                if (complex != null) copy.ComplexType = complex;
+                if (parameter.Direction != ParameterDirection.Input) { outputs.Add(parameter); complexTypes.Add(complex); }
                 copy.Direction = ParameterDirection.Input;
             }
-            return new OracleCommandPlan(new ParameterBindingPlan(original.CommandText, inputs), outputs.ToArray());
+            return new OracleCommandPlan(new ParameterBindingPlan(original.CommandText, inputs), outputs.ToArray(), complexTypes.ToArray());
         }
 
         private static string BindingName(string name) => name.Length > 0 && name[0] == ':' ? name.Substring(1) : name;
