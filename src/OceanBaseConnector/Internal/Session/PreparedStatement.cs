@@ -30,9 +30,11 @@ namespace OceanBaseConnector.Internal.Session
         internal int ParameterCount { get; }
         internal int ColumnCount { get; }
 
-        internal static PreparedStatement Read(CommandExchange exchange, PhysicalSession session, string sql)
+        internal static PreparedStatement? Read(CommandExchange exchange, PhysicalSession session, string sql, bool allowFallback = false)
         {
-            var statement = new PreparedStatement(session, sql, exchange.Receive(), out var columns);
+            var header = exchange.Receive(allowFallback);
+            if (ErrPacket.IsErr(header)) return null;
+            var statement = new PreparedStatement(session, sql, header, out var columns);
             try
             {
                 var bytes = 0;
@@ -48,9 +50,11 @@ namespace OceanBaseConnector.Internal.Session
             catch { statement.Release(); throw; }
         }
 
-        internal static async Task<PreparedStatement> ReadAsync(CommandExchange exchange, PhysicalSession session, string sql, CancellationToken token)
+        internal static async Task<PreparedStatement?> ReadAsync(CommandExchange exchange, PhysicalSession session, string sql, CancellationToken token, bool allowFallback = false)
         {
-            var statement = new PreparedStatement(session, sql, await exchange.ReceiveAsync(token).ConfigureAwait(false), out var columns);
+            var header = await exchange.ReceiveAsync(token, allowFallback).ConfigureAwait(false);
+            if (ErrPacket.IsErr(header)) return null;
+            var statement = new PreparedStatement(session, sql, header, out var columns);
             try
             {
                 var bytes = 0;

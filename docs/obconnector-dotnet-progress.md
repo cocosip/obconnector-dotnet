@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07–D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08/D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -191,7 +191,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D04 | 本地先行，实库延期 | LOB locator、分块读写及临时对象 | 待验证 | locator解析、公开读取/绑定、WRITE/TRIM及临时对象显式创建/释放本地实现、完整回归及独立走查修复完成，见末尾；真实资源验收仍开放 |
 | D05 | 本地先行，实库延期 | ARRAY/STRUCT 与类型字典 | 待验证 | 约定本地范围实现及完整复核通过，见末尾；真实字典/DDL、往返及版本/OBProxy资源语义验收继续延期 |
 | D06 | 本地先行，实库延期 | bulk/array binding及多行输出 | 待验证 | 公开同步/异步、部分失败/位置/逐项DML计数、多行OUT/RETURNING及五资产矩阵本地完成，见末尾；按用户要求提交后暂停 |
-| D07 | G4 后 | 按需客户端预处理回退 | 未开始 | 待记录 |
+| D07 | 本地先行，实库延期 | 按需客户端预处理回退 | 待验证 | 命令显式开关、精准prepare首错误、基础标量安全编码、原租约/事务/总预算及五资产本地覆盖；MySQL非NULL字符串等待可信collation；见末尾 |
 | D08 | G4 后 | 拓扑发现与负载均衡 | 未开始 | 待记录 |
 | D09 | G4 后 | 显式 XA | 未开始 | 待记录 |
 | D10 | G4 后 | Oracle NCHAR/national charset | 待验证 | Codex，2026-10-19：独立会话编码、两种结果/参数读写、顺序字符流及五资产本地实现，验证见末尾；真实列往返和版本/OBProxy 暂缓 |
@@ -219,7 +219,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | K01 | 双模式真实环境和版本尚未确定 | G0 未关闭，所有互通结论不可发布 | 取得版本和可重复测试入口 | 待记录 |
 | K02 | TLS 默认 VerifyFull 需要可验证的证书 | 无证书环境不能以默认设置连接 | G0-3 确认证书/信任根；不得静默降级 | 待记录 |
 | K03 | 服务端完整重置能力随版本/模式变化 | 池化可能泄漏会话状态 | C01/C08 建立白名单；其余组合只直连 | 待记录 |
-| K04 | Java 默认客户端预处理，.NET B 只服务端预处理 | 部分 Java 可执行的参数化 SQL 在 .NET B 失败 | B04 显式失败并记录差距；D07 按需求处理 | 待记录 |
+| K04 | Java 默认客户端预处理，.NET B 只服务端预处理 | 部分 Java 可执行的参数化 SQL 在 .NET B 失败 | 默认仍显式失败；D07可按命令启用受限回退 | D07本地记录见末尾 |
 | K05 | `netstandard2.0` 可消费范围大于已测试运行时 | 旧运行时行为可能不同 | B09/R01 记录实际消费运行时；.NET Framework 4.8 是否正式支持由 G0-4 决定 | 待记录 |
 | K06 | 首版 A-C 的范围尚未由产品确认 | 若 G0-5 改为 B 阶段发布，G3/G4 排期和对外能力需重设 | G0-5 决定后重定基线，不把未实现的 C 能力写进发布说明 | 待记录 |
 
@@ -1150,3 +1150,33 @@ OceanBaseArrayBindingResult按输入位置提供不可变状态、错误码及�
 本地要求对应：请求/整包预算→OraclePrepareExecutePacket及RequestTests；部分成功/失败位置/逐项计数→OracleArrayBindingPlan及ResultTests；多行OUT/RETURNING/原子发布→OracleCommandPlan及ExecutionTests；原会话/事务/取消清理→共享StartCommand/CommandExchange及故障测试；五资产标准/OB20→ArrayBindingConsumerTests。README、架构、计划和台账同步，UTF8无BOM/CRLF与diff检查后本地提交，不推送。
 
 本次提交后按用户要求暂停，不启动D07。下次从D07客户端预处理回退继续；A05公共MySQL可信判定、C01池及完整重置、D08拓扑/负载、D09 XA、D15其他插件和发布审核仍开放。D06本地约定范围完成，正式状态为待验证；真实数据库/OBProxy、异机及扩展经TLS联调仍暂缓，本轮未重跑打包或旧运行时/Framework矩阵。本地夹具不能证明实库兼容，整体goal未完成。
+
+
+## D07基础标量客户端预处理回退（2026-10-19）
+
+从1840a4c继续，按本轮用户要求完成模块测试、独立走查后在当前master提交，不推送。另一会话遗留的Oracle-only/连接级开关/不提交实施段与本轮要求冲突，用户明确授权直接合并修复；保留统一D07实施段。公开命令AllowClientSidePrepareFallback默认false，五目标同步/异步均已接入。仅自动prepare首响应1295/HY000、完整通过标准/OB20响应边界验证后，保留原租约/事务/总预算发送一次COM_QUERY。显式Prepare、FetchSize、PrepareExecute、metadata及EXECUTE阶段错误、断线、取消都不回退。没有statement ID或失败结论缓存；下次仍先prepare。文本结果复用原reader/顺序字段流/多结果及未知结果契约。
+
+基础输入整数、有限浮点、精确decimal、二进制、NULL及Oracle普通字符串可回退；特殊类型及其NULL、输出方向仍拒绝。Oracle复用原绑定位置，字符串CAST为VARCHAR2并双写引号，RAW用HEXTORAW，保守4000/2000字节限制及NUL拒绝；数字不经区域性或缩窄。MySQL校验反斜杠开/关和ANSI_QUOTES三种词法组合，拒绝执行式注释/不确定语法；非NULL字符串等待可信会话collation，明确拒绝，不硬编码默认排序规则。所有表达式加括号，参数/RAW及SQL/开关在执行入口冻结，最终SQL含命令字节最多64MiB。回退值可能出现在服务端SQL日志，驱动诊断仍不记录SQL或参数。
+
+验证与走查记录：
+
+- 编码及公共API红编译分别见client-prepare-red.log、client-prepare-public-red.log。首轮夹具误用DbException.ErrorCode和Oracle字段CLR类型，按现有ServerErrorCode/decimal契约修正后25项通过，未为夹具修改产品类型映射。
+- 独立走查发现Oracle普通数字字面量丢失F/D浮点类型、字符串变成CHAR补空格语义、MySQL Single十进制缩短及ANSI_QUOTES组合遗漏。浮点2项及其余4项先失败记录见client-prepare-float-red.log、client-prepare-review-red.log；补F/D、MySQL先精确提升Double并保留指数、Oracle VARCHAR2 CAST、第三种词法校验后通过。MySQL字符串collation缺口按最小安全边界明确拒绝，未新增会话查询或配置抽象。
+- 最终42项新Unit（22编码+20执行）和30项新Consumer，覆盖重复位置/q引号/注释、文化区/精确数值/浮点、Unicode/注入字符、RAW/预算、默认关闭/精准错误/缺SQLSTATE/metadata及执行阶段、同步异步文本reader、原事务/快照、prepare前后取消/超时/断流，以及五资产标准/OB20及尾附加数据拒绝。42项见client-prepare-reviewed-focus；含D06故障的58项见client-prepare-array-fixture-reviewed，扩至临时LOB共63项见client-prepare-fixtures-final。
+- 首次完整Unit为2566通过/26失败：24项为沙箱证书私钥导入权限，另两项D06取消/关闭夹具把服务端写出当成客户端已接收。正常Windows权限解决证书问题，不安装信任根或降低TLS校验；D06仅Cancel/Close允许首项Unknown或Succeeded，第二项严格Unknown，其余故障原断言保留，独立复核通过。
+- 正常权限回归中既有TCP压力测试读超时，串行测试集合仍复现（2596通过/1失败，client-prepare-unit-complete）。8个Task.Run同步阻塞客户端与异步服务端共享线程池，改为LongRunning专用线程后，保留8×1024次连接、5秒连接/读取超时和字节确认。定向1项通过见client-prepare-tcp-fixture-green，独立走查确认未绕过TcpTransport；最终完整Unit按默认调度运行，不使用串行runsettings，2597项全通过。
+- 完整回归另暴露临时LOB Free的错误类型、Write的畸形locator响应夹具在客户端拒绝完整输出行后继续发送EOF/OK，导致模拟服务端写入重置。LobMutationReply统一rejectOutput等待边界，贯通Write及临时Create/Free，删除Create原有吞IOException逻辑；错误类型/畸形值增加InnerException精确ProtocolException断言，旧所有权/连接销毁/未知结果/不重放断言保留。20项相关测试通过见client-prepare-lob-fixtures-green。独立走查核对产品CaptureOutput及codec的真实拒绝点，不改产品LOB行为。
+- 新增四个源码/测试文件的dotnet format whitespace校验通过；对既有文件的扩展格式检查发现历史同一行多个测试属性，不作无关整文件重排。UTF8无BOM/CRLF及git diff --check单独核验。未重新打包或运行旧运行时/Framework矩阵。
+
+最终完整编译/回归结果（退出码均为0）：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release slnx核心五/DI三目标 | 0警告、0错误 | `TestResults/client-prepare-build-final.log` |
+| 完整Unit，默认测试调度 | 2597通过，0失败/跳过；本轮新增42项，未删除旧案例 | `TestResults/client-prepare-unit-final/11855_VIRTIAL-PC_2026-10-19_20_40_28_net10.0.trx` |
+| 完整五资产Consumer | 804通过，0失败/跳过；新增30项 | `TestResults/client-prepare-consumer-reviewed/*.trx` |
+| DI | 8通过，0失败/跳过 | `TestResults/client-prepare-di-reviewed/*.trx` |
+
+编译及完整测试命令沿上一模块，不加filter或runsettings，结果目录使用上表路径。已解析最终TRX确认全部执行/通过；与当前HEAD测试diff核对原案例未移除。完整Unit使用正常Windows证书私钥权限，没有安装/删除信任根或降低TLS验证；首轮失败及试验配置不计为通过证据。另按用户要求删除global.json，并移除架构/方案中的SDK锁定要求，使用支持net10.0的已安装SDK；删除后Release全解决方案0警告/错误，见`TestResults/sdk-unpin-build-final.log`。
+
+独立只读走查及复查无剩余阻断；源码/测试、README、架构、方案和台账同步，UTF8无BOM/CRLF及diff检查后在当前master本地提交，不推送。D07约定本地范围完成，正式状态待验证；D08/D09、A05、C01、D15其他插件及发布审核保持开放，整体goal未完成。真实数据库/OBProxy及异机测试按要求暂缓，扩展经TLS、打包及旧运行时/Framework矩阵本轮未重跑；本地夹具不作为实库兼容证据。

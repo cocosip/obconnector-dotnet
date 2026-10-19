@@ -1,0 +1,73 @@
+using System;
+using System.Collections.Generic;
+using System.Data.Common;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Runtime.Loader;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using OceanBaseConnector.Internal.Protocol;
+using Xunit;
+
+namespace OceanBaseConnector.ConsumerTests
+{
+    public sealed partial class Ob20ConsumerTests
+    {
+        public static IEnumerable<object[]> ClientPrepareAssets()
+        {
+            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+                foreach (var asynchronous in new[] { false, true })
+                    foreach (var kind in new[] { "standard", "ob20", "trailing" }) yield return new object[] { target, asynchronous, kind };
+        }
+
+        [Theory]
+        [MemberData(nameof(ClientPrepareAssets))]
+        public async Task EveryAssetFallsBackOnlyAfterCompleteUnsupportedPrepare(string target, bool asynchronous, string kind)
+        {
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
+            var ob20 = kind != "standard";
+            var serving = Task.Run(async () =>
+            {
+                using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream(); var channel = new PacketChannel(stream);
+                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token);
+                var prepare = await ReadRequest(stream, channel, ob20, 0, budget.Token);
+                Assert.Equal(22, prepare[0]); Assert.Equal("update t set x=?", Encoding.UTF8.GetString(prepare, 1, prepare.Length - 1));
+                var response = Frame(1, new byte[] { 255, 15, 5, 35, 72, 89, 48, 48, 48, 115 });
+                if (kind == "trailing") response = response.Concat(Frame(2, new byte[] { 0 })).ToArray();
+                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 0, 1, response) : response, budget.Token);
+                if (kind == "trailing") { await ObserveClose(stream, budget.Token); return; }
+                if (!ob20) channel.BeginCommand();
+                var query = await ReadRequest(stream, channel, ob20, 1, budget.Token);
+                Assert.Equal(3, query[0]); Assert.Equal("update t set x=(CAST('a''\\中' AS VARCHAR2(4000)))", Encoding.UTF8.GetString(query, 1, query.Length - 1));
+                response = Frame(1, Report(false, 1));
+                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 1, 1, response) : response, budget.Token);
+            }, budget.Token);
+            var context = new AssemblyLoadContext("client-prepare-" + target, isCollectible: true);
+            try
+            {
+                var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
+                using var connection = (DbConnection)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!)!;
+                connection.ConnectionString = new DbConnectionStringBuilder
+                { ["Server"] = "127.0.0.1", ["Port"] = ((IPEndPoint)listener.LocalEndpoint).Port, ["User ID"] = "u", ["TLS Mode"] = "Disabled", ["Use OB20"] = ob20 }.ConnectionString;
+                if (asynchronous) await connection.OpenAsync(budget.Token); else connection.Open();
+                using var command = connection.CreateCommand();
+                var property = command.GetType().GetProperty("AllowClientSidePrepareFallback")!;
+                Assert.False((bool)property.GetValue(command)!); property.SetValue(command, true);
+                command.CommandText = "update t set x=:p";
+                var parameter = command.CreateParameter(); parameter.ParameterName = "p"; parameter.Value = "a'\\中"; command.Parameters.Add(parameter);
+                if (kind == "trailing")
+                {
+                    var error = await Assert.ThrowsAnyAsync<DbException>(() => asynchronous ? command.ExecuteNonQueryAsync(budget.Token) : Task.FromResult(command.ExecuteNonQuery()));
+                    Assert.False((bool)error.GetType().GetProperty("IsExecutionOutcomeUnknown")!.GetValue(error)!);
+                    Assert.Equal(System.Data.ConnectionState.Broken, connection.State);
+                }
+                else Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
+                connection.Close(); await serving.WaitAsync(budget.Token);
+            }
+            finally { budget.Cancel(); listener.Stop(); context.Unload(); }
+        }
+    }
+}

@@ -178,16 +178,16 @@ namespace OceanBaseConnector.Internal.Session
             catch (Exception error) { throw Fail(ReaderCanceled(error, readerToken)); }
         }
 
-        internal byte[] Receive()
+        internal byte[] Receive(bool allowUnsupportedPrepare = false)
         {
-            try { return CheckPacket(_channel.ReadPacket()); }
+            try { return CheckPacket(_channel.ReadPacket(), allowUnsupportedPrepare: allowUnsupportedPrepare); }
             catch (Exception error) { throw Fail(error); }
         }
 
-        internal async Task<byte[]> ReceiveAsync(CancellationToken cancellationToken)
+        internal async Task<byte[]> ReceiveAsync(CancellationToken cancellationToken, bool allowUnsupportedPrepare = false)
         {
             using var registration = cancellationToken.Register(Cancel);
-            try { return CheckPacket(await _channel.ReadPacketAsync(_budget.Token).ConfigureAwait(false)); }
+            try { return CheckPacket(await _channel.ReadPacketAsync(_budget.Token).ConfigureAwait(false), allowUnsupportedPrepare: allowUnsupportedPrepare); }
             catch (Exception error)
             {
                 throw Fail(!_terminal && cancellationToken.IsCancellationRequested
@@ -200,13 +200,19 @@ namespace OceanBaseConnector.Internal.Session
             if (++_packets > 1_000_000) throw new ProtocolException("Command response packet limit exceeded.");
         }
 
-        private byte[] CheckPacket(byte[] packet, bool count = true)
+        private byte[] CheckPacket(byte[] packet, bool count = true, bool allowUnsupportedPrepare = false)
         {
             if (count) CountPacket();
             if (packet.Length == 0) throw new ProtocolException("Empty command response packet.");
             if (ErrPacket.IsErr(packet))
             {
                 var server = ErrPacket.Parse(packet);
+                if (allowUnsupportedPrepare && server.ErrorCode == 1295 && server.SqlState == "HY000")
+                {
+                    // Only the first prepare response may keep this lease for text execution.
+                    ResponseComplete();
+                    return packet;
+                }
                 var error = new OceanBaseException("The server rejected the command.", server.ErrorCode, server.SqlState);
 #if NET8_0_OR_GREATER
                 error.FailedBatchCommand = BatchCommand;

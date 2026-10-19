@@ -801,6 +801,18 @@ DML成功响应首列是该项影响行数；错误响应首列是0起始失败�
 - [x] 公开不可变`OceanBaseArrayBindingResult.Items`及完整终态累计数；`ArrayBindingResult`保留最近已启动数组执行的可证明部分结果，未发送SQL时为null，未知后缀为Unknown。完整响应及OB20边界、取消与Busy状态验证前不发布参数；成功后每个输出参数Value为object[][]，第一维输入位置、第二维该位置返回的多行。快照独立复制RAW字节，结果输出总值数最多65535、原始字段总字节受既有包上限约束。
 - [x] 测试请求独立字节、响应形状/位置/计数/NULL/预算、多行输出和原子终态，公开同步/异步、部分错误、PL停止、事务绑定、无效声明不发包、取消/超时/断流；五资产隔离消费覆盖标准协议及OB20成功/尾附加数据。Release全目标及完整Unit/Consumer/DI通过、独立走查、同步README/架构/台账并提交；之后按用户要求暂停，下次从D07等开放模块继续。
 
+### D07 客户端预处理回退实施
+
+按既有D07安全文本编码及仅明确unsupported prepare回退的要求继续本地开发；不重新设计默认执行方式。命令级`AllowClientSidePrepareFallback`默认false，不增加连接串别名或依赖。仅自动prepare首响应为1295/HY000、完整消费且通过标准/OB20边界验证后，在同租约、事务及总超时预算内发送一次COM_QUERY；显式Prepare、FetchSize、Oracle PrepareExecute和执行阶段错误不回退，不缓存不支持结论或重放SQL。
+
+范围贯通ParameterBindingPlan、ClientPreparedSql、PreparedStatement、CommandExchange、OceanBaseCommand及Unit/五资产Consumer和README/架构/台账。Oracle复用原绑定位置，避免重新解释q/nq字面量；MySQL仅接受在反斜杠开/关及ANSI_QUOTES下占位符位置均一致的SQL，拒绝执行式注释或不确定引号。所有插入值加括号隔离词法边界，MySQL非NULL字符串因缺可信会话collation明确拒绝；Oracle双写单引号、CAST为VARCHAR2且拒绝NUL，RAW使用HEXTORAW。基础输入整数/有限浮点/精确decimal/二进制/NULL及Oracle普通字符串可回退；日期、时区、national、JSON、LOB、复杂值及输出仍要求服务端预处理，NULL声明也不绕过。Oracle文本保守限制4000字节、RAW2000字节，最终SQL含命令字节不超过64MiB。回退SQL可能出现在服务端SQL日志，驱动日志仍不记录SQL或参数。
+
+- [x] 编码先红后绿：绑定位置、重复名称、注释/引号、SQL_MODE歧义、Unicode/注入字符、独立精确字面量、类型/预算拒绝。
+- [x] 执行先红后绿：默认/显式开关、精准错误及阶段、原会话/事务、同步/异步文本reader、快照、错误/取消/超时/断流不重放。
+- [x] 五资产标准/OB20隔离消费、完整Release/Unit/Consumer/DI、独立只读走查及修复、同步文档和diff检查后提交，不推送。实库与异机继续暂缓；不据本地夹具关闭真实验收。
+
+本地范围完成：Release核心五/DI三目标0警告/错误，完整Unit2597（新增42）、Consumer804（新增30）、DI8全部通过，0失败/跳过；详见台账。MySQL非NULL字符串仍需可信会话collation，特殊类型及输出不回退。D07正式状态待验证，D08/D09及其余环境/发布关口保持开放。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

@@ -7,11 +7,12 @@ namespace OceanBaseConnector.Internal.Sql
 {
     internal sealed class ParameterBindingPlan
     {
-        internal ParameterBindingPlan(string commandText, OceanBaseParameter[] parameters)
-        { CommandText = commandText; Parameters = parameters; }
+        internal ParameterBindingPlan(string commandText, OceanBaseParameter[] parameters, int[]? bindingPositions = null)
+        { CommandText = commandText; Parameters = parameters; BindingPositions = bindingPositions; }
 
         internal string CommandText { get; }
         internal OceanBaseParameter[] Parameters { get; }
+        internal int[]? BindingPositions { get; }
 
         internal static ParameterBindingPlan Create(string sql, OceanBaseCompatibilityMode mode, OceanBaseParameterCollection parameters, bool allowOutputs = false)
         {
@@ -35,6 +36,7 @@ namespace OceanBaseConnector.Internal.Sql
             }
 
             var ordered = new List<OceanBaseParameter>();
+            var positions = new List<int>();
             var used = new bool[supplied.Length];
             var usedCount = 0;
             StringBuilder? rewritten = null;
@@ -77,11 +79,12 @@ namespace OceanBaseConnector.Internal.Sql
                 ordered.Add(supplied[index]);
                 rewritten ??= new StringBuilder();
                 rewritten.Append(sql, copiedThrough, start - copiedThrough).Append('?');
+                positions.Add(rewritten.Length - 1);
                 copiedThrough = position;
             }
             if (usedCount != supplied.Length) throw new ArgumentException("One or more Oracle parameters are not referenced by the command.");
             var text = rewritten == null ? sql : rewritten.Append(sql, copiedThrough, sql.Length - copiedThrough).ToString();
-            return new ParameterBindingPlan(text, ordered.ToArray());
+            return new ParameterBindingPlan(text, ordered.ToArray(), positions.ToArray());
         }
 
         private static string NormalizeName(string name)
