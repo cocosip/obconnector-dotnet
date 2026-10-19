@@ -637,6 +637,16 @@ RSA子模块已完成本地实现与独立复查：修复初始sha256取钥后�
 
 本轮本地实现、独立走查修复及回归已完成：核心五/DI三目标Release编译0警告/错误，完整Unit1689（新增追踪27）、Consumer464（新增追踪70）、DI8全部通过且无跳过。修复legacy大小写/有界非最短varint、未知重复TLV及signed level，红绿证据见进度台账末尾。完成记录仅随下一请求发送，关闭不刷新最后一条；query时间只校验，未导出指标或新增AppInfo定制API。D01正式状态待验证，OB20经TLS环回、真实采样/SHOW TRACE和版本矩阵仍开放；其他未实现模块不据本轮关闭。
 
+### D02 Oracle PrepareExecute报文子模块（2026-10-19）
+
+先补过程/OUT/RETURNING所需的扩展线协议基础，之后接入公开命令与输出生命周期；本子模块不改变CommandType或ParameterDirection的支持状态。沿用固定Java基线ComStmtPrepareExecute.send/read与JDBC4ServerPreparedStatement.calculateCheckSum，只核对字段和行为，不复制实现或新增依赖。
+
+1. 新内部OraclePrepareExecutePacket组装0xA1、statement ID、非游标/iteration=1、长度编码UTF-8 SQL、32位参数数目、既有PreparedParameters编码、executeMode=0/closeCount=0/raw SQL CRC32C/reserved=0。完整逻辑包在分配前限制64MiB；参数数量限制响应可表达的UInt16，检查编码块最低长度及零参数一致性。
+2. 解析17字节扩展响应头：OK、statement ID、列数、参数数、filler、warning、extend flags和hasResultSet；拒绝截断/尾随、坏marker/filler/布尔值及超过4096的列数。保留未知扩展位供执行层决定支持边界，不将头OK误当SQL终态，也不在此分配列/参数数组。
+3. 先用独立固定字节、SQL长度前缀/Unicode/CRC、参数块、所有头截断与恶意边界测试证明缺实现，再实现；用固定Java原CRC类独立输出请求夹具。全目标Release编译、完整Unit/Consumer/DI、独立走查与文档复核通过后本地提交。后续必须接入扩展响应元数据、结果/尾OK、OUT原子发布和事务/资源清理，不能据本子模块宣布D02完成；真实服务端联调继续暂缓。
+
+报文子模块已实现并本地验证：Release核心五/DI三目标0警告/错误，完整Unit1710（新增21）、Consumer464、DI8全部通过且无跳过。独立只读走查核对固定Java布局及CRC，未发现必须修复项；独立夹具是手工字段构造加原Java CRC，不冒称实际执行Java发送方法。尚未接公开API，Consumer仅为既有完整回归；D02结果/尾包、输出发布和生命周期接入仍须继续，实库和异机暂缓。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

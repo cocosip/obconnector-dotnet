@@ -267,7 +267,7 @@ namespace OceanBaseConnector.Internal.Protocol
             var prefix = count < 251 ? 1 : count <= ushort.MaxValue ? 3 : count <= 0xFFFFFF ? 4 : 9;
             if (count > PacketChannel.DefaultMaxPacketSize - 10 - writer.BaseStream.Position - prefix) throw TooLarge();
         }
-        private static void WriteBytes(BinaryWriter writer, byte[] bytes)
+        internal static void WriteBytes(BinaryWriter writer, byte[] bytes)
         {
             var count = bytes.Length;
             if (count < 251) writer.Write((byte)count);
