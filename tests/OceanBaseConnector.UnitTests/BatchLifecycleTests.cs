@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -13,11 +14,11 @@ namespace OceanBaseConnector.UnitTests
 {
     public sealed partial class TextCommandTests
     {
-        private static async Task BatchTextResult(PacketChannel channel, string value, byte status = 6)
+        private static async Task BatchTextResult(PacketChannel channel, string value, byte status = 6, bool terminate = true)
         {
             await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(Column("value", 253));
             await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(new[] { (byte)value.Length }.Concat(System.Text.Encoding.UTF8.GetBytes(value)).ToArray());
-            await channel.WritePacketAsync(Eof(status));
+            if (terminate) await channel.WritePacketAsync(Eof(status));
         }
 
         [Theory]
@@ -139,7 +140,8 @@ namespace OceanBaseConnector.UnitTests
             var server = Server(async channel =>
             {
                 await Query(channel, "first");
-                if (unread) await BatchTextResult(channel, "unread"); else await channel.WritePacketAsync(Ok(1));
+                // Leave the terminal response pending so early disposal cannot race a server write.
+                if (unread) await BatchTextResult(channel, "unread", terminate: false); else await channel.WritePacketAsync(Ok(1));
                 try { Assert.Equal(0, await channelStreamRead(channel)); }
                 catch (IOException) when (unread) { }
                 catch (ProtocolException) when (unread) { }
@@ -149,7 +151,9 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync(); using var batch = connection.CreateBatch(); BatchItem(batch, "first"); var suffix = BatchItem(batch, "never");
                 var reader = asynchronous ? await batch.ExecuteReaderAsync() : batch.ExecuteReader();
+                var closing = Stopwatch.StartNew();
                 if (asynchronous) await reader.DisposeAsync(); else reader.Dispose();
+                Assert.True(closing.Elapsed < TimeSpan.FromSeconds(5), "Early close waited for the pending terminal response.");
                 Assert.Equal(-1, suffix.RecordsAffected); Assert.Equal(unread ? ConnectionState.Broken : ConnectionState.Open, connection.State);
             }
             finally { connection.Close(); server.Stop(); }
