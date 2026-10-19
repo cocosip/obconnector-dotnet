@@ -381,7 +381,7 @@ D04公开读取/绑定：新增默认关闭的UseLobLocators，冻结配置要�
 
 OceanBaseLob保留原连接、物理会话、显式事务及事务epoch和原command timeout。原reader完整消费后，OpenRead/OpenTextReader只允许打开一次；取预约失败可重试，成功后流独占原会话，释放handle会取消在途读取并释放预约。连接关闭重开、原事务或后续事务结束均使handle失效。参数只绑定原locator，在连接锁内再次验证来源及epoch；输入可按DbType.Object推断Blob/Clob，InputOutput的输出期望类型在创建计划时冻结，Output/ReturnValue需显式声明类型。非空LOB输出的类型码必须与声明匹配，所有输出沿D02原子发布，NULL保留DBNull，不按locator长度分配正文。
 
-行内流取得预约后才借用locator payload，避免读取等待期间完成的修改仍返回旧值；行外流通过同一会话`DBMS_LOB.READ`有界读取，复用D02版本门槛和错误收尾。BLOB amount/offset按字节，每块最多32767；CLOB按Unicode标量，每块最多8191，严格UTF8最多32764字节，保留BOM。总字节数受locator ByteLength约束，amount支持精确整数NUMBER且拒绝小数、溢出、无进展或不匹配buffer。调用方取消/原timeout作用于实际网络读取，破坏未完成会话；内部READ不把已完成的原SQL重新标为结果未知，不重放。异步文本入口和stream/handle及内部命令释放使用异步I/O；Standard2.0无IAsyncDisposable公共契约但内部异步清理仍可用。Dispose仅释放客户端资源，不擅自FREETEMPORARY；临时对象使用下述显式所有权API，真实版本/OBProxy、临时生命周期与扩展经TLS验收保持开放。
+行内流取得预约后才借用locator payload，避免读取等待期间完成的修改仍返回旧值；行外流通过同一会话`DBMS_LOB.READ`有界读取，复用D02版本门槛和错误收尾。BLOB amount/offset按字节，每块最多32767；CLOB按Unicode标量，每块最多8191，严格UTF8最多32764字节，保留BOM。总字节数受locator ByteLength约束，amount支持精确整数NUMBER且拒绝小数、溢出、无进展或不匹配buffer。调用方取消/原timeout作用于实际网络读取，破坏未完成会话；内部READ不把已完成的原SQL重新标为结果未知，不重放。异步文本入口和stream/handle及内部命令释放使用异步I/O；Standard2.0无IAsyncDisposable公共契约但内部异步清理仍可用。Dispose仅释放客户端资源，不擅自FREETEMPORARY；临时对象使用下述显式所有权API。Required TLS本地消费补验见§6；真实版本/OBProxy、临时生命周期及可信TLS验收保持开放。
 
 D04修改：OceanBaseLob的WriteBytes/WriteText/Truncate及异步入口在原会话执行DBMS_LOB.WRITE/TRIM，lob为INOUT，WRITE另绑定amount、offset和buffer，TRIM绑定length。公开offset从0开始，协议加1，位置保留Int64；BLOB按字节、CLOB按Unicode标量，沿用32767字节/8191标量块上限并保留surrogate pair。首包前验证全部UTF16、片段及offset+count范围，空输入不发SQL但仍校验上下文/预约。多块间保持同一预约，活动reader/流、其他命令、并发修改及事务结束不能插入；每块沿用原事务epoch/command timeout。完整终态及协议边界成功后才采用返回的新locator，后续块及绑定使用新值。失败使源handle失效，ByteLength只保留最后成功快照；NULL locator在已确认终态后破坏会话并报已知失败，可信ERR保留可用会话，畸形/未确认响应沿既有结果未知策略销毁会话。多块修改非原子，不自动提交、回滚成功前缀或重放；Dispose/DisposeAsync取消在途修改，异步命令清理仍使用异步I/O。
 
@@ -523,7 +523,11 @@ MySQL使用固定XA关键字和`0x<gtrid>,0x<bqual>,0x<uint32 format bit pattern
 
 Recover仅Idle，使用固定Java观察到的declare x DBMS_XA_XID_ARRAY := DBMS_XA_XID_ARRAY(); BEGIN x := DBMS_XA.XA_RECOVER(); :recovered := x; END;，由现有命名绑定计划生成占位符，隐藏输出/尾包验证后读取私有数组。返回独立OceanBaseXid[]，不得使用SELECT TABLE或构造器代替未验证路径。数组必须非NULL，元素必须为三属性对象、格式号为有符号Int32且非-1、gtrid为1–64字节、bqual为0–64字节；Oracle RAW的NULL分支规范为零长度，NULL全局ID仍失败。超出公开格式域、NULL元素、畸形/多行输出、额外结果或中断都失败，不返回部分结果。沿复杂值65535总成员预算，每个分支占一集合元素加三属性，Oracle快照上限16383个（MySQL仍65536），不为XA放宽全局编解码预算。所有0xa1响应已创建statement均排队关闭，不持有服务端statement缓存。
 
-五目标公开同步/异步生命周期与XaErrorCode消费、标准/OB20夹具覆盖阶段/只读/错误码/恢复/错误边界，保留MySQL既有回归。日志和诊断不输出身份/SQL/参数，仅六种xa.*操作。D09的本地两模式范围由本模块继续补齐；真实协调器、OceanBase/OBProxy、TLS扩展及异机/旧运行时验收仍开放，TransactionScope和池化门槛不变。
+五目标公开同步/异步生命周期与XaErrorCode消费、标准/OB20夹具覆盖阶段/只读/错误码/恢复/错误边界，保留MySQL既有回归。日志和诊断不输出身份/SQL/参数，仅六种xa.*操作。D09的本地两模式范围由本模块继续补齐；Oracle阶段的Required TLS本地补验见下文，MySQL XA经TLS、真实协调器、OceanBase/OBProxy、可信TLS及异机/旧运行时验收仍开放，TransactionScope和池化门槛不变。
+
+### Oracle扩展经TLS本地消费（2026-10-20）
+
+过程OUT、REF CURSOR、行外BLOB/CLOB读取、WRITE/TRIM、临时LOB创建/写入/显式释放、Oracle XA阶段/恢复/错误及复杂类型字典/绑定/输出，复用七组公开Consumer脚本分别新增30/30/60/60/80/100/20项Required TLS用例。原明文380与新增TLS380定向全部通过，包含五资产同步/异步的标准帧与OB20路径、既有资源所有权/尾随正文和结果发布断言。共享Handshake在SSLRequest后升级同一PacketChannel并保留序号，后续标准帧与OB20都从TLS流收发；不改产品源码或系统信任根。五资产均由net10宿主隔离消费，自签名Required仅证明本机加密传输，不证明VerifyFull、五运行时、实库资源/字典/协调器或完整故障组合，详细证据和边界见台账末尾。
 
 ### 错误与诊断
 

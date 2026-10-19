@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
@@ -13,6 +14,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
+using OceanBaseConnector.UnitTests.Transport;
 using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
@@ -28,14 +30,26 @@ namespace OceanBaseConnector.ConsumerTests
 
         [Theory]
         [MemberData(nameof(ComplexDictionaryAssets))]
-        public async Task EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValues(string target, bool async, bool ob20)
+        public Task EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValues(string target, bool async, bool ob20)
+            => EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesCore(target, async, ob20, encrypted: false);
+
+        [Theory]
+        [MemberData(nameof(ComplexDictionaryAssets))]
+        public Task EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesOverTls(string target, bool async, bool ob20)
+            => EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesCore(target, async, ob20, encrypted: true);
+
+        private static async Task EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesCore(string target, bool async, bool ob20, bool encrypted)
         {
+            using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             var serving = Task.Run(async () =>
             {
-                using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream(); var channel = new PacketChannel(stream);
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true);
+                using var peer = await listener.AcceptTcpClientAsync(budget.Token);
+                using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
+                Stream stream = tls is null ? peer.GetStream() : tls;
+                var channel = new PacketChannel(peer.GetStream());
+                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, tls: tls, certificate: certificate);
                 byte[] Column(string name)
                 {
                     var bytes = Encoding.UTF8.GetBytes(name);
@@ -139,7 +153,7 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
                 using var connection = (DbConnection)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!)!;
-                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Use Oracle Prepare Execute=true;Use OB20={ob20}";
+                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode={(encrypted ? "Required" : "Disabled")};Use Oracle Prepare Execute=true;Use OB20={ob20}";
                 if (async) await connection.OpenAsync(budget.Token); else connection.Open();
                 async Task<object?> Call(object receiver, string name, object?[] arguments)
                 {

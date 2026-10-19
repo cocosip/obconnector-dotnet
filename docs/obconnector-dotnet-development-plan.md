@@ -730,6 +730,14 @@ TDD以真实TCP环回覆盖两EOF格式、有/无结果、普通/顺序、同步
 
 本轮标量接入已本地实现：Release核心五/DI三目标0警告/错误，完整Unit1840、Consumer494、DI8全部通过、零跳过。独立走查发现并修复最终OK后取消/关闭仍可能发布OUT的竞态，4项修前失败、修后通过；再次走查无新增必须修复项。新增30项公共消费覆盖五资产的标准、OB20和尾部夹带包边界。证据与限制见台账末尾；D02保持进行中，复杂/多行输出、独立Prepare/FetchSize及真实互通不据本轮宣称支持。
 
+### D02–D05/D09 Oracle扩展经TLS本地消费补验（2026-10-20）
+
+复用七组现有Consumer协议脚本和断言，保留原明文入口及案例身份，分别新增Required TLS入口：过程OUT发布30、REF CURSOR30、行外BLOB/CLOB分块读取60、LOB WRITE/TRIM60、临时LOB创建/写入/显式释放80、Oracle XA阶段/恢复/错误100、复杂类型字典和值构造20，共380项。五资产同步/异步覆盖标准帧与OB20；已有尾随正文、阶段错误/断连、资源所有权及发布边界断言原样沿用。不扩大为LOB全部取消场景、完整复杂值往返或真实协调器验收。
+
+沿用已验证的共享Handshake可选TLS参数：每例独立自签名证书和SslStream，先标准greeting/SSLRequest，再在同一PacketChannel升级并保留序号，所有后续扩展请求/响应都经TLS。只参数化测试传输并复用证书fixture，不改产品配置、公共API、依赖或系统信任根。定向760项及完整Unit/Consumer/DI、核心五/DI五Release、案例增删核对、独立走查及必要修复后同步台账并提交。五资产由net10宿主隔离消费，Required不证明VerifyFull信任链，真实数据库/OBProxy、KDC/协调器和异机继续暂缓。
+
+本地补验完成：核心五/DI五及测试Release零警告错误，定向760、完整Unit2912/Consumer1693/DI14全部通过，零失败/跳过。与上一模块完整Consumer1313逐名对比新增380、删除0，新增380项在完整报告全部通过且七组数量一致。独立只读代码走查无阻断，最终证据及边界见台账；本轮不关闭实库、可信TLS、异机、MySQL XA经TLS或整体目标。
+
 ### D03 REF CURSOR 本地实施（2026-10-19）
 
 沿用Oracle PrepareExecute入口与2.2.76门槛，追加OceanBaseDbType.RefCursor和一次性OceanBaseRefCursor输出对象；纯OUT/ReturnValue发送NULL，拒绝游标输入/输入输出。Oracle类型163的二进制值为4字节LE游标ID，不能当普通整数或文本解码。输出对象同标量先暂存、完整响应及边界成功后发布；NULL保留DBNull。

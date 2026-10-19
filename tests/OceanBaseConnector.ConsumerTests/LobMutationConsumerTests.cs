@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
@@ -12,6 +13,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
+using OceanBaseConnector.UnitTests.Transport;
 using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
@@ -20,8 +22,17 @@ namespace OceanBaseConnector.ConsumerTests
     {
         [Theory]
         [MemberData(nameof(LobAssets))]
-        public async Task EveryAssetMutatesLobLocatorsAndKeepsWriteOutcomeAtOb20Boundary(string target, bool async, string kind, bool character)
+        public Task EveryAssetMutatesLobLocatorsAndKeepsWriteOutcomeAtOb20Boundary(string target, bool async, string kind, bool character)
+            => EveryAssetMutatesLobLocatorsAndKeepsWriteOutcomeAtOb20BoundaryCore(target, async, kind, character, encrypted: false);
+
+        [Theory]
+        [MemberData(nameof(LobAssets))]
+        public Task EveryAssetMutatesLobLocatorsAndKeepsWriteOutcomeAtOb20BoundaryOverTls(string target, bool async, string kind, bool character)
+            => EveryAssetMutatesLobLocatorsAndKeepsWriteOutcomeAtOb20BoundaryCore(target, async, kind, character, encrypted: true);
+
+        private static async Task EveryAssetMutatesLobLocatorsAndKeepsWriteOutcomeAtOb20BoundaryCore(string target, bool async, string kind, bool character, bool encrypted)
         {
+            using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             var ob20 = kind != "standard"; var data = Encoding.UTF8.GetBytes("患者😀a"); var type = character ? (byte)211 : (byte)210;
@@ -33,8 +44,11 @@ namespace OceanBaseConnector.ConsumerTests
             }
             var serving = Task.Run(async () =>
             {
-                using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream(); var channel = new PacketChannel(stream);
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, lobLocators: true);
+                using var peer = await listener.AcceptTcpClientAsync(budget.Token);
+                using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
+                Stream stream = tls is null ? peer.GetStream() : tls;
+                var channel = new PacketChannel(peer.GetStream());
+                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, lobLocators: true, tls: tls, certificate: certificate);
                 byte[] Column(byte code) => new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 112, 1, 112, 12, 45, 0, 20, 0, 0, 0, code, 0, 0, 0, 0, 0 };
                 byte[] Bytes(byte[] value) => new[] { (byte)value.Length }.Concat(value).ToArray();
                 async Task Reply(uint id, byte[] bytes)
@@ -78,7 +92,7 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
                 using var connection = (DbConnection)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!)!;
-                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Use Oracle Prepare Execute=true;Use Lob Locators=true;Use OB20={ob20}";
+                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode={(encrypted ? "Required" : "Disabled")};Use Oracle Prepare Execute=true;Use Lob Locators=true;Use OB20={ob20}";
                 if (async) await connection.OpenAsync(budget.Token); else connection.Open();
                 using var command = connection.CreateCommand(); command.CommandText = "select lob_value";
                 using var lob = Assert.IsAssignableFrom<IDisposable>(async ? await command.ExecuteScalarAsync(budget.Token) : command.ExecuteScalar());

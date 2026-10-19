@@ -25,7 +25,7 @@
 | D01 | OB20帧/校验、协商/回退、流式传输及脱敏追踪已有本地实现；五资产Required TLS执行、部分字段消费故障销毁及完整链路追踪TLS补验见末尾 | VerifyFull信任链、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
-| D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流、WRITE/TRIM及临时对象显式创建/释放已本地接入，验证见末尾 | 真实版本/OBProxy、资源生命周期及扩展经TLS验收仍开放 |
+| D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流、WRITE/TRIM及临时对象显式创建/释放已本地接入；Required TLS公开消费补验见末尾 | 真实版本/OBProxy、资源生命周期及可信TLS仍开放 |
 | D05 | 内部嵌套编解码、同会话字典、值构造、命名结果/参数/输出、匿名标量结果/输入/输出及完整本地复核完成，验证见末尾 | 真实字典/DDL、往返及版本/OBProxy资源语义验收 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
@@ -1538,3 +1538,32 @@ net9完整首轮2911通过/1失败（current-runtime9-unit/*.trx）：复杂字�
 命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；三个完整测试分别dotnet test对应工程-c Release --no-build --no-restore --logger trx --results-directory对应目录；定向另加--filter FullyQualifiedName~Ob20TraceConsumerTests，红灯限制EveryAssetCorrelatesFullLinkTraceOverTls、net10.0和modern。格式检查为Consumer工程dotnet format whitespace --no-restore --verify-no-changes --include本轮测试文件绝对路径。完整测试期间不重建产品。
 
 五资产仍由net10宿主隔离消费，不是五运行时验收。Required只证明本机加密传输，VerifyFull、实库采样/SHOW TRACE、版本/OBProxy、LOB/XA经TLS及其他机器仍待验收；本轮未重跑打包、Framework和旧运行时，产品源码未改。不关闭D01、A05/C01/D15余项或整体goal；最终证据独立复核及UTF8无BOM/CRLF、diff检查后本地提交，不推送。
+
+## D02–D05/D09 Oracle扩展经TLS本地消费补验（2026-10-20）
+
+为文档中仍保留的Oracle扩展TLS组合缺口，七组Consumer脚本保留原明文方法、MemberData和断言，通过同一主体的encrypted参数新增Required TLS入口；每例创建独立自签名证书及SslStream，复用共享Handshake的32字节CLIENT_SSL检查、TLS加密状态和PacketChannel序号。标准包由替换后的channel收发，OB20包直接通过tls流收发。成功路径等待服务端脚本结束，原服务端断言不能被忽略；失败、反射异常及客户端资源清理策略不改。
+
+| 脚本 | 原明文案例 | 新增Required TLS案例 | 保留的主要断言 |
+| --- | --- | --- | --- |
+| OracleProcedureConsumerTests | 30 | 30 | 标量OUT只在完整终态及OB20边界验证后发布 |
+| RefCursorConsumerTests | 30 | 30 | 父command释放后原会话cursor可读、游标/父statement清理及尾随响应拒绝 |
+| LobConsumerTests | 60 | 60 | BLOB/CLOB原会话分块READ、字符/字节长度和错误后的连接状态 |
+| LobMutationConsumerTests | 60 | 60 | WRITE/TRIM参数、返回locator更新及写入结果未知边界 |
+| TemporaryLobConsumerTests | 80 | 80 | 创建/写入/显式释放、创建或释放尾随响应失败及释放后失效 |
+| OracleXaConsumerTests | 100 | 100 | START/END/PREPARE/COMMIT/RECOVER/ROLLBACK、只读票、XA错误/断连及完整恢复快照 |
+| ComplexTypeDictionaryConsumerTests | 20 | 20 | 类型字典精确布局、不可变复杂值、绑定/输出及缓存清除后旧描述符拒绝 |
+
+不新增产品接口、配置、依赖或信任根操作，不复制另一套协议断言。独立只读代码走查已核对七文件全路径、共享Handshake及PacketChannel升级，未发现必须修复项。最终原始TRX均为Completed，零失败/跳过；逐名核对原完整Consumer1313项到1693项新增380、删除0，新增380全部通过，七组计数与上表一致（TestResults/oracle-tls-final-summary.json、oracle-tls-case-comparison.json、oracle-tls-final-groups.json）。定向报告亦保留原380项、新增380全部通过（oracle-tls-focused-comparison.json、oracle-tls-focused-groups.json）。
+
+| 验证 | 结果 | 证据 |
+| --- | --- | --- |
+| 核心五/DI五及测试工程Release | 0警告/错误 | TestResults/oracle-tls-build.log |
+| 七组定向回归 | 明文380及TLS380全部通过 | TestResults/oracle-tls-focused/*.trx |
+| 完整Unit | 2912通过，0失败/跳过 | TestResults/oracle-tls-unit-final/*.trx |
+| 完整Consumer | 1693通过，0失败/跳过；旧案例无移除，新增380均通过 | TestResults/oracle-tls-consumer-final/*.trx |
+| 完整DI | 14通过，0失败/跳过 | TestResults/oracle-tls-di-final/*.trx |
+| 范围格式检查 | 退出0，0文件需更改 | TestResults/oracle-tls-format.log |
+
+命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore --logger trx --results-directory对应目录。定向另加--filter，以七个原公开测试方法名前缀用OR连接，同时匹配原方法及OverTls入口。格式为Consumer工程dotnet format whitespace --no-restore --verify-no-changes --include七文件绝对路径。完整测试期间不重建产品；最终证据独立只读复核、UTF8无BOM/CRLF及diff检查后在当前master本地提交，不推送。
+
+五资产由net10宿主隔离消费，只验证本机Required加密传输；不等同VerifyFull信任链、五运行时或真实OceanBase/OBProxy兼容。LOB全部取消组合、复杂值全部往返、MySQL XA经TLS、真实XA协调器、系统票据及其他机器不在这批脚本覆盖内。本轮产品源码未改，不重复打包/Framework/旧运行时。A05/C01、D15余项、D01真实采样/SHOW TRACE和发布关口仍开放，不关闭整体goal。
