@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部嵌套编解码已落地（验证见末尾），字典/公开接入及D06–D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典及公开值构造已落地（验证见末尾），复杂列/参数/输出接入及D06–D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -26,7 +26,7 @@
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
 | D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流、WRITE/TRIM及临时对象显式创建/释放已本地接入，验证见末尾 | 真实版本/OBProxy、资源生命周期及扩展经TLS验收仍开放 |
-| D05 | 内部嵌套对象/集合编解码已有本地实现，验证见末尾 | 类型字典、缓存失效、公开值及列/参数/输出接入继续实施 |
+| D05 | 内部嵌套编解码、同会话类型字典、整批缓存失效及公开值构造已有本地实现，验证见末尾 | 复杂列/参数/输出接入、顺序边界及完整公开读写继续实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -968,3 +968,30 @@ ComplexType新增不可变成员布局，ComplexValueCodec按完整布局递归�
 编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/complex-codec-<unit|consumer|di>-final`。已解析TRX核对实际执行/通过计数及新增/移除情况。完整Unit使用正常Windows TLS凭据权限，未安装/删除信任根或改变TLS策略。同步架构、开发方案和本台账，UTF8无BOM/CRLF及diff检查后本地提交，不推送。
 
 本轮完成D05内部codec子模块，D05整体仍进行中：下一步是同会话类型字典、schema/type身份及缓存失效，再接入公开值、复杂列/参数附加类型头、顺序读取和D02输出。README继续明确不支持公共ARRAY/STRUCT，不以内部夹具证明服务端兼容。真实数据库/OBProxy、字典DDL可见性、异机、打包和旧运行时/Framework矩阵本轮未验证，整体目标保持开放。
+
+## D05同会话类型字典与公开值构造（2026-10-19）
+
+从`7dfa958`继续，实现GetComplexType/GetComplexTypeAsync(schemaName, typeName, transaction)及ClearComplexTypeCache(transaction)。根身份使用精确区分大小写的schema/type二元组，名称参数化查询ALL_TYPES、ALL_TYPE_ATTRS/ALL_COLL_TYPES；完整装载预约原物理会话，固定原事务epoch并显式绑定事务，不另建字典连接。校验结果列形状、owner/name/kind、对象属性总数及连续序号/唯一名称、集合唯一元素与嵌套kind；不猜测未支持类型。循环图、LOB/cursor/national charset成员明确拒绝。
+
+公开OceanBaseComplexType/Members不可变，CreateValue构造OceanBaseComplexValue并复用既有codec检查精确标量与值预算；嵌套必须使用对应成员的描述，数组及RAW快照独立。RAW先检查预算再复制，公开值累计成员预算在递归展开前校验。关闭重开、事务切换或显式清缓存使旧描述/值不能继续构造/绑定，内容快照仍可检查；清空同时失效所有父子依赖。外部类型DDL不自动感知，须在无活动reader时清空并重载，不伪造服务端版本。每个查询使用连接CommandTimeout，并非整个递归装载的总超时。
+
+类型图最多32层；当前会话缓存累计最多65535成员、65535命名类型及4MiB字典UTF8文本，单个名称最多512 UTF8字节。成功后同锁发布全部新描述及预算，失败不发布子类型或扣减额度；缓存命中已收费，额度满时可显式清空重载。
+
+红绿与独立走查：
+
+- 缺公开API的红编译见`TestResults/complex-dictionary-red.log`。基础11项通过后，扩展首轮19通过/3失败（`complex-dictionary-boundaries`）：两项为事务夹具未在无响应statement-close后重置序号，一项错误期待已发SQL取消直接抛OperationCanceledException。对齐既有结果未知契约及序号后22项通过，未为错误断言改变产品行为。
+- 超限RAW复制回归修前2项失败（`complex-dictionary-raw-red`）：拒绝70MiB输入前先复制了正文。改为复制前检查预算，最终同步/异步均通过，额外分配小于1MiB。
+- 独立只读走查发现，预热子类型可绕过原按单次新装载计费的预算。预热1成员Child再装载65535属性Parent的回归修前未抛异常（`complex-dictionary-cache-red`），改为整个会话缓存累计计费后拒绝。首次修后夹具只捕获IOException，PacketChannel的正常断开实际为ProtocolException；修正捕获后通过，未改变产品断开映射。复查确认收费与缓存同锁发布、失败不污染既有缓存，Clear/context切换归零，无剩余阻断。
+- 最终46项定向通过（`complex-dictionary-targeted-final`），覆盖对象/集合及32层成功/33层拒绝、成员预算、精确/Unicode标量与NULL、RAW快照、嵌套身份、大小写/schema、缓存刷新、原会话重开/事务代次、预取消/在途取消/超时、异步等待与独占、畸形字典及失败不发布子缓存。五资产×同步/异步×标准/OB20新增20项消费，覆盖实际字典查询/精确绑定、值快照及缓存失效。
+- 文档走查发现README未列出已支持的VARCHAR同义标量，已补充；未将公开值构造当作复杂列/参数读写完成。
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/complex-dictionary-build-final.log` |
+| 完整Unit | 2159通过，0失败/跳过；较上一提交新增46项、移除0项 | `TestResults/complex-dictionary-unit-final/*.trx` |
+| 五资产Consumer | 744通过，0失败/跳过；新增20项、移除0项 | `TestResults/complex-dictionary-consumer-final/*.trx` |
+| DI | 8通过，0失败/跳过 | `TestResults/complex-dictionary-di-final/*.trx` |
+
+编译命令沿上一节；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/complex-dictionary-<unit|consumer|di>-final`。已解析TRX核对执行/通过及新增/移除计数。完整Unit使用正常Windows TLS凭据权限，不安装/删除信任根或改变TLS策略；四份公开/设计/进度文档同步，UTF8无BOM/CRLF和git diff --check后本地提交，不推送。
+
+本子模块完成，D05整体仍进行中：复杂列扩展metadata、二进制行/SequentialAccess边界、参数附加type header、D02原子输出和完整公开读写继续实施。当前公共命令仍拒绝ARRAY/STRUCT值。真实字典/DDL可见性、OceanBase/OBProxy、异机及扩展经TLS未验收，本轮未重跑打包或旧运行时/Framework矩阵；不据局部实现关闭D05或整体目标。

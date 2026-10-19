@@ -721,7 +721,11 @@ D03本地输出/读取实现及独立走查修复已完成：修后Release核心
 沿固定Java基线`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的ColumnDefinition、BinaryRowProtocol.getComplexArray/getComplexStruct和ComplexUtil行为实现，不复制源码。复杂结果没有统一的外层长度，必须由完整类型描述确定字段边界；参数NULL位图从bit0开始，结果及嵌套结果从bit2开始，两方向不能互用同一序列化格式。NUMBER保留OceanBaseDecimal，日期/纳秒复用已有精确codec，不猜测未支持成员。
 
 - [x] 独立嵌套编解码：Internal/Values/ComplexType.cs保存只读成员布局，ComplexValueCodec.cs以ByteCursor解析结果、以BinaryWriter编码参数。先固定Oracle对象/集合、嵌套NULL与跨位图边界、空值、Unicode、宽NUMBER、RAW、DATE/TIMESTAMP及后续字段报文；拒绝MySQL、畸形长度、无效标量、过深嵌套/过多成员与参数类型不匹配。tests/OceanBaseConnector.UnitTests/ComplexValueCodecTests.cs先红后绿，完整编译/Unit/Consumer/DI与独立走查后提交。本层不开放公共复杂值入口。
-- [ ] 类型字典及显式生命周期：按schema+type精确身份从Oracle字典装载完整嵌套描述，先定义同会话查询、活动reader/事务、缓存失效及刷新规则，再接入公共ARRAY/STRUCT值构造。不能沿Java实现偷偷另建查询连接，不能跨schema仅按大写typeName复用。
+- [x] 类型字典及显式生命周期：按schema+type精确身份从Oracle字典装载完整嵌套描述，先定义同会话查询、活动reader/事务、缓存失效及刷新规则，再接入公共ARRAY/STRUCT值构造。不能沿Java实现偷偷另建查询连接，不能跨schema仅按大写typeName复用。本地验证见进度台账“D05同会话类型字典与公开值构造”；复杂列/参数/输出继续下一子模块。
+
+本子模块实施决定：公开GetComplexType/GetComplexTypeAsync(schemaName, typeName, transaction)和ClearComplexTypeCache(transaction)，名称按字典原样精确绑定，不解析SQL标识符或同义词。OceanBaseComplexType/Members保存不可变完整布局，CreateValue构造OceanBaseComplexValue并检查成员/嵌套类型、精确标量、字节与成员预算；RAW及返回数组复制，嵌套必须使用对应描述构造的值。仅Oracle模式；当前不支持LOB/cursor/national charset成员及循环类型图，明确拒绝。
+
+同一物理会话预约覆盖ALL_TYPES及ALL_TYPE_ATTRS/ALL_COLL_TYPES所有查询；显式绑定当前事务，固定原会话/事务epoch，每个查询沿用连接CommandTimeout，异步入口使用真实异步I/O及调用方取消。活动reader/预约/环境事务不发包；结果列形状、owner/name/kind、对象属性总数与连续序号、集合唯一元素均核验。类型图最多32层；当前会话缓存累计最多65535成员、65535命名类型及4MiB字典UTF8文本，额度满时可清空重载。失败不发布部分缓存或扣减额度。缓存键为区分大小写的schema+type二元组；关闭重开、事务切换及显式清空使全部旧描述/值失效，清空同时处理父子依赖。外部DDL不自动感知，业务须在无活动reader时清空并重载；不伪造服务端类型version。公开值快照可以在失效后检查，但不能再构造或绑定。该子模块独立测试/五资产消费、全量build/Unit/Consumer/DI及只读走查后提交；公共复杂列/参数仍由下一协议子模块接入。
 - [ ] 协议及公开接入：复杂列元数据/类型信息、二进制行边界与顺序读取、参数附加类型头、D02输出原子发布及五资产同步/异步标准/OB20消费。文本协议没有可信复杂值定义时明确拒绝，不能当byte[]/string跳过。每层保留原会话错误/取消/结果未知契约。
 - [ ] 复核完整D05后同步README/架构/台账，本地完整验证和独立走查通过后提交；真实字典/DDL可见性、服务端往返和版本/OBProxy资源语义单独延期，不因局部codec通过关闭D05。
 
