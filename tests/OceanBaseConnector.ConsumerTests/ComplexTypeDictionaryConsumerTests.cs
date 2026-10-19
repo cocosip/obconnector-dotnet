@@ -93,6 +93,8 @@ namespace OceanBaseConnector.ConsumerTests
                 complexColumn = complexColumn.Concat(new[] { (byte)complexName.Length }).Concat(complexName)
                     .Concat(new byte[] { 10 }).Concat(Encoding.UTF8.GetBytes("Mixed_Type")).Concat(new byte[] { 17 }).ToArray();
                 var trailing = Column("after"); trailing[trailing.Length - 6] = 8;
+                var anonymousColumn = Column("anonymous"); anonymousColumn[anonymousColumn.Length - 6] = 160;
+                anonymousColumn = anonymousColumn.Concat(new byte[] { 0, 0, 0, 203 }).ToArray();
                 for (uint requestId = 7; requestId < 9; requestId++)
                 {
                     var request = await ReadRequest(stream, channel, ob20, requestId, budget.Token); Assert.Equal(23, request[0]); Assert.Equal(19, request[1]);
@@ -100,8 +102,8 @@ namespace OceanBaseConnector.ConsumerTests
                         .Concat(new byte[] { 10 }).Concat(Encoding.UTF8.GetBytes("Mixed_Type")).Concat(new byte[] { 0 }).ToArray();
                     Assert.Equal(new byte[] { 2, 1 }.Concat(typeHeader).Concat(typeHeader).Concat(new byte[] { 0, 2, 51, 49, 2, 1, 2 }), request.Skip(10));
                     var eof = Report(false, 0); eof[0] = 254;
-                    var packets = new[] { new byte[] { 3 }, complexColumn, trailing, complexColumn,
-                        new byte[] { 0, 16, 0, 2, 51, 49, 2, 1, 2 }.Concat(BitConverter.GetBytes(42L)).ToArray(), eof };
+                    var packets = new[] { new byte[] { 4 }, complexColumn, trailing, complexColumn, anonymousColumn,
+                        new byte[] { 0, 16, 0, 2, 51, 49, 2, 1, 2 }.Concat(BitConverter.GetBytes(42L)).Concat(new byte[] { 2, 0, 2, 8, 9, 0 }).ToArray(), eof };
                     var response = packets.SelectMany((p, i) => Frame((byte)(i + 1), p)).ToArray();
                     await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId, 1, response) : response, budget.Token);
                     if (!ob20) channel.BeginCommand();
@@ -176,6 +178,13 @@ namespace OceanBaseConnector.ConsumerTests
                         Assert.Equal("31", fields[0]!.ToString()); Assert.Equal(new byte[] { 1, 2 }, fields[1]);
                         Assert.Equal(42L, async ? await reader.GetFieldValueAsync<long>(1, budget.Token) : reader.GetInt64(1));
                         Assert.True(async ? await reader.IsDBNullAsync(2, budget.Token) : reader.IsDBNull(2)); Assert.Equal(DBNull.Value, reader.GetValue(2));
+                        Assert.Equal("ARRAY", reader.GetDataTypeName(3));
+                        var anonymous = async ? await reader.GetFieldValueAsync<object>(3, budget.Token) : reader.GetValue(3);
+                        var anonymousType = anonymous.GetType().GetProperty("Type")!.GetValue(anonymous)!;
+                        Assert.True((bool)anonymousType.GetType().GetProperty("IsAnonymous")!.GetValue(anonymousType)!);
+                        Assert.Equal("", anonymousType.GetType().GetProperty("TypeName")!.GetValue(anonymousType));
+                        var anonymousItems = (object?[])(await Call(anonymous, "GetValues", Array.Empty<object?>()))!;
+                        Assert.Equal(new byte[] { 8, 9 }, anonymousItems[0]); Assert.Empty((byte[])anonymousItems[1]!);
                         Assert.False(async ? await reader.ReadAsync(budget.Token) : reader.Read());
                     }
                 }

@@ -87,7 +87,8 @@ namespace OceanBaseConnector.Internal.Protocol
             {
                 if (mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Complex columns require Oracle mode.");
                 result.ComplexMetadata = ComplexColumnMetadata.Parse(cursor);
-                if (complexTypes != null && complexTypes.TryGetValue((result.ComplexMetadata.Schema, result.ComplexMetadata.Name), out var description))
+                if (result.ComplexMetadata.Name.Length == 0) result.ComplexType = result.ComplexMetadata.CreateAnonymousType();
+                else if (complexTypes != null && complexTypes.TryGetValue((result.ComplexMetadata.Schema, result.ComplexMetadata.Name), out var description))
                     result.ComplexType = description;
             }
             if (cursor.HasRemaining) throw new NotSupportedException("Extended column metadata is not supported yet.");
@@ -121,7 +122,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 200: return "TIMESTAMP WITH TIME ZONE";
                     case 201: return "TIMESTAMP WITH LOCAL TIME ZONE";
                     case 203: return "RAW";
-                    case 160: return ComplexType?.TypeName ?? throw new NotSupportedException("Preload the named complex type on the command's session and transaction.");
+                    case 160: return ComplexType == null ? throw new NotSupportedException("The complex type layout is unavailable.") : ComplexType.IsAnonymous ? "ARRAY" : ComplexType.TypeName;
                     case 163: return "REF CURSOR";
                     case 210: return "BLOB";
                     case 211: return "CLOB";
@@ -191,7 +192,7 @@ namespace OceanBaseConnector.Internal.Protocol
                         return typeof(OceanBaseRefCursor);
                     case 160:
                         if (Mode != OceanBaseCompatibilityMode.Oracle || ComplexType == null)
-                            throw new NotSupportedException("Preload the named complex type on the command's session and transaction; anonymous complex results are not supported yet.");
+                            throw new NotSupportedException("The complex layout is unavailable; preload named types and use a supported anonymous scalar element.");
                         return typeof(OceanBaseComplexValue);
                     case 210:
                     case 211:

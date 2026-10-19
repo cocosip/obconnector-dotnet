@@ -742,6 +742,16 @@ D03本地输出/读取实现及独立走查修复已完成：修后Release核心
 
 本子模块已完成本地实现、独立走查及复查：核心五/DI三目标Release编译0警告/错误，完整Unit2286（新增79项）、Consumer744（扩展既有20项）、DI8全通过且零跳过。输出NULL/零行metadata、声明快照、错误/取消/早关原子发布及原会话绑定边界证据见进度台账；匿名集合和真实验收仍开放，D05整体继续进行中。
 
+#### D05 匿名标量集合结果实施
+
+固定Java基线OceanBaseConnection.getAnonymousArrayComplexType只在空typeName且非complex元素时由列metadata创建单元素布局；BinaryRowProtocol按结果bit2位图及标量长度读取。沿用已有codec接入NUMBER（0/3/246映射规范NUMBER布局）、VARCHAR2(253)、CHAR(254)、RAW(203)、DATE(12)、TIMESTAMP(202)，其他元素或无布局的匿名complex明确拒绝。只参考行为，不复制源码，不在reader中查询字典。
+
+1. 先写metadata/逐字节边界及公开普通/顺序读取失败测试；匿名描述保留线上schema和空TypeName，新增IsAnonymous，reader DataTypeName为ARRAY，不伪造数据库类型名。
+2. 复用既有codec、预算、字段流和分页metadata匹配；NULL、空集合、后续列、多结果及取消/故障仍遵守相同生命周期。匿名结果描述为只读快照，CreateValue及参数/输出绑定明确拒绝，匿名构造/绑定另行推进，不能由结果decoder意外放行。
+3. 补五资产标准/OB20公开消费、全目标Release编译、完整Unit/Consumer/DI、独立走查、文档同步及本地提交。D05整体保持进行中；实库/异机继续暂缓。
+
+本子模块本地实现及独立复查完成：Release核心五/DI三目标编译0警告/错误，完整Unit2331（新增45项、移除0）、Consumer744（扩展既有20项）、DI8全通过且零跳过。复用codec预算并覆盖超限、取消、成功游标页与后续元素/version变化；完整回归发现的既有LOB测试发送/关闭竞态已按真实拒绝边界修复，另加精确协议异常断言。红绿、完整回归及走查证据见进度台账；匿名构造/绑定及D05整体仍开放。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

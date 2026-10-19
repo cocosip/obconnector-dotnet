@@ -1,4 +1,5 @@
 using System;
+using OceanBaseConnector.Internal.Values;
 
 namespace OceanBaseConnector.Internal.Protocol
 {
@@ -10,6 +11,24 @@ namespace OceanBaseConnector.Internal.Protocol
         internal string Name { get; }
         internal long Version { get; }
         internal byte? ElementType { get; }
+
+        internal OceanBaseComplexType? CreateAnonymousType()
+        {
+            if (Name.Length != 0) return null;
+            byte code; string name;
+            switch (ElementType)
+            {
+                case 0: case 3: case 246: code = 0; name = "NUMBER"; break;
+                case 253: code = 253; name = "VARCHAR2"; break;
+                case 254: code = 254; name = "CHAR"; break;
+                case 203: code = 203; name = "RAW"; break;
+                case 12: code = 12; name = "DATE"; break;
+                case 202: code = 202; name = "TIMESTAMP"; break;
+                default: return null;
+            }
+            return new OceanBaseComplexType(null, Schema, "", true,
+                new[] { new OceanBaseComplexMember(null, null, name, null, new ComplexType(code)) });
+        }
 
         internal static ComplexColumnMetadata Parse(ByteCursor cursor)
         {

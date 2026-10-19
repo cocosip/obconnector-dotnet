@@ -133,6 +133,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (type == null && !declared && (provider.HasValue || parameter.DbType != DbType.Object || value == null)) return null;
             type ??= value?.Type;
             if (type == null) throw new ArgumentException("A NULL complex parameter requires ComplexType.");
+            if (type.IsAnonymous) throw new NotSupportedException("Anonymous collection parameter binding is not supported.");
             if (parameter.Size != 0 || parameter.Precision != 0 || parameter.Scale != 0)
                 throw new ArgumentException("Complex parameters cannot declare scalar size or precision.");
             if (declared && type.IsCollection != (provider == OceanBaseDbType.Array))

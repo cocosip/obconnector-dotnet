@@ -49,7 +49,8 @@ namespace OceanBaseConnector
             RejectAmbientTransaction();
             lock (_gate)
             {
-                var context = type.Context; var session = GetCommandSession(context.Transaction);
+                var context = type.Context ?? throw new NotSupportedException("An anonymous result descriptor has no dictionary session.");
+                var session = GetCommandSession(context.Transaction);
                 ValidateComplexBinding(type, session, context.Transaction);
             }
         }

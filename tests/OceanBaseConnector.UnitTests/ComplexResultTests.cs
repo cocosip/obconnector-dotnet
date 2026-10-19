@@ -126,7 +126,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Throws<NotSupportedException>(() => ResultColumn.Parse(ComplexColumn(), OceanBaseCompatibilityMode.MySql));
             var type = ComplexResultType(false, ComplexResultScalar("A", 203));
             var types = new Dictionary<(string, string), OceanBaseComplexType> { [("Owner", "Thing")] = type };
-            foreach (var bytes in new[] { ComplexColumn("owner"), ComplexColumn(name: "thing"), ComplexColumn("", "", element: 203) })
+            foreach (var bytes in new[] { ComplexColumn("owner"), ComplexColumn(name: "thing") })
             {
                 var column = ResultColumn.Parse(bytes, OceanBaseCompatibilityMode.Oracle, complexTypes: types);
                 Assert.Throws<NotSupportedException>(() => column.RequireComplexResult(true));
