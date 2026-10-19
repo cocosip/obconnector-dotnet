@@ -360,6 +360,12 @@ D04临时对象：连接CreateTemporaryLob/Async仅接受Blob/Clob，要求既�
 
 只有创建者handle可FreeTemporary/Async，普通列/输出handle均为借用。释放持原修改预约，固定类型局部变量接收输入locator并调用FREETEMPORARY，再输出字符串完成标记；不解析已被服务端标记invalid的释放后locator。成功或在途失败均使源handle失效，失败沿修改契约保留取消/timeout/unknown语义；不承诺使其他独立借用handle同步失效。Dispose/DisposeAsync只清理客户端并取消在途操作，不自动释放数据库对象，必须在事务结束和Dispose前显式Free；遗留或释放失败的SESSION临时对象可能保持到原会话结束。不另连、提交、回滚、重放或后台释放。接口依据为固定OceanBase官方文档的[CREATETEMPORARY](https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/en-US/700.reference/600.pl-reference/300.pl-oracle/1400.pl-system-package-oracle/9300.dbms-lob-oracle/600.createtemporary-oracle.md)、[FREETEMPORARY](https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/en-US/700.reference/600.pl-reference/300.pl-oracle/1400.pl-system-package-oracle/9300.dbms-lob-oracle/800.freetemporary-oracle.md)及[ISTEMPORARY](https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/en-US/700.reference/600.pl-reference/300.pl-oracle/1400.pl-system-package-oracle/9300.dbms-lob-oracle/1150.istemporary-of-oracle-mode.md)，本地夹具不能证明真实资源回收语义。
 
+D05内部嵌套编解码：ComplexType保存不可变成员布局快照，区分对象固定成员与单元素类型集合；标量布局只接受NUMBER、VARCHAR2/CHAR、RAW、DATE和TIMESTAMP的内部规范类型码，未知类型及依赖会话的LOB/cursor成员不猜测处理。ComplexValueCodec结果解析使用ByteCursor，返回独立的嵌套object数组，精确NUMBER保留OceanBaseDecimal、TIMESTAMP保留嵌入scale及纳秒、DATE拒绝截断小数秒/附加时区。参数仅接受对应精确类型，字符保持严格UTF8；不按ToString任意转换值，不把NULL对象等同于成员为NULL的对象。
+
+复杂值没有外层总长度；对象按布局成员数推进，集合先读取长度编码的元素数。每层结果NULL位图从bit2开始，参数位图从bit0开始，内部空集合/对象及NULL嵌套值分别处理，解析后保留后续字段。每个根值最多32层、累计65535个成员（含NULL），字段分配前检查正文长度和剩余字节；DATE/TIMESTAMP先验证固定长度再读取正文，NUMBER文本先限制512字节。整个值正文及编码不超过既有64MiB包预算减10字节，参数长度前缀按1/3/4/9字节准确计入，字符串先检查UTF8字节数再分配。该限制为当前内部codec边界，不代表服务端限制。
+
+协议行为依据为固定Java基线的[BinaryRowProtocol.getComplexArray/getComplexStruct](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/com/read/resultset/rowprotocol/BinaryRowProtocol.java#L2502)及[ComplexUtil.storeComplexStruct/storeComplexArray](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/extend/datatype/ComplexUtil.java#L144)，只参考协议，不复制源码。本层未接入复杂列/参数、类型字典或公开ARRAY/STRUCT对象；后续必须先定义完整类型身份、同会话装载、缓存失效及reader/事务规则，再接入边界解析、参数附加头和输出原子发布。D05整体继续进行中，真实版本/模式及字典资源语义仍待验收。
+
 C05首批目录集合（2026-10-19本地实现，真实字典版本/权限仍待验收）：五目标提供三个同步GetSchema重载；现代三目标覆写三个GetSchemaAsync重载，后者使用异步执行、逐行/结果读取及释放，不调用基类同步回退。每次返回独立的InvariantCulture DataTable，空结果保留列形状；未支持集合抛NotSupportedException，不静默返回空集。
 
 | 集合 | 固定列形状（按顺序） | 限制参数顺序 |

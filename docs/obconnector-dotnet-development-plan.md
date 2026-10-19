@@ -716,6 +716,15 @@ D03本地输出/读取实现及独立走查修复已完成：修后Release核心
 
 本地验证：Release核心五/DI三目标0警告/错误，完整Unit2054（新增46项）、Consumer724（新增80项）、DI8全通过且零跳过。独立走查修复typed局部变量重载及创建后尾ERR无主资源问题，红绿证据见台账；D04本地范围已接入，状态待验证，真实资源/版本/OBProxy与扩展经TLS关口保持开放。后续推进D05，整体目标未完成。
 
+### D05 ARRAY/STRUCT 本地实施顺序（2026-10-19）
+
+沿固定Java基线`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的ColumnDefinition、BinaryRowProtocol.getComplexArray/getComplexStruct和ComplexUtil行为实现，不复制源码。复杂结果没有统一的外层长度，必须由完整类型描述确定字段边界；参数NULL位图从bit0开始，结果及嵌套结果从bit2开始，两方向不能互用同一序列化格式。NUMBER保留OceanBaseDecimal，日期/纳秒复用已有精确codec，不猜测未支持成员。
+
+- [x] 独立嵌套编解码：Internal/Values/ComplexType.cs保存只读成员布局，ComplexValueCodec.cs以ByteCursor解析结果、以BinaryWriter编码参数。先固定Oracle对象/集合、嵌套NULL与跨位图边界、空值、Unicode、宽NUMBER、RAW、DATE/TIMESTAMP及后续字段报文；拒绝MySQL、畸形长度、无效标量、过深嵌套/过多成员与参数类型不匹配。tests/OceanBaseConnector.UnitTests/ComplexValueCodecTests.cs先红后绿，完整编译/Unit/Consumer/DI与独立走查后提交。本层不开放公共复杂值入口。
+- [ ] 类型字典及显式生命周期：按schema+type精确身份从Oracle字典装载完整嵌套描述，先定义同会话查询、活动reader/事务、缓存失效及刷新规则，再接入公共ARRAY/STRUCT值构造。不能沿Java实现偷偷另建查询连接，不能跨schema仅按大写typeName复用。
+- [ ] 协议及公开接入：复杂列元数据/类型信息、二进制行边界与顺序读取、参数附加类型头、D02输出原子发布及五资产同步/异步标准/OB20消费。文本协议没有可信复杂值定义时明确拒绝，不能当byte[]/string跳过。每层保留原会话错误/取消/结果未知契约。
+- [ ] 复核完整D05后同步README/架构/台账，本地完整验证和独立走查通过后提交；真实字典/DDL可见性、服务端往返和版本/OBProxy资源语义单独延期，不因局部codec通过关闭D05。
+
 ## 执行与进度规则
 
 每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。

@@ -4,7 +4,7 @@
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05–D09尚未开发；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部嵌套编解码已落地（验证见末尾），字典/公开接入及D06–D09仍未实现；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA 路径已有本地实现，其他插件及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
@@ -26,7 +26,7 @@
 | D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
 | D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流、WRITE/TRIM及临时对象显式创建/释放已本地接入，验证见末尾 | 真实版本/OBProxy、资源生命周期及扩展经TLS验收仍开放 |
-| D05–D09 | 尚未开发 | 复杂类型、批量优化、客户端回退、拓扑/XA继续逐项实施 |
+| D05 | 内部嵌套对象/集合编解码已有本地实现，验证见末尾 | 类型字典、缓存失效、公开值及列/参数/输出接入继续实施 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
@@ -189,7 +189,7 @@ R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceB
 | D02 | 本地先行，实库延期 | Oracle 过程及 OUT/RETURNING | 进行中 | 公开过程及标量OUT/RETURNING已接入，完整回归/走查见末尾；保留标量范围及独立Prepare/FetchSize限制，真实互通开放 |
 | D03 | 本地先行，实库延期 | REF CURSOR | 待验证 | REF CURSOR输出、流式分页及所有权本地实现/完整回归/独立走查修复完成，见末尾；真实版本/OBProxy互通开放 |
 | D04 | 本地先行，实库延期 | LOB locator、分块读写及临时对象 | 待验证 | locator解析、公开读取/绑定、WRITE/TRIM及临时对象显式创建/释放本地实现、完整回归及独立走查修复完成，见末尾；真实资源验收仍开放 |
-| D05 | G4 后 | ARRAY/STRUCT 与类型字典 | 未开始 | 待记录 |
+| D05 | 本地先行，实库延期 | ARRAY/STRUCT 与类型字典 | 进行中 | 内部嵌套编解码、边界回归及独立走查修复见末尾；字典/缓存与公开接入仍开放 |
 | D06 | G4 后 | bulk/array binding | 未开始 | 待记录 |
 | D07 | G4 后 | 按需客户端预处理回退 | 未开始 | 待记录 |
 | D08 | G4 后 | 拓扑发现与负载均衡 | 未开始 | 待记录 |
@@ -944,3 +944,27 @@ Dispose/DisposeAsync仅清理客户端并取消在途操作，必须在事务结
 编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/lob-temporary-<unit|consumer|di>-final`。解析TRX核对实际执行/通过计数及新增用例；Consumer覆盖五资产同步/异步、标准/OB20创建→写入→读取新值→释放、创建/释放两处尾包夹带拒绝及locator更新后仍保留所有权。完整Unit使用正常Windows TLS凭据权限，未安装/删除信任根或改变TLS策略。UTF8无BOM/CRLF与git diff --check通过后本地提交，不推送。
 
 D04本地接口范围已接入，状态改为待验证；真实OceanBase/OBProxy资源生命周期、扩展经TLS和异机验收继续暂缓，本轮未重新打包或执行旧运行时/Framework矩阵。整体目标仍未完成，下一步推进D05；A05、C01、D05–D09、D15其他插件和发布余项保持开放。
+
+## D05 内部嵌套对象/集合编解码（2026-10-19）
+
+ComplexType新增不可变成员布局，ComplexValueCodec按完整布局递归读取结果和编码参数：对象不带外层长度，集合先带长度编码元素数；每层结果NULL位图从bit2开始，参数从bit0开始。NULL嵌套对象、成员为NULL的对象、空集合与空对象独立处理，解析不吞掉后续字段。NUMBER沿OceanBaseDecimal保留Oracle精度，字符串严格UTF8，RAW独立字节，DATE/TIMESTAMP复用既有精确codec。当前内部规范标量码仅覆盖NUMBER、VARCHAR2/CHAR、RAW、DATE和TIMESTAMP；LOB/cursor成员、公开类型、字典及复杂列/参数入口均未在本层开放。
+
+每个根值最多32层、累计65535个成员（包含NULL），整个复杂值预算沿既有64MiB减10字节；先核验计数/位图和剩余报文再分配，NUMBER文本最多512字节，DATE/TIMESTAMP在读取正文前验证固定长度。参数检查值种类、对象成员数、精确数字/日期及Unicode，禁止任意字符串化、日期截断或吞掉编码错误。前缀按既有长度编码1/3/4/9字节计算，字符串先算UTF8字节预算再分配。固定上游依据及永久链接见架构D05内部编解码段，只参考协议行为、不复制Java源码。
+
+红绿与走查证据：
+
+- 缺ComplexType/codec的红编译见`TestResults/complex-codec-red-corrected.log`；首个实现曾将既有long包上限声明为int，编译错误修正后开始实际测试。首批实际40通过/2失败（`complex-codec-second`）均为夹具手工报文错误：空字符串长度及40000元素位图末字节，修正后42项通过（`complex-codec-green`）。
+- 独立走查发现大型标量大于0xFFFFFF时，预算按4字节而实际写9字节前缀。新增回归修前未抛超限异常（`complex-codec-prefix-red`），修后通过；另补0xFFFFFF/0x1000000前缀转换、恰好总长上限成功及超1字节拒绝。
+- 走查另建议时间字段先检查固定长度再复制正文。新增两个回归修前请求了非法大正文（`complex-codec-temporal-red`），改为先复用TemporalCodec.ValidateFieldLength后通过。重复的TIMESTAMP长度分支随之移除。
+- 最终定向59项通过（`complex-codec-reviewed`），覆盖嵌套、位图边界、0/250/251/65535成员、空值/NULL、Unicode/非法UTF8、宽NUMBER、整数/decimal、RAW、日期/纳秒scale、畸形长度、模式拒绝、深度/累计计数/字节预算与布局快照。独立只读复查确认两个发现修复，无剩余阻断项。
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/complex-codec-build-final.log` |
+| 完整Unit | 2113通过，0失败/跳过；较上一提交新增59项、移除0项 | `TestResults/complex-codec-unit-final/*.trx` |
+| 五资产Consumer | 724通过，0失败/跳过；本层未开放公共API，未新增消费用例 | `TestResults/complex-codec-consumer-final/*.trx` |
+| DI | 8通过，0失败/跳过 | `TestResults/complex-codec-di-final/*.trx` |
+
+编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/complex-codec-<unit|consumer|di>-final`。已解析TRX核对实际执行/通过计数及新增/移除情况。完整Unit使用正常Windows TLS凭据权限，未安装/删除信任根或改变TLS策略。同步架构、开发方案和本台账，UTF8无BOM/CRLF及diff检查后本地提交，不推送。
+
+本轮完成D05内部codec子模块，D05整体仍进行中：下一步是同会话类型字典、schema/type身份及缓存失效，再接入公开值、复杂列/参数附加类型头、顺序读取和D02输出。README继续明确不支持公共ARRAY/STRUCT，不以内部夹具证明服务端兼容。真实数据库/OBProxy、字典DDL可见性、异机、打包和旧运行时/Framework矩阵本轮未验证，整体目标保持开放。
