@@ -1,0 +1,7 @@
+{
+  "mode": "Oracle",
+  "connectionStringEnvironment": "OB_ACCEPTANCE_CONNECTION_STRING",
+  "allowCreateObjects": true,
+  "groups": [],
+  "largeValueBytes": 65536
+}

@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\OceanBaseConnector\OceanBaseConnector.csproj" />
+    <ProjectReference Include="..\OceanBaseConnector.Acceptance\OceanBaseConnector.Acceptance.csproj" />
   </ItemGroup>
 
   <ItemGroup>
