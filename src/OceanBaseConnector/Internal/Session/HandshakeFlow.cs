@@ -12,14 +12,14 @@ namespace OceanBaseConnector.Internal.Session
     /// capabilities, send the handshake response and process the server's
     /// answer including authentication switches. The compatibility mode is
     /// taken from the authenticated OK packet's OB_SERVER_USE_ORACLE_MODE
-    /// bit and only for endpoints whose version identifies OceanBase;
-    /// unknown endpoints are refused before the session is usable.
+    /// bit. Compatible greetings and MySQL mode require a read-only
+    /// OceanBase version confirmation before the session is usable.
     /// SHA-2 fast authentication is supported; complete passwords are sent
     /// only over identity-verified TLS. Unknown plugins fail explicitly. The
     /// synchronous and asynchronous entries share parsing and decisions but
     /// never share each other's I/O calls.
     /// </summary>
-    internal static class HandshakeFlow
+    internal static partial class HandshakeFlow
     {
         public static ConnectResult Authenticate(
             TcpTransport transport,
@@ -37,7 +37,10 @@ namespace OceanBaseConnector.Internal.Session
             using var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
             cancellationToken.ThrowIfCancellationRequested();
             channel.WritePacket(BuildHandshakeResponse(handshake, clientCapabilities, options, authentication));
-            return ReadAuthenticationResult(channel, handshake, clientCapabilities, options, authentication, cancellationToken);
+            var result = ReadAuthenticationResult(channel, handshake, clientCapabilities, options, authentication, cancellationToken);
+            EnableOb20(channel, result, options);
+            if (NeedsIdentityProbe(handshake, result)) ConfirmIdentity(channel, result, cancellationToken);
+            return result;
         }
 
         public static async Task<ConnectResult> AuthenticateAsync(
@@ -54,8 +57,11 @@ namespace OceanBaseConnector.Internal.Session
             cancellationToken.ThrowIfCancellationRequested();
             await channel.WritePacketAsync(BuildHandshakeResponse(handshake, capabilities, options, authentication), cancellationToken)
                 .ConfigureAwait(false);
-            return await ReadAuthenticationResultAsync(channel, handshake, capabilities, options, authentication, cancellationToken)
+            var result = await ReadAuthenticationResultAsync(channel, handshake, capabilities, options, authentication, cancellationToken)
                 .ConfigureAwait(false);
+            EnableOb20(channel, result, options);
+            if (NeedsIdentityProbe(handshake, result)) await ConfirmIdentityAsync(channel, result, cancellationToken).ConfigureAwait(false);
+            return result;
         }
 
         private static byte[] BuildHandshakeResponse(
@@ -153,7 +159,7 @@ namespace OceanBaseConnector.Internal.Session
                     authentication.ValidateSuccess();
                     var negotiated = new NegotiatedCapabilities(clientCapabilities, handshake.Capabilities);
                     var ok = OkPacket.Parse(packet, negotiated.Effective);
-                    var mode = DetermineMode(handshake, ok.StatusFlags, options);
+                    var mode = DetermineMode(ok.StatusFlags, options);
                     result = new ConnectResult(
                         handshake.ServerVersion,
                         handshake.ConnectionId,
@@ -175,23 +181,11 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         private static OceanBaseCompatibilityMode DetermineMode(
-            InitialHandshakePacket handshake,
             ServerStatusFlags statusFlags,
             OceanBaseConnectionOptions options)
         {
-            if (!handshake.IsOceanBaseServer)
-            {
-                throw new OceanBaseException(
-                    $"Server at {options.Endpoint} does not identify an OceanBase endpoint; " +
-                    "the compatibility mode cannot be determined reliably, so the connection is refused before any query.");
-            }
-
-            if ((statusFlags & ServerStatusFlags.ObServerUseOracleMode) == 0)
-            {
-                // No server versions have passed G0/G1 yet; absence cannot prove MySQL mode.
-                throw new OceanBaseException($"Compatibility mode at {options.Endpoint} cannot be confirmed without a verified OceanBase/OBProxy version matrix.");
-            }
-            var mode = OceanBaseCompatibilityMode.Oracle;
+            var mode = (statusFlags & ServerStatusFlags.ObServerUseOracleMode) != 0
+                ? OceanBaseCompatibilityMode.Oracle : OceanBaseCompatibilityMode.MySql;
 
             if (options.ExpectedMode.HasValue && options.ExpectedMode.Value != mode)
             {

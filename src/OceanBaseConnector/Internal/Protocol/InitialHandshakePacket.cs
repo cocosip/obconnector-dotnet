@@ -59,8 +59,8 @@ namespace OceanBaseConnector.Internal.Protocol
 
         /// <summary>
         /// True when the server version string identifies an OceanBase
-        /// endpoint. Only then may the Oracle-mode status bit be interpreted
-        /// at all; unknown endpoints must be rejected before use.
+        /// endpoint. Compatible version strings require a separate
+        /// read-only identity probe before the connection is usable.
         /// </summary>
         public bool IsOceanBaseServer { get; }
 

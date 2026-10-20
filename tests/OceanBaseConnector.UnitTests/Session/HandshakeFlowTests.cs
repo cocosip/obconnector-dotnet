@@ -71,7 +71,8 @@ namespace OceanBaseConnector.UnitTests.Session
         private static byte[] BuildInitialHandshake(
             string serverVersion = "5.7.4-OceanBase 4.2.1",
             string? pluginName = "mysql_native_password",
-            byte[]? seed = null)
+            byte[]? seed = null,
+            CapabilityFlags extraCapabilities = CapabilityFlags.None)
         {
             seed ??= SeedBytes(SeedHex);
             var buffer = new MemoryStream();
@@ -89,7 +90,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 CapabilityFlags.ClientSecureConnection |
                 (pluginName is null ? CapabilityFlags.None : CapabilityFlags.ClientPluginAuth) |
                 CapabilityFlags.ClientPluginAuthLenencClientData |
-                CapabilityFlags.ClientSessionTrack) & 0xFFFF);
+                CapabilityFlags.ClientSessionTrack | extraCapabilities) & 0xFFFF);
             buffer.WriteByte((byte)capsLower);
             buffer.WriteByte((byte)(capsLower >> 8));
             buffer.WriteByte(45);
@@ -100,7 +101,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 CapabilityFlags.ClientSecureConnection |
                 (pluginName is null ? CapabilityFlags.None : CapabilityFlags.ClientPluginAuth) |
                 CapabilityFlags.ClientPluginAuthLenencClientData |
-                CapabilityFlags.ClientSessionTrack) >> 16) & 0xFFFF);
+                CapabilityFlags.ClientSessionTrack | extraCapabilities) >> 16) & 0xFFFF);
             buffer.WriteByte((byte)capsUpper);
             buffer.WriteByte((byte)(capsUpper >> 8));
             buffer.WriteByte((byte)(seed.Length + 1));
@@ -227,6 +228,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 await channel.WritePacketAsync(BuildInitialHandshake());
                 await channel.ReadPacketAsync();
                 await channel.WritePacketAsync(BuildAuthOk(oracleMode: false));
+                await IdentityResponse(channel, false, "4.4.2.1");
             });
             try
             {
@@ -531,7 +533,7 @@ namespace OceanBaseConnector.UnitTests.Session
         }
 
         [Fact]
-        public async Task NonOceanBaseVersionIsRefusedBeforeQueries()
+        public async Task NonOceanBaseVersionIsRefusedAfterIdentityProbe()
         {
             var server = LoopbackServer.Start(async client =>
             {
@@ -539,6 +541,9 @@ namespace OceanBaseConnector.UnitTests.Session
                 await stream.WriteAsync(Frame(0, BuildInitialHandshake(serverVersion: "5.7.29-log")));
                 ReadResponse(stream);
                 await stream.WriteAsync(Frame(2, BuildAuthOk(oracleMode: true)));
+                var channel = new PacketChannel(stream);
+                await channel.ReadPacketAsync();
+                await channel.WritePacketAsync(new byte[] { 255, 25, 5, (byte)'#', (byte)'4', (byte)'2', (byte)'0', (byte)'0', (byte)'0' });
             });
 
             OceanBaseException exception;
@@ -556,7 +561,8 @@ namespace OceanBaseConnector.UnitTests.Session
             }
 
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
-            Assert.Contains("cannot be determined", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("could not be verified", exception.Message, StringComparison.Ordinal);
+            Assert.Equal(1305, exception.ServerErrorCode);
         }
 
         [Fact]

@@ -117,7 +117,7 @@ A04 implementation and Windows loopback are complete locally; overall verificati
 - [x] Synthetic fixtures/loopback cover Oracle bit set/unset, untrustworthy mode identification, unknown plugins, missing capabilities, and authentication errors; do not return an executable connection with unknown mode.
 - [x] Permit cleartext-style plugins only after successful VerifyFull upgrade; authentication switches reuse that security check; rejection without verified TLS is tested.
 - [x] Local handshake/authentication evidence covers native authentication, switches, mode/capability snapshots, error codes/redaction, and sync/async.
-- [ ] Implement permitted MySQL-mode identification after obtaining trusted version/plugin evidence. Currently reject a missing Oracle bit safely; MySQL authentication support is not complete.
+- [x] Implement permitted MySQL-mode identification for verified OceanBase 4.4.2.2: authenticated native-password OK distinguishes both modes; a read-only `ob_version()` probe confirms generic greetings and MySQL mode before Open succeeds. ExpectedMode remains a cross-check. Other versions/plugin/proxy combinations remain unverified.
 - [ ] Live handshake in both modes and OBProxy acceptance, recording server/proxy versions, plugin, and bits; defer this and non-Windows tests per user instruction.
 
 Current boundary (2026-10-18): native-challenge encoding and VerifyFull-only clear-password encoding lack live acceptance. Without a verified version matrix, connections missing the Oracle-state bit explicitly fail rather than default to MySQL. After G0, establish an allowlist from live evidence before A07. Synthetic fixture version 4.2.1 is not a compatibility promise.

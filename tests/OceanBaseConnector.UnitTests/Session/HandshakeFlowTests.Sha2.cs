@@ -341,6 +341,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 await channel.WritePacketAsync(BuildInitialHandshake(pluginName: "caching_sha2_password"));
                 await channel.ReadPacketAsync(); await channel.WritePacketAsync(new byte[] { 1, 3 });
                 await channel.WritePacketAsync(BuildAuthOk(oracleMode: oracleBit));
+                if (!oracleBit) await IdentityResponse(channel, false, "4.4.2.1");
                 Assert.Equal(0, await stream.ReadUpToAsync(new byte[1], 1));
             });
             try

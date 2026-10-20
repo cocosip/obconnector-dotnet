@@ -92,6 +92,12 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
                 await channel.ReadPacketAsync();
                 await channel.WritePacketAsync(failurePhase == 1 ? Error() : Ok(status: failurePhase == 4 ? (byte)2 : (byte)6));
+                if (failurePhase == 4)
+                {
+                    channel.BeginCommand();
+                    await Query(channel, "select ob_version() from dual");
+                    await channel.WritePacketAsync(Error());
+                }
                 if (failurePhase == 3)
                 {
                     channel.BeginCommand();
@@ -118,7 +124,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.DoesNotContain("secret", databaseError.Message);
                 if (failurePhase == 1) Assert.Equal(1064, databaseError.ServerErrorCode);
                 if (failurePhase == 2) Assert.Contains("ExpectedMode", databaseError.Message);
-                if (failurePhase == 4) Assert.Contains("cannot be confirmed", databaseError.Message);
+                if (failurePhase == 4) Assert.Contains("could not be verified", databaseError.Message);
                 Assert.False(fallback.Pending());
                 Assert.NotEqual(ConnectionState.Open, connection.State);
             }

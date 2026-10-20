@@ -2,6 +2,37 @@
 
 Baseline date: 2026-10-17; progress updated: 2026-10-20. References: [Architecture design](obconnector-dotnet-architecture-design.md) and [Development plan](obconnector-dotnet-development-plan.md).
 
+## Live acceptance and verified mode identification (2026-10-20)
+
+The user supplied both test modes and authorized real acceptance. Connection details are confined to child-process environment/memory; no supplied address, schema, tenant, account, password, or connection string belongs in source, configuration examples, reports, documentation, or Git. Diagnostics are redacted in memory before display or persistence. A scan of tracked files, diagnostic text, and reachable historical Git objects found zero supplied private values.
+
+Both endpoints use the generic greeting `5.7.25`; authenticated OK status is `0x4004` in Oracle mode and `0x4002` in MySQL mode. A read-only `ob_version()` query confirms `4.4.2.2` in both modes. Oracle query EOFs report zero status, so they cannot be used to recheck the authenticated Oracle bit. These are observed protocol facts, not endpoint identity data.
+
+A05 now permits verified OceanBase 4.4.2.2 MySQL mode and generic greetings after a bounded read-only identity query, before Open publishes a usable connection. ExpectedMode remains a cross-check. Other versions on this path remain rejected; wider version/plugin/OBProxy matrices are open. Existing identified Oracle greetings retain their earlier behavior. The probe validates one string column, one row, terminal EOF/OK, and no additional results. It retains the opening budget/cancellation and never triggers endpoint failover. Negotiated OB20 starts before the probe, whose terminal boundary is completed before the next request.
+
+| Initial real acceptance | Passed | Failed | Skipped | Cleanup callback failures | Evidence |
+| --- | ---: | ---: | ---: | ---: | --- |
+| MySQL mode | 36 | 0 | 29 | 0 | `TestResults/live-mysql-full-01.json` |
+| Oracle mode | 31 | 19 | 15 | 3 | `TestResults/live-oracle-full-01.json` |
+
+The Oracle failures remain failures: RAW bindings/sequential binary cases, extended cursor fetch, catalog text conversion, PrepareExecute OUT/REF CURSOR/temporary LOB paths, array binding, complex metadata/collection DDL, and DBMS_XA completion require diagnosis and compatibility repairs. No assertion was weakened or failure reclassified as a skip. Slow-query interruption, alternate database switching, dedicated authentication/TLS, actual OB20/trace negotiation, topology/network faults, pooling/reset, coordinator crash recovery, and zero-date SQL_MODE profiles remain explicit gaps as applicable.
+
+Independent cleanup used the existing local Go driver as a temporary diagnostic, without adding a .NET dependency or shipped executable. Exact owned-object inventories found zero remaining objects: 39 Oracle entries and 28 MySQL entries. Owned prepared XA counts were zero in both modes. The two Oracle XIDs were independently rolled back; the two MySQL XIDs returned already absent. Focused Oracle diagnostics created another 10 owned entries, independently confirmed absent, with their one owned XID rolled back. The original callback failures remain in their reports.
+
+The supplemental MySQL faults run used a bounded read-only sleep query: server-error reuse, cancellation, and timeout all passed (3 passed, 0 failed, 62 unselected/deferred; `TestResults/live-mysql-faults-01.json`). This covers the two slow-query cases skipped by the initial full run; it does not close the controlled network-fault matrix.
+
+| Mode-identification verification | Result | Evidence |
+| --- | --- | --- |
+| Release solution, five core/five DI assets | 0 warnings/errors | `TestResults/live-identity-build-final.log` |
+| Full Unit | 3164 passed, 0 failed/skipped | `TestResults/live-identity-unit-final/*.trx` |
+| Full Consumer | 2076 passed, 0 failed/skipped | `TestResults/live-identity-consumer/*.trx` |
+| Full DI | 14 passed, 0 failed/skipped | `TestResults/live-identity-di/*.trx` |
+| New parser and test whitespace | Both checks passed | `TestResults/live-identity-new-*-format.log` |
+
+The first full unit attempt exposed two obsolete multi-address rejection-message expectations. Their fixtures now exercise an identity-query server error and retain no-failover assertions; the final full run above passes. New regressions cover synchronous/asynchronous generic greetings, verified and unknown versions, malformed/extra rows, Oracle EOF without mode bits, deprecated EOF, OB20 probe request 0 followed by request 1, and stalled opening timeout/cancel/close. Independent review found and resolved the EOF mode-bit assumption and a timeout test that could mistake its observation timeout for the product timeout. Broader whitespace verification reports existing formatting in unchanged portions of older fixtures; those lines were left unchanged. `git diff --check` passes.
+
+The following sections preserve their historical local-only scope; this real run supersedes their statements that no database connection had yet been made. Real Oracle acceptance is incomplete. Deployment, publication, and push were not performed.
+
 ## Configurable database acceptance console and English documentation (2026-10-20)
 
 The additional user request is implemented locally as the standalone net10.0 executable `tests/OceanBaseConnector.Acceptance`. It references the core driver and uses public APIs, with no product-source changes, new NuGet dependencies, background services, or additional simulated server. JSON selects `Oracle`/`MySql`, a direct connection string or an environment-variable name, groups, and permission to create test objects. Existing driver options control authentication, TLS, OB20, and Oracle extensions. Both example configurations and the usage guide are in that directory. A Release build also produces `bin/Release/net10.0/OceanBaseConnector.Acceptance.exe`.
