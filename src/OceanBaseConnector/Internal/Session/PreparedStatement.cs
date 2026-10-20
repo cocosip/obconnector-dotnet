@@ -18,6 +18,7 @@ namespace OceanBaseConnector.Internal.Session
             if (cursor.ReadUInt8() != 0) throw new ProtocolException("Invalid prepared statement filler.");
             cursor.ReadUInt16();
             if (cursor.HasRemaining || columns > 4096) throw new ProtocolException("Invalid prepared statement metadata counts.");
+            Columns = new ResultColumn[columns];
             Session = session;
             CommandText = sql;
             Database = session.Database;
@@ -29,6 +30,7 @@ namespace OceanBaseConnector.Internal.Session
         internal uint Id { get; }
         internal int ParameterCount { get; }
         internal int ColumnCount { get; }
+        internal ResultColumn[] Columns { get; }
 
         internal static PreparedStatement? Read(CommandExchange exchange, PhysicalSession session, string sql, bool allowFallback = false)
         {
@@ -38,9 +40,14 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 var bytes = 0;
-                foreach (var count in new[] { statement.ParameterCount, columns })
+                for (var section = 0; section < 2; section++)
                 {
-                    for (var i = 0; i < count; i++) bytes = Metadata(exchange.Receive(), exchange.Mode, bytes);
+                    var count = section == 0 ? statement.ParameterCount : columns;
+                    for (var i = 0; i < count; i++)
+                    {
+                        var column = Metadata(exchange.Receive(), exchange.Mode, ref bytes);
+                        if (section == 1) statement.Columns[i] = column;
+                    }
                     if (count > 0 && (exchange.Capabilities & CapabilityFlags.ClientDeprecateEof) == 0)
                         QueryResult.ReadEof(exchange.Receive());
                 }
@@ -58,9 +65,14 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 var bytes = 0;
-                foreach (var count in new[] { statement.ParameterCount, columns })
+                for (var section = 0; section < 2; section++)
                 {
-                    for (var i = 0; i < count; i++) bytes = Metadata(await exchange.ReceiveAsync(token).ConfigureAwait(false), exchange.Mode, bytes);
+                    var count = section == 0 ? statement.ParameterCount : columns;
+                    for (var i = 0; i < count; i++)
+                    {
+                        var column = Metadata(await exchange.ReceiveAsync(token).ConfigureAwait(false), exchange.Mode, ref bytes);
+                        if (section == 1) statement.Columns[i] = column;
+                    }
                     if (count > 0 && (exchange.Capabilities & CapabilityFlags.ClientDeprecateEof) == 0)
                         QueryResult.ReadEof(await exchange.ReceiveAsync(token).ConfigureAwait(false));
                 }
@@ -70,11 +82,11 @@ namespace OceanBaseConnector.Internal.Session
             catch { statement.Release(); throw; }
         }
 
-        private static int Metadata(byte[] packet, OceanBaseCompatibilityMode mode, int bytes)
+        private static ResultColumn Metadata(byte[] packet, OceanBaseCompatibilityMode mode, ref int bytes)
         {
             if (packet.Length > 4 * 1024 * 1024 - bytes) throw new ProtocolException("Prepared statement metadata size limit exceeded.");
-            ResultColumn.Parse(packet, mode);
-            return bytes + packet.Length;
+            bytes += packet.Length;
+            return ResultColumn.Parse(packet, mode);
         }
 
         internal void Release() => Session.QueueStatementClose(Id);

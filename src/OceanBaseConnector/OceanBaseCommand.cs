@@ -86,13 +86,20 @@ namespace OceanBaseConnector
                 var zone = execution.EnsureSessionTimeZone();
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = execution.EnsureNationalCharacterSet();
-                var parameters = HasNationalParameters(operation.Bindings.Parameters)
-                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
                 var statement = operation.Binary && (operation.Oracle == null || HasStreamParameters(operation.Bindings.Parameters))
                     ? EnsurePrepared(operation, operation.ClientFallback) : null;
                 var text = operation.Binary && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode) : operation.Bindings.CommandText;
                 ValidateCursorStatement(operation.FetchSize, statement);
+                if (statement != null && operation.Oracle == null) execution.ResolveComplexColumns(statement);
+                if (execution.SourceComplexTypes != null)
+                {
+                    zone = execution.EnsureSessionTimeZone();
+                    PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
+                    national = execution.EnsureNationalCharacterSet();
+                }
+                var parameters = HasNationalParameters(operation.Bindings.Parameters)
+                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
                 var request = operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(0, operation.Bindings.CommandText, operation.Bindings.Parameters)
                     : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
                     : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0);
@@ -147,13 +154,20 @@ namespace OceanBaseConnector
                 var zone = await execution.EnsureSessionTimeZoneAsync(cancellationToken).ConfigureAwait(false);
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = await execution.EnsureNationalCharacterSetAsync(cancellationToken).ConfigureAwait(false);
-                var parameters = HasNationalParameters(operation.Bindings.Parameters)
-                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
                 var statement = operation.Binary && (operation.Oracle == null || HasStreamParameters(operation.Bindings.Parameters))
                     ? await EnsurePreparedAsync(operation, cancellationToken, operation.ClientFallback).ConfigureAwait(false) : null;
                 var text = operation.Binary && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode) : operation.Bindings.CommandText;
                 ValidateCursorStatement(operation.FetchSize, statement);
+                if (statement != null && operation.Oracle == null) await execution.ResolveComplexColumnsAsync(statement, cancellationToken).ConfigureAwait(false);
+                if (execution.SourceComplexTypes != null)
+                {
+                    zone = await execution.EnsureSessionTimeZoneAsync(cancellationToken).ConfigureAwait(false);
+                    PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
+                    national = await execution.EnsureNationalCharacterSetAsync(cancellationToken).ConfigureAwait(false);
+                }
+                var parameters = HasNationalParameters(operation.Bindings.Parameters)
+                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
                 var request = operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(0, operation.Bindings.CommandText, operation.Bindings.Parameters)
                     : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
                     : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0);

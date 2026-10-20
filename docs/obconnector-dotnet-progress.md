@@ -2,6 +2,25 @@
 
 Baseline date: 2026-10-17; progress updated: 2026-10-20. References: [Architecture design](obconnector-dotnet-architecture-design.md) and [Development plan](obconnector-dotnet-development-plan.md).
 
+## Oracle named-object owner resolution repaired (2026-10-20)
+
+This repair supersedes the unresolved named-object diagnosis below. Ordinary prepared queries retain their result-column source identities. Before business execution or stream upload, a parameterized dictionary query resolves the exact database/original-table/original-column to its declared type owner and name. Where `ALL_TAB_COLUMNS.DATA_TYPE_OWNER` is NULL, matching local TABLE-to-TYPE `ALL_DEPENDENCIES` entries provide the owner. Missing, malformed, duplicate, ambiguous, mismatched or unloaded identities fail before business execution. Bound SELECT preparation may omit the type name too; execution metadata must still match the complete source identity and resolved type name.
+
+Resolution uses the existing command lease, timeout, cancellation and immutable preloaded descriptor snapshot. The dictionary result is consumed and its statement closed before execution; timezone and national-character state are reacquired afterward. Each execution resolves its own identities, including repeated use of a cached statement. No name-only cache match, current-schema guess, hidden connection, automatic descriptor loading, reader-side query, new dependency or shipped diagnostic program was introduced. Explicit-owner results and REF CURSOR retain their existing paths; expressions without authoritative source identities remain unsupported when a named type owner is missing.
+
+The 32 new regression cases cover synchronous/asynchronous reads, missing prepare-time type names, repeated execution, same-named types with different owners/source columns, rejected identities before business SQL, changed execute-time source metadata, cancellation/timeout, and timezone/national-character preservation. Full Release verification against the final binaries passed **3251 Unit**, **2076 Consumer**, and **14 DI** tests, with zero failures/skips; the build had zero warnings/errors. Package verification also passed consumers of all five target frameworks. Evidence: `TestResults/final-{unit,consumer,di}/*.trx`, `TestResults/ubuntu-nagle-build.log`, and `TestResults/owner-final-package-verify.log`.
+
+| Mode | Passed | Failed | Skipped | Cleanup callback failures | Evidence |
+| --- | ---: | ---: | ---: | ---: | --- |
+| MySQL, including bounded cancellation/timeout | 38 | 0 | 27 | 0 | `TestResults/live-mysql-owner-final-03.json` |
+| Oracle | 49 | 1 | 15 | 1 | `TestResults/live-oracle-owner-final-03.json` |
+
+The unchanged `complex.object` acceptance case now passes both literal and parameterized round trips. Oracle still exits with code 1: `complex.collection` retains server error 600 / SQLSTATE 0A000 for unsupported nested-table-valued columns, matching Connector/J. Its cleanup callback failure is the DROP of the table whose CREATE failed. No original failure was converted to a skip or weakened assertion. Skips preserve their report-specific environment and compatibility-mode reasons; these results do not establish compatibility for other versions, OBProxy, TLS, topology, faults or coordinator crash recovery.
+
+Independent cleanup checked all **39 Oracle** and **28 MySQL** exact report-owned entries and found zero remaining objects and zero owned prepared XA branches. Both Oracle exact-XID rollback checks succeeded; both MySQL XIDs were already absent. Evidence: `TestResults/live-{oracle,mysql}-owner-final-03-independent-cleanup.log`. Connection values remained in child-process environment/memory and sanitized ignored evidence. Work stayed directly on `master`; no deployment, publication or push was performed.
+
+Version/English maintenance was also completed in both related repositories: this repository uses centralized project versions and English repository comments (`b9a726b`); `oceanbase-dotnet` centralizes assembly versions and translates documentation/comments (`267390f`). The related repository passed its Release build, 1904 Unit tests, 7 DI tests, version-override/package checks and coverage script. Unicode payload fixtures were preserved.
+
 ## Java comparison corrects the remaining Oracle failure classification (2026-10-20)
 
 The same Oracle 4.4.2.2 tenant was tested with the existing OceanBase Connector/J **2.4.14** binary (SHA-256 `3168e7e3f2f14f35738d7c695e05012bf351f623757c7baada29659d2afa2ad4`) and the unchanged .NET acceptance console. The named-object failure is a **.NET compatibility gap**, not evidence that the server cannot store or return objects. The earlier review's characterization of both remaining failures as server limitations was too broad and is superseded by this comparison.

@@ -73,7 +73,8 @@ namespace OceanBaseConnector.Internal.Protocol
         }
 
         internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode, string? sessionTimeZone = null, NationalCharacterSet? nationalCharacterSet = null, OceanBaseConnector.Internal.Session.LobSession? lobs = null,
-            IReadOnlyDictionary<(string, string), OceanBaseComplexType>? complexTypes = null)
+            IReadOnlyDictionary<(string, string), OceanBaseComplexType>? complexTypes = null,
+            IReadOnlyDictionary<(string, string, string, string), OceanBaseComplexType>? sourceComplexTypes = null)
         {
             var cursor = new ByteCursor(payload);
             cursor.ReadLengthEncodedBytes(); // Protocol catalog marker, not the database catalog name.
@@ -99,6 +100,9 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (result.ComplexMetadata.Name.Length == 0) result.ComplexType = result.ComplexMetadata.CreateAnonymousType();
                 else if (complexTypes != null && complexTypes.TryGetValue((result.ComplexMetadata.Schema, result.ComplexMetadata.Name), out var description))
                     result.ComplexType = description;
+                else if (result.ComplexMetadata.Schema.Length == 0 && sourceComplexTypes != null &&
+                    sourceComplexTypes.TryGetValue((database, originalTable, originalName, result.ComplexMetadata.Name), out var sourceDescription))
+                    result.ComplexType = sourceDescription;
             }
             if (cursor.HasRemaining) throw new NotSupportedException("Extended column metadata is not supported yet.");
             return result;
