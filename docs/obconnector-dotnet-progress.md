@@ -2,6 +2,31 @@
 
 基线日期：2026-10-17；当前进度更新：2026-10-20。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。
 
+## M07 Oracle PrepareExecute流输入组合（2026-10-20）
+
+711c3e4后核对M07与D02，接通二进制Stream Input和存储过程/OUT组合。复用现有EnsurePrepared、PIECE_DATA、PrepareExecute及OracleCursorOwner；不新增公开类型、配置、依赖、服务或测试应用。固定Java 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的AbstractQueryProtocol.executePreparedQuery与ComStmtPrepareExecute.send/read给出先prepare取得ID、逐块上传、以该ID执行的依据，只参考行为。
+
+每次执行独立prepare，不写入命令经典缓存；参数数不符显式Release，匹配后把临时ID移交当前执行的cursor owner。扩展响应换ID时延迟关旧ID，相同ID不重复关；REF CURSOR继续持有最终父ID，同一command重执行和Dispose不破坏旧游标。InputOutput流在方向规范化前拒绝；Output/ReturnValue仍忽略旧Value，包括与Input相同的Stream，不读取、不注册身份。执行总预算先扣实际请求全部字节，含SQL/长度前缀/扩展头尾/参数，再计hex流值；原版本门槛、事务/独占/总超时和OUT完整终态后原子发布契约保留。
+
+首批6项因现有组合拒绝而失败（prepare-piece-red/）；扩展首轮20失败、2通过（prepare-piece-red-expanded/），最小实现后新旧流回归76项通过（prepare-piece-green/）。补充边界首轮28通过、1失败，原因是新预算夹具把19字节SQL误计为20；仅修正测试预算，随后含原过程/游标/流的定向153项通过（prepare-piece-focused/）。独立走查未发现产品缺陷，建议覆盖旧游标存活时同command再次执行：已扩充相同/变化ID两例，验证两个owner和父ID独立、命令释放后两游标仍可读且分别关闭，模块最终29项通过（prepare-piece-reviewed/），复核无剩余问题。
+
+新增五资产同步/异步×标准/OB20及OB20尾随错误共30项消费，精确检查prepare ID、PIECE_DATA头与hex、无inline流、0xA1 ID、OUT/计数和两个ID的关闭顺序。测试只使用既有本机环回设施，不进入产品包。初次沙箱MSBuild无输出运行已中止；正常权限单节点重跑完成，最终无testhost残留。范围格式首轮仅发现新测试InlineData属性同排，分行后验证0文件需调整。
+
+| 最终检查 | 结果 | 原始证据 |
+| --- | --- | --- |
+| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/prepare-piece-build-final.log、prepare-piece-test-build-final.log |
+| 完整Unit | 3114通过，0失败/跳过；原3085保留，新增29 | TestResults/prepare-piece-unit-final/ |
+| 完整Consumer | 2076通过，0失败/跳过；原2046保留，新增30 | TestResults/prepare-piece-consumer-final/ |
+| 完整DI | 14通过，0失败/跳过 | TestResults/prepare-piece-di-final/ |
+| 范围格式 | 8个源码/测试文件无需调整 | TestResults/prepare-piece-format-final.log |
+| 双包及五资产实际包消费 | 双包生成、消费通过；实际8.0.32/9.0.21/10.0.13 | TestResults/prepare-piece-pack.log、prepare-piece-package-verification.log |
+
+三份完整TRX均为Completed，5204项均Passed；逐名比较原案例无删除，见TestResults/prepare-piece-final-summary.json、prepare-piece-inventory-final.json。完整测试期间未重建产品，SHA256未变化（prepare-piece-product-hashes-final.json）。两包各含五产品DLL，无testhost、测试程序集或模拟服务端。实际消费者、包副本及restore图保留在TestResults/package-validation/40f456232fb045c1a177bf63fa2e4ec2/；Standard仍由10.0.13宿主消费，基本包样例不证明各运行时完成组合SQL验收。
+
+命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；格式修正后另外build Unit工程；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录。范围dotnet format whitespace --no-restore --verify-no-changes；dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/prepare-piece-packages；pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/prepare-piece-packages。源码走查、UTF8无BOM/CRLF及diff检查后本地提交，不推送、不发布。
+
+真实数据库/OBProxy对该组合及ID替换的接受/资源语义、实库集成及Linux/Windows部署按用户要求不执行、未验证。文本流和数组元素Stream尚未实现，A05可信MySQL判定/C01完整重置、D15延后范围及许可/真实矩阵/发布关口仍开放；本轮不据本地测试关闭整体目标。
+
 ## M07 Oracle二进制流参数本地实施（2026-10-20）
 
 c9e967c后继续落实架构M07已列明的Oracle PIECE_DATA。复用Stream输入、参数快照、经典prepare/execute及会话命令预算；不加连接选项、公开类型、依赖、服务或后台任务。固定Java 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的OBStreamParameter.writePieceData/Utils.encodeHexStr/AbstractQueryProtocol.executePreparedQuery/ComStmtExecute给出0xA2、位置头、piece标志、大写hex、长度LE64、逐块应答及EXECUTE类型254/无inline依据，只参考行为、不复制源码。

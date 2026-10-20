@@ -7,10 +7,10 @@ namespace OceanBaseConnector.Internal.Session
 {
     internal sealed partial class CommandExchange
     {
-        private void SendPieceData(uint statement, OceanBaseParameter[] parameters, int inlineBytes)
+        private void SendPieceData(uint statement, OceanBaseParameter[] parameters, int executionBytes)
         {
             byte[]? raw = null, packet = null;
-            long remaining = PacketChannel.DefaultMaxPacketSize - 10 - inlineBytes;
+            long remaining = PacketChannel.DefaultMaxPacketSize - executionBytes;
             for (var i = 0; i < parameters.Length; i++)
             {
                 if (!(parameters[i].Value is Stream source)) continue;
@@ -40,10 +40,10 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
-        private async Task SendPieceDataAsync(uint statement, OceanBaseParameter[] parameters, int inlineBytes)
+        private async Task SendPieceDataAsync(uint statement, OceanBaseParameter[] parameters, int executionBytes)
         {
             byte[]? raw = null, packet = null;
-            long remaining = PacketChannel.DefaultMaxPacketSize - 10 - inlineBytes;
+            long remaining = PacketChannel.DefaultMaxPacketSize - executionBytes;
             for (var i = 0; i < parameters.Length; i++)
             {
                 if (!(parameters[i].Value is Stream source)) continue;

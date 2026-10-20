@@ -7,11 +7,11 @@ namespace OceanBaseConnector.Internal.Session
 {
     internal sealed partial class CommandExchange
     {
-        internal void SendLongData(uint statement, OceanBaseParameter[] parameters, int inlineBytes)
+        internal void SendLongData(uint statement, OceanBaseParameter[] parameters, int executionBytes)
         {
-            if (Mode == OceanBaseCompatibilityMode.Oracle) { SendPieceData(statement, parameters, inlineBytes); return; }
+            if (Mode == OceanBaseCompatibilityMode.Oracle) { SendPieceData(statement, parameters, executionBytes); return; }
             byte[]? packet = null;
-            long remaining = PacketChannel.DefaultMaxPacketSize - 10 - inlineBytes;
+            long remaining = PacketChannel.DefaultMaxPacketSize - executionBytes;
             for (var i = 0; i < parameters.Length; i++)
             {
                 if (!(parameters[i].Value is Stream source)) continue;
@@ -34,11 +34,11 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
-        internal async Task SendLongDataAsync(uint statement, OceanBaseParameter[] parameters, int inlineBytes)
+        internal async Task SendLongDataAsync(uint statement, OceanBaseParameter[] parameters, int executionBytes)
         {
-            if (Mode == OceanBaseCompatibilityMode.Oracle) { await SendPieceDataAsync(statement, parameters, inlineBytes).ConfigureAwait(false); return; }
+            if (Mode == OceanBaseCompatibilityMode.Oracle) { await SendPieceDataAsync(statement, parameters, executionBytes).ConfigureAwait(false); return; }
             byte[]? packet = null;
-            long remaining = PacketChannel.DefaultMaxPacketSize - 10 - inlineBytes;
+            long remaining = PacketChannel.DefaultMaxPacketSize - executionBytes;
             for (var i = 0; i < parameters.Length; i++)
             {
                 if (!(parameters[i].Value is Stream source)) continue;

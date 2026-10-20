@@ -460,6 +460,18 @@ C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/re
 - [x] 补FIRST/NEXT/LAST、精确头/hex/无inline、多流/混合值/快照、Prepare/当前位置/重复/NULL、错误声明、源失败/取消/超时/独占、块ERR/畸形/断流、执行ERR/未知结果、会话状态与累计预算边界。
 - [x] 五资产同步/异步×标准/OB20消费，完整Release/Unit/Consumer/DI、格式/diff、双包实际消费；独立代码走查修复、文档同步后本地提交，不推送。实库/部署不执行，PrepareExecute组合仍保留后续，不据此关闭整个M07。
 
+### M07 Oracle PrepareExecute流输入组合（2026-10-20）
+
+目标：接通已存在的D02存储过程/OUT与M07二进制Stream Input，避免选择PrepareExecute便丢失流输入能力。不新增选项、类型、依赖或服务；仍要求原Use Oracle Prepare Execute及2.2.76门槛、原事务/独占/总预算。仅Input消费Stream，InputOutput在方向规范化前拒绝；Output/ReturnValue仍忽略旧Value（包括Stream），不读取或注册其流身份，不提供流输出API。数组元素不接受Stream。固定Java AbstractQueryProtocol.executePreparedQuery先prepare并逐块上传，ComStmtPrepareExecute.send使用该statement ID、跳过inline流值；扩展响应可给出不同ID，须保证两者清理且不重复关闭。
+
+每次此组合创建独立经典prepare ID，参数数不符时显式Release入关闭队列，匹配时交给现有OracleCursorOwner；不写入命令经典prepare缓存，不与仍在使用的REF CURSOR父statement共享所有权。源前失败/块ERR/取消等由现有清理处理；收到扩展新ID时，若不同则延迟关闭原ID，最终ID沿原输出/REF CURSOR生命周期关闭。OUT仍只在完整终态及OB20边界通过后原子发布。流上传预算按整个实际执行请求字节数扣除（扩展头、SQL、参数、尾字段），再计hex流数据，不能仅扣经典EXECUTE的10字节头。
+
+文件：OceanBaseCommand.cs在Oracle计划存在流时prepare/上传/以ID构建执行；CommandExchange.LongData.cs/PieceData.cs将预算参数统一为完整执行请求长度；OracleCursorOwner.SetStatement在ID替换时延迟关闭旧ID。测试复用OracleProcedure/RefCursor及PieceData的既有夹具，新增组合用例与五资产标准/OB20消费；README/架构/台账同步。
+
+- [x] 先用公开同步/异步流输入+OUT固定失败回归，再实现最小路径。
+- [x] 补空/多块、statement ID相同/变化、每次重执行、参数数不符、源失败/块ERR/尾ERR/取消及OUT不发布、REF CURSOR父资源与原事务；预算验证计入完整扩展请求。
+- [x] 全目标Release、完整Unit/Consumer/DI、范围格式及双包消费，独立走查修复、文档/diff核对后本地提交。真实数据库/OBProxy接受范围与部署按用户要求不执行、未验证。
+
 ### M11 过程/参数目录本地实施（2026-10-20）
 
 目标：落实架构M11仍在D阶段规划的过程/参数目录。D02已有过程执行不代表目录发现已实现；在C05现有GetSchema路径新增Procedures、ProcedureParameters，不添加DeriveParameters、adapter、命令生成或连接配置。沿当前master续接，无新依赖；同步五资产、GetSchemaAsync现代三资产，Standard异步API边界不变。

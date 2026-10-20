@@ -281,9 +281,9 @@ namespace OceanBaseConnector.UnitTests
                 var value = new OceanBaseParameter { ParameterName = "p", Value = source }; command.Parameters.Add(value);
                 foreach (var invalid in new Action[] { () => value.DbType = DbType.String, () => value.Size = 1, () => value.Precision = 1,
                     () => value.Scale = 1, () => value.OceanBaseDbType = OceanBaseDbType.Blob, () => command.AllowClientSidePrepareFallback = true,
-                    () => { command.CommandType = CommandType.StoredProcedure; command.CommandText = "p"; }, () => source.Dispose() })
+                    () => { command.CommandType = CommandType.StoredProcedure; command.CommandText = "p"; value.Direction = ParameterDirection.InputOutput; }, () => source.Dispose() })
                 {
-                    value.ResetDbType(); value.Size = 0; value.Precision = value.Scale = 0; command.AllowClientSidePrepareFallback = false;
+                    value.ResetDbType(); value.Size = 0; value.Precision = value.Scale = 0; value.Direction = ParameterDirection.Input; command.AllowClientSidePrepareFallback = false;
                     command.CommandType = CommandType.Text; command.CommandText = "insert into t values (:p)"; invalid();
                     Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery());
                 }

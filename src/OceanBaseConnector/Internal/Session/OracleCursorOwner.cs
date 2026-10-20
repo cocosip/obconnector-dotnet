@@ -21,7 +21,14 @@ namespace OceanBaseConnector.Internal.Session
         internal OracleCursorOwner(OceanBaseConnection connection, PhysicalSession session, OceanBaseTransaction? transaction, int timeout)
         { Connection = connection; Session = session; Transaction = transaction; Timeout = timeout; Epoch = connection.TransactionEpoch; }
 
-        internal void SetStatement(uint id) { lock (_gate) _statement = id; }
+        internal void SetStatement(uint id)
+        {
+            lock (_gate)
+            {
+                if (_statement.HasValue && _statement.Value != id) Session.QueueStatementClose(_statement.Value);
+                _statement = id;
+            }
+        }
         internal OceanBaseRefCursor Create(uint id)
         {
             lock (_gate)

@@ -310,11 +310,13 @@ OceanBaseRefCursor.GetDataReader/GetDataReaderAsync返回既有OceanBaseDataRead
 
 每次扩展执行的OracleCursorOwner在所有输出游标释放前保留父statement；command.Dispose只清理已可释放资源。读尽、失败或游标Dispose均原子一次入延迟关闭队列，最后释放再排父statement关闭，空闲Dispose刷新队列；别名ID共享同一对象，避免重复关闭。未读取对象必须Dispose，连接关闭释放服务端资源；重执行不隐式释放旧参数值。未读完的reader/游标关闭、fetch ERR或协议/网络错误销毁原会话。后续fetch不再执行业务SQL，取消/超时及故障不将已成功完成的原过程改判结果未知；仍保留真实错误码/取消token。上述为本地实现，真实目标版本/OBProxy、TLS扩展执行及异机矩阵待验收。
 
-M07长参数上传（2026-10-20本地接入）：MySQL/Oracle经典prepare/execute的二进制Input Value可为Stream，推断/显式DbType.Binary；执行入口拒绝不兼容声明、非零Size/Precision/Scale、不可读源、客户端prepare回退及未接入的Oracle PrepareExecute/数组绑定流组合。同一Stream引用只能占一个绑定位置，含Oracle重复命名展开，读取/发包前明确拒绝，不以空流代替重复值；使用标准ConditionalWeakTable按引用身份判定，不依赖用户Equals。Prepare沿既有规则只验证绑定/参数数，值校验留待执行，不读源。参数元数据和源引用快照后，按原位置读至EOF、不seek/读取Length/释放源；再次执行由调用者管理源位置。普通byte[]路径不变，文本流仍未实现。
+M07长参数上传（2026-10-20本地接入）：MySQL/Oracle经典prepare/execute的二进制Input Value可为Stream，推断/显式DbType.Binary；执行入口拒绝不兼容声明、非零Size/Precision/Scale、不可读源、客户端prepare回退及数组绑定流组合。同一Stream引用只能占一个绑定位置，含Oracle重复命名展开，读取/发包前明确拒绝，不以空流代替重复值；使用标准ConditionalWeakTable按引用身份判定，不依赖用户Equals。Prepare沿既有规则只验证绑定/参数数，值校验留待执行，不读源。参数元数据和源引用快照后，按原位置读至EOF、不seek/读取Length/释放源；再次执行由调用者管理源位置。普通byte[]路径不变，文本流仍未实现。
 
 固定8KiB数据缓冲及7字节LONG_DATA头，每块独立命令且无应答，空流也发空数据块；EXECUTE保留类型头、跳过流的inline值。每块经ResponseComplete(false)结束OB20/标准协议无应答边界。所有流、inline编码和10字节EXECUTE头共用64MiB预算；异步源/网络用原命令总预算token，不缓冲全流或另建任务。源须合作取消，驱动不能强制中断用户源的阻塞Read/忽略token的ReadAsync；已上传期间仍立即销毁原会话。污染标记独立于当前响应状态，上传后取消/异常/关闭均不允许带残余数据的会话复用；EXECUTE前失败不报告SQL结果未知，发送后沿既有契约处理。固定Java的AbstractQueryProtocol.executePreparedQuery、StreamParameter.writeLongData及ComStmtExecute提供报文依据，真实OceanBase/OBProxy接受与清理语义仍未验证。
 
 Oracle另用0xA2/statement LE32/index LE16/piece byte/保留0/编码长度LE64/大写hex，EXECUTE类型254且无inline流值。8192字节块加一字节前瞻决定FIRST=1/NEXT=2/LAST=3，单块/空流为LAST；不使用Length/seek或Java available()。逐块严格验证一个OK、应用会话变量、完成标准/OB20边界后再发后续，ACK计数不计入RecordsAffected且不释放租约，拒绝结果集/额外结果/游标标志。64MiB预算计入hex膨胀。块ERR在边界验证后保留错误码并销毁污染会话，不假设服务端清理成功；EXECUTE后的可信ERR沿原契约。固定Java OBStreamParameter.writePieceData/Utils.encodeHexStr提供依据，未添加无来源的服务端版本门槛，也不将驱动版本视为服务端版本。真实接受范围、清理语义、版本/OBProxy互通仍待实库验收，不据本地实现关闭M07全部范围。
+
+Oracle PrepareExecute与Stream Input组合沿原Use Oracle Prepare Execute及2.2.76门槛，每次经典prepare取得独立ID、校验参数数，再上传PIECE_DATA，最后以该ID发送0xA1。复用EnsurePrepared，但临时ID交给OracleCursorOwner而非命令缓存；参数数不符显式Release，扩展响应换ID时延迟关闭旧ID，相同不重复关闭，最终父ID仍由该次REF CURSOR持有。InputOutput流在方向规范化前拒绝，Output/ReturnValue旧值即使为Stream也忽略且不读取。64MiB预算先扣整个实际执行请求（SQL、长度前缀、参数、扩展固定头和尾字段），再计hex数据；OUT只在完整终态与OB20边界通过后发布。无新选项、类型或服务。固定Java的AbstractQueryProtocol.executePreparedQuery与ComStmtPrepareExecute.send/read支持该调用链，真实服务端资源语义仍待验证。
 
 ### D06 数组批量执行
 
