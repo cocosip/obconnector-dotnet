@@ -2,6 +2,23 @@
 
 基线日期：2026-10-17；当前进度更新：2026-10-20。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。
 
+## 当前范围收尾核查（2026-10-20）
+
+以323d39c为产品基线，对照开发方案A/B/C/D/R及架构M01–M16，结合公开入口、测试与各模块独立走查核对：已确定契约内可脱离真实服务端完成的本地功能已有实现，未发现需要继续新增的明确本地功能。本结论仅关闭用户此次排除实库和部署后的本地开发范围，不关闭G1–G4，不表示已兼容真实OceanBase，也不表示可以发布。
+
+| 剩余工作 | 当前状态与后续条件 |
+| --- | --- |
+| A05 可信MySQL模式判定 | 尚未实现；缺少真实版本/模式/插件证据，HandshakeFlow仍拒绝没有Oracle状态位的连接。测试注入MySQL事实不代表公共连接可用；取得可信矩阵后才可继续实现 |
+| C01 完整重置与池化、C07 池借还基线 | 尚未实现；PhysicalSession仍拒绝Pooling=true。须先证明目标版本/模式可清理原始会话SQL、临时对象等全部状态，再实现池与隔离验收，不加测试放行开关 |
+| A07/B09/C08/R02 真实验收套件 | IntegrationTests当前只有ConnectionGateTests的四项连接/模式/TLS/认证门槛测试；完整真实CRUD、类型往返、事务和故障套件尚未编写，不能记成“已有套件仅未执行”。这些套件及实库执行留待恢复数据库验收范围后一起完成 |
+| 其他真实验收及部署 | OceanBase/OBProxy版本与两模式、可信私有CA/KDC、LOB/游标/复杂类型/保存点/XA资源语义、协调器及Linux/Windows部署按用户要求不执行、未验证；本地Windows测试不等于Windows部署验收 |
+| R01/R02 发布决定 | 项目许可证、来源/包名审核、正式Framework支持及最终发布审核未完成；由维护者决定，不发布、不推送 |
+| 明确延后或未承诺能力 | Standard GSSAPI/其他系统认证机制沿D15既有裁定延后；DataAdapter/CommandBuilder等按架构保留按需边界。输入TextReader、数组元素Stream没有已确定的本地实施契约，不因Java存在相关能力自动追加需求；输出GetTextReader已有实现 |
+
+下一步需要的是真实环境证据及验收工作；本次不连接数据库、不部署，不用增加配置、服务或模拟功能填补这些证据。协议模拟仅在既有tests项目中，testhost.exe是dotnet test启动的微软测试宿主，不随产品包交付。
+
+收尾复查重新解析上一模块三份原始TRX：Unit3114、Consumer2076、DI14，共5204项，均Completed/Passed，失败/跳过/中止为0；15个产品DLL的SHA256仍与prepare-piece-product-hashes-final.json一致。双包消费记录及原始报告见上次功能验证记录，收尾仅更新本台账，不重建产品或重复启动测试；检查时无testhost进程。各模块先测试、独立走查再本地提交，最近功能提交为323d39c。
+
 ## M07 Oracle PrepareExecute流输入组合（2026-10-20）
 
 711c3e4后核对M07与D02，接通二进制Stream Input和存储过程/OUT组合。复用现有EnsurePrepared、PIECE_DATA、PrepareExecute及OracleCursorOwner；不新增公开类型、配置、依赖、服务或测试应用。固定Java 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的AbstractQueryProtocol.executePreparedQuery与ComStmtPrepareExecute.send/read给出先prepare取得ID、逐块上传、以该ID执行的依据，只参考行为。
@@ -174,16 +191,16 @@ Consumer新增5项资产形状和96项三现代资产×同步/异步×两模式�
 
 ## 当前开发进度
 
-当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值及MySQL/Oracle固定会话、显式阶段与完整恢复快照已本地接入，真实协调器及两模式实库验收仍开放；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA、mysql_old_password、Ed25519、dialog/PAM及现代资产Kerberos GSSAPI路径已有本地实现，Standard GSSAPI、Java Windows native其他机制及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。
+当前产品基线为323d39c。B01–B09、C02–C07及D01–D15已确定本地契约内的功能已有实现和回归；近期补齐M05现代事务保存点、M08 Oracle带偏移量Fetch、M11过程/参数目录，以及M07 MySQL LONG_DATA、Oracle PIECE_DATA和PrepareExecute流输入组合。D15仍保留Standard GSSAPI等明确延后边界。A05公共MySQL模式判定和C01池化尚未实现；真实环境、完整集成套件和发布决定见本页“当前范围收尾核查”。项目仍为实验版本 `0.1.0-alpha`，本地通过不等同正式验收。
 
 | 范围 | 当前已实现及本地验证 | 尚未完成 |
 | --- | --- | --- |
 | A01/A02/A03/A06 | 工程、连接配置、标准报文/序号/分片、物理会话状态与独占生命周期已完成；后续命令、statement、reader资源管理已接入 | 真实服务端互通另随阶段门槛验收 |
 | A04 | TCP、SSLRequest、TLS升级/拒绝、同步/异步取消及Windows环回已实现；同步建连借用等待句柄缺陷已修复并有压力回归 | 私有CA成功链、真实证书名及跨平台验收 |
 | A05/A07 | 安全认证、Oracle模式位、能力协商、认证错误/脱敏及真实环境测试入口已实现 | 可信MySQL模式判定及版本/插件白名单；双模式直连/OBProxy真实验收。当前公共MySQL连接仍被拒绝 |
-| B01–B09 | 统一provider/factory、现代数据源/DI/日志；文本与预处理命令、命名绑定、逐行/多结果reader、字段元数据、基础/provider-specific类型、本地事务、取消/超时/结果未知及公共API审核已完成本地实现和走查 | 双模式真实CRUD、参数/类型往返、事务、故障及跨平台验收；本地夹具不能证明服务端兼容 |
+| B01–B09 | 统一provider/factory、现代数据源/DI/日志；文本与预处理命令、命名绑定、逐行/多结果reader、字段元数据、基础/provider-specific类型、本地事务、取消/超时/结果未知及公共API审核已完成本地实现和走查 | 完整双模式真实CRUD、参数/类型往返、事务及故障集成套件尚未编写/执行；跨平台验收未完成，本地夹具不能证明服务端兼容 |
 | C02–C04 | 多地址仅建连前切换；宽精度数值、纳秒/TZ/LTZ/零日期；SequentialAccess字段流及服务端游标已实现并有本地回归 | 真实模式/版本/OBProxy的大值、游标、精确值、资源和性能验收 |
-| C05–C07 | MySQL ChangeDatabase、首批四个GetSchema集合/现代异步入口；逐条DbBatch及数据源入口；ActivitySource/Meter、脱敏及Windows协议性能基线已实现并走查 | 真实目录权限/字典、切库、批次及诊断验收；池借还性能尚无实现基础 |
+| C05–C07 | MySQL ChangeDatabase、六个GetSchema集合（含Procedures/ProcedureParameters）及现代异步入口；逐条DbBatch及数据源入口；ActivitySource/Meter、脱敏及Windows协议性能基线已实现并走查 | 真实目录权限/字典、切库、批次及诊断验收；池借还性能尚无实现基础 |
 | C01/C08 | 未开放Pooling=true，公开入口明确拒绝；生产验收缺口已列明 | 连接池及完整重置实现、可信版本/模式白名单、生产矩阵与G3验收 |
 | R01/R02 | 同版本双包、五资产实际包消费、故障/回退README、8/9完整本地Unit/DI及Windows Framework基础包消费工具已完成 | 许可证/来源/包名审核、正式Framework支持决定、真实兼容矩阵和最终发布审核 |
 | D14 | 四位 MySQL YEAR 本地实现，验证记录见末尾；真实验收开放 | 真实 YEAR 列往返、版本/OBProxy矩阵 |
@@ -197,10 +214,14 @@ Consumer新增5项资产形状和96项三现代资产×同步/异步×两模式�
 | D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
 | D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流、WRITE/TRIM及临时对象显式创建/释放已本地接入；Required TLS公开消费补验见末尾 | 真实版本/OBProxy、资源生命周期及可信TLS仍开放 |
 | D05 | 内部嵌套编解码、同会话字典、值构造、命名结果/参数/输出、匿名标量结果/输入/输出及完整本地复核完成，验证见末尾 | 真实字典/DDL、往返及版本/OBProxy资源语义验收 |
+| D06 | Oracle数组绑定、逐项状态/错误、多行OUT/RETURNING及输出原子发布已本地接入 | 真实服务端接受范围、版本/OBProxy及资源语义验收 |
+| D07 | 显式启用、安全标量及精确错误门槛下的客户端预处理回退已本地接入 | 真实语法/字符集及版本/OBProxy验收；不自动扩大回退范围 |
+| D08 | 地址发现、冻结候选快照及建连前轮转选址已本地接入；不迁移已发送SQL | 真实拓扑/发现源、故障及版本/OBProxy验收 |
+| D09 | 不可变XID、MySQL/Oracle固定会话显式XA阶段与完整恢复快照已本地接入 | 真实协调器、两模式实库及恢复/资源语义验收 |
 
 工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
 
-上一轮 Windows 验证结果如下（历史运行时快照；本轮新结果见后文“本轮本地范围复核”）：
+上一轮 Windows 验证结果如下（历史运行时快照；最新本地结果见页首M07 PrepareExecute流输入组合及“当前范围收尾核查”）：
 
 | 实际运行时 | Unit通过 | Consumer通过 | DI通过 | 失败/跳过 |
 | --- | --- | --- | --- | --- |
@@ -212,7 +233,7 @@ Consumer新增5项资产形状和96项三现代资产×同步/异步×两模式�
 
 最近已提交：`d8d7072`修复同步TCP等待句柄；`0e8229b`补齐8/9完整本地回归并修复测试兼容；`1aeba69`新增可选Windows Framework包消费及生成工程重建修复。已报告走查问题的修复和红绿证据见后文。
 
-后文阶段计数按正式验收完成项统计，B/C显示0项通过关口不代表没有实现；各模块落地时的测试数量为历史快照，最新全量结果以本轮复核表为准。
+后文阶段计数按正式验收完成项统计，B/C显示0项通过关口不代表没有实现；各模块落地时的测试数量为历史快照，最新全量结果以页首M07 PrepareExecute流输入组合记录为准。
 
 ## 本轮本地范围复核（2026-10-19）
 
