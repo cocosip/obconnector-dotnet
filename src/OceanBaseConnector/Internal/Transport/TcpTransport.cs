@@ -20,6 +20,8 @@ namespace OceanBaseConnector.Internal.Transport
 
         private TcpTransport(TcpClient client)
         {
+            // Protocol headers and bodies are separate writes; do not wait for delayed TCP acknowledgements.
+            client.NoDelay = true;
             _client = client;
         }
 

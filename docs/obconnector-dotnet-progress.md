@@ -2,6 +2,16 @@
 
 Baseline date: 2026-10-17; progress updated: 2026-10-20. References: [Architecture design](obconnector-dotnet-architecture-design.md) and [Development plan](obconnector-dotnet-development-plan.md).
 
+## Ubuntu CI small-write timeout repair (2026-10-20)
+
+The supplied Ubuntu CI log reports 3215 passes and two failures: `PieceDataEncodedBudgetIncludesHexExpansionAndTheExecuteHeader` and `PrepareExecutePieceDataBudgetIncludesSqlAndExtendedFields`. Both expected an encoded-budget `ArgumentException` but reached the 30-second command timeout while waiting for piece-data acknowledgements. Packet headers and bodies are separate writes, and neither the transport nor its shared scripted TCP peer disabled Nagle buffering. This permits a Nagle/delayed-ACK stall across thousands of small request/acknowledgement exchanges and is consistent with the reported Linux timing.
+
+`TcpTransport` now sets `TcpClient.NoDelay=true` in its shared constructor, covering synchronous/asynchronous connections and all target frameworks. The shared unit-test loopback peer does the same. No packet budget, timeout, expected exception, retry, CI skip or dependency changed. Two new socket-configuration regressions failed before the change; afterward, those cases and both original CI cases passed together: **4 passed, 0 failed, 0 skipped in 772 ms** (`TestResults/nagle-{red,green}/*.trx`).
+
+The final full Release build had zero warnings/errors. Unit **3251**, Consumer **2076**, and DI **14** all passed: **5341 passed, 0 failed, 0 skipped**. Package consumers passed all five targets, and real MySQL/Oracle acceptance and independent cleanup completed against these binaries as recorded below. Source walkthrough, diff whitespace and supplied-private-value checks passed. No new branch/worktree, deployment, publication or push was performed.
+
+Local verification ran on Windows. No usable Linux/WSL runtime was available, so the Ubuntu CI job still needs a rerun to confirm the platform-specific timing fix; local green tests are not a claim that Ubuntu execution has passed.
+
 ## Oracle named-object owner resolution repaired (2026-10-20)
 
 This repair supersedes the unresolved named-object diagnosis below. Ordinary prepared queries retain their result-column source identities. Before business execution or stream upload, a parameterized dictionary query resolves the exact database/original-table/original-column to its declared type owner and name. Where `ALL_TAB_COLUMNS.DATA_TYPE_OWNER` is NULL, matching local TABLE-to-TYPE `ALL_DEPENDENCIES` entries provide the owner. Missing, malformed, duplicate, ambiguous, mismatched or unloaded identities fail before business execution. Bound SELECT preparation may omit the type name too; execution metadata must still match the complete source identity and resolved type name.

@@ -44,6 +44,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                 async () =>
                 {
                     using var client = await listener.AcceptTcpClientAsync();
+                    client.NoDelay = true;
                     await script(client);
                 },
                 CancellationToken.None,

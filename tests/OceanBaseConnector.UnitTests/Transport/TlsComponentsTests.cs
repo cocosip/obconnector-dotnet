@@ -75,6 +75,30 @@ namespace OceanBaseConnector.UnitTests.Transport
             }
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task ProtocolConnectionsSendSmallWritesWithoutNagleDelay(bool asynchronous)
+        {
+            var peerConfigured = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var server = OceanBaseConnector.UnitTests.TestInfrastructure.LoopbackServer.Start(async peer =>
+            {
+                peerConfigured.SetResult(peer.NoDelay);
+                Assert.Equal(0, await peer.GetStream().ReadAsync(new byte[1]));
+            });
+            try
+            {
+                using var transport = asynchronous
+                    ? await TcpTransport.ConnectAsync("127.0.0.1", server.Port, TimeSpan.FromSeconds(5), CancellationToken.None)
+                    : TcpTransport.Connect("127.0.0.1", server.Port, TimeSpan.FromSeconds(5));
+                var client = (TcpClient)typeof(TcpTransport).GetField("_client", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(transport)!;
+                Assert.True(client.NoDelay);
+                Assert.True(await peerConfigured.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            }
+            finally { server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
         [Fact]
         public async Task ConnectAsyncWrapsRefusedConnection()
         {
