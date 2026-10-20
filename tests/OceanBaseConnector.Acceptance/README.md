@@ -1,6 +1,6 @@
 # Database acceptance console
 
-This standalone console connects directly to OceanBase Server or OBProxy through the driver's public API. It does not simulate a database and is not included in the driver NuGet packages. It requires the .NET 10 SDK. Its 65 named entries run according to mode, configuration, and permissions; other entries report explicit skip reasons. **The runner has been verified locally; its database cases have not been executed against a real server.**
+This standalone console connects directly to OceanBase Server or OBProxy through the driver's public API. It does not simulate a database and is not included in the driver NuGet packages. It requires the .NET 10 SDK. Its 65 named entries run according to mode, configuration, and permissions; other entries report explicit skip reasons. Real OceanBase 4.4.2.2 MySQL and Oracle tenant runs are recorded in the [progress ledger](../../docs/obconnector-dotnet-progress.md). Those results cover the tested profiles; complete interoperability acceptance remains open.
 
 ## Configure and run
 
@@ -28,7 +28,7 @@ $env:OB_ACCEPTANCE_CONNECTION_STRING = 'Server=db.example;Port=2881;User ID=test
 dotnet run --project tests/OceanBaseConnector.Acceptance -c Release -- --config tests/OceanBaseConnector.Acceptance/mysql.example.json --report TestResults/mysql-acceptance.json
 ```
 
-The driver currently lacks a trustworthy MySQL-mode identification rule and still rejects public MySQL-mode connections. The console reports the connection failure and skips dependent cases; it does not bypass that restriction. Oracle extension cases are skipped when their options are disabled. Once enabled, version, permission, or unsupported-server errors are failures.
+For MySQL mode or a greeting that does not identify OceanBase, the driver requires a read-only `ob_version()` confirmation. This identity confirmation currently accepts only OceanBase 4.4.2.2; native MySQL and unverified versions are rejected by that path. The console does not bypass mode identification. Oracle extension cases are skipped when their options are disabled. Once enabled, version, permission, or unsupported-server errors are failures.
 
 ## Configuration fields
 

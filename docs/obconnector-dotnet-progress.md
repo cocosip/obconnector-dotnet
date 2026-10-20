@@ -2,6 +2,35 @@
 
 Baseline date: 2026-10-17; progress updated: 2026-10-20. References: [Architecture design](obconnector-dotnet-architecture-design.md) and [Development plan](obconnector-dotnet-development-plan.md).
 
+## Final live acceptance verification (2026-10-20)
+
+Both modes were rerun with the existing acceptance console at product commit `749ae87`. Connection values were supplied only through child-process environment variables; no account or endpoint values were added to source, configuration examples, documentation or reports. Work remains directly on `master`; the temporary development branch has been merged and deleted. No deployment, publication or push was performed.
+
+| Mode | Passed | Failed | Skipped | Cleanup callback failures | Evidence |
+| --- | ---: | ---: | ---: | ---: | --- |
+| MySQL, including bounded cancellation/timeout | 38 | 0 | 27 | 0 | `TestResults/live-mysql-final-01.json` |
+| Oracle | 48 | 2 | 15 | 1 | `TestResults/live-oracle-final-01.json` |
+
+Oracle retains exit code **1**: `complex.object` fails on missing type-owner identity and `complex.collection` fails on unsupported nested-table column DDL. The cleanup callback failure is the DROP of the table whose CREATE failed. Independent checks found all **28 MySQL** and **39 Oracle** exact report-owned entries absent, zero owned prepared branches in either mode, and successful exact-XID rollback checks (`TestResults/live-mysql-final-cleanup-01.log`, `TestResults/live-oracle-final-cleanup-01.log`). No failure was converted to a skip or passing assertion.
+
+Skips retain their individual report reasons: features of the other compatibility mode; alternate MySQL database and zero-date SQL_MODE profiles; an Oracle read-only slow query; dedicated TLS/authentication profiles; actual OB20/trace negotiation; controlled topology/network faults; complete pooling/reset; and coordinator crash recovery. These untested environments and the two Oracle compatibility failures keep general interoperability/release gates open. The complete Release build passed with zero warnings/errors (`TestResults/acceptance-final-build.log`). Full Unit verification passed **3217** and DI passed **14**, with zero failures/skips (`TestResults/acceptance-final-unit-authorized/*.trx`, `TestResults/acceptance-final-di/*.trx`).
+
+Full Consumer verification also passed **2076**, with zero failures/skips (`TestResults/acceptance-final-consumer-authorized/*.trx`). The three complete suites total **5307 passed, 0 failed, 0 skipped**. These suites ran after the latest product change; no product rebuild overlapped their execution. Independent read-only review found no remaining documentation blocker or justified production fix based on the two remaining server limitations. UTF-8, Markdown fences, English documentation, diff whitespace, and supplied-private-value audits passed.
+
+The initial sandboxed Unit run failed because Windows denied temporary TLS private-key access; the similarly restricted Consumer attempt was stopped. Those diagnostic logs remain under `TestResults/acceptance-final-{unit,consumer}.log`. The successful Unit and Consumer runs used normal permissions without changing the certificate fixture, installing trust roots or changing product code. The acceptance guide and root README now reference real-run evidence and preserve the remaining boundaries instead of claiming that no database has been connected.
+
+## Oracle nested-table column limitation (2026-10-20)
+
+A raw DDL diagnostic on the tested OceanBase 4.4.2.2 Oracle tenant successfully creates a named `TABLE OF NUMBER` type, then rejects a table column of that type with error 600, SQLSTATE 0A000, and `OBE-00600: internal error code, arguments: -4007, nested table type not supported`. This establishes a target-server limitation for the collection-valued table case; it does not establish that all collection operations are unsupported. No driver workaround or acceptance assertion change was made. The original `complex.collection` failure and DROP callback failure for the table that was never created remain recorded.
+
+Sanitized evidence: `TestResults/live-oracle-collection-ddl-01.log` and its JSON object inventory. Independent verification checked both exact owned entries, found zero remaining objects and zero owned prepared XA branches (`TestResults/live-oracle-collection-ddl-cleanup-01.log`). The latest complete Oracle report remains **48 passed, 2 failed, 15 skipped, 1 cleanup callback failure**. The other failure, named-complex result metadata with an empty type owner, remains unresolved; substituting a column database or current schema without proving type ownership could select a different same-named type.
+
+## Oracle named-complex owner investigation (2026-10-20)
+
+The raw prepare identity diagnostic confirms an empty type owner, the exact generated type name, and a NULL version (`TestResults/live-oracle-complex-identity-01.log`). Public server source at revision `5e8a63d29dae9fde5e962b8fcc7b167d438fc343` corroborates this shape: the [SQL UDT path](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/sql/ob_sql.cpp#L868) assigns the type name without an owner, while the PL path assigns both. The same file derives the column database from the table database, and the [result-set conversion](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/observer/mysql/ob_mysql_result_set.cpp#L124) forwards the type owner unchanged. The exact source revision of the deployed server has not been independently established.
+
+Independent read-only review found no safe correction based on the available metadata. A table can reference another schema's type, so its database, the current schema, and a unique cached type name are insufficient identity proofs. The driver retains exact owner/name matching and the original `complex.object` failure. Automatic dictionary SQL during result metadata parsing would also violate exclusive response ownership. Supporting omitted owners requires an authoritative type identity source and cross-schema same-name tests; no inferred-owner fallback, new public API, or hidden metadata I/O was added. This compatibility gap remains open, rather than being reported as a passing round trip.
+
 ## Oracle anonymous NUMBER array declarations (2026-10-20)
 
 A same-request raw comparison isolated the array-binding rejection: element declaration 0 returns 600/HY004 (Object type error); declaration 246 returns three item results and affected count three. Only the outgoing anonymous NUMBER element declaration now maps internal layout 0 to NEWDECIMAL 246. Internal exact decimal encoding, immutable values, named complex members, ordinary scalar parameters, other anonymous elements and MySQL retain their paths. Typed NULL and output declarations receive the same valid header; output metadata code 0 still normalizes through the existing decoder.
