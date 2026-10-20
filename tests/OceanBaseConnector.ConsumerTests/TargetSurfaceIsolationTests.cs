@@ -19,7 +19,7 @@ namespace OceanBaseConnector.ConsumerTests
 {
     /// <summary>
     /// Verifies the target-conditional API surface of the product assembly
-    /// (A01: "验证不存在现代 API 泄漏到 netstandard2.0"). The netstandard2.0
+    /// (A01: modern APIs must not leak into netstandard2.0). The netstandard2.0
     /// asset is inspected with a metadata reader instead of Assembly.Load so
     /// the check cannot be masked by assembly-name unification with the
     /// already-loaded modern asset.

@@ -39,7 +39,7 @@ logs/
 
 .claude/
 
-# nuget包
+# NuGet packages
 nupkgs/
 
 # tools

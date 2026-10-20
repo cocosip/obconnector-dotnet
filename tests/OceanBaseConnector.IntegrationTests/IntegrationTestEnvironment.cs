@@ -9,8 +9,8 @@ namespace OceanBaseConnector.IntegrationTests
     /// requested. With OB_REQUIRE_INTEGRATION unset the test is skipped with
     /// a visible reason; with OB_REQUIRE_INTEGRATION=1 but missing connection
     /// strings the test body fails, so gates cannot pass on a half-configured
-    /// environment (development plan: "关口验收设置 OB_REQUIRE_INTEGRATION=1,
-    /// 缺少必需环境时测试失败,日常开发可明确跳过并报告").
+    /// environment. Release gates require OB_REQUIRE_INTEGRATION=1; daily
+    /// development may explicitly skip integration tests and report the skip.
     /// </summary>
     public sealed class IntegrationFactAttribute : FactAttribute
     {
