@@ -64,7 +64,7 @@ namespace OceanBaseConnector.UnitTests
                 await connection.OpenAsync();
                 using var source = new LongDataSource(100, false);
                 using var command = (OceanBaseCommand)connection.CreateCommand(); command.CommandText = "select :p";
-                var value = new OceanBaseParameter { ParameterName = "p", Value = source }; command.Parameters.Add(value);
+                var value = new OceanBaseParameter { ParameterName = "p", Value = source, DbType = DbType.String }; command.Parameters.Add(value);
                 Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery());
                 UseInternalMySqlFixture(connection); command.CommandText = "select ?";
                 foreach (var invalid in new Action[] { () => value.DbType = DbType.String, () => value.Size = 1,

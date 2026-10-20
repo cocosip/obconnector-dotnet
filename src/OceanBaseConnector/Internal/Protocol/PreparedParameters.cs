@@ -52,7 +52,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 {
                     continue;
                 }
-                else if (value is Stream) continue; // LONG_DATA is uploaded before EXECUTE, without an inline value.
+                else if (value is Stream) continue; // Stream data is uploaded before EXECUTE, without an inline value.
                 else if (type == 160)
                     ComplexValueCodec.WriteParameter(writer, complexTypes[i]!.Layout, ((OceanBaseComplexValue)value).WireValues(), mode);
                 else if (type == 207 || type == 208)
@@ -178,11 +178,11 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             if (parameter.Value is Stream source)
             {
-                if (mode != OceanBaseCompatibilityMode.MySql || parameter.DbType != DbType.Binary ||
+                if (parameter.DbType != DbType.Binary ||
                     parameter.Direction != ParameterDirection.Input || parameter.OceanBaseDbType.HasValue && parameter.OceanBaseDbType != OceanBaseDbType.Binary ||
                     parameter.Size != 0 || parameter.Precision != 0 || parameter.Scale != 0 || !source.CanRead)
-                    throw new NotSupportedException("Stream parameters require MySQL binary Input with no size or precision.");
-                return 252;
+                    throw new NotSupportedException("Stream parameters require binary Input with no size or precision.");
+                return mode == OceanBaseCompatibilityMode.Oracle ? (ushort)254 : (ushort)252;
             }
             var lobType = parameter.OceanBaseDbType;
             if (!lobType.HasValue && parameter.DbType == DbType.Object && parameter.Value is OceanBaseLob lob) lobType = lob.IsCharacter ? OceanBaseDbType.Clob : OceanBaseDbType.Blob;

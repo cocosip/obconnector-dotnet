@@ -446,6 +446,20 @@ C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/re
 - [x] 最小实现及故障回归：发包前拒绝、Prepare不读、源抛错/取消、独占、已上传后不执行与原会话销毁、执行后结果未知和可信ERR；既有参数/prepare回退回归通过。
 - [x] 五资产公开消费、Release全目标、完整Unit/Consumer/DI、范围格式及双包消费；独立走查修复后本地提交。实库/部署不执行、未验证；Oracle PIECE_DATA保持后续项。
 
+### M07 Oracle二进制流参数实施细化（2026-10-20）
+
+目标：补M07已列明的Oracle PIECE_DATA输入参数，复用Value=Stream、参数快照、经典prepare/execute及同一命令预算，不增加连接选项、公开类型、依赖或服务。沿当前checkout接续MySQL模块。仅可读Binary Input、零Size/Precision/Scale；客户端回退和本轮尚未接入的PrepareExecute/数组输入组合在读取或发包前拒绝，后者单独保留后续项。Prepare不读流。源当前位置、所有权、重复执行及阻塞源取消契约沿MySQL。
+
+固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的OBStreamParameter.writePieceData、Utils.encodeHexStr及AbstractQueryProtocol.executePreparedQuery：请求0xA2/statement LE32/index LE16/piece byte/reserved 0/encoded length LE64/大写十六进制数据，EXECUTE类型254且无inline流值。每块必须收到并验证单一OK，再结束标准/OB20边界，之后才可发下一块或EXECUTE。Java的available()不适用于一般.NET Stream，使用8192字节块加一字节前瞻确认EOF，首块未结束为FIRST=1、中块NEXT=2、末块/空流LAST=3；不seek、不读Length、不缓冲全流。总64MiB执行预算按实际十六进制编码后的字节数加inline及10字节EXECUTE头计。
+
+污染标记沿现有_longDataPending，独立于当前应答状态；块上传后任何源异常/取消/关闭、畸形或块ERR均销毁原会话，防止残留数据复用。块ERR保留服务端错误码但不宣称服务器已清理；EXECUTE前失败不标记SQL结果未知，EXECUTE后沿现有可信ERR/未知终态契约。块OK需应用会话变量，不污染用户的RecordsAffected，也不得提前释放命令租约；结果集/MoreResults/游标标志拒绝。源码没有可直接沿用的服务端版本门槛，不把Java驱动版本当作服务端版本；实际版本/OBProxy接受范围保留未验证。
+
+文件：PreparedParameters.cs放宽Oracle并选择类型254；OceanBaseCommand.cs拒绝未接入组合、以标准ConditionalWeakTable在快照/发包前按Stream引用拒绝多位置共用（含Oracle重复名称展开），不依赖用户Equals或隐式重放；CommandExchange.LongData.cs按模式分派，新增同层CommandExchange.PieceData.cs复用Header/会话API；CommandExchange.cs仅在执行前污染块ERR时销毁会话。测试沿TextCommandTests和Ob20ConsumerTests的既有环回helper，新增PieceDataTests.cs/PieceDataConsumerTests.cs，不建立模拟数据库应用。
+
+- [x] 先写公开同步/异步、空流/单块/多块及短读失败回归，确认因缺少Oracle Stream支持而失败；实现最小协议路径并转绿。
+- [x] 补FIRST/NEXT/LAST、精确头/hex/无inline、多流/混合值/快照、Prepare/当前位置/重复/NULL、错误声明、源失败/取消/超时/独占、块ERR/畸形/断流、执行ERR/未知结果、会话状态与累计预算边界。
+- [x] 五资产同步/异步×标准/OB20消费，完整Release/Unit/Consumer/DI、格式/diff、双包实际消费；独立代码走查修复、文档同步后本地提交，不推送。实库/部署不执行，PrepareExecute组合仍保留后续，不据此关闭整个M07。
+
 ### M11 过程/参数目录本地实施（2026-10-20）
 
 目标：落实架构M11仍在D阶段规划的过程/参数目录。D02已有过程执行不代表目录发现已实现；在C05现有GetSchema路径新增Procedures、ProcedureParameters，不添加DeriveParameters、adapter、命令生成或连接配置。沿当前master续接，无新依赖；同步五资产、GetSchemaAsync现代三资产，Standard异步API边界不变。

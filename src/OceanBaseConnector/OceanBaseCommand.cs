@@ -1,6 +1,8 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.IO;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
@@ -217,8 +219,17 @@ namespace OceanBaseConnector
                 if (oracle != null && (prepareOnly || _fetchSize > 0)) throw new NotSupportedException("PrepareExecute prepares during execution and does not support standalone Prepare or FetchSize.");
                 var bindings = oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
                 var clientFallback = AllowClientSidePrepareFallback && !prepareOnly && !_explicitPreparation && _fetchSize == 0 && oracle == null;
-                var streams = false;
-                foreach (var parameter in bindings.Parameters) streams |= parameter.Value is System.IO.Stream;
+                // Stream identity must not depend on a user stream's equality implementation.
+                ConditionalWeakTable<Stream, OceanBaseParameter>? streamBindings = null;
+                foreach (var parameter in bindings.Parameters)
+                {
+                    if (!(parameter.Value is Stream source)) continue;
+                    streamBindings ??= new ConditionalWeakTable<Stream, OceanBaseParameter>();
+                    if (streamBindings.TryGetValue(source, out _)) throw new NotSupportedException("A Stream cannot be bound to multiple parameter positions.");
+                    streamBindings.Add(source, parameter);
+                }
+                var streams = streamBindings != null;
+                if (streams && oracle != null) throw new NotSupportedException("Stream parameters with Oracle PrepareExecute are not supported yet.");
                 if (streams && clientFallback) throw new NotSupportedException("Stream parameters require server preparation without client fallback.");
                 if (clientFallback || streams)
                 {

@@ -219,6 +219,11 @@ namespace OceanBaseConnector.Internal.Session
 #if NET8_0_OR_GREATER
                 error.FailedBatchCommand = BatchCommand;
 #endif
+                if (_longDataPending && !_sqlSent && Mode == OceanBaseCompatibilityMode.Oracle)
+                {
+                    ResponseComplete();
+                    _session.Break(); // A piece error does not prove that staged parameter data was cleared.
+                }
                 if (_cursorOwned) _session.Break();
                 Complete(error);
                 throw error;

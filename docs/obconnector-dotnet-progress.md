@@ -2,6 +2,33 @@
 
 基线日期：2026-10-17；当前进度更新：2026-10-20。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。
 
+## M07 Oracle二进制流参数本地实施（2026-10-20）
+
+c9e967c后继续落实架构M07已列明的Oracle PIECE_DATA。复用Stream输入、参数快照、经典prepare/execute及会话命令预算；不加连接选项、公开类型、依赖、服务或后台任务。固定Java 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的OBStreamParameter.writePieceData/Utils.encodeHexStr/AbstractQueryProtocol.executePreparedQuery/ComStmtExecute给出0xA2、位置头、piece标志、大写hex、长度LE64、逐块应答及EXECUTE类型254/无inline依据，只参考行为、不复制源码。
+
+8KiB块加一字节前瞻替代不可靠的available()；短读不是EOF，精确保留前瞻字节，单块/空流LAST、多块FIRST/NEXT/LAST。固定8193字节原始缓冲和16401字节报文缓冲，不读取Length、不seek、不物化全流。累计预算计入hex膨胀和EXECUTE固定头。每块只接受完整OK、应用会话变量并结束标准/OB20边界后才发下一请求；块ACK计数不进入用户RecordsAffected，不提前释放命令租约。块ERR保留服务端码，但必须销毁污染会话；EXECUTE后可信ERR仍沿原契约。真实版本门槛没有来源，不借用Java驱动版本。
+
+首批8项公开同步/异步空/单/多块测试均因Oracle流尚不支持而失败（piece-data-red/），最小实现后连同原MySQL15项共23通过（piece-data-green/）。设计复核要求明确8192/8193/16384及持续单字节短读，均已覆盖。代码走查发现同源重复绑定会使后位置静默变空：先用Oracle重复名称/独立两参数及MySQL两参数共6项证明缺少发包前拒绝（piece-data-identity-red/），再以标准ConditionalWeakTable按引用身份在快照/发包前拒绝；不调用用户Equals，不新增重放/seek/缓冲。修复已独立复核，无剩余确认缺陷。
+
+最终定向102项通过（piece-data-focused-reviewed/），其中新增45项含上述6项，保留原MySQL及客户端prepare回退回归。覆盖混合inline/多流、快照、Prepare不读/当前位置/重复空流/NULL、非法声明及未接入组合、源前后失败、块ERR/坏OK/额外结果/游标/断流、执行ERR/未知结果、等待ACK时独占/取消/超时、ACK后会话报告及源忽略token时立即断会话、按需生成的64MiB编码预算溢出。
+
+五资产新增20项同步/异步×标准/OB20消费，初次与原LONG_DATA20项合跑为20通过/20失败（piece-data-consumer-focused/）：新夹具的首次EXECUTE普通OK未保留会话事实，重复执行触发既有时区/编码探测，而脚本错误期待下一块。仅改为复用既有Report(ob20,1)报告，不改产品或绕过模式门槛；修后40项全部通过（piece-data-consumer-reviewed/）。格式首轮遇沙箱命名管道权限失败；同范围正常权限只读验证0文件需调整。隔离包验证首轮因沙箱Windows SSL凭据限制无法访问NuGet；正常权限运行现有脚本通过，不修改凭据、信任根或产品。
+
+| 最终检查 | 结果 | 原始证据 |
+| --- | --- | --- |
+| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/piece-data-build-final.log |
+| 完整Unit | 3085通过，0失败/跳过；原3040项保留，新增45项 | TestResults/piece-data-unit-final/、piece-data-unit-inventory.json |
+| 完整Consumer | 2046通过，0失败/跳过；原2026项保留，新增20项 | TestResults/piece-data-consumer-final/ |
+| 完整DI | 14通过，0失败/跳过 | TestResults/piece-data-di-final/ |
+| 范围格式 | 8个源码/测试文件无需调整 | TestResults/piece-data-format-reviewed.log |
+| 双包及五资产实际包消费 | 双包及消费通过；实际8.0.32/9.0.21/10.0.13 | TestResults/piece-data-pack.log、piece-data-package-verified.log |
+
+本轮命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录。完整测试期间不重建产品/测试程序集，产品SHA256保留在TestResults/piece-data-product-hashes-final.json。范围dotnet format whitespace --no-restore --verify-no-changes；dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/piece-data-packages；pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/piece-data-packages。实际包消费者、包副本及restore图保留于TestResults/package-validation/7cacff6f6a1e4c75871a12405b674cab/，两个Standard宿主为10.0.13；包基本样例不证明各运行时完成PIECE_DATA SQL验收。
+
+三份完整TRX均Completed，全部Passed、0失败/跳过/中止；与上一模块逐项核对，原案例移除0，新增Unit45/Consumer20，详见TestResults/piece-data-inventory-final.json。最终15个产品DLL的SHA256与构建后完全一致，testhost进程已全部退出；双包各含5个产品DLL，无测试程序/模拟报文代码。独立代码及文档复核无剩余阻断，最终UTF8无BOM/CRLF与diff检查通过，仅提交功能、测试和文档。
+
+本轮尚未接入的Oracle PrepareExecute/数组绑定流组合、文本流明确拒绝，不用空inline值假装成功，后续范围需继续与原需求核对。真实Oracle/OBProxy对piece序列、hex类型、清理和版本接受范围，以及Linux/Windows部署均按用户要求不执行、未验证。所有环回响应仅在tests，不进入产品包、不安装常驻服务；A05/C01、D15延后范围及许可/真实矩阵/发布关口继续开放，本模块不关闭整体目标，不发布、不推送。
+
 ## M07 MySQL二进制流参数本地实施（2026-10-20）
 
 40beb9b后逐项对照架构M01–M16及开发方案A/B/C/D/R，发现M07长参数优化尚未实现，也未落入D06数组绑定。先接入MySQL LONG_DATA；Oracle PIECE_DATA存在独立应答与条件，保持后续未实现项。本轮复用DbParameter.Value、现有参数快照/prepare/execute、PacketChannel的offset/count及原会话/命令预算，不增连接选项、依赖或服务。公开流所有权、Size限制、取消与Prepare边界见README和开发方案M07。

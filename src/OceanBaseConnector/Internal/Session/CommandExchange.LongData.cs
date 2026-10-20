@@ -9,6 +9,7 @@ namespace OceanBaseConnector.Internal.Session
     {
         internal void SendLongData(uint statement, OceanBaseParameter[] parameters, int inlineBytes)
         {
+            if (Mode == OceanBaseCompatibilityMode.Oracle) { SendPieceData(statement, parameters, inlineBytes); return; }
             byte[]? packet = null;
             long remaining = PacketChannel.DefaultMaxPacketSize - 10 - inlineBytes;
             for (var i = 0; i < parameters.Length; i++)
@@ -35,6 +36,7 @@ namespace OceanBaseConnector.Internal.Session
 
         internal async Task SendLongDataAsync(uint statement, OceanBaseParameter[] parameters, int inlineBytes)
         {
+            if (Mode == OceanBaseCompatibilityMode.Oracle) { await SendPieceDataAsync(statement, parameters, inlineBytes).ConfigureAwait(false); return; }
             byte[]? packet = null;
             long remaining = PacketChannel.DefaultMaxPacketSize - 10 - inlineBytes;
             for (var i = 0; i < parameters.Length; i++)
