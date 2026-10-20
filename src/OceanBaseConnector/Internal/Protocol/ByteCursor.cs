@@ -159,6 +159,13 @@ namespace OceanBaseConnector.Internal.Protocol
             ReadLengthEncodedInteger();
         }
 
+        internal long? ReadNullableLengthEncodedInteger()
+        {
+            EnsureAvailable(1);
+            if (_data[_offset + _position] == 0xFB) { _position++; return null; }
+            return ReadLengthEncodedInteger();
+        }
+
         public byte[] ReadLengthEncodedBytes()
         {
             var length = ReadLengthEncodedInteger();

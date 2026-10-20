@@ -33,6 +33,21 @@ namespace OceanBaseConnector.UnitTests
             => new OceanBaseComplexMember(name, null, "RAW", null, new ComplexType(type));
 
         [Theory]
+        [InlineData("Thing")]
+        [InlineData("")]
+        public void ComplexColumnMetadataKeepsNullVersionDistinctFromZero(string name)
+        {
+            var packet = ComplexColumn(name: name);
+            packet[packet.Length - (name.Length == 0 ? 2 : 1)] = 251;
+            var column = ResultColumn.Parse(packet, OceanBaseCompatibilityMode.Oracle);
+            Assert.Null(column.ComplexMetadata!.Version);
+            Assert.Equal(name.Length == 0 ? (byte?)203 : null, column.ComplexMetadata.ElementType);
+            var zero = ResultColumn.Parse(ComplexColumn(name: name), OceanBaseCompatibilityMode.Oracle);
+            Assert.False(column.ComplexMetadata.Matches(zero.ComplexMetadata));
+            Assert.True(column.ComplexMetadata.Matches(ResultColumn.Parse(packet, OceanBaseCompatibilityMode.Oracle).ComplexMetadata));
+        }
+
+        [Theory]
         [InlineData(0)] [InlineData(250)] [InlineData(251)] [InlineData(4294967296)] [InlineData(long.MaxValue)]
         public void ComplexColumnMetadataPreservesIdentityVersionAndFieldBoundaries(long version)
         {
@@ -96,7 +111,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("missing")] [InlineData("truncated")] [InlineData("null-version")]
+        [InlineData("missing")] [InlineData("truncated")] [InlineData("null-name")]
+        [InlineData("null-schema")] [InlineData("missing-version")]
         [InlineData("overflow-version")] [InlineData("long-name")] [InlineData("nul-name")]
         [InlineData("utf8-name")] [InlineData("missing-element")] [InlineData("trailing")]
         public void ComplexMetadataRejectsMalformedExtensions(string kind)
@@ -106,7 +122,9 @@ namespace OceanBaseConnector.UnitTests
             {
                 case "missing": extension = Array.Empty<byte>(); break;
                 case "truncated": extension = new byte[] { 2, 65 }; break;
-                case "null-version": extension = new byte[] { 0, 1, 84, 251 }; break;
+                case "null-name": extension = new byte[] { 0, 251, 0 }; break;
+                case "null-schema": extension = new byte[] { 251, 1, 84, 0 }; break;
+                case "missing-version": extension = new byte[] { 0, 1, 84 }; break;
                 case "overflow-version": extension = new byte[] { 0, 1, 84, 254, 0, 0, 0, 0, 0, 0, 0, 128 }; break;
                 case "long-name": extension = new byte[] { 252, 1, 2 }; break;
                 case "nul-name": extension = new byte[] { 1, 0, 1, 84, 0 }; break;

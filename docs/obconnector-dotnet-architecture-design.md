@@ -247,6 +247,8 @@ Real Oracle 4.4.2.2 can also mark PL outputs with `PS_OUT_PARAMETERS` in the col
 
 Oracle DbType.Binary parameters use native RAW wire type 203 and retain length-prefixed raw bytes. MySQL binary parameters use type 252; Oracle streamed binary inputs use their separate type 254 path. This distinction is verified by real fixed-byte RAW probes and binary/temporary-BLOB acceptance; do not route Oracle RAW through VARCHAR or MySQL BLOB types.
 
+Oracle complex-column type versions may be NULL. Preserve that absence distinctly from version zero while keeping numeric bounds and exact cursor metadata comparisons. Required schema/type-name fields and ordinary length/count fields still reject NULL. Parsing an absent version does not authorize guessing a missing type owner or binding a same-named cached layout.
+
 Oracle routine catalogs explicitly cast OVERLOAD to VARCHAR2(40), preserving the documented string schema contract even when the server dictionary exposes NUMBER. Other numeric directory fields retain their declared types; shared row conversion remains strict.
 
 Unconstrained scalar PL NUMBER outputs on this target report precision zero and scale -1. Only output capture treats that combination as unconstrained, preserving the exact runtime value while still checking syntax, unsignedness and Oracle NUMBER limits. Ordinary columns can legitimately use the same metadata for `NUMBER(*,-1)` and continue enforcing their declared scale; do not normalize this combination globally. Specified numeric outputs and array binding retain their existing decoding paths.

@@ -111,6 +111,7 @@ namespace OceanBaseConnector.ConsumerTests
                 anonymousColumn = anonymousColumn.Concat(new byte[] { 0, 0, 0, 203 }).ToArray();
                 for (uint requestId = 7; requestId < 9; requestId++)
                 {
+                    if (requestId == 8) { complexColumn[complexColumn.Length - 1] = 251; anonymousColumn[anonymousColumn.Length - 2] = 251; }
                     var request = await ReadRequest(stream, channel, ob20, requestId, budget.Token); Assert.Equal(23, request[0]); Assert.Equal(19, request[1]);
                     var typeHeader = new byte[] { 160, 0, (byte)complexName.Length }.Concat(complexName)
                         .Concat(new byte[] { 10 }).Concat(Encoding.UTF8.GetBytes("Mixed_Type")).Concat(new byte[] { 0 }).ToArray();

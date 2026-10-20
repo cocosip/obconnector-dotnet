@@ -2,6 +2,25 @@
 
 Baseline date: 2026-10-17; progress updated: 2026-10-20. References: [Architecture design](obconnector-dotnet-architecture-design.md) and [Development plan](obconnector-dotnet-development-plan.md).
 
+## Oracle nullable complex type versions (2026-10-20)
+
+Real named-complex prepare metadata can encode its version as the length-encoded NULL marker. ComplexColumnMetadata now retains a nullable version instead of passing it through the strict non-NULL integer reader. The new internal nullable reader consumes exactly one NULL byte and delegates all numeric encodings to the existing bounded reader. Ordinary count/length readers remain strict; NULL versions remain distinct from version zero during cursor metadata matching.
+
+Two named/anonymous regressions first failed on the NULL marker. All **333** complex/byte-cursor/Oracle-XA Unit cases and **40** complex Consumer cases then passed. Existing consumer scripts retain numeric versions on their first execution and exercise named/anonymous NULL versions on the second execution and PL outputs across five assets, standard/OB20 and local TLS. Former NULL-version rejection was replaced with required schema/name NULL and missing-version rejection; overflow, truncation and exact trailing-boundary checks remain. Full Release build has zero warnings/errors; scoped production whitespace, diff and private-value checks passed; independent review found no actionable issues (`TestResults/complex-version-*`).
+
+This repairs parsing only. Real complex.object now reaches a separate missing-schema identity lookup failure and remains failed. A names-free metadata comparison confirms that the server omits the type schema while returning the exact generated type name and a column database matching its owner (`TestResults/live-oracle-complex-identity-01.log`). No owner is inferred from usernames or a same-named cached type. The collection-valued table CREATE still fails with 600/0A000. All four owned entries from the focused complex run and both entries from the identity probe are independently absent; no owned prepared XA branches remain.
+
+Consolidated current acceptance (`TestResults/live-{oracle,mysql}-consolidated-01.json`):
+
+| Mode | Passed | Failed | Skipped | Cleanup callback failures |
+| --- | ---: | ---: | ---: | ---: |
+| MySQL, including bounded cancellation/timeout | 38 | 0 | 27 | 0 |
+| Oracle | 45 | 5 | 15 | 3 |
+
+Oracle failures remain array binding (600/HY004), named complex layout identity, collection-valued table CREATE (600/0A000), and the two DBMS_XA workflows. No failures were weakened or relabeled. Independent inventories checked **39 Oracle** and **28 MySQL** exact owned entries with zero remaining objects; no owned prepared branches remained. Both Oracle XIDs were rolled back; both MySQL XIDs were already absent. Reports/diagnostic text and reachable Git history contain no supplied private values. Deployment, publication and push remain unperformed.
+
+Next live work is to establish safe schema resolution for omitted complex owners, capture exact DBMS_XA phase completion status/counters, and isolate the rejected array-binding request. Collection-valued table support and skipped transport/topology/coordinator/runtime matrices remain explicit acceptance gaps; no speculative driver fallback or deployment is authorized by these results.
+
 ## Oracle routine catalog OVERLOAD compatibility (2026-10-20)
 
 The real ALL_PROCEDURES and ALL_ARGUMENTS directories return OVERLOAD as NUMBER, while Procedures/ProcedureParameters expose that column as a string. Both Oracle SELECT lists now project CAST(OVERLOAD AS VARCHAR2(40)) AS OVERLOAD. Public column types/order, NULLs, numeric SUBPROGRAM_ID, parameterized restrictions, shared strict row conversion and MySQL queries remain unchanged.
