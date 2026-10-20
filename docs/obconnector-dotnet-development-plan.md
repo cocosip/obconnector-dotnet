@@ -384,6 +384,22 @@ C04 游标本地实施（2026-10-19，沿用既有 TDD/独立走查，合并进�
 
 本轮走查的租约释放早于游标ERR销毁、二进制行冒充FE-OK确认、中间页遗漏会话报告、初始空结果重复清除报告等缺陷均以先失败回归修复。同步/异步、默认/顺序读取、两模式/两类EOF共16种分页组合及Oracle弃用EOF空结果首次fetch已覆盖；五资产隔离消费覆盖Oracle旧/弃用EOF。确认包形态和省略规则见架构§3，实库游标资源/内存/吞吐仍待验证，C04本地代码完成不关闭G3。最终Release核心五/DI三目标0警告0错误，Windows Unit1037/Consumer111/DI8全部通过（TestResults/c04-cursor-*-final-checked.trx）；格式、双包、统一版本及按TFM的Microsoft.Extensions依赖矩阵通过，独立复查无剩余必须修复项。
 
+### M08 Oracle带偏移量Fetch本地实施（2026-10-20）
+
+依据架构M08的后续项和固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1：AbstractConnectProtocol.supportFetchWithOffset要求Oracle、服务端prepare、显式选项及OceanBase>=2.2.5；AbstractQueryProtocol.fetchRowViaCursorForOracle给出19字节请求，CursorResultSet.getCursorFetchData确认每页行终态之后另有尾OK。保留现有五目标、无新依赖，在当前checkout实现、测试、走查后本地提交，不推送。
+
+本轮选择命令级UseCursorOffset（bool，默认false），与正FetchSize共同启用经典服务端预处理的Oracle向前游标；不扩展ADO.NET reader的滚动API，也不改变REF CURSOR。执行时在同一exchange/总超时内复用ob_version()严格查询/解析，物理会话缓存版本供本功能与PrepareExecute共享；PrepareExecute的2.2.76门槛不降低。错误模式/非正FetchSize在发送前拒绝；低版本/不可识别版本不发送prepare/execute/fetch，不静默退回普通fetch。
+
+请求沿Packet中非滚动游标的OCI_FETCH_NEXT=2、offset=0、末字段=1，id/行数LE32，orientation LE16。每页保留现有重发元数据、二进制行及EOF/FE-OK校验；尾OK须完整有效，无多结果/OUT、lastInsertId为0、affectedRows与累计向前行位置一致。位置计数不进入RecordsAffected。必须收到尾OK并验证标准/OB20边界后才发下一fetch或完成命令，缺失/错误/尾ERR/取消/断流均销毁原会话且不重放。
+
+证据边界：Java实际next()沿ABSOLUTE，NEXT/零偏移来自协议常量与非滚动说明；累计位置相等是本实现的严格约束，Java仅提供尾affectedRows作为位置的依据。不能据此声称真实服务端已支持这两个约定，真实矩阵继续开放。
+
+文件范围：OceanBaseCommand.cs属性/执行快照与版本准入；PhysicalSession.cs及CommandExchange.OraclePrepareExecute.cs共享版本事实；QueryResult.cs/QueryResult.Cursor.cs/QueryResult.Sequential.cs处理扩展包及尾终态。新增CursorOffsetTests.cs、CursorOffsetConsumerTests.cs，复用现有环回/故障流/OB20 helper；同步README、架构与台账。
+
+- [x] 先用反射设置新属性的公开行为回归证明缺口：两类EOF、同步/异步、默认/SequentialAccess、多页含空末页、版本边界/缓存及发包前拒绝。
+- [x] 实现最小共享路径；尾OK延迟/ERR/截断/坏计数/标志/边界、取消、提前关闭及同statement复用均有回归；五资产标准/OB20实际公开消费证明资产契约。
+- [x] 核心五/DI五Release、完整Unit2994/Consumer1974/DI14、格式/diff/双包消费检查及独立只读代码走查均通过；修复并复验后更新证据，随本模块本地提交。实库数据/版本/OBProxy及Linux/Windows部署不执行，明确未验证。
+
 ### C05 数据库目录元数据
 
 **产物：**`DbConnection.GetSchema` 的首批集合、限制参数与现代 `GetSchemaAsync`；C 阶段实现 MySQL 模式 `ChangeDatabase` 和真实异步的 `ChangeDatabaseAsync`，Oracle 模式在发包前明确报不支持。MySQL 与 Oracle 模式的目录元数据分别使用对应系统视图，不复用错误方言。

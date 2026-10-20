@@ -14,6 +14,10 @@ namespace OceanBaseConnector.Internal.Protocol
         private bool _cursorActive;
         private bool _cursorNeedsFetch;
         private int _cursorRows;
+        private readonly bool _cursorOffset;
+        private bool _cursorOffsetTailPending;
+        private ServerStatusFlags _cursorEndFlags;
+        private long _cursorPosition;
 
         private bool CursorMetadataOmitsEof => _cursorId.HasValue && DeprecatedEof && _query.Mode == OceanBaseCompatibilityMode.Oracle;
 
@@ -62,7 +66,11 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private byte[] FetchPacket()
         {
-            return CursorFetchPacket(_cursorId!.Value, _fetchSize);
+            var packet = CursorFetchPacket(_cursorId!.Value, _fetchSize);
+            if (!_cursorOffset) return packet;
+            Array.Resize(ref packet, 19);
+            packet[9] = 2; packet[15] = 1;
+            return packet;
         }
 
         internal static byte[] CursorFetchPacket(uint id, int rows)
@@ -77,6 +85,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (!_cursorNeedsFetch) return;
             _query.ValidateResponseBoundary();
             _query.Send(FetchPacket(), executesSql: false); _cursorNeedsFetch = false; _cursorRows = 0;
+            _cursorOffsetTailPending = _cursorOffset;
             if (_query.Mode != OceanBaseCompatibilityMode.Oracle) return;
             ValidateFetchHeader(_query.Receive());
             for (var i = 0; i < Columns.Length; i++) ValidateFetchColumn(i, _query.Receive());
@@ -89,6 +98,7 @@ namespace OceanBaseConnector.Internal.Protocol
             token.ThrowIfCancellationRequested();
             _query.ValidateResponseBoundary();
             await _query.SendAsync(FetchPacket(), executesSql: false, readerToken: token).ConfigureAwait(false); _cursorNeedsFetch = false; _cursorRows = 0;
+            _cursorOffsetTailPending = _cursorOffset;
             if (_query.Mode != OceanBaseCompatibilityMode.Oracle) return;
             ValidateFetchHeader(await _query.ReceiveAsync(token).ConfigureAwait(false));
             for (var i = 0; i < Columns.Length; i++) ValidateFetchColumn(i, await _query.ReceiveAsync(token).ConfigureAwait(false));
@@ -119,6 +129,7 @@ namespace OceanBaseConnector.Internal.Protocol
             do
             {
                 FetchCursor(); var row = ParseRow(_query.Receive());
+                if (row == null && _cursorOffsetTailPending) EndCursorTail(_query.Receive());
                 if (row == null && _oracleTailPending) ReadOracleTail();
                 if (row != null || !_cursorNeedsFetch) return row;
             } while (true);
@@ -129,9 +140,21 @@ namespace OceanBaseConnector.Internal.Protocol
             do
             {
                 await FetchCursorAsync(token).ConfigureAwait(false); var row = ParseRow(await _query.ReceiveAsync(token).ConfigureAwait(false));
+                if (row == null && _cursorOffsetTailPending) EndCursorTail(await _query.ReceiveAsync(token).ConfigureAwait(false));
                 if (row == null && _oracleTailPending) await ReadOracleTailAsync(token).ConfigureAwait(false);
                 if (row != null || !_cursorNeedsFetch) return row;
             } while (true);
+        }
+
+        private void EndCursorTail(byte[] packet)
+        {
+            var ok = OkPacket.Parse(packet, _query.Capabilities);
+            var position = checked(_cursorPosition + _cursorRows);
+            ValidateCursorFlags(ok.StatusFlags);
+            if (ok.AffectedRows != position || ok.LastInsertId != 0)
+                throw new ProtocolException("Invalid offset fetch completion counters.");
+            _cursorPosition = position; _cursorOffsetTailPending = false;
+            End(_cursorEndFlags, ok);
         }
     }
 }

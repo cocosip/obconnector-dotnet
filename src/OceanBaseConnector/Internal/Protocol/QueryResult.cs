@@ -16,13 +16,14 @@ namespace OceanBaseConnector.Internal.Protocol
         private long _affected = -1;
         private bool _faulted;
         private int _metadataBytes;
-        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true, bool sequential = false, uint? cursorId = null, int fetchSize = 0, int? oracleParameterCount = null, OracleCommandPlan? oraclePlan = null, bool refCursor = false)
+        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true, bool sequential = false, uint? cursorId = null, int fetchSize = 0, int? oracleParameterCount = null, OracleCommandPlan? oraclePlan = null, bool refCursor = false, bool cursorOffset = false)
         {
             _query = query; IsBinary = binary; _completeExchange = completeExchange; _sequential = sequential; _cursorId = cursorId; _fetchSize = fetchSize;
             if (oracleParameterCount.HasValue && (!binary || cursorId.HasValue || query.Mode != OceanBaseCompatibilityMode.Oracle || (uint)oracleParameterCount.Value > ushort.MaxValue))
                 throw new ArgumentException("Oracle PrepareExecute requires a binary Oracle response without a fetch cursor.", nameof(oracleParameterCount));
             _oracleParameterCount = oracleParameterCount; _oracleHeaderPending = oracleParameterCount.HasValue;
             _oraclePlan = oraclePlan; _refCursorInitial = refCursor;
+            _cursorOffset = cursorOffset;
             if (cursorId.HasValue) query.OwnCursor(refCursor);
         }
         internal bool IsBinary { get; }
@@ -118,6 +119,8 @@ namespace OceanBaseConnector.Internal.Protocol
         private void End(ServerStatusFlags flags, OkPacket? ok = null)
         {
             _query.ObserveSessionState(ok);
+            // Offset fetch has a separate tail OK; the row terminator cannot release the lease.
+            if (_cursorOffsetTailPending) { ValidateCursorFlags(flags); _cursorEndFlags = flags; return; }
             if (_cursorActive && !EndCursorBatch(flags)) return;
             _ended = true;
             // PrepareExecute always has a final execution OK/ERR after its row terminator.

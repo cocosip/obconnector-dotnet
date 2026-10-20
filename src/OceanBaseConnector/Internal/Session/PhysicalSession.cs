@@ -33,7 +33,8 @@ namespace OceanBaseConnector.Internal.Session
         internal bool UseOraclePrepareExecute => _options.UseOraclePrepareExecute;
         internal bool UseLobLocators => _options.UseLobLocators && Info?.Mode == OceanBaseCompatibilityMode.Oracle &&
             (Info.Capabilities.Effective & CapabilityFlags.ClientSupportLobLocator) != 0;
-        internal bool? OraclePrepareExecuteSupported { get; set; }
+        internal bool OracleVersionLoaded { get; set; }
+        internal Version? OracleVersion { get; set; }
 
         public PhysicalSession(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? addressResolver = null, EndpointSelector? endpointSelector = null)
         {

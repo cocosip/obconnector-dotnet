@@ -2,6 +2,35 @@
 
 基线日期：2026-10-17；当前进度更新：2026-10-20。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。
 
+## M08 Oracle扩展Fetch本地实施（2026-10-20）
+
+对照架构M08与源码，普通9字节Fetch和REF CURSOR已经存在，实际缺口是显式Oracle扩展Fetch。五资产新增命令级UseCursorOffset，默认false、须正FetchSize及认证后Oracle模式；经典服务端prepare，首次执行严格探测ob_version()>=2.2.5。版本缓存在物理会话并与PrepareExecute共享，后者原有显式选项及2.2.76门槛不变；关闭重开不复用旧会话缓存。独立Prepare不探测或Fetch，执行时才准入，无静默回退。
+
+固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的AbstractConnectProtocol.java:1783、AbstractQueryProtocol.java:1423、Packet.java:117及CursorResultSet.java:222提供准入、19字节扩展请求、方向常量和独立尾OK依据。这里选择NEXT=2、offset=0、末字段=1，保留向前只读reader而不添加滚动API；Java实际next()调用ABSOLUTE，本选择来自协议说明，尚无真实服务端往返证据。尾affectedRows按累计行位置严格相等校验，是本实现的一致性约束，不能当作已证明的服务端保证。
+
+每页行终态后保留租约直至完整尾OK及标准/OB20边界通过；尾OK的位置不污染RecordsAffected，额外会话报告正常应用。缺尾、畸形、非法计数/标志、取消、超时及断流销毁游标会话且不重放，完整尾ERR保留已知失败。普通9字节Fetch及REF CURSOR路径不变。
+
+实现前14项回归全部失败（cursor-offset-red/），随后实现通过；扩展后52项Unit定向全通过（cursor-offset-unit-reviewed/）。涵盖同步/异步、两类EOF、默认/顺序读取、多页/空末页/空结果、版本边界/缓存/重开/显式Prepare、statement复用、尾OK延迟/取消/关闭/超时/预取消、ERR/缺失/截断/坏计数/标志、无进展/超量/丢游标和中间/最终页时区报告。五资产×同步/异步×标准/OB20的Consumer新增100项通过（cursor-offset-consumer-green/）；同步覆盖默认读取，异步覆盖SequentialAccess，两类EOF组合另由Unit覆盖。
+
+Consumer初始两轮各100失败（cursor-offset-consumer-focused/、cursor-offset-consumer-diagnosis/），根因是新夹具版本查询终态未报告会话时区，驱动依法补发时区查询而夹具错误期待PREPARE。增加服务端异常聚合定位后补齐既有Report终态；未放宽产品初始化或协议校验。cursor-offset-consumer-rebuild.log使用无匹配过滤器，仅用于重建，不计测试通过。以上失败证据均保留。
+
+| 最终检查 | 结果 | 原始证据 |
+| --- | --- | --- |
+| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/cursor-offset-build-final.log |
+| 完整Unit | 2994通过，含新增52；0失败/跳过 | TestResults/cursor-offset-unit-final/*.trx |
+| 完整Consumer | 1974通过，含新增100；0失败/跳过 | TestResults/cursor-offset-consumer-final/*.trx |
+| 完整DI | 14通过，0失败/跳过 | TestResults/cursor-offset-di-final/*.trx |
+| 范围格式 | 9个源码/测试文件无需格式调整 | TestResults/cursor-offset-format.log |
+| 双包及五资产实际包消费 | 包内容/依赖组/隔离哈希及新API编译消费通过，0警告/错误 | TestResults/cursor-offset-pack.log、cursor-offset-package-verification.log；TestResults/package-validation/3f7fbe714de140768dd7498145f17c15/ |
+
+三份最终TRX状态均为Completed，每项UnitTestResult均通过，无失败/跳过/中止；上轮保存点的2942个Unit和1874个Consumer用例名全部保留。git diff --check通过，最终只更新文档不改变已测程序集。本模块按用户要求测试、走查后本地提交，不推送；临时环回协议夹具仅位于tests中，不进入产品包、不安装常驻服务。
+
+包基础样例实际运行于.NET8.0.32/9.0.21/10.0.13，两个Standard由10.0.13隔离消费；它直接使用UseCursorOffset，但不执行SQL，不能作为该功能在8/9运行时上的协议验收。跨资产Consumer宿主仍是.NET10。独立只读设计/代码走查完成，复核版本缓存、尾边界、取消/独占与资产契约，无剩余阻断；建议的会话报告、无进展/超量及预取消回归已补齐并通过。
+
+本轮命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录；定向加FullyQualifiedName~CursorOffset。范围格式使用dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-changes --include对应9文件 --verbosity diagnostic。打包dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/cursor-offset-packages，再pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/cursor-offset-packages。使用正常本地Windows TLS私钥权限，不改变系统信任根或依赖版本；没有并发重建完整测试使用的程序集。
+
+本模块不关闭整体目标。A05可信MySQL识别、C01完整重置及池化、D15 Standard GSSAPI/其他机制、真实矩阵与许可/包名发布门槛仍开放。按用户要求，真实数据库/OBProxy、NEXT/位置约定兼容、Linux/Windows部署均不执行、未验证。
+
 ## M05 现代事务保存点本地实施（2026-10-20）
 
 本轮结合架构M05、开发方案和当前代码确认保存点为实际功能缺口，而不是继续追加TLS组合。固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的OceanBaseConnection.java:1515–1558及1127–1140提供两模式语句/Oracle不支持释放的行为依据；没有连接真实数据库。现代net8/net9/net10现覆写SupportsSavepoints、Save/SaveAsync、Rollback(name)/RollbackAsync(name)、Release/ReleaseAsync；两个Standard资产不补同名API。

@@ -53,6 +53,9 @@ public static class PackageConsumer
         var parameter = factory.CreateParameter();
         Check(connection.GetType() == typeof(OceanBaseConnection), "Connection type identity");
         Check(command.GetType() == typeof(OceanBaseCommand), "Command type identity");
+        var cursorCommand = (OceanBaseCommand)command;
+        Check(!cursorCommand.UseCursorOffset, "Offset fetch is opt-in");
+        cursorCommand.UseCursorOffset = true; cursorCommand.FetchSize = 1;
         Check(parameter.GetType() == typeof(OceanBaseParameter), "Parameter type identity");
         var number = new OceanBaseDecimal(12.34m);
         parameter.Value = number;

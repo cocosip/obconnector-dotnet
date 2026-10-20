@@ -19,6 +19,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (payload.FirstByte == 254 && payload.FirstFrameLength < PacketChannel.MaxFramePayload)
                 {
                     ParseRow(payload.ReadAll()); payload.Dispose();
+                    if (_cursorOffsetTailPending) EndCursorTail(_query.Receive());
                     if (_oracleTailPending) ReadOracleTail();
                     if (_cursorNeedsFetch) continue;
                     return null;
@@ -37,6 +38,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (payload.FirstByte == 254 && payload.FirstFrameLength < PacketChannel.MaxFramePayload)
                 {
                     ParseRow(await payload.ReadAllAsync(token).ConfigureAwait(false)); payload.Dispose();
+                    if (_cursorOffsetTailPending) EndCursorTail(await _query.ReceiveAsync(token).ConfigureAwait(false));
                     if (_oracleTailPending) await ReadOracleTailAsync(token).ConfigureAwait(false);
                     if (_cursorNeedsFetch) continue;
                     return null;

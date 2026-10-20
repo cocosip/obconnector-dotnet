@@ -36,6 +36,8 @@ namespace OceanBaseConnector
         public override int CommandTimeout { get => _timeout; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _timeout = value; } }
         /// <summary>Rows requested per server cursor fetch; zero uses ordinary result streaming.</summary>
         public int FetchSize { get => _fetchSize; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _fetchSize = value; } }
+        /// <summary>Use Oracle offset fetch for a positive FetchSize; requires OceanBase 2.2.5 or later.</summary>
+        public bool UseCursorOffset { get; set; }
         /// <summary>Allow scalar input text execution only after an unsupported-prepare error (1295/HY000).
         /// Disabled by default; explicit Prepare, cursors and Oracle PrepareExecute never fall back.</summary>
         public bool AllowClientSidePrepareFallback { get; set; }
@@ -78,6 +80,7 @@ namespace OceanBaseConnector
             try
             {
                 if (operation.Oracle != null) execution.EnsureOraclePrepareExecute();
+                if (operation.CursorOffset) execution.EnsureCursorOffset();
                 var zone = execution.EnsureSessionTimeZone();
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = execution.EnsureNationalCharacterSet();
@@ -93,7 +96,7 @@ namespace OceanBaseConnector
                     : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0), executesSql: !IsLobRead);
                 var result = new QueryResult(execution, operation.Oracle != null || statement != null, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize,
-                    oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle);
+                    oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle, cursorOffset: operation.CursorOffset);
                 result.Start();
                 return new OceanBaseDataReader(execution, result, operation.Connection, operation.Session, behavior);
             }
@@ -135,6 +138,7 @@ namespace OceanBaseConnector
             try
             {
                 if (operation.Oracle != null) await execution.EnsureOraclePrepareExecuteAsync(cancellationToken).ConfigureAwait(false);
+                if (operation.CursorOffset) await execution.EnsureCursorOffsetAsync(cancellationToken).ConfigureAwait(false);
                 var zone = await execution.EnsureSessionTimeZoneAsync(cancellationToken).ConfigureAwait(false);
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = await execution.EnsureNationalCharacterSetAsync(cancellationToken).ConfigureAwait(false);
@@ -150,7 +154,7 @@ namespace OceanBaseConnector
                     : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0), executesSql: !IsLobRead).ConfigureAwait(false);
                 var result = new QueryResult(execution, operation.Oracle != null || statement != null, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize,
-                    oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle);
+                    oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle, cursorOffset: operation.CursorOffset);
                 await result.StartAsync(cancellationToken).ConfigureAwait(false);
                 return new OceanBaseDataReader(execution, result, operation.Connection, operation.Session, behavior);
             }
@@ -178,7 +182,7 @@ namespace OceanBaseConnector
             if (_oracleSession != null && !ReferenceEquals(_oracleSession, statement?.Session)) await PreparedStatement.CloseIdleAsync(_oracleSession, _timeout).ConfigureAwait(false);
             _oracleSession = null;
         }
-        private (CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback)
+        private (CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset)
             Start(CommandBehavior behavior, CancellationToken token, bool prepareOnly, int arrayCount = 0)
         {
             lock (_gate)
@@ -196,6 +200,9 @@ namespace OceanBaseConnector
                 if (token.IsCancellationRequested) { CancellationOrigin?.Invoke().ThrowIfCancellationRequested(); token.ThrowIfCancellationRequested(); }
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
                 var session = connection.GetCommandSession(_transaction, SessionOwner);
+                var cursorOffset = !prepareOnly && UseCursorOffset;
+                if (cursorOffset && (_fetchSize == 0 || session.Info!.Mode != OceanBaseCompatibilityMode.Oracle))
+                    throw new NotSupportedException("Offset fetch requires Oracle mode and a positive FetchSize.");
                 if (arrayCount != 0 && (!session.UseOraclePrepareExecute || session.Info!.Mode != OceanBaseCompatibilityMode.Oracle || _transaction == null))
                     throw new NotSupportedException("Array binding requires Oracle mode, Use Oracle Prepare Execute=true and an explicit transaction.");
                 if (RequiredSession != null && !ReferenceEquals(session, RequiredSession))
@@ -252,7 +259,7 @@ namespace OceanBaseConnector
                     oracle.StatementCreated = oracle.Cursors.SetStatement;
                     _oracleSession = session;
                 }
-                return (execution, session, connection, bindings, parameters, binary, fetchSize, oracle, clientFallback);
+                return (execution, session, connection, bindings, parameters, binary, fetchSize, oracle, clientFallback, cursorOffset);
             }
         }
 
@@ -269,7 +276,7 @@ namespace OceanBaseConnector
             return false;
         }
 
-        private PreparedStatement? EnsurePrepared((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback) operation, bool allowFallback = false)
+        private PreparedStatement? EnsurePrepared((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset) operation, bool allowFallback = false)
         {
             InvalidatePreparedDatabase(operation.Session);
             if (_prepared != null) return _prepared;
@@ -278,7 +285,7 @@ namespace OceanBaseConnector
             return statement == null ? null : PublishPrepared(statement, operation.Bindings.Parameters.Length);
         }
 
-        private async Task<PreparedStatement?> EnsurePreparedAsync((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback) operation, CancellationToken token, bool allowFallback = false)
+        private async Task<PreparedStatement?> EnsurePreparedAsync((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset) operation, CancellationToken token, bool allowFallback = false)
         {
             InvalidatePreparedDatabase(operation.Session);
             if (_prepared != null) return _prepared;

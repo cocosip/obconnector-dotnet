@@ -264,7 +264,13 @@ C04 服务端游标使用同一个 `OceanBaseCommand.FetchSize`：默认 0 为�
 
 MySQL execute 的游标确认必须为旧 EOF 或以 `0xFE` 开头的 FE-OK，二进制行的 `0x00` 不能冒充确认。Oracle 旧 EOF 也以元数据终结状态确认游标；协商 ClientDeprecateEof 时，Oracle execute/fetch 均省略元数据 EOF，依据已认证 Oracle 模式及显式只读游标请求进入首次 fetch，以重复元数据和批次状态验证。空结果也必须 fetch 到 `LastRowSent` 才完成。此模式差别参考固定 Java 2.4.14 的 [readResultSetColumnDef](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L2185) 和 [readResultSet](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L2487)，本地协议夹具不是目标版本互通证据。
 
-继续页必须带 `CursorExists` 且至少返回一行，页内行数不得超过 FetchSize；`LastRowSent` 可结束空最终页。多结果/OUT 标记、不确认游标、元数据变化或无进展均失败并销毁会话，绝不回退重执行。默认与 SequentialAccess 共享分页，HasRows 预取首行（顺序模式只读前缀），NextResult 排空所有页。提前关闭、取消、超时或网络故障销毁原会话；完整 ERR 保留已知服务器错误，但在释放租约和日志回调前先销毁游标会话，避免新命令进入未清理游标。每页终结包更新或失效会话状态，不复用旧报告。完整读尽后原 statement 可在同 SQL/会话复用，FetchSize 改回 0 仍使用该 statement 的普通结果流。offset/滚动游标及真实版本/模式/OBProxy验收仍不属于已验证能力；locator值的独立读取见D04；D03的REF CURSOR输出本地接入见下文，A05 的公开 MySQL 握手限制不变。
+继续页必须带 `CursorExists` 且至少返回一行，页内行数不得超过 FetchSize；`LastRowSent` 可结束空最终页。多结果/OUT 标记、不确认游标、元数据变化或无进展均失败并销毁会话，绝不回退重执行。默认与 SequentialAccess 共享分页，HasRows 预取首行（顺序模式只读前缀），NextResult 排空所有页。提前关闭、取消、超时或网络故障销毁原会话；完整 ERR 保留已知服务器错误，但在释放租约和日志回调前先销毁游标会话，避免新命令进入未清理游标。每页终结包更新或失效会话状态，不复用旧报告。完整读尽后原 statement 可在同 SQL/会话复用，FetchSize 改回 0 仍使用该 statement 的普通结果流。滚动游标及真实版本/模式/OBProxy验收仍不属于已验证能力；locator值的独立读取见D04；D03的REF CURSOR输出本地接入见下文，A05 的公开 MySQL 握手限制不变。
+
+M08扩展Fetch：五资产命令级 `UseCursorOffset` 默认false，仅与正FetchSize、已认证Oracle及经典服务端prepare组合。首次执行在同一exchange/超时内严格探测ob_version()，要求>=2.2.5；版本事实缓存在物理会话并与PrepareExecute共享，后者仍要求显式选项及>=2.2.76。显式Prepare本身不探测/取行，执行时准入；无静默回退。扩展请求共19字节，在原9字节后附orientation LE16=2（OCI_FETCH_NEXT）、offset LE32=0和末字段LE32=1；不扩展滚动reader，不改变REF CURSOR。
+
+每页EOF/FE-OK后须另消费完整尾OK；此前不得释放独占租约、发下一Fetch或将reader标为完成。保留现有元数据/页数/无进展校验；尾OK拒绝多结果/OUT及非零lastInsertId，并要求affectedRows等于累计向前行位置，该位置不进入RecordsAffected。尾OK的会话报告按现有规则更新；缺失/畸形/断流/取消/超时均销毁原会话、不重放，完整尾ERR保留已知错误语义并销毁游标会话。
+
+依据固定Java基线AbstractConnectProtocol.java:1783、AbstractQueryProtocol.java:1423、Packet.java:117及CursorResultSet.java:222。Java实际next()使用ABSOLUTE取行；这里的NEXT/零偏移来自协议常量及非滚动游标说明，不是已验证的Java同调用链。尾affectedRows被Java用作位置，但累计行数相等是本实现的严格一致性约束，尚无真实服务端保证。两项推导均须在真实版本/OBProxy矩阵验证；本地标准/OB20、两类EOF、默认/顺序、同步/异步夹具只证明实现与约定一致。
 
 C05 数据库切换本地契约：`ChangeDatabase` 只在已认证 MySQL 模式发送 COM_INIT_DB（命令2），名称按严格 UTF-8 原样编码，不拼接 USE SQL、不转义/折叠大小写/裁剪名称。null、空串、NUL、非法 UTF-16 及超出逻辑包上限在取得租约前失败；具体数据库名合法性与权限由服务端判断。Oracle 模式发包前明确报不支持，不把 schema 切换假装为 database 切换。参考 Java [setCatalog](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/protocol/AbstractQueryProtocol.java#L1882) 的协议命令和模式边界；.NET 额外严格验证 OK 形态，不照搬 Java 的服务端错误文本回显。
 
@@ -561,7 +567,7 @@ Recover仅Idle，使用固定Java观察到的declare x DBMS_XA_XID_ARRAY := DBMS
 | M05 会话与本地事务 | B：生命周期、自动提交、事务与隔离级别，命令显式绑定当前事务；C：可验证重置及 `ChangeDatabase` | B 阶段曾拒绝 `ChangeDatabase`/`ChangeDatabaseAsync`；C05 已实现 MySQL 模式 COM_INIT_DB 及真实异步入口，当前数据库和预处理归属由物理会话管理，真实切换语义仍待实库验证。Oracle 模式明确报不支持，不能把 schema 变化误当 database 切换。保存点按模式验证；现代事务异步方法执行真实异步网络 I/O，`DbTransaction.Save` 等仅在验证后开放，旧 TFM 不补同名平台 API |
 | M06 SQL 与预处理 | B：文本及服务端 prepare/execute；D：Oracle PrepareExecute 与可选客户端预处理 | Java 默认客户端预处理，部分选项强制服务端预处理；.NET 默认不隐式模拟，D07仅在命令显式启用且满足安全标量和精准错误门槛时回退；`CommandType.StoredProcedure` 仅在显式启用Oracle PrepareExecute且版本满足门槛时支持 |
 | M07 参数和批量 | B：模式感知词法解析、位置/名称绑定和常见输入参数；C：逐条 `DbBatch`；D：bulk/array binding、长参数优化 | B 阶段的 Oracle `:name` 需映射为服务端位置参数，不能把名称绑定词法器推迟到客户端预处理阶段；`ParameterDirection.Output`/`InputOutput`、Oracle PIECE_DATA 和 MySQL LONG_DATA 要分别验证，未经支持的方向在执行前报错 |
-| M08 结果与游标 | B：OK/ERR、多结果、文本/二进制逐行读取和默认 `CLIENT_FOUND_ROWS` 计数；C：大值/服务器游标流式读取；D：REF CURSOR输出已本地接入，offset fetch后续 | Reader、游标、原物理会话的生命周期绑定，不透明迁移；Java 的 `useAffectedRows` 可选语义不属于 .NET 首版 |
+| M08 结果与游标 | B：OK/ERR、多结果、文本/二进制逐行读取和默认 `CLIENT_FOUND_ROWS` 计数；C：大值/服务器游标流式读取；D：REF CURSOR输出及显式Oracle offset Fetch已本地接入，真实矩阵待验 | Reader、游标、原物理会话的生命周期绑定，不透明迁移；Java 的 `useAffectedRows` 可选语义不属于 .NET 首版 |
 | M09 类型/字符集/时间 | B：基础标量、低精度 NUMBER/DECIMAL 的 provider-specific 访问、Oracle `DATE` 的日期加时间语义和模式感知映射；C：宽精度 NUMBER/DECIMAL、Oracle TIMESTAMP/TZ/LTZ 纳秒语义与 MySQL 零日期 | Oracle INTERVAL 和 NCHAR/NVARCHAR2 本地实现见 D10/D11/§5；按独立 national 会话编码处理字符值，不用单一类型码表或猜测性解码 |
 | M10 LOB 与复杂类型 | D：locator、流式 LOB、ARRAY/STRUCT 及类型字典 | B/C 只读取已证明安全的内联值；不把 locator 或复杂值当普通字节数组 |
 | M11 元数据 | B：列/结果元数据；C：`GetSchema` 基础集合；D：过程/参数及复杂类型元数据 | MySQL 用对应系统视图，Oracle 用兼容数据字典；集合清单和限制参数需逐项测试 |
