@@ -436,14 +436,22 @@ C05首批目录集合（2026-10-19本地实现，真实字典版本/权限仍待
 | DataSourceInformation | ADO.NET标准17列，见下文 | 无 |
 | Tables | TABLE_CATALOG/TABLE_SCHEMA/TABLE_NAME/TABLE_TYPE:string；仅TABLE/VIEW | catalog、schema、table、type |
 | Columns | TABLE_CATALOG/TABLE_SCHEMA/TABLE_NAME/COLUMN_NAME:string、ORDINAL_POSITION:int、COLUMN_DEFAULT/IS_NULLABLE/DATA_TYPE:string、CHARACTER_MAXIMUM_LENGTH:long、NUMERIC_PRECISION/NUMERIC_SCALE/DATETIME_PRECISION:int | catalog、schema、table、column |
+| Procedures（M11） | ROUTINE_CATALOG/ROUTINE_SCHEMA/ROUTINE_NAME/PACKAGE_NAME/OVERLOAD:string、SUBPROGRAM_ID:int、ROUTINE_TYPE:string | catalog、schema、routine、type、package |
+| ProcedureParameters（M11） | 前七列同Procedures；PARAMETER_NAME:string、ORDINAL_POSITION:int、PARAMETER_MODE/DATA_TYPE:string、DATA_LENGTH:long、NUMERIC_PRECISION/NUMERIC_SCALE/DATETIME_PRECISION:int、TYPE_OWNER/TYPE_NAME/TYPE_SUBNAME:string | catalog、schema、routine、parameter、package |
 
 DataSourceInformation列为CompositeIdentifierSeparatorPattern、DataSourceProductName、DataSourceProductVersion、DataSourceProductVersionNormalized:string；GroupByBehavior:GroupByBehavior；IdentifierPattern:string、IdentifierCase:IdentifierCase、OrderByColumnsInSelect:bool、ParameterMarkerFormat/ParameterMarkerPattern:string、ParameterNameMaxLength:int、ParameterNamePattern/QuotedIdentifierPattern:string、QuotedIdentifierCase:IdentifierCase、StatementSeparatorPattern/StringLiteralPattern:string、SupportedJoinOperators:SupportedJoinOperators。产品名OceanBase、版本保留认证原文，不把MySQL兼容版本前缀猜成OceanBase规范版本；参数标记按模式为`?`或`:{0}`，Oracle名称正则限定驱动实际支持的ASCII字母/下划线开头。Oracle未引用标识大小写不敏感、引用标识敏感；MySQL大小写配置未知，IdentifierCase/QuotedIdentifierCase为Unknown。GroupByBehavior为Unknown；其余无可靠证据的版本规范化、名称长度、引号/文字正则、分组/连接运算符等字段保留DBNull，不发布虚假能力。
 
-四集合都要求连接已打开且无进行中的命令/reader，拒绝环境事务；静态两集合不发包。目录命令快照限制数组，显式绑定当前本地事务并固定原物理会话，关闭重开不能令旧模式查询在新会话执行。使用连接Command Timeout及原命令独占/取消/错误/未知结果不重放契约；权限错误保留服务端错误码，不吞成空结果或切换方言重试。限制数超过集合上限抛ArgumentException；null限制不筛选，空串、百分号、下划线、引号均作为绑定值参与`=`比较，不去引号或改写大小写，比较遵守服务端标识列的排序/比较规则。MySQL catalog映射TABLE_SCHEMA、schema为DBNull；Oracle catalog为DBNull、schema映射OWNER。对不存在标识部分的非null限制返回空表。未给限制时列举当前用户可见对象，不隐式限定当前Database/用户。
+六集合都要求连接已打开且无进行中的命令/reader，拒绝环境事务；静态两集合不发包。目录命令快照限制数组，显式绑定当前本地事务并固定原物理会话，关闭重开不能令旧模式查询在新会话执行。使用连接Command Timeout及原命令独占/取消/错误/未知结果不重放契约；权限错误保留服务端错误码，不吞成空结果或切换方言重试。限制数超过集合上限抛ArgumentException；null限制不筛选，空串、百分号、下划线、引号均作为绑定值参与`=`比较，不去引号或改写大小写，比较遵守服务端标识列的排序/比较规则。MySQL catalog映射TABLE_SCHEMA、schema为DBNull；Oracle catalog为DBNull、schema映射OWNER。对不存在标识部分的非null限制返回空表。未给限制时列举当前用户可见对象，不隐式限定当前Database/用户。
 
 MySQL从INFORMATION_SCHEMA.TABLES/COLUMNS读取，BASE TABLE归一为TABLE；Oracle从ALL_OBJECTS（TABLE/VIEW，排除__recyclebin）/ALL_TAB_COLUMNS读取，DATA_DEFAULT原样保留、NULLABLE归一YES/NO，列序号保留字典COLUMN_ID，字符长度仅对字符类型取CHAR_LENGTH，TIMESTAMP小数精度取DATA_SCALE。按catalog/schema/table及列序号排序，缺失元数据保留DBNull，数值使用精确整数转换并拒绝溢出/小数；文本经精确十进制解析，浮点等不支持的数值表示明确拒绝，不能先舍入再判整数，也不依赖当前文化。固定列名/数量验证防止把不兼容结果误装载；返回DataTable前读到终态并拒绝额外结果集。
 
 源码依据为Java基线JDBC4DatabaseMetaData.getTables/getColumns及OceanBaseOracleDatabaseMetadata和util/DefaultSQLs：沿用两模式字典来源，不复制其字符串插值、模式匹配、JDBC类型码或列序号调整。与Java相比，首批不提供同义词、键/索引、过程/参数、类型/模式等完整集合；差距留D阶段。真实目标版本字典列、ALL_TAB_COLUMNS默认值LONG、列序号、权限可见性及大小写配置仍须实库确认，本地协议/五资产消费不能替代互通验收。
+
+M11后续现接入Procedures/ProcedureParameters：MySQL从INFORMATION_SCHEMA.ROUTINES/PARAMETERS读取，不按名称关联两表，保留ROUTINE_TYPE以区别同名过程/函数，参数例程名来自SPECIFIC_NAME。Oracle从ALL_PROCEDURES列举独立PROCEDURE/FUNCTION及非空PROCEDURE_NAME的PACKAGE成员，包头不作为过程；成员例程名/包名分别取PROCEDURE_NAME/OBJECT_NAME，保留OVERLOAD和SUBPROGRAM_ID，不合并重载，包成员类型未知为DBNull。参数从ALL_ARGUMENTS读取DATA_LEVEL=0、DATA_TYPE非null行，保留原POSITION、PACKAGE_NAME/OVERLOAD/SUBPROGRAM_ID及TYPE_OWNER/TYPE_NAME/TYPE_SUBNAME；不展开嵌套属性或伪造无参行。Oracle参数ROUTINE_TYPE未知为DBNull，不从缺少返回行推断为过程。
+
+两模式参数位置0优先为RETURN，匿名返回名称保留DBNull；Oracle其余IN→IN、OUT→OUT、IN/OUT→INOUT，未知方向为DBNull。DATA_LENGTH为字节，分别来自CHARACTER_OCTET_LENGTH/DATA_LENGTH；Oracle数值precision/scale仅NUMBER/FLOAT，TIMESTAMP系列DATA_SCALE用于DATETIME_PRECISION，不把时间精度混成数值精度。MySQL没有package/overload/subprogram及Oracle类型身份，保持DBNull；package的非null限制返回空表。两集合各5限制、标识部分数4/5，按catalog/schema/package/routine/type/subprogram/overload及参数位置排序，共用既有严格数值转换、单结果终态与失败清理。
+
+Java字段依据为固定基线JDBC4DatabaseMetaData.java:2775、2898、4842、4991和DefaultSQLs；Java Oracle过程目录用ALL_OBJECTS/ALL_ARGUMENTS，参数元数据关联ALL_PROCEDURES，本驱动直接列举ALL_PROCEDURES是为保留无参/包/重载身份作出的设计选择。没有DeriveParameters、隐式参数构造、CLR/DbType推断或复杂参数重建保证。真实字典字段、权限、可见性、重载/无参/包成员及版本/OBProxy仍须实库确认，当前仅有本地协议与消费证据。
 
 B06 本地契约：五目标 reader 的两套 schema 共用 ResultColumn/内部 DbColumn 映射，仅反映当前结果；不额外发 SQL、不缓存整个结果集。返回独立快照，GetColumnSchema 集合只读，调用方修改 schema table 不影响 reader。零行 SELECT 仍保留声明列，直到 NextResult 返回 false 才清空；无列的 OK 结果返回 null schema table/空 column schema。表别名与原始表列名分别保留，GetName 返回标签；原始名称缺失时不猜测来源。MySQL 数据库名映射 BaseCatalogName，Oracle 映射 BaseSchemaName；协议 catalog 标记 def 不是库名。
 
@@ -570,7 +578,7 @@ Recover仅Idle，使用固定Java观察到的declare x DBMS_XA_XID_ARRAY := DBMS
 | M08 结果与游标 | B：OK/ERR、多结果、文本/二进制逐行读取和默认 `CLIENT_FOUND_ROWS` 计数；C：大值/服务器游标流式读取；D：REF CURSOR输出及显式Oracle offset Fetch已本地接入，真实矩阵待验 | Reader、游标、原物理会话的生命周期绑定，不透明迁移；Java 的 `useAffectedRows` 可选语义不属于 .NET 首版 |
 | M09 类型/字符集/时间 | B：基础标量、低精度 NUMBER/DECIMAL 的 provider-specific 访问、Oracle `DATE` 的日期加时间语义和模式感知映射；C：宽精度 NUMBER/DECIMAL、Oracle TIMESTAMP/TZ/LTZ 纳秒语义与 MySQL 零日期 | Oracle INTERVAL 和 NCHAR/NVARCHAR2 本地实现见 D10/D11/§5；按独立 national 会话编码处理字符值，不用单一类型码表或猜测性解码 |
 | M10 LOB 与复杂类型 | D：locator、流式 LOB、ARRAY/STRUCT 及类型字典 | B/C 只读取已证明安全的内联值；不把 locator 或复杂值当普通字节数组 |
-| M11 元数据 | B：列/结果元数据；C：`GetSchema` 基础集合；D：过程/参数及复杂类型元数据 | MySQL 用对应系统视图，Oracle 用兼容数据字典；集合清单和限制参数需逐项测试 |
+| M11 元数据 | B：列/结果元数据；C：`GetSchema` 基础集合；D：过程/参数目录及复杂类型字典已本地接入 | MySQL 用对应系统视图，Oracle 用兼容数据字典；真实字段/权限与版本仍待验证，不自动推导命令参数 |
 | M12 HA/地址发现 | C：建连前顺序切换；D：经拓扑验证的负载均衡/发现 | 不迁移 Java 的 AURORA/REPLICATION 名称或透明重试已发送 SQL |
 | M13 内置池 | C：provider 池与完整重置门槛 | .NET 没有替 provider 提供通用物理池；Java 的已跟踪状态重置不足以证明隔离 |
 | M14 XA | D：固定会话的显式 XA API，分模式命令和恢复 | 不自动等价于 `TransactionScope`，首版显式拒绝环境事务 |

@@ -65,7 +65,7 @@ namespace OceanBaseConnector.ConsumerTests
                 Assert.Throws<InvalidOperationException>(() => connection.GetSchema()); await connection.OpenAsync(budget.Token);
                 Assert.Equal(target.StartsWith("netstandard", StringComparison.Ordinal) ? 0 : 3,
                     connection.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Count(x => x.Name == "GetSchemaAsync"));
-                Assert.Equal(4, (asynchronous ? await connection.GetSchemaAsync(budget.Token) : connection.GetSchema()).Rows.Count);
+                Assert.Equal(6, (asynchronous ? await connection.GetSchemaAsync(budget.Token) : connection.GetSchema()).Rows.Count);
                 var information = asynchronous ? await connection.GetSchemaAsync("DataSourceInformation", budget.Token) : connection.GetSchema("DataSourceInformation");
                 Assert.Equal(17, information.Columns.Count); Assert.Equal("OceanBase", information.Rows[0]["DataSourceProductName"]);
                 var table = asynchronous ? await connection.GetSchemaAsync("Tables", null!, budget.Token) : connection.GetSchema("Tables", null!);

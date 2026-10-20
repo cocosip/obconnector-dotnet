@@ -2,6 +2,43 @@
 
 基线日期：2026-10-17；当前进度更新：2026-10-20。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。
 
+## M11 过程/参数目录本地实施（2026-10-20）
+
+核查发现架构M11的D阶段过程/参数目录尚未落地：现有D02提供过程执行和OUT，C05只提供四个GetSchema集合。本轮细化并接入Procedures/ProcedureParameters，共用现有目录装载、精确整数转换、原事务/RequiredSession/独占、总超时与取消及读尽终态，不新增配置、依赖、DeriveParameters或参数自动构造。五资产同步、现代三资产GetSchemaAsync；原四集合语义和顺序保留，集合清单追加两行。
+
+MySQL直接读取INFORMATION_SCHEMA.ROUTINES/PARAMETERS并保留ROUTINE_TYPE，不通过名称关联两表而混淆同名过程/函数。Oracle直接列举ALL_PROCEDURES的独立过程/函数及包成员，排除包头，保留PACKAGE_NAME/OVERLOAD/SUBPROGRAM_ID；参数读取ALL_ARGUMENTS顶层非占位行，保留原POSITION、返回行及TYPE_OWNER/TYPE_NAME/TYPE_SUBNAME。包成员/参数无法直接确认的例程类型保留DBNull，不从没有返回行推断PROCEDURE。长度按字节，数值和时间精度分别取值。两集合各5个精确协议绑定限制，MySQL无schema/package及Oracle无catalog的非null限制直接返回固定形状空表；详见架构目录表及开发方案M11。
+
+固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的JDBC4DatabaseMetaData.java:2775/2898/4842/4991及DefaultSQLs提供字典字段依据。Java Oracle过程列表使用ALL_OBJECTS/ALL_ARGUMENTS，ALL_PROCEDURES用于参数元数据关联；本驱动直接列举ALL_PROCEDURES是为保留无参/包/重载身份作出的选择，不宣称同一SQL链或真实服务端已验证。不移植Java模式匹配、名称折叠、mysql.proc回退、JDBC类型数字、虚构长度和可空性。
+
+初次新测试编译因Prepared夹具的ushort参数传入int失败（routine-schema-red.log），修正测试参数后22项均失败（routine-schema-red-compiled/），证明缺失集合和相应公开行为。最小实现首轮64通过/2失败（routine-schema-green/）；诊断聚合服务端断言发现，两个Oracle限制用例错误期待发包仍含:p，实际既有预处理绑定器依法改为?（routine-schema-restriction-diagnosis/）。只修测试预期，未改绑定器或放宽产品；修后68通过（routine-schema-focused-fixed/）。
+
+独立设计复核要求明确ALL_PROCEDURES为本驱动选择、未知方向不猜测及同名例程按ROUTINE_TYPE排序，均已落实。代码走查发现旧Batch静态集合计数仍为4，随公开清单更新为6；另补准确过滤左侧字段/CASE及Oracle FUNCTION限制，避免错误绑定包名仍全绿。最终定向77项通过，含新增31个RoutineSchema用例、既有目录及空批次回归（routine-schema-focused-reviewed/）。覆盖两模式/两集合、同步/异步、精确参数、NULL/原始复杂身份、Oracle NUMBER、返回行/重载、错误列名/小数/溢出/额外结果、已知权限ERR复用及异步独占/取消。
+
+Consumer新增32项：两个Standard同步、三个现代同步/异步，分别两模式×两集合，原目录8项一起定向40通过（routine-schema-consumer-focused/）。MySQL仍使用显式认证后事实夹具，不放宽A05；没有追加TLS/OB20矩阵。所有模拟代码只在tests中运行、不会进入产品包或安装常驻服务。独立代码复核已确认修复及新增断言，无剩余阻断。
+
+| 最终检查 | 结果 | 原始证据 |
+| --- | --- | --- |
+| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/routine-schema-build-final.log |
+| 完整Unit | 3025通过，0失败/跳过；原2994项全部保留，新增31项 | TestResults/routine-schema-unit-final/*.trx |
+| 完整Consumer | 2006通过，0失败/跳过；原1974项全部保留，新增32项 | TestResults/routine-schema-consumer-final/*.trx |
+| 完整DI | 14通过，0失败/跳过 | TestResults/routine-schema-di-final/*.trx |
+| 范围格式 | 7个源码/测试文件无需格式调整 | TestResults/routine-schema-format.log |
+| 双包及五资产实际包消费 | 双包生成、五资产消费通过；实际运行时8.0.32/9.0.21/10.0.13 | TestResults/routine-schema-pack.log、routine-schema-package-verification.log |
+
+本轮命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录。Unit定向筛选RoutineSchema/ConnectionSchema/EmptyBatch，Consumer定向RoutineSchema/EachAssetExposesSchema。范围格式dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-changes --include对应7文件 --verbosity diagnostic。打包dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/routine-schema-packages，再pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/routine-schema-packages。使用正常本地TLS私钥权限，不改系统信任根；完整测试期间不重建程序集。
+
+实际包消费的独立消费者、包副本及restore图保留在TestResults/package-validation/1f4c32cb9ec042fc8842935c65305635；两个Standard资产的消费宿主为10.0.13。
+
+三份完整TRX状态均为Completed，全部结果为Passed，无跳过或中止；与M08基线逐项比较的清单结果见TestResults/routine-schema-inventory-final.json。完整消费测试结束后testhost进程已退出。最终范围走查、UTF-8无BOM/CRLF及git diff --check通过；仅提交功能、测试和文档，不提交日志或测试产物。
+
+真实字典字段/权限/可见性、无参/包/重载/复杂类型语义与版本/OBProxy，以及Linux/Windows部署均按用户要求不执行、未验证。五资产Consumer宿主仍为.NET10；实际8/9包样例只证明基本包消费，不证明M11查询在这些运行时或服务端成功。目录查询不提供跨查询字典快照或复杂参数重建保证。A05/C01、D15保留范围和许可/真实矩阵/发布关口仍开放，本模块不关闭整体目标，不发布、不推送。
+
+## M08提交后的剩余工作核查（2026-10-20）
+
+核查基线为ed10e95。A05可信MySQL识别、C01完整重置/池化均缺真实服务端证据；按用户要求不连接数据库，不用合成报文放行。D15 Standard GSSAPI/其他Windows机制已明确延后，adapter/command builder按需实现，不因Java存在相应API就追加依赖或配置。A04可信CA、各阶段实库/OBProxy/协调器/平台与许可/包名发布关口继续开放。
+
+独立范围复核发现M11过程/参数目录仍列在架构D阶段规划，当前Schema.cs仅四集合，D02只交付过程执行与OUT，不能等同目录发现已经完成。该项缺少具体集合契约，但并非必须先连数据库才能开发，因此继续细化最小GetSchema集合，沿固定Java字典来源和当前目录加载路径实施；不将未细化需求当成环境阻塞，也不扩展为整套Java API或DeriveParameters。后续范围、测试与真实限制见开发方案M11段；本核查不声明整体目标完成。
+
 ## M08 Oracle扩展Fetch本地实施（2026-10-20）
 
 对照架构M08与源码，普通9字节Fetch和REF CURSOR已经存在，实际缺口是显式Oracle扩展Fetch。五资产新增命令级UseCursorOffset，默认false、须正FetchSize及认证后Oracle模式；经典服务端prepare，首次执行严格探测ob_version()>=2.2.5。版本缓存在物理会话并与PrepareExecute共享，后者原有显式选项及2.2.76门槛不变；关闭重开不复用旧会话缓存。独立Prepare不探测或Fetch，执行时才准入，无静默回退。

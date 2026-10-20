@@ -11,7 +11,7 @@ namespace OceanBaseConnector
 {
     public sealed partial class OceanBaseConnection
     {
-        private static readonly string[] SchemaCollections = { "MetaDataCollections", "DataSourceInformation", "Tables", "Columns" };
+        private static readonly string[] SchemaCollections = { "MetaDataCollections", "DataSourceInformation", "Tables", "Columns", "Procedures", "ProcedureParameters" };
         private static readonly string[] SchemaTableColumns = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "TABLE_TYPE" };
         private static readonly string[] SchemaColumnColumns = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "COLUMN_NAME", "ORDINAL_POSITION", "COLUMN_DEFAULT", "IS_NULLABLE", "DATA_TYPE", "CHARACTER_MAXIMUM_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION" };
 
@@ -58,7 +58,7 @@ namespace OceanBaseConnector
             if (collectionName == null) throw new ArgumentNullException(nameof(collectionName));
             var index = Array.FindIndex(SchemaCollections, name => string.Equals(name, collectionName, StringComparison.OrdinalIgnoreCase));
             if (index < 0) throw new NotSupportedException("The requested schema collection is not supported.");
-            if (restrictions != null && restrictions.Length > (index < 2 ? 0 : 4)) throw new ArgumentException("Too many restrictions for this schema collection.", nameof(restrictions));
+            if (restrictions != null && restrictions.Length > (index < 2 ? 0 : index < 4 ? 4 : 5)) throw new ArgumentException("Too many restrictions for this schema collection.", nameof(restrictions));
             var values = restrictions == null ? Array.Empty<string?>() : (string?[])restrictions.Clone();
             RejectAmbientTransaction(); token.ThrowIfCancellationRequested();
             lock (_gate)
@@ -67,12 +67,12 @@ namespace OceanBaseConnector
                 var mysql = session.Info!.Mode == OceanBaseCompatibilityMode.MySql;
                 if (index == 0) return (CreateSchemaCollections(), null);
                 if (index == 1) return (CreateDataSourceInformation(mysql, session.Info.ServerVersion), null);
-                var table = CreateDirectoryTable(index == 3);
+                var table = index >= 4 ? CreateRoutineDirectoryTable(index == 5) : CreateDirectoryTable(index == 3);
                 // This mode has no such identifier part; a non-null exact restriction cannot match.
                 var absent = mysql ? 1 : 0;
-                if (values.Length > absent && values[absent] != null) return (table, null);
+                if (values.Length > absent && values[absent] != null || mysql && index >= 4 && values.Length > 4 && values[4] != null) return (table, null);
                 var command = new OceanBaseCommand { Connection = this, Transaction = _transaction, CommandTimeout = _builder.CommandTimeout, RequiredSession = session };
-                try { command.CommandText = DirectorySql(index == 3, mysql, values, command); return (table, command); }
+                try { command.CommandText = index >= 4 ? RoutineDirectorySql(index == 5, mysql, values, command) : DirectorySql(index == 3, mysql, values, command); return (table, command); }
                 catch { command.Dispose(); table.Dispose(); throw; }
             }
         }
@@ -81,7 +81,7 @@ namespace OceanBaseConnector
         {
             var table = new DataTable("MetaDataCollections") { Locale = CultureInfo.InvariantCulture };
             table.Columns.Add("CollectionName", typeof(string)); table.Columns.Add("NumberOfRestrictions", typeof(int)); table.Columns.Add("NumberOfIdentifierParts", typeof(int));
-            for (var i = 0; i < SchemaCollections.Length; i++) table.Rows.Add(SchemaCollections[i], i < 2 ? 0 : 4, i < 2 ? 0 : i == 2 ? 3 : 4);
+            for (var i = 0; i < SchemaCollections.Length; i++) table.Rows.Add(SchemaCollections[i], i < 2 ? 0 : i < 4 ? 4 : 5, i < 2 ? 0 : i == 2 ? 3 : i == 5 ? 5 : 4);
             return table;
         }
 
@@ -136,6 +136,14 @@ namespace OceanBaseConnector
                     sql.Append("OBJECT_NAME AS TABLE_NAME, OBJECT_TYPE AS TABLE_TYPE FROM ALL_OBJECTS WHERE OWNER <> '__recyclebin' AND OBJECT_TYPE IN ('TABLE', 'VIEW')");
                 filters = new[] { null, "OWNER", columns ? "TABLE_NAME" : "OBJECT_NAME", columns ? "COLUMN_NAME" : "OBJECT_TYPE" };
             }
+            AppendSchemaRestrictions(sql, mysql, restrictions, filters, command);
+            sql.Append(" ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME");
+            if (columns) sql.Append(", ORDINAL_POSITION");
+            return sql.ToString();
+        }
+
+        private static void AppendSchemaRestrictions(StringBuilder sql, bool mysql, string?[] restrictions, string?[] filters, OceanBaseCommand command)
+        {
             for (var i = 0; i < restrictions.Length; i++)
             {
                 if (restrictions[i] == null || filters[i] == null) continue;
@@ -143,9 +151,6 @@ namespace OceanBaseConnector
                 sql.Append(" AND ").Append(filters[i]).Append(" = ").Append(mysql ? "?" : ":" + name);
                 command.Parameters.Add(new OceanBaseParameter { ParameterName = name, DbType = DbType.String, Value = restrictions[i] });
             }
-            sql.Append(" ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME");
-            if (columns) sql.Append(", ORDINAL_POSITION");
-            return sql.ToString();
         }
 
         private static void ValidateSchemaResult(DataTable table, DbDataReader reader)

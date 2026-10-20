@@ -50,10 +50,10 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync(); var transport = new ProtocolFaultStream(Array.Empty<byte>()); InstallFaultStream(connection, transport);
                 var collections = connection.GetSchema();
-                Assert.Equal("MetaDataCollections", collections.TableName); Assert.Equal(4, collections.Rows.Count);
+                Assert.Equal("MetaDataCollections", collections.TableName); Assert.Equal(6, collections.Rows.Count);
                 Assert.Equal(new[] { "CollectionName", "NumberOfRestrictions", "NumberOfIdentifierParts" }, collections.Columns.Cast<DataColumn>().Select(x => x.ColumnName));
-                Assert.Equal(new[] { 0, 0, 4, 4 }, collections.Rows.Cast<DataRow>().Select(x => (int)x[1]));
-                collections.Rows.Clear(); Assert.Equal(4, (await connection.GetSchemaAsync()).Rows.Count);
+                Assert.Equal(new[] { 0, 0, 4, 4, 5, 5 }, collections.Rows.Cast<DataRow>().Select(x => (int)x[1]));
+                collections.Rows.Clear(); Assert.Equal(6, (await connection.GetSchemaAsync()).Rows.Count);
                 var information = await connection.GetSchemaAsync("datasourceinformation");
                 Assert.Equal(17, information.Columns.Count); var row = Assert.Single(information.Rows.Cast<DataRow>());
                 Assert.Equal("OceanBase", row["DataSourceProductName"]); Assert.Equal(connection.ServerVersion, row["DataSourceProductVersion"]);

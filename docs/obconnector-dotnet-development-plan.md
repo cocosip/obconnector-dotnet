@@ -430,6 +430,24 @@ C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/re
 
 目录模块本地验证：首批13项失败转绿，最终44项定向/8项五资产消费通过；独立走查发现的数值先舍入问题用2项失败回归修复并复查通过。Release核心五/DI三目标0警告0错误，Windows完整Unit1117/Consumer128/DI8通过（TestResults/c05-schema-*-final.trx）；格式、UTF-8无BOM/CRLF、diff、核心5/DI3包资产及统一版本/按TFM的依赖矩阵通过。C05转待验证，真实目录/权限/版本互通仍留空，下一可本地推进C06。
 
+### M11 过程/参数目录本地实施（2026-10-20）
+
+目标：落实架构M11仍在D阶段规划的过程/参数目录。D02已有过程执行不代表目录发现已实现；在C05现有GetSchema路径新增Procedures、ProcedureParameters，不添加DeriveParameters、adapter、命令生成或连接配置。沿当前master续接，无新依赖；同步五资产、GetSchemaAsync现代三资产，Standard异步API边界不变。
+
+依据固定Java 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的JDBC4DatabaseMetaData.java:2775、2898、4842、4991及util/DefaultSQLs.java的字典字段。MySQL用INFORMATION_SCHEMA.ROUTINES/PARAMETERS，Oracle用ALL_PROCEDURES/ALL_ARGUMENTS。Java过程目录实际使用ALL_OBJECTS/ALL_ARGUMENTS，ALL_PROCEDURES出现在参数元数据关联；本驱动选择直接列举ALL_PROCEDURES以保留无参/包/重载身份，不宣称照搬Java过程SQL。不移植Java的LIKE、折叠名称、mysql.proc回退、JDBC类型数字或虚构参数长度/可空性。
+
+两个集合共用前七列：ROUTINE_CATALOG、ROUTINE_SCHEMA、ROUTINE_NAME、PACKAGE_NAME、OVERLOAD（string）、SUBPROGRAM_ID（int）、ROUTINE_TYPE（string）。Procedures即这七列；ProcedureParameters后接PARAMETER_NAME（string）、ORDINAL_POSITION（int）、PARAMETER_MODE/DATA_TYPE（string）、DATA_LENGTH（long，字节）、NUMERIC_PRECISION/NUMERIC_SCALE/DATETIME_PRECISION（int）、TYPE_OWNER/TYPE_NAME/TYPE_SUBNAME（string）。未知字段保持DBNull，不构造虚假特定名称或CLR/DbType映射。
+
+限制顺序均为catalog、schema、routine name、type或parameter name、package name，共5项；所有非null值精确等号、协议绑定，空串/%/_不作模式。MySQL无schema/package，Oracle无catalog，对这些部分的非null限制直接返回固定形状空表。MetaDataCollections追加两行，限制数5/5、标识部分数4/5。保留旧四集合顺序及语义。
+
+Oracle过程目录保留独立PROCEDURE/FUNCTION，以及OBJECT_TYPE=PACKAGE且PROCEDURE_NAME非空的包成员；包头不当过程，包成员ROUTINE_TYPE未知，不推测。PACKAGE_NAME/OVERLOAD/SUBPROGRAM_ID保留原字典身份，不合并重载；参数仅DATA_LEVEL=0且DATA_TYPE非null，排除旧字典无参占位行及嵌套属性，位置0是RETURN，其余IN→IN、OUT→OUT、IN/OUT→INOUT，未知方向为DBNull。参数目录无法由ALL_ARGUMENTS直接确认ROUTINE_TYPE，保留DBNull。MySQL目录同时保留过程/函数，参数位置0为RETURN，其余保留PARAMETER_MODE，ROUTINE_TYPE直接来自字典。长度使用CHARACTER_OCTET_LENGTH/Oracle DATA_LENGTH；Oracle数值精度仅NUMBER/FLOAT，时间小数仅TIMESTAMP系列；类型身份保留原Oracle字段，MySQL无对应身份为DBNull。按catalog/schema/package/routine/type/subprogram/overload及参数位置排序；不声称跨查询字典快照或能自动重建复杂参数。
+
+修改范围：OceanBaseConnection.Schema.cs接入集合/限制及共用参数过滤，新增OceanBaseConnection.Schema.Routines.cs承载两目录列形状/SQL；复用ValidateSchemaResult/AddSchemaRow、原事务绑定/RequiredSession/独占/超时/取消与读尽终态。新增RoutineSchemaTests.cs、RoutineSchemaConsumerTests.cs，现有四集合计数断言随公开集合清单扩展而更新；README/架构/台账同步。
+
+- [x] 先在现有公开GetSchema入口新增失败测试：两模式、两集合、同步/异步固定形状/原始值/NULL、精确限制绑定、无对应标识部分不发包、MetaDataCollections清单。
+- [x] 最小实现共用目录路径，保留package/重载/返回行、字节长度及精度；补坏列名/小数/溢出/额外结果/可信ERR、取消/延迟、原事务/忙reader及五资产公开消费，验证旧四集合不退化。
+- [x] 核心五/DI五Release、完整Unit/Consumer/DI、范围格式、diff及双包消费；独立设计/代码走查后修复复验并本地提交，不推送。真实字典字段/权限/可见性、重载/无参/包成员/复杂类型与版本/OBProxy及部署不执行、未验证，不能把夹具当版本支持证据。
+
 ### C06 逐条 DbBatch 与数据源批量入口
 
 **产物：**`net8.0+` 的 `DbBatch`、factory 和 B01 数据源的批量入口；`DbBatch` 先逐条执行，保留每条 `RecordsAffected` 和失败前缀，不自动保证原子性。基础数据源不再延后到本任务。
