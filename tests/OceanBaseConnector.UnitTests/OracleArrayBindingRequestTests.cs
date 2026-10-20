@@ -10,7 +10,7 @@ namespace OceanBaseConnector.UnitTests
     public sealed partial class TextCommandTests
     {
         [Theory]
-        [InlineData("NUMBER", (byte)0, "023432")]
+        [InlineData("NUMBER", (byte)246, "023432")]
         [InlineData("VARCHAR2", (byte)253, "0AE682A3E88085F09F9880")]
         [InlineData("CHAR", (byte)254, "0161")]
         [InlineData("RAW", (byte)203, "0200FF")]
@@ -72,7 +72,7 @@ namespace OceanBaseConnector.UnitTests
                     new OceanBaseParameter { ComplexType = raw, Value = raw.CreateValue(null, new byte[] { 8, 9 }, null) },
                 });
                 var expected = Convert.FromHexString("A1EFCDAB89000200000017626567696E20702827E682A3E8808527293B20656E643B02000000")
-                    .Concat(Convert.FromHexString("0001A00000000000A000000000CB0302023432022D370305020809800000000000000011C6398200000000"));
+                    .Concat(Convert.FromHexString("0001A000000000F6A000000000CB0302023432022D370305020809800000000000000011C6398200000000"));
                 Assert.Equal(expected, packet);
             }
             finally { connection.Close(); server.Stop(); }

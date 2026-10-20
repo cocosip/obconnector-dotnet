@@ -38,7 +38,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 WriteComplexIdentity(writer, complex);
                 if (complex.IsAnonymous)
                 {
-                    var element = complex.Members[0]; writer.Write(element.Layout.TypeCode);
+                    var element = complex.Members[0]; writer.Write(element.Layout.TypeCode == 0 ? (byte)246 : element.Layout.TypeCode);
                     if (element.ComplexType != null) WriteComplexIdentity(writer, element.ComplexType);
                 }
             }

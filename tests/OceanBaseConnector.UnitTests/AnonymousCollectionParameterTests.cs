@@ -11,7 +11,7 @@ namespace OceanBaseConnector.UnitTests
     public sealed partial class TextCommandTests
     {
         [Theory]
-        [InlineData("NUMBER", (byte)0, "0100023432")]
+        [InlineData("NUMBER", (byte)246, "0100023432")]
         [InlineData("VARCHAR2", (byte)253, "01000AE682A3E88085F09F9880")]
         [InlineData("CHAR", (byte)254, "01000161")]
         [InlineData("RAW", (byte)203, "01000200FF")]

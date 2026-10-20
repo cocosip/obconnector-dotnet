@@ -82,7 +82,7 @@ namespace OceanBaseConnector.UnitTests
                 await OracleVersionReply(channel, "4.3.5.0");
                 var request = await StatementCommand(channel, 0xa1);
                 var input = direction == ParameterDirection.InputOutput;
-                var encoded = new byte[] { input ? (byte)0 : (byte)1, 1, 160, 0, 0, 0, 0, code }
+                var encoded = new byte[] { input ? (byte)0 : (byte)1, 1, 160, 0, 0, 0, 0, code == 0 ? (byte)246 : code }
                     .Concat(input ? new byte[] { 1, 0 }.Concat(body) : Array.Empty<byte>()).ToArray();
                 Assert.Equal(OraclePrepareExecutePacket.Build(0, direction == ParameterDirection.ReturnValue ? "BEGIN ? := pkg.p(); END;" : "BEGIN pkg.p(?); END;", 1, encoded), request);
                 await channel.WritePacketAsync(OracleExecuteHeader(1, 1, direction == ParameterDirection.ReturnValue ? 1u : input ? 4u : 3u));

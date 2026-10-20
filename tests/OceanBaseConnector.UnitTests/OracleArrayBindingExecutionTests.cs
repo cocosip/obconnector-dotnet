@@ -39,7 +39,7 @@ namespace OceanBaseConnector.UnitTests
                 var cursor = new ByteCursor(await StatementCommand(channel, 0xa1, deprecated));
                 Assert.Equal(0xa1, cursor.ReadUInt8()); Assert.Equal(0u, cursor.ReadUInt32()); Assert.Equal(0, cursor.ReadUInt8()); Assert.Equal(2u, cursor.ReadUInt32());
                 Assert.Equal("update t set x=?", ResultColumn.Utf8.GetString(cursor.ReadLengthEncodedBytes())); Assert.Equal(1u, cursor.ReadUInt32());
-                Assert.Equal(new byte[] { 0, 1, 160, 0, 0, 0, 0, 0, 3, 2, 1, 49, 1, 50 }, cursor.ReadBytes(14));
+                Assert.Equal(new byte[] { 0, 1, 160, 0, 0, 0, 0, 246, 3, 2, 1, 49, 1, 50 }, cursor.ReadBytes(14));
                 Assert.Equal(128u, cursor.ReadUInt32());
                 await ArrayMetadata(channel, deprecated);
                 await channel.WritePacketAsync(ArrayWireRow(2)); await channel.WritePacketAsync(ArrayWireRow(1, 1)); await channel.WritePacketAsync(ArrayWireRow(0));

@@ -63,7 +63,7 @@ namespace OceanBaseConnector.ConsumerTests
                 var execute = new ByteCursor(await ReadRequest(stream, channel, ob20, 3, budget.Token));
                 Assert.Equal(0xa1, execute.ReadUInt8()); Assert.Equal(0u, execute.ReadUInt32()); Assert.Equal(0, execute.ReadUInt8()); Assert.Equal(2u, execute.ReadUInt32());
                 Assert.Equal("update t set x=? returning x into ?", Encoding.UTF8.GetString(execute.ReadLengthEncodedBytes())); Assert.Equal(2u, execute.ReadUInt32());
-                Assert.Equal(new byte[] { 0, 1, 160, 0, 0, 0, 0, 0, 160, 0, 0, 0, 0, 0, 3, 2, 1, 49, 1, 50, 3, 7 }, execute.ReadBytes(22));
+                Assert.Equal(new byte[] { 0, 1, 160, 0, 0, 0, 0, 246, 160, 0, 0, 0, 0, 246, 3, 2, 1, 49, 1, 50, 3, 7 }, execute.ReadBytes(22));
                 Assert.Equal(128u, execute.ReadUInt32()); Assert.Equal(0u, execute.ReadUInt32()); execute.ReadUInt32(); Assert.Equal(0u, execute.ReadUInt32()); Assert.False(execute.HasRemaining);
                 var packets = new[]
                 {
