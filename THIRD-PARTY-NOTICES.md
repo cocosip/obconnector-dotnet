@@ -1,5 +1,7 @@
 # Third-party dependencies and references
 
+This project is licensed under the MIT License; see `LICENSE`. That license applies to this project's original work and does not replace licenses or notices for third-party components.
+
 The NuGet packages declare their runtime dependencies rather than embedding those dependencies' assemblies. Their licenses and copyright notices remain with the original packages and repositories. This inventory does not replace the release source-provenance review or grant a license to this project.
 
 ## Direct runtime dependencies
@@ -21,4 +23,4 @@ Versions are centrally managed in the repository's Directory.Packages.props. The
 - The official OceanBase .NET repository was consulted only for limited .NET hosting, logging and DI usage. Its split MySQL/Oracle provider structure is not this project's architecture. Source provenance and attribution must be reviewed before release.
 - Npgsql was consulted for .NET data-source and host-lifecycle API design; no Npgsql runtime package is referenced by these packages. https://github.com/npgsql/npgsql
 
-The project's own open-source license, package-name availability and trademark review remain release-gate decisions; this document does not imply OceanBase endorsement or production certification.
+The existing package IDs are retained; package-name availability and trademark review still require release-owner confirmation. This document does not imply OceanBase endorsement or production certification. Source provenance must be reviewed before publication, independently of the project's MIT license.

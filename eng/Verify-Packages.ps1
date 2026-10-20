@@ -38,9 +38,10 @@ foreach ($id in $packages) {
         try { [xml]$nuspec = $reader.ReadToEnd() } finally { $reader.Dispose() }
         $metadata = $nuspec.package.metadata
         Assert-Package ($metadata.id -eq $id -and $metadata.version -eq $version) "$id identity/version mismatch."
+        Assert-Package ($metadata.license.type -eq 'expression' -and $metadata.license.InnerText -eq 'MIT') "$id must declare the MIT license expression."
         $readme = $metadata.SelectSingleNode('*[local-name()="readme"]')
         Assert-Package ($null -ne $readme -and $readme.InnerText -eq 'README.md') "$id must declare README.md."
-        foreach ($document in @('README.md', 'THIRD-PARTY-NOTICES.md')) {
+        foreach ($document in @('README.md', 'LICENSE', 'THIRD-PARTY-NOTICES.md')) {
             $entry = $archive.GetEntry($document)
             Assert-Package ($null -ne $entry -and $entry.Length -gt 0) "$id is missing $document."
         }
@@ -166,7 +167,7 @@ foreach ($target in $targets) {
         Assert-Package ($dependency.Split('/')[1].StartsWith("$major.")) "$target resolved an incompatible $dependency."
     }
 }
-Invoke-Dotnet @('build', $projectPath, '-c', 'Release', '--no-restore')
+Invoke-Dotnet @('build', $projectPath, '-c', 'Release', '--no-restore', '-m:1')
 foreach ($target in $targets[2..4]) {
     Invoke-Dotnet @((Join-Path $run "bin/Release/$target/PackageConsumer.dll"))
 }
@@ -225,7 +226,7 @@ internal static class Program
     foreach ($dependency in $frameworkGraph.PSObject.Properties.Name | Where-Object { $_ -like 'Microsoft.Extensions.*' }) {
         Assert-Package ($dependency.Split('/')[1].StartsWith('8.')) "Framework host resolved an incompatible $dependency."
     }
-    Invoke-Dotnet @('build', $frameworkProject, '-c', 'Release', '--no-restore')
+    Invoke-Dotnet @('build', $frameworkProject, '-c', 'Release', '--no-restore', '-m:1')
     & (Join-Path $frameworkDirectory 'bin/Release/net48/FrameworkHost.exe')
     if ($LASTEXITCODE -ne 0) { throw "Framework package consumer failed ($LASTEXITCODE)." }
 }

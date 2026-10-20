@@ -629,24 +629,25 @@ Check that [Java M01-M16 modules](obconnector-j-architecture-outline.md) have ex
 
 ### R01 Packages and Public Contracts
 
-- [ ] Finalize core/integration NuGet IDs/license/third-party attribution. Shared root Version, pack/release together; integration nuspec exact core-version interval derived from root. Five assets per package/required docs complete.
+- [x] Select MIT for the project and package both same-version packages with MIT metadata, `LICENSE`, and third-party attribution. Retain the existing NuGet IDs; keep source provenance and package-name/trademark confirmation as separate release gates. Shared root Version, exact integration dependency, and five assets remain required.
 - [x] Empty-project consumption of Standard2.0/2.1/.NET 8/9/10 verifies factory/modern API visibility/type identity/redaction.
 - [x] Generate/inspect packages; publish unsupported features/matrix without claiming planned D support.
 
 Local order (2026-10-19, existing design, no publishing):
 
 1. eng/Verify-Packages.ps1/independent consumers first fail on missing README/attribution in existing nupkg. Verify nuspec/five-three assets/exact core dependency/per-TFM Microsoft versions.
-2. src/Directory.Build.props centralizes package descriptions/repository/docs; explicitly retain existing NuGet IDs. Root Version/CPM unchanged. Add root README/third-party dependency-reference notice. Maintainer chooses license; no fabricated SPDX/closed license gate.
+2. src/Directory.Build.props centralizes package descriptions/repository/docs/license; explicitly retain existing NuGet IDs. Root Version/CPM unchanged. Root README, MIT license, and third-party dependency-reference notice are packaged together.
 3. One slnx pack creates both packages. Independent directories/NuGet caches/local-source mapping consume only generated PackageReferences; check restored assets/SHA512. Compile both Standard/three modern samples. Standard uses isolated.NET10; modern actual.NET8/9/10 checks factory/types/modern entry/DI/credentials. Daily projects remain net10.
-4. Reject missing docs/wrong DI core interval; integrate unified pack/verifier in Windows CI. Build/full local tests/read-only review/fixes/three-doc sync/commit; C08/R02 live gates stay open.
+4. Reject missing docs/license/wrong DI core interval; integrate unified pack/verifier in Windows CI. Build/full local tests/read-only review/fixes/docs sync/commit; C08/R02 live gates stay open.
 
-2026-10-19 steps implemented/verified: old README-less packages fail; new five-asset actual restore/consumption passes; corrupted docs/widened core interval reject. Windows Unit1205/Consumer152/DI8/five-three build/review pass; PowerShell minimum fixed to 7.1+. First checkbox includes undecided project license/origin/package-trademark review, remains open. R01 in progress; no publishing/C08-R02 closure.
+2026-10-19 steps implemented/verified: old README-less packages fail; new five-asset actual restore/consumption passes; corrupted docs/widened core interval reject. Windows Unit1205/Consumer152/DI8/five-three build/review pass; PowerShell minimum fixed to 7.1+. MIT choice and package metadata are now selected; source-provenance review and package-name/trademark confirmation remain open. R01 remains in progress; no publishing/C08-R02 closure.
 
 R01 follow-up (2026-10-19): after D09, extend existing five-asset package samples for XA identity/copy boundaries/nullable error codes/closed-connection resource rejection. Prior R02 packages fail compilation for missing XA; newly packed packages restore by SHA512/identity in independent caches, compile five targets, consume on actual.NET8/9/10/isolated Standard hosts. Read-only review then test commit; no dependencies/product changes. License/release/live/other-machine acceptance remain open; ledger details.
 
 ### R02 Complete Candidate Verification
 
 - [ ] Rerun all G1-G3 required suites/delivery matrix; retain commands/versions/log links/skip reasons.
+- [x] Compare TLS, OBProxy, and failover/recovery behavior with the pinned Connector/J implementation; live interoperability remains unverified because those environments are unavailable.
 - [ ] Mark each mode/version/OBProxy/TLS/auth combination verified/unverified/unsupported; without real tests never verified.
 - [ ] Complete release notes/fault-unknown-outcome guide/differences/rollback plan; publish only after final code/docs review.
 
