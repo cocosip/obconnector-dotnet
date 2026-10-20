@@ -2,6 +2,14 @@
 
 Baseline date: 2026-10-17; progress updated: 2026-10-20. References: [Architecture design](obconnector-dotnet-architecture-design.md) and [Development plan](obconnector-dotnet-development-plan.md).
 
+## Oracle offset-fetch tail marker compatibility (2026-10-20)
+
+Real extended cursor fetches mark row EOFs with MoreResultsExists while a separate tail OK remains pending: continuing page status 0x0048 and final page status 0x00C8. Only the offset-tail-pending branch now removes that marker before the existing cursor validation/state transition. The separate tail still must pass status/counter and complete-response checks before another fetch or lease release. Ordinary cursors, REF CURSOR and tail MoreResultsExists/PS_OUT rejection retain their paths.
+
+The expanded multi-page regression first passed eight original unmarked combinations and failed eight marked combinations. After the fix, 220 cursor/output Unit cases passed, together with 86 cursor/REF CURSOR Consumer cases and the exact 100-case offset-fetch Consumer matrix. Coverage includes sync/async, default/sequential reads, both EOF forms, all five assets, standard/OB20, delayed tails/cancellation/timeout, invalid counters/boundaries and row MORE+PS_OUT rejection. Full Release build had zero warnings/errors; scoped production whitespace and diff checks passed. Independent review found no actionable issues (`TestResults/cursor-marker-*`).
+
+The current acceptance console's Oracle reader group passes **7**, fails **0**, skips **58** unselected cases, with zero cleanup failures (`TestResults/live-oracle-cursor-marker-reader-01.json`). Both real offset-fetch cases now pass. Independent cleanup checked all six exact owned objects and found zero remaining, with zero owned prepared XA branches. An earlier ignored diagnostic executable still held a stale assembly; its failures were not counted as verification of the new build. Supplied private values remain absent from tracked files, diagnostic text and reachable Git history. No full compatibility, deployment, publication or push claim is made.
+
 ## Oracle native RAW parameter compatibility (2026-10-20)
 
 Real Oracle binary bindings failed with error 1465 when sent as VARCHAR type 253. A bounded fixed-byte UTL_RAW.LENGTH probe rejected type 253 (1465) and MySQL BLOB type 252 (600), but accepted native Oracle RAW type 203. PreparedParameters now emits type 203 for Oracle DbType.Binary with the existing length-prefixed bytes. MySQL binary type 252, ordinary strings, streamed inputs, LOB locators and client-side literals retain their paths. No hex conversion or dependency was added.

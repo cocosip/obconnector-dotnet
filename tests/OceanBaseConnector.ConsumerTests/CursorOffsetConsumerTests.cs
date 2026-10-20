@@ -56,7 +56,7 @@ namespace OceanBaseConnector.ConsumerTests
                     Assert.Equal(new byte[] { 28, 80, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, page + 3, budget.Token));
                     var row = new byte[10]; row[2] = (byte)(page + 42);
                     response = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(8))).Concat(Frame(3, row))
-                        .Concat(Frame(4, new byte[] { 254, 0, 0, page == 0 ? (byte)70 : (byte)134, 0, 0, 0 })).ToArray();
+                        .Concat(Frame(4, new byte[] { 254, 0, 0, page == 0 ? (byte)78 : (byte)142, 0, 0, 0 })).ToArray();
                     if (page == 1 && outcome == "missing")
                     {
                         await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, page + 3, 1, response) : response, budget.Token); return;

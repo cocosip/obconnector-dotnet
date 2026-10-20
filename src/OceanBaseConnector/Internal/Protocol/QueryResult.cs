@@ -129,7 +129,11 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             _query.ObserveSessionState(ok);
             // Offset fetch has a separate tail OK; the row terminator cannot release the lease.
-            if (_cursorOffsetTailPending) { ValidateCursorFlags(flags); _cursorEndFlags = flags; return; }
+            if (_cursorOffsetTailPending)
+            {
+                flags &= ~ServerStatusFlags.MoreResultsExists;
+                ValidateCursorFlags(flags); _cursorEndFlags = flags; return;
+            }
             if (_cursorActive && !EndCursorBatch(flags)) return;
             _ended = true;
             // PrepareExecute always has a final execution OK/ERR after its row terminator.

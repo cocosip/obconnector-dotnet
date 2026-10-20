@@ -17,15 +17,23 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false, false)]
-        [InlineData(true, false, false)]
-        [InlineData(false, true, false)]
-        [InlineData(true, true, false)]
-        [InlineData(false, false, true)]
-        [InlineData(true, false, true)]
-        [InlineData(false, true, true)]
-        [InlineData(true, true, true)]
-        public async Task CursorOffsetConsumesEveryTailBeforeReusingTheStatement(bool asynchronous, bool sequential, bool deprecated)
+        [InlineData(false, false, false, false)]
+        [InlineData(true, false, false, false)]
+        [InlineData(false, true, false, false)]
+        [InlineData(true, true, false, false)]
+        [InlineData(false, false, true, false)]
+        [InlineData(true, false, true, false)]
+        [InlineData(false, true, true, false)]
+        [InlineData(true, true, true, false)]
+        [InlineData(false, false, false, true)]
+        [InlineData(true, false, false, true)]
+        [InlineData(false, true, false, true)]
+        [InlineData(true, true, false, true)]
+        [InlineData(false, false, true, true)]
+        [InlineData(true, false, true, true)]
+        [InlineData(false, true, true, true)]
+        [InlineData(true, true, true, true)]
+        public async Task CursorOffsetConsumesEveryTailBeforeReusingTheStatement(bool asynchronous, bool sequential, bool deprecated, bool tailMarker)
         {
             using var command = new OceanBaseCommand(); EnableCursorOffset(command); command.FetchSize = 2; command.CommandText = "select n";
             var server = Server(async channel =>
@@ -40,7 +48,9 @@ namespace OceanBaseConnector.UnitTests
                         Assert.Equal(new byte[] { 28, 80, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, await StatementCommand(channel, 28, deprecated));
                         await CursorMetadata(channel, 6, deprecated, deprecated);
                         if (page < 2) await channel.WritePacketAsync(CursorRow(page + 10));
-                        await channel.WritePacketAsync(CursorTerminator(page == 2 ? (byte)134 : (byte)70, deprecated));
+                        var flags = page == 2 ? (byte)134 : (byte)70;
+                        if (tailMarker) flags |= 8;
+                        await channel.WritePacketAsync(CursorTerminator(flags, deprecated));
                         await channel.WritePacketAsync(Ok(page == 0 ? (byte)1 : (byte)2));
                     }
                 }
@@ -129,7 +139,7 @@ namespace OceanBaseConnector.UnitTests
                 await OracleVersionReply(channel, "4.3.5.0"); await StatementCommand(channel, 22); await Prepared(channel, 80, 0, 1);
                 await StatementCommand(channel, 23); await CursorMetadata(channel, 70);
                 await StatementCommand(channel, 28); await CursorMetadata(channel, 6);
-                await channel.WritePacketAsync(CursorRow(42)); await channel.WritePacketAsync(Eof(134)); terminated.SetResult();
+                await channel.WritePacketAsync(CursorRow(42)); await channel.WritePacketAsync(Eof(142)); terminated.SetResult();
                 if (outcome == "success")
                 {
                     await release.Task.WaitAsync(TimeSpan.FromSeconds(10)); await channel.WritePacketAsync(Ok(1));
@@ -173,6 +183,8 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(true, "insert")]
         [InlineData(false, "more")]
         [InlineData(true, "more")]
+        [InlineData(false, "row-output")]
+        [InlineData(true, "row-output")]
         [InlineData(false, "output")]
         [InlineData(true, "output")]
         [InlineData(false, "eof")]
@@ -191,7 +203,10 @@ namespace OceanBaseConnector.UnitTests
                 await OracleVersionReply(channel, "4.3.5.0"); await StatementCommand(channel, 22); await Prepared(channel, 80, 0, 1);
                 await StatementCommand(channel, 23); await CursorMetadata(channel, 70);
                 await StatementCommand(channel, 28); await CursorMetadata(channel, 6);
-                await channel.WritePacketAsync(CursorRow(42)); await channel.WritePacketAsync(Eof(134));
+                await channel.WritePacketAsync(CursorRow(42));
+                var end = Eof(142); if (fault == "row-output") end[4] |= 16;
+                await channel.WritePacketAsync(end);
+                if (fault == "row-output") { Assert.Equal(0, await channelStreamRead(channel).WaitAsync(TimeSpan.FromSeconds(10))); return; }
                 if (fault == "missing") return;
                 var tail = fault == "error" ? Error() : fault == "eof" ? Eof() : fault == "truncated" ? new byte[] { 0, 1 } : Ok(1);
                 if (fault == "count") tail[1] = 2;
