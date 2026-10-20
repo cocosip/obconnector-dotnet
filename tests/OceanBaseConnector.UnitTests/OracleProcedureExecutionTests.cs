@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
@@ -92,6 +93,57 @@ namespace OceanBaseConnector.UnitTests
                 using var after = connection.CreateCommand(); after.CommandText = "after"; Assert.Equal(1, await after.ExecuteNonQueryAsync());
             }
             finally { release.TrySetResult(); connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false, "42", true)] [InlineData(true, "42", true)]
+        [InlineData(false, "1.2300", true)] [InlineData(true, "1.2300", true)]
+        [InlineData(false, "12345678901234567890123456789012345678", true)] [InlineData(true, "12345678901234567890123456789012345678", true)]
+        [InlineData(false, null, true)] [InlineData(true, null, true)]
+        [InlineData(false, "1e126", false)] [InlineData(true, "1e126", false)]
+        [InlineData(false, "1e-131", false)] [InlineData(true, "1e-131", false)]
+        public async Task OracleUnconstrainedNumericOutputPreservesExactValuesAndModeLimits(bool async, string? text, bool valid)
+        {
+            var server = Server(async channel =>
+            {
+                await OracleVersionReply(channel, "4.4.2.2"); await StatementCommand(channel, 0xa1);
+                await channel.WritePacketAsync(OracleExecuteHeader(1, 1, 0));
+                await channel.WritePacketAsync(Column("p", 6)); await channel.WritePacketAsync(Eof(64));
+                await channel.WritePacketAsync(ValueColumnPacket(246, 0, 255));
+                await channel.WritePacketAsync(new byte[] { 254, 0, 0, 0, 16 });
+                await channel.WritePacketAsync(text == null ? new byte[] { 0, 4 } : new byte[] { 0, 0 }.Concat(WithLength(Encoding.ASCII.GetBytes(text))).ToArray());
+                if (valid)
+                {
+                    await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(Ok());
+                    await StatementCommand(channel, 25); channel.BeginCommand();
+                    await Query(channel, "after number output"); await channel.WritePacketAsync(Ok(1));
+                }
+                else await AssertOracleExecuteTransportClosed(channel);
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
+            try
+            {
+                await connection.OpenAsync(); using var command = connection.CreateCommand();
+                command.CommandText = "BEGIN :result := 42; END;";
+                var output = new OceanBaseParameter { ParameterName = "result", DbType = DbType.Decimal, Direction = ParameterDirection.Output, Value = "old" };
+                command.Parameters.Add(output);
+                if (valid)
+                {
+                    Assert.Equal(0, async ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+                    if (text == null) Assert.Equal(DBNull.Value, output.Value);
+                    else Assert.Equal(text, Assert.IsType<OceanBaseDecimal>(output.Value).ToString());
+                    using var after = connection.CreateCommand(); after.CommandText = "after number output";
+                    Assert.Equal(1, await after.ExecuteNonQueryAsync());
+                }
+                else
+                {
+                    var error = await Assert.ThrowsAsync<OceanBaseException>(async () => { if (async) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery(); });
+                    Assert.IsType<OverflowException>(error.InnerException); Assert.True(error.IsExecutionOutcomeUnknown);
+                    Assert.Equal("old", output.Value); Assert.Equal(ConnectionState.Broken, connection.State);
+                }
+            }
+            finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 

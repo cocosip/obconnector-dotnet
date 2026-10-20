@@ -81,9 +81,12 @@ namespace OceanBaseConnector.Internal.Sql
                     throw new ProtocolException("LOB output metadata must match its declared BLOB or CLOB type.");
                 if (declared == OceanBaseDbType.RefCursor && columns[i].TypeCode != 163 && row[i] != null)
                     throw new ProtocolException("A REF CURSOR output requires cursor metadata.");
+                // PL outputs use precision 0 / scale -1 for an unconstrained runtime NUMBER.
                 values[i] = columns[i].TypeCode == 163 && row[i] != null
                     ? (object)(Cursors ?? throw new NotSupportedException("A REF CURSOR requires its originating command.")).Create(new ByteCursor(row[i]!).ReadUInt32())
-                    : columns[i].DecodeBinary(row[i]);
+                    : row[i] != null && columns[i].IsDecimal && columns[i].Precision == 0 && columns[i].Scale == -1
+                        ? columns[i].DecodeDecimal(row[i]!, binary: true, constrain: false)
+                        : columns[i].DecodeBinary(row[i]);
             }
             _values = values;
         }

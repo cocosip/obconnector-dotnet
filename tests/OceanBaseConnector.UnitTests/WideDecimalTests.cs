@@ -18,6 +18,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(OceanBaseCompatibilityMode.MySql, 65, 20, WideDecimalText, "12345678901234567890123456789012345678901234512345678901234567890", 20)]
         [InlineData(OceanBaseCompatibilityMode.Oracle, 38, 0, "12345678901234567890123456789012345678", "12345678901234567890123456789012345678", 0)]
         [InlineData(OceanBaseCompatibilityMode.Oracle, 5, 254, "12300", "123", -2)]
+        [InlineData(OceanBaseCompatibilityMode.Oracle, 0, 255, "40", "4", -1)]
         [InlineData(OceanBaseCompatibilityMode.Oracle, 3, 5, "0.00123", "123", 5)]
         [InlineData(OceanBaseCompatibilityMode.Oracle, 0, 0, "1.2300E-126", "12300", 130)]
         [InlineData(OceanBaseCompatibilityMode.Oracle, 255, 171, "1.2300E125", "12300", -121)]
@@ -38,6 +39,14 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal(typeof(OceanBaseDecimal), schema.DataType);
             Assert.Equal(typeof(OceanBaseDecimal), schema["ProviderSpecificDataType"]);
             if (precision == 0 || precision == 255) Assert.Null(schema.NumericPrecision);
+        }
+
+        [Theory]
+        [InlineData(false)] [InlineData(true)]
+        public void OracleUnknownPrecisionColumnStillEnforcesItsDeclaredNegativeScale(bool binary)
+        {
+            var column = ValueColumn(246, OceanBaseCompatibilityMode.Oracle, 0, 255);
+            Assert.Throws<OverflowException>(() => column.DecodeDecimal(Encoding.ASCII.GetBytes("42"), binary));
         }
 
         [Theory]

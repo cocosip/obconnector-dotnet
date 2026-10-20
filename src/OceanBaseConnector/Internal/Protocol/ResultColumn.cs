@@ -401,7 +401,7 @@ namespace OceanBaseConnector.Internal.Protocol
             return TypeCode == 10 ? (object)date.Date : date;
         }
 
-        internal OceanBaseDecimal DecodeDecimal(byte[] value, bool binary)
+        internal OceanBaseDecimal DecodeDecimal(byte[] value, bool binary, bool constrain = true)
         {
             _ = FieldType;
             OceanBaseDecimal number;
@@ -411,7 +411,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 number = new OceanBaseDecimal(Unsigned ? (decimal)integer : unchecked((int)integer));
             }
             else number = DecimalCodec.Parse(Utf8.GetString(value));
-            if (Precision > 0 || Scale != 0)
+            if (constrain && (Precision > 0 || Scale != 0))
                 number = DecimalCodec.Constrain(number, Precision > 0 ? (int)Precision : Mode == OceanBaseCompatibilityMode.Oracle ? 38 : 65, Scale, Unsigned);
             DecimalCodec.Validate(number, Mode, Unsigned);
             return number;
