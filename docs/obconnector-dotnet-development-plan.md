@@ -1,1059 +1,1058 @@
 # OceanBase Connector for .NET Implementation Plan
 
-> **For agentic workers:** 执行时逐项读取[架构设计](obconnector-dotnet-architecture-design.md)和本计划；每项完成后更新[进度台账](obconnector-dotnet-progress.md)，提交实现前运行该项的验证命令。
+> **For agentic workers:** Read the [Architecture Design](obconnector-dotnet-architecture-design.md) and this plan task by task. Update the [Progress Ledger](obconnector-dotnet-progress.md) after each task, and run its verification commands before committing the implementation.
 
-**Goal:** 交付一个直接连接 OceanBase/OBProxy、同时支持 MySQL 和 Oracle 兼容模式的托管 ADO.NET provider，并在明确的服务端版本矩阵上证明其行为。
+**Goal:** Deliver a managed ADO.NET provider that connects directly to OceanBase/OBProxy, supports MySQL and Oracle compatibility modes, and demonstrates its behavior against an explicit server-version matrix.
 
-**Architecture:** 一个公开 provider、一个共享协议主链，每个物理会话保存模式、版本、能力和事务状态。同步与异步入口共享编码和状态机，分别使用同步与异步网络 I/O；C 阶段才开放经完整重置验证的池化。
+**Architecture:** One public provider and one shared protocol pipeline. Each physical session owns its mode, version, capabilities, and transaction state. Synchronous and asynchronous APIs share encoding and state machines but use synchronous and asynchronous network I/O respectively. Pooling opens in phase C only after complete reset has been verified.
 
-**Tech Stack:** C#、.NET 10 SDK；单个 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` 核心 provider 包和可选的现代 DI 集成包，同版本统一发布；ADO.NET、`TcpClient`/`SslStream`、标准日志抽象、`System.Numerics.BigInteger`、xUnit。协议核心不引入 Oracle/MySQL 原生客户端。
+**Tech Stack:** C#, .NET 10 SDK; one core provider package targeting `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` and an optional modern DI integration package, released together at the same version; ADO.NET, `TcpClient`/`SslStream`, standard logging abstractions, `System.Numerics.BigInteger`, and xUnit. No Oracle/MySQL native client in the protocol core.
 
-**Spec:** [架构设计](obconnector-dotnet-architecture-design.md)，Java 行为基线为 [Connector/J 架构提纲](obconnector-j-architecture-outline.md)固定的提交 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。这两个文档是设计和对照依据，不是 .NET 已实现能力的证明。
+**Spec:** [Architecture Design](obconnector-dotnet-architecture-design.md), with the Java behavior baseline pinned to commit `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` in the [Connector/J Architecture Outline](obconnector-j-architecture-outline.md). These documents provide design and comparison references, not proof of implemented .NET capabilities.
 
-**.NET 接入修订（2026-10-18）：**架构设计 §2.1–§2.7将现代数据源、可选 DI 和基础日志前移到 B01；C06 保留 batch，C07 保留追踪/指标与性能。Java 仍是统一协议与模式行为的主要依据，`oceanbase-dotnet` 只作有限的宿主接入参考。B01 范围扩大，原周窗口只保留为估算，进入 B 前需重估，不由任务数量不变推断工作量不变。
+**.NET integration revision (2026-10-18):** Architecture §§2.1–2.7 move modern data sources, optional DI, and basic logging into B01. C06 retains batch; C07 retains tracing, metrics, and performance. Java remains the primary reference for the shared protocol and mode behavior; `oceanbase-dotnet` is only a limited host-integration reference. B01 has expanded: the original week window is an estimate and must be reassessed before phase B. An unchanged task count does not imply unchanged effort.
 
-## 全局约束与准入
+## Global Constraints and Entry Criteria
 
-- 当前排期以 A/B/C 均进入首个正式版本为基线，G0-5 决定是否调整；D 按独立能力交付。没有真实双模式测试和明确版本矩阵，不能把 A/B/C 标记为发布完成。
-- 首版默认 `TLS Mode=VerifyFull`、`Pooling=false`、`CLIENT_FOUND_ROWS`；不自动重试已发送 SQL，不隐式客户端参数插值，不加入 `TransactionScope`。变更这些公开语义须先修订架构设计。
-- `netstandard2.0` 定义公共类型身份；数据源/batch 等现代 ADO.NET API 用条件编译，仅在 `net8.0+` 暴露；`netstandard2.1` 另覆写其参考 API 已有的命令 `PrepareAsync`/`DisposeAsync`、连接/reader 的 `CloseAsync`/`DisposeAsync`、事务 `CommitAsync`/`RollbackAsync`/`DisposeAsync` 和连接受保护的 `BeginDbTransactionAsync`；`ChangeDatabaseAsync` 在尚未实现前明确拒绝。每个产品目标单独编译；全部测试及消费宿主统一使用 `net10.0`，显式选择并隔离加载 `netstandard2.0`/`netstandard2.1` 资产；B09/R01 另验证旧运行时消费。
-- 仓库统一使用中央包管理(CPM)：根目录 `Directory.Packages.props` 固定全部 NuGet 包版本并开启传递依赖钉扎；工程的 `PackageReference` 一律不带 `Version`。产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性提供,csproj 不得各自声明版本。新增依赖只改 `Directory.Packages.props`。
-- Microsoft 通用库按产品 TFM 条件集中定版：`netstandard2.0`/`netstandard2.1`/`net8.0` 使用 8.x 基线，`net9.0` 使用 9.x，`net10.0` 使用 10.x；具体补丁见架构设计 §2.3。统一发布版本不要求依赖主版本相同，.NET 10 SDK/测试宿主也不抬高旧资产依赖。验收逐目标 restore 图、程序集引用和 nuspec 依赖组，避免传递钉扎将旧目标提升到 10.x。
-- 当前依用户要求暂不执行实库及非 Windows 运行测试；缺失证据保留在台账，不阻止依赖已满足的本地模块开发、走查和提交，也不关闭真实兼容门槛。
-- 许可和包名在发布前审定；只参考 Java 行为和协议，不直接移植其 LGPL-2.1 实现。
-- 进入 A 的真实互通验收前，应取得两个兼容模式的独立租户、服务端和 OBProxy 版本、认证插件、可验证的 TLS 证书及可控故障网络。缺少环境时只报告夹具验证。
-- 所有任务先写会失败的边界用例，再实现，再运行该用例和所属阶段回归；原始协议夹具保留来源、版本、模式和预期字段，不存真实凭据。
+- The current schedule includes A/B/C in the first stable release, subject to G0-5; D ships as independent capabilities. A/B/C cannot be marked release-complete without live tests in both modes and an explicit version matrix.
+- Initial defaults: `TLS Mode=VerifyFull`, `Pooling=false`, and `CLIENT_FOUND_ROWS`. No automatic retry of sent SQL, implicit client parameter interpolation, or `TransactionScope`. Revise the architecture before changing these public semantics.
+- `netstandard2.0` defines public type identity. Modern ADO.NET APIs such as data sources/batch use conditional compilation and are exposed only on `net8.0+`. `netstandard2.1` additionally overrides APIs already present in its reference surface: command `PrepareAsync`/`DisposeAsync`, connection/reader `CloseAsync`/`DisposeAsync`, transaction `CommitAsync`/`RollbackAsync`/`DisposeAsync`, and protected connection `BeginDbTransactionAsync`. `ChangeDatabaseAsync` explicitly rejects calls until implemented. Compile each product target separately. All tests and consumer hosts use `net10.0`, explicitly selecting and loading `netstandard2.0`/`netstandard2.1` assets in isolation; B09/R01 separately verify older-runtime consumption.
+- Use Central Package Management (CPM) throughout: root `Directory.Packages.props` pins all NuGet versions and enables transitive pinning; project `PackageReference` entries carry no `Version`. Root `Directory.Build.props` supplies the single `Version` for all current and future products/assemblies/packages; individual csproj files must not declare versions. Add dependency versions only to `Directory.Packages.props`.
+- Centrally select Microsoft library versions by product TFM: 8.x for `netstandard2.0`/`netstandard2.1`/`net8.0`, 9.x for `net9.0`, and 10.x for `net10.0`; see architecture §2.3 for patches. A shared release version does not require the same dependency major, and the .NET 10 SDK/test host must not raise older-asset dependencies. Inspect each target's restore graph, assembly references, and nuspec dependency groups so transitive pinning does not lift older targets to 10.x.
+- Per the user's current instruction, defer live-database and non-Windows runtime tests. Keep missing evidence in the ledger; it neither blocks local development/review/commits of modules with satisfied dependencies nor closes real compatibility gates.
+- Approve licensing and package names before release. Refer to Java behavior/protocol without directly porting LGPL-2.1 implementation code.
+- Before phase-A live interoperability acceptance, obtain independent tenants for both modes, server/OBProxy versions, authentication plugins, verifiable TLS certificates, and controllable network faults. Without that environment, report fixture verification only.
+- For every task, write failing boundary cases first, implement, then run those cases and the phase regression suite. Raw protocol fixtures retain source, version, mode, and expected fields, without real credentials.
 
-## 交付目录与接口边界
+## Delivery Layout and Interface Boundaries
 
-| 位置 | 职责 |
+| Location | Responsibility |
 | --- | --- |
-| `OceanBaseConnector.slnx` | 统一解决方案；使用支持 net10.0 的已安装 SDK，不固定 SDK 版本 |
-| `Directory.Build.props` | 全部产品、程序集与包版本唯一来源 Version |
-| `Directory.Packages.props` | 中央包管理：全部 NuGet 包版本的唯一来源，传递依赖钉扎 |
-| `src/OceanBaseConnector/OceanBaseConnector.csproj` | 唯一核心 provider 程序集和五目标条件编译；日志仅依赖标准抽象 |
-| `src/OceanBaseConnector/OceanBaseDataSource*.cs` | B01 的现代 builder/数据源、冻结配置与生命周期；C01 后拥有独立可选池 |
-| `src/OceanBaseConnector.DependencyInjection/` | B01 新增的可选集成包，目标 netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0；五目标注册独立连接，现代目标另创建统一数据源并接入宿主日志，无模式分支 |
-| `src/OceanBaseConnector/OceanBaseConnection*.cs`、`OceanBaseCommand*.cs`、`OceanBaseDataReader*.cs`、`OceanBaseTransaction*.cs` | ADO.NET 公共对象；拆分文件按对象职责，不复制多套协议 |
-| `src/OceanBaseConnector/OceanBaseParameter*.cs`、`OceanBaseProviderFactory.cs`、`OceanBaseConnectionStringBuilder.cs` | 参数、工厂和配置的公开契约 |
-| `src/OceanBaseConnector/Internal/Transport/` | TCP、SSLRequest、TLS、同步/异步字节流与关闭取消 |
-| `src/OceanBaseConnector/Internal/Protocol/` | 标准帧、握手、认证、命令、OK/ERR、文本/二进制行与多结果；D 阶段才加 OB20 |
-| `src/OceanBaseConnector/Internal/Session/` | `PhysicalSession`、模式/能力快照、独占执行、statement ID、事务与失效状态 |
-| `src/OceanBaseConnector/Internal/Sql/`、`Internal/Values/` | 占位符词法器、参数编码、模式感知列解码和 provider-specific 值 |
-| `src/OceanBaseConnector/Internal/Pooling/` | C 阶段的池、会话完整重置与池键 |
-| `tests/OceanBaseConnector.UnitTests/` | 不依赖服务端的字节夹具、API/状态机和错误路径测试 |
-| `tests/OceanBaseConnector.IntegrationTests/` | 独立 MySQL/Oracle 租户、OBProxy、TLS、故障与重置测试；没有环境时跳过并明确报告 |
-| `tests/OceanBaseConnector.ConsumerTests/` | 统一 .NET 10 消费宿主；编译样例显式选择 netstandard2.0，隔离加载覆盖 netstandard2.0/netstandard2.1 资产；发布时另验证包、工厂和公开值类型身份 |
-| `tests/OceanBaseConnector.DependencyInjection.Tests/` | B01 新增，net10.0；内置容器释放、普通/key 注册隔离、配置与日志测试 |
+| `OceanBaseConnector.slnx` | Shared solution; use an installed SDK supporting net10.0 without pinning the SDK version |
+| `Directory.Build.props` | Sole `Version` source for every product, assembly, and package |
+| `Directory.Packages.props` | CPM: sole source of all NuGet versions, with transitive pinning |
+| `src/OceanBaseConnector/OceanBaseConnector.csproj` | Single core provider assembly and five-target conditional compilation; logging depends only on standard abstractions |
+| `src/OceanBaseConnector/OceanBaseDataSource*.cs` | B01 modern builder/data source, frozen configuration and lifecycle; owns an independent optional pool after C01 |
+| `src/OceanBaseConnector.DependencyInjection/` | Optional B01 integration package targeting netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0; registers independent connections on all five targets and a shared data source with host logging on modern targets, without mode branches |
+| `src/OceanBaseConnector/OceanBaseConnection*.cs`, `OceanBaseCommand*.cs`, `OceanBaseDataReader*.cs`, `OceanBaseTransaction*.cs` | Public ADO.NET objects; split files by responsibility without duplicating protocol implementations |
+| `src/OceanBaseConnector/OceanBaseParameter*.cs`, `OceanBaseProviderFactory.cs`, `OceanBaseConnectionStringBuilder.cs` | Public parameter, factory, and configuration contracts |
+| `src/OceanBaseConnector/Internal/Transport/` | TCP, SSLRequest, TLS, synchronous/asynchronous byte streams, close/cancel |
+| `src/OceanBaseConnector/Internal/Protocol/` | Standard frames, handshake, authentication, commands, OK/ERR, text/binary rows, and multiple results; OB20 starts in phase D |
+| `src/OceanBaseConnector/Internal/Session/` | `PhysicalSession`, mode/capability snapshots, exclusive execution, statement IDs, transaction and invalidation state |
+| `src/OceanBaseConnector/Internal/Sql/`, `Internal/Values/` | Placeholder lexer, parameter encoding, mode-aware column decoding, and provider-specific values |
+| `src/OceanBaseConnector/Internal/Pooling/` | Phase-C pools, complete session reset, and pool keys |
+| `tests/OceanBaseConnector.UnitTests/` | Server-independent byte fixtures, API/state-machine tests, and error paths |
+| `tests/OceanBaseConnector.IntegrationTests/` | Separate MySQL/Oracle tenants, OBProxy, TLS, fault/reset tests; explicitly skip/report absent environments |
+| `tests/OceanBaseConnector.ConsumerTests/` | .NET 10 consumer host; compilation samples explicitly select netstandard2.0, isolated loads cover netstandard2.0/netstandard2.1; release checks also verify packages, factory, and public value-type identity |
+| `tests/OceanBaseConnector.DependencyInjection.Tests/` | Added in B01, net10.0; built-in container disposal, ordinary/keyed registration isolation, configuration, and logging |
 
-`PhysicalSession` 独占 socket、包序号、模式、版本、协商能力及服务端 statement ID；一次只有一个命令或 reader 持有它。公开 `OceanBaseConnection` 是逻辑借用者。`OceanBaseCommand` 在发送前验证参数、事务和环境事务；`OceanBaseDataReader` 在关闭/读尽前持有响应；任何未读包、结果未知、重置失败都使物理会话失效。`SessionMode` 只能由认证 OK 的服务端状态确定，`ExpectedMode` 只做事后校验。
+`PhysicalSession` exclusively owns the socket, packet sequence, mode, version, negotiated capabilities, and server statement IDs. Only one command or reader may hold it at a time. Public `OceanBaseConnection` is its logical borrower. `OceanBaseCommand` validates parameters, transaction, and ambient transaction before sending. `OceanBaseDataReader` owns the response until closed/drained. Unread packets, unknown outcomes, or reset failure invalidate the physical session. `SessionMode` derives only from server state in authentication OK; `ExpectedMode` is a subsequent validation only.
 
-对外扩展类型先固定 `OceanBaseDbType`、`OceanBaseDecimal`、`OceanBaseTimestamp`、`OceanBaseTimestampWithTimeZone`、`OceanBaseTimestampLocalTimeZone`、`OceanBaseDate`、`OceanBaseDateTime` 的 `netstandard2.0` 类型身份；`OceanBaseDecimal` 的低精度列访问及范围内写入在 B05/B06 落地，宽精度编解码及其余精确时间类型在 C03 落地。不得让 `GetFieldType` 随行值变化。`OceanBaseException` 含服务端错误码、SQLSTATE 和 `IsExecutionOutcomeUnknown`，现代目标还通过继承的 `BatchCommand` 关联批次条目；异常不提供模式或端点属性，安全端点和模式通过日志/诊断关联，不含默认 SQL/参数/凭据。
+Fix the `netstandard2.0` type identities of `OceanBaseDbType`, `OceanBaseDecimal`, `OceanBaseTimestamp`, `OceanBaseTimestampWithTimeZone`, `OceanBaseTimestampLocalTimeZone`, `OceanBaseDate`, and `OceanBaseDateTime` first. B05/B06 implement low-precision column access and in-range writes for `OceanBaseDecimal`; C03 implements wide-precision codecs and the other exact temporal types. `GetFieldType` must not vary with row values. `OceanBaseException` includes server error code, SQLSTATE, and `IsExecutionOutcomeUnknown`; modern targets also associate batch entries through inherited `BatchCommand`. Exceptions have no mode/endpoint properties: safe endpoints and mode are correlated through logging/diagnostics, without SQL, parameters, or credentials by default.
 
-## 阶段与日程基线
+## Phase and Schedule Baseline
 
-相对周数从双模式环境与产品决定可用的第 1 周算起，按 1 名全职开发者估算；代码评审、环境故障和服务端差异可能改变范围。周数是排期基线，不是已承诺发布日期。G0 未关闭时可先做 A01 工程骨架和 A03 不依赖实库的协议夹具，实际 W1 日期及 G1 关闭仍以 G0 完成为前提。任务可在依赖满足时并行评审，阶段门槛仍按顺序关闭。
+Relative weeks start at week 1 when both-mode environments and product decisions are available; estimates assume one full-time developer. Review, environment failures, and server differences may change scope. These are scheduling estimates, not committed release dates. Before G0 closes, A01 scaffolding and server-independent A03 fixtures may proceed; actual W1 and G1 closure still require G0 completion. Tasks may be reviewed in parallel when dependencies permit, but gates close sequentially.
 
-| 门槛 | 相对窗口 | 完成定义 |
+| Gate | Relative window | Definition of done |
 | --- | --- | --- |
-| G0 准入 | W0 | 记录目标 OceanBase/OBProxy 版本、租户、TLS/认证、测试运行方式和 §9 产品决定；环境缺失列为阻塞项 |
-| G1 协议基础 A | W1-W5 | A01-A07 完成；双模式真实连接/关闭与 TLS 拒绝场景有证据 |
-| G2 ADO.NET 核心 B | W6-W17（接入修订后待重估） | B01-B09 完成；现代数据源/DI 生命周期与基础日志、双模式 CRUD、参数、低精度 `OceanBaseDecimal` provider-specific 访问、事务、取消、元数据和五目标消费证据齐全 |
-| G3 生产连接 C | W18-W34 | C01-C08 完成；池化仅对通过完整重置的组合开放，精确类型和负载故障场景通过 |
-| G4 发布候选 | W35-W37 | R01-R02 完成；兼容矩阵、许可证/包名和 NuGet 包验证齐全 |
-| D 扩展 | G4 后逐项排期 | D01-D15 各自有独立版本/模式矩阵，不阻塞 G4，除非产品决定更改 |
+| G0 entry | W0 | Record target OceanBase/OBProxy versions, tenants, TLS/authentication, test execution, and §9 product decisions; missing environment items remain blockers |
+| G1 protocol foundation A | W1-W5 | A01-A07 complete; evidence of live open/close in both modes and TLS rejection scenarios |
+| G2 ADO.NET core B | W6-W17 (reestimate after integration revision) | B01-B09 complete; evidence for modern data-source/DI lifecycle/basic logging, CRUD in both modes, parameters, low-precision `OceanBaseDecimal` provider-specific access, transactions, cancellation, metadata, and five-target consumption |
+| G3 production connections C | W18-W34 | C01-C08 complete; pooling enabled only for fully reset-verified combinations; exact types and load/fault scenarios pass |
+| G4 release candidate | W35-W37 | R01-R02 complete; compatibility matrix, license/package names, and NuGet validation complete |
+| D extensions | Schedule individually after G4 | D01-D15 each has an independent version/mode matrix; do not block G4 unless product decisions change |
 
 ## Review Focus
 
-以下五类输入必须在所属任务的测试中落地，不允许只靠正常路径测试推断：
+The owning task's tests must cover all five input categories; normal-path tests alone are insufficient:
 
-1. TLS 被拒绝或证书名称不符：认证数据未发出且不降级；A04/A05。
-2. Oracle 模式位或能力反馈缺失：在任何模式相关值解码前失败；A05/A07。
-3. 取消恰好发生在部分发包后：报结果未知、销毁会话且不重放；B08。
-4. 低精度 NUMBER/DECIMAL 在 B 阶段已有 provider-specific 精确访问；MySQL `DECIMAL(65,20)`、Oracle 高精度/纳秒值在 C 阶段精确往返，B 阶段显式失败；B05/B06/C03。
-5. 应用执行 `SET`/`ALTER SESSION` 后归池：下一借用者看不到前一会话状态；C01/C08。
+1. Rejected TLS or certificate-name mismatch: send no authentication data and never downgrade; A04/A05.
+2. Missing Oracle-mode bit or capability feedback: fail before decoding any mode-dependent value; A05/A07.
+3. Cancellation immediately after partial packet transmission: report unknown outcome, destroy the session, and never replay; B08.
+4. Low-precision NUMBER/DECIMAL already has exact provider-specific access in B. MySQL `DECIMAL(65,20)` and Oracle high-precision/nanosecond values round-trip exactly in C and explicitly fail in B; B05/B06/C03.
+5. Return after application `SET`/`ALTER SESSION`: the next borrower must not observe prior session state; C01/C08.
 
-## A. 协议基础
+## A. Protocol Foundation
 
-### A01 多目标工程与测试入口
+### A01 Multi-target Projects and Test Entry Points
 
-**产物：**slnx 解决方案、唯一五目标产品工程、统一 net10.0 的测试及消费工程、CI 入口。消费测试显式选择并隔离加载 netstandard2.0/netstandard2.1 资产。
+**Deliverables:** slnx solution, one five-target product project, net10.0 test/consumer projects, and CI entry points. Consumer tests explicitly select and load netstandard2.0/netstandard2.1 assets in isolation.
 
-- [x] 建立多目标工程和目标条件编译样例；验证不存在现代 API 泄漏到 `netstandard2.0`/`netstandard2.1`。
-- [x] 建立协议夹具格式：二进制数据、来源、服务端版本、模式、脱敏说明和期望解析结果。
-- [x] 运行 `dotnet restore`、`dotnet build -c Release`、各测试目标的 `dotnet test -c Release`；将命令及日志位置登记到进度台账。
+- [x] Create multi-target projects and conditional compilation examples; verify no modern API leaks into `netstandard2.0`/`netstandard2.1`.
+- [x] Define protocol fixtures: binary data, source, server version, mode, redaction notes, and expected parsing results.
+- [x] Run `dotnet restore`, `dotnet build -c Release`, and `dotnet test -c Release` for every test target; record commands/log locations in the ledger.
 
-### A02 连接串与公开配置
+### A02 Connection Strings and Public Configuration
 
-**产物：**`OceanBaseConnectionStringBuilder`、不可变内部连接选项；解析 `Server`、`Port`、`User ID`、`Password`、`Database`、超时、`TLS Mode`、`TLS Server Name`、`Persist Security Info`、`ExpectedMode`、`Pooling`。未实现的选项不得静默接受。
+**Deliverables:** `OceanBaseConnectionStringBuilder` and immutable internal options parsing `Server`, `Port`, `User ID`, `Password`, `Database`, timeouts, `TLS Mode`, `TLS Server Name`, `Persist Security Info`, `ExpectedMode`, and `Pooling`. Never silently accept unimplemented options.
 
-- [x] 用测试固定空值、非法端口/超时、同义词冲突、未知键、密码序列化与公开连接串脱敏。
-- [x] 解析一次并冻结内部配置；密码不进入异常/默认日志，池键规则留给 C01。
-- [x] 运行连接串单测及五目标编译；在进度台账记录公开键清单。
+- [x] Test empty values, invalid ports/timeouts, conflicting synonyms, unknown keys, password serialization, and public connection-string redaction.
+- [x] Parse once and freeze internal configuration; no passwords in exceptions/default logs; pool-key rules belong to C01.
+- [x] Run connection-string tests and five-target compilation; record public keys in the ledger.
 
-### A03 标准包帧与字节游标
+### A03 Standard Packet Frames and Byte Cursor
 
-**产物：**协议帧读写器，处理 3 字节长度、1 字节序号、最大长度分片、命令边界序号重置、截断/越界/恶意长度。解析前检查剩余字节和整数溢出，不按不可信长度直接分配。
+**Deliverables:** frame reader/writer for three-byte lengths, one-byte sequence IDs, maximum-length fragmentation, command-boundary sequence reset, truncation/bounds/malicious lengths. Check remaining bytes and integer overflow before parsing; never allocate directly from untrusted lengths.
 
-- [x] 用固定字节夹具先覆盖单包、多分片、零长度尾包、错序、截断、过长长度编码和服务端 ERR。
-- [x] 分离包流与命令解析；同步/异步网络入口使用同一帧规则，异步不调用同步读写。
-- [x] 运行协议单测，包含随机截断输入与资源上限断言。
+- [x] Fixed byte fixtures cover single/multiple fragments, empty terminators, wrong sequence, truncation, oversized length encodings, and server ERR first.
+- [x] Separate packet streams from command parsing; sync/async network paths share framing rules; async never calls synchronous I/O.
+- [x] Run protocol tests including random truncation and resource-limit assertions.
 
-### A04 TCP、SSLRequest 与 TLS
+### A04 TCP, SSLRequest, and TLS
 
-**产物：**`TcpClient` 建连、超时、`SslStream` 升级与端点/`TLS Server Name` 验证；`VerifyFull` 默认使用 OS 信任根，`Required` 和 `Disabled` 仅显式配置。
+**Deliverables:** `TcpClient` connection, timeout, `SslStream` upgrade, and endpoint/`TLS Server Name` validation. Default `VerifyFull` uses OS trust roots; `Required`/`Disabled` require explicit configuration.
 
-- [x] 本地字节/环回覆盖握手、CLIENT_SSL 检查、SSLRequest 与 TLS 升级顺序；TLS 失败后不继续认证。测试严格握手零认证字节、无 TLS 能力零发送、不受信证书零认证字节及同步/异步一致性。
-- [x] Windows 本地环回验证静默 TLS 握手中的同步/异步总超时、关闭及异步调用方取消；确认已进入 TLS 后再中断，服务端在显式清理前确认 EOF/断开，会话不可复活。
-- [ ] 以可验证私有 CA、错误主机名、IP 连接加显式 DNS 名称分别运行跨平台 TLS 测试。修改系统信任库会触发 Windows 人工确认，本轮按用户反馈暂缓；不在默认单元测试中安装/删除信任根。
-- [x] 本地失败测试断言连接拒绝、预取消、TLS 错误的异常和资源释放；无 TLS 能力或升级失败时拒绝连接，不明文降级。
+- [x] Local byte/loopback tests cover handshake, CLIENT_SSL, SSLRequest/TLS order, and no authentication after TLS failure; assert zero authentication bytes on strict handshake/untrusted certificate, zero sends without TLS capability, and sync/async consistency.
+- [x] Windows loopback covers total sync/async timeout, close, and async caller cancellation during a silent TLS handshake. Interrupt only after TLS starts; peer confirms EOF/disconnect before explicit cleanup; session cannot revive.
+- [ ] Cross-platform TLS tests with a verifiable private CA, wrong hostname, and IP connection plus explicit DNS name. System trust-store changes trigger manual Windows confirmation and are deferred per user feedback; default unit tests must not install/remove roots.
+- [x] Local failure tests assert exceptions/resource release for connection refusal, precancellation, and TLS errors; reject missing TLS capability/upgrade failure without plaintext downgrade.
 
-A04 本地实现及 Windows 环回已完成，整体仍为待验证：可信私有 CA 成功链、真实错误主机名、实库 TLS 与非 Windows 证据未取得。2026-10-19 增补 `SilentTlsHandshakeIsInterruptedAndClosesTransport` 五项不操作证书库的回归，覆盖 TLS ClientHello 后的超时、取消、关闭与对端释放；产品代码无需修改。私有 CA 尝试因系统确认打断已撤销，残留专用证书已清除，不计为完成证据。依用户要求暂不执行缺环境或需人工确认的部分，不把这些验收项混写为代码未实现。
+A04 implementation and Windows loopback are complete locally; overall verification remains open: trusted private-CA success, real wrong-hostname rejection, live TLS, and non-Windows evidence are missing. On 2026-10-19, five `SilentTlsHandshakeIsInterruptedAndClosesTransport` regressions were added without certificate-store changes, covering timeout/cancel/close/peer release after ClientHello; no product-code change was needed. The private-CA attempt interrupted by system confirmation was reverted and dedicated certificate remnants removed; it is not completion evidence. Defer missing-environment/manual-confirmation items per the user; do not describe them as unimplemented code.
 
-### A05 认证、模式与能力
+### A05 Authentication, Mode, and Capabilities
 
-**产物：**初始握手/认证切换/OK 解析，按版本矩阵选择已验证插件；发送 `CLIENT_SUPPORT_ORACLE`、`CLIENT_SESSION_TRACK`、`CLIENT_FOUND_ROWS`、多结果等必要位。保存请求、服务器能力与实际生效能力；解析 `OB_SERVER_USE_ORACLE_MODE` 和 `ob_capability_flag`。
+**Deliverables:** initial handshake/authentication-switch/OK parsing, selecting verified plugins by version matrix; send required bits including `CLIENT_SUPPORT_ORACLE`, `CLIENT_SESSION_TRACK`, `CLIENT_FOUND_ROWS`, and multiple results. Retain requested/server/effective capabilities; parse `OB_SERVER_USE_ORACLE_MODE` and `ob_capability_flag`.
 
-- [x] 合成夹具/环回覆盖 Oracle 位设置/未设置、无法可信识别模式、未知插件、能力缺失和认证错误；模式未知时不交付可执行连接。
-- [x] 仅 VerifyFull 成功升级后允许 cleartext 类插件；认证切换复用同一安全检查；无验证 TLS 的 clear password 路径已有拒绝测试。
-- [x] 本地握手/认证测试通过：native、认证切换、模式/能力快照、错误码和脱敏、同步/异步路径均有证据。
-- [ ] 取得可信版本及插件矩阵后实现允许的 MySQL 模式判定规则；当前缺 Oracle 位安全拒绝，不能称已完成 MySQL 模式认证支持。
-- [ ] 两模式真实握手和 OBProxy 验收，记录服务端/代理版本、插件与能力位；与非 Windows 测试均按用户要求暂缓。
+- [x] Synthetic fixtures/loopback cover Oracle bit set/unset, untrustworthy mode identification, unknown plugins, missing capabilities, and authentication errors; do not return an executable connection with unknown mode.
+- [x] Permit cleartext-style plugins only after successful VerifyFull upgrade; authentication switches reuse that security check; rejection without verified TLS is tested.
+- [x] Local handshake/authentication evidence covers native authentication, switches, mode/capability snapshots, error codes/redaction, and sync/async.
+- [ ] Implement permitted MySQL-mode identification after obtaining trusted version/plugin evidence. Currently reject a missing Oracle bit safely; MySQL authentication support is not complete.
+- [ ] Live handshake in both modes and OBProxy acceptance, recording server/proxy versions, plugin, and bits; defer this and non-Windows tests per user instruction.
 
-当前实现边界（2026-10-18）：native challenge 和仅 VerifyFull 下的 clear password 编码尚无实库验收。没有已验证版本矩阵时，缺少 Oracle 状态位的连接明确失败，不能假设 MySQL；补齐 G0 后须以真实证据建立版本白名单再运行 A07。合成夹具中的 4.2.1 不是兼容承诺。
+Current boundary (2026-10-18): native-challenge encoding and VerifyFull-only clear-password encoding lack live acceptance. Without a verified version matrix, connections missing the Oracle-state bit explicitly fail rather than default to MySQL. After G0, establish an allowlist from live evidence before A07. Synthetic fixture version 4.2.1 is not a compatibility promise.
 
-### A06 物理会话、错误与生命周期
+### A06 Physical Sessions, Errors, and Lifecycle
 
-**产物：**`PhysicalSession` 的 `Connecting/Open/Busy/Broken/Closed` 状态与独占租约；关闭/错误释放 socket、statement ID、结果状态。`OceanBaseException` 保留 SQLSTATE、服务端码和结果未知标记；安全端点和模式通过日志/诊断关联。
+**Deliverables:** `PhysicalSession` states `Connecting/Open/Busy/Broken/Closed` and exclusive lease; close/error releases socket, statement IDs, and result state. `OceanBaseException` retains SQLSTATE, server code, and unknown-outcome flag; logging/diagnostics correlate safe endpoints and mode.
 
-- [x] 测试同一物理会话并发执行拒绝、未读响应不得复用、错误后失效、重复释放幂等和日志脱敏。
-- [x] 实现同步/异步关闭的资源所有权；不让后台清理线程替代显式状态转换。
-- [x] 运行状态机单测及网络断开夹具。
+- [x] Test concurrent execution rejection, no reuse with unread responses, invalidation after errors, idempotent disposal, and log redaction.
+- [x] Implement explicit sync/async close resource ownership; no background cleanup thread replaces state transitions.
+- [x] Run state-machine tests and network-disconnect fixtures.
 
-### A07 G1 真实连接门槛
+### A07 G1 Live Connection Gate
 
-**产物：**在明确版本的 MySQL/Oracle 租户和 OBProxy 上打开、识别模式、关闭连接；记录 TLS 和认证组合。G1 是互通证据，不是仅有夹具的绿色构建。
+**Deliverables:** open, identify mode, and close on explicitly versioned MySQL/Oracle tenants and OBProxy; record TLS/authentication combinations. G1 requires interoperability evidence, not a fixture-only green build.
 
-- [ ] 两模式直连及 OBProxy 组合各跑连接/关闭、模式不符拒绝、错误证书和不支持认证。
-- [ ] 将实际版本/端点类别、执行命令、脱敏日志及失败项填入兼容矩阵。
-- [ ] 仅在全部必需组合通过时关闭 G1；其余记录为阻塞，不把夹具通过写成兼容通过。
+- [ ] For direct/OBProxy combinations in both modes, test open/close, expected-mode mismatch, wrong certificates, and unsupported authentication.
+- [ ] Record actual versions/endpoint categories, commands, redacted logs, and failures in the compatibility matrix.
+- [ ] Close G1 only when all required combinations pass; otherwise record blockers and never equate fixtures with compatibility.
 
-## B. ADO.NET 核心
+## B. ADO.NET Core
 
-### B01 标准 provider、现代数据源与宿主接入
+### B01 Standard Provider, Modern Data Sources, and Host Integration
 
-**产物：**`OceanBaseConnection`、`OceanBaseCommand`、`OceanBaseParameter`、`OceanBaseDataReader`、`OceanBaseTransaction`、`OceanBaseProviderFactory`；现代资产的 `OceanBaseDataSourceBuilder`/`OceanBaseDataSource` 和可选 DI 包；数据源级 `ILoggerFactory`。工厂创建正确派生类型，尚未实现的方法明确失败；SQL、reader、事务的执行能力仍由 B02-B08 逐项交付，不发布空壳能力声明。
+**Deliverables:** `OceanBaseConnection`, `OceanBaseCommand`, `OceanBaseParameter`, `OceanBaseDataReader`, `OceanBaseTransaction`, `OceanBaseProviderFactory`; modern `OceanBaseDataSourceBuilder`/`OceanBaseDataSource`, optional DI package, and data-source-level `ILoggerFactory`. Factory methods create the correct derived types; unimplemented methods fail explicitly. SQL/reader/transaction execution ships through B02-B08, without claiming capabilities from skeletons.
 
-- [x] 测试创建/关闭/重复使用、`DbProviderFactories.RegisterFactory`、`ConnectionString` 脱敏，以及 B 阶段 `ChangeDatabase`/`ChangeDatabaseAsync` 在发包前报不支持。
-- [x] 将对象只连接到 A 阶段会话，不暴露内部 socket 或双模式两套公开类型。
-- [x] 实现核心 builder/无池数据源、现代 factory 入口与日志上下文，可选 DI 工程及 slnx 项目项。五个资产的直接连接构造重载均可传入 `ILoggerFactory`，无全局工厂，基线资产也有日志配置入口。核心只引用日志抽象；集成包引用核心和 DI 抽象，两个包同一根 Version，依赖按 TFM 由 CPM 管理。
-- [x] 实现普通/带 key 数据源注册；容器工厂延迟 Build，先取得宿主 logger 再执行配置回调，无日志服务时可用；默认不注册连接。数据源 Singleton，key/重复注册/通用别名冲突遵循架构设计 §2.5，不创建第二个容器。
-- [x] 测试 Build/DI 解析不联网、配置冻结、来源数据源的连接配置不可替换、独立数据源不串配置、打开失败释放、数据源关闭与打开竞争、关闭后新打开拒绝、活动连接由调用者完成、释放幂等和外部 logger factory 不被释放。
-- [x] 测试同步/异步连接事件、凭据脱敏、原始服务端异常不泄露、日志工厂/过滤/写入抛错不妨碍建连与清理；取消保留原 token，回调关闭不乱序发布状态。命令结果未知日志随 B02/B08 验收。
-- [x] 新增 net10.0 DI 测试：容器创建/释放、scope validation、配置覆盖、无日志宿主及不同 key 隔离。
-- [x] 五目标核心、三目标 DI 编译；运行工厂/隔离消费和逐目标依赖图测试，检查两包同版本及精确核心依赖。
-- [ ] 取得可信 MySQL 模式版本证据后验证双模式公开建连路径；当前缺模式位仍安全拒绝，不为合成 MySQL 成功路径绕过门槛。实库、旧运行时和非 Windows 证据仍待补充。
-- [x] reader 的 `CommandBehavior.CloseConnection` 已有 B06/后续隔离消费的本地契约回归；真实双模式行为仍随 B06 实库验收。
+- [x] Test creation/close/reuse, `DbProviderFactories.RegisterFactory`, `ConnectionString` redaction, and B-stage `ChangeDatabase`/`ChangeDatabaseAsync` rejection before sending.
+- [x] Connect public objects only to phase-A sessions; expose neither sockets nor separate public type sets for the two modes.
+- [x] Implement core builder/nonpooled data source, modern factory entry points, logging context, optional DI project, and slnx entries. Direct connection constructors in all five assets accept `ILoggerFactory`, including Standard; no global factory. Core depends only on logging abstractions; integration depends on core/DI abstractions. Both packages use root Version and CPM dependencies by TFM.
+- [x] Ordinary/keyed data-source registration uses deferred container-factory Build; resolve host logger before configuration callbacks and work without logging services; do not register connections by default. Singleton source, key/duplicate/common-alias conflict rules follow architecture §2.5; never create a second container.
+- [x] Test no network on Build/DI resolution, frozen configuration, no replacement of source-owned connection configuration, independent source isolation, open-failure cleanup, source-dispose/open races, rejection after disposal, caller-owned active connections, idempotent disposal, and no disposal of external logger factories.
+- [x] Test sync/async connection events, credential redaction, no raw server exception leaks, and logging factory/filter/write failures not preventing open/cleanup. Cancellation retains the original token; callback-triggered close cannot publish states out of order. Command unknown-outcome logs follow B02/B08.
+- [x] Add net10.0 DI tests for container creation/disposal, scope validation, configuration overrides, hosts without logging, and key isolation.
+- [x] Compile five core/three DI targets; run factory/isolated-consumer/per-target dependency-graph tests and verify shared package versions/exact core dependency.
+- [ ] Verify public open paths in both modes after trusted MySQL-version evidence. Missing mode bits still reject safely; no bypass to synthesize MySQL success. Live, old-runtime, and non-Windows evidence remains open.
+- [x] Reader `CommandBehavior.CloseConnection` has B06/subsequent isolated-consumer regressions; live behavior in both modes remains part of B06 acceptance.
 
-### B02 文本命令、OK/ERR 与多结果
+### B02 Text Commands, OK/ERR, and Multiple Results
 
-**产物：**`COM_QUERY`、文本行、OK/ERR、多结果状态；`ExecuteNonQuery`、`ExecuteScalar`、`ExecuteReader` 同步与异步路径共享状态机。
+**Deliverables:** `COM_QUERY`, text rows, OK/ERR, and multiple-result state; sync/async `ExecuteNonQuery`, `ExecuteScalar`, and `ExecuteReader` share a state machine.
 
-- [x] 夹具/环回覆盖 `SELECT`、DML、空结果、多个结果集、结果集后更新计数、服务器 ERR、有未消费响应的关闭，以及传统 EOF/协商后的 FE OK 终止。
-- [x] 保留默认 `CLIENT_FOUND_ROWS` 能力；`RecordsAffected` 仅累计服务端 OK 的计数，不按客户端 SQL 猜测，也不把 SELECT 行数算入更新计数。真实不变 UPDATE 的匹配行语义仍待实库证明。
-- [x] Windows 环回验证异步建命令/逐行读取等待网络，文本路径不缓存整个结果；同步调用同步 I/O。预取消/不支持参数/行为/环境事务在发包前失败；发包后取消、超时或关闭销毁会话并报告结果未知。B08 继续覆盖更完整的故障矩阵。
-- [x] 使用 B01 日志上下文记录命令完成/错误/取消/结果未知，默认不记录 SQL 或绑定值；已收到可信 OK/ERR 后，日志回调触发取消也不覆盖终态。
-- [ ] 两模式分别运行真实文本 CRUD 和不变 UPDATE 匹配行验证；依用户要求实库及非 Windows 测试暂不执行，MySQL 模式可信版本门槛保持不变。
+- [x] Fixtures/loopback cover `SELECT`, DML, empty/multiple results, update counts after result sets, server ERR, close with unread responses, and traditional EOF/negotiated FE OK terminators.
+- [x] Keep default `CLIENT_FOUND_ROWS`; `RecordsAffected` accumulates server OK counts only, without guessing from SQL or counting SELECT rows. Live unchanged-UPDATE matched-row semantics remain unproven.
+- [x] Windows loopback proves async command creation/row reads await the network without buffering entire text results; synchronous calls use synchronous I/O. Precancellation/unsupported parameters/behavior/ambient transactions fail before sending. Cancellation/timeout/close after sending destroys the session and reports unknown outcome. B08 extends fault coverage.
+- [x] B01 context logs command completion/error/cancellation/unknown outcome without default SQL/bind values. Cancellation from logging callbacks cannot overwrite a trusted terminal OK/ERR.
+- [ ] Live text CRUD and unchanged-UPDATE matched-row tests in both modes; live/non-Windows execution is deferred per user instruction and the trusted MySQL-version gate remains.
 
-B02 交付的 reader 支持基础有/无符号整数、浮点、UTF-8 字符串、binary 字符串和 NULL；保留物理会话模式，Oracle 类型码 3（NUMBER）当时明确拒绝，不借用 MySQL INT 映射。B05 已补精确数值、日期及低精度 provider-specific 访问，完整字段元数据仍属 B06；national charset、LOB 和其他扩展值不猜测解码。B02 交付时仅接受 `CommandBehavior.Default`/`CloseConnection`；C04 已新增本地 `SequentialAccess` 字段流，其他未实现行为仍在发包前拒绝。响应硬上限为每包 64 MiB、每结果 4096 列/4 MiB 元数据、每命令一百万包；超限销毁会话。超出平台计时器范围的超时在取得会话前失败，不遗留 Busy 会话。
+At B02 delivery, the reader supported basic signed/unsigned integers, floating point, UTF-8/binary strings, and NULL. It retained physical-session mode and explicitly rejected Oracle type code 3 (NUMBER) instead of borrowing MySQL INT mapping. B05 subsequently added exact numeric/date/low-precision provider-specific access; full metadata remains B06. Never guess national charset, LOB, or other extension decoding. B02 originally accepted only `CommandBehavior.Default`/`CloseConnection`; C04 subsequently added local `SequentialAccess` field streams. Other unsupported behavior fails before sending. Limits: 64 MiB per packet, 4096 columns/4 MiB metadata per result, one million packets per command; exceeding them destroys the session. Timeouts outside platform timer range fail before leasing, leaving no Busy session.
 
-### B03 Oracle 占位符词法器与参数验证
+### B03 Oracle Placeholder Lexer and Parameter Validation
 
-**产物：**Oracle 命名 `:name` 到位置参数的映射；跳过单/双引号、注释、成对及非成对分隔符的 `q'...'` 字面量和 `:=` 赋值；重复名称展开到每个位置，无法可靠识别的字面量或绑定语法及缺失/多余绑定在发包前失败。`ParameterName` 接受有/无 `:` 前缀，去前缀后不区分大小写，参数集合中规范化后重名的多个项一律拒绝。MySQL SQL 不经客户端占位符改写，参数数量以 B04 的服务端 prepare 返回值为准。
+**Deliverables:** map Oracle `:name` to positional parameters, skipping single/double quotes, comments, paired/unpaired `q'...'` literals, and `:=` assignment. Expand repeated names to each position. Unreliable literal/bind syntax and missing/extra binds fail before sending. `ParameterName` accepts an optional `:`; normalize then compare case-insensitively and reject duplicate normalized collection entries. MySQL SQL is not rewritten; B04 server prepare determines its parameter count.
 
-- [x] 用普通字符串、`q'[...]'`/`q'{...}'`/`q'(...)'`/`q'<...>'`、非成对分隔符 `q'!:name!'`、未闭合字面量、双引号、注释、`:=`、重复名称/大小写和无参数 SQL 写用例；确认仅实际绑定被改写，无法可靠识别时发包前失败。
-- [x] 实现 Oracle 单次词法扫描，保留原始参数顺序，不做客户端值插入；未知 Oracle 绑定语法明确失败。
-- [x] 运行词法器单测及同步/异步公共命令环回测试，验证错误绑定不发包且会话仍可用。
-- [ ] Oracle/MySQL 参数化集成测试依用户要求暂缓；合法参数实际执行由 B04 接入后验收。
+- [x] Cases cover strings, `q'[...]'`/`q'{...}'`/`q'(...)'`/`q'<...>'`, unpaired `q'!:name!'`, unterminated literals, double quotes, comments, `:=`, repeats/case, and parameterless SQL; rewrite actual binds only and fail before sending when recognition is unreliable.
+- [x] One Oracle lexical scan preserves original parameter order without inserting values; unknown bind syntax fails explicitly.
+- [x] Run lexer and sync/async public-command loopback tests; bad binds send nothing and leave the session usable.
+- [ ] Oracle/MySQL integration is deferred per the user; valid-parameter execution is accepted after B04 integration.
 
-B03 当前支持 ASCII `[A-Za-z_][A-Za-z0-9_$#]*` 名称（ParameterName 可带一个 `:`），按 OrdinalIgnoreCase 匹配；数字、带引号、Unicode 名称及 Oracle 字面量外的 `?` 显式不支持。`q`/`nq` 大小写均可，分隔符为单个非空白/非控制/非代理项 BMP 字符；单/双引号双写转义，反斜杠无转义含义。块注释不嵌套、以首个 `*/` 结束。规范化后的重复名称、缺失/多余参数和不支持的参数方向在命令租约/发包前拒绝，参数 Value 不参与 SQL 重写；集合本身的名称查找语义不变。校验依据已认证模式，关闭连接先报无可用会话。B03 单独交付映射与校验，服务端 Prepare 及合法基础参数执行已由 B04 接入。
+Supported names are ASCII `[A-Za-z_][A-Za-z0-9_$#]*` (one optional leading `:`), matched with OrdinalIgnoreCase. Numeric/quoted/Unicode names and `?` outside Oracle literals are explicitly unsupported. `q`/`nq` are case-insensitive; delimiters are single nonwhitespace/noncontrol/nonsurrogate BMP characters. Doubled quotes escape single/double quotes; backslash has no escape meaning. Block comments do not nest and end at the first `*/`. Duplicate normalized names, missing/extra binds, and unsupported directions reject before lease/send. Values never participate in rewriting; collection name-lookup semantics are unchanged. Validation uses authenticated mode; closed connections report no available session first. B03 delivered mapping/validation; B04 subsequently integrated server Prepare and valid basic-parameter execution.
 
-### B04 服务端预处理与语句所有权
+### B04 Server Preparation and Statement Ownership
 
-**产物：**`COM_STMT_PREPARE/EXECUTE/CLOSE`、二进制参数/结果、同一物理会话上的 statement ID；MySQL 参数数量以服务端 prepare 响应为准，Oracle 改写后数量须与响应一致。不支持 prepare 的 SQL 明确失败。`PrepareAsync` 和命令 `DisposeAsync` 在 netstandard2.1/net8.0/net9.0/net10.0 覆写并真实异步；netstandard2.0 仅提供其参考 API 支持的入口。
+**Deliverables:** `COM_STMT_PREPARE/EXECUTE/CLOSE`, binary parameters/results, and statement IDs owned by one physical session. Server prepare determines MySQL counts; Oracle rewritten counts must match. Unsupported prepared SQL fails explicitly. `PrepareAsync`/command `DisposeAsync` are true async overrides on netstandard2.1/net8.0/net9.0/net10.0; netstandard2.0 exposes only reference-supported APIs.
 
-- [x] Windows 字节级/环回覆盖基础参数类型、有/无符号边界、跨字节 NULL 位图、类型变化、重复执行、多结果、畸形二进制行、错误关闭、断线后旧 statement ID 不复用。
-- [x] 实现同步/异步发包与响应；保持 `Prepare()` 强制准备，失败不转成客户端插值。自动准备与执行共享一个租约/超时预算；只有实际执行发送后故障才报 SQL 结果未知。
-- [x] Windows 环回确认 net10.0 和隔离加载的 netstandard2.1 资产 PrepareAsync 等待网络，不退回同步 I/O；覆盖执行、同步/异步释放和忙会话延迟关闭。
-- [ ] 两模式运行真实预处理 CRUD、目标运行时非同步退化与类型往返测试；依用户要求实库、非 Windows 和旧运行时暂缓，缺 Oracle 模式位的握手仍安全拒绝。
+- [x] Windows byte/loopback cases cover basic types, signed/unsigned bounds, cross-byte NULL bitmaps, type changes, repeated execution, multiple results, malformed binary rows, error cleanup, and no reuse of old IDs after disconnect.
+- [x] Shared sync/async packet/response handling keeps `Prepare()` mandatory, without interpolation fallback. Automatic preparation/execution share one lease/timeout budget; SQL outcome is unknown only after actual execution starts sending.
+- [x] Windows net10.0/isolated netstandard2.1 consumption proves PrepareAsync awaits the network without sync fallback; cover execute, sync/async disposal, and deferred close on busy sessions.
+- [ ] Live prepared CRUD, no async fallback on target runtimes, and type round-trips in both modes; defer live/non-Windows/old-runtime tests per the user. Missing Oracle-mode bits still reject safely.
 
-B04 交付基础 bool/整数/浮点/普通 UTF-8 字符串/byte[]/NULL 编解码，B05 已扩展精确数值/日期；执行入口在发送其准备/执行包前拒绝显式 DbType 与 CLR 值不匹配及未支持类型，显式 Prepare/PrepareAsync 不检查 Value 编码。语句 ID 仅在同一命令、相同改写 SQL 和同一物理会话复用；变更、重连和释放时失效，空闲关闭或忙时排队到下次命令前。服务端参数数不符不执行 SQL，准备元数据 ERR 关闭已知 ID，终态执行 ERR 保留可复用会话；未消费响应则销毁会话。B06 已补 reader 字段元数据、B07 已接入本地事务；B08 本地故障矩阵已补齐，真实环境验收仍未完成，不据此关闭 G2。
+B04 delivered bool/integer/float/ordinary UTF-8 string/byte[]/NULL codecs; B05 extended exact numbers/dates. Execution rejects explicit DbType/CLR mismatch and unsupported types before prepare/execute packets; explicit Prepare/PrepareAsync does not inspect value encoding. IDs reuse only within the same command, rewritten SQL, and physical session; changes/reconnect/disposal invalidate them, closing immediately if idle or before the next command if busy. Count mismatch never executes SQL. Prepare-metadata ERR closes known IDs; terminal execution ERR permits session reuse; unread responses destroy the session. B06 added metadata and B07 local transactions. B08 local faults are covered, but live acceptance is incomplete and G2 stays open.
 
-### B05 基础值、字符集与不支持类型
+### B05 Basic Values, Charsets, and Unsupported Types
 
-**产物：**模式感知编解码支持基础整数、浮点、可表示的 `decimal`、低精度列的 `OceanBaseDecimal` provider-specific 读取和范围内参数写入、文本/二进制、NULL、常见日期时间及含时间的 Oracle `DATE`；宽精度和延期类型显式失败。
+**Deliverables:** mode-aware codecs for basic integers/floats, representable `decimal`, low-precision `OceanBaseDecimal` provider-specific reads/in-range writes, text/binary, NULL, common temporal values, and Oracle `DATE` including time. Wide precision/deferred types fail explicitly.
 
-- [x] 夹具覆盖有符号/无符号边界、乱码、NULL/空串、Oracle `DATE` 时分秒、低精度 NUMBER/DECIMAL 经 `OceanBaseDecimal` 精确读取和写入、MySQL `DECIMAL(65,20)` 在 C 前失败、NCHAR/INTERVAL/JSON/BIT/YEAR 未支持时失败。
-- [x] 编码依据 `DbType`/显式 `OceanBaseDbType`，解码依据模式、列定义、字符集、精度；普通 `string` 参数不声称支持 NCHAR/JSON。
-- [ ] 两模式运行真实基本类型往返和字段元数据一致性测试；依用户要求暂缓，合成报文及 Windows 环回不能替代。
+- [x] Fixtures cover signed/unsigned bounds, invalid encoding, NULL/empty strings, Oracle DATE time, exact low-precision NUMBER/DECIMAL `OceanBaseDecimal` read/write, pre-C rejection of MySQL `DECIMAL(65,20)`, and unsupported NCHAR/INTERVAL/JSON/BIT/YEAR rejection.
+- [x] Encode by `DbType`/explicit `OceanBaseDbType`; decode by mode, column definition, charset, and precision. Ordinary `string` parameters do not imply NCHAR/JSON support.
+- [ ] Live basic-type round-trips and metadata consistency in both modes remain deferred; synthetic packets/Windows loopback cannot substitute.
 
-B05 本地实现及 Windows 验证已完成，整体待验证。低精度读列使用固定 decimal/OceanBaseDecimal 类型，元数据缺失、p>28 或负 scale 明确拒绝；Oracle 优化 NUMBER 类型码 3 的四字节布局独立处理。参数保留显式/推断 scale 的差异、不舍入；日期时间保留 Oracle DATE 的时分秒，MySQL TIME 按有符号时长处理，Oracle TIMESTAMP 202 按原始 12 字节布局处理，精确范围及拒绝规则见架构 §5。公开 reader 文本/二进制、同步/异步命令前置校验和五目标隔离资产消费已有测试；真实 Oracle 空字符串/NULL、TIMESTAMP scale 变体、旧运行时及非 Windows 验收仍缺证据。GetSchemaTable/GetColumnSchema 留 B06。
+B05 is locally implemented/Windows-verified, overall verification open. Low-precision fields have fixed decimal/OceanBaseDecimal types; missing metadata, p>28, and negative scale explicitly reject. Oracle optimized NUMBER code 3 uses a separate four-byte layout. Parameters preserve explicit/inferred scale without rounding; Oracle DATE preserves time; MySQL TIME is a signed duration; Oracle TIMESTAMP 202 uses its original 12-byte layout. Exact ranges/rejections are in architecture §5. Public text/binary reader, sync/async prevalidation, and isolated five-asset consumption are tested. Live Oracle empty-string/NULL semantics, TIMESTAMP scale variants, old runtimes, and non-Windows lack evidence. GetSchemaTable/GetColumnSchema belong to B06.
 
-### B06 逐行 reader 与列元数据
+### B06 Row-by-row Reader and Column Metadata
 
-**产物：**逐行 `Read`/`ReadAsync`、`NextResult`/`NextResultAsync`、`GetSchemaTable`、`IDbColumnSchemaGenerator.GetColumnSchema`、固定的 `GetFieldType`/provider-specific 字段类型；低精度 NUMBER/DECIMAL 列的 `GetProviderSpecificFieldType` 与 `GetProviderSpecificValue` 使用 `OceanBaseDecimal`。B 阶段允许有上限的当前行缓冲，不缓存整个结果集。
+**Deliverables:** `Read`/`ReadAsync`, `NextResult`/`NextResultAsync`, `GetSchemaTable`, `IDbColumnSchemaGenerator.GetColumnSchema`, and stable `GetFieldType`/provider-specific field types. Low-precision NUMBER/DECIMAL `GetProviderSpecificFieldType`/`GetProviderSpecificValue` use `OceanBaseDecimal`. B permits bounded current-row buffering, never entire-result buffering.
 
-- [x] 测试跨多结果读取、早关、`CommandBehavior.CloseConnection`、零/空值、低精度列的标准/provider-specific 类型随行稳定、未消费响应的会话处理；零日期继续按 C03 边界拒绝。
-- [x] 实现 reader 在响应未消费完时独占物理会话；`ExecuteScalar`/`ExecuteNonQuery` 安全消费或使会话失效。
-- [ ] 两模式对照真实服务端列定义验证名称、精度、长度、可空性和异步读取；合成列定义/Windows 环回已通过，实库暂缓。
+- [x] Test multiple-result traversal, early close, `CommandBehavior.CloseConnection`, zero/NULL, stable standard/provider-specific low-precision types across rows, and unread-response session handling; zero dates still reject at the C03 boundary.
+- [x] Reader exclusively holds the session until responses are consumed; `ExecuteScalar`/`ExecuteNonQuery` safely drain or invalidate.
+- [ ] Verify names, precision, length, nullability, and async reading against real columns in both modes; synthetic columns/Windows loopback pass, live testing deferred.
 
-B06 本地实施步骤（现有 master，基线 b772c0f）：
+B06 local implementation steps (existing master, baseline b772c0f):
 
-- [x] `ResultColumn` 保留数据库/表/原始表列名、原始长度与 flags；新增内部 `ResultDbColumn`，把它们映射到跨五目标的 `DbColumn`，不增加依赖。名称、类型名及解码共用同一列定义，MySQL 字符长度按已支持字符集宽度换算，Oracle 普通字符长度按其元数据单位保留；超出 int 的长度饱和为 int.MaxValue。MySQL 数据库名映射 BaseCatalogName，Oracle 映射 BaseSchemaName。
-- [x] `OceanBaseDataReader` 实现 `IDbColumnSchemaGenerator` 及 schema table；返回独立快照，未提供的唯一性/表达式/可更新性保持未知；ProviderType 在 B06 时未知，已由 B09 补齐，ProviderSpecificDataType 与实际 provider-specific 读取一致。无列结果的 schema table 为 null、column schema 为空；推进结果时不复用旧元数据。
-- [x] 先以公开文本/二进制、同步/异步环回及内部 MySQL/Oracle 列定义测试证明缺口，再验证大小/精度/NULL/别名/多结果/提前关闭/独占/安全消费和五目标消费；编译、完整 Windows 单元/消费/DI、format、包矩阵、独立走查通过后提交。实库及非 Windows/旧运行时验收继续留空。
+- [x] `ResultColumn` retains database/table/original table/column names, raw length, and flags. Internal `ResultDbColumn` maps these to five-target `DbColumn` without dependencies. Names/type names/decoding share one definition. MySQL character lengths use supported charset widths; Oracle ordinary character lengths retain metadata units; lengths beyond int saturate at int.MaxValue. MySQL database maps to BaseCatalogName, Oracle to BaseSchemaName.
+- [x] `OceanBaseDataReader` implements `IDbColumnSchemaGenerator`/schema table and returns independent snapshots. Unprovided uniqueness/expression/updatability stays unknown. ProviderType was unknown in B06 and filled by B09; ProviderSpecificDataType matches actual access. No-column results return null schema table/empty column schema; advancing results never reuses stale metadata.
+- [x] First demonstrate gaps through public text/binary sync/async loopback and internal MySQL/Oracle column tests; then verify size/precision/NULL/aliases/multiple results/early close/exclusivity/safe drain/five-target consumption. Build, full Windows Unit/Consumer/DI, format, package matrix, and independent review passed before commit. Live/non-Windows/old-runtime acceptance remains empty.
 
-B06 本地实现边界见架构 §5：GetColumnSchema/GetSchemaTable 已有跨五目标消费证据；独立源码走查未发现需修复问题，另补零行 SELECT 保留 schema 的回归。真实字符长度/Oracle 空值语义、真实服务端元数据及旧运行时/非 Windows 仍未验证。B06 当时的 ProviderType 未知项已在 B09 补齐标量枚举与参数映射，不伪装协议码。
+See architecture §5 for B06 boundaries. GetColumnSchema/GetSchemaTable have five-target consumption evidence. Independent source review found no required fixes; an additional zero-row SELECT schema regression was added. Actual character lengths, Oracle NULL semantics, real metadata, old runtimes, and non-Windows remain unverified. B09 filled the former unknown ProviderType using scalar enum/parameter mappings, not disguised protocol codes.
 
-### B07 本地事务与环境事务拒绝
+### B07 Local Transactions and Ambient Transaction Rejection
 
-**产物：**`BeginTransaction`、隔离级别逐模式映射、显式 `DbCommand.Transaction` 绑定、提交/回滚/释放；现代事务异步入口真实异步。`TransactionScope`/`EnlistTransaction` 在发包前拒绝。
+**Deliverables:** `BeginTransaction`, mode-specific isolation mapping, explicit `DbCommand.Transaction` binding, commit/rollback/disposal, and true modern async lifecycle APIs. Reject `TransactionScope`/`EnlistTransaction` before sending.
 
-B07 本地实现：沿 Java 的 `SET SESSION TRANSACTION ISOLATION LEVEL ...`、`set autocommit = 0` 会话路径，在第一条业务语句时由服务端实际开始事务；不向 Oracle 模式发送 PL/SQL `BEGIN`。Unspecified 明确选择 MySQL RepeatableRead / Oracle ReadCommitted；MySQL 支持四个常规隔离级别，Oracle 首先只开放 ReadCommitted/Serializable（Java 允许 RepeatableRead 不能代替实库证据）。提交/回滚后恢复 `set autocommit = 1`。终态提交/回滚已确认但恢复失败时销毁会话并保留已确认结果，单独记录恢复失败；终态 ERR 保留活动事务供回滚，未确认响应则销毁。关闭/释放清理复用该路径，忙会话直接销毁，不向未读响应插入回滚。模式映射有内部测试；公共握手仍只接受已认证 Oracle 模式，不能据此宣称 MySQL 事务已互通。
+Local implementation follows Java session commands `SET SESSION TRANSACTION ISOLATION LEVEL ...` and `set autocommit = 0`; the server starts the transaction on the first business statement. Do not send PL/SQL `BEGIN` in Oracle mode. Unspecified chooses MySQL RepeatableRead / Oracle ReadCommitted. MySQL supports four conventional levels; Oracle initially only ReadCommitted/Serializable (Java allowing RepeatableRead is not live evidence). Restore `set autocommit = 1` after commit/rollback. If terminal commit/rollback is confirmed but restoration fails, destroy the session, retain the confirmed outcome, and log restoration failure separately. Terminal ERR retains the active transaction for rollback; unconfirmed responses destroy it. Close/dispose reuse cleanup; destroy busy sessions rather than insert rollback into unread responses. Internal mapping tests do not prove MySQL interoperability: public handshake still accepts only authenticated Oracle mode.
 
-- [x] Windows 环回测试遗漏、错误连接、已结束事务、重复开启、隔离级别错误、关闭时回滚及回滚失败销毁。
-- [x] Windows 环回测试连接打开前/后进入 `TransactionScope`，已实现的调用方协议入口拒绝但内部清理可继续。
-- [x] Oracle 合成环回验证同步/异步提交、回滚、断线/取消后结果未知，以及五资产公开事务消费；现代资产延迟响应证明 Begin/End 不阻塞调用线程。
-- [ ] 两模式实库提交、回滚、隔离级别及断线验收；实库、非 Windows 及旧运行时暂缓。
-- [x] 沿用 B01 日志上下文，覆盖事务完成/失败及结果未知；不记录 SQL/参数或原始服务端错误文本，日志异常不能掩盖提交结果。
+- [x] Windows loopback covers missing/wrong-connection/completed transaction, nested begin, invalid isolation, rollback on close, and destruction after rollback failure.
+- [x] Windows loopback covers entering `TransactionScope` before/after open; implemented caller protocol entry points reject while internal cleanup remains possible.
+- [x] Synthetic Oracle loopback covers sync/async commit/rollback, unknown outcome on disconnect/cancel, and five-asset public consumption. Delayed modern responses prove Begin/End do not block the caller.
+- [ ] Live commit/rollback/isolation/disconnect in both modes; live/non-Windows/old-runtime acceptance deferred.
+- [x] B01 context logs transaction completion/failure/unknown outcome without SQL/parameters/raw server messages; logging failures cannot obscure commit results.
 
-2026-10-18 本地验证：五目标核心/三目标 DI Release build 0 警告/错误；Windows Unit455、Consumer34、DI8 通过（`TestResults/b07-{unit,consumer,di}.trx`）。独立走查指出的 reader 异步释放同步回滚、延迟关闭后重开事件顺序已有失败后通过的回归；日志工厂在事务执行前创建类别，避免惰性创建重入。CloseConnection reader 的现代异步清理沿用连接异步回滚；关闭先发布逻辑 Closed，旧会话清理不能销毁新会话。格式、双包和资产/依赖版本检查通过。整体仍待验证，G2 不关闭；下一模块 B08。
+2026-10-18 local verification: five-core/three-DI Release build, 0 warnings/errors; Windows Unit455, Consumer34, DI8 pass (`TestResults/b07-{unit,consumer,di}.trx`). Independent review found sync rollback during async reader disposal and event ordering on reopen after delayed close; failing-then-passing regressions cover both. Create log categories before transactions to avoid lazy-creation reentry. Modern CloseConnection-reader cleanup uses async connection rollback. Publish logical Closed first; old cleanup cannot destroy a new session. Format, both packages, asset/dependency versions pass. Overall pending; G2 remains open; next B08.
 
-2026-10-19 中断走查续接修正：直接检查 NETStandard.Library.Ref 2.1.0 的 netstandard.dll 元数据，确认连接/reader/事务异步生命周期 API 已存在；将四处仅 NET8_0_OR_GREATER 的条件扩大至 NETSTANDARD2_1，复用同一异步实现。先以隔离消费的 2.1 五种延迟回滚清理和事务覆写共6项失败证明缺口，修复后17项定向通过，补充 COMMIT/ROLLBACK 等待网络及预取消原 token 的检查。完整验证与延期边界见进度台账；不把本次修复当作 C03 TZ/LTZ 子项完成。
+2026-10-19 resumed-review correction: direct NETStandard.Library.Ref 2.1.0 netstandard.dll metadata inspection confirmed async connection/reader/transaction lifecycle APIs. Expand four NET8_0_OR_GREATER conditions to NETSTANDARD2_1, reusing the implementation. Six isolated-2.1 cases (five delayed rollback cleanups plus transaction overrides) failed before correction; 17 targeted cases passed afterward, with COMMIT/ROLLBACK network waits and original precancelled-token checks. Full evidence/deferred boundaries are in the ledger. This correction does not complete C03 TZ/LTZ work.
 
-### M05 现代事务保存点本地实施（2026-10-20）
+### M05 Modern Transaction Savepoints: Local Implementation (2026-10-20)
 
-依据架构M05及固定Java基线OceanBaseConnection的setSavepoint/rollback(Savepoint)/releaseSavepoint。下一功能为现代net8/net9/net10资产覆写DbTransaction.SupportsSavepoints、Save/SaveAsync、Rollback(name)/RollbackAsync(name)和Release/ReleaseAsync；两个Standard资产不补参考API中不存在的同名方法。技术栈、依赖和连接配置不变，当前checkout本地提交，不推送。
+Based on architecture M05 and pinned Java OceanBaseConnection setSavepoint/rollback(Savepoint)/releaseSavepoint. Modern net8/net9/net10 assets override DbTransaction.SupportsSavepoints, Save/SaveAsync, Rollback(name)/RollbackAsync(name), Release/ReleaseAsync. The two Standard assets gain no methods absent from their reference APIs. Stack/dependencies/configuration unchanged; local commit in current checkout, no push.
 
-设计：只在原连接的活动本地事务内执行，复用CommandExchange与事务控制响应校验、独占租约、原事务超时和取消规则。MySQL发送SAVEPOINT/ROLLBACK TO SAVEPOINT/RELEASE SAVEPOINT，名称使用反引号；Oracle发送SAVEPOINT/ROLLBACK TO，明确拒绝Release，不假装成功。首批名称只接受1–30个ASCII字符，首字符字母，后续字母/数字/下划线，Oracle使用未引用标识符，与Java模式分支一致；拒绝null/空白/引号/注释/分号及超长名称，不记录名称。不在客户端维护保存点目录或猜测服务端存在性/重名/删除行为。
+Execute only in the original connection's active local transaction, reusing CommandExchange, transaction-control response validation, exclusive lease, original transaction timeout/cancellation. MySQL sends SAVEPOINT/ROLLBACK TO SAVEPOINT/RELEASE SAVEPOINT with backtick names. Oracle sends SAVEPOINT/ROLLBACK TO and explicitly rejects Release. Initially allow 1–30 ASCII characters, first a letter, remaining letters/digits/underscore. Oracle uses unquoted identifiers, matching Java's mode branch. Reject null/blank/quotes/comments/semicolons/overlong names; never log names. Maintain no client savepoint catalog and do not infer server existence/duplicate/deletion semantics.
 
-保存点成功不结束事务、不恢复自动提交。回滚到保存点经可信终态确认后递增事务资源代次，保守使既有LOB/REF CURSOR/复杂类型上下文失效；后续业务仍绑定同一个事务。完整ERR保留活动事务供调用者决定，取消/超时/断流/错误响应或OB20边界不能重放、不能保留可复用会话。预取消、无效名称、已结束/关闭重开旧事务、活动reader及环境事务均在发包前拒绝。
+Success neither ends the transaction nor restores autocommit. Confirmed rollback-to-savepoint advances the transaction resource generation, conservatively invalidating existing LOB/REF CURSOR/complex-type contexts; subsequent work still binds the same transaction. Complete ERR retains the active transaction for caller decisions. Cancellation/timeout/disconnect/bad response/OB20 boundary failure permits neither replay nor reusable session. Reject precancellation, invalid names, completed/stale transactions after close/reopen, active readers, and ambient transactions before sending.
 
-文件范围：OceanBaseTransaction.cs公开现代覆写；新增OceanBaseConnection.Savepoints.cs复用Transactions.cs控制交换及状态保护；SavepointTests.cs和SavepointConsumerTests.cs覆盖本地协议与五资产形状/三资产实际消费；同步README、架构和台账。走查重点为注入、事务错误脱离、锁内回调/重入、回滚后的资源失效以及异步等待网络。
+Files: modern overrides in OceanBaseTransaction.cs; new OceanBaseConnection.Savepoints.cs reuses Transactions.cs exchanges/state guards; SavepointTests.cs and SavepointConsumerTests.cs cover local protocol, five-asset shape, and actual three-modern-asset consumption; synchronize README, architecture, ledger. Review injection, accidental transaction detachment, callbacks/reentry under locks, post-rollback resource invalidation, and true async waits.
 
-- [x] 先写公开同步/异步生命周期、名称拒绝和错误路径回归，确认现有基类不支持而失败；实现最小共享控制路径，定向全绿。
-- [x] 三现代资产两模式、标准/OB20消费及异步延迟、尾随响应/断流测试；Standard资产验证无新增API。MySQL仅使用显式认证后模式事实夹具，A05不变。
-- [x] 核心五/DI五Release及完整Unit/Consumer/DI、范围格式与diff检查；独立只读代码走查、必要修复和复验后同步证据并提交。真实保存点数据/锁/DDL行为、数据库/OBProxy和Linux/Windows部署继续标记未验证。
+- [x] First write failing public sync/async lifecycle, invalid-name, and error regressions against unsupported base behavior; implement the minimal shared control path and pass targeted tests.
+- [x] Three-modern-asset/both-mode standard/OB20 consumption, delayed async, trailing-response/disconnect tests; Standard assets add no API. MySQL uses explicit authenticated mode-fact fixtures only; A05 unchanged.
+- [x] Five-core/five-DI Release, full Unit/Consumer/DI, scoped format/diff checks; independent read-only review, necessary corrections/reverification, evidence synchronization and commit. Real savepoint data/locks/DDL, database/OBProxy, and Linux/Windows deployment remain unverified.
 
-补充约束：完整ERR没有事务状态字段，仅保留本地绑定，不证明服务端事务状态。名称子集暂不包含ORM默认的__EFSavePoint，不能由SupportsSavepoints推导ORM全兼容；未找到OceanBase Oracle模式引号名称的独立语法证据，本模块不猜测扩展。独立走查发现并经两项红绿回归修复保存点Activity名称映射；完整Consumer捕获原RollbackAsync按名称反射的重载歧义，仅将原断言改为精确CancellationToken签名，无删除用例或改变产品API。
+Additional limits: complete ERR has no transaction-state field; retaining local binding does not prove server transaction state. The name subset excludes ORM default __EFSavePoint; SupportsSavepoints does not imply full ORM compatibility. No independent syntax evidence for quoted OceanBase Oracle names was found, so do not guess broader support. Independent review found incorrect savepoint Activity-name mapping, fixed with two red/green regressions. Full Consumer found old name-only RollbackAsync reflection ambiguous after overloading; change only that assertion to the exact CancellationToken signature, without removing tests or changing product API.
 
-### B08 取消、超时与结果未知
+### B08 Cancellation, Timeouts, and Unknown Outcomes
 
-**产物：**发送前取消返回 `OperationCanceledException`；发包开始且无可信终态响应时返回 `OceanBaseException(IsExecutionOutcomeUnknown=true)` 并销毁物理会话。`DbCommand.Cancel()` 使用相同状态机。
+**Deliverables:** cancellation before send yields `OperationCanceledException`; once sending starts without a trusted terminal response, return `OceanBaseException(IsExecutionOutcomeUnknown=true)` and destroy the session. `DbCommand.Cancel()` shares this state machine.
 
-- [x] 本地故障注入覆盖发送前、部分头/负载发送、请求已收到但无终态响应、完整 ERR/OK 与取消竞争、`Commit`/`Rollback` 中断。合成环回不证明真实服务端执行，实库执行后断线另验收。
-- [x] 协调调用方 token、Cancel、预算超时与连接关闭；外部 token 保留、内部预算到期映射 TimeoutException。完整终态响应不被迟到取消覆盖，传输可保守销毁；重开后的新会话不受旧命令 Cancel/Dispose 影响。
-- [x] 同步/异步确定性故障测试验证不重放；异步部分发送测试使用真实预算 token 等待中止，并断言精确已写前缀、结果未知/准备区别、Broken 状态及日志归因。
-- [ ] 真实双模式/OBProxy 验证执行后断线、提交/回滚中断、取消与网络时序；非 Windows 与旧运行时验收依用户要求/现有环境暂未执行。
+- [x] Local faults cover before-send, partial header/payload, received request without terminal response, complete ERR/OK racing cancellation, and interrupted `Commit`/`Rollback`. Synthetic loopback does not prove server execution; live post-execution disconnect remains separate.
+- [x] Coordinate caller token, Cancel, budget expiry, and close. Preserve external tokens; map internal budget expiry to TimeoutException. Late cancellation cannot overwrite complete terminal responses, though transport may be conservatively destroyed. Old-command Cancel/Dispose cannot affect reopened sessions.
+- [x] Deterministic sync/async faults prove no replay. Async partial-send tests wait for real budget-token interruption and assert exact written prefix, unknown-outcome versus prepare distinction, Broken state, and log attribution.
+- [ ] Live both-mode/OBProxy post-execution disconnect, commit/rollback interruption, cancellation/network ordering; non-Windows/old-runtime acceptance remains deferred by user instruction/environment.
 
-2026-10-19 本地验证：Release build 核心五目标/DI 三目标0警告/错误，Windows Unit498、Consumer39、DI8 全通过（TestResults/b08-{unit,consumer,di}.trx）。独立走查建议的部分异步发送取消已补7例，其中旧逻辑的超时3例失败后修复通过；接收路径超时与日志误分类亦有回归。五资产消费在 net10.0 宿主通过预取消与命令超时，格式、双包、依赖分组与统一版本校验通过。B08 本地实现完成但保持待验证，下一模块 B09；A05 可信 MySQL 模式判定缺口及 G0/G1/G2 门槛不变。
+2026-10-19 local verification: five-core/three-DI Release build, 0 warnings/errors; Windows Unit498, Consumer39, DI8 pass (TestResults/b08-{unit,consumer,di}.trx). Seven async partial-send cancellation cases requested by review were added; three timeout cases first failed then passed after correction. Receive timeout/log misclassification also has regressions. All five assets pass precancellation/command timeout on net10.0. Format, both packages, dependency groups, and shared-version checks pass. Local B08 complete, overall pending; next B09. Trusted MySQL-mode gap and G0/G1/G2 unchanged.
 
-### B09 G2 公共 API 与双模式验收
+### B09 G2 Public API and Both-mode Acceptance
 
-本地实施步骤（2026-10-19）：先以字段 schema/参数编码回归固定 ProviderType 缺口；在 OceanBaseDbType 末尾追加基础标量族而保持既有0..9数值，OceanBaseParameter 映射到已支持的 DbType/编解码，ResultColumn/ResultDbColumn 提供与该枚举一致的整数 ProviderType。普通字符串与字节族归一为 String/Binary，原始数据库类型仍由 DataTypeName 区分，不伪装原始协议码；NULL 独立映射且只接受空值。更新现有 reader/五资产消费测试，核查 factory/DI/日志及明确不支持的公共入口；最终运行五目标/三目标 build、Windows 单测/消费/DI、格式、双包及资产/依赖组校验，独立源码走查后提交。实库/非 Windows 继续暂缓；net10.0 宿主不能替代旧运行时验收。
+Local steps (2026-10-19): first demonstrate missing ProviderType through schema/parameter regressions; append scalar families to OceanBaseDbType preserving values 0..9. OceanBaseParameter maps to supported DbType/codecs; ResultColumn/ResultDbColumn expose matching integer ProviderType. Normalize ordinary strings/bytes to String/Binary; DataTypeName preserves database distinctions, without pretending protocol codes. NULL maps independently and accepts only null. Update reader/five-asset tests and inspect factory/DI/logging/unsupported public APIs. Run five-core/three-DI build, Windows Unit/Consumer/DI, format, both packages, asset/dependency checks; independent review then commit. Live/non-Windows deferred; net10.0 cannot substitute for old-runtime acceptance.
 
-**产物：**B01-B08 的核心五目标编译/消费、现代数据源/DI 生命周期与基础日志、双模式 CRUD、参数、低精度 `OceanBaseDecimal` provider-specific 访问、事务、reader、取消证据；公开 API 审查记录，列明与 Java 的有意功能差距。
+**Deliverables:** five-target B01-B08 compilation/consumption; modern data-source/DI lifecycle/basic logging, both-mode CRUD, parameters, low-precision `OceanBaseDecimal` provider-specific access, transaction/reader/cancellation evidence; public API review listing intentional Java gaps.
 
-- [x] .NET10 SDK 的 Release slnx 核心五目标/DI 三目标编译和 Windows 单测/消费/DI 通过，日常宿主保持 net10.0；独立核心样例取得五资产在 Windows .NET8/9/10 的基础消费证据，范围见下。
-- [ ] 旧运行时现代 DI、全部核心 API 和 .NET Framework4.8 正式支持仍需 R01/版本矩阵验收，不能由基础样例替代。
-- [x] 基线隔离消费解析日志依赖，核心无反向 DI 引用，Standard 无现代数据源类型；数据源/DI/factory 的配置、安全与生命周期本地证据通过，实际模式/SQL 互通仍受下列实库门槛约束。
-- [x] 公共 API 审核及与 Java 的有意差距归档到架构 §5；补齐 ProviderType/标量参数映射、保持原枚举身份，修复命令事件类别过滤。
-- [ ] 在双模式直连和 OBProxy 上运行 B 阶段集成套件，登记版本、失败用例及已知不支持项。
-- [ ] 仅当必需组合全部通过、无 P0/P1 缺陷时关闭 G2。
+- [x] .NET 10 SDK Release slnx five-core/three-DI build and Windows Unit/Consumer/DI pass; daily hosts remain net10.0. Independent core samples provide basic Windows .NET 8/9/10 consumption evidence for five assets, scoped below.
+- [ ] Older-runtime modern DI, full core API, and formal .NET Framework4.8 support still require R01/version-matrix acceptance; basic samples cannot substitute.
+- [x] Isolated baseline consumers resolve logging dependencies; core has no reverse DI reference; Standard exposes no modern data source. Local data-source/DI/factory configuration/security/lifecycle pass; actual mode/SQL interoperability remains subject to live gates.
+- [x] Public API/intentional Java gaps recorded in architecture §5; complete ProviderType/scalar mappings while preserving enum identity; fix command-event category filtering.
+- [ ] Run B integration suites against direct/OBProxy both-mode combinations; record versions, failures, unsupported items.
+- [ ] Close G2 only after every required combination passes with no P0/P1 defects.
 
-2026-10-19 B09 本地结果：新增65项类型/模式单元测试（首批49项先失败后通过），补5资产既有 schema/parameter 消费断言；新增4项命令日志类别回归先红后绿。最终 Release build0警告/错误，Windows Unit567、Consumer39、DI8 全通过（TestResults/b09-{unit,consumer,di}.trx）。格式/diff、双包及 ZIP/XML5/3资产、8依赖组、统一0.1.0-alpha和精确核心依赖检查通过。源码独立走查无剩余需修复项。
+2026-10-19 B09 local results: 65 new type/mode unit cases (initial 49 failed then passed), existing schema/parameter assertions extended across five assets; four new command-category regressions red then green. Final Release build 0 warnings/errors; Windows Unit567, Consumer39, DI8 pass (TestResults/b09-{unit,consumer,di}.trx). Format/diff, both packages, ZIP/XML five/three assets, eight dependency groups, shared 0.1.0-alpha, exact core dependency pass. Independent review found no remaining required fixes.
 
-运行时基础消费：`RuntimeConsumerSample.cs` 用 SDK10 csc 编译为独立 Smoke.dll，reference pack 选择8/9/10、仅引用对应产品 DLL 和 project.assets.json 对应 runtime 包；把依赖放入各自私有目录，runtimeconfig 固定该 Microsoft.NETCore.App 主版本、LatestPatch。生成的 compile.rsp/runtimeconfig 与 results.txt 位于忽略目录 artifacts/b09-runtime-smoke，各目录执行 `dotnet <SDK>/Roslyn/bincore/csc.dll -noconfig @<目录>/compile.rsp`，再执行 `dotnet <目录>/Smoke.dll <运行时主版本> <日志主版本> tests/fixtures/protocol/initial-handshake-oceanbase.json <产品TFM>`。结果：Standard2.0/2.1/net8→8.0.31/日志8，net9→9.0.20/日志9，net10→10.0.12/日志10，5次均通过预取消/Oracle环回/decimal/schema/关闭验证。源码纳入版本管理，生成材料仅作本地证据，日常测试工程仍只面向 net10.0；未覆盖真实数据库、所有 API 或旧运行时 DI。
+Basic runtime consumption: SDK10 csc compiles `RuntimeConsumerSample.cs` to standalone Smoke.dll using reference packs 8/9/10, corresponding product DLL, and runtime packages from project.assets.json. Dependencies live in private directories; runtimeconfig fixes Microsoft.NETCore.App major with LatestPatch. Generated compile.rsp/runtimeconfig/results.txt are in ignored artifacts/b09-runtime-smoke. In each directory run `dotnet <SDK>/Roslyn/bincore/csc.dll -noconfig @<directory>/compile.rsp`, then `dotnet <directory>/Smoke.dll <runtime-major> <logging-major> tests/fixtures/protocol/initial-handshake-oceanbase.json <product-TFM>`. Results: Standard2.0/2.1/net8→8.0.31/logging8, net9→9.0.20/logging9, net10→10.0.12/logging10; all five pass precancel/Oracle-loopback/decimal/schema/close. Source is tracked; generated materials are local evidence. Daily test projects remain net10.0. No live database, full-API, or old-runtime DI coverage.
 
-B09 本地审核/补齐完成、状态待验证；双模式直连/OBProxy、非 Windows、完整旧运行时消费与 A05 MySQL 判定仍未完成，G2 不关闭。下一模块 C01 池与完整会话重置；在可信完整重置版本白名单建立前仍拒绝 Pooling=true。
+B09 local review/completion done, overall pending. Both-mode direct/OBProxy, non-Windows, full old-runtime consumption, and A05 MySQL identification remain open; G2 stays open. Next C01 pooling/complete reset; reject Pooling=true until a trusted complete-reset version allowlist exists.
 
-## C. 生产连接
+## C. Production Connections
 
-### C01 池、完整重置与会话隔离
+### C01 Pools, Complete Reset, and Session Isolation
 
-2026-10-19 核查：暂无通过真实完整重置验证的版本/模式白名单。Java 2.4.14 的 OceanBaseConnection.reset（2473行起）也只在特定 MariaDB 版本启用 COM_RESET_CONNECTION，否则依赖驱动跟踪状态，不能证明原始会话 SQL/临时对象均清理。C01 保持阻塞，公开 Pooling=true 继续拒绝；不实现测试专用的池化放行开关。按当前暂缓实库测试的要求，先推进不依赖池化的 C02。
+2026-10-19 inspection: no version/mode allowlist has passed live complete-reset verification. Java 2.4.14 OceanBaseConnection.reset (from line 2473) enables COM_RESET_CONNECTION only for certain MariaDB versions, otherwise relying on tracked state; this does not prove cleanup of raw session SQL/temp objects. C01 remains blocked and public Pooling=true rejects. No test-only pooling bypass. With live tests deferred, proceed to independent C02.
 
-**产物：**由数据源拥有、按规范化连接选项、凭据身份/材料和 TLS 目标分组的可选池；默认不池化。仅在版本/模式组合的完整重置已验证后接受 `Pooling=true`。不同显式数据源不共享物理会话，池日志继承各自上下文；数据源释放后清空空闲连接、活动借用归还即销毁，打开/释放竞争不能产生游离会话。直接连接入口的池作用域须与显式数据源隔离，沿用同一池/重置实现。
+**Deliverables:** optional data-source-owned pools keyed by normalized options, credential identity/material, and TLS target; pooling off by default. Accept `Pooling=true` only after complete-reset verification for that version/mode. Explicit sources never share physical sessions; logs inherit source contexts. Disposal clears idle sessions and destroys active borrowers upon return; open/dispose races cannot orphan sessions. Direct-connection pool scope is separate from explicit sources and shares pool/reset implementation.
 
-- [ ] 测试 `SET`/`ALTER SESSION`、schema、用户变量、临时对象、未完成事务、准备语句、reader 和重置失败不会跨借用者泄漏。
-- [ ] 归还时读尽/销毁未消费响应、回滚、服务端重置、重做初始化；任何无法证明已清理的状态销毁物理会话。
-- [ ] 测试池上限、等待超时、凭据轮换和故障清池；记录可池化的精确版本矩阵。
+- [ ] Test isolation for `SET`/`ALTER SESSION`, schema, user variables, temporary objects, unfinished transactions, prepared statements, readers, reset failures.
+- [ ] On return, drain/destroy unread responses, rollback, server-reset, reinitialize; destroy any session whose cleanup cannot be proven.
+- [ ] Test capacity, wait timeout, credential rotation, fault clearing; record exact poolable-version matrix.
 
-### C02 多地址建连与故障边界
+### C02 Multiple Addresses and Failure Boundaries
 
-**产物：**连接建立前顺序尝试候选地址；每个新物理会话重新 TLS/认证/模式/能力/初始化。任何已发送 SQL、事务、reader、locator 不迁移、不自动重放。
+**Deliverables:** sequential candidate attempts before connection establishment; every new session repeats TLS/authentication/mode/capability/initialization. Never migrate/replay sent SQL, transactions, readers, or locators.
 
-本地实施步骤（2026-10-19，沿用已授权的 C02 范围）：
+Local steps (2026-10-19, existing C02 authorization):
 
-1. 在既有 Server/Host 键支持逗号分隔的 host[:port]、[IPv6][:port] 和不带端口的 IPv6；省略端口继承 Port（默认2881）。保留原有键和单地址，候选两侧空格忽略，空候选/非法主机/端口在配置边界拒绝；不新增 JDBC URL、角色或发现语法。用 builder 非法输入测试及公共环回首地址失败用例先证明缺口。
-2. Internal/OceanBaseEndpoint 负责解析，OceanBaseConnectionOptions 冻结只读候选，并派生保留 TLS/凭据/模式等全部配置的单端点快照；PhysicalSession 同步/异步仅在 TCP 建连的 socket 故障时顺序尝试。整个 Open 共用一个超时/取消预算（0无限），不因候选数重置；一旦 TCP 建立，TLS/认证/协议/模式失败即终止，不掩盖配置或安全失败。
-3. 每次 Open 从首候选开始；连接和数据源入口共用物理会话代码。TLS SNI/证书名及认证 _server_host 使用实际主机，显式 TLS Server Name 仍优先。DataSource 保留配置的 Server 列表，成功连接、关闭、命令、事务日志记录实际端点；默认日志不含密码或完整连接串。
-4. Windows 环回验证同步/异步及五资产消费、显式/继承端口、IPv6解析、全部失败、取消/关闭/总预算、TLS名称与拒绝、模式不匹配，以及发包后断线不尝试备用地址。编译核心五目标/DI三目标、单元/消费/DI、格式、双包和依赖矩阵后独立走查并提交。真实直连/OBProxy、非Windows继续留空。
+1. Existing Server/Host accepts comma-separated host[:port], [IPv6][:port], and portless IPv6; missing port inherits Port (default2881). Preserve keys/single addresses, trim candidates, reject empty/invalid hosts/ports at configuration boundary. No JDBC URL/role/discovery syntax. First demonstrate gaps with builder-invalid-input and first-address-failure loopback cases.
+2. Internal/OceanBaseEndpoint parses; OceanBaseConnectionOptions freezes read-only candidates and derives single-endpoint snapshots preserving TLS/credentials/mode/all configuration. PhysicalSession sync/async attempts sequentially only on TCP socket-connect errors. Entire Open shares one timeout/cancel budget (0 infinite), never reset per candidate. Once TCP connects, TLS/auth/protocol/mode failure stops immediately rather than hiding configuration/security failures.
+3. Each Open starts at the first candidate; direct/source paths share sessions. TLS SNI/certificate name/authentication _server_host use the actual host, with explicit TLS Server Name taking precedence. DataSource retains configured Server list; successful-open/close/command/transaction logs use actual endpoint, without default passwords/full connection strings.
+4. Windows loopback: sync/async/five-asset consumption, explicit/inherited ports, IPv6 parsing, all-fail, cancellation/close/total budget, TLS names/rejection, mode mismatch, and no fallback after sent-packet disconnect. Five-core/three-DI compilation, Unit/Consumer/DI, format, both packages/dependency matrix, independent review, commit. Live direct/OBProxy and non-Windows remain open.
 
-- [x] Windows 合成环回测试第一地址连接失败后第二地址成功，以及发包后断线不切换重试；真实拓扑留下一项。
-- [x] Windows 环回验证逐地址 TLS SNI/认证主机、显式 TLS 名称、证书拒绝、取消/关闭/总超时和模式校验；可信私有 CA 成功链仍待环境。
-- [ ] 直连和 OBProxy 故障测试记录目标版本及拓扑。
+- [x] Synthetic Windows loopback covers first-candidate failure/second success and no retry after send; real topology remains below.
+- [x] Windows loopback covers per-address SNI/auth host, explicit TLS name, certificate rejection, cancellation/close/total timeout/mode; trusted private-CA success remains environment-dependent.
+- [ ] Direct/OBProxy faults record target versions/topology.
 
-2026-10-19 本地结果：新增60项单元、10项五资产同步/异步消费；首批26项地址/输入回归先全失败后全通过。Release slnx 核心五目标/DI三目标0警告/错误，Windows Unit627、Consumer49、DI8通过（TestResults/c02-{unit-final,consumer,di}.trx）；独立走查修正了总预算测试对环回拒绝耗时的错误假设，调整后2项单独通过（c02-budget-reviewed.trx）。总预算回归证明整个Open的耗时上界，共享预算不重置另由源码走查确认：Open/OpenAsync均在候选循环外仅创建一次预算；TCP及异步握手使用同一预算token，同步TLS/认证由该预算注册关闭传输来中断。格式、diff、双包及5/3资产、8依赖组、统一0.1.0-alpha和分TFM的Microsoft.Extensions8/9/10检查通过；NuGet README提示仍留R01。
+2026-10-19 local results: 60 new Unit, 10 five-asset sync/async Consumer; initial 26 address/input regressions all failed then passed. Release slnx five-core/three-DI 0 warnings/errors; Windows Unit627, Consumer49, DI8 pass (TestResults/c02-{unit-final,consumer,di}.trx). Independent review corrected the budget test's false assumption about loopback refusal duration; two adjusted tests pass separately (c02-budget-reviewed.trx). Timing bounds prove whole-Open limits; source review separately confirms one budget outside both candidate loops. TCP/async handshake share the token; synchronous TLS/auth uses registered transport close for interruption. Format/diff, both packages, five/three assets, eight groups, shared0.1.0-alpha, per-TFM Microsoft.Extensions8/9/10 pass. NuGet README warning remains R01.
 
-实际Windows运行时消费沿用B09的RuntimeConsumerSample.cs，增加首地址拒绝后的公开查询，使用相同SDK10 csc/reference pack/私有包依赖/LatestPatch隔离方式；五资产分别在8.0.31（两Standard及net8）、9.0.20、10.0.12通过，日志程序集主版本分别8/9/10。复现脚本、响应文件和结果位于本地artifacts/c02-runtime-smoke（未纳入版本管理），方法与B09一致。此样例没有扩大为旧运行时DI、全部API或真实双模式验收。C02本地实现完成、整体待验证；C01继续阻塞，下一可本地推进模块C03，G3保持0/8。
+Windows runtime samples reuse B09 RuntimeConsumerSample.cs with a public query after first-address refusal and identical SDK10 csc/reference-pack/private-dependency/LatestPatch isolation. Five assets pass on 8.0.31 (both Standard/net8),9.0.20,10.0.12 with logging majors8/9/10. Scripts/response files/results are local untracked artifacts/c02-runtime-smoke; reproduction matches B09. This adds no old-runtime DI/full-API/live both-mode acceptance. Local C02 complete, overall pending; C01 blocked, next locally viable C03; G3 remains0/8.
 
-### C03 精确数值、纳秒与零日期
+### C03 Exact Numerics, Nanoseconds, and Zero Dates
 
-**产物：**在 B 阶段 `OceanBaseDecimal` 基础上扩展宽精度读写编解码；`BigInteger` 系数/scale 保真，时间值保留纳秒、offset/时区信息；MySQL `DATE`/`DATETIME` 列的 provider-specific 类型整列稳定，零日期不映射 `DateTime.MinValue`。
+**Deliverables:** extend B-stage `OceanBaseDecimal` to wide-precision codecs, preserving `BigInteger` coefficient/scale; temporal values retain nanoseconds and offset/zone information. MySQL `DATE`/`DATETIME` provider-specific types remain stable across each column; zero dates never map to `DateTime.MinValue`.
 
-2026-10-19 分步实施（C03在所有子项完成前保持进行中）：先实现精确数值，后实现纳秒/时区和零日期，不把数值子项通过标为整个C03完成。数值改动贯通DecimalCodec、ResultColumn、ResultDbColumn、PreparedParameters、OceanBaseDataReader及五资产消费；先用DECIMAL(65,20)、NUMBER(38)、未知精度标记、负scale和精确转换回归证明缺口，再补实现。标准类型由列声明固定：可靠p<=28且0<=s<=p为decimal，其余为OceanBaseDecimal；NULL不缩窄类型。Oracle p=255/s=-85按Java ColumnDefinition归一为未知p=0/s=0；未知精度不伪造schema精度，p0/s0按payload保留系数/scale；p0且已知非零scale时按该scale精确重标度，校验精度上限使用Oracle38/MySQL65，schema精度仍未知；声明负scale时精确重标度，不舍入。MySQL最大p65/s30，Oracle声明p38/s[-84,127]及非零值绝对值[1e-130,1e126)范围，超界明确失败；未知NUMBER按最多38个有效数字和该范围校验。GetDecimal/GetFieldValue<decimal>只作精确转换。参数不经过CLR decimal或浮点缩窄；沿Java BigDecimalParameter的长度编码普通十进制文本，不发送科学记数法，负scale扩成整数，服务端目标列元数据决定读回scale。DbParameter.Scale是byte，负scale从OceanBaseDecimal.Scale表达，不新增不兼容的Scale覆盖。所有本地编译/回归/打包和独立走查通过后提交数值子项；实库与非Windows继续暂缓。
+2026-10-19 staged implementation: C03 stays in progress until all subitems finish. Implement exact numerics first, then nanoseconds/zones/zero dates; numeric success alone does not complete C03. Changes span DecimalCodec, ResultColumn, ResultDbColumn, PreparedParameters, OceanBaseDataReader, five-asset consumption. First expose gaps using DECIMAL(65,20), NUMBER(38), unknown-precision markers, negative scale, and exact conversion. Declared metadata fixes standard types: reliable p<=28 and 0<=s<=p gives decimal; otherwise OceanBaseDecimal; NULL never narrows types. Normalize Oracle p=255/s=-85 to unknown p=0/s=0 as Java ColumnDefinition does. Unknown precision stays unknown in schema; p0/s0 preserves payload coefficient/scale. With p0/known nonzero scale, rescale exactly and enforce Oracle38/MySQL65 limits without inventing schema precision. Negative declared scale rescales without rounding. MySQL max p65/s30; Oracle p38/s[-84,127], nonzero absolute range[1e-130,1e126); reject overflow. Unknown NUMBER permits at most38 significant digits in that range. GetDecimal/GetFieldValue<decimal> convert exactly only. Parameters never narrow through CLR decimal/float; Java BigDecimalParameter-style length-encoded plain decimal text, no exponent; expand negative scale into integers. Target metadata determines readback scale. DbParameter.Scale is byte; negative scale belongs to OceanBaseDecimal.Scale, without incompatible overrides. Build/regressions/packages/review then numeric-subitem commit; live/non-Windows deferred.
 
-- [x] 数值子项本地编译、测试与独立走查：MySQL `DECIMAL(65,20)`、Oracle 无精度/负 scale `NUMBER`；文本/预处理字段类型、provider-specific 读取和写回，五资产消费及模式边界回归。Unit672/Consumer54/DI8、格式与双包资产/依赖矩阵通过，详见进度台账。
-- [x] `GetDecimal`/`GetFieldValue<decimal>` 只作精确转换；声明列类型不随当前值或 NULL 改变。修复未声明参数精度时的误限制、MySQL负scale的声明精度漏检及零值误拒绝，均有失败后通过的回归。
-- [x] 不带时区的Oracle `TIMESTAMP(0..9)`本地读写/精确转换/整列类型/五目标消费及独立走查；Unit716/Consumer59/DI8，编译、格式、打包矩阵通过，详见台账。
-- [x] 不带时区的 `GetDateTime`/`GetFieldValue<DateTime>` 只在100ns可精确表示时转换，否则溢出；所有p的provider-specific类型固定为OceanBaseTimestamp。
-- [x] TZ 文本/预处理读取、参数写回、稳定标准/provider-specific类型、精确 DateTimeOffset 转换和五资产消费；独立走查的参数长度及负offset问题已回归修复，详见台账。
-- [x] LTZ记录服务端会话时区标识，查询补全/结果快照、精确201读写、参数时区一致性及五资产消费；本地验证见进度台账，真实互通待验。
-- [x] MySQL DATE/DATETIME/TIMESTAMP同列混合正常值、零分量与NULL，文本/预处理路径的稳定标准/provider-specific类型、精确参数写回及五资产消费；仅内部模式夹具，不等同公开MySQL握手或实库支持。
-- [ ] 两模式实库测试记录会话时区、字符集与服务端列定义。
+- [x] Local numeric build/tests/independent review: MySQL `DECIMAL(65,20)`, Oracle unspecified/negative-scale `NUMBER`; text/prepared field types, provider-specific read/write, five-asset and mode boundaries. Unit672/Consumer54/DI8, format, both-package asset/dependency matrix pass; see ledger.
+- [x] `GetDecimal`/`GetFieldValue<decimal>` convert exactly; declared types stay stable across values/NULL. Red/green fixes cover inferred-precision overrestriction, missing MySQL negative-scale precision validation, and incorrect zero rejection.
+- [x] Local Oracle `TIMESTAMP(0..9)` without zone: read/write/exact conversion/stable types/five-target consumption/review; Unit716/Consumer59/DI8, build/format/package matrix pass; ledger records evidence.
+- [x] Unzoned `GetDateTime`/`GetFieldValue<DateTime>` converts only if exactly representable in 100ns, otherwise overflows. All precisions have fixed OceanBaseTimestamp provider-specific type.
+- [x] TZ text/prepared reads, writes, stable standard/provider-specific types, exact DateTimeOffset conversion, five-asset consumption; review found parameter-length/negative-offset issues, now regression-fixed; see ledger.
+- [x] LTZ server session-zone identity, query completion/result snapshots, exact201 codecs, parameter-zone matching, five-asset consumption; local evidence in ledger, live interoperability open.
+- [x] MySQL DATE/DATETIME/TIMESTAMP mixed normal/zero-component/NULL rows, stable text/prepared types, exact writes, five-asset consumption; internal mode fixtures only, not public MySQL handshake/live support.
+- [ ] Live both-mode tests record session zone, charset, server column definitions.
 
-2026-10-19 纳秒子项执行细化：先贯通不带时区的 Oracle TIMESTAMP(0..9)，TZ/LTZ 和 MySQL 零日期仍保留后续子项。OceanBaseTimestamp 为五目标共享只读值，保存 DateTimeKind.Unspecified 的整秒 WholeSeconds、0..999999999 的 Nanosecond 和0..9的 Scale；构造时拒绝混入亚秒/时区或不符合scale的纳秒，不舍入。ToDateTime 仅在纳秒为100的倍数时成功；年份范围仍为1..9999，超出范围明确失败。标准字段p<=7为DateTime、p8/9为OceanBaseTimestamp，provider-specific访问对所有p都固定为OceanBaseTimestamp，NULL不改变类型。沿Java type202/12字节布局读取两种结果协议，维持载荷scale和列scale一致校验；参数默认保留provider的Scale（普通DateTime仍默认7），显式Scale只允许精确重标度，不改Java固定写9的实现但记录差异。修改到达TemporalCodec、ResultColumn/DbColumn、OceanBaseParameter/PreparedParameters、reader和五资产消费；先验证缺口，再补公开值、codec、公开环回及消费回归，最后完整编译/测试/独立走查/打包后提交。重点回归p8/9小值和NULL不缩窄、纳秒1/999999999、边界日期、非法长度/scale/小数、错误模式以及发包前拒绝。
+2026-10-19 nanosecond detail: deliver unzoned Oracle TIMESTAMP(0..9) first; retain TZ/LTZ/zero dates as subsequent items. Shared immutable OceanBaseTimestamp stores whole seconds with DateTimeKind.Unspecified, Nanosecond0..999999999, Scale0..9. Reject fractional seconds/zones in WholeSeconds and nanoseconds inconsistent with scale; never round. ToDateTime requires nanoseconds divisible by 100. Years1..9999 only; reject others. Standard p<=7 is DateTime, p8/9 OceanBaseTimestamp; provider-specific always OceanBaseTimestamp; NULL stable. Both result protocols use Java type 202/12-byte layout with payload/column-scale equality. Provider parameters retain Scale by default (ordinary DateTime defaults7); explicit Scale allows exact rescaling only. Record the difference from Java's fixed write-scale9 without changing Java. Changes span TemporalCodec, ResultColumn/DbColumn, OceanBaseParameter/PreparedParameters, reader, consumers. Gap tests precede values/codecs/public loopback/consumers; full build/tests/review/packages before commit. Cover small p8/9 values and NULL, nanos1/999999999, date boundaries, bad lengths/scales/fractions/modes, and pre-send rejection.
 
-2026-10-19 TZ/LTZ 执行细化：先交付可独立验证的 TZ 全链路，再处理 LTZ 的可信会话时区来源，C03 始终保持进行中。TZ 的公共 OceanBaseTimestampWithTimeZone 组合已有 OceanBaseTimestamp、分钟精度 offset、可选时区名称及缩写，不用客户端时区规则重算服务端 offset；DateTimeOffset 输入保留本地字段和 offset，ToDateTimeOffset 仅精确转换，越界或纳秒不能整除100时失败。所有p0..9的标准/provider字段类型固定为该类型；type200 两种结果协议共用前12字节时间+小时符号/分钟幅值+可选名称/缩写长度字段，严格检查长度、UTF8、offset及scale；结果与参数均采用小时符号/分钟幅值，小时为零时分钟带符号；结果外层长度编码，参数单字节长度并在超过255字节时发包前拒绝。名称/缩写各按UTF-8限255字节，实际参数总长度另校验；固定server源码证据及名称优先于offset的语义见架构§5，实库接受范围仍待验。参数默认保留scale、显式scale仅精确重标度；DbType.DateTimeOffset和追加的OceanBaseDbType.TimestampWithTimeZone映射到Oracle200，MySQL及不匹配的显式类型在发包前拒绝，旧枚举数值不变。覆盖公共值、codec、同步/异步文本/二进制环回、读写回、NULL稳定schema、恶意载荷和五资产消费；编译/完整测试/格式/包矩阵和独立走查后提交。LTZ不得采用Java默认客户端时区；下一步明确会话时区查询或追踪/失效与结果快照，不能用认证时快照解释任意后续SQL。
+2026-10-19 TZ/LTZ detail: independent TZ pipeline precedes trustworthy LTZ session-zone sourcing; C03 remains in progress. OceanBaseTimestampWithTimeZone combines OceanBaseTimestamp, minute-resolution offset, optional zone name/abbreviation. Never recompute server offset through client zone rules. DateTimeOffset input retains local fields/offset; exact ToDateTimeOffset fails for range overflow or nanoseconds not divisible by 100. Standard/provider types fixed for p0..9. Type200 results share12-byte timestamp plus signed-hour/minute-magnitude and optional name/abbreviation length fields; validate lengths/UTF8/offset/scale. Both results/parameters use hour sign and minute magnitude, with signed minutes when hour=0. Results use outer length encoding; parameters use one-byte length and reject >255 bytes before send. Names/abbreviations each permit255 UTF-8 bytes, with separate total parameter bound. Pinned server evidence/name-over-offset precedence: architecture§5; real accepted ranges unverified. Retain default scale; explicit scale exact only. DbType.DateTimeOffset/new trailing OceanBaseDbType.TimestampWithTimeZone map to Oracle200; MySQL/mismatched explicit types reject pre-send; old enum values unchanged. Test values/codecs/sync-async text-binary loopback/read-write/NULL schema/malicious payloads/five assets; full validation/review before commit. LTZ must not adopt Java's default client zone: define session query/tracking/invalidation/result snapshots rather than applying the authentication snapshot to arbitrary later SQL.
 
-2026-10-19 TZ子项本地验证：Unit772/Consumer76/DI8全部通过，核心五目标/DI三目标Release编译0警告/错误，格式、diff、双包和资产/依赖版本矩阵通过。独立走查发现并修复参数单字节长度、负小时分钟幅值、结果名称内部长度编码三项问题；结果最大530字节、参数最大255字节，均有先失败后通过的边界回归。五资产消费宿主仍为net10，真实互通、非Windows及旧运行时未验收；C03保持进行中，LTZ/零日期继续后续实现。
+2026-10-19 local TZ verification: Unit772/Consumer76/DI8 pass; five-core/three-DI Release 0 warnings/errors; format/diff/both packages/asset-dependency-version matrix pass. Review fixed one-byte parameter length, negative-hour minute magnitude, internal result-name length encoding with red/green cases. Maximum result530 bytes, parameter255 bytes. Five assets run on net10; live/non-Windows/old-runtime acceptance absent. C03 then in progress; LTZ/zero dates follow.
 
+2026-10-19 LTZ prerequisite: repair post-authentication zone-state flow without enabling201. PhysicalSession stores invalidatable time_zone facts independently from ConnectResult authentication snapshot. Authentication reports seed state; before any SQL, capture execution snapshot and immediately invalidate current session facts so SQL that may mutate state cannot leave stale values. Prepare/statement-close execute no SQL and do not invalidate; close/fault clears state. Before every result-header read, QueryResult snapshots execution-start/previous-report zone. Terminal reports never rewrite that result snapshot. OK headers, deprecated-EOF OK terminators, transaction-control OK consume time_zone reports. Subsequent results use latest reports; each result start invalidates session/current subsequent source again, covering A-report→no-report→unknown-third-result. Classic EOF/ERR invent neither variables nor authentication defaults. Reliable on-demand/preexecution SESSIONTIMEZONE completion is still required before temporal decoding; this prerequisite alone proves neither LTZ implementation nor trustworthy tracking.
 
-2026-10-19 LTZ会话时区前置实施：先修复认证之后的会话时区状态通路，仍不开放type201。PhysicalSession保存独立于ConnectResult认证快照的可失效time_zone事实；认证报告作为初始来源，任意SQL发送前捕获执行快照并立即使物理会话当前值失效，避免把可能修改会话的SQL之后的旧值复用。prepare/statement-close不执行SQL，不作此失效；连接关闭/故障清除状态。QueryResult在读取每个结果头包前，从执行开始快照/上一报告建立每结果的时区快照，该快照不因本结果终态更新而回写；OK头、弃用EOF的OK终态和事务控制OK均消费time_zone报告，后续结果以最新报告为来源，每结果开始再次使会话当前值和后续来源失效，覆盖报告A→无报告→第三结果未知的链条。经典EOF或ERR不伪造会话变量，也不把认证默认值补回。时间值解码前还需可靠的按需/执行前SESSIONTIMEZONE查询补全未知状态；本前置提交不声称LTZ已实现或可信追踪已证明。
+Changes span PhysicalSession, CommandExchange, QueryResult, transaction-control OK; no public options/dependencies. Windows sync/async regressions first: authentication-snapshot independence, arbitrary-SQL invalidation, terminal/multiple-result updates, snapshot independence, prepare exemption, fault/close clearing. Then minimal shared state methods, full build/tests/format/packages/version matrix/review/commit. LTZ still needs query source, parameter-zone matching, full201 codecs; state plumbing cannot substitute.
 
-修改贯通PhysicalSession、CommandExchange、QueryResult与事务控制OK路径，不新增公开配置或依赖。先用Windows同步/异步协议回归验证认证快照独立、任意SQL失效、终态/多结果更新、结果快照独立、非执行准备不失效和故障/关闭清空；再实现最小共享状态方法。完成编译、完整测试、格式/打包/版本矩阵和独立审查后提交；LTZ后续仍须查询来源、参数时区一致性及type201完整读写，不能用此状态通路替代LTZ交付。
+2026-10-19 LTZ-state verification:25 targeted cases (initial 12 failing, two additional review failures, all corrected) included in Windows Unit797; Consumer76/DI8 pass. Five-core/three-DI Release 0 warnings/errors; format/diff/packages/matrix pass; independent re-review has no required fixes. QueryResult capture moved before header read; subsequent ERR invalidates zone. Full LTZ query/parameter/value codecs and zero dates remained subsequent work.
 
-2026-10-19 LTZ状态前置验证：25项定向回归（首批12失败、审查补充2失败后均通过）纳入完整Windows Unit797，Consumer76/DI8通过；核心5/DI3目标Release编译0警告/错误，格式/diff、打包和资产/依赖矩阵通过，独立复审无剩余必须修复项。QueryResult捕获已移到读取头包前，后续ERR也使时区失效。完整LTZ查询/参数/值编解码和零日期仍待后续实现。
+2026-10-19 complete LTZ pipeline: immutable OceanBaseTimestampLocalTimeZone combines OceanBaseTimestamp/SessionTimeZone. Identity is nonempty strict UTF-8<=255 bytes without whitespace/control characters; reject unresolved SYSTEM; numeric offsets strictly±HH:MM within±14h. No local-zone resolution or speculative DateTimeOffset. ToDateTime/GetDateTime exact only, Kind=Unspecified. Uninitialized default lacks zone and cannot be written. Standard/provider types fixed for p0..9; append OceanBaseDbType.TimestampLocalTimeZone value28. DbType.DateTime2 selects Oracle201 only with explicit provider identity/value; ordinary TIMESTAMP stays202.
 
+Before Oracle execution with no usable zone report, query SELECT SESSIONTIMEZONE FROM DUAL under the existing exclusive lease/timeout. Require one string column, one nonNULL row, strict identity<=255 bytes, trusted terminal response. Do not affect RecordsAffected, log a separate command, or label query failure as user-SQL execution. Validate ordinary binds/values first; prepare/execute only after query and exact LTZ-parameter identity match. Valid reported zones need no query; every SQL still invalidates state, with no long cache. Prepare-only never queries; transaction-control commands do not query merely because no LTZ is returned. Internal query supports classic EOF/FEOK, drains in the same exchange without releasing lease; unknown response destroys/no replay. Extra round trips are the correctness cost; no new option.
 
-2026-10-19 LTZ完整链路实施：公共只读OceanBaseTimestampLocalTimeZone组合OceanBaseTimestamp和SessionTimeZone（非空、严格UTF-8<=255字节、无空白/控制字符；SYSTEM未解析标记拒绝，数字offset严格±HH:MM/±14小时）。不解析本机时区、不提供推测DateTimeOffset；ToDateTime/GetDateTime仅精确转换且Kind=Unspecified。未初始化default值无时区，不能写入。所有p0..9标准/provider-specific类型固定，新增OceanBaseDbType.TimestampLocalTimeZone末尾28、DbType.DateTime2仅在显式provider身份或provider值时选择Oracle201，不更改普通TIMESTAMP的202身份。
+Columns bind each result's frozen zone. With unknown zone retain stable types/DBNull (still checking mode/scale), but explicitly reject nonNULL201 decoding. Never insert queries into active readers or buffer all results. No stale identity after arbitrary SQL/multiple results without reliable reports; reported later results use fresh identity. Type201 first12 bytes reuse202 layout in both result protocols/parameters; no nanosecond/scale truncation. Changes reach public value, TemporalCodec, ResultColumn/QueryResult, PreparedParameters/Parameter/DbType, reader, internal CommandExchange query, OceanBaseCommand. Sync/async/five-asset tests cover unknown zone, pre-send mismatches, query failures/snapshots. Full verification/review/commit; pinned Java/server evidence in architecture§5; database/non-Windows deferred.
 
-执行前若Oracle物理会话没有可用时区报告，在现有独占租约/超时预算内发送SELECT SESSIONTIMEZONE FROM DUAL。只接受单个字符串列、单行非NULL、<=255字节的严格标识和可信终态，不改变用户RecordsAffected、不单独记录命令，不把查询失败标记成用户SQL已执行；先检查所有普通绑定/值，查询完成且LTZ参数标识与当前时区完全一致后才prepare/execute。已报告且合法的时区可直接使用；每次SQL仍沿前置通路失效，不长期缓存。prepare-only不查询，事务控制不因不返回LTZ增加查询。内部查询支持经典EOF/FEOK，在同一交换中读完不释放租约，未知响应销毁不重放；额外往返是此正确性选择的成本，暂不新增配置。
+2026-10-19 LTZ local results: initial 8 gap tests red→green; review reproduced three conflicting-report/explicit-Timestamp-override failures, fixed before 49 targeted cases passed. Final Unit846/Consumer81/DI8, five-core/three-DI Release 0 warnings/errors; format/diff/packages/matrix pass. Ledger retains live gaps. C03 then in progress, zero dates/live acceptance remaining.
 
-结果column绑定QueryResult每结果冻结的时区标识；未知时保留稳定类型及DBNull（仍校验模式/scale），仅非NULL201值明确拒绝解码，不在活动reader中插入查询或改为全量缓存。任意后续SQL或多结果没有可靠报告时不能拿旧标识解释LTZ；有报告的多结果使用新标识。201前12字节沿202时间布局，两协议读取/参数写入，纳秒/scale严格不截断。修改到达新公共值、TemporalCodec、ResultColumn/QueryResult、PreparedParameters/Parameter/DbType、reader、CommandExchange内部查询与OceanBaseCommand执行路径；同步/异步/五资产回归和未知时区/发包前参数不匹配/查询故障/结果快照边界贯通，完整验证/独立走查后提交。固定Java及server证据见架构§5；数据库及非Windows验收继续暂缓。
+2026-10-19 C03 zero-date plan (confirmed§5 contract):
 
-2026-10-19 LTZ子项本地验证：初始8项缺口由失败转通过；独立走查再复现3项冲突报告/显式Timestamp覆盖失败，修复后49项定向通过。最终Unit846/Consumer81/DI8，核心五/DI三目标Release编译0警告0错误，格式、diff、打包资产/依赖矩阵通过；当前状态及真实环境缺口见台账。C03保持进行中，剩余MySQL零日期及真实验收。
+- [x] First reproduce provider-type gaps with text/binary normal/all-zero/partial-zero/NULL cases. Standard DateTime stays stable; zero components throw InvalidCastException on conversion; IsDBNull detects protocol NULL only.
+- [x] Shared OceanBaseDate(year,month,day)/OceanBaseDate(DateTime), OceanBaseDateTime(date,hour,minute,second,microsecond,scale)/OceanBaseDateTime(DateTime), without zone. Year0..9999/month0..12/day0..31; nonzero month/day must form a valid calendar (year0 leap-day checked as400). Preserve zeros, reject other ALLOW_INVALID_DATES calendars. Microsecond0..999999/scale0..6, no rounding; default=all-zero. Expose Date components, IsValidDate/IsValidDateTime, ToDateTime, fixed-format ToString. No zero→NULL/min-date option.
+- [x] TemporalCodec handles raw MySQL DATE10/DATETIME12/TIMESTAMP7 components, strict text and binary lengths0/4/7/11, component/precision bounds; DATE only 0/4. Never normalize invalid data. ResultColumn provider types Date/DateTime, standard exact DateTime; reader GetProviderSpecificValue(s)/GetFieldValue<T>/both schema paths integrated; Oracle unchanged.
+- [x] PreparedParameters/Parameter infer Date/DateTime; provider values write only matching MySQL types. Explicit mismatch/Oracle/precision loss reject pre-send. Zero writes length 0; partial-zero writes components. No enums/dependencies added. Existing Timestamp parameters still map to MySQL DATETIME12, without promising restoration of a zone instant.
+- [x] Red/green codec/parameter, sync/async mixed reader/prepared rows, malformed/precision/mode boundaries, five-asset type/consumption tests. MySQL uses internal fixtures; A05 rejects untrusted missing-mode-bit handshakes. Release slnx/full Windows/format/package matrix/review/corrections, synchronize three docs and commit. Live/non-Windows deferred; overall C03 pending verification, not complete.
 
-2026-10-19 C03零日期实施计划（沿用已确认的§5契约）：
+2026-10-19 zero-date results: initial 9 failures fixed;49 targeted cases pass for strict text/binary, zero components, nonzero clock on zero dates, microseconds/scales, mixed TIMESTAMP rows, NULL, mode/precision rejection. Windows Unit895/Consumer91/DI8 all pass; five-core/three-DI build0 warnings/errors, format/diff/both packages/version matrix pass. All C03 local subitems implemented, status pending verification; live/non-Windows/A05 public MySQL gaps remain. Next local C04; C01 complete reset blocked.
 
-- [x] 先以文本/二进制正常、全零、部分零及NULL回归复现provider类型缺口；标准DateTime不随行改变，零分量转换抛InvalidCastException，IsDBNull仅识别协议NULL。
-- [x] 新增五目标共享OceanBaseDate(year,month,day)/OceanBaseDate(DateTime)及OceanBaseDateTime(date,hour,minute,second,microsecond,scale)/OceanBaseDateTime(DateTime)，无时区。Date组件年0..9999、月0..12、日0..31，非零月/日需合法日历（year0按400年检查闰日）；零分量保留，不支持ALLOW_INVALID_DATES的其他非法日历。DateTime微秒0..999999、scale0..6且禁止舍入，default表示全零。提供Date分量、IsValidDate/IsValidDateTime、ToDateTime与固定格式ToString，不新增零值转NULL/最小日期配置。
-- [x] TemporalCodec新增MySQL DATE10/DATETIME12/TIMESTAMP7原始分量读写；文本严格格式、二进制0/4/7/11长度及分量/精度边界，DATE仅0/4，不归一化非法数据。ResultColumn整列provider类型分别Date/DateTime，标准值仍精确转换DateTime；reader的GetProviderSpecificValue(s)/GetFieldValue<T>/两套schema贯通，Oracle路径不变。
-- [x] PreparedParameters和Parameter自动推断Date/DateTime，provider值仅在MySQL对应类型写入，显式不匹配/Oracle及精度损失在发包前拒绝；零值写0长度，部分零按分量发送；不新增枚举或依赖。既有Timestamp参数映射保持MySQL DATETIME12，不承诺恢复时区瞬时点。
-- [x] codec/参数红绿、同步/异步reader和预处理混合行、畸形输入/精度/模式边界、五资产类型/消费验证；MySQL模式仅测试内部夹具，A05公开握手继续拒绝无可信模式位。Release slnx编译、Windows完整测试、格式/打包版本矩阵、独立走查并修复后更新三份文档提交；实库/非Windows继续暂缓，C03整体记待验证而非完成。
+### C04 Large Values, SequentialAccess, and Server Cursors
 
-2026-10-19 零日期本地验证：首批9项失败回归修复后通过；最终49项定向通过，覆盖严格文本/二进制、含零分量、带非零时钟的零日期、微秒/scale、TIMESTAMP混合reader、NULL及模式/精度拒绝。完整Windows Unit895/Consumer91/DI8全部通过，核心五/DI三目标编译0警告0错误、格式/diff/双包及版本矩阵通过。C03全部本地子项已实现，状态改为待验证，保留实库/非Windows及A05公开MySQL握手缺口；下一可本地推进模块C04，C01完整重置仍阻塞。
+**Deliverables:** `SequentialAccess` never implicitly buffers entire values; cursors belong to the physical session/statement ID and are released or destroyed on close/cancel/disconnect.
 
-### C04 大值、SequentialAccess 与服务端游标
+Local order: single-owner incremental PacketChannel payload stream, then ordered QueryResult/reader fields/character decoding, then prepare/execute/fetch cursors with explicit enablement. Incremental streams read only requested bytes, validate cross-frame sequences/cumulative64 MiB, and forbid new packet reads/sends/sequence resets/transport replacement while unread. Early disposal/corruption/cancellation closes transport; only complete consumption permits another message; unknown execution never replays. Incremental packets, sequential fields, and cursor paging are now locally implemented; C04 pending live verification.
 
-**产物：**`SequentialAccess` 不隐式缓存整值；游标以物理会话和 statement ID 为作用域，关闭/取消/断线时释放或销毁。
+- [x] Incremental stream sync/async, continuations/empty terminator, sequence/cumulative bound, truncation/cancel/early close; generated large payload proves chunking/fixed memory without preallocating test payload.
+- [x] Text/prepared ordered fields, GetBytes/GetChars/GetStream/GetTextReader, ordinal/offset progression, NULL, multiple results, close/cancel ownership.
+- [x] Reader large-value chunking, out-of-order limits, early close/cancel, bounded allocations.
+- [x] Local cursor paging/early-close/cancel lifecycle.
+- [x] Select cursor protocol by authenticated mode/negotiated EOF; missing acknowledgement/unsupported responses fail and destroy session, never reexecute fallback.
+- [ ] Declare supported combinations only after live mode/version/capability acceptance; fixtures are not version allowlists.
+- [ ] Measure peak memory, throughput, resource release on real tenants in both modes.
 
-本地实施顺序：先补 PacketChannel 的单所有者增量 payload 流，再接 QueryResult/reader 的有序字段读取和字符解码，最后实现有明确启用条件的 prepare/execute/fetch 游标。增量报文流只读取调用方请求的字节，跨帧继续验证序号及累计 64 MiB 上限；未消费完成时禁止新读包、发包、重置序号或替换传输。提前释放、损坏或中途取消关闭传输，完整消费后才允许下一报文，保持未知执行结果不重放。目前增量报文、QueryResult/reader 顺序字段流及游标分页均已完成本地实现，C04 转为待验证；真实验收仍开放。
+2026-10-19 incremental transport: internal OpenPayload/OpenPayloadAsync; full-packet reads share frame validation/fail-close.29 new cases cover demand reads, generated32 MiB payload/synchronous-loop allocation<256 KiB, continuations/exact-full-frame terminator, full/streaming sequence wrap, partial-I/O cancellation, cumulative bounds, invalid arguments/early disposal.54 total packet cases pass. Initial 21 missing-API cases failed before implementation; two full-packet-limit fail-close cases red→green. Five-core/three-DI Release 0 warnings/errors; Windows Unit924/Consumer91/DI8 pass; independent read-only review no required fix. Allocation evidence covers internal synchronous managed streaming only, not real reader peak memory/throughput. At that commit C04 in progress, transport only; reader follows. No live/non-Windows/new old-runtime acceptance.
 
-- [x] 增量报文流：同步/异步、续帧及空终结帧、序号/累计限额、截断/取消/提前关闭；用按需生成的大报文断言分块读取和固定内存，而非预先分配完整测试载荷。
-- [x] QueryResult/reader 本地接入：文本/预处理逐字段读取、GetBytes/GetChars/GetStream/GetTextReader、字段与偏移前进限制、NULL、多结果和关闭/取消资源归属。
-- [x] 本地 reader 大值分块读取、乱序访问限制、提前关闭、取消和有界分配回归。
-- [x] 服务端游标本地分页、提前关闭与取消生命周期测试。
-- [x] 本地按已认证模式和协商 EOF 能力选择游标协议；无确认/不支持的响应失败并销毁会话，不回退重执行。
-- [ ] 真实模式/版本/能力矩阵验收后才声明相应组合支持；本地夹具不作为版本白名单。
-- [ ] 在两模式真实租户上测量内存峰值、吞吐和资源释放。
+2026-10-19 reader continuation: text/prepared-binary, classic/deprecated EOF integrated with sync/async fields; pre-read only row prefix/NULL bitmap. GetBytes/GetChars/GetStream/GetTextReader and async getters enforce ordinal/offset progression, NULL, explicit whole-field materialization, stream invalidation. GetChars null-buffer length probe rejects in sequential mode. Strict UTF-8 preserves BOM/surrogate boundaries; default mode unchanged. Shared8 KiB drains skipped columns/rows/results. Early close destroys unread sessions. Architecture specifies sequential contract.
 
-2026-10-19 增量报文底层：新增内部 OpenPayload/OpenPayloadAsync，既有整包读取共用相同帧校验和失败关闭规则。29项新测试覆盖按需读取、32 MiB生成载荷/同步循环分配少于256 KiB、续帧和精确满帧终结、混合整包/流式序号回绕、部分I/O取消、累计限额、非法参数和提前释放；与既有报文测试共54项通过。先验证21项缺失API失败，再实现通过；整包超限未销毁传输的2项回归亦先红后绿。Release核心五/DI三目标0警告0错误，完整Windows Unit924/Consumer91/DI8通过，独立只读走查无必须修复项。该内存断言只覆盖内部同步流读取的托管分配，不是实库reader内存峰值或吞吐基线。C04进行中，当次仅交付报文底层，reader字段流见下方续接；实库/非Windows/新的旧运行时验收未执行。
+Review issues—buffered characters/exhausted streams bypassing cancellation/close, late cancellation misclassifying complete terminators, field tokens excluded from command budget—have failing-first fixes. Malformed binary field framing now gives unknown outcome/discard. Five-asset isolated net10 hosts do not prove old-runtime support. Generated32 MiB row proves ExecuteReader returns before body arrival, streaming across continuations, synchronous drain allocation<1 MiB; not live peak-memory/throughput evidence. Five-core/three-DI Release 0 warnings/errors; Windows Unit978/Consumer101/DI8 pass (TestResults/c04-reader-*-final.trx);54 sequential/zero-date cases and five-asset stream/nanosecond-provider consumption cover current contract. C04 then in progress, cursor/live large-value/throughput/resource acceptance remaining. A05 public MySQL/C01 reset gates unchanged.
 
-2026-10-19 reader 续接：文本/预处理二进制、旧 EOF/弃用 EOF 已接入同步/异步字段流；只预读行前缀和 NULL 位图。GetBytes/GetChars/GetStream/GetTextReader 及异步字段 getter 遵守 ordinal/offset 前进、NULL、显式整字段物化和流失效规则。GetChars 空 buffer 长度探测在顺序模式拒绝；字符读取严格 UTF-8、保留 BOM 和代理项边界；默认模式不变。跳列/行/结果用共享 8 KiB 缓冲区排空，提前关闭销毁未消费会话。详见现有架构文档的顺序读取契约。
+C04 local cursor implementation (2026-10-19, existing TDD/independent review, merged into existing docs):
 
-走查发现的缓存字符/耗尽流绕过取消与连接关闭、完整终结包被后到取消误判、字段自身 token 未进入命令预算等问题均增加先失败回归并修复；非法二进制字段 framing 亦转为未知结果并废弃会话。五资产隔离消费由 net10 宿主运行，不等于旧运行时验收。32 MiB 生成行用例验证 ExecuteReader 在正文到达前返回、跨续帧流读取且同步 drain 托管分配少于 1 MiB；这不是实库内存峰值或吞吐基线。Release slnx核心五/DI三目标编译0警告0错误，完整Windows Unit978/Consumer101/DI8通过（TestResults/c04-reader-*-final.trx）；54项顺序读取/零日期本地回归及五资产顺序流/纳秒provider消费覆盖当前契约。当次 C04 仍进行中，剩余服务端游标、真实两模式大值/吞吐和资源验收；不放宽 A05 的公共 MySQL 握手或 C01 完整重置门槛。
+- [x] Entry: OceanBaseCommand.FetchSize defaults0 (no cursor); positive forces prepare and snapshots page size; negative rejects. PreparedStatement retains column count; reject non-result statements before execute. PreparedParameters.Execute uses readonly cursor flag1. Oracle+ClientDeprecateEof omits execute/fetch metadata EOF per Java evidence, first fetch confirms termination; others strictly require EOF/FE-OK cursor acknowledgement. A05 unchanged.
+- [x] QueryResult handles execute metadata by mode/capability (Oracle deprecated-EOF exception above); others fetch after CursorExists.9-byte COM_STMT_FETCH contains LE32 statement ID/row count; reset sequence per request, retaining lease/total budget, never reexecute SQL. MySQL reads binary rows; Oracle validates repeated metadata. Continuing pages require CursorExists/progress; LastRowSent alone ends lease. Multiple-result cursors currently reject/destroy, without fabricated support.
+- [x] Default/SequentialAccess share paging; HasRows prefetches first row only, NextResult drains remaining pages. Early Close/cancel/timeout/disconnect destroys original session; cached statements never cross sessions. Test pages/empty final pages/reuse/mode differences/bad flags/metadata/excess rows/true async/no replay.
+- [x] Five-core/three-DI build, Windows Unit/Consumer/DI, format/packages/version matrix; independent review/fixes, synchronize plan/architecture/ledger, commit current master. Live both-mode/OBProxy/non-Windows deferred; local tests do not close interoperability.
 
-C04 游标本地实施（2026-10-19，沿用既有 TDD/独立走查，合并进现有文档）：
+Red/green review fixes: lease release before cursor-ERR destruction, binary rows impersonating FE-OK acknowledgement, missing intermediate-page reports, initial empty result clearing reports twice.16 paging combinations cover sync/async, default/sequential, two modes/two EOF forms, plus first fetch for empty Oracle deprecated-EOF. Five-asset isolated consumers cover Oracle classic/deprecated EOF. Shapes/omission rules: architecture§3. Real cursor resources/memory/throughput unverified; local completion does not close G3. Final five-core/three-DI Release 0 warnings/errors; Windows Unit1037/Consumer111/DI8 pass (TestResults/c04-cursor-*-final-checked.trx); format/both packages/shared version/per-TFM Microsoft.Extensions matrix pass; re-review no required fixes.
 
-- [x] 入口：OceanBaseCommand.FetchSize 默认0不请求游标，正数强制服务端prepare并快照为本次分页行数；负数拒绝。PreparedStatement保留列计数，非结果语句发execute前拒绝；PreparedParameters.Execute只读cursor flag=1。Oracle + ClientDeprecateEof按Java协议证据省略execute/fetch元数据EOF，由首次fetch确认终态；其他组合严格验证EOF/FE-OK游标确认包，不放宽A05。
-- [x] 读取：QueryResult按模式/能力处理execute元数据（Oracle弃用EOF例外见上），其余确认CursorExists后开始fetch；9字节COM_STMT_FETCH、statement ID/行数LE32，每次请求重置序号但保持同一命令租约/总超时，不重新执行SQL。MySQL直接读二进制行，Oracle先验证重发列元数据一致；继续批次必须CursorExists且有进展，LastRowSent才结束租约。多结果游标暂拒绝并销毁会话，不伪造支持。
-- [x] 生命周期：默认与SequentialAccess共用分页控制，HasRows只预取首行，NextResult读尽剩余页；提前Close/取消/超时/断线销毁原会话，缓存statement不跨会话复用。测试翻页、空最终页、语句复用、两模式差别、非法flag/元数据/超额行、异步纯I/O和未知结果不重放。
-- [x] 验证提交：核心5/DI3编译、Windows Unit/Consumer/DI、格式/双包/版本矩阵，独立走查并修复；更新本页、架构及进度后提交当前master。真实两模式/OBProxy与非Windows仍暂缓，不据本地回归关闭互通验收。
+### M08 Oracle Fetch with Offset: Local Implementation (2026-10-20)
 
-本轮走查的租约释放早于游标ERR销毁、二进制行冒充FE-OK确认、中间页遗漏会话报告、初始空结果重复清除报告等缺陷均以先失败回归修复。同步/异步、默认/顺序读取、两模式/两类EOF共16种分页组合及Oracle弃用EOF空结果首次fetch已覆盖；五资产隔离消费覆盖Oracle旧/弃用EOF。确认包形态和省略规则见架构§3，实库游标资源/内存/吞吐仍待验证，C04本地代码完成不关闭G3。最终Release核心五/DI三目标0警告0错误，Windows Unit1037/Consumer111/DI8全部通过（TestResults/c04-cursor-*-final-checked.trx）；格式、双包、统一版本及按TFM的Microsoft.Extensions依赖矩阵通过，独立复查无剩余必须修复项。
+Architecture M08/pinned Java6adc311ba5db8b2f19f98f3e6e4734667fdfdda1: AbstractConnectProtocol.supportFetchWithOffset requires Oracle, server prepare, explicit option, OceanBase>=2.2.5. AbstractQueryProtocol.fetchRowViaCursorForOracle specifies19-byte request; CursorResultSet.getCursorFetchData confirms trailing OK after each page's row terminator. Preserve five targets/no dependencies; implement/test/review/commit locally in current checkout, no push.
 
-### M08 Oracle带偏移量Fetch本地实施（2026-10-20）
+Command UseCursorOffset(bool,false) plus positive FetchSize enables classic prepared Oracle forward cursors. No scrolling ADO.NET reader API/REF CURSOR change. Reuse strict ob_version() query/parsing in the same exchange/total timeout; PhysicalSession caches version shared with PrepareExecute, whose2.2.76 gate stays. Wrong mode/nonpositive FetchSize reject pre-send; old/unrecognized versions send no prepare/execute/fetch, with no silent normal-fetch fallback.
 
-依据架构M08的后续项和固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1：AbstractConnectProtocol.supportFetchWithOffset要求Oracle、服务端prepare、显式选项及OceanBase>=2.2.5；AbstractQueryProtocol.fetchRowViaCursorForOracle给出19字节请求，CursorResultSet.getCursorFetchData确认每页行终态之后另有尾OK。保留现有五目标、无新依赖，在当前checkout实现、测试、走查后本地提交，不推送。
+Use Packet's nonscroll OCI_FETCH_NEXT=2, offset0, final field1, LE32 ID/count, LE16 orientation. Keep repeated metadata/binary rows/EOF-FEOK validation. Trailing OK must be complete/valid, no multiple results/OUT, lastInsertId0, affectedRows equal cumulative forward row position. Position never enters RecordsAffected. Validate trailing OK and standard/OB20 boundary before next fetch/completion. Missing/bad/ERR/cancel/disconnect destroys original session, no replay.
 
-本轮选择命令级UseCursorOffset（bool，默认false），与正FetchSize共同启用经典服务端预处理的Oracle向前游标；不扩展ADO.NET reader的滚动API，也不改变REF CURSOR。执行时在同一exchange/总超时内复用ob_version()严格查询/解析，物理会话缓存版本供本功能与PrepareExecute共享；PrepareExecute的2.2.76门槛不降低。错误模式/非正FetchSize在发送前拒绝；低版本/不可识别版本不发送prepare/execute/fetch，不静默退回普通fetch。
+Evidence limit: Java next() actually uses ABSOLUTE; NEXT/zero offset derive from protocol constants/nonscroll description. Equality to cumulative position is this implementation's strict constraint; Java only establishes trailing affectedRows as position. Neither convention is live-server-proven; real matrix remains open.
 
-请求沿Packet中非滚动游标的OCI_FETCH_NEXT=2、offset=0、末字段=1，id/行数LE32，orientation LE16。每页保留现有重发元数据、二进制行及EOF/FE-OK校验；尾OK须完整有效，无多结果/OUT、lastInsertId为0、affectedRows与累计向前行位置一致。位置计数不进入RecordsAffected。必须收到尾OK并验证标准/OB20边界后才发下一fetch或完成命令，缺失/错误/尾ERR/取消/断流均销毁原会话且不重放。
+Files: OceanBaseCommand.cs option/snapshot/version admission; PhysicalSession.cs and CommandExchange.OraclePrepareExecute.cs shared version; QueryResult.cs/QueryResult.Cursor.cs/QueryResult.Sequential.cs extended packets/terminal tail. CursorOffsetTests.cs/CursorOffsetConsumerTests.cs reuse loopback/fault/OB20 helpers; README/architecture/ledger synchronized.
 
-证据边界：Java实际next()沿ABSOLUTE，NEXT/零偏移来自协议常量与非滚动说明；累计位置相等是本实现的严格约束，Java仅提供尾affectedRows作为位置的依据。不能据此声称真实服务端已支持这两个约定，真实矩阵继续开放。
+- [x] Public regressions set missing property through reflection: both EOFs, sync/async, default/SequentialAccess, multipage/empty final page, version boundaries/cache/pre-send rejection.
+- [x] Minimal shared path; tail OK delay/ERR/truncation/bad counts/flags/boundaries/cancel/early close/reuse regressions; public five-asset standard/OB20 consumption.
+- [x] Five-core/five-DI Release, full Unit2994/Consumer1974/DI14, format/diff/both-package consumption/independent read-only review pass; fix/reverify/evidence/local commit. Live data/version/OBProxy/Linux-Windows deployment not executed, explicitly unverified.
 
-文件范围：OceanBaseCommand.cs属性/执行快照与版本准入；PhysicalSession.cs及CommandExchange.OraclePrepareExecute.cs共享版本事实；QueryResult.cs/QueryResult.Cursor.cs/QueryResult.Sequential.cs处理扩展包及尾终态。新增CursorOffsetTests.cs、CursorOffsetConsumerTests.cs，复用现有环回/故障流/OB20 helper；同步README、架构与台账。
+### C05 Database Catalog Metadata
 
-- [x] 先用反射设置新属性的公开行为回归证明缺口：两类EOF、同步/异步、默认/SequentialAccess、多页含空末页、版本边界/缓存及发包前拒绝。
-- [x] 实现最小共享路径；尾OK延迟/ERR/截断/坏计数/标志/边界、取消、提前关闭及同statement复用均有回归；五资产标准/OB20实际公开消费证明资产契约。
-- [x] 核心五/DI五Release、完整Unit2994/Consumer1974/DI14、格式/diff/双包消费检查及独立只读代码走查均通过；修复并复验后更新证据，随本模块本地提交。实库数据/版本/OBProxy及Linux/Windows部署不执行，明确未验证。
+**Deliverables:** initial `DbConnection.GetSchema` collections/restrictions, modern `GetSchemaAsync`. C implements MySQL `ChangeDatabase`/true `ChangeDatabaseAsync`; Oracle rejects before sending. Each mode uses its own system views, never the wrong dialect.
 
-### C05 数据库目录元数据
+- [x] Fix initial shapes: `MetaDataCollections`, `DataSourceInformation`, `Tables`, `Columns`; reject other collections.
+- [x] Both-mode cases cover casing/schema/restrictions/permission errors/async nonblocking waits; verify MySQL Database/query destination after switch, unchanged state on failure, Oracle rejection without packets.
+- [x] Record Java metadata gaps for phase D.
 
-**产物：**`DbConnection.GetSchema` 的首批集合、限制参数与现代 `GetSchemaAsync`；C 阶段实现 MySQL 模式 `ChangeDatabase` 和真实异步的 `ChangeDatabaseAsync`，Oracle 模式在发包前明确报不支持。MySQL 与 Oracle 模式的目录元数据分别使用对应系统视图，不复用错误方言。
+Local order (2026-10-19, existing docs/native implementation/independent review):
 
-- [x] 固定首批集合清单及列形状：`MetaDataCollections`、`DataSourceInformation`、`Tables`、`Columns`；其他集合报不支持。
-- [x] 双模式测试名称大小写、schema、限制参数、权限不足和异步入口不阻塞网络等待；验证 MySQL 切换后的 `Database`/查询目标、失败时状态不变，Oracle 模式拒绝切换且不发包。
-- [x] 记录与 Java 元数据范围的差距，作为 D 阶段候选。
+- [x] Database partial: MySQL COM_INIT_DB sends exact strict UTF-8 names, no USE concatenation; reject null/empty/NUL/invalid UTF-16/oversize and Oracle pre-send. Reuse CommandExchange lease/Command Timeout/no replay; sync I/O and true Standard2.1/modern async overrides.
+- [x] PhysicalSession owns current Database; update only on valid terminal OK/current lease. Failure leaves state; config/source keep original database, reopen restores it. Old responses cannot mutate new sessions; publish Database before completion callbacks. Prepared reuse compares preparation database even for same SQL. Allow switches inside idle explicit local transactions without changing bindings/commit state; reject busy readers/commands/ambient transactions pre-send.
+- [x] Database tests: sync/async/exact special/case-sensitive names/success/rejection/bad packets/partial I/O/cancel/timeout/reopen/log reentry/prepared reuse/transactions/source isolation. Five-asset MySQL consumers use internal post-auth facts only; A05 unchanged.
+- [x] Four catalog shapes/restriction order; compare Java both-mode SQL, bind protocol parameters instead of SQL concatenation; shared sync/async loading retains permissions/cancellation.
+- [x] Database module five-core/three-DI build, Windows Unit1073/Consumer120/DI8, format/packages/matrix pass; review no required fix; update three docs/commit master.36 new Unit/nine five-asset Consumer; TestResults/c05-database-*-final.trx.
+- [x] Catalog module independently repeats build/test/review/commit gates; live permissions/transaction-switch interoperability/cross-platform/old runtimes remain open.
 
-C05 本地执行顺序（2026-10-19，沿用现有文档与原生实现/独立走查）：
+2026-10-19 database results: initial five failures corrected;36 targeted cases for exact transmission/mode-name-ambient rejection/trusted ERR state retention/bad OK-response/partial send/cancel-timeout/reader exclusivity/local transaction binding/callback publication/source isolation/reopen. Compare prepared reuse after lease acquisition; existing queue closes stale IDs. Failed switches retain IDs. Nine isolated Standard2.0-sync/other-four-sync-async cases pass on net10. Five-core/three-DI Release 0 warnings/errors; Windows Unit1073/Consumer120/DI8 pass; review no required fix. C05 then in progress pending catalogs. Fixtures do not prove live switching/transactions/permissions/public MySQL handshake.
 
-- [x] 数据库切换模块：新增连接 Database partial，MySQL 使用 COM_INIT_DB 原样发送严格 UTF-8 名称（不拼接 USE SQL）；拒绝 null/空/NUL/非法 UTF-16/超包，Oracle 在发包前拒绝。共享 CommandExchange 的独占租约/Command Timeout/未知结果不重放；同步使用同步 I/O，Standard2.1和现代目标覆写真正异步入口。
-- [x] 状态归属：物理会话持有当前 Database，只有合法终态 OK 且租约仍有效时更新；失败不更新，配置/数据源保持原始数据库，关闭重开恢复配置。旧响应不能改变重开的新会话；当前 Database 在完成回调前发布。成功切换后，同 SQL 的预处理语句必须按准备时数据库重新判定复用，不能继续查询旧库。允许空闲的显式本地事务内切换但不改变事务绑定/提交状态；忙 reader/命令及环境事务在发包前拒绝。
-- [x] 测试数据库模块：同步/异步、原样特殊字符/大小写名称、成功/拒绝/异常报文、部分 I/O、取消/超时/关闭重开、日志重入、预处理复用、事务与数据源隔离；五资产消费仍用内部认证后 MySQL 事实夹具，绝不放宽 A05 公共握手。
-- [x] 目录模块：固定四集合列形状与每集合限制顺序；对照 Java 的两模式目录 SQL，使用协议绑定值，不将限制参数拼成 SQL；同步/异步共享结果装载，保留权限错误和取消语义。
-- [x] 数据库切换模块：核心5/DI3编译、Windows Unit1073/Consumer120/DI8、格式/双包/版本矩阵通过，独立走查无必须修复项；更新三份文档并在当前 master 提交。新增36项单测及9项五资产消费，TestResults/c05-database-*-final.trx。
-- [x] 目录模块实现后独立执行相同编译/测试/走查/提交关口；真实目录权限、事务/切换互通、跨平台与旧运行时仍待验收。
+Catalog detail (2026-10-19, reuse commands/readers):
 
-2026-10-19 数据库切换本地验证：首批5项失败回归修复后通过；36项定向覆盖精确名称传输、模式/名称/环境事务拒绝、已知ERR保留原状态、非法OK/响应、部分发送和取消/超时、reader独占、本地事务绑定、回调发布、数据源隔离及关闭重开。预处理比较在获取租约之后执行，旧ID由既有队列清理；失败切换保留旧ID。Standard2.0同步与其余四资产同步/异步隔离消费9项通过，宿主仍net10。Release slnx核心五/DI三目标0警告0错误，完整Windows Unit1073/Consumer120/DI8全部通过；独立走查无必须修复项。当时C05保持进行中，目录子模块的后续实现见下；不据协议夹具宣称真实切换、事务/目录权限或A05公共MySQL握手已验证。
+- [x] OceanBaseConnection.Schema.cs overrides three sync GetSchema forms on five targets and three GetSchemaAsync forms on modern targets. Static collections return tasks; catalogs await ExecuteReaderAsync/ReadAsync/NextResultAsync. Require open/idle/no ambient transaction; snapshot restrictions, bind current explicit transaction and fixed physical session so reopen cannot run old query in a new mode.
+- [x] MetaDataCollections: CollectionName:string, NumberOfRestrictions:int, NumberOfIdentifierParts:int; four rows restrictions0/0/4/4 and identity parts0/0/3/4. Tables: string TABLE_CATALOG/TABLE_SCHEMA/TABLE_NAME/TABLE_TYPE; same restriction order, TABLE/VIEW normalized. Columns: TABLE_CATALOG/TABLE_SCHEMA/TABLE_NAME/COLUMN_NAME:string; ORDINAL_POSITION:int; COLUMN_DEFAULT/IS_NULLABLE/DATA_TYPE:string; CHARACTER_MAXIMUM_LENGTH:long; NUMERIC_PRECISION/NUMERIC_SCALE/DATETIME_PRECISION:int. Restrictions=first four.
+- [x] DataSourceInformation uses17 standard ADO.NET columns with enum types where applicable. Product OceanBase, raw authenticated version, mode-specific parameter/quote syntax. Unsupported normalized versions/regex/lengths/join operators remain DBNull; do not infer OceanBase version/case settings from MySQL-compatible prefixes.
+- [x] Null restriction=no filter; empty/%/_ are exact literal values. No unquoting/case folding; server comparison decides. MySQL database→catalog/schema DBNull; Oracle OWNER→schema/catalog DBNull. Restricting absent identity parts returns empty fixed-shape tables. MySQL INFORMATION_SCHEMA.TABLES/COLUMNS; Oracle ALL_OBJECTS(TABLE/VIEW only)/ALL_TAB_COLUMNS. Sort by identifiers/ordinal; preserve NULL as DBNull; convert Oracle NUMBER exactly to fixed integers.
+- [x] Failing-first four-collection/both-mode sync-async/restriction-binding/NULL/numeric cases; add transaction/permission/timeout-cancel-partial-send-close/empty-bad-shape/true-async/five-asset coverage. Reuse errors/exclusivity/unknown outcomes without replay/dialect fallback.
+- [x] Java gaps: initially no complete JDBC schema/type/key/index/procedure/synonym collections, Java pattern matching/string interpolation not reused. Loopback does not prove real dictionary columns/permissions/case settings/default LONG/ordinal-version semantics. Full build/tests/format/packages/review/three-doc sync before commit.
 
-C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/reader）：
+Catalog results: initial 13 red→green;44 targeted/eight five-asset cases pass. Review's premature-rounding bug fixed with two failing-first cases/re-review. Five-core/three-DI Release 0 warnings/errors; Windows Unit1117/Consumer128/DI8 pass (TestResults/c05-schema-*-final.trx); format/UTF-8-no-BOM-CRLF/diff/five-core-three-DI packages/shared-version/per-TFM matrix pass. C05 pending verification; live catalog/permissions/version interoperability open; next local C06.
 
-- [x] 新建 `OceanBaseConnection.Schema.cs`：五目标覆写三个同步 GetSchema；现代三目标覆写三个 GetSchemaAsync，静态集合直接返回任务，目录读取使用 ExecuteReaderAsync/ReadAsync/NextResultAsync。所有集合要求打开且空闲的连接、拒绝环境事务；限制数组先快照，绑定当前显式事务并固定物理会话，防止关闭重开后换模式执行旧查询。
-- [x] 固定集合：MetaDataCollections 三列（CollectionName:string、NumberOfRestrictions:int、NumberOfIdentifierParts:int），四行限制数为0/0/4/4，对象标识部分数为0/0/3/4。Tables 四列 TABLE_CATALOG/TABLE_SCHEMA/TABLE_NAME/TABLE_TYPE 均为string；限制顺序同四列，类型归一 TABLE/VIEW。Columns 十二列为 TABLE_CATALOG/TABLE_SCHEMA/TABLE_NAME/COLUMN_NAME:string、ORDINAL_POSITION:int、COLUMN_DEFAULT/IS_NULLABLE/DATA_TYPE:string、CHARACTER_MAXIMUM_LENGTH:long、NUMERIC_PRECISION/NUMERIC_SCALE/DATETIME_PRECISION:int；限制顺序为前四列。
-- [x] DataSourceInformation 使用 ADO.NET 标准17列（枚举列使用对应枚举类型）；产品名OceanBase，版本保留认证原文，参数语法和引号按模式；没有可靠证据的规范版本/正则/长度/连接运算符等保持DBNull，不从MySQL兼容前缀猜OceanBase版本或大小写配置。
-- [x] null限制表示不筛选，空字符串和%/_为原样精确值；不去引号、不做大小写折叠，匹配由服务端比较规则决定。MySQL目录映射catalog、schema为DBNull；Oracle映射schema=OWNER、catalog为DBNull，限制不存在的标识部分返回空表。MySQL使用INFORMATION_SCHEMA.TABLES/COLUMNS，Oracle使用ALL_OBJECTS（仅TABLE/VIEW）/ALL_TAB_COLUMNS；按标识及列序号排序，NULL元数据保留DBNull，Oracle NUMBER精确转换为固定整数列。
-- [x] 首批失败回归覆盖四集合、两模式同步/异步目录、限制安全绑定、NULL和数值；补齐事务、权限错误、超时/取消/部分发送/关闭、空结果/非法结果形状和真实异步I/O及五资产消费。复用原错误、独占和未知结果语义，不增加重放或方言回退。
-- [x] 记录Java差距：首批不提供JDBC的模式/类型/键/索引/过程/同义词等完整集合，不复用Java模式匹配和字符串插值；本地环回不证明真实字典列/权限、标识大小写配置、默认值LONG及列序号版本语义。编译、完整测试、格式/包矩阵、独立走查、三文档同步后提交。
+### M07 MySQL Binary Stream Parameters: Local Implementation (2026-10-20)
 
-目录模块本地验证：首批13项失败转绿，最终44项定向/8项五资产消费通过；独立走查发现的数值先舍入问题用2项失败回归修复并复查通过。Release核心五/DI三目标0警告0错误，Windows完整Unit1117/Consumer128/DI8通过（TestResults/c05-schema-*-final.trx）；格式、UTF-8无BOM/CRLF、diff、核心5/DI3包资产及统一版本/按TFM的依赖矩阵通过。C05转待验证，真实目录/权限/版本互通仍留空，下一可本地推进C06。
+Architecture M07 long-parameter optimization was not yet implemented. Deliver MySQL LONG_DATA first; Oracle PIECE_DATA has separate acknowledgements and remains a later independent item. LOB locators/DbBatch do not constitute long-parameter upload. Work in current checkout, no dependencies/options/services added.
 
-### M07 MySQL二进制流参数本地实施（2026-10-20）
+Contract: Input parameter Value=Stream, inferred/explicit DbType.Binary, MySQL classic server prepare/execute only. At execution reject Oracle, other declarations, nonzero Size/Precision/Scale, unreadable streams, and client-prepare fallback before packets. Read current position→EOF without Length/seek/disposal/rewind; caller supplies current position/new source on repeat. Prepare checks binds/server count only, never reads stream; execution retains existing value/declaration validation. Snapshot metadata/source references; caller exclusively owns sources; byte[] unchanged.
 
-架构M07的长参数优化尚无实现。先交付MySQL LONG_DATA；Oracle PIECE_DATA有独立应答，保持未实现、后续独立推进，不把LOB locator或DbBatch当作长参数上传。沿当前checkout实施，不增加依赖、连接选项或独立服务。
+Fixed8192-byte chunks/seven-byte header(24, LE32 statement ID, LE16 parameter index); each starts sequence0, no response. Empty stream sends header-only LONG_DATA. Final EXECUTE includes type header, no inline stream value. Reuse PacketChannel offset/count writing and one buffer, no whole-stream materialization. Stream bytes+inline encoding+10-byte EXECUTE header share64 MiB budget; exceeding it never truncates-and-executes. Each chunk uses ResponseComplete(false) to validate no-response boundary, including subsequent OB20 requests. Async source ReadAsync/transport I/O use command-budget token. Sources must cooperate: synchronous Read/token-ignoring ReadAsync must return before interruption completes; no background task workaround.
 
-契约：Input参数Value为Stream，推断或显式DbType.Binary，仅MySQL经典服务端prepare/execute；执行时Oracle、其他声明、非零Size/Precision/Scale、不可读流及客户端prepare回退发包前拒绝。读取当前位置至EOF，不读取Length、不seek、不关闭或自动重绕源；再次执行由调用者提供当前位置/新源。Prepare只核验绑定和服务端参数数，不读取流，值及声明校验沿既有参数规则留在执行入口。执行快照参数元数据和源引用，来源由调用者独占；普通byte[]路径不变。
+Keep contamination flag from first chunk through trusted EXECUTE terminal. Error/cancel/close destroys original session, preventing residual parameter reuse. Failure before EXECUTE is not unknown SQL outcome; afterward existing contract applies. Complete server ERR retains code; no fallback/replay. Real LONG_DATA range/error cleanup/OBProxy compatibility unverified; A05 unchanged.
 
-使用固定8192字节数据块和7字节头（24、statement ID LE32、parameter index LE16），每块独立序号0且无应答；空流也发送一次仅含头的LONG_DATA。最终EXECUTE有类型头但无该流的inline值。复用PacketChannel已有offset/count写入，单个缓冲区不物化全流；累计流字节、inline编码及10字节EXECUTE头共用64MiB执行预算，超限不截断后执行。每块ResponseComplete(false)校验无应答边界，兼容OB20后续请求。异步使用源ReadAsync及传输异步I/O，传入命令总预算token；源自身须合作取消，同步Read或忽略token的ReadAsync仍须等待源返回，不另建后台任务。
+Files: OceanBaseParameter.cs inference; PreparedParameters.cs validation/inline omission; OceanBaseCommand.cs snapshot/send order; CommandExchange.LongData.cs chunk/budget; CommandExchange.cs contamination cleanup; LongDataTests.cs/existing five-asset consumers. Synchronize README/architecture/ledger.
 
-首块发送后至EXECUTE可信终态间保留污染标记，异常/取消/关闭必须销毁原会话，防止残余长参数复用。EXECUTE发送前失败不称SQL结果未知，发送后沿既有结果未知契约；完整服务端ERR保留错误码，绝不回退/重放。真实服务端LONG_DATA接受范围、错误清理及OBProxy版本兼容仍待实库验收，A05不放宽。
+- [x] Public execution red first: sync/async multichunk/empty/mixed-inline/no Length-seek/caller ownership.
+- [x] Minimal implementation/faults: pre-send rejection, Prepare never reads, source error/cancel, exclusivity, uploaded-but-not-executed destroys original session, postexecution unknown/trusted ERR; existing parameter/fallback regressions pass.
+- [x] Five-asset public consumption/all-target Release/full Unit-Consumer-DI/scoped format/both packages/review-fix/local commit. Live/deployment not executed/unverified; Oracle PIECE_DATA remains subsequent.
 
-文件范围：OceanBaseParameter.cs推断、PreparedParameters.cs校验/跳过inline流、OceanBaseCommand.cs快照/发包顺序、CommandExchange.LongData.cs分块/预算及CommandExchange.cs污染清理；LongDataTests.cs及现有五资产消费测试体系。README、架构和台账同步。
+### M07 Oracle Binary Stream Parameters: Implementation Detail (2026-10-20)
 
-- [x] 公开执行入口先红：同步/异步多块/空流、混合inline参数、无seek/Length及调用者所有权。
-- [x] 最小实现及故障回归：发包前拒绝、Prepare不读、源抛错/取消、独占、已上传后不执行与原会话销毁、执行后结果未知和可信ERR；既有参数/prepare回退回归通过。
-- [x] 五资产公开消费、Release全目标、完整Unit/Consumer/DI、范围格式及双包消费；独立走查修复后本地提交。实库/部署不执行、未验证；Oracle PIECE_DATA保持后续项。
+Implement planned Oracle PIECE_DATA inputs, reusing Value=Stream, snapshots, classic prepare/execute, one command budget. No options/types/dependencies/services. Continue current checkout after MySQL. Readable Binary Input/zero Size-Precision-Scale only; reject client fallback and then-unintegrated PrepareExecute/array-input combinations before source read/send, retaining those as later items. Prepare never reads; current-position/ownership/reexecution/blocking-source cancellation match MySQL.
 
-### M07 Oracle二进制流参数实施细化（2026-10-20）
+Pinned Java6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 OBStreamParameter.writePieceData/Utils.encodeHexStr/AbstractQueryProtocol.executePreparedQuery: request0xA2/LE32 statement/LE16 index/piece byte/reserved0/LE64 encoded length/uppercase hex; EXECUTE type 254, no inline stream. Each chunk receives one valid OK and completes standard/OB20 boundary before next chunk/EXECUTE. Java available() does not generalize to .NET Stream:8192-byte chunks plus one-byte lookahead detect EOF; FIRST=1 if first is nonfinal, NEXT=2 middle, LAST=3 final/empty. No seek/Length/whole-stream buffer.64 MiB counts actual hex bytes+inline+10-byte EXECUTE header.
 
-目标：补M07已列明的Oracle PIECE_DATA输入参数，复用Value=Stream、参数快照、经典prepare/execute及同一命令预算，不增加连接选项、公开类型、依赖或服务。沿当前checkout接续MySQL模块。仅可读Binary Input、零Size/Precision/Scale；客户端回退和本轮尚未接入的PrepareExecute/数组输入组合在读取或发包前拒绝，后者单独保留后续项。Prepare不读流。源当前位置、所有权、重复执行及阻塞源取消契约沿MySQL。
+Existing _longDataPending is independent from response state. After upload, source errors/cancel/close/malformed responses/chunk ERR destroy original session; retain chunk-ERR code without claiming server cleanup. Pre-EXECUTE failure is not unknown SQL outcome; post-EXECUTE trusted/unknown semantics unchanged. Chunk OK applies session variables, not user RecordsAffected, and never releases lease early. Reject result sets/MoreResults/cursor flags. Source offers no reusable server-version gate; Java driver version is not server version. Real versions/OBProxy unverified.
 
-固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的OBStreamParameter.writePieceData、Utils.encodeHexStr及AbstractQueryProtocol.executePreparedQuery：请求0xA2/statement LE32/index LE16/piece byte/reserved 0/encoded length LE64/大写十六进制数据，EXECUTE类型254且无inline流值。每块必须收到并验证单一OK，再结束标准/OB20边界，之后才可发下一块或EXECUTE。Java的available()不适用于一般.NET Stream，使用8192字节块加一字节前瞻确认EOF，首块未结束为FIRST=1、中块NEXT=2、末块/空流LAST=3；不seek、不读Length、不缓冲全流。总64MiB执行预算按实际十六进制编码后的字节数加inline及10字节EXECUTE头计。
+Files: PreparedParameters.cs permits Oracle/type 254; OceanBaseCommand.cs rejects unsupported combinations and uses standard ConditionalWeakTable by Stream reference before snapshot/send to reject multislot reuse, including repeated Oracle names (no user Equals/implicit replay). CommandExchange.LongData.cs dispatches by mode; new peer CommandExchange.PieceData.cs reuses header/session APIs. CommandExchange.cs destroys only preexecute contaminated chunk-ERR sessions. PieceDataTests.cs/PieceDataConsumerTests.cs reuse TextCommandTests/Ob20ConsumerTests helpers, no mock database application.
 
-污染标记沿现有_longDataPending，独立于当前应答状态；块上传后任何源异常/取消/关闭、畸形或块ERR均销毁原会话，防止残留数据复用。块ERR保留服务端错误码但不宣称服务器已清理；EXECUTE前失败不标记SQL结果未知，EXECUTE后沿现有可信ERR/未知终态契约。块OK需应用会话变量，不污染用户的RecordsAffected，也不得提前释放命令租约；结果集/MoreResults/游标标志拒绝。源码没有可直接沿用的服务端版本门槛，不把Java驱动版本当作服务端版本；实际版本/OBProxy接受范围保留未验证。
+- [x] Public sync/async empty/single/multichunk/short-read cases fail for missing support first, then minimal protocol path passes.
+- [x] FIRST/NEXT/LAST, exact header/hex/no-inline, multistream/mixed/snapshots, Prepare/current-position/repeat/NULL, invalid declarations, source error/cancel/timeout/exclusivity, chunk ERR/malformed/disconnect, execution ERR/unknown outcome, state/cumulative bounds.
+- [x] Five-asset sync/async×standard/OB20, full Release/Unit/Consumer/DI/format/diff/both-package consumption/review-fix/doc sync/local commit, no push. Live/deployment not executed. PrepareExecute remained next; do not close all M07 from this subitem.
 
-文件：PreparedParameters.cs放宽Oracle并选择类型254；OceanBaseCommand.cs拒绝未接入组合、以标准ConditionalWeakTable在快照/发包前按Stream引用拒绝多位置共用（含Oracle重复名称展开），不依赖用户Equals或隐式重放；CommandExchange.LongData.cs按模式分派，新增同层CommandExchange.PieceData.cs复用Header/会话API；CommandExchange.cs仅在执行前污染块ERR时销毁会话。测试沿TextCommandTests和Ob20ConsumerTests的既有环回helper，新增PieceDataTests.cs/PieceDataConsumerTests.cs，不建立模拟数据库应用。
+### M07 Oracle PrepareExecute with Stream Input (2026-10-20)
 
-- [x] 先写公开同步/异步、空流/单块/多块及短读失败回归，确认因缺少Oracle Stream支持而失败；实现最小协议路径并转绿。
-- [x] 补FIRST/NEXT/LAST、精确头/hex/无inline、多流/混合值/快照、Prepare/当前位置/重复/NULL、错误声明、源失败/取消/超时/独占、块ERR/畸形/断流、执行ERR/未知结果、会话状态与累计预算边界。
-- [x] 五资产同步/异步×标准/OB20消费，完整Release/Unit/Consumer/DI、格式/diff、双包实际消费；独立代码走查修复、文档同步后本地提交，不推送。实库/部署不执行，PrepareExecute组合仍保留后续，不据此关闭整个M07。
+Combine D02 procedure/OUT with M07 binary Stream Input so selecting PrepareExecute retains stream support. No options/types/dependencies/services. Require existing Use Oracle Prepare Execute/2.2.76 gate, transaction/exclusive lease/total budget. Only Input consumes streams; reject InputOutput before direction normalization. Output/ReturnValue ignore old Value including Stream, never read/register its identity; no stream-output API. Array elements reject Stream. Pinned Java AbstractQueryProtocol.executePreparedQuery prepares/uploads first; ComStmtPrepareExecute.send uses that statement ID and omits inline streams. Extended response may replace ID; clean both once.
 
-### M07 Oracle PrepareExecute流输入组合（2026-10-20）
+Each execution creates an independent classic prepare ID. Count mismatch explicitly Releases into close queue; matching IDs transfer to OracleCursorOwner. Do not cache as command classic prepare or share ownership with active REF CURSOR parents. Existing cleanup handles source/chunk/cancel errors. Different returned ID queues original close; final ID follows output/REF CURSOR lifetime. OUT publishes atomically only after complete terminal/OB20 boundary. Budget subtracts full actual extended request(header/SQL/parameters/tail), then hex data, not merely classic10-byte header.
 
-目标：接通已存在的D02存储过程/OUT与M07二进制Stream Input，避免选择PrepareExecute便丢失流输入能力。不新增选项、类型、依赖或服务；仍要求原Use Oracle Prepare Execute及2.2.76门槛、原事务/独占/总预算。仅Input消费Stream，InputOutput在方向规范化前拒绝；Output/ReturnValue仍忽略旧Value（包括Stream），不读取或注册其流身份，不提供流输出API。数组元素不接受Stream。固定Java AbstractQueryProtocol.executePreparedQuery先prepare并逐块上传，ComStmtPrepareExecute.send使用该statement ID、跳过inline流值；扩展响应可给出不同ID，须保证两者清理且不重复关闭。
+Files: OceanBaseCommand.cs prepares/uploads/builds with ID when Oracle plan has streams; CommandExchange.LongData.cs/PieceData.cs use full execution-request length budget; OracleCursorOwner.SetStatement queues replaced IDs. Reuse OracleProcedure/RefCursor/PieceData fixtures, new combination/five-asset standard-OB20 cases; sync README/architecture/ledger.
 
-每次此组合创建独立经典prepare ID，参数数不符时显式Release入关闭队列，匹配时交给现有OracleCursorOwner；不写入命令经典prepare缓存，不与仍在使用的REF CURSOR父statement共享所有权。源前失败/块ERR/取消等由现有清理处理；收到扩展新ID时，若不同则延迟关闭原ID，最终ID沿原输出/REF CURSOR生命周期关闭。OUT仍只在完整终态及OB20边界通过后原子发布。流上传预算按整个实际执行请求字节数扣除（扩展头、SQL、参数、尾字段），再计hex流数据，不能仅扣经典EXECUTE的10字节头。
+- [x] Public sync/async stream+OUT fails first, then minimal path.
+- [x] Empty/multichunk, same/replaced ID, reexecution, count mismatch, source/chunk/tail ERR/cancel with no OUT publication, REF CURSOR parent/original transaction; budget includes complete extended request.
+- [x] All-target Release/full Unit-Consumer-DI/scoped format/both-package consumption/review-fix/docs-diff/local commit. User-deferred real database/OBProxy/deployment unexecuted/unverified.
 
-文件：OceanBaseCommand.cs在Oracle计划存在流时prepare/上传/以ID构建执行；CommandExchange.LongData.cs/PieceData.cs将预算参数统一为完整执行请求长度；OracleCursorOwner.SetStatement在ID替换时延迟关闭旧ID。测试复用OracleProcedure/RefCursor及PieceData的既有夹具，新增组合用例与五资产标准/OB20消费；README/架构/台账同步。
+### M11 Procedure/Parameter Catalogs: Local Implementation (2026-10-20)
 
-- [x] 先用公开同步/异步流输入+OUT固定失败回归，再实现最小路径。
-- [x] 补空/多块、statement ID相同/变化、每次重执行、参数数不符、源失败/块ERR/尾ERR/取消及OUT不发布、REF CURSOR父资源与原事务；预算验证计入完整扩展请求。
-- [x] 全目标Release、完整Unit/Consumer/DI、范围格式及双包消费，独立走查修复、文档/diff核对后本地提交。真实数据库/OBProxy接受范围与部署按用户要求不执行、未验证。
+Implement architecture M11 procedure/parameter catalogs previously planned for D. D02 procedure execution does not imply discovery. Add Procedures/ProcedureParameters to C05 GetSchema, without DeriveParameters/adapters/command generation/options. Current master/no dependencies; five sync assets/three modern async assets; Standard async boundaries unchanged.
 
-### M11 过程/参数目录本地实施（2026-10-20）
+Pinned Java6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 JDBC4DatabaseMetaData.java:2775,2898,4842,4991 and util/DefaultSQLs.java dictionary fields. MySQL INFORMATION_SCHEMA.ROUTINES/PARAMETERS; Oracle ALL_PROCEDURES/ALL_ARGUMENTS. Java procedure SQL actually uses ALL_OBJECTS/ALL_ARGUMENTS and joins ALL_PROCEDURES for parameters; this provider directly lists ALL_PROCEDURES to preserve parameterless/package/overload identity, without claiming identical Java SQL. Do not port LIKE/name folding/mysql.proc fallback/JDBC numbers/invented lengths-nullability.
 
-目标：落实架构M11仍在D阶段规划的过程/参数目录。D02已有过程执行不代表目录发现已实现；在C05现有GetSchema路径新增Procedures、ProcedureParameters，不添加DeriveParameters、adapter、命令生成或连接配置。沿当前master续接，无新依赖；同步五资产、GetSchemaAsync现代三资产，Standard异步API边界不变。
+Shared first seven columns: ROUTINE_CATALOG/ROUTINE_SCHEMA/ROUTINE_NAME/PACKAGE_NAME/OVERLOAD:string, SUBPROGRAM_ID:int, ROUTINE_TYPE:string. Procedures has these only. ProcedureParameters adds PARAMETER_NAME:string, ORDINAL_POSITION:int, PARAMETER_MODE/DATA_TYPE:string, DATA_LENGTH:long(bytes), NUMERIC_PRECISION/NUMERIC_SCALE/DATETIME_PRECISION:int, TYPE_OWNER/TYPE_NAME/TYPE_SUBNAME:string. Unknown=DBNull; no fabricated specific names/CLR-DbType mappings.
 
-依据固定Java 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的JDBC4DatabaseMetaData.java:2775、2898、4842、4991及util/DefaultSQLs.java的字典字段。MySQL用INFORMATION_SCHEMA.ROUTINES/PARAMETERS，Oracle用ALL_PROCEDURES/ALL_ARGUMENTS。Java过程目录实际使用ALL_OBJECTS/ALL_ARGUMENTS，ALL_PROCEDURES出现在参数元数据关联；本驱动选择直接列举ALL_PROCEDURES以保留无参/包/重载身份，不宣称照搬Java过程SQL。不移植Java的LIKE、折叠名称、mysql.proc回退、JDBC类型数字或虚构参数长度/可空性。
+Both restriction orders: catalog/schema/routine/type-or-parameter/package, five each. Nonnull values use exact equality/protocol binds; empty/%/_ are literal. MySQL lacks schema/package, Oracle lacks catalog: nonnull restrictions there return fixed-shape empty tables. Append MetaDataCollections rows with restrictions5/5, identity parts4/5; preserve original four order/semantics.
 
-两个集合共用前七列：ROUTINE_CATALOG、ROUTINE_SCHEMA、ROUTINE_NAME、PACKAGE_NAME、OVERLOAD（string）、SUBPROGRAM_ID（int）、ROUTINE_TYPE（string）。Procedures即这七列；ProcedureParameters后接PARAMETER_NAME（string）、ORDINAL_POSITION（int）、PARAMETER_MODE/DATA_TYPE（string）、DATA_LENGTH（long，字节）、NUMERIC_PRECISION/NUMERIC_SCALE/DATETIME_PRECISION（int）、TYPE_OWNER/TYPE_NAME/TYPE_SUBNAME（string）。未知字段保持DBNull，不构造虚假特定名称或CLR/DbType映射。
+Oracle procedures retain standalone PROCEDURE/FUNCTION and PACKAGE members with nonempty PROCEDURE_NAME; package headers excluded. Member ROUTINE_TYPE unknown, never inferred. Keep PACKAGE_NAME/OVERLOAD/SUBPROGRAM_ID identities, never merge overloads. Parameters require DATA_LEVEL=0/nonNULL DATA_TYPE, excluding old parameterless placeholders/nested attributes. Position0=RETURN; otherwise IN→IN, OUT→OUT, IN/OUT→INOUT, unknown→DBNull. ALL_ARGUMENTS cannot confirm ROUTINE_TYPE, so DBNull. MySQL retains procedures/functions, position 0 RETURN, other PARAMETER_MODE unchanged, dictionary ROUTINE_TYPE. Lengths CHARACTER_OCTET_LENGTH/Oracle DATA_LENGTH. Oracle precision only NUMBER/FLOAT, fractional time only TIMESTAMP; preserve Oracle type-identity fields, MySQL missing ones DBNull. Sort catalog/schema/package/routine/type/subprogram/overload/position. No cross-query dictionary snapshot/automatic complex-parameter reconstruction claim.
 
-限制顺序均为catalog、schema、routine name、type或parameter name、package name，共5项；所有非null值精确等号、协议绑定，空串/%/_不作模式。MySQL无schema/package，Oracle无catalog，对这些部分的非null限制直接返回固定形状空表。MetaDataCollections追加两行，限制数5/5、标识部分数4/5。保留旧四集合顺序及语义。
+Files: OceanBaseConnection.Schema.cs collections/restrictions/shared filtering; new OceanBaseConnection.Schema.Routines.cs shapes/SQL; reuse ValidateSchemaResult/AddSchemaRow, transaction binding/RequiredSession/lease/timeout/cancel/terminal drain. New RoutineSchemaTests.cs/RoutineSchemaConsumerTests.cs; update four-collection count assertions for expanded API; sync README/architecture/ledger.
 
-Oracle过程目录保留独立PROCEDURE/FUNCTION，以及OBJECT_TYPE=PACKAGE且PROCEDURE_NAME非空的包成员；包头不当过程，包成员ROUTINE_TYPE未知，不推测。PACKAGE_NAME/OVERLOAD/SUBPROGRAM_ID保留原字典身份，不合并重载；参数仅DATA_LEVEL=0且DATA_TYPE非null，排除旧字典无参占位行及嵌套属性，位置0是RETURN，其余IN→IN、OUT→OUT、IN/OUT→INOUT，未知方向为DBNull。参数目录无法由ALL_ARGUMENTS直接确认ROUTINE_TYPE，保留DBNull。MySQL目录同时保留过程/函数，参数位置0为RETURN，其余保留PARAMETER_MODE，ROUTINE_TYPE直接来自字典。长度使用CHARACTER_OCTET_LENGTH/Oracle DATA_LENGTH；Oracle数值精度仅NUMBER/FLOAT，时间小数仅TIMESTAMP系列；类型身份保留原Oracle字段，MySQL无对应身份为DBNull。按catalog/schema/package/routine/type/subprogram/overload及参数位置排序；不声称跨查询字典快照或能自动重建复杂参数。
+- [x] Failing-first public GetSchema: two modes/two collections/sync-async fixed shapes/raw values/NULL/exact binds/absent-part no-send/MetaDataCollections list.
+- [x] Minimal shared catalogs preserve packages/overloads/returns/byte-length/precision; bad names/fractions/overflow/extra results/trusted ERR/cancel-delay/transactions-busy-readers/five-asset cases, no original-collection regression.
+- [x] Five-core/five-DI Release/full Unit-Consumer-DI/scoped format/diff/both-package consumption/independent design-code review/fix-reverify/local commit, no push. Real dictionary fields/permissions/visibility/overloads/parameterless/package/complex-type/version-OBProxy/deployment unexecuted/unverified; fixtures do not establish version support.
 
-修改范围：OceanBaseConnection.Schema.cs接入集合/限制及共用参数过滤，新增OceanBaseConnection.Schema.Routines.cs承载两目录列形状/SQL；复用ValidateSchemaResult/AddSchemaRow、原事务绑定/RequiredSession/独占/超时/取消与读尽终态。新增RoutineSchemaTests.cs、RoutineSchemaConsumerTests.cs，现有四集合计数断言随公开集合清单扩展而更新；README/架构/台账同步。
+### C06 Sequential DbBatch and Data-source Batch APIs
 
-- [x] 先在现有公开GetSchema入口新增失败测试：两模式、两集合、同步/异步固定形状/原始值/NULL、精确限制绑定、无对应标识部分不发包、MetaDataCollections清单。
-- [x] 最小实现共用目录路径，保留package/重载/返回行、字节长度及精度；补坏列名/小数/溢出/额外结果/可信ERR、取消/延迟、原事务/忙reader及五资产公开消费，验证旧四集合不退化。
-- [x] 核心五/DI五Release、完整Unit/Consumer/DI、范围格式、diff及双包消费；独立设计/代码走查后修复复验并本地提交，不推送。真实字典字段/权限/可见性、重载/无参/包成员/复杂类型与版本/OBProxy及部署不执行、未验证，不能把夹具当版本支持证据。
+**Deliverables:** `net8.0+` `DbBatch`, factory/B01 data-source batch entry points. Initially execute sequentially, retaining per-command `RecordsAffected`/successful prefix without automatic atomicity. Basic data sources are already B01, not deferred here.
 
-### C06 逐条 DbBatch 与数据源批量入口
+Local steps (existing batch design; implement directly, independent read-only review):
 
-**产物：**`net8.0+` 的 `DbBatch`、factory 和 B01 数据源的批量入口；`DbBatch` 先逐条执行，保留每条 `RecordsAffected` 和失败前缀，不自动保证原子性。基础数据源不再延后到本任务。
+- [x] Failing public DbBatch cases establish order, empty batch, per-command counts, failing command, unexecuted suffix.
+- [x] OceanBaseBatch/BatchCommand/BatchCommandCollection/internal reader reuse OceanBaseCommand; snapshot all commands/parameters at start, copying byte[], retain per-command prepare caches. Collection/commands have one batch owner; active configuration/collection mutation prohibited.
+- [x] PhysicalSession batch-owner reservation prevents ordinary commands/catalogs/database changes/transaction operations between entries; stale batches cannot enter reopened sessions. Failure/reader close releases reservation; early close does not execute suffix, unread responses destroy original session.
+- [x] NextResult starts each command, supporting existing multiple results/types/schema/SequentialAccess/true async. ExecuteScalar returns first row/column of first column-bearing result (null if empty), then drains all suffixes. Timeout applies per command including prepare/read,0 infinite. Cancel covers current/unstarted suffix; no automatic transaction.
+- [x] Data-source entry uses platform DbDataSource wrapper for automatic open/close/disposal; platform rejects Prepare/Connection/Transaction; factory.CreateBatchCommand creates entries. Five-asset isolation/three-modern-asset consumers cover API boundaries.
+- [x] Full build/Windows Unit-Consumer-DI/format/packages/review-fix, update three docs, commit current branch; live/non-Windows deferred.
 
-本地实施步骤（沿用架构批量契约，本轮自行实施、独立只读走查）：
+- [x] After implementation, test `CanCreateBatch=true`, transaction binding, counts, failure position, async/unknown outcome; no skeleton capability claim.
+- [x] Source batches inherit frozen configuration/logging/independent optional-pool/transaction rules and redacted connection strings. No modern APIs on older targets; C01 still rejects pooling.
+- [ ] Consumption/integration on .NET 8/9/10 separately.
 
-- [x] 先以公共 DbBatch 入口的失败用例固定顺序执行、空批次、逐条计数、失败命令及不执行后缀。
-- [x] 新增 OceanBaseBatch/BatchCommand/BatchCommandCollection 和内部批量 reader；复用现有 OceanBaseCommand，开始时快照所有命令和参数（byte[]复制），保留各命令准备缓存。集合/命令只归属一个 batch，活动期间禁止修改集合及配置。
-- [x] PhysicalSession 增加批量所有者预约；普通命令、目录、切库及事务操作不能插入批量语句之间，旧批次不能进入重开后的会话。失败或 reader 关闭释放预约；提前关闭不执行后缀，未读响应仍销毁原会话。
-- [x] reader 按 NextResult 逐条启动，支持现有多结果、字段类型/schema、SequentialAccess 和真正异步；ExecuteScalar 取第一个有列结果的首行首列（无行则 null）后排空全部后缀。Timeout 对每条命令（含准备和读取）生效，0 无限；Cancel 覆盖当前与未启动后缀，不自动开启事务。
-- [x] 数据源入口复用平台 DbDataSource 包装，自动打开/关闭/释放；其 Prepare、Connection/Transaction 按平台拒绝，命令通过 factory.CreateBatchCommand 创建。五资产隔离和现代三资产消费覆盖 API 边界。
-- [x] 完整编译、Windows 单元/消费/DI、格式/包矩阵和独立走查修复后，更新三份文档并在当前分支提交；实库和非 Windows 暂缓。
+2026-10-19 local implementation/full Windows tests/review complete; C06 pending verification. Independent samples also pass actual.NET8.0.31/9.0.20/10.0.12 batch consumption with Logging8/9/10. Full integration/non-Windows deferred, so final checkbox stays open. Evidence/fixes: ledger C06 tail record.
 
-- [x] 实现后测试 `CanCreateBatch=true`、batch 事务绑定、逐条计数、失败位置、异步批量和结果未知；实现前不发布空壳 batch。
-- [x] 数据源 batch 沿用其冻结配置、日志、独立可选池和事务规则，公开连接串仍脱敏；旧目标不出现现代 API，池化仍按 C01 拒绝。
-- [ ] 在 .NET 8/9/10 分别运行消费与集成测试。
+### C07 Diagnostics and Performance Baselines
 
-2026-10-19 本地实现、Windows 完整测试和独立走查已完成，C06 待验证。另以独立编译样例在实际 .NET 8.0.31/9.0.20/10.0.12 验证批量消费及对应 Logging 8/9/10；完整集成和非 Windows 暂缓，最后一项不据此勾选。证据及走查修复见进度台账末尾 C06 记录。
+**Deliverables:** local `ActivitySource` tracing, aggregated `Meter` metrics, disabled overhead/performance baselines. B01 already supplies basic `ILogger`; task-specific command/transaction/pool logs follow those tasks. Verify five-target APIs/dependencies. Local tracing does not require OB20 or additional bridges. Default excludes SQL/binds/credentials. No SQL/connection IDs/arbitrary keys as high-cardinality metric labels. Packet capture separately opt-in, with authentication/parameters erased.
 
-### C07 诊断与性能基线
+Local steps (existing design; direct implementation/independent review):
 
-**产物：**`ActivitySource` 本地操作追踪、`Meter` 聚合指标及禁用开销/性能基线；基础 `ILogger` 接入已由 B01 交付，命令/事务和池日志随对应任务实现。五目标 API/包依赖验证；本地追踪不依赖 OB20，不预先堆叠其他诊断桥接。默认无 SQL、绑定值或凭据；指标不用 SQL/连接 ID/任意 key 作高基数标签。抓包单独显式开启并擦除认证/参数数据。
+- [x] Failing public connection/command/reader/transaction fixture cases: source name/parent-Current restoration/no early completion/known ERR/cancel/timeout/unknown outcome/listener errors-reentry. Fixed operation/mode/outcome tags prove no secrets.
+- [x] Internal/DriverDiagnostics centralizes source/meter/per-operation enabled objects. CommandExchange reports after lease release/batch-failure cleanup; OceanBaseCommand distinguishes prepare/execute after Start returns. Reuse connection/database/transaction lifecycles; no listener calls under internal locks.
+- [x] Standard assets use CPM DiagnosticSource8.0.1; modern use runtime APIs. Five-asset isolated listeners verify identical events/tags/reference versions; daily host net10.
+- [x] Repeatable Windows no-listener/sampling-rejected/enabled/prepared-cache/multiple-result/sequential-large-value baselines record timings/allocations/environment. Material regressions enter defect ledger; do not fabricate pool measurements while C01 blocked.
+- [x] Full slnx/Windows Unit-Consumer-DI/packages-format/review-fix, synchronize existing three docs, local commit/no push.
 
-本地实施步骤（已有设计下自行实施、独立只读走查）：
+- [x] Five-target event/field consistency, no sensitive data, cancel distinguished from unknown outcome.
+- [ ] Establish prepared/multiple-result/large-value/high-concurrency pool-rental performance-memory baselines; log material regressions.
+- [ ] Collect redacted both-mode direct/OBProxy samples.
 
-- [x] 在现有公共连接/命令/reader及事务夹具先增加诊断失败回归：源名、父上下文/Current恢复、终态前不结束、已知ERR/取消/超时/未知结果、监听器异常及重入；使用固定操作/模式/结果标签验证无敏感数据。
-- [x] 新增 Internal/DriverDiagnostics，集中 ActivitySource/Meter 及按操作启用的诊断对象；CommandExchange结束时在释放租约和batch失败清理后上报，OceanBaseCommand在Start返回后区分prepare/execute，ChangeDatabase和连接/事务复用现有生命周期，不在内部锁内调用监听器。
-- [x] 两个Standard资产通过CPM引用DiagnosticSource8.0.1，现代目标使用运行时API；五资产隔离监听器消费验证同一事件/标签和程序集引用版本，普通测试宿主保持net10。
-- [x] Windows可重复本地基线覆盖无监听/采样拒绝/启用、预处理缓存、多结果、顺序大值；记录实际耗时/分配及环境，显著退化记入缺陷台账。池借还因C01阻塞不伪造测量。
-- [x] 完整slnx编译、Windows单元/消费/DI、包依赖/格式检查，独立走查修复后更新三份既有文档，在当前分支提交不推送。
+2026-10-19 local diagnostics/redaction/Windows prepared-multiresult-sequential baselines complete; C07 pending. Unit1205/Consumer152/DI8, actual.NET8/9/10 samples/package matrix pass. Activity.CurrentChanged review defect fixed with sync/async regressions. Original performance checkbox includes unavailable pooling, stays open. Live both-mode/OBProxy/non-Windows deferred; data/reproduction at ledger tail.
 
-- [x] 测试五目标事件名称/字段一致、敏感数据不出现、取消与结果未知被区分。
-- [ ] 以预处理、多结果、大值和高并发池借还建立性能/内存基线；显著退化写入缺陷台账。
-- [ ] 在两模式直连与 OBProxy 采集脱敏样本。
+### C08 G3 Production Gate
 
-2026-10-19 本地诊断、脱敏及Windows预处理/多结果/顺序大值基线已完成，C07待验证。Unit1205、Consumer152、DI8、实际.NET8/9/10样例及包矩阵通过；Activity.CurrentChanged走查缺陷已以同步/异步回归修复。原性能验收项包含尚未开放的池借还，保持未勾选；真实两模式/OBProxy和非Windows仍暂缓，数据与复现命令见进度台账末尾。
+**Deliverables:** public version/mode/topology/TLS/auth/pooling matrix and measured reset-isolation/fault/exact-value evidence. Combinations without complete reset publish direct connections only.
 
-### C08 G3 生产门槛
+- [ ] Compile five targets; run .NET 10 Unit/isolated Consumer/both-mode integration/fault suites; record skips/failures/environment blockers.
+- [ ] Review pool allowlist/memory-connection leaks/postcancel SQL uncertainty/observability.
+- [ ] Close G3 only without P0/P1 defects and with claims matching measurements.
 
-**产物：**版本/模式/拓扑/TLS/认证/池化的公开兼容矩阵，重置隔离、故障和精确值的实测证据。不能完整重置的组合只发布直连能力。
+## D. Independent Extension Slices
 
-- [ ] 编译全部五目标，运行 .NET 10 单测、隔离消费、双模式集成与故障套件，记录跳过、失败和环境阻塞。
-- [ ] 审核池化白名单、内存/连接泄漏、取消后的 SQL 结果不确定性与可观测性。
-- [ ] 无 P0/P1 缺陷且公开声明与实测一致时关闭 G3。
+Each D item has its own switch/version-mode matrix/fallback semantics. Continue independently verifiable local work under current instructions despite missing G4/live environments; defer deployment-dependent integration and never replace live acceptance with fixtures. Start failing fixtures, add public API docs/resource tests, record each live-version/mode gap separately.
 
-## D. 独立扩展切片
-
-每个 D 项独立开关、独立版本/模式矩阵和回退行为。按当前开发要求，可独立验证的本地实现继续推进，不因 G4 或实库环境尚缺而全部搁置；依赖部署的联调暂缓，不能以本地夹具替代真实验收。每项先写失败夹具，补公开 API 文档与资源释放测试，并单独记录真实版本/模式验证缺口。
-
-| ID | 扩展 | 必须证明的边界 |
+| ID | Extension | Required boundaries |
 | --- | --- | --- |
-| D01 | OB20、校验与完整链路追踪 | 能力协商、帧校验、标准包流回退、无敏感追踪 |
-| D02 | Oracle 过程及 OUT/RETURNING | 参数方向、多个结果、失败时参数与事务状态 |
-| D03 | REF CURSOR | 游标、事务和连接所有权及提前关闭 |
-| D04 | LOB locator 与流式 LOB | locator 失效点、分块流、取消与内存上限 |
-| D05 | ARRAY/STRUCT 与类型字典 | 嵌套值、类型缓存失效、模式差异 |
-| D06 | bulk/array binding | 部分成功、失败位置、逐条更新计数 |
-| D07 | 按需客户端预处理回退 | 安全文本编码、仅对明确不支持 prepare 的错误回退，断线不回退 |
-| D08 | 拓扑发现与负载均衡 | 地址来源、选址、模式重验、已发送 SQL 不重放 |
-| D09 | 显式 XA | 会话固定、恢复与真实事务协调器；`TransactionScope` 仍需独立设计 |
-| D10 | Oracle NCHAR/national charset | 会话字符集识别、文本/预处理双向读写与元数据 |
-| D11 | Oracle INTERVAL | 精度、符号、文本/二进制双向读写 |
-| D12 | MySQL JSON | 文本/二进制值、NULL、元数据与双向读写 |
-| D13 | MySQL BIT | 不同位宽、符号边界、元数据与双向读写 |
-| D14 | MySQL YEAR | 合法范围、零值规则、元数据与双向读写 |
-| D15 | 新认证插件 | 插件切换、TLS 先决条件和两模式实测 |
+| D01 | OB20, checksums, full-link tracing | Negotiation, frame validation, standard-stream fallback, no sensitive tracing |
+| D02 | Oracle procedures, OUT/RETURNING | Directions, multiple results, parameter/transaction state on failure |
+| D03 | REF CURSOR | Cursor/transaction/connection ownership, early close |
+| D04 | LOB locators/streaming | Invalidation points, chunks, cancellation, memory bounds |
+| D05 | ARRAY/STRUCT/type dictionary | Nesting, cache invalidation, mode differences |
+| D06 | bulk/array binding | Partial success, failure position, per-entry counts |
+| D07 | Explicit client-prepare fallback | Safe text encoding; only explicit prepare-unsupported errors permit fallback, never disconnect |
+| D08 | Topology discovery/load balancing | Address sources/selection/mode revalidation/no replay |
+| D09 | Explicit XA | Session pinning/recovery/real coordinator; `TransactionScope` needs separate design |
+| D10 | Oracle NCHAR/national charset | Session charset identification, text/prepared bidirectional codecs/metadata |
+| D11 | Oracle INTERVAL | Precision/sign/text-binary bidirectional codecs |
+| D12 | MySQL JSON | Text/binary values/NULL/metadata/bidirectional codecs |
+| D13 | MySQL BIT | Widths/sign boundaries/metadata/bidirectional codecs |
+| D14 | MySQL YEAR | Range/zero semantics/metadata/bidirectional codecs |
+| D15 | Additional authentication plugins | Switches/TLS prerequisites/live both-mode evidence |
 
-### D14 本地实现范围（2026-10-19）
+### D14 Local Scope (2026-10-19)
 
-沿用现有 `OceanBaseDbType.Year`（枚举值 9），标准及 provider-specific 访问均为 `ushort` / `DbType.UInt16`；只支持四位 YEAR，保留零值及 1901–2155，拒绝 YEAR(2)、两位年份推断、日期转换和非法精度。结果类型码 13，文本四个 ASCII 数字，二进制固定两字节小端；NULL 的模式/元数据亦须先验证。显式 Year 参数先校验模式、精度和 UInt16 范围，复用现有无符号 SMALLINT 参数编码，不假设执行请求接受 YEAR 类型码；普通 UInt16 仍不受年份范围限制。
+Reuse `OceanBaseDbType.Year`(9); standard/provider access `ushort`/`DbType.UInt16`. Four-digit YEAR only, zero/1901–2155; reject YEAR(2), two-digit inference, date conversion, invalid precision. Result13: four ASCII digits text/two-byte LE binary; validate mode/metadata even for NULL. Explicit Year validates mode/precision/UInt16 and reuses unsigned SMALLINT parameter encoding, without assuming execute accepts YEAR code. Ordinary UInt16 has no year restriction.
 
-实施顺序：失败编解码/边界及公共环回测试 → 共用结果/参数/Schema 路径实现 → 五资产公共 API 消费 → Release 全目标、完整 Unit/Consumer/DI → 独立走查、修复、文档和本地提交。同步/异步、文本/预处理、默认/SequentialAccess、后续字段及会话复用均覆盖。协议行为参考固定 Java 基线的 `BinaryRowProtocol` YEAR 两字节读取及 `ShortParameter` SMALLINT 写入，不复制其源码。真实 OceanBase YEAR 列 INSERT/SELECT、版本/OBProxy 验收另行保留；A05 公共 MySQL 模式门槛不变，本地测试仅注入认证后的模式事实。
+Failing codec/boundary/public loopback→shared results/parameters/schema→five-asset API consumption→all-target Release/full Unit-Consumer-DI→review/fix/docs/local commit. Cover sync/async,text/prepared,default/SequentialAccess,next fields/session reuse. Reference pinned Java BinaryRowProtocol two-byte YEAR/ShortParameter SMALLINT behavior, no source copying. Live YEAR INSERT/SELECT/version/OBProxy remains open; A05 unchanged; tests inject post-auth mode facts only.
 
-### D13 本地实现范围（2026-10-19）
+### D13 Local Scope (2026-10-19)
 
-沿用 `OceanBaseDbType.Bit`（枚举值 8），标准及 provider-specific 访问统一为 `ulong` / `DbType.UInt64`，BIT(1) 也不隐式转 bool。结果类型码 16，列 Length 为位数，只支持 1–64 位、scale=0；两个行协议都以长度编码包裹大端原始字节，要求字节数为 ceil(位数/8)，未使用高位必须为零。保留 2^63 和 UInt64.MaxValue，不按有符号整数解释或解码为文本。Schema 的 ColumnSize 为位数；NumericPrecision/NumericScale 不填十进制精度。
+Reuse `OceanBaseDbType.Bit`(8), standard/provider `ulong`/`DbType.UInt64`; BIT(1) never implicit bool. Result16; Length=bits,1–64,scale0. Both protocols length-encode big-endian raw bytes, exactly ceil(bits/8), unused high bits zero. Preserve2^63/UInt64.MaxValue without signed/text interpretation. ColumnSize=bits, no decimal NumericPrecision/Scale.
 
-显式 Bit 参数只接受 UInt64，Size=0 表示 64 位，Size=1–64 声明位宽；验证范围且不截断，Precision/Scale 仅支持 0，Oracle 模式含 NULL 预先拒绝。复用现有 unsigned BIGINT 参数编码，不假定执行请求支持 BIT 类型码；服务端目标列位宽和转换仍须实库验证。普通 UInt64 参数不受此位宽规则影响。先写全位宽/符号边界失败测试，再实现共享编解码、元数据和参数映射，覆盖同步/异步、文本/预处理、默认/SequentialAccess、NULL、后续字段及会话复用、五资产公共 API 消费；全目标编译、完整测试与独立走查通过后本地提交。协议参考固定 Java 基线 RowProtocol.parseBit 的大端解释，不复制源码；真实 BIT 列 INSERT/SELECT 与模式/版本矩阵另行验收，A05 公共 MySQL 判定不变。
+Explicit Bit accepts UInt64 only; Size0=64,1–64 declares width, bounds validated/no truncation, Precision/Scale0 only; Oracle including NULL rejects early. Reuse unsigned BIGINT encoding without assuming execute BIT code. Server column-width/conversion requires live tests; ordinary UInt64 unchanged. Failing widths/sign cases→shared codecs/metadata/mapping→sync-async/text-prepared/default-sequential/NULL/next fields/reuse/five assets→full build/tests/review/local commit. Reference pinned Java RowProtocol.parseBit big-endian behavior without copying. Live BIT INSERT/SELECT/mode-version matrix separate; A05 unchanged.
 
-长度依据：[固定 OceanBase 源码的 bit_cell_str](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp) 在 TEXT/BINARY 两分支均发送 `(bit_len + 7) / 8` 字节；Java 固定基线 `RowProtocol.parseBit` 以大端解释。只作为协议行为依据，不将源码核对计作真实服务端验证。
+Length evidence: pinned [OceanBase bit_cell_str](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp) emits `(bit_len + 7) / 8` bytes in TEXT/BINARY; pinned Java RowProtocol.parseBit interprets big-endian. Source inspection is protocol evidence, not live-server verification.
 
-### D12 本地实现范围（2026-10-19）
+### D12 Local Scope (2026-10-19)
 
-沿用 `OceanBaseDbType.Json`（枚举值 7），标准及 provider-specific 访问为 `string` / `DbType.String`。MySQL 结果类型码 245，文本与二进制行中均为长度编码的 UTF-8 JSON 文本，不是数据库内部二进制 JSON。接受 binary collation 63（JSON 线上文本的特殊情况）及已支持的 UTF-8 collation，拒绝其他字符集和 Oracle 模式，NULL 也先验证元数据；非数值类型的 scale 不按数值精度解释（含字符串常见标记 31）。JSON 字符串 `null`、空 JSON 字符串 `""` 与 SQL NULL 独立；返回文本不再序列化、不转 double/decimal，不丢失宽精度数字或空白。Schema 为 JSON/Json/string，IsLong=true；Length 不能可靠给出 JSON 文本的字符上限，ColumnSize 不填，NumericPrecision/Scale 不填。
+Reuse `OceanBaseDbType.Json`(7), standard/provider `string`/`DbType.String`. MySQL245 is length-encoded UTF-8 JSON text in both protocols, not internal binary JSON. Accept binary collation63 (special wire-text case)/supported UTF-8 collations; reject others/Oracle, validating NULL metadata too. Nonnumeric scale is not numeric precision, including common string marker31. JSON text `null`, empty JSON string `""`, SQL NULL distinct. Return original text without reserialization/double-decimal narrowing/lost whitespace-wide numbers. Schema JSON/Json/string, IsLong=true; Length cannot reliably bound text characters, so ColumnSize/NumericPrecision/Scale unset.
 
-显式 Json 参数使用现有 UTF-8 VAR_STRING 编码，mode=MySQL、Precision/Scale=0，接受 string/null/DBNull，不猜测对象或 JsonDocument 序列化；语法/目标列转换由服务端验证，不新增客户端 JSON 解析器。参数化保留现有长度限制和严格 UTF-8，异常在发包前抛出；普通 string 参数仍不自动变为 Json。默认与 SequentialAccess 结果复用现有 GetString/GetChars/GetTextReader 和异步字段读取，不复制流/取消/资源管理逻辑。
+Explicit Json uses UTF-8 VAR_STRING, MySQL/Precision-Scale0, string/null/DBNull only; no object/JsonDocument serialization inference/client parser. Server validates syntax/target conversions. Existing strict UTF-8/length validation pre-send; ordinary string stays ordinary. Reuse GetString/GetChars/GetTextReader/async getters in both modes of access, with shared cancellation/resources.
 
-先写失败编解码/元数据/参数测试，再实现共用路径，补齐同步/异步、文本/预处理、默认/顺序读取、Unicode/宽精度文本、NULL/多结果/后续字段、字段流及生命周期、五资产公共 API 消费。全目标编译、完整 Unit/Consumer/DI 与独立走查通过后本地提交。协议依据为固定 Java 基线 `ColumnType.JSON` 及两种 RowProtocol 的字符串读取，以及[固定 OceanBase json_cell_str](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp) 将内部 JSON 打印为长度编码文本；只参考行为，不复制源码。真实 JSON 列 INSERT/SELECT、语法拒绝和目标版本/OBProxy 往返另行验收，A05 公共 MySQL 门槛不变。
+Failing codecs/metadata/parameters→shared path→sync-async/text-prepared/default-sequential/Unicode-wide-text/NULL-multiresult-next-field/streams-lifecycle/five assets→all-target/full tests/review/local commit. References: pinned Java ColumnType.JSON/string RowProtocol and [pinned OceanBase json_cell_str](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp), printing internal JSON to length-encoded text. No source copying. Live INSERT/SELECT/syntax rejection/version-OBProxy round-trips remain open; A05 unchanged.
 
-### D10 本地实现范围及步骤（2026-10-19）
+### D10 Local Scope and Steps (2026-10-19)
 
-Oracle 207/208 对应 NVARCHAR2/NCHAR，标准及 provider-specific 值为 string，显式 provider 参数映射 DbType.String；普通 string 参数不隐式变为 national 参数。两种行协议共用长度编码字节，NCHAR 尾部空格及 Unicode 原样保留。按当前会话 NCHARACTER_SET_CONNECTION 解码/绑定，支持 UTF8/UTF8MB4 和无 BOM 的严格 UTF16BE；不按列的存储字符集猜测线上编码。national 为 NULL/binary 时，参数回退到报告的 CHARACTER_SET_CONNECTION，结果回退到 CHARACTER_SET_RESULTS；results 为 NULL/binary 时根据列的源 collation 解码，未知编码明确拒绝，不替换乱码。Size 按 CLR UTF-16 code unit 计数并拒绝超长，不截断；Precision/Scale 只允许0。NULL 结果保留字段类型身份且不需要解码；NULL 参数沿用既有类型6/NULL位图。Oracle 列长度已由服务端换算为字符数，Schema 直接保留。
+Oracle207/208=NVARCHAR2/NCHAR; standard/provider string, explicit provider parameters DbType.String. Ordinary strings do not become national. Both protocols length-encoded bytes, preserving trailing spaces/Unicode. Use current NCHARACTER_SET_CONNECTION for decoding/binding: UTF8/UTF8MB4/strict BOM-free UTF16BE. Never infer wire encoding from storage charset. National NULL/binary falls back to CHARACTER_SET_CONNECTION for parameters/CHARACTER_SET_RESULTS for results. Results NULL/binary then uses source column collation; unknown rejects without replacement. Size counts CLR UTF-16 units, rejects overflow/no truncation. Precision/Scale0. NULL fields retain identity without decoding; NULL parameters use existing type 6/bitmap. Server national Length already characters; preserve in schema.
 
-会话事实沿用现有时区的租约、查询、发送前失效和每结果快照模式：只有三个 charset 变量均有会话报告时才能复用，否则在 Oracle 业务执行前用同租约/总预算查询 `SELECT @@NCHARACTER_SET_CONNECTION, @@CHARACTER_SET_RESULTS, @@CHARACTER_SET_CONNECTION FROM DUAL`。查询必须是三个字符串列、一行、单结果；不支持的合法编码只在实际 national 值访问/参数绑定时拒绝，避免阻断普通列。每次 SQL 发送和每结果起始使旧事实失效，无报告的后续结果不猜测编码。national 查询保留先前只读时区查询的结果；不增加连接选项、不修改用户会话、不缓存完整业务结果。参数先在取得租约前验证类型/Unicode/Size，再用已识别编码在 prepare 前编码并检查字节预算。
+Follow zone-state lease/query/pre-send invalidation/per-result snapshots. Reuse charset facts only when all three variables reported; otherwise before Oracle business execution, query `SELECT @@NCHARACTER_SET_CONNECTION, @@CHARACTER_SET_RESULTS, @@CHARACTER_SET_CONNECTION FROM DUAL` under same lease/total budget. Require three string columns/one row/one result. Valid but unsupported encoding rejects only actual national access/binding, not ordinary columns. Invalidate per SQL/result; no guessing in unreported later results. National query preserves prior readonly zone-query result. No options/session mutation/full business-result cache. Validate type/Unicode/Size before leasing, encode with identified charset/check bytes before prepare.
 
-- [x] 先运行失败 metadata/参数回归，再实现 national 编码、会话查询/快照/失效、参数与顺序字符流。
-- [x] 覆盖 UTF8/UTF16BE、fallback、NULL、坏 Unicode、发包前拒绝、两种结果/同步异步/顺序访问、会话变更及错误取消，补五资产公共 API 消费。
-- [x] Release 全目标、完整 Unit/Consumer/DI、独立走查和 diff 检查通过后本地提交。真实 NCHAR/NVARCHAR2 列往返、目标版本/OBProxy 与跨平台仍单列延期。
+- [x] Failing metadata/parameter regressions, then national codecs/query-snapshot-invalidation/parameters/sequential chars.
+- [x] UTF8/UTF16BE/fallback/NULL/bad Unicode/pre-send rejection/both protocols-sync-async-sequential/session changes-errors-cancel/five assets.
+- [x] All-target Release/full Unit-Consumer-DI/review/diff/local commit; real NCHAR/NVARCHAR2/version-OBProxy/cross-platform deferred separately.
 
-协议参考固定 Java 基线 `AbstractConnectProtocol`、`OBNStringParameter` 和 `RowProtocol`；固定 OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343` 的 `ObMPStmtExecute::parse_basic_param_value`、`ObQueryDriver::convert_string_value_charset` 与 `ObMySQLResultSet::to_mysql_field`。前两者分别按会话 national 编码处理输入/结果，后者将 national 列 length 按存储字符集最大宽度换算成字符数。仅参考行为，不复制第三方源码。
+References: pinned Java AbstractConnectProtocol/OBNStringParameter/RowProtocol; OceanBase5e8a63d29dae9fde5e962b8fcc7b167d438fc343 ObMPStmtExecute::parse_basic_param_value/ObQueryDriver::convert_string_value_charset/ObMySQLResultSet::to_mysql_field. First two use session national encoding for input/results; third divides national Length by storage-charset maximum width to yield characters. Behavior references only, no copied source.
 
-### D11 本地实现范围及步骤（2026-10-19）
+### D11 Local Scope and Steps (2026-10-19)
 
-新增不可变 `OceanBaseIntervalYearToMonth` / `OceanBaseIntervalDayToSecond`，标准/provider-specific 均返回精确值，DbType.Object，沿用枚举值 5/6。分量为非负 magnitude 加独立符号，前导精度 0–9（0 仅允许前导分量为零）、年月/天不超过 999999999、月 0–11、时/分/秒 0–23/59/59、纳秒 0–999999999，DS scale 0–9，不允许舍入。默认结构值为合法零；ToString 使用不受当前区域影响的明确符号文本，保留声明精度；DS 的 ToTimeSpan 仅在 ticks 精度和范围内精确转换。
+Immutable `OceanBaseIntervalYearToMonth`/`OceanBaseIntervalDayToSecond`; exact standard/provider values, DbType.Object, enum5/6. Nonnegative magnitudes plus separate sign. Leading precision0–9 (0 requires zero leading component), years/days<=999999999, months0–11,hours/minutes/seconds0–23/59/59,nanos0–999999999, DS scale0–9, no rounding. Default valid zero. Culture-invariant signed ToString retains precision; DS ToTimeSpan converts only exactly within tick precision/range.
 
-Oracle 类型码 204/205，两种行协议均为长度编码的 7/14 字节小端专用数据：符号、年/月/前导精度，或符号、天/时/分/秒/纳秒/前导精度/scale。字段精度须与列 scale 一致：YM scale=前导精度，DS scale=前导精度*10+小数精度。非 Oracle（包括 NULL）、畸形长度/分量/精度/符号明确拒绝，不猜测普通字符串或 TimeSpan。Schema 返回精确 CLR 类型和 provider 身份；不把区间精度当作 NumericPrecision/Scale。
+Oracle204/205: length-encoded7/14-byte little-endian layouts in both protocols: sign/year/month/leading precision or sign/day/hour/minute/second/nano/leading precision/scale. Field precision matches column scale: YM=leading, DS=leading*10+fraction. Reject non-Oracle including NULL, malformed lengths/components/precision/sign; no guessed string/TimeSpan. Schema exact CLR/provider identity, no numeric precision misuse.
 
-显式参数或 DbType.Object 下的精确值可绑定，NULL 保留既有 null bitmap 规则；Precision=0 表示采用值的前导精度，非零为 1–9 的声明，Scale 未设置采用值的 scale，显式 0 不能截断纳秒。参数改变精度仅在值能精确表示时允许。复用命令预先编码、默认/顺序读取及多结果生命周期，不新增依赖。固定参考为 Java 基线的 INTERVAL 参数和两种 RowProtocol，以及 OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343` 的 `ob_mysql_util.cpp`、`ob_time_convert.cpp`、`ob_timezone_info.h`；只参考协议行为，不复制代码。
+Bind explicit provider types or exact DbType.Object values; NULL bitmap unchanged. Precision0 uses value's leading precision, nonzero1–9 declares it. Unset Scale uses value scale; explicit0 cannot truncate nanos. Precision changes require exact representation. Reuse preencoding/default-sequential/multiresult lifecycles, no dependencies. References: pinned Java INTERVAL parameters/RowProtocols and OceanBase5e8a63d29dae9fde5e962b8fcc7b167d438fc343 ob_mysql_util.cpp/ob_time_convert.cpp/ob_timezone_info.h, no copying.
 
-- [x] 先运行已有入口上的失败测试，覆盖 7/14 字节、类型身份、NULL、两模式及精度边界。
-- [x] 实现两种精确值、共用 codec、参数和 ResultColumn/Schema 接入，验证正负最大值、所有精度、范围与纳秒拒绝。
-- [x] 补齐同步/异步×文本/预处理×默认/SequentialAccess、参数复用/发包前拒绝、NULL/后续列/多结果及五资产公共 API 消费。
-- [x] Release 全目标编译和完整 Unit/Consumer/DI，通过独立走查及 diff 检查后本地提交。真实 INTERVAL 列往返、目标版本/OBProxy 验收单独延期。
+- [x] Failing existing-entry cases for7/14-byte shapes/type identity/NULL/both modes/precision.
+- [x] Exact values/shared codec/parameter/ResultColumn-Schema; signed maxima/all precision/range/nano rejection.
+- [x] Sync-async×text-prepared×default-SequentialAccess, reuse/pre-send rejection/NULL-next-column-multiresult/five assets.
+- [x] All-target Release/full Unit-Consumer-DI/review/diff/local commit; real INTERVAL round-trips/version-OBProxy deferred.
 
-## Java 模块到任务索引
+## Java Module-to-task Index
 
-该索引用来检查[Java M01-M16 模块](obconnector-j-architecture-outline.md)是否有明确 .NET 落点；索引中的 D 项是有意延后，不代表首版功能缺失被忽略。
+Check that [Java M01-M16 modules](obconnector-j-architecture-outline.md) have explicit .NET destinations. D entries are intentional deferrals, not overlooked first-release gaps.
 
-| Java 模块 | 主任务 |
+| Java module | Main tasks |
 | --- | --- |
-| M01 入口与统一 API | B01、C06 |
-| M02 URL、选项、地址 | A02、C02、D08 |
-| M03 网络、TLS、认证 | A04、A05、D15 |
-| M04 握手、模式、能力 | A05、D01 |
-| M05 会话与本地事务 | A06、B07、C01、C05 |
-| M06 SQL 与预处理 | B02-B04、D02、D07 |
-| M07 参数和批量 | B03-B04、C06、D06；M07长参数上传独立切片 |
-| M08 结果与游标 | B02、B06、C04、D03 |
-| M09 类型、字符集与时间 | B05、C03、D10-D14 |
-| M10 LOB 与复杂类型 | C04、D04-D05 |
-| M11 元数据 | B06、C05、M11过程/参数目录及D05类型字典 |
-| M12 HA 与地址发现 | C02、D08 |
-| M13 内置池 | C01 |
+| M01 Entry/unified API | B01, C06 |
+| M02 URLs/options/addresses | A02, C02, D08 |
+| M03 Network/TLS/authentication | A04, A05, D15 |
+| M04 Handshake/mode/capabilities | A05, D01 |
+| M05 Sessions/local transactions | A06, B07, C01, C05 |
+| M06 SQL/preparation | B02-B04, D02, D07 |
+| M07 Parameters/batches | B03-B04, C06, D06; independent M07 long-upload slice |
+| M08 Results/cursors | B02, B06, C04, D03 |
+| M09 Types/charsets/time | B05, C03, D10-D14 |
+| M10 LOB/complex types | C04, D04-D05 |
+| M11 Metadata | B06, C05, M11 procedure/parameter catalogs, D05 dictionary |
+| M12 HA/discovery | C02, D08 |
+| M13 Built-in pool | C01 |
 | M14 XA | D09 |
-| M15 诊断与 OB20 | B01、B02、B07、C01、C07、D01 |
-| M16 构建与生态 | A01、B09、R01-R02 |
+| M15 Diagnostics/OB20 | B01, B02, B07, C01, C07, D01 |
+| M16 Build/ecosystem | A01, B09, R01-R02 |
 
-## 发布与交接
+## Release and Handoff
 
-### R01 包与公开契约审查
+### R01 Packages and Public Contracts
 
-- [ ] 固定核心/集成包 NuGet ID、许可证声明和第三方归属；两个包从根 Version 取同一版本，统一打包和发布，检查 nuspec 中集成包的核心依赖为根 Version 派生的精确区间；核心与集成包各五资产及必要文档齐全。
-- [x] 从空项目分别消费 `netstandard2.0`、`netstandard2.1`、.NET 8/9/10 资产，验证 provider factory、现代 API 可见性、公开类型身份和脱敏。
-- [x] 生成包并检查内容，公开不支持能力与兼容矩阵；不得把阶段 D 计划写成已支持。
+- [ ] Finalize core/integration NuGet IDs/license/third-party attribution. Shared root Version, pack/release together; integration nuspec exact core-version interval derived from root. Five assets per package/required docs complete.
+- [x] Empty-project consumption of Standard2.0/2.1/.NET 8/9/10 verifies factory/modern API visibility/type identity/redaction.
+- [x] Generate/inspect packages; publish unsupported features/matrix without claiming planned D support.
 
-本地实施顺序（2026-10-19，沿用现有设计，不发布）：
+Local order (2026-10-19, existing design, no publishing):
 
-1. 增加 `eng/Verify-Packages.ps1` 和独立包消费样例，先对现有实际 nupkg 验证 README/归属文档缺失的失败；验证器必须检查 nuspec、五/三资产、精确核心依赖和按 TFM 的 Microsoft 版本。
-2. 在 `src/Directory.Build.props` 统一产品包说明、源码仓库和包内文档，两个产品显式固定现有 NuGet ID；根 Version/CPM 不变。添加根 README 和第三方依赖/参考来源说明；项目许可证由维护者决定，未确定前不虚构 SPDX 声明或关闭许可关口。
-3. 用一次 slnx pack 生成两个包。验证器创建独立目录、NuGet 缓存和本地包源映射，只通过 PackageReference 消费本次生成的包，核对还原资产与包 SHA512。临时消费样例编译两个 Standard 和三个现代目标；Standard 在隔离的 .NET 10 宿主验证，现代样例分别在实际 .NET 8/9/10 上验证 factory、公开类型、现代入口、DI 和凭据隐藏。日常测试工程仍统一 net10。
-4. 验证缺失包文档及错误 DI 核心版本区间会被拒绝；在 Windows CI 接入统一 pack 和该验证器。编译、完整本地测试、只读代码走查并修复问题后，更新现有三份文档和提交；C08/R02 真实环境关口保持开放。
+1. eng/Verify-Packages.ps1/independent consumers first fail on missing README/attribution in existing nupkg. Verify nuspec/five-three assets/exact core dependency/per-TFM Microsoft versions.
+2. src/Directory.Build.props centralizes package descriptions/repository/docs; explicitly retain existing NuGet IDs. Root Version/CPM unchanged. Add root README/third-party dependency-reference notice. Maintainer chooses license; no fabricated SPDX/closed license gate.
+3. One slnx pack creates both packages. Independent directories/NuGet caches/local-source mapping consume only generated PackageReferences; check restored assets/SHA512. Compile both Standard/three modern samples. Standard uses isolated.NET10; modern actual.NET8/9/10 checks factory/types/modern entry/DI/credentials. Daily projects remain net10.
+4. Reject missing docs/wrong DI core interval; integrate unified pack/verifier in Windows CI. Build/full local tests/read-only review/fixes/three-doc sync/commit; C08/R02 live gates stay open.
 
-2026-10-19 上述本地步骤已实施并验证：旧包缺 README 先失败，新包通过五资产实际还原/消费；损坏包文档及放宽 DI 核心依赖均被拒绝。完整 Windows Unit1205、Consumer152、DI8、五/三目标编译及独立只读走查通过；走查的 PowerShell 最低版本问题已修复为 7.1+。第一项包含尚未决定的项目许可证、来源和包名/商标审查，保持未勾选；R01 进行中，不发布，也不关闭 C08/R02。
+2026-10-19 steps implemented/verified: old README-less packages fail; new five-asset actual restore/consumption passes; corrupted docs/widened core interval reject. Windows Unit1205/Consumer152/DI8/five-three build/review pass; PowerShell minimum fixed to 7.1+. First checkbox includes undecided project license/origin/package-trademark review, remains open. R01 in progress; no publishing/C08-R02 closure.
 
-R01 后续包消费复核（2026-10-19）：D09落地后，沿现有验证器补充五资产XA公开身份、复制边界、可空错误码类型及关闭连接资源拒绝的离线消费。旧R02实际包因缺少XA API编译失败；当前双包重新pack后，在独立缓存按SHA512/资产身份还原，五目标编译及本机.NET8/9/10和Standard隔离宿主全部通过。只读走查后随测试提交，不新增依赖，不改产品行为；许可、发布、实库和异机验收仍开放，详见进度台账。
+R01 follow-up (2026-10-19): after D09, extend existing five-asset package samples for XA identity/copy boundaries/nullable error codes/closed-connection resource rejection. Prior R02 packages fail compilation for missing XA; newly packed packages restore by SHA512/identity in independent caches, compile five targets, consume on actual.NET8/9/10/isolated Standard hosts. Read-only review then test commit; no dependencies/product changes. License/release/live/other-machine acceptance remain open; ledger details.
 
-### R02 候选版完整验证
+### R02 Complete Candidate Verification
 
-- [ ] 再运行 G1-G3 全部必需套件与交付矩阵，留存命令、版本、日志链接及跳过原因。
-- [ ] 对每个模式/版本/OBProxy/TLS/认证组合逐项标注“已验证/未验证/不支持”；无真实测试时不得标“已验证”。
-- [ ] 完成发布说明、故障与结果未知指南、已知差异、回滚方案；通过最终代码和文档走查后才发布。
+- [ ] Rerun all G1-G3 required suites/delivery matrix; retain commands/versions/log links/skip reasons.
+- [ ] Mark each mode/version/OBProxy/TLS/auth combination verified/unverified/unsupported; without real tests never verified.
+- [ ] Complete release notes/fault-unknown-outcome guide/differences/rollback plan; publish only after final code/docs review.
 
-本地交付材料准备（2026-10-19，不代替候选版验收）：
+Local delivery preparation (2026-10-19, not candidate acceptance):
 
-1. 从当前命令/reader/事务/多地址/认证代码和已有回归核对错误结果、提前关闭、已知提交与清理失败语义；将故障处置、版本升级/回退、日志诊断及认证/TLS限制合并进包内根 README，不另建设计文档。
-2. 在现有兼容矩阵区分未验证与明确不支持，不虚构 OceanBase/OBProxy 最低版本或已验证升级来源；保留公共 MySQL 判定、池化及真实矩阵缺口。
-3. 编译并运行 Windows 本地测试，用统一 pack 与实际五资产包消费验证重新检查随包交付的 README；独立只读走查指南与代码/测试的一致性，修复后更新三份现有文档并提交。G1–G3 与 R01 许可关口未通过前，不勾选 R02 最终发布项、不创建发布或推送。
+1. Check command/reader/transaction/multiaddress/auth code and regressions for errors/early close/confirmed commit/cleanup failure. Merge operations/upgrade-downgrade/logging/auth-TLS guidance into packaged root README, no separate design document.
+2. Distinguish unverified/unsupported in matrix; invent no minimum OceanBase/OBProxy version/verified upgrade source; retain public MySQL/pooling/live gaps.
+3. Windows build/tests/unified pack/actual five-asset package consumption verify README; independently compare guide with code/tests, fix/sync three docs/commit. Without G1-G3/R01-license clearance, keep final release unchecked and create no release/push.
 
-2026-10-19 本地材料已补齐并通过独立走查：修正字段流释放/reader完成和可信COMMIT ERR的会话存活边界，同时按源码更正异常公开契约。验证发现的同步TCP共享句柄释放缺陷已在d8d7072修复，压力回归的端口清理及主异常保留问题亦已闭环；最终五/三目标编译0警告0错误、Windows Unit1206/Consumer152/DI8、实际五资产包消费全部通过，失败与最终报告均记录在台账。R02真实矩阵及最终发布验收仍未勾选，许可与生产关口未关闭，不发布或推送。
+2026-10-19 local material/review complete: correct field-stream disposal/reader completion/trusted COMMIT ERR session-survival boundaries and exception public contract against source. Verification exposed synchronous TCP shared-handle disposal defect, fixed d8d7072; stress port cleanup/primary-exception preservation also resolved. Final five-three build0 warnings/errors; Windows Unit1206/Consumer152/DI8/actual five-asset packages pass; failures/final reports retained in ledger. R02 live/final release unchecked; license/production gates open; no publish/push.
 
-R02 Windows 历史现代运行时本地回归补验（2026-10-19，沿用五目标产品契约）：
+R02 older modern Windows runtimes (2026-10-19, five-target contract):
 
-1. 日常测试项目及 slnx 继续声明 net10.0；本次发布验收临时同时传入 `-p:TargetFrameworks=net8.0 -p:TargetFramework=net8.0`（net9同理），用实际8/9运行时构建和执行现有完整 Unit/DI 套件，不把net10程序集回退运行冒充旧运行时验证。还原/输出产生的临时资产不提交，最后还原并编译默认五/三目标和net10测试宿主。
-2. 只调整测试宿主兼容性：证书夹具在net8使用该框架的PFX导入API，net9及以后使用X509CertificateLoader；异步Prepare隔离回归加载Standard2.1和当前实际运行时对应的现代资产，避免旧宿主误加载net10产品。先记录旧逻辑编译失败及错误资产加载失败，再验证修正后的真实异步行为。完整net8回归发现MeterListener在8.0.31缺少MeasurementsCompleted时Dispose保留订阅，测试监听器补齐空完成回调并保留全部诊断/分配断言，README说明应用监听器所有权与清理要求。
-3. 每个运行时完整执行本地协议、取消/超时、类型、事务、游标、批次、诊断和DI测试；再执行默认net10验证，逐项记录实际运行时、编译警告、通过/失败/跳过。Consumer的五资产隔离宿主仍为net10，已有8/9包样例和局部环回证据单独保留，不将这些本地测试称为完整实库或旧运行时支持矩阵。
-4. 独立走查测试边界及临时构建的依赖主版本，更新现有三份文档后提交；真实数据库、非Windows、.NET Framework4.8、许可及G0/G1/G3关口继续开放，D项依既定前置条件保持未开始。
+1. Daily tests/slnx remain net10.0. Temporarily pass both `-p:TargetFrameworks=net8.0 -p:TargetFramework=net8.0` (likewise9) to build/run complete Unit/DI on actual8/9, not run net10 binaries on old runtimes. Do not commit generated restore/output; restore default five-three/net10 afterward.
+2. Test-host compatibility only: net8 PFX import API; net9+ X509CertificateLoader. Async Prepare loads Standard2.1/current-runtime modern asset instead of net10 on old hosts. Retain initial compile/wrong-load failures before corrected async proof. Full net8 found MeterListener8.0.31 retaining subscriptions on Dispose without MeasurementsCompleted; add empty completion callback retaining all diagnostic/allocation assertions. README documents application listener ownership/cleanup.
+3. Full per-runtime protocol/cancel-timeout/types/transactions/cursors/batches/diagnostics/DI then default net10; record actual runtime/warnings/pass-fail-skip. Five-asset Consumer still net10; separate8/9 package/partial-loopback evidence, never a full live/old-runtime matrix claim.
+4. Independently review temporary-build dependency majors/boundaries, sync three docs/commit. Live/non-Windows/.NETFramework4.8/license/G0-G1-G3 open; D items then remained unstarted subject to prerequisites.
 
-2026-10-19 补验结果：Windows 实际 .NET 8.0.31、9.0.20 各 Unit1206/DI8 全通过，恢复默认 slnx 后 .NET10.0.12 Unit1206/Consumer152/DI8 全通过，全部零失败、零跳过。五/三目标 Release 编译0警告0错误；两包重新打包并以独立缓存验证五资产消费通过，8/9依赖图保持对应主版本。首轮net8的9项诊断失败及证书/资产加载问题保留红绿记录，不计作通过；完整证据、监听清理原因和仍开放关口见进度台账末尾。
+2026-10-19 results: actual Windows.NET8.0.31/9.0.20 each Unit1206/DI8 pass; restored.NET10.0.12 Unit1206/Consumer152/DI8 pass; all zero fail/skip. Five-three Release 0 warnings/errors; repacked isolated five-asset consumption passes;8/9 graphs retain corresponding majors. Initial net8 nine diagnostic failures/certificate-load issues remain red-green history, not passes. Full evidence/listener rationale/open gates: ledger tail.
 
-R02 Windows D扩展后的现代运行时复验（2026-10-20）：
+R02 Windows modern-runtime recheck after D extensions (2026-10-20):
 
-沿用临时MSBuild属性执行当前完整Unit/DI的.NET8/9回归，日常测试项目仍声明net10.0，两个产品包保持各五目标，global.json保持删除。Oracle XA恢复夹具显式使用Enumerable.Reverse以避免旧目标下选中返回void的Span反转重载；复杂字典错误列夹具发送首行供reader预取，保留最终EOF待定后只读断连，避免与客户端销毁未读会话竞态写入。保留原异常、Broken和断连断言，不改产品协议语义。完成旧运行时验证后恢复默认还原/全目标Release构建及net10完整Unit/Consumer/DI，逐项记录实际运行时、失败与最终证据，经独立走查后提交；不以此关闭真实数据库、异机、KDC、许可或发布关口。
+Temporary MSBuild properties run current complete Unit/DI on.NET8/9. Daily projects net10.0; both packages five targets, global.json stays deleted. Oracle XA-recovery fixture explicitly uses Enumerable.Reverse to avoid old-target void Span overload. Malformed complex-dictionary-column fixture supplies first row for reader prefetch, retains final EOF pending and reads disconnect only, avoiding writes racing destruction of unread sessions. Preserve original exception/Broken/disconnect assertions; no protocol-semantic change. Restore default/all-target Release/net10 Unit-Consumer-DI after old runtimes; record actual runtimes/failures/finals, independent review/commit. No closure of live/other-machine/KDC/license/release gates.
 
-本轮结果：实际.NET8.0.31/9.0.20各完整Unit2912/DI14全通过；恢复默认后核心五/DI五目标Release零警告错误，.NET10.0.12完整Unit2912/Consumer1163/DI14全通过，零失败/跳过。net8编译失败、net9夹具竞态失败、走查发现的预取遗漏及最终复验均记录于台账；现有案例未被删去。本轮不重复实际包/Framework验收，R02仍进行中，不发布或推送。
+Results: actual.NET8.0.31/9.0.20 each Unit2912/DI14 pass. Restored five-core/five-DI Release 0 warnings/errors; .NET 10.0.12 Unit2912/Consumer1163/DI14 pass, zero fail/skip. Retain net8 compile/net9 fixture-race/review prefetch omission/final evidence in ledger; no deleted cases. No repeat package/Framework acceptance this round. R02 in progress/no publish-push.
 
-R02 Windows Framework 包消费补验（2026-10-19；仅本地证据，不作正式支持决定）：
+R02 Windows Framework package consumption (2026-10-19, local evidence only, no formal support decision):
 
-1. 复用现有五资产包消费样例，在 `Verify-Packages.ps1` 增加显式 `-VerifyNetFramework` 选项；只在 Windows 上启用，临时生成 net48 可执行宿主并引用已编译的 Standard2.0 消费库及本次核心包。仓库测试工程仍为net10，不新增日常Framework工程或产品目标。
-2. 使用已安装的4.8参考程序集、自动生成宿主binding redirects，不给产品新增依赖；独立还原图/包哈希必须确认选中本次包的netstandard2.0资产。执行桌面CLR并输出实际Framework描述及注册表Release，不能将4.8目标编译当作4.8原版运行证据。
-3. 保留现有factory、公共类型/现代API边界、8主版本日志/诊断、预取消/脱敏断言；先记录旧脚本拒绝新参数，再运行完整包验证、默认slnx编译及适当本地回归，独立走查后更新现有文档并提交。
-4. 当前本机安装4.8.1（Release533509），只能记为net48目标在4.8.1上的基础包消费；不覆盖同步/异步SQL、TLS、完整核心API、真实数据库或4.8原版。§9/G0正式Framework支持决定、实库与非Windows验收继续开放。
+1. Reuse five-asset samples; explicit Verify-Packages.ps1 `-VerifyNetFramework`, Windows only, generates net48 executable host referencing compiled Standard2.0 consumer/current core package. Daily tests net10; no daily Framework project/product target.
+2. Installed4.8 reference assemblies/automatic host binding redirects, no product dependencies. Independent graph/package hash confirms current netstandard2.0 asset. Run desktop CLR and report actual framework description/registry Release; target compilation is not original 4.8 runtime proof.
+3. Retain factory/types/modern boundaries/logging-diagnostics8/precancel-redaction; old script rejects new option first, then full package/default slnx/appropriate regressions/review/docs/commit.
+4. Installed4.8.1 Release 533509 proves net48-target basic package consumption on 4.8.1 only; no sync-async SQL/TLS/full API/live/original 4.8 coverage. Formal§9/G0 Framework decision/live/non-Windows open.
 
-本地验证已通过；生成Framework子宿主后重建父消费工程暴露源码glob包含子目录的问题，已排除framework-host/**/*.cs并用先失败/后通过重建验证。最终编译、包消费、独立走查及证据登记见进度台账末尾。
+Local verification passed. Rebuilding parent after generating Framework child exposed source glob inclusion; exclude framework-host/**/*.cs and retain failing-then-passing rebuild evidence. Final build/package/review/evidence at ledger tail.
 
-## D15 SHA-2 认证本地实施（2026-10-19）
+## D15 SHA-2 Authentication: Local Implementation (2026-10-19)
 
-本轮先完成 `caching_sha2_password` 与 `sha256_password` 的 TLS 路径和 caching fast auth；D15 不因此整体关闭。沿用现有连接选项、TLS 验证、PacketChannel 序号、连接总预算、异常脱敏和 A05 模式确认，不新增依赖。RSA 公钥配置/检索、其他认证插件和两模式真实服务端验收仍为余项，禁止自动获取未验证公钥或降低 TLS 要求。
+First deliver `caching_sha2_password`/`sha256_password` TLS paths and caching fast auth; D15 stays open. Reuse options/TLS/PacketChannel sequences/open budget/redaction/A05 mode verification, no dependencies. RSA configuration/retrieval, other plugins, live both-mode acceptance remain subsequent. No automatic unverified-key retrieval/TLS weakening.
 
-1. 在现有 HandshakeFlow 增加最小内部 AuthenticationConversation，记录当前插件、一次插件切换及等待最终结果状态；同步/异步只共享决策，不互相包装 I/O。caching 初始 token 使用 `SHA256(password) XOR SHA256(SHA256(SHA256(password)) || seed)`，20字节挑战；空密码为空token。新SHA插件拒绝含NUL或无效Unicode的密码，错误不包含凭据。
-2. `01 03` 不发送响应，继续等待最终 OK/ERR；`01 04` 仅在已成功 VerifyFull 的 TLS 后发送严格UTF8密码及NUL。sha256 初始/切换响应同样只允许 VerifyFull；未知插件、畸形/重复AuthMoreData、重复切换或最终阶段再次挑战均明确失败。保持 native/clear 的既有契约及失败即清理传输规则。
-3. 先用公开握手环回测试复现未支持的失败，再覆盖同步/异步、初始/切换、固定token向量、最终OK/ERR、乱序/截断、弱TLS拒绝、取消/超时和脱敏。纯状态测试验证 VerifyFull 分支的编码决策；不得安装信任根、触发信任确认或绕过产品验证冒充成功TLS链。五资产消费走真实DbConnection入口，区分状态测试与真实TLS成功链证据。
-4. 独立走查并修复问题，核心五/DI三目标Release编译和完整Unit/Consumer/DI通过后更新README、架构和进度证据，本地提交不推送。实库、异机和私有CA成功链继续暂缓，A05/C01及完整D15余项保持开放。
+1. Minimal internal AuthenticationConversation in HandshakeFlow tracks plugin/one switch/final-result state. Sync/async share decisions, not I/O wrappers. Caching token=`SHA256(password) XOR SHA256(SHA256(SHA256(password)) || seed)`,20-byte challenge; empty password→empty token. SHA plugins reject NUL/invalid Unicode without credential disclosure.
+2. `01 03`: no response, await final OK/ERR. `01 04`: strict UTF8 password+NUL only after successful VerifyFull TLS. Same requirement for sha256 initial/switch. Unknown plugin/malformed-repeated AuthMoreData/repeated switch/challenge in final state fail explicitly. Native/clear contracts and fail-close remain.
+3. Public handshake loopback first fails, then sync-async/initial-switch/fixed vectors/final OK-ERR/order-truncation/weak TLS/cancel-timeout/redaction. State tests prove VerifyFull encoding decisions only. No trust-root installation/confirmation/validation bypass masquerading as trusted TLS. Five-asset DbConnection consumption separates state evidence from successful TLS identity chains.
+4. Independent review/fixes/five-core-three-DI Release/full Unit-Consumer-DI; sync README/architecture/ledger/local commit, no push. Live/other-machine/private-CA success deferred; A05/C01/remaining D15 open.
 
-协议依据：固定Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` 的 `CachingSha2PasswordPlugin` 与 `Sha256PasswordPlugin`，仅核对协议，不复制实现；相比Java的useSsl判断，发送完整密码保留本项目更严格的VerifyFull边界。
+Protocol reference: pinned Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` CachingSha2PasswordPlugin/Sha256PasswordPlugin, no implementation copying. Unlike Java useSsl, full-password send requires stricter VerifyFull.
 
-本轮SHA-2子模块已完成本地实现、独立走查及验证：核心五/DI三目标Release编译0警告0错误，完整Unit1514（新增SHA-2为72）、Consumer292（新增SHA-2为40）、DI8全部通过且无跳过；红绿和夹具修正记录见进度台账。D15保持进行中，未实现项和真实验收仍开放，不发布、不推送。
+SHA-2 local implementation/review complete: five-core/three-DI Release 0 warnings/errors; Unit1514(new SHA-2 72), Consumer292(new 40), DI8 all pass/no skips. Red-green/fixture corrections in ledger. D15 in progress, remaining implementation/live gates open; no publish/push.
 
-### D15 RSA 后续实施（2026-10-19）
+### D15 RSA Follow-up (2026-10-19)
 
-1. 增加规范连接键 `Server RSA Public Key`（默认空，PEM SubjectPublicKeyInfo PUBLIC KEY文本）和 `Allow Public Key Retrieval`（默认false）。固定PEM由调用方提供，避免驱动引入文件读取或五目标不同的PEM文件API；冻结选项、多地址副本、序列化/脱敏和公共builder同步覆盖。默认日志/公开脱敏连接串不包含PEM，完整builder序列化可往返。无效固定key不回退检索。
-2. 非VerifyFull的SHA-2完整认证在配置固定key时使用RSA OAEP-SHA1加密严格UTF8密码加NUL、与20字节seed循环XOR后的内容。无固定key只有显式Allow选项才请求：sha256初始/切换发01，caching full阶段发02，等待01前缀的PEM，再发送密文等待最终OK/ERR。初始sha256取钥请求后仍允许一次账户插件切换；切换后/full阶段严格等待key，无key不得OK。空密码发送无密码标记，不请求key或加密；已验证TLS仍优先现有非空密码路径，clear插件不因RSA选项开放。
-3. 新增最小内部RsaPassword，用BCL RSA.ImportParameters/Encrypt保证Standard2.0兼容；复用ByteCursor严格解析SPKI DER，仅RSA OID、正整数、完整无尾随数据、16KiB PEM上限、2048–8192位模数、正奇数且不超过64位指数。拒绝私钥、弱key、非规范DER、过长密码、乱序/重复/缺失key，错误不回显key/password。公钥获取本身无身份验证，README明确中间人风险和默认关闭；TLS Disabled不加密业务SQL。
-4. TDD先以公开握手环回/独立RSA私钥解密验证未支持失败，再覆盖两插件、初始/切换、固定/获取、同步/异步、空/Unicode/边界密码、恶意DER/PEM、取消/超时/最终ERR及五资产公开消费。独立走查、全目标编译及完整Unit/Consumer/DI通过后更新证据并本地提交；实库、异机和VerifyFull成功链仍暂缓，其他插件保持余项，不据本轮关闭D15或项目。
+1. Canonical `Server RSA Public Key`(empty; PEM SubjectPublicKeyInfo PUBLIC KEY text), `Allow Public Key Retrieval`(false). Caller supplies PEM; no file I/O/TFM-specific file APIs. Frozen options/endpoint copies/serialization-redaction/builder covered. Default logs/redacted strings omit PEM; full builder round-trips. Invalid pinned key never falls back to retrieval.
+2. NonVerifyFull SHA-2 full auth uses pinned RSA OAEP-SHA1 on strict UTF8 password+NUL XOR repeated20-byte seed. Without pinned key require explicit Allow: sha256 initial/switch sends01, caching-full02; await01-prefixed PEM, send ciphertext, await final OK/ERR. Initial sha256 retrieval may still receive one account plugin switch; after switch/full stage require key, never accept keyless OK. Empty password sends no-password marker, no key/encryption. Verified TLS keeps existing nonempty-password priority; RSA does not enable clear plugin.
+3. Minimal RsaPassword with BCL RSA.ImportParameters/Encrypt supports Standard2.0. ByteCursor strict SPKI DER: RSA OID/positive integers/no trailing data/PEM<=16 KiB/modulus2048–8192/exponent positive odd<=64 bits. Reject private/weak/noncanonical keys/oversize password/missing-reordered-repeated key without echoing secrets. README explains unauthenticated retrieval/MITM/default-off; Disabled TLS leaves business SQL unencrypted.
+4. Failing public loopback plus independent private-key decryption, then plugins/initial-switch/pinned-retrieved/sync-async/empty-Unicode-boundary/malicious DER-PEM/cancel-timeout-final ERR/five assets. Review/full build-tests/docs/local commit; live/other-machine/VerifyFull success deferred, other plugins remain, no D15/project closure.
 
-RSA子模块已完成本地实现与独立复查：修复初始sha256取钥后账户插件切换，补齐空密码无密码标记；依据MySQL8服务端sha256入口接受空包/单NUL的规则，不把RSA密文NUL当作空密码线协议。最终五/三目标Release编译0警告0错误，Unit1596（新增82）、Consumer332（新增40）、DI8全通过；红绿、沙箱TLS权限失败与最终证据见台账。D15其他插件及真实关口仍开放。
+RSA locally complete/reviewed: fix account switch after initial sha256 retrieval, add empty-password marker. MySQL8 sha256 accepts empty packet/single NUL; never mistake RSA ciphertext NUL for no-password protocol. Five-three Release 0 warnings/errors; Unit1596(new 82)/Consumer332(new 40)/DI8 pass. Ledger retains red-green/sandbox TLS-permission failures/final evidence. Other D15/live gates open.
 
-### D15 Java注册插件本地后续（2026-10-19）
+### D15 Java-registered Plugins: Local Follow-up (2026-10-19)
 
-D15其他插件范围修订（2026-10-19，依据用户补充）：不再由用户另选插件，以固定Java提交的AuthenticationPlugin SPI注册表为范围。现有native/clear/SHA256/caching SHA2之外，逐模块推进mysql_old_password、dialog/PAM、client_ed25519及auth_gssapi_client；不同插件的凭据来源、密码编码、交互及TLS前提单独核对，不把注册表当作实库证据。
+Scope revision per user: use pinned Java AuthenticationPlugin SPI registry without asking user to select plugins. Beyond native/clear/SHA256/cachingSHA2, implement mysql_old_password, dialog/PAM, client_ed25519, auth_gssapi_client separately. Check credential sources/password encoding/interaction/TLS per plugin; registry is not live evidence.
 
-下一子模块为mysql_old_password：沿Java OldPasswordPlugin的3.23响应行为、前8字节ASCII挑战及UTF16密码字符散列，支持显式初始/命名切换和单字节FE旧切换（后者复用原挑战）。空密码为空响应；非空为8字节响应加NUL。不复制Java源码。由于旧散列保护较弱，本驱动沿完整密码的既有边界要求VerifyFull，不新增降级开关；旧协议握手本身仍要求protocol41/secure connection，不扩大为pre41客户端。用固定向量、状态/编码、恶意挑战、重复切换、弱TLS拒绝及五资产公开消费验证；最后全目标构建、完整本地测试、独立走查、同步文档并提交。私有CA成功链、实库和异机继续暂缓，其余三个插件随后推进，D15保持进行中。
+Next mysql_old_password follows Java OldPasswordPlugin3.23 response, first8 ASCII challenge bytes, UTF16 password-character hashing; initial/named switch and single FE legacy switch (original challenge). Empty→empty response; nonempty8 bytes+NUL. No Java source copying. Weak hash requires existing full-password VerifyFull boundary, no downgrade option. Handshake still protocol41/secure connection, no pre41 client expansion. Fixed vectors/state-encoding/malicious challenges/repeated switches/weak TLS/five-asset consumption, full build-tests/review/docs/commit. Trusted private-CA/live/other-machine deferred; three other plugins follow, D15 in progress.
 
-### D15 Ed25519子模块（2026-10-19）
+### D15 Ed25519 Submodule (2026-10-19)
 
-D15 Ed25519子模块实施（2026-10-19）：沿固定Java Ed25519PasswordPlugin的client_ed25519行为，严格32字节二进制挑战、UTF8密码SHA512展开、Ed25519签名64字节；空密码为空响应。使用BouncyCastle.Cryptography 2.7.0公开ExpandedKey签名API（MIT，五目标可用），不用32字节seed API二次散列密码，不手写曲线运算或移植Java源码。包版本只在CPM固定，核心引用与第三方清单同步。初始/命名切换接入，挑战尾零不得当字符串终止符裁剪；现有一次切换、最终OK/ERR、模式门槛、超时取消与TLS策略保留。先用独立执行Java所得向量及尾零/畸形挑战证明缺口，再覆盖同步/异步公开握手、五资产消费、错误/中断/边界和依赖的实际包交付；全目标编译、完整本地回归及独立走查后提交。其他PAM/GSSAPI及真实部署验收仍开放。
+Pinned Java Ed25519PasswordPlugin client_ed25519: strict32-byte binary challenge, SHA512-expanded UTF8 password,64-byte Ed25519 signature; empty→empty response. BouncyCastle.Cryptography2.7.0 public ExpandedKey API(MIT/five targets), no double-hashing32-byte seed API/manual curve/Java port. Version only CPM; core reference/third-party notice synchronized. Initial/named switch; trailing challenge zeros are data. Existing single-switch/final OK-ERR/mode/budget/TLS retained. Independent Java vectors/trailing-zero/malformed tests expose gap, then sync-async public/five assets/errors-interruption-boundaries/actual dependency packages. Full build-tests/review/local commit. PAM/GSSAPI/live deployment remain.
 
-### D15 dialog/PAM本地实施（2026-10-19）
+### D15 dialog/PAM: Local Implementation (2026-10-19)
 
-沿固定Java SendPamAuthPacket：初始/命名切换先发主Password加NUL，后续每个非OK/ERR/FE包触发Password2、Password3等顺序凭据；不根据服务端提示猜选密码或增加回调。每轮RequireVerifiedTls，密码严格UTF8且拒绝NUL/无效Unicode；保留一次切换、最终结果、连接总预算及脱敏。空密码加NUL；缺下一凭据明确失败，配置数自然限制响应轮数。
+Pinned SendPamAuthPacket: initial/named switch sends primary Password+NUL; each later nonOK/ERR/FE packet consumes Password2/Password3 sequentially. No prompt-based password inference/callback. RequireVerifiedTls each round; strict UTF8/noNUL-invalid Unicode; one switch/final state/total budget/redaction. Empty→NUL; missing next credential fails; configured count bounds rounds.
 
-- [x] 先在tests/OceanBaseConnector.UnitTests/Session/HandshakeFlowTests.Pam.cs写失败测试：多轮固定字节、缺号、空/Unicode/恶意密码、TLS先决条件、切换/最终结果；新增PamConfigurationTests.cs覆盖大小写、合法整数2..Int32.MaxValue、拒绝前导零/溢出、全串往返、秘密脱敏及冻结/ForEndpoint。
-- [x] 最小修改OceanBaseConnectionStringBuilder：索引器接收规范PasswordN动态键，不增加大量typed属性；在ToSanitizedConnectionString中仅includeSecrets=true保留附加密码，false全部移除；builder.ConnectionString继续完整往返。OceanBaseConnectionOptions构造复制只读字典，端点副本保留，避免按最大后缀分配数组。未知键拒绝保持。
-- [x] AuthenticationConversation增加dialog主密码和顺序继续，复用严格编码/终止密码helper；协议数据按Java不解释提示，敏感值不进入异常；FE仍走既有切换。测试先RED后GREEN，不改TLS实现。
-- [x] 新增PAM Required/Disabled公开拒绝环回和五资产配置/秘密/拒绝消费；可信TLS成功路径仅状态/编码证据，不装信任根。独立走查后修复，核心五/DI三Release与完整Unit/Consumer/DI、格式/diff通过，README/架构/台账同步后本地提交。GSSAPI与实库/异机仍独立后续。
+- [x] Failing tests/OceanBaseConnector.UnitTests/Session/HandshakeFlowTests.Pam.cs for exact rounds/gaps/empty-Unicode-malicious/TLS/switch-final; PamConfigurationTests.cs covers case/integer2..Int32.MaxValue/no leading-zero-overflow/full round-trip/redaction/frozen-ForEndpoint.
+- [x] Builder indexer accepts canonical dynamic PasswordN, no many typed properties. ToSanitizedConnectionString retains extras only with includeSecrets=true; full builder round-trip. Options copy readonly dictionary/endpoint copies without maximum-suffix-sized arrays. Unknown keys still reject.
+- [x] AuthenticationConversation adds primary/sequential dialog through strict password helper; ignore prompts as Java does, no sensitive exceptions; FE uses existing switch. RED→GREEN, TLS unchanged.
+- [x] Public PAM Required/Disabled rejection and five-asset config/secrets/rejection; trusted-TLS success is state/encoding evidence only, no roots. Review/fix/five-three Release/full tests/format-diff/README-architecture-ledger/local commit. GSSAPI/live/other-machine subsequent.
 
-### D15 GSSAPI本地实施（2026-10-19）
+### D15 GSSAPI: Local Implementation (2026-10-19)
 
-依据固定Java SendGssApiAuthPacket和StandardGssapiAuthentication的当前票据/Kerberos及mutual认证，原始token直接经PacketChannel传输，不使用NegotiateStream额外帧、不复制Java源码。Service Principal Name选项覆盖服务端SPN；严格有界UTF8双NUL字段（SPN及mechanism），保留原始切换数据尾零。空mechanism默认Kerberos，首批仅Kerberos，未知/NTLM拒绝，不把任意服务端package名交给系统。完整认证前要求VerifyFull，完成时必须系统Completed、IsAuthenticated、IsMutuallyAuthenticated和实际Package=Kerberos，再接受数据库最终OK。
+Pinned SendGssApiAuthPacket/StandardGssapiAuthentication uses current ticket/Kerberos/mutual authentication; raw tokens through PacketChannel, no NegotiateStream framing/Java port. Service Principal Name overrides server SPN. Strict bounded UTF8 double NUL(SPN/mechanism), preserving switch-data trailing zeros. Empty mechanism→Kerberos; initially Kerberos only, reject unknown/NTLM, never pass arbitrary server package names to OS. VerifyFull before complete auth; require system Completed/IsAuthenticated/IsMutuallyAuthenticated/actual Package=Kerberos before database final OK.
 
-Ruling: 首批仅net8/net9/net10直接使用系统NegotiateAuthentication，两个Standard资产明确拒绝该插件 — Standard参考API缺失且暂无旧host需求/真实凭据验收，不引入反射/新依赖/自编SSPI；代价是Standard资产即使在现代host运行也不提供GSSAPI。Java Windows native的NTLM/任意mechanism范围不属于本子模块，不据此声称完整Java互通。系统同步SSPI/GSS协商可能等待KDC，取消无法强制中断原生调用；连接预算在驱动控制的步骤/网络中生效，真实凭据/KDC及异机均暂缓。
+Ruling: net8/net9/net10 use NegotiateAuthentication directly; Standard explicitly rejects plugin because reference APIs/old-host requirement/live credentials absent. No reflection/dependency/custom SSPI. Thus Standard lacks GSSAPI even on modern hosts. Java Windows-native NTLM/arbitrary mechanisms outside scope; no full Java-interoperability claim. Synchronous native negotiation may await KDC and cannot be forcibly cancelled; budget governs driver-controlled/network steps. Real credentials/KDC/other-machine deferred.
 
-- [x] TDD新增GssapiChallengeTests覆盖双NUL/UTF8/尾零/畸形/长度/override，GssapiConfigurationTests覆盖规范配置/冻结/端点副本；验证现有未支持缺口。SPN最长1024字符，不含控制符/无效Unicode，不做realm改写或反向DNS。
-- [x] 最小接入GssapiChallenge、GssapiAuthentication与系统上下文适配器，接口隔离原生token提供方；先用确定性上下文替身验证协商状态、token原样、最终OK门槛、错误/构造/切换/Dispose生命周期，不能称Kerberos互通证明。
-- [x] AuthenticationConversation持有并Dispose上下文，HandshakeFlow同步/异步using；初始/命名切换、一次切换、最终ERR、取消/超时沿既有网络路径；每次OS调用返回后检查调用方取消，不能并发Dispose仍在执行的原生调用。
-- [x] 弱TLS环回及五资产公开配置/拒绝消费，本机系统API形状验证但不获取票据/连接KDC；独立走查、完整本地Unit/Consumer/DI和核心五/DI三Release、格式/diff通过，同步README/架构/台账后本地提交。实库、KDC/凭据缓存、可信TLS成功链/原生阻塞及Standard支持仍开放。
+- [x] Failing GssapiChallengeTests double NUL/UTF8/zeros/malformed/length/override; GssapiConfigurationTests canonical/frozen/endpoint. SPN<=1024 chars, no control/invalid Unicode, no realm rewrite/reverse DNS.
+- [x] GssapiChallenge/GssapiAuthentication/system adapter with isolated native-token interface. Deterministic doubles prove state/raw token/final OK/errors-construction-switch-disposal only, not Kerberos interoperability.
+- [x] Conversation owns/disposes context, HandshakeFlow sync/async using. Existing initial-switch/one-switch/final ERR/cancel-timeout paths; check cancellation after OS calls; never concurrently Dispose executing native calls.
+- [x] Weak-TLS/five-asset public config-rejection/local OS API shape without tickets/KDC. Review/full tests/five-three Release/format-diff/docs/local commit. Live/KDC-cache/trusted TLS/native blocking/Standard support open.
 
-### B01/R01 DI Standard修正（2026-10-20）
+### B01/R01 DI Standard Correction (2026-10-20)
 
-用户指出DI包缺少Standard目标。原先仅封装现代数据源的实现不能代表DI本身的平台要求：两个Standard资产同样可使用现有连接和DI抽象。本模块将DI包与核心统一五目标，保留现代DataSource API的平台边界，所有目标新增AddOceanBaseConnection；不伪造DbDataSource，也不只增加无实际功能的包资产。
+User identified missing Standard DI targets. Modern-data-source-only wrapper did not define DI's platform needs: existing connection/DI abstractions work on Standard. Align DI/core to five targets; modern DataSource boundary retained; AddOceanBaseConnection on all targets. No fake DbDataSource/nonfunctional assets.
 
-Ruling: 使用Transient连接，每次解析创建关闭实例，默认注册具体类型和无冲突时的DbConnection转发工厂，由容器/作用域释放，注入宿主可选ILoggerFactory。注册先规范化配置和检查重复具体类型，再写描述符；已有泛型连接服务保留。沿直接连接的配置可变性/凭据可见性，不提供生命周期参数或keyed连接；数据源API不隐式注册连接。代价是一次作用域内多次解析得到独立连接，不能将直接注入视为共享请求连接或池化。
+Ruling: Transient connections, fresh closed instance per resolution, concrete registration plus nonconflicting DbConnection forwarding factory; container/scope disposal, optional host ILoggerFactory. Normalize config/check duplicate concrete services before descriptors, preserve existing generic connection services. Direct-connection mutability/credential visibility unchanged; no lifetime options/keyed connections; source API never implicitly registers connections. Repeated scoped resolutions are independent, not shared request connections/pooling.
 
-- [x] 先证明注册缺口，补连接懒创建/独立解析/作用域释放、宿主日志不被驱动释放、已有泛型服务保留、重复/无效配置无部分注册。
-- [x] 核心与DI五目标Release、DI完整及五目标依赖测试通过；包验证器两包均查五资产、十依赖组及精确同版核心，Standard消费者明确引入测试容器8.x。
-- [x] 实际包在.NET8/9/10及Standard隔离宿主、可选本机Framework4.8.1执行基本DI配置/释放，独立走查后同步公开文档和进度并提交。实库/异机与完整旧运行时仍不执行，global.json保持删除。
+- [x] Failing registration gap, lazy creation/independent resolutions/scoped disposal/external logger lifetime/existing generic service/no partial registration on duplicate-invalid config.
+- [x] Core/DI five-target Release/full DI/dependency tests; verifier checks five assets each/ten groups/exact same-version core. Standard samples explicitly use8.x test container.
+- [x] Actual packages on.NET8/9/10/isolated Standard/optional localFramework4.8.1 basic DI configuration-disposal; review/public docs-ledger/commit. Live/other-machine/full old-runtime deferred; global.json remains deleted.
 
-### D15 PAM/GSSAPI包交付复核（2026-10-20）
+### D15 PAM/GSSAPI Package Delivery Recheck (2026-10-20)
 
-复用R01/R02的实际包验证器，不改变产品认证行为。扩展PackageConsumer公开契约，编译并运行五资产的ServicePrincipalName属性/键、Password2及稀疏最大编号、完整连接串往返和全部密码脱敏；预取消不得连接，现代DI数据源仍须去除附加密码、保留SPN。先以Ed25519历史包反向验证新契约无法由旧资产满足，再生成本轮双包并在独立缓存按SHA512还原和运行，现代资产使用实际.NET8/9/10，Standard使用隔离宿主。不连接数据库或真实KDC、不装信任根、不发布。范围编译、断言、独立走查、文档及diff通过后本地提交；本轮未改产品，无需重复数分钟前已通过的完整产品回归。
+Reuse R01/R02 actual-package verifier, no product-auth change. PackageConsumer compiles/runs five-asset ServicePrincipalName property/key, Password2/sparse maximum suffix, full-string round-trip/all-password redaction. Precancellation never connects; modern DI source omits extra passwords/retains SPN. Historical Ed25519 package must fail new contract, then repack both/isolated SHA512 restore/run actual.NET8/9/10 and isolated Standard. No database/KDC/roots/publishing. Scoped build/assertions/review/docs/diff/local commit; no repeat full product regression passed minutes earlier, since product unchanged.
 
-- [x] 新包消费契约及历史包反向检查。
-- [x] 双包五资产实际还原/运行、独立走查和文档后提交。
+- [x] New package contract/historical negative check.
+- [x] Actual five-asset restore/run/both packages/review/docs/commit.
 
-### D01 OB20 报文与校验子模块（2026-10-19）
+### D01 OB20 Packets and Checksums (2026-10-19)
 
-先实现内部报文层，D01 在能力协商、流式传输和完整链路追踪接入前保持进行中。依据固定 Java 基线 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` 的 `OceanBaseProtocolV20`、`Ob20PacketInputStream` / `Ob20PacketOutputStream` 和 `OceanBaseCRC16` / `OceanBaseCRC32C`；只核对线协议，不复制实现或查表常量。
+Internal packets first; D01 in progress until negotiation/streaming/full trace. Pinned Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` OceanBaseProtocolV20/Ob20PacketInputStream-OutputStream/OceanBaseCRC16-CRC32C protocol only, no implementation/tables copied.
 
-1. 先写 OB20 固定字节夹具和校验失败测试。用独立 Java 基线校验器核对夹具，不能只以同一编码器往返证明正确。7字节压缩外头、24字节OB20头、4字节尾，全部小端；CRC16/ARC覆盖头前29字节，尾CRC32C从0开始且不做最终异或，0字段表示关闭对应校验。
-2. 新增内部 `Ob20Checksum` 和 `Ob20Packet`，复用ByteCursor，编码/解码完整单帧；独立ParseHeader先验证身份、请求/序号、长度及上限，供后续流式实现于正文分配前调用。外头uncompressed length非零明确拒绝；不猜测或解压。24位包长度同时限制payload及extra；无截断/尾随数据。extra存在时严格验证4字节长度，不把extra交给MySQL解析器；legacy/new extra内容仅作为不透明字节保留，具体追踪语义留后续子模块。保留flags/reserved及外层序号，不自行解释未知标志。
-3. 覆盖固定校验向量、分段增量CRC、边界长度/请求/序号、篡改与截断、关闭校验、extra及未知标志；验证正文/extra是原帧视图，避免解码二次复制。此阶段无公开选项或网络行为变化，不启用OB20、不宣称实库兼容。
-4. 核心五/DI三目标Release编译、完整Unit/Consumer/DI、独立走查及diff检查通过后更新架构/台账并本地提交。之后继续能力协商和PacketChannel流式接入；实库及异机矩阵暂缓。
+1. Failing fixed packets/checksums, independently checked with pinned Java checker, not same-codec round-trip alone.7-byte compression wrapper/24-byteOB20/4-byte tail, little-endian. CRC16/ARC first29 header bytes; raw CRC32C starts0/no final XOR; zero disables corresponding checksum.
+2. Internal Ob20Checksum/Ob20Packet reuse ByteCursor/single-frame codec. ParseHeader checks identities/request-sequence/length-bound before body allocation. Nonzero uncompressed length rejects, no guessed decompression.24-bit limit covers payload+extra, no truncation/trailing bytes. Validate4-byte extra length; never feed extra to MySQL parser. Preserve opaque legacy/new extra, flags/reserved/outer sequence; trace later, unknown flags not invented.
+3. Fixed vectors/incremental CRC/length-request-sequence bounds/tamper-truncation/disabled checksums/extra-unknown flags; payload/extra views avoid second copy. No public/network changes, OB20 enablement/live claim.
+4. Five-three Release/full tests/review/diff/docs/local commit. Negotiation/PacketChannel streaming follow; live/other-machine deferred.
 
-报文/校验子模块本地证据：固定Java原校验类独立执行确认头CRC16 `bb3d`、raw CRC32C `58e3fa20`（输入123456789），以及完整固定帧。40项OB20回归已实际执行；Release核心五/DI三目标0警告/错误，完整Unit1636、Consumer332、DI8全部通过且无跳过，独立只读走查无必须修复项。该子模块未接入公开API，未新增Consumer案例；既有Consumer完整回归不代表OB20网络消费已验证。详细命令/报告见进度台账末尾，D01仍进行中。
+Local evidence: independently executed original Java checksum classes confirm CRC16 bb3d/rawCRC32C58e3fa20 for123456789 and full frame.40 OB20 cases; five-three Release 0 warnings/errors; Unit1636/Consumer332/DI8 pass/no skips; review no required fixes. No public integration/new Consumer cases yet; existing Consumer regression is not OB20 networking evidence. Commands/reports at ledger tail; D01 in progress.
 
-### D01 OB20流式传输及协商后续（2026-10-19）
+### D01 OB20 Streaming and Negotiation Follow-up (2026-10-19)
 
-1. 内部Ob20Stream包装当前标准/TLS流，固定64KiB写缓冲、8KiB extra跳过缓冲；收包按调用方读取量返回，不缓存完整OB20正文。头先校验、CRC按段累积，帧正文耗尽时先消费/验证尾再返回最后一段；extra只校验长度后按段跳过。不请求session sync/追踪扩展；proxy reroute明确失败，不重放SQL。每请求最多100万OB20帧，防止空帧循环。
-2. PacketChannel每个逻辑写请求启动新的24位request ID、OB20序号从0开始，响应沿发送后序号继续并允许byte回绕；内层MySQL分片/序号仍由原实现处理。命令成功、prepare元数据、内部探测及游标分页切换前验证OB20 last及无剩余内层字节；COM_STMT_CLOSE显式无响应完成。读写/取消/校验失败沿原租约销毁会话，错误不重试。
-3. 新连接键`Use OB20`及builder属性UseOb20，默认false，接入冻结/多地址/序列化。仅请求时在已协商连接属性写`__proxy_capability_flag=256`；认证完成、模式确定后，只有连接属性能力与服务端ob_capability_flag的OB_PROTOCOL_V2均确认才包装包流，否则继续标准流。认证始终标准帧，TLS保持现有策略；不放宽A05/C01。
-4. 先写失败流式/协商测试，再实现；覆盖同步/异步、短读/分段写入、跨OB20/MySQL帧、extra、CRC与last错误、取消/关闭/超时、无响应关闭、公开五资产环回及标准回退。Release全目标、完整Unit/Consumer/DI、独立走查及文档复查后本地提交。完整链路追踪仍为D01后续，真实矩阵继续暂缓。
+1. Ob20Stream wraps standard/TLS stream, fixed64 KiB writes/8 KiB extra-skip. Reads demand-sized, no full-body buffer. Validate header/incremental CRC; consume/check tail before returning final body segment. Extra length-check/chunk-skip. No session-sync/trace request; proxy reroute rejects/no replay. Max million frames/request prevents empty loops.
+2. Each PacketChannel logical request gets new 24-bit request ID/OB20 sequence0. Response continues after sent sequence with byte wrap; MySQL fragmentation stays existing. Verify last/no inner bytes before command success/prepare metadata/internal probes/cursor transitions. COM_STMT_CLOSE completes without response. I/O/cancel/checksum failure destroys session/no retry.
+3. `Use OB20`/UseOb20 false, frozen/endpoint/serialization. Only when requested, negotiated connection attributes include `__proxy_capability_flag=256`. After auth/mode, wrap only if attribute capability and server ob_capability_flag OB_PROTOCOL_V2 confirmed; otherwise standard. Authentication stays standard, TLS/A05/C01 unchanged.
+4. Failing streaming/negotiation→sync-async short-read/split-write/crossframes/extra/CRC-last faults/cancel-close-timeout/no-response-close/five assets/fallback→all-target/full tests/review/docs/local commit. Full trace/live matrix subsequent.
 
-本轮协商/传输子模块已实现并通过本地验证：核心五/DI三目标Release编译0警告/错误，完整Unit1662（OB20共66，流式新增26）、Consumer394（OB20新增62）、DI8全部通过且无跳过。独立走查发现握手属性名遗漏`_flag`，已用固定Java常量复核并先复现20失败后修复；再次走查无必须修复项。公开测试含可信ERR后普通连接复用及状态探测、三页cursor、第二页CRC/缺last和等待fetch响应时取消；未覆盖OB20经TLS环回或读取部分正文后的取消，不作这两项已验证声明。证据见进度台账末尾；D01完整链路追踪与真实矩阵仍开放，不关闭项目目标。
+Local results: five-three Release 0 warnings/errors; Unit1662(OB20 total 66,new 26)/Consumer394(new 62)/DI8 pass/no skips. Review found missing _flag suffix; pinned Java confirmed,20 reproduced failures then fix; re-review clear. Public tests include reuse/state probe after trusted ERR,three-page cursor,second-page CRC/missing-last,cancel waiting fetch. No OB20-TLS loopback/partial-body-cancel coverage at that time; do not claim either. Evidence ledger; trace/live/project gates open.
 
-### D01 OB20经TLS及部分响应消费补验（2026-10-20）
+### D01 OB20 over TLS and Partial Responses (2026-10-20)
 
-复用Consumer的OB20服务端脚本和现有自签名证书夹具，五资产分别经公开同步/异步入口验证Required TLS下协商、未请求/未确认能力的标准帧回退、文本执行、参数化prepare/execute及无响应statement关闭。另通过SequentialAccess字段流先实际读出128字节，再验证CRC错误、取消、总执行超时和显式关闭都会销毁未完成响应，不重放请求。只在既有测试helper接入TLS升级和保持握手包序号，不增加产品配置或证书信任回调，不改系统信任根；Required证据不作为VerifyFull身份验证通过。新增测试、完整本地回归、独立代码/证据走查及必要修复后同步台账并提交；真实OceanBase/OBProxy、可信CA及异机继续暂缓。
+Reuse Consumer OB20 scripts/self-signed fixtures. Five assets sync/async Required TLS: negotiation/standard fallback when unrequested-unconfirmed/text/prepared/no-response close. SequentialAccess actually reads128 bytes before bad CRC/cancel/total-timeout/close; incomplete session destroyed/no replay. Only helpers gain TLS upgrade/preserved handshake sequence; no config/trust callback/system roots. Required is not VerifyFull identity proof. New/full tests/review-fix/evidence/commit; live OceanBase-OBProxy/trusted CA/other-machine deferred.
 
-本地补验完成：新增Consumer80项，完整Consumer1243、Unit2912、DI14全部通过，零失败/跳过；核心五/DI五目标Release零警告错误，独立走查无阻断。首次错误CanRead假设已按既有契约修正并保留失败报告；正常CRC反向校验十项准确拒绝、最终恢复畸形CRC后的完整报告覆盖全部新用例。五资产均由net10宿主隔离消费，不当作旧运行时或可信TLS身份验收；详细命令/证据见台账，D01真实验收仍开放。
+Completed:80 new Consumer; full Consumer1243/Unit2912/DI14 pass,zero fail-skip; five-core/five-DI Release 0 warnings/errors, review no blockers. Initial wrong CanRead assumption corrected to existing contract/failure retained. Ten valid-CRC negative checks rejected as intended; final malformed CRC full report covers all additions. Five assets on isolated net10, not old-runtime/trusted TLS acceptance. Ledger evidence; D01 live open.
 
-### D01 完整链路追踪经TLS补验（2026-10-20）
+### D01 Full-link Trace over TLS (2026-10-20)
 
-复用Ob20TraceConsumerTests的既有断言和协议脚本，保留原70项明文用例，新增同范围70项Required TLS用例：五资产同步/异步下的modern/legacy、关闭追踪、缺能力和无监听者50项；当前目标的prepare/execute、游标分页、statement关闭及事务控制4项；畸形extra、64KiB上限、CRC和部分响应取消16项。TLS脚本先验证32字节CLIENT_SSL请求及加密状态，升级同一PacketChannel并保持序号；不新增产品接口、依赖或系统信任根操作。先验证未接入TLS升级时新测试会失败，再接入升级并运行定向/完整回归，独立走查后记录结果并本地提交。五资产由net10宿主消费，不视作五运行时验收；Required不证明VerifyFull、可信CA或实库采样/SHOW TRACE，LOB/XA经TLS仍属独立缺口。
+Reuse Ob20TraceConsumerTests assertions/scripts; preserve70 plaintext cases/add70 Required TLS: five-asset sync-async modern/legacy/disabled/missing-cap/no-listener50; current-target prepare-execute/cursor/close/transaction4; badextra/64 KiB/CRC/partial-cancel16. Validate32-byteCLIENT_SSL/encryption, upgrade same PacketChannel/preserve sequence. No API/dependency/roots. First fail without upgrade, then targeted/full/review/evidence/local commit. net10 five-asset consumption is not five-runtime acceptance. Required proves no VerifyFull/trusted CA/live sampling-SHOWTRACE; TLS LOB/XA separate gaps then.
 
-本地验证完成：Release核心五/DI五及测试工程零警告错误，完整Unit2912、Consumer1313、DI14全部通过，零失败/跳过；定向明文/TLS共140项通过。与上一模块完整Consumer逐名比较新增70、删除0，新增70项在完整报告均通过。独立只读代码走查无阻断，红绿、格式和最终证据见进度台账；不以本轮结果关闭真实验收或整体目标。
+Results: five-core/five-DI/tests Release 0 warnings/errors; Unit2912/Consumer1313/DI14 all pass,zero fail-skip; targeted 140 plaintext-TLS pass. Name comparison with previous full Consumer:+70/-0,all 70 pass. Independent read-only review no blockers; red-green/format/evidence ledger. No live/overall closure.
 
-### D01 完整链路追踪本地实施（2026-10-19）
+### D01 Full-link Tracing: Local Implementation (2026-10-19)
 
-沿用既有五目标、ActivitySource及单租约OB20通道，不新增依赖或独立日志系统。协议参考固定Java基线FullLinkTrace、OceanBaseProtocolV20、ObObj和OceanBaseSerialize，仅核对行为与字段，不复制实现。
+Five targets/existing ActivitySource/single-lease OB20, no dependency/log system. Pinned FullLinkTrace/OceanBaseProtocolV20/ObObj/OceanBaseSerialize behavior only, no port.
 
-1. 连接键`Enable Full Link Trace`/builder属性EnableFullLinkTrace默认false，开启时要求Use OB20=true。冻结/多地址/序列化接入；握手请求FULL_LINK_TRACE、NEW_EXTRA_INFO与SHOW_TRACE，只有服务端确认OB20及FULL_LINK_TRACE才生效，缺失追踪能力继续普通OB20。支持legacy ObObj varchar键值及new-extra TLV两种格式，不依赖新格式能力才能追踪。
-2. 内部Ob20TraceContext负责两格式extra与嵌套TLV、服务器control采样/记录策略、span及driver/show-trace日志；复用ByteCursor并逐层限定长度。启用追踪时单帧extra上限64KiB，仅在尾CRC验证后应用控制信息；无追踪时仍按原路径分段跳过。拒绝已知字段畸形长度、重复、非法数值/策略，跳过未知TLV，校验legacy字符串终止符及有界变长整数。不因服务端文本而分配不受控内存或写日志。
-3. PacketChannel/Ob20Stream每请求首帧附加extra，CRC包含extra，分片/请求/last/无响应关闭语义不变。CommandExchange在execute/prepare/探测/cursor共享本地Activity的trace ID，每线协议请求独立128位span；无监听者时生成内部上下文，事务控制传递外层Activity上下文。driver记录仅固定模块、随机ID及微秒时间戳，下一请求发出，单个待发记录有界；不采集SQL、参数、凭据、端点、任意Activity标签或baggage，不创建额外SQL或重放操作。
-4. TDD先固定TLV/legacy/UUID线序、控制与上下文测试的失败证据，再实现并补真实公开环回、同步/异步、五资产、采样0/1、关闭/缺能力回退、错误/CRC/extra上限、prepare/游标/事务及故障清理。独立走查并修复、Release全目标编译及完整Unit/Consumer/DI通过后同步现有文档和本地提交。真实服务端采样/SHOW TRACE、版本/代理矩阵与异机继续暂缓；不以夹具关闭生产验收。
+1. `Enable Full Link Trace`/EnableFullLinkTrace false, requires UseOB20. Frozen/endpoint/serialization. Request FULL_LINK_TRACE/NEW_EXTRA_INFO/SHOW_TRACE; effective only with serverOB20+FULL_LINK_TRACE, otherwise ordinaryOB20. Both legacy ObObj varchar key-values/new-extra TLV; new format not required.
+2. Ob20TraceContext owns formats/nested TLV/server sampling-record policies/spans/driver-showtrace logs. ByteCursor nested bounds; trace extra<=64 KiB/frame, apply only after tail CRC. Disabled path chunk-skips. Reject malformed known-field lengths/duplicates/values-policies, skip unknown TLV; validate legacy terminators/bounded varints. No unbounded allocation/logging from server text.
+3. First request frame carries extra/CRC covers it; fragments/request-last/no-response unchanged. CommandExchange execute/prepare/probe/cursor shares local Activity trace ID, independent128-bit span/request; no listeners→internal context; transactions pass outer context. Driver records fixed module/random IDs/microsecond timestamps only, bounded one pending record sent next request. No SQL/binds/credentials/endpoints/arbitrary Activity tags/baggage/additional SQL/replay.
+4. Failing TLV-legacy-UUID-wire/control-context→public loopback/sync-async/five assets/sampling0-1/disabled-missingcap/faults/CRC-size/prepare-cursor-transactions/cleanup→review-fix/all-target/full tests/docs/local commit. Live sampling-SHOWTRACE/version-proxy/other-machine deferred, no production gate closure.
 
-本轮本地实现、独立走查修复及回归已完成：核心五/DI三目标Release编译0警告/错误，完整Unit1689（新增追踪27）、Consumer464（新增追踪70）、DI8全部通过且无跳过。修复legacy大小写/有界非最短varint、未知重复TLV及signed level，红绿证据见进度台账末尾。完成记录仅随下一请求发送，关闭不刷新最后一条；query时间只校验，未导出指标或新增AppInfo定制API。D01正式状态待验证，OB20经TLS环回、真实采样/SHOW TRACE和版本矩阵仍开放；其他未实现模块不据本轮关闭。
+Local completed: five-three Release 0 warnings/errors; Unit1689(newtrace27)/Consumer464(new 70)/DI8 pass/no skips. Fix legacy casing/bounded nonminimal varints/unknown duplicate TLV/signed level; ledger red-green. Completion records sent only next request; close never flushes final. Query time validated only, no metric/AppInfo API. D01 pending; OB20-TLS/live sampling-SHOWTRACE/version matrix then open; no unrelated-module closure.
 
-### D02 Oracle PrepareExecute报文子模块（2026-10-19）
+### D02 Oracle PrepareExecute Packets (2026-10-19)
 
-先补过程/OUT/RETURNING所需的扩展线协议基础，之后接入公开命令与输出生命周期；本子模块不改变CommandType或ParameterDirection的支持状态。沿用固定Java基线ComStmtPrepareExecute.send/read与JDBC4ServerPreparedStatement.calculateCheckSum，只核对字段和行为，不复制实现或新增依赖。
+Protocol prerequisite for procedure/OUT/RETURNING before public execution/output lifecycle; CommandType/ParameterDirection support unchanged here. Pinned ComStmtPrepareExecute.send-read/JDBC4ServerPreparedStatement.calculateCheckSum behavior only, no copying/dependency.
 
-1. 新内部OraclePrepareExecutePacket组装0xA1、statement ID、非游标/iteration=1、长度编码UTF-8 SQL、32位参数数目、既有PreparedParameters编码、executeMode=0/closeCount=0/raw SQL CRC32C/reserved=0。完整逻辑包在分配前限制64MiB；参数数量限制响应可表达的UInt16，检查编码块最低长度及零参数一致性。
-2. 解析17字节扩展响应头：OK、statement ID、列数、参数数、filler、warning、extend flags和hasResultSet；拒绝截断/尾随、坏marker/filler/布尔值及超过4096的列数。保留未知扩展位供执行层决定支持边界，不将头OK误当SQL终态，也不在此分配列/参数数组。
-3. 先用独立固定字节、SQL长度前缀/Unicode/CRC、参数块、所有头截断与恶意边界测试证明缺实现，再实现；用固定Java原CRC类独立输出请求夹具。全目标Release编译、完整Unit/Consumer/DI、独立走查与文档复核通过后本地提交。后续必须接入扩展响应元数据、结果/尾OK、OUT原子发布和事务/资源清理，不能据本子模块宣布D02完成；真实服务端联调继续暂缓。
+1. OraclePrepareExecutePacket:0xA1/statement ID/noncursor-iteration1/length-encodedUTF8SQL/32-bit parameter count/existing PreparedParameters/executeMode0-closeCount0/rawSQLCRC32C/reserved0. Preallocation64 MiB bound, count<=UInt16(response range), minimum encoded block/zero-count consistency.
+2.17-byte extended header:OK/ID/columns/parameters/filler/warnings/extendFlags/hasResultSet. Reject truncation/trailing/bad marker-filler-bool/columns>4096. Preserve unknown flags for execution policy; header OK is not terminal SQL; no metadata arrays here.
+3. Failing independent bytes/SQL-length-Unicode-CRC/parameter blocks/all-header truncations/malicious bounds; pinned Java original CRC independently generates fixture. Full build-tests/review/docs/local commit. Later metadata/results-tail OK/atomic OUT/transaction-resource cleanup mandatory; not D02 complete/live.
 
-报文子模块已实现并本地验证：Release核心五/DI三目标0警告/错误，完整Unit1710（新增21）、Consumer464、DI8全部通过且无跳过。独立只读走查核对固定Java布局及CRC，未发现必须修复项；独立夹具是手工字段构造加原Java CRC，不冒称实际执行Java发送方法。尚未接公开API，Consumer仅为既有完整回归；D02结果/尾包、输出发布和生命周期接入仍须继续，实库和异机暂缓。
+Local: five-three Release 0 warnings/errors; Unit1710(new 21)/Consumer464/DI8 pass/no skips. Review confirms layout/CRC, no required fix. Fixture manually constructed with original JavaCRC, not execution of Java send method. No public API/new Consumer yet; response/output/lifecycle/live/other-machine remain.
 
-### D02 扩展响应流与执行终态（2026-10-19）
+### D02 Extended Response Streaming and Terminal Outcome (2026-10-19)
 
-在接入公开OUT发布前，先贯通QueryResult对PrepareExecute响应的实际流式消费。复用既有列定义、二进制行、SequentialAccess及多结果路径，新增可选内部Oracle参数数目与只读响应头；默认查询路径不变。先验证Oracle/binary前提，读取17字节头、核对参数数量、累计4MiB元数据预算并消费参数定义/可选EOF，随后直接读取响应头指定的列及行，不误读为普通列数包。无结果时直接读最终OK/ERR；有结果时行终结不释放租约，须再读尾OK/ERR；尾OK才更新计数及会话、验证OB20边界并完成交换，尾包MoreResults继续普通结果。同步/异步及顺序路径分别推进底层I/O，取消/截断/错误不得丢失未决状态或重放SQL。
+Before public OUT, stream PrepareExecute through QueryResult, reusing column/binary-row/SequentialAccess/multiple-result paths; optional internal Oracle parameter-count/readonly header, default unchanged. Check Oracle/binary,17-byte header/count/cumulative4 MiB metadata, parameter definitions/optional EOF, then header-declared columns/rows without reading ordinary count packet. No-result→final OK-ERR; with-result row terminator keeps lease until tail OK-ERR. TailOK updates counts/session/checksOB20/completes; MoreResults continues ordinary results. Sync/async/sequential advance correct I/O, preserving pending state/no replay on cancel/truncation/error.
 
-TDD以真实TCP环回覆盖两EOF格式、有/无结果、普通/顺序、同步/异步、参数计数/元数据/头/尾错误、等待尾包时取消/超时、可信尾ERR与后续复用、多结果及状态观察。保持公开过程/OUT/RETURNING拒绝，本子模块不发布输出参数；其后继续公共入口、版本/选项门槛及OUT原子发布。全目标编译、完整Unit/Consumer/DI、独立走查和文档同步通过后提交；实库和异机继续暂缓。
+Failing TCP cases: both EOF forms/results-none/default-sequential/sync-async/count-metadata-header-tail faults/cancel-timeout awaiting tail/trustedtail ERR-reuse/multiple results/state. Public procedure/OUT/RETURNING still rejects/no output publication. Then public API/version-option/atomic OUT. Full validation/review/docs/commit; live/other-machine deferred.
 
-响应子模块已实现并本地验证：定向69项（既有报文21、新响应48）通过；Release核心五/DI三目标0警告/错误，完整Unit1758、Consumer464、DI8全部通过且无跳过。独立只读走查核对Java布局、租约、两类读取路径、错误及会话快照，未发现必须修复项。初次取消断连失败来自测试错误地等待EndOfStreamException，修正为精确接受协议关闭或TCP连接重置；早关闭夹具增加服务端写完行终结的屏障，避免清理与服务端写竞争；不改变产品异常或传输策略。公开入口、OUT结果解释和生命周期仍继续实施，D02不关闭。
+Results:69 targeted(oldpacket21,newresponse48); five-three Release 0 warnings/errors; Unit1758/Consumer464/DI8 pass/no skips; review layout/lease/read paths/errors/snapshots clear. Initial cancellation test wrongly awaited EndOfStreamException; accept precise protocol close/TCP reset. Early-close fixture barrier waits until row terminator sent, avoiding cleanup-write race. No product exception/transport change. Public/output lifecycle remains; D02 open.
 
-### D02 公开过程与标量输出接入（2026-10-19）
+### D02 Public Procedures and Scalar Outputs (2026-10-19)
 
-继续现有内部请求/响应模块，增加默认关闭的Use Oracle Prepare Execute连接选项；仅已认证Oracle会话可使用，首次执行以同一租约/预算查询`select ob_version() from dual`，严格解析并按2.2.76门槛缓存物理会话版本，不使用握手兼容版本或故障后回退。公开StoredProcedure仅接受安全的限定过程/函数名，生成PL/SQL块；Text保留现有词法器，只在显式扩展选项且存在输出方向时使用PrepareExecute。InputOutput发送原始快照，Output/ReturnValue发送NULL；重复输出位置和多个ReturnValue在发包前拒绝。
+Default-off Use Oracle Prepare Execute option; authenticated Oracle only. First execution queries `select ob_version() from dual` under same lease/budget, strict version/cache per session, gate2.2.76. Never use compatible handshake version/fallback after fault. StoredProcedure accepts safe qualified procedure/function names and generates PL/SQL. Text retains lexer, uses extension only when explicitly enabled with output directions. InputOutput sends original snapshot; Output/ReturnValue NULL. Reject repeated output positions/multiple ReturnValue pre-send.
 
-内部PL OUT及RETURNING结果隐藏于公开reader，按位置复用二进制类型解码，标量输出至多一行、零行映射DBNull；多行明确拒绝，数组输出归D06。所有输出先暂存，完整响应及OB20边界验证成功后、释放租约/日志回调前一次发布；尾ERR、后续结果错误、取消/超时和提前关闭均保留原值。返回的statement ID立即纳入既有延迟关闭队列，命令清理在空闲会话刷新。继续覆盖同步/异步、SequentialAccess、事务、后续多结果、默认选项拒绝、版本探测及故障清理；完成编译、完整测试、独立走查并同步文档后本地提交。实库和异机不做，REF CURSOR/LOB/复杂输出等归各自后续模块，不扩大本模块声明。
+Hide internal PL OUT/RETURNING rows from public reader; positional binary decoding, scalar at most one row,zero→DBNull,multiple rejects(D06 arrays later). Stage all outputs, publish together after full response/OB20 boundary before lease/log callback. TailERR/later-result faults/cancel-timeout/early close retain old values. Returned ID enters existing delayed-close queue, idle cleanup flushes. Cover sync-async/SequentialAccess/transactions/later results/default rejection/version probe/faults; full validation/review/docs/local commit. No live/other-machine; cursor/LOB/complex outputs separate.
 
-本轮标量接入已本地实现：Release核心五/DI三目标0警告/错误，完整Unit1840、Consumer494、DI8全部通过、零跳过。独立走查发现并修复最终OK后取消/关闭仍可能发布OUT的竞态，4项修前失败、修后通过；再次走查无新增必须修复项。新增30项公共消费覆盖五资产的标准、OB20和尾部夹带包边界。证据与限制见台账末尾；D02保持进行中，复杂/多行输出、独立Prepare/FetchSize及真实互通不据本轮宣称支持。
+Local: five-three Release 0 warnings/errors; Unit1840/Consumer494/DI8 pass,no skips. Review found OUT publishing after final OK raced cancellation/close;four failing-first cases fixed, rereview clear.30 new five-asset public cases cover standard/OB20/trailing-body boundaries. Ledger evidence; D02 in progress; complex/multirow/independent Prepare-FetchSize/live not claimed.
 
-### D02–D05/D09 Oracle扩展经TLS本地消费补验（2026-10-20）
+### D02–D05/D09 Oracle Extensions over TLS (2026-10-20)
 
-复用七组现有Consumer协议脚本和断言，保留原明文入口及案例身份，分别新增Required TLS入口：过程OUT发布30、REF CURSOR30、行外BLOB/CLOB分块读取60、LOB WRITE/TRIM60、临时LOB创建/写入/显式释放80、Oracle XA阶段/恢复/错误100、复杂类型字典和值构造20，共380项。五资产同步/异步覆盖标准帧与OB20；已有尾随正文、阶段错误/断连、资源所有权及发布边界断言原样沿用。不扩大为LOB全部取消场景、完整复杂值往返或真实协调器验收。
+Reuse seven Consumer scripts/assertions, preserve plaintext identities, add Required TLS: procedureOUT30,REFCURSOR30,out-of-row BLOB-CLOB60,LOBWRITE-TRIM60,temporary LOB create-write-release80,OracleXAphase-recovery-errors100,complex dictionary-construction20=380. Five assets/sync-async/standard-OB20. Existing trailing-body/stage error-disconnect/ownership/publication boundaries unchanged. Not all LOB cancellations/full complex round-trip/real coordinator acceptance.
 
-沿用已验证的共享Handshake可选TLS参数：每例独立自签名证书和SslStream，先标准greeting/SSLRequest，再在同一PacketChannel升级并保留序号，所有后续扩展请求/响应都经TLS。只参数化测试传输并复用证书fixture，不改产品配置、公共API、依赖或系统信任根。定向760项及完整Unit/Consumer/DI、核心五/DI五Release、案例增删核对、独立走查及必要修复后同步台账并提交。五资产由net10宿主隔离消费，Required不证明VerifyFull信任链，真实数据库/OBProxy、KDC/协调器和异机继续暂缓。
+Shared optional-TLS Handshake: per-case self-signed certificate/SslStream,standard greeting-SSLRequest,upgrade same PacketChannel/preserve sequence; all extensions encrypted. Test transport only, no config/API/dependency/roots. Targeted760/full tests/five-five-target Release/case-name comparison/review-fix/evidence/commit. net10 isolated assets; Required not VerifyFull. LiveOceanBase-OBProxy/KDC-coordinator/other-machine deferred.
 
-本地补验完成：核心五/DI五及测试Release零警告错误，定向760、完整Unit2912/Consumer1693/DI14全部通过，零失败/跳过。与上一模块完整Consumer1313逐名对比新增380、删除0，新增380项在完整报告全部通过且七组数量一致。独立只读代码走查无阻断，最终证据及边界见台账；本轮不关闭实库、可信TLS、异机、MySQL XA经TLS或整体目标。
+Results: five-core/five-DI and tests Release 0 warnings/errors; targeted 760/fullUnit2912-Consumer1693-DI14 all pass,zero fail-skip. Compared Consumer1313:+380/-0; all additions pass/group counts match. Review no blockers; ledger evidence/boundaries. No live/trusted TLS/other-machine/MySQLXA-TLS/overall closure.
 
-### D03 REF CURSOR 本地实施（2026-10-19）
+### D03 REF CURSOR: Local Implementation (2026-10-19)
 
-沿用Oracle PrepareExecute入口与2.2.76门槛，追加OceanBaseDbType.RefCursor和一次性OceanBaseRefCursor输出对象；纯OUT/ReturnValue发送NULL，拒绝游标输入/输入输出。Oracle类型163的二进制值为4字节LE游标ID，不能当普通整数或文本解码。输出对象同标量先暂存、完整响应及边界成功后发布；NULL保留DBNull。
+Existing OraclePrepareExecute/2.2.76; append OceanBaseDbType.RefCursor/single-use OceanBaseRefCursor output. PureOUT/ReturnValue NULL; reject input/input-output. Oracle163 binary=LE32 cursor ID, never ordinary integer/text. Stage/publish with scalar outputs after complete boundary; NULL=DBNull.
 
-1. 先以真实TCP环回写失败测试，覆盖过程输出、固定cursor ID、COM_STMT_FETCH及COM_STMT_CLOSE、两EOF/同步异步/Sequential与分页。复用QueryResult的逐页读取及元数据一致性检查，首fetch取得列定义后直接读行，不再次误发fetch；不缓存完整结果。
-2. GetDataReader/GetDataReaderAsync绑定原物理会话及事务代次、原命令超时，默认每页128行，可传正数fetchSize和默认/SequentialAccess/CloseConnection行为。每个对象仅打开一次reader，同一连接独占规则不变；获取租约失败可重试，发起读取后失败不重放。事务结束/后续事务代次或连接重开均不得让旧游标进入新上下文。
-3. 每次扩展执行保留父statement直到所有返回游标释放；完成读取、Dispose或失败只释放一次，复用延迟关闭队列，空闲Dispose刷新。未读完关闭仍销毁会话；未读取的对象须Dispose，连接关闭释放服务端全部资源。所有输出失败不泄露暂存游标，标量已有生命周期保持回归。
-4. 补多游标、空/NULL、错误/畸形/取消、事务/连接/父command清理边界与五资产公共消费。独立走查、全目标Release编译、完整Unit/Consumer/DI、文档同步和本地提交；实库/异机继续暂缓，不将夹具视为服务器兼容证明。
+1. Failing real TCP outputs/fixed ID/COM_STMT_FETCH-CLOSE/both EOF forms/sync-async/sequential/pages. Reuse paging/metadata consistency; first fetch gets definitions then rows without duplicate fetch, never full-result buffering.
+2. GetDataReader/GetDataReaderAsync bind original session/transaction generation/command timeout. Default128/page,positive fetchSize/default-SequentialAccess-CloseConnection. One reader/object; exclusivity unchanged. Lease failure retriable, begun read failure never replays. Ended/new transaction/reopen cannot move stale cursors into new contexts.
+3. Keep execution parent statement until all output cursors released. Read completion/Dispose/failure releases once via delayed queue; idle Dispose flushes. Early unread close destroys session. Unopened output objects require Dispose; connection close releases all server resources. Failed outputs leak no staged cursors; scalar lifecycle regresses.
+4. Multiple/empty-NULL/error-malformed-cancel/transaction-connection-parent cleanup/five assets; review/all-target/full tests/docs/local commit. Live/other-machine deferred, fixtures not server proof.
 
-D03本地输出/读取实现及独立走查修复已完成：修后Release核心五/DI三目标0警告/错误，完整Unit1876（新增36）、Consumer524（新增30）、DI8全通过、零跳过。终态取消/关闭竞态4项先红后绿，连既有C04终态契约4项一起验证通过；详情见台账末尾。正式状态待验证，实库、扩展经TLS、异机及新打包/旧运行时矩阵未执行，输入/输入输出及普通结果列cursor值未支持。后续继续D04，不关闭整体目标。
+Local complete/review fixes: five-three Release 0 warnings/errors; Unit1876(new 36)/Consumer524(new 30)/DI8 pass,no skips. Four terminal-cancel-close race cases red→green plus four existing C04 terminal cases pass; ledger details. Pending verification: live/TLS extensions/other-machine/new package-old-runtime matrix not run then. Input/input-output/ordinary-result cursor fields unsupported. NextD04, overall open.
 
-### D04 本地实施顺序（2026-10-19）
+### D04 Local Implementation Order (2026-10-19)
 
-沿用现有字段流、Oracle PrepareExecute和原会话独占规则，不迁移locator，不通过第二条连接读取旧事务的数据。分为下列可独立走查的交付；每项先有失败测试，再实现、编译、完整单测、走查和本地提交，D04整体在全部接入前保持进行中。
+Reuse field streams/OraclePrepareExecute/session exclusivity; never migrate locators or read old-transaction data through a second connection. Independent deliveries each require failing tests→implementation/build/full tests/review/local commit; D04 stays in progress until integrated.
 
-1. 内部`LobLocator.Parse(byte[])`：识别V1的40字节头及V2的8字节内存头，返回版本、字节长度、内联数据的借用视图或行外标记。严格验证版本、头长度、长度/偏移、扩展与rowkey边界；不按未受信长度分配数据，不将locator当普通BLOB/CLOB。覆盖空值、V1兼容locator、V2 simple/extern/disk、行内/行外、截断、溢出及大行外长度。此步不改变握手或公开支持声明。
-2. 在握手能力和显式选项门槛后接入210/211类型、元数据、参数及D02输出；公开LOB对象绑定物理会话和事务代次，校验输出原子发布、连接重开、事务结束、Dispose和reader独占。默认未启用时继续拒绝locator类型，不把协议夹具当作实库互通。
-3. 使用原会话执行DBMS_LOB.READ的有界分块Stream/TextReader，同步/异步取消、超时、Unicode字符与字节偏移分别验证，复用既有命令预算和错误清理；明确原reader消费/释放后才能获取独占租约，不缓冲整LOB或另建连接规避占用。补齐LOB输入/输出、流式读取及五资产公开消费。
-4. 复核全部D04契约，更新README、架构和台账。真实版本/OBProxy、LOB写入/临时对象服务端语义、扩展经TLS与异机验收单独保留；实现范围不足时不得将D04改为完成。
+1. Internal LobLocator.Parse(byte[]): V1 40-byte header/V2 8-byte memory header, version/byte length/borrowed inline view or out-of-row marker. Strict version/header/length-offset/extension-rowkey bounds; no untrusted-length allocation/ordinary BLOB-CLOB interpretation. Empty/V1-compatible/V2simple-extern-disk/inline-out of row/truncation-overflow/large-external cases. No handshake/public capability change yet.
+2. After negotiated/explicit gates, integrate210/211/metadata/parameters/D02OUT. Handles bind session/transaction generation; validate atomic OUT/reopen/transaction-end/Dispose/reader exclusivity. Disabled locators still reject; fixtures not live proof.
+3. Same-session bounded DBMS_LOB.READ Stream/TextReader, sync-async cancel-timeout/Unicode character-versus-byte offsets/existing budgets-errors. Original reader must drain/dispose before lease; no full LOB/second-connection workaround. Inputs/outputs/streams/five assets.
+4. Review all contracts/sync README-architecture-ledger. Real versions/OBProxy/server mutation-temp semantics/TLS extensions/other-machine separate; incomplete scope cannot mark D04 complete.
 
-协议依据仅参考行为：固定Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的`Lob.java`、`Blob.java`、`Clob.java`，及固定OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343`的`deps/oblib/src/common/object/ob_object.h/.cpp`（ObLobLocator、ObMemLobCommon、ObLobCommon、get_inrow_data/get_lob_data_byte_len）。V2前4字节在该服务端基线中是带is_mem_loc标记的ObLobCommon，不是V1的LOB! magic；不照搬Java忽略该头的宽松处理。未知布局明确拒绝，后续按版本证据扩展。
+Behavior references: pinned Java6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 Lob.java/Blob.java/Clob.java; OceanBase5e8a63d29dae9fde5e962b8fcc7b167d438fc343 deps/oblib/src/common/object/ob_object.h/.cpp(ObLobLocator/ObMemLobCommon/ObLobCommon/get_inrow_data/get_lob_data_byte_len). V2 first4 bytes are is_mem_loc ObLobCommon, not V1 LOB! magic; do not adopt Java's permissive header omission. Unknown layouts reject pending version evidence.
 
-### D04 公开读取与绑定本地接入（2026-10-19）
+### D04 Public Reading and Binding (2026-10-19)
 
-在内部解析提交`cc0cc1d`之后，接入默认关闭的UseLobLocators、ClientSupportLobLocator及独立client属性V2请求，保留OB20/追踪的proxy属性命名空间。公开Blob/Clob类型及OceanBaseLob，标准/provider getter均返回handle；D02输出在完整终态后原子发布，InputOutput按原值推断的类型冻结并与回复匹配。参数和打开流在连接锁内校验原物理会话、事务引用及epoch，旧连接、已结束事务、已释放handle和能力不足均在发包前拒绝。
+After parser commitcc0cc1d, integrate default-off UseLobLocators/ClientSupportLobLocator/separateclientV2 attribute, preserving proxy namespace for OB20/trace. Public Blob/Clob/OceanBaseLob, standard/provider getters return handles. D02OUT atomic after terminal; InputOutput inferred type frozen/matched. Under connection lock, parameters/open-stream validate original session/transaction reference/epoch; stale connection/ended transaction/disposed handle/missing capability reject pre-send.
 
-内联数据借用现有payload；行外BLOB/CLOB通过原会话DBMS_LOB.READ分块读取。每次只持有一块正文，byte/scalar偏移分别推进；NUMBER amount只接受精确正整数并检查实际buffer、进展和总字节长度。原reader须先完整消费；流占用预约，Dispose取消在途读取，异步读取/清理不借同步网络入口。现代公共stream/handle支持异步释放，Standard2.0保留内部异步清理。真实数据库临时对象生命周期和修改语义尚无证据，不新增FREETEMPORARY猜测，也不将客户端Dispose宣称为数据库对象销毁。
+Inline borrows payload; external BLOB/CLOB uses original-session DBMS_LOB.READ chunks, one body at a time, advancing byte/scalar offsets separately. NUMBER amount exact positive integer, verify actual buffer/progress/total bytes. Original reader must drain. Stream reservation; Dispose cancels pending reads; async reads/cleanup use async network. Modern stream/handle async disposal; Standard2.0 internal async cleanup. No evidence for server temporary lifecycle/mutation yet; do not invent FREETEMPORARY or equate client Dispose/server destruction.
 
-已补输出/返回值/输入输出、NULL/尾ERR、错误类型、畸形locator、跨连接/重开/事务代次、Dispose、取消/原timeout、有界Unicode分块及五资产标准/OB20边界测试；失败回归、全量验证及独立复查证据见进度台账末尾。D04整体仍进行中，LOB修改和临时对象API的本地可实施部分继续评估；实库、OBProxy、扩展经TLS、异机及发布矩阵暂缓，不据本子模块关闭整体目标。
+Tests cover output/return/input-output/NULL-tail ERR/wrong types/bad locators/cross-connection-reopen-epoch/Dispose/cancel-timeout/bounded Unicode/five-asset standard-OB20 boundaries; red-green/full/re-review at ledger tail. D04 then in progress; mutation/temp APIs assessed next. Live/OBProxy/TLS-extensions/other-machine/release matrix deferred, overall open.
 
-### D04 LOB 修改本地实施（2026-10-19）
+### D04 LOB Mutation (2026-10-19)
 
-本轮沿现有读取/绑定契约增加原会话WRITE/TRIM，参考固定Java Blob.updateBlobToServer/trimBlobToServer和Clob对应方法的DBMS_LOB参数方向，仅参考行为。公开OceanBaseLob.WriteBytes/WriteBytesAsync（byte[]片段）、WriteText/WriteTextAsync（严格UTF8文本）及Truncate/TruncateAsync；位置为.NET常用的0起始offset，BLOB单位字节、CLOB单位Unicode标量，TRIM长度沿相同单位。同步路径同步I/O，异步路径直接异步I/O，不引入依赖或新连接。
+Add same-session WRITE/TRIM, referencing pinned Blob.updateBlobToServer/trimBlobToServer and Clob DBMS_LOB directions, no copying. OceanBaseLob.WriteBytes/WriteBytesAsync(byte[]slice),WriteText/WriteTextAsync(strictUTF8),Truncate/TruncateAsync. .NET 0-based offset, BLOB bytes/CLOB Unicode scalars; TRIM same units. Direct sync/async I/O, no dependency/new connection.
 
-- [x] 先固定失败用例：WRITE每块BLOB最多32767字节/CLOB最多8191标量；请求使用上一块成功返回的locator，输出只在完整终态后更新handle；TRIM参数和后续读取使用新locator。
-- [x] 实现共享内部LobMutation，预约原会话覆盖整个多块修改，绑定原事务epoch/timeout；handle Dispose取消在途修改。输入范围、UTF16有效性和Int64偏移溢出全部在首包前校验。完整成功后更新locator，NULL/不匹配输出破坏会话并使旧handle失效。
-- [x] 覆盖同步/异步、Unicode跨块、>Int32位置、空输入/预取消、活动reader/流、事务结束/连接重开、已知ERR/部分前缀/尾中断/超时和Dispose。WRITE/TRIM具有副作用，未确认终态保留既有结果未知语义；多块非原子，不自动回滚已成功前缀或重放失败块。
-- [x] 补五资产公共消费，独立只读走查并修复，Release核心五/DI三目标编译、完整Unit/Consumer/DI通过后同步README/架构/台账并本地提交。临时对象创建/所有权管理按后续子模块推进，实库资源语义、OBProxy、TLS扩展和异机联调暂缓。
+- [x] Failing WRITE chunks<=32767BLOB bytes/8191CLOB scalars; each request uses prior successful locator, update handle only after terminal; TRIM/later reads use new locator.
+- [x] Shared LobMutation reserves session across all chunks, original epoch/timeout; Dispose cancels. Range/UTF16/Int64-offset overflow checked before first packet. Update after full success; NULL/mismatched output breaks session/invalidates old handle.
+- [x] Sync-async/Unicode boundaries/>Int32 offsets/empty-precancel/busy reader-stream/transaction-reopen/known ERR-successful prefix-tail fault-timeout-Dispose. Side effects retain unknown-outcome semantics; multichunk nontransactional as a unit, no automatic prefix rollback/failed-chunk replay.
+- [x] Five assets/review-fix/five-three Release/full tests/docs/local commit. Temporary create/ownership follows; live resources/OBProxy/TLS/other-machine deferred.
 
-### D04 临时 LOB 创建与显式所有权（2026-10-19）
+### D04 Temporary LOB Creation and Explicit Ownership (2026-10-19)
 
-沿用现有选项、Oracle PrepareExecute和原会话/事务代次契约。连接新增CreateTemporaryLob(OceanBaseDbType, OceanBaseTransaction?)及Async入口，只接受Blob/Clob；显式事务按命令相同规则绑定，使用连接CommandTimeout。固定PL/SQL块声明BLOB/CLOB局部变量，再调用CREATETEMPORARY，cache=FALSE、dur=DBMS_LOB.SESSION，避免NULL协议类型无法选择重载及猜测PL/SQL BOOLEAN线上编码；最后赋给OUT locator。完整终态后创建拥有释放权的新handle，失败不交付所有权。创建SQL开始发送后失败（包括尾ERR）或成功后无法安全交付，销毁原会话避免遗留资源；未发送创建SQL的版本探测可信ERR/不支持版本保留可用会话。
+Existing options/PrepareExecute/session-epoch. Connection CreateTemporaryLob(OceanBaseDbType,OceanBaseTransaction?) plus Async, Blob/Clob only, command-style explicit transaction binding/connection CommandTimeout. Fixed PL/SQL declares typed BLOB-CLOB local, CREATETEMPORARY(cache=FALSE,durDBMS_LOB.SESSION), then OUT locator; avoids NULL-overload/guessed wire BOOLEAN. After terminal deliver owning handle, never ownership on failure. Once create SQL sending starts, any failure including tail ERR/unsafe delivery destroys session to reclaim resources. Precreate version-probe trusted ERR/unsupported version retains session.
 
-创建者handle新增FreeTemporary/FreeTemporaryAsync，普通查询/输出handle没有释放权。释放持原预约、复用修改取消/超时/未知结果策略。固定类型的PL/SQL局部变量接收输入locator并调用FREETEMPORARY，另返回固定字符串完成标记；不把服务端释放后标记invalid的locator交给普通解析器。成功后客户端handle失效，在途失败沿修改契约失效；不能跨连接、事务代次或活动流使用。Dispose保持现有客户端清理契约，必须在事务结束及Dispose前显式FreeTemporary；未显式释放或释放失败的SESSION临时对象可能保留至原会话结束，不引入后台清理或自动提交。
+Only creator handles expose effective FreeTemporary/FreeTemporaryAsync ownership; ordinary queried/output handles cannot free. Reserve same session, reuse mutation cancel-timeout-unknown semantics. Typed PL/SQL local receives locator/calls FREETEMPORARY/returns fixed completion string; do not parse invalidated released locator normally. Success invalidates handle; pending failure follows mutation invalidation. Reject cross-session/epoch/active streams. Dispose remains client-only; explicitly FreeTemporary before transaction end/Dispose. Unfreed/failed SESSION objects may persist until original session ends; no background cleanup/autocommit.
 
-协议依据为OceanBase官方文档固定提交`2a5ae3a23a51729d065cec716508eb26cb064106`的Oracle DBMS_LOB CREATETEMPORARY/FREETEMPORARY/ISTEMPORARY说明（固定链接见架构D04临时对象段）；Java createBlob/createClob只创建本地空对象，不作服务端临时创建依据。官方文档证明接口契约，本地夹具不替代实库资源验收。
+Reference: official OceanBase docs pinned2a5ae3a23a51729d065cec716508eb26cb064106 OracleDBMS_LOB CREATETEMPORARY/FREETEMPORARY/ISTEMPORARY (links architecture D04). Java createBlob/createClob creates local empty objects, not server-temp evidence. Docs establish interface, fixtures do not prove real resources.
 
-- [x] 首先固定创建/释放同步异步、BLOB/CLOB、typed局部变量及OUT空值/完整输出、显式所有权拒绝和未释放Dispose无数据库调用的失败测试。
-- [x] 实现连接工厂、所有权标记及原会话Free操作，覆盖事务/连接重开、活动流、取消/超时、尾ERR/NULL/坏输出与创建交付终态竞态；创建后尾ERR回收、版本探测失败保留会话回归已通过。
-- [x] 补五资产标准/OB20成功与尾包拒绝消费，Release全目标及完整Unit/Consumer/DI通过，独立走查修复及文档同步完成；本地验证见进度台账，不推送。实库和异机继续暂缓。
+- [x] Failing sync-async/BLOB-CLOB/typed-local/OUTNULL-complete/ownership rejection/Dispose-without-DB-call cases.
+- [x] Factory/ownership/same-session Free; transaction-reopen/active streams/cancel-timeout/tail ERR-NULL-bad output/delivery-terminal races; post-create-tail ERR reclamation/version-probe retention regressions pass.
+- [x] Five assets standard-OB20 success/tail rejection/all-target/full tests/review-fix/docs complete, ledger local evidence/no push. Live/other-machine deferred.
 
-本地验证：Release核心五/DI三目标0警告/错误，完整Unit2054（新增46项）、Consumer724（新增80项）、DI8全通过且零跳过。独立走查修复typed局部变量重载及创建后尾ERR无主资源问题，红绿证据见台账；D04本地范围已接入，状态待验证，真实资源/版本/OBProxy与扩展经TLS关口保持开放。后续推进D05，整体目标未完成。
+Local five-three Release 0 warnings/errors; Unit2054(new 46)/Consumer724(new 80)/DI8 pass,no skips. Review fixed typed overload/post-create-tail ERR orphan, ledger red-green. D04 local scope integrated, pending real resources/version/OBProxy/TLS; next D05, overall incomplete.
 
-### D05 ARRAY/STRUCT 本地实施顺序（2026-10-19）
+### D05 ARRAY/STRUCT Local Order (2026-10-19)
 
-沿固定Java基线`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的ColumnDefinition、BinaryRowProtocol.getComplexArray/getComplexStruct和ComplexUtil行为实现，不复制源码。复杂结果没有统一的外层长度，必须由完整类型描述确定字段边界；参数NULL位图从bit0开始，结果及嵌套结果从bit2开始，两方向不能互用同一序列化格式。NUMBER保留OceanBaseDecimal，日期/纳秒复用已有精确codec，不猜测未支持成员。
+Pinned Java6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 ColumnDefinition/BinaryRowProtocol.getComplexArray-getComplexStruct/ComplexUtil behavior only. Complex results lack uniform outer lengths; complete descriptors determine boundaries. ParameterNULL bitmap startsbit0, result/nested result bit2, never same serialization. NUMBER OceanBaseDecimal, existing exact date/nano codecs; unsupported members never guessed.
 
-- [x] 独立嵌套编解码：Internal/Values/ComplexType.cs保存只读成员布局，ComplexValueCodec.cs以ByteCursor解析结果、以BinaryWriter编码参数。先固定Oracle对象/集合、嵌套NULL与跨位图边界、空值、Unicode、宽NUMBER、RAW、DATE/TIMESTAMP及后续字段报文；拒绝MySQL、畸形长度、无效标量、过深嵌套/过多成员与参数类型不匹配。tests/OceanBaseConnector.UnitTests/ComplexValueCodecTests.cs先红后绿，完整编译/Unit/Consumer/DI与独立走查后提交。本层不开放公共复杂值入口。
-- [x] 类型字典及显式生命周期：按schema+type精确身份从Oracle字典装载完整嵌套描述，先定义同会话查询、活动reader/事务、缓存失效及刷新规则，再接入公共ARRAY/STRUCT值构造。不能沿Java实现偷偷另建查询连接，不能跨schema仅按大写typeName复用。本地验证见进度台账“D05同会话类型字典与公开值构造”；复杂列/参数/输出继续下一子模块。
+- [x] Independent codec: Internal/Values/ComplexType.cs immutable layouts, ComplexValueCodec.cs ByteCursor results/BinaryWriter parameters. Failing Oracle objects-collections/nested NULL-cross-bitmap/empty/Unicode/wide NUMBER/RAW/DATE-TIMESTAMP/next-field fixtures; reject MySQL/bad lengths-scalars/depth-member budgets/type mismatch. ComplexValueCodecTests.cs RED→GREEN/full build-tests/review/commit; no public complex API yet.
+- [x] Dictionary/lifecycle: exact schema+type full nested descriptions; define same-session queries/reader-transaction/cache-refresh before construction. No hidden Java-style second query connection or schema-blind uppercase-name cache. Ledger same-session dictionary/construction evidence; column/parameter/output follows.
 
-本子模块实施决定：公开GetComplexType/GetComplexTypeAsync(schemaName, typeName, transaction)和ClearComplexTypeCache(transaction)，名称按字典原样精确绑定，不解析SQL标识符或同义词。OceanBaseComplexType/Members保存不可变完整布局，CreateValue构造OceanBaseComplexValue并检查成员/嵌套类型、精确标量、字节与成员预算；RAW及返回数组复制，嵌套必须使用对应描述构造的值。仅Oracle模式；当前不支持LOB/cursor/national charset成员及循环类型图，明确拒绝。
+Decision: public GetComplexType/GetComplexTypeAsync(schemaName,typeName,transaction),ClearComplexTypeCache(transaction). Exact dictionary-bound names, no SQL-identifier/synonym parsing. Immutable OceanBaseComplexType/Members/CreateValue→OceanBaseComplexValue validates members/nested types/exact scalars/byte-member budgets. Copy RAW/returned arrays; nested values require corresponding descriptor. Oracle only; reject LOB/cursor/national/cyclic graphs.
 
-同一物理会话预约覆盖ALL_TYPES及ALL_TYPE_ATTRS/ALL_COLL_TYPES所有查询；显式绑定当前事务，固定原会话/事务epoch，每个查询沿用连接CommandTimeout，异步入口使用真实异步I/O及调用方取消。活动reader/预约/环境事务不发包；结果列形状、owner/name/kind、对象属性总数与连续序号、集合唯一元素均核验。类型图最多32层；当前会话缓存累计最多65535成员、65535命名类型及4MiB字典UTF8文本，额度满时可清空重载。失败不发布部分缓存或扣减额度。缓存键为区分大小写的schema+type二元组；关闭重开、事务切换及显式清空使全部旧描述/值失效，清空同时处理父子依赖。外部DDL不自动感知，业务须在无活动reader时清空并重载；不伪造服务端类型version。公开值快照可以在失效后检查，但不能再构造或绑定。该子模块独立测试/五资产消费、全量build/Unit/Consumer/DI及只读走查后提交；公共复杂列/参数仍由下一协议子模块接入。
-- [x] 命名复杂结果读取：列扩展metadata、执行时原会话字典快照、二进制行边界、SequentialAccess当前字段物化、分页metadata一致性及五资产同步/异步标准/OB20消费。schema/type精确匹配执行前预载的字典，不在reader内查询；保留线上version而不假装字典能证明版本，外部DDL仍须显式刷新。文本复杂结果明确拒绝，包括NULL；未预载/失效字典拒绝，不按byte[]/string跳过。新增48项单测、扩展20项五资产消费，完整编译/Unit/Consumer/DI及独立走查见进度台账。每层保留原会话错误/取消/结果未知契约。
-- [x] 命名参数附加类型头及D02输出声明/原子发布，沿用原会话/缓存有效性及输出完整终态契约，证据见进度台账“D05命名复杂参数与输出绑定”。未声明复杂输出（含NULL）继续拒绝。
-- [x] 匿名集合：标量结果、工厂标量/命名元素输入及匿名标量三输出方向已接入；未知布局的匿名复杂元素结果/输出明确拒绝，符合原边界。
-- [x] 完整D05本地范围复核及文档同步：全部已约定本地功能已接入，Release全目标、完整Unit/Consumer/DI及独立走查通过，见下文匿名输出与进度台账。真实字典/DDL可见性、服务端往返和版本/OBProxy资源语义单独延期，D05正式状态待验证。
+One physical reservation spans ALL_TYPES/ALL_TYPE_ATTRS/ALL_COLL_TYPES, explicit transaction/original session-epoch, connection CommandTimeout per query/true async caller cancellation. Busyreader/reservation/ambient sends nothing. Validate result shape/owner-name-kind/attribute count-contiguous ordinals/one collection element. Depth<=32; session cache<=65535 members/65535namedtypes/4 MiB UTF8dictionary. Clear/reload at capacity; failures publish/debit nothing. Case-sensitive(schema,type) keys. Reopen/transaction change/explicit Clear invalidate all old descriptors-values, including dependencies. ExternalDDL requires idle Clear/reload; no fabricated server-version. Invalidated snapshots inspectable but no new construction/binding. Independent tests/five assets/full build-tests/read-only review/commit; public columns/parameters later.
+- [x] Named complex columns: extended metadata/preexecution dictionary snapshot/binary boundaries/SequentialAccess current-field materialization/paging consistency/five-asset sync-async standard-OB20. Match exact preloaded schema/type, no reader queries. Preserve wire version without claiming dictionary proves it; external DDL explicit refresh. Text even NULL/unloaded-stale descriptors reject, no byte[]-string skipping.48 new Unit/20 extended Consumer/full/review ledger. Original errors/cancel/unknown semantics at every layer.
+- [x] Named additional parameter heads/D02 output declarations/atomic publication, same-session-cache/full-terminal rules; ledger named-binding evidence. Undeclared complex OUT including NULL rejects.
+- [x] Anonymous collections: scalar results,factory scalar/named-element input,three scalar-output directions integrated. Anonymous complex result/output without full layout rejects by design.
+- [x] Full D05 scope review/docs/all-target/full tests/review pass; anonymous-output/ledger evidence below. Live dictionary/DDL visibility/round-trip/version-OBProxy resources deferred; D05 pending.
 
-#### D05 命名参数及输出实施
+#### D05 Named Parameters and Outputs
 
-本子模块新增Parameter.ComplexType声明；非NULL输入/InputOutput可从不可变值推断，NULL/Output/ReturnValue须保留显式描述。ARRAY和STRUCT均使用type160、长度编码schema/type及version0的命名类型头，不发送匿名元素头；固定OceanBase服务端`5e8a63d29dae9fde5e962b8fcc7b167d438fc343`的obmp_stmt_execute.cpp中decode_type_info读取但不保存version，命名类型按schema/name解析OBJECT或COLLECTION。0仅表示未携带字典版本，外部DDL仍须显式刷新。
+Parameter.ComplexType declaration; nonNULL Input/InputOutput infer immutable value, NULL/Output/ReturnValue require explicit descriptor. ARRAY/STRUCT use160,length-encoded schema/type/version 0 named head, no anonymous-element head. Pinned OceanBase5e8a63d29dae9fde5e962b8fcc7b167d438fc343 obmp_stmt_execute.cpp decode_type_info reads/discards version and resolves OBJECT/COLLECTION by schema/name.0 means no dictionary-version claim; external DDL refresh unchanged.
 
-1. 先固定混合标量/对象/集合/NULL参数的独立字节测试及声明边界失败，再改共用参数编码；头先于全部值，总字节预算包含附加类型头，复杂值直接写入既有writer。
-2. 在命令取得会话租约前核验描述所属连接、原物理会话、事务代次和缓存身份；独立Prepare不提前验证尚未赋值的参数。跨连接、重开、Clear及事务切换发包前拒绝。
-3. 输出声明随执行快照保存，metadata阶段逐列精确核验，含NULL与零行；复用既有全响应成功后原子发布，错误/取消/提前关闭保留旧值。未声明复杂输出继续拒绝。
-4. 补同步/异步公开执行与五资产标准/OB20消费；全目标Release编译、完整Unit/Consumer/DI、独立只读走查、文档同步及diff检查通过后本地提交。匿名集合另行推进，实库/异机继续暂缓，不关闭D05或整体目标。
+1. Failing independent mixed scalar-object-collection-NULL bytes/declaration boundaries; shared encoder, all heads before values, budget includes heads, complex writes existing writer.
+2. Before lease validate owning connection/original session/epoch/cache identity. Prepare-only does not prevalidate unassigned values. Crossconnection/reopen/Clear/transaction change reject pre-send.
+3. Snapshot output declarations, match every metadata column including NULL/zero rows. Existing atomic full-response publication; failure/cancel/early close preserves values; undeclared complex OUT rejects.
+4. Sync-async/five-asset standard-OB20/full build-tests/review/docs-diff/local commit. Anonymous later/live-other-machine deferred; no D05/overall closure.
 
-本子模块已完成本地实现、独立走查及复查：核心五/DI三目标Release编译0警告/错误，完整Unit2286（新增79项）、Consumer744（扩展既有20项）、DI8全通过且零跳过。输出NULL/零行metadata、声明快照、错误/取消/早关原子发布及原会话绑定边界证据见进度台账；匿名集合和真实验收仍开放，D05整体继续进行中。
+Local complete/re-reviewed: five-three Release 0 warnings/errors; Unit2286(new 79)/Consumer744(20 existing extended)/DI8 pass,no skips. Ledger covers NULL-zero metadata/snapshots/atomic errors-cancel-close/original session. Anonymous/live remained; D05 in progress.
 
-#### D05 匿名标量集合结果实施
+#### D05 Anonymous Scalar Collection Results
 
-固定Java基线OceanBaseConnection.getAnonymousArrayComplexType只在空typeName且非complex元素时由列metadata创建单元素布局；BinaryRowProtocol按结果bit2位图及标量长度读取。沿用已有codec接入NUMBER（0/3/246映射规范NUMBER布局）、VARCHAR2(253)、CHAR(254)、RAW(203)、DATE(12)、TIMESTAMP(202)，其他元素或无布局的匿名complex明确拒绝。只参考行为，不复制源码，不在reader中查询字典。
+Pinned OceanBaseConnection.getAnonymousArrayComplexType creates single-element layout only with empty typeName/noncomplex element; BinaryRowProtocol usesbit2 result bitmap/scalar lengths. Support NUMBER(0/3/246 normalized),VARCHAR2(253),CHAR(254),RAW(203),DATE(12),TIMESTAMP(202); reject other/no-layout complex. No code port/reader dictionary queries.
 
-1. 先写metadata/逐字节边界及公开普通/顺序读取失败测试；匿名描述保留线上schema和空TypeName，新增IsAnonymous，reader DataTypeName为ARRAY，不伪造数据库类型名。
-2. 复用既有codec、预算、字段流和分页metadata匹配；NULL、空集合、后续列、多结果及取消/故障仍遵守相同生命周期。匿名结果描述为只读快照，CreateValue及参数/输出绑定明确拒绝，匿名构造/绑定另行推进，不能由结果decoder意外放行。
-3. 补五资产标准/OB20公开消费、全目标Release编译、完整Unit/Consumer/DI、独立走查、文档同步及本地提交。D05整体保持进行中；实库/异机继续暂缓。
+1. Failing metadata/byte boundaries/public default-sequential; preserve wire schema/empty TypeName,IsAnonymous,DataTypeNameARRAY without invented name.
+2. Existing codec/budgets/field streams/paging matches/NULL-empty-next column-multiresult-cancel-errors. Result descriptors readonly; CreateValue/parameter-OUT reject until separate factory integration, no accidental decoder bypass.
+3. Five-asset standard-OB20/all-target/full tests/review/docs/local commit; D05 in progress/live-other-machine deferred.
 
-本子模块本地实现及独立复查完成：Release核心五/DI三目标编译0警告/错误，完整Unit2331（新增45项、移除0）、Consumer744（扩展既有20项）、DI8全通过且零跳过。复用codec预算并覆盖超限、取消、成功游标页与后续元素/version变化；完整回归发现的既有LOB测试发送/关闭竞态已按真实拒绝边界修复，另加精确协议异常断言。红绿、完整回归及走查证据见进度台账；匿名构造/绑定及D05整体仍开放。
+Local five-three Release 0 warnings/errors; Unit2331(new 45,removed 0)/Consumer744(20 extended)/DI8 pass,no skips. Shared budgets/overflow/cancel/successful pages/later-element-version changes. Existing LOB send-close race fixed against actual rejection boundary with exact protocol-exception assertion. Ledger red-green/full/review; construction/binding/D05 then open.
 
-#### D05 匿名集合构造与输入绑定实施
+#### D05 Anonymous Collection Construction and Input Binding
 
-本子模块由连接提供`CreateArrayType(string elementTypeName, OceanBaseTransaction? transaction = null)`，标量名称仅接受不区分大小写的NUMBER、VARCHAR2、CHAR、RAW、DATE、TIMESTAMP，不推断别名或隐式查询字典；另提供`CreateArrayType(OceanBaseComplexType elementType, OceanBaseTransaction? transaction = null)`，将原会话已加载的命名对象/集合包装为匿名集合。根schema/typeName均为空，标量成员保存规范类型名及布局，命名成员保留原描述；不接受没有完整嵌套身份的匿名元素类型。公开值由既有CreateValue构造，RAW复制、NULL/空集合、嵌套精确描述及总预算沿原契约。
+Connection `CreateArrayType(string elementTypeName, OceanBaseTransaction? transaction = null)` accepts case-insensitive NUMBER/VARCHAR2/CHAR/RAW/DATE/TIMESTAMP only, no aliases/implicit queries. `CreateArrayType(OceanBaseComplexType elementType, OceanBaseTransaction? transaction = null)` wraps same-session preloaded named objects/collections. Root schema/type empty; scalar members canonical layout, named members original descriptor. Reject anonymous element types lacking full nested identity. Existing CreateValue/RAW copies/NULL-empty/exact nesting/budgets.
 
-协议依据为固定Java基线`OBArrayParameter.storeArrayTypeInfo`与`ComplexUtil.getMysqlType`，以及固定OceanBase服务端`obmp_stmt_execute.cpp`的decode_type_info及L761–806空类型名分支：匿名头使用160、空schema/type、version0及元素字节；命名复杂元素使用160并跟随该元素schema/type/version0。只参考协议行为，不复制源码；不沿用Java以类型名长度填写元素version的实现。值正文仍使用现有集合codec和参数bit0位图，全部类型头先于全部值，头/值共享64MiB-10预算。
+References: pinned OBArrayParameter.storeArrayTypeInfo/ComplexUtil.getMysqlType, OceanBase obmp_stmt_execute.cpp decode_type_info/L761–806 empty-name branch. Anonymous160/empty schema-type/version 0/element byte; named complex element160+its schema-type-version 0. Do not copy Java's type-name-length-as-element-version. Existing collection body/bit0/all-heads-first/shared64 MiB-10 budget.
 
-- [x] 在`AnonymousCollectionParameterTests.cs`先写缺API红编译与独立字节断言：六标量、NULL/空、混合参数、命名对象/集合元素头、严格成员及无效声明；复用原codec预算测试，不重复底层算法。
-- [x] 修改`OceanBaseConnection.ComplexTypes.cs`的上下文复用和两个工厂；`ValidateComplexBinding`允许同原context的工厂匿名根，但命名类型仍需缓存引用身份。Clear、跨连接、物理会话重开及事务epoch变化均发包前拒绝；活动reader及环境事务不查询或发包。
-- [x] 在`PreparedParameters`编码匿名元素附加头；只有带有效会话context的Input可绑定，结果解码得到的只读匿名描述以及Output/InputOutput/ReturnValue继续明确拒绝，匿名输出契约另行推进。`OceanBaseComplexType`更新公开说明；不新增依赖或伪造字典条目。
-- [x] 同步/异步公开普通预处理及PrepareExecute输入、五资产标准/OB20消费覆盖实际发送与复用；完整Release编译/Unit/Consumer/DI、独立只读走查及修复、文档同步、diff检查后本地提交，不推送。D05整体保持进行中，实库/异机继续暂缓。
+- [x] AnonymousCollectionParameterTests.cs missing API RED compile/independent bytes: six scalars,NULL-empty,mixed,named object-collection heads,strict members-invalid declarations; reuse budget tests.
+- [x] OceanBaseConnection.ComplexTypes.cs factories/context reuse. ValidateComplexBinding permits same-context factory anonymous root; named requires cached reference. Clear/cross-connection/reopen/epoch rejects pre-send; busy reader/ambient no query/send.
+- [x] PreparedParameters anonymous element heads; valid-context Input only then. Readonly result descriptors/Output-InputOutput-ReturnValue explicitly reject pending output contract. Update OceanBaseComplexType docs; no dependency/fake dictionary.
+- [x] Sync-async ordinary prepare/PrepareExecute/five-asset standard-OB20/reuse/full build-tests/review-fix/docs-diff/local commit,no push. D05 then in progress/live-other-machine deferred.
 
-本子模块完成本地实现及独立走查：Release核心五/DI三目标0警告/错误，完整Unit2363（新增32、移除0）、Consumer744、DI8全通过且零跳过。同步/异步普通预处理及PrepareExecute、五资产标准/OB20消费，以及Clear/跨连接/重开/事务边界均已覆盖；详细证据见进度台账。匿名输出与完整D05复核继续推进，整体目标未完成。
+Local: five-three Release 0 warnings/errors; Unit2363(new 32,removed 0)/Consumer744/DI8 pass,no skips; ordinary prepare/PrepareExecute/five assets/Clear-cross-connection-reopen-transaction covered. Ledger details; anonymous OUT/full D05 review next, overall incomplete.
 
-#### D05 匿名标量集合输出实施
+#### D05 Anonymous Scalar Collection Outputs
 
-沿用连接CreateArrayType的六种标量布局、显式ComplexType声明和原会话/事务/缓存代次。Output/ReturnValue不推断旧值，InputOutput可从工厂值推断；只读结果描述仍不能绑定。匿名metadata仅提供元素码，标量按既有NUMBER规范化匹配，不将无类型名的schema当命名身份；响应保留原metadata，值绑定执行快照的工厂描述。匿名复杂元素160缺少完整结果身份，仍在发包前拒绝输出，不从调用方猜测未知结果结构。命名输出继续要求原字典描述引用，不能被匿名匹配放宽。
+Reuse six scalar factories/explicit ComplexType/session-epoch-cache. Output/ReturnValue never infer old Value; InputOutput may infer factory value. Readonly result descriptors cannot bind. Anonymousmetadata only element code; normalize NUMBER, not treat empty-name schema as named identity. Retain response metadata, bind values to snapshotted factory descriptor. Element160 lacks full response identity and rejects output pre-send, never guess layout. Named output still exact cached dictionary reference.
 
-- [x] 新AnonymousCollectionOutputTests.cs固定同步/异步三方向、六标量、NULL/空/零行、错误metadata（含NULL/零行）和混合输出原子发布；先红后绿，扩展五资产标准/OB20实际消费。
-- [x] PreparedParameters只对无会话描述或匿名复杂元素输出拒绝；ResultColumn与OracleCommandPlan核验匿名标量布局并使用执行快照描述，沿用既有完整终态发布，不新增值容器或完整payload副本。
-- [x] Clear/重开/跨连接及事务代次继续执行前拒绝；补匿名输出定向失效与错误/取消/早关保持旧值。更新旧Input-only测试/说明，不移除已有案例。
-- [x] Release全目标编译、完整Unit/Consumer/DI、独立只读走查及必要修复、同步README/架构/台账、diff检查后本地提交。实库及异机继续暂缓，不据此关闭整体目标。
+- [x] AnonymousCollectionOutputTests.cs RED→GREEN: sync-async/three directions/six scalars/NULL-empty-zero rows/bad metadata including NULL-zero/mixed atomic OUT; five-asset standard-OB20 actual consumers.
+- [x] PreparedParameters rejects context-free/anonymous complex OUT only; ResultColumn/OracleCommandPlan validate anonymous scalar layout/snapshot descriptor/existing full terminal publication. No container/full payload copy added.
+- [x] Clear/reopen/cross-connection/epoch reject preexecute; targeted invalidation/error-cancel-early close retains values. Update Input-only tests/docs without removal.
+- [x] All-target/full tests/independent review-fix/README-architecture-ledger/diff/local commit; live-other-machine deferred, overall open.
 
-本轮结果：Release核心五/DI三目标0警告/错误，完整Unit2434（新增71、移除0）、Consumer744、DI8全通过且零跳过。独立走查及完整D05需求对应复核无阻断；本地约定范围实现完成，正式状态待验证，下一本地模块D06。匿名复杂元素无身份输出限制仍符合既有未知布局拒绝契约；真实字典/DDL、OceanBase/OBProxy及异机验收继续暂缓，整体目标未完成。
+Results: five-three Release 0 warnings/errors; Unit2434(new 71,removed 0)/Consumer744/DI8 pass,no skips. Review/full D05 mapping no blockers. Local agreed scope complete/pending verification; next D06. Anonymouscomplex OUT without type identity restriction matches unknown-layout rejection; live dictionary-DDL/OceanBase-OBProxy/other-machine deferred, overall incomplete.
 
-### D06 数组绑定本地实施
+### D06 Array Binding: Local Implementation
 
-完整目标仍包括bulk/array binding、部分成功、失败位置、逐条更新计数，以及D02移交的多行OUT/RETURNING；C06逐条DbBatch不能替代此功能。先按协议请求、响应/结果、公开执行及完整矩阵分模块交付，每模块完整验证并提交；D06在公开链路及全部本地约定功能完成前保持进行中。
+Full scope bulk/array binding,partial success/failure position/per-entry counts,D02 multirow OUT-RETURNING; sequential DbBatch is not a substitute. Deliver request/response/public/full matrix modules with full verification/commit each. D06 in progress until public/agreed local scope complete.
 
-固定OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343` 的obmp_stmt_prexecute.cpp（L72、L173、L336、L1135、L1155、L1180、L1306）及obmp_stmt_execute.cpp（L239、L1742）为主要依据，Java固定基线ComStmtPrepareExecute.writeCmdArrayBinding仅辅助核对。PrepareExecute数组绑定由iteration-count=2触发，不使用旧COM_STMT_EXECUTE的0x08/0x10头标志；所有参数为相同正行数的匿名集合，根不为NULL，元素可NULL，头先于各列正文。一个元素也使用iteration=2。DML使用exec_mode=0x80（OCI_BATCH_ERRORS）保留逐项响应并禁用服务端聚合batch优化，不沿用Java的0x01而伪造逐行计数；PL不支持save-exception，沿服务器停止/输出语义处理。
+Primary pinnedOceanBase5e8a63d29dae9fde5e962b8fcc7b167d438fc343 obmp_stmt_prexecute.cpp(L72,173,336,1135,1155,1180,1306),obmp_stmt_execute.cpp(L239,1742); Java ComStmtPrepareExecute.writeCmdArrayBinding secondary. PrepareExecute array mode iteration-count 2, not oldEXECUTE0x08-0x10 header flags. All parameters equal positive-count anonymous collections,nonnull roots/nullable elements,heads before column bodies; one element also iteration2. DML exec_mode0x80(OCI_BATCH_ERRORS) preserves item responses/disables server aggregation, not Java0x01 with fabricated counts. PL no save-exception, follows stop/output semantics.
 
-DML成功响应首列是该项影响行数；错误响应首列是0起始失败位置；PL成功首列也是位置，不能解释成更新数。响应依序携带error_code、可选多列输出和末列error_message，尾OK给出累计影响数。后续结果模块须核验列结构、行数/位置、错误代码、NULL和终态，保留可证明的成功前缀及结果未知，不自动提交/回滚或重放；公开执行须要求Oracle、显式事务及现有PrepareExecute版本门槛，并使用原会话/取消/超时/statement清理，不另建连接。多行OUT/RETURNING不能强塞入D02单行输出容器。
+DMLsuccess first column=affected rows; error first column=zero-based failed position; PLsuccess first column=position, not count. Responses error_code/optional outputs/finalerror_message,tail OK cumulative affected rows. Validate shape/row count-position/code/NULL/terminal, retain proven prefix/unknown without autocommit-rollback-replay. Public requires Oracle/explicit transaction/existing PrepareExecute version gate/session-budget-cleanup, no new connection. MultirowOUT cannot fit D02 scalar container.
 
-#### D06 请求编码子模块
+#### D06 Request Encoding Submodule
 
-- [x] 在OracleArrayBindingRequestTests.cs先固定缺API红编译：精确六标量/混合列/位图跨字节/全部元素NULL/单行/命名复杂元素、完整独立报文、同正行数及无效声明；保留D02普通报文不变。
-- [x] OraclePrepareExecutePacket.BuildArray接受已冻结且归一化为Input的列快照，复用PreparedParameters和集合codec，验证非空参数列、工厂匿名描述、非NULL根及一致正行数；增加OceanBaseComplexValue内部Count避免为计数复制整数组。共享BuildCore只改变iteration2和exec_mode0x80，复用SQL UTF8长度、CRC及最终整包预算，此内部方法不直接开放公共入口，完整执行接入见下节。
-- [x] 请求编码只负责列形状和字节，原连接/事务/缓存核验由后续公共StartCommand执行，不能据内部编码宣称公共数组绑定或实库兼容。完整执行模块已接入逐项成功/失败、多行输出、公开同步/异步和五资产标准/OB20、事务/故障/取消边界矩阵，D06整体不因请求编码关闭。
-- [x] Release全目标编译、完整Unit/Consumer/DI、独立只读走查、文档同步与diff检查后本地提交。真实数据库/OBProxy及异机仍暂缓。
+- [x] OracleArrayBindingRequestTests.cs missing API RED compile: six scalars/mixed/cross-bitmap/all NULL/single row/named complex/full independent bytes/equal positive count/invalid declarations; ordinaryD02 unchanged.
+- [x] OraclePrepareExecutePacket.BuildArray takes frozen normalized Input columns, reuses encoder/codec; validates nonempty columns/factory anonymous/nonnull roots/equal positive count. Internal OceanBaseComplexValue.Count avoids array copy for counting. BuildCore changes iteration2/execmode0x80 only, shares SQLUTF8/CRC/final budget. No public API yet; complete execution below.
+- [x] Encoder owns shape/bytes; later StartCommand owns connection-transaction-cache checks. No public/live claim from encoding. Full execution later covers items/multirow/public/five assets/standard-OB20/transaction-fault-cancel matrix; encoder alone never closes D06.
+- [x] All-target/full tests/review/docs-diff/local commit; real database-OBProxy/other-machine deferred.
 
-#### D06 完整执行链路（本轮暂停边界）
+#### D06 Complete Execution Pipeline (Pause Boundary for That Round)
 
-用户要求完成整个D06后再更新进度、提交并暂停，不在内部请求编码子模块处停止。
+User required complete D06 before progress update/commit/pause, not stopping at internal encoding.
 
-- [x] 公开五资产均提供`OceanBaseCommand.ExecuteArray(rowCount)`及`ExecuteArrayAsync(rowCount, token)`。要求1–65535行、Oracle模式、显式事务及Use Oracle Prepare Execute；复用既有版本门槛、原会话、类型缓存代次、命令租约、取消/超时及延迟statement关闭，不另建连接，不自动提交/回滚或重放。
-- [x] 参数按Oracle绑定顺序冻结；Input/InputOutput使用工厂匿名集合值，Output/ReturnValue显式声明工厂匿名集合类型并生成NULL元素占位。根和长度严格验证；支持D05六标量及已预载命名复杂元素；输出按元素类型核验，不能把多行输出塞回D02标量容器。
-- [x] 内部消费`sql_no,error_code,[outputs],error_message`，DML无RETURNING逐项计数与尾累计数核对；PL成功与RETURNING首列按位置处理，逐项计数为null，避免伪造计数。多行输出按输入位置分组、保留NULL和零行；错误码保留，服务端消息不公开，避免泄露绑定值。支持返回行内负数内部错误码；失败及未知项不填更新数。
-- [x] 公开不可变`OceanBaseArrayBindingResult.Items`及完整终态累计数；`ArrayBindingResult`保留最近已启动数组执行的可证明部分结果，未发送SQL时为null，未知后缀为Unknown。完整响应及OB20边界、取消与Busy状态验证前不发布参数；成功后每个输出参数Value为object[][]，第一维输入位置、第二维该位置返回的多行。快照独立复制RAW字节，结果输出总值数最多65535、原始字段总字节受既有包上限约束。
-- [x] 测试请求独立字节、响应形状/位置/计数/NULL/预算、多行输出和原子终态，公开同步/异步、部分错误、PL停止、事务绑定、无效声明不发包、取消/超时/断流；五资产隔离消费覆盖标准协议及OB20成功/尾附加数据。Release全目标及完整Unit/Consumer/DI通过、独立走查、同步README/架构/台账并提交；之后按用户要求暂停，下次从D07等开放模块继续。
+- [x] Allfive assets expose `OceanBaseCommand.ExecuteArray(rowCount)`/`ExecuteArrayAsync(rowCount, token)`. Rows1–65535,Oracle/explicit transaction/UseOraclePrepareExecute; existing version/session/cache epoch/lease/cancel-timeout/delayed close. No new connection/automatic commit-rollback/replay.
+- [x] Freeze Oraclebindorder. Input/InputOutput factory anonymous values; Output/ReturnValue explicit factory anonymous descriptor plus NULL placeholders. Strict root/count; six D05 scalars/preloaded named complex; validate output element type, never D02scalar container.
+- [x] Consume `sql_no,error_code,[outputs],error_message`. DMLwithoutRETURNING checks item/tail counts; PL/RETURNING first column=position,per-item count null. Group multirow OUT by input position,preserve NULL-zero rows,codes; hide server messages to avoid bind leakage. Accept negative internal row error codes; failed/unknown counts unset.
+- [x] Immutable OceanBaseArrayBindingResult.Items/full terminal total. ArrayBindingResult retains provable partial results of latest started array SQL; null before SQL send,Unknown suffix. Publish parameters only after full response/OB20/cancel-Busy validation. SuccessfulOUT Value=object[][] indexed input position then returned rows. CopyRAW snapshots; <=65535outputvalues,raw field bytes existing packet bound.
+- [x] Independentrequestbytes/shape-position-count-NULL-budget/multirow-atomic terminal/public sync-async/partial errors/PLstop/transaction/pre-send invalid/cancel-timeout-disconnect; five assets standard-OB20 success/trailing-body. All-target/full tests/review/README-architecture-ledger/commit, then user-requested pause; resume D07/open modules next time.
 
-### D07 客户端预处理回退实施
+### D07 Client-side Prepare Fallback
 
-按既有D07安全文本编码及仅明确unsupported prepare回退的要求继续本地开发；不重新设计默认执行方式。命令级`AllowClientSidePrepareFallback`默认false，不增加连接串别名或依赖。仅自动prepare首响应为1295/HY000、完整消费且通过标准/OB20边界验证后，在同租约、事务及总超时预算内发送一次COM_QUERY；显式Prepare、FetchSize、Oracle PrepareExecute和执行阶段错误不回退，不缓存不支持结论或重放SQL。
+Continue the existing safe text encoding and fallback only for explicit unsupported-prepare responses. Keep the default execution model. Command-level `AllowClientSidePrepareFallback` defaults to false; add no connection-string alias or dependency. Only an automatic prepare whose first response is 1295/HY000, fully consumed and validated through the standard/OB20 boundary, permits one COM_QUERY under the same lease, transaction, and total timeout. Explicit Prepare, FetchSize, Oracle PrepareExecute, and execution-stage errors never fall back. Do not cache unsupported conclusions or replay SQL.
 
-范围贯通ParameterBindingPlan、ClientPreparedSql、PreparedStatement、CommandExchange、OceanBaseCommand及Unit/五资产Consumer和README/架构/台账。Oracle复用原绑定位置，避免重新解释q/nq字面量；MySQL仅接受在反斜杠开/关及ANSI_QUOTES下占位符位置均一致的SQL，拒绝执行式注释或不确定引号。所有插入值加括号隔离词法边界，MySQL非NULL字符串因缺可信会话collation明确拒绝；Oracle双写单引号、CAST为VARCHAR2且拒绝NUL，RAW使用HEXTORAW。基础输入整数/有限浮点/精确decimal/二进制/NULL及Oracle普通字符串可回退；日期、时区、national、JSON、LOB、复杂值及输出仍要求服务端预处理，NULL声明也不绕过。Oracle文本保守限制4000字节、RAW2000字节，最终SQL含命令字节不超过64MiB。回退SQL可能出现在服务端SQL日志，驱动日志仍不记录SQL或参数。
+Changes span ParameterBindingPlan, ClientPreparedSql, PreparedStatement, CommandExchange, OceanBaseCommand, Unit/five-asset Consumer tests, README, architecture, and ledger. Oracle reuses binding positions without reinterpreting q/nq literals. MySQL accepts only SQL with identical placeholder positions under backslash on/off and ANSI_QUOTES; reject executable comments and ambiguous quotes. Parenthesize inserted values to isolate lexical boundaries. Reject nonNULL MySQL strings without trusted session collation. Oracle doubles single quotes, casts to VARCHAR2, rejects NUL, and uses HEXTORAW for RAW. Basic Input integers, finite floats, exact decimal, binary, NULL, and ordinary Oracle strings may fall back. Dates, zones, national strings, JSON, LOB, complex values, and outputs still require server preparation, even when NULL. Oracle text is limited to 4000 bytes/RAW2000 bytes; final SQL plus command byte<=64 MiB. Server SQL logs may contain fallback literals; driver logs still omit SQL/parameters.
 
-- [x] 编码先红后绿：绑定位置、重复名称、注释/引号、SQL_MODE歧义、Unicode/注入字符、独立精确字面量、类型/预算拒绝。
-- [x] 执行先红后绿：默认/显式开关、精准错误及阶段、原会话/事务、同步/异步文本reader、快照、错误/取消/超时/断流不重放。
-- [x] 五资产标准/OB20隔离消费、完整Release/Unit/Consumer/DI、独立只读走查及修复、同步文档和diff检查后提交，不推送。实库与异机继续暂缓；不据本地夹具关闭真实验收。
+- [x] Encoder red→green: positions, repeats, comments/quotes, SQL_MODE ambiguity, Unicode/injection characters, independent exact literals, type/budget rejection.
+- [x] Execution red→green: default/opt-in, exact error/stage, original session/transaction, sync/async text reader, snapshots, no replay after errors/cancel/timeout/disconnect.
+- [x] Five-asset standard/OB20 isolated consumption, full Release/Unit/Consumer/DI, independent review/fixes, docs/diff, local commit without push. Live/other-machine deferred; fixtures never close real acceptance.
 
-本地范围完成：Release核心五/DI三目标0警告/错误，完整Unit2597（新增42）、Consumer804（新增30）、DI8全部通过，0失败/跳过；详见台账。MySQL非NULL字符串仍需可信会话collation，特殊类型及输出不回退。D07正式状态待验证，D08/D09及其余环境/发布关口保持开放。
+Local scope complete: five-core/three-DI Release 0 warnings/errors; Unit2597(new 42), Consumer804(new 30), DI8 pass, zero failures/skips; ledger details. MySQL nonNULL strings still require trusted collation; special types/outputs never fall back. D07 pending verification; D08/D09/environment/release gates open.
 
-### D08 地址发现与轮转选址实施
+### D08 Address Discovery and Round-robin Selection
 
-目标：落实D08的地址来源、选址、模式重验及已发送SQL不重放要求；复用C02共享PhysicalSession链路，不增加第二套建连流程。技术边界仍为核心五目标/现代数据源三目标、无新依赖、当前分支本地测试/走查后提交，实库及异机暂缓。按架构第6节和D08条目执行，接口细节由本轮实现确定。
+Implement address sources, selection, mode revalidation, and no replay through C02 PhysicalSession, without another connection pipeline. Five core targets/three modern data-source targets, no dependencies, current branch/local tests/review/commit; live/other-machine deferred. Follow architecture§6/D08; choose API details here.
 
-设计约定：
+Design:
 
-- 连接串新增`Load Balance=Sequential|RoundRobin`，默认Sequential保持C02行为。RoundRobin只轮换每次显式Open的首选地址，然后环形遍历剩余候选一次；只有TCP socket建连失败可尝试下一项。游标按数据源共享且线程安全；直接连接按实例跨Close/Open保留，不使用全局静态轮转器。重新设置连接串或地址源重置直接连接轮转器；失败的Open也消耗一次选址。
-- 五目标公开`IOceanBaseAddressResolver.Resolve(CancellationToken): string`和`ResolveAsync(CancellationToken): Task<string>`。直接连接`AddressResolver`仅关闭时可修改；现代builder的`UseAddressResolver(IOceanBaseAddressResolver?)`在Build冻结引用，同源连接不可改写。resolver由调用者持有、释放并保证并发安全；同步方法必须合作取消，异步方法须及时返回Task。驱动不在锁内调用用户代码，也不以同步方法代替异步方法。
-- 每次Open在同一总预算内调用resolver一次，非空结果按现有`Server`语法解析，省略端口继承Port；最多64KiB字符/256候选，完整验证后冻结为本次候选。配置Server仍必填并用于建连前诊断，解析结果替换本次地址列表；空/无效/抛错立即失败，不静默回退种子列表或使用上次结果。异步等待受取消/关闭/超时中断，迟到结果不能建连，迟到异常被观察；同步resolver必须响应传入token，返回后再次核验预算。
-- 地址来源是应用提供的可信服务发现适配器，可接OCP/注册中心；本轮不内置未约定格式的OCP/TNS/角色或只读路由。返回地址必须属于调用者信任的同一逻辑租户，TLS认证及ExpectedMode继续逐新会话核验，不能凭地址或缓存推断模式。驱动不拥有resolver，不记录resolver异常文本；应用抛出的异常仍通过现有InnerException向调用者保留。
-- 不改变已打开会话、事务、reader、statement或locator。断线后不调用resolver、不透明重连、不重放已发送SQL。业务故障后只允许调用者显式Close/Open创建新会话并重新握手/初始化。真实拓扑适配与协调器验收不因本地夹具通过关闭。
+- `Load Balance=Sequential|RoundRobin`, default Sequential retains C02. RoundRobin rotates the first candidate per explicit Open, then visits remaining candidates once circularly. Only TCP socket connection failure permits another. Thread-safe cursor shared by data source; direct connections retain per-instance cursors across Close/Open, never global. Replacing connection string/resolver resets the direct cursor; failed Open consumes a selection.
+- Five-target `IOceanBaseAddressResolver.Resolve(CancellationToken): string` and `ResolveAsync(CancellationToken): Task<string>`. Direct AddressResolver changes only while closed. Modern builder UseAddressResolver(IOceanBaseAddressResolver?) freezes its reference at Build; source-owned connections cannot override it. Caller owns/disposes and ensures concurrent safety. Sync resolvers must cooperate with cancellation; async must return Task promptly. No user code under locks or synchronous substitution for async.
+- Call the resolver once per Open within the same total budget. Parse nonempty output with Server syntax/inherited Port; maximum 64 KiB characters/256 candidates, fully validated/frozen. Configured Server stays mandatory for preconnection diagnostics; resolved addresses replace the list. Empty/invalid/error fails immediately, without seed/previous-result fallback. Cancellation/close/timeout interrupts async waits; late results cannot connect and late faults are observed. Sync resolvers must honor tokens; recheck budget after return.
+- Caller-trusted discovery adapters may use OCP/registries. No built-in undefined OCP/TNS/roles/read-only routing. Addresses must belong to a trusted logical tenant. Every new session revalidates TLS/authentication/ExpectedMode; never infer mode from addresses/cache. Driver does not own resolver or log its error text; existing InnerException retains application errors for callers.
+- Existing sessions/transactions/readers/statements/locators stay bound. Disconnect never invokes discovery, transparently reconnects, or replays. Explicit caller Close/Open creates a new authenticated/initialized session. Local fixtures do not close topology/coordinator acceptance.
 
-文件范围：新增公开resolver接口和内部EndpointSelector；修改ConnectionEnums、ConnectionStringBuilder/Options、PhysicalSession、Connection、DataSource/Builder；新增TopologyTests及五资产TopologyConsumerTests；同步README/架构/台账。
+Files: public resolver/interface, internal EndpointSelector, ConnectionEnums, builder/options, PhysicalSession, Connection, DataSource/Builder, TopologyTests/TopologyConsumerTests, README/architecture/ledger.
 
-审查重点：动态源空/恶意数据不能发包；共享轮转溢出及并发不失控；取消后迟到结果不能连网；身份/TLS错误不能切换；事务中断不能重放。对应任务如下（本人顺序实现，独立只读审查）：
+Review malicious/empty results before send, cursor overflow/concurrency, late results after cancellation, no address switch on identity/TLS failure, and no replay of interrupted transactions. Sequential implementation with independent review:
 
-- [x] 配置/选址先红后绿：严格枚举/默认/序列化/快照、三地址环形次序、计数器溢出和并发公平分配。`dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 -nr:false --filter FullyQualifiedName~Topology`；预期配置/API红编译或断言失败，完成后全部通过。
-- [x] 发现/建连先红后绿：两种Open仅调用匹配resolver方法，端口继承、每次重开刷新、静态列表替换/错误不回退；直接/数据源生命周期及冻结、并发轮转；等待时取消/关闭/超时及迟到结果/异常；认证模式/TLS拒绝、事务内断线结果未知且备用地址无连接。共用原总预算与原错误映射。
-- [x] 五资产同步/异步公开入口消费发现及轮转、标准/OB20成功和执行断流；完整Release/Unit/Consumer/DI、独立走查及必要红绿修复、同步文档/UTF8无BOM/CRLF/diff检查后统一提交D08模块，不推送。明确本地适配器机制与真实部署验收边界。
+- [x] Config/selection red→green: strict enum/default/serialization/snapshots, three-address order, overflow, concurrent fair allocation. `dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 -nr:false --filter FullyQualifiedName~Topology`; missing APIs/assertions fail first, then all pass.
+- [x] Discovery/open red→green: matching sync/async resolver calls, inherited ports, refresh per reopen, list replacement/no fallback, direct/source lifecycle/freeze, concurrent rotation, cancel/close/timeout/late results-faults, TLS/mode rejection, transaction disconnect unknown outcome without spare connections. Reuse budget/error mapping.
+- [x] Five-asset sync/async discovery/rotation, standard/OB20 success/disconnect, full validation, independent review/red-green fixes, docs/UTF8-no-BOM/CRLF/diff, one D08 commit/no push. State local adapter versus real deployment boundaries.
 
-本地范围完成：Release核心五/DI三目标0警告/错误，完整Unit2653（新增56）、Consumer844（新增40）、DI8均通过且零失败/跳过；旧案例移除0项。独立走查发现的锁内取消回调和异常释放问题已用红绿回归修复，发现后重置预算的变异也被测试检出。详细证据见台账。D08正式状态待验证，真实拓扑/数据库/OBProxy及异机继续暂缓，D09及其他开放项继续推进。
+Local complete: five-core/three-DI Release 0 warnings/errors; Unit2653(new 56), Consumer844(new 40), DI8 pass, zero failures/skips/removals. Review fixed callbacks under locks and exception cleanup; budget-reset-after-discovery mutation was detected. Ledger evidence. D08 pending; live topology/database/OBProxy/other-machine deferred. Continue D09/open work.
 
-### D09 XID值基础模块
+### D09 XID Value Foundation
 
-D09完整目标仍为显式XA、固定物理会话、阶段控制与恢复，真实事务协调器和两模式实库验收延期，TransactionScope继续拒绝。本模块先交付可独立消费和校验的不可变XID值，不把值类型存在等同于公开XA执行已支持；后续固定会话/阶段执行和恢复必须继续完成。依据固定Java基线OceanBaseXid及OceanBaseXaResource和OceanBase服务端5e8a63d29dae9fde5e962b8fcc7b167d438fc343的ObXATransID（src/storage/tx/ob_xa_define.h/.cpp），借鉴身份结构与两段各64字节上限，不复制实现。Java基线直接保留/返回输入数组，本驱动改为防御复制，防止协调器已登记的身份被外部修改。
+D09 includes explicit XA, pinned sessions, stages, and recovery. Real coordinator/both-mode live tests deferred; TransactionScope still rejects. First deliver an immutable XID value, without treating its existence as public XA execution support; stage/recovery follow. References: pinned Java OceanBaseXid/OceanBaseXaResource and OceanBase5e8a63d29dae9fde5e962b8fcc7b167d438fc343 ObXATransID(src/storage/tx/ob_xa_define.h/.cpp), identity/two64-byte limits only. Unlike Java's retained/returned arrays, defensively copy to protect coordinator identities.
 
-本模块设计决定：五目标公开sealed OceanBaseXid : IEquatable<OceanBaseXid>，唯一构造OceanBaseXid(int formatId, byte[] globalTransactionId, byte[] branchQualifier)，FormatId只读。FormatId保留完整有符号Int32格式号，仅拒绝XA保留的NULLXID -1；不擅自将其他负数当非法，后续MySQL编码按Java基线保留其32位无符号位模式、Oracle保留有符号值。gtrid为1–64字节，bqual为0–64字节，二者不可null且保留所有字节（含NUL/高位字节）。GetGlobalTransactionId()/GetBranchQualifier()返回新数组。Equals/GetHashCode按格式号、两段独立边界和完整字节定义身份，不依赖当前区域、不将文本当XID；默认对象字符串不输出身份正文，不增加隐式字符串/Guid转换或自定义序列化。后续恢复遇超出此公开域的身份必须明确失败，不截断或静默丢弃；服务端内部的Int64身份不据此宣称全部可用于XA协调器；恢复层须精确验证目标模式的32位表示。
+Five-target sealed OceanBaseXid:IEquatable<OceanBaseXid>, constructor(int formatId,byte[] globalTransactionId,byte[] branchQualifier), readonly FormatId. Preserve signed Int32 except reserved NULLXID=-1; other negatives valid. MySQL later preserves32-bit unsigned pattern as Java does; Oracle signed. gtrid1–64 bytes, bqual0–64, nonnull, all bytes including NUL/high bits. GetGlobalTransactionId/GetBranchQualifier return copies. Equality/hash includes format, separate boundaries, full bytes; culture independent, not text. Default ToString hides identity; no implicit string/Guid/custom serialization. Recovery outside this domain fails, never truncates/drops. Server Int64 identity does not imply all values usable by coordinators; validate target32-bit representation exactly.
 
-文件范围：新增src/OceanBaseConnector/OceanBaseXid.cs；tests/OceanBaseConnector.UnitTests/XidTests.cs固定边界/不可变/相等散列/任意字节；tests/OceanBaseConnector.ConsumerTests/XidConsumerTests.cs隔离加载五资产的公开API，既有ConsumerTests.NetStandard/NetStandardConsumerSample.cs补基线编译消费。沿原工程/依赖，无新配置、依赖或数据库访问；同名类不暴露执行入口。
+Files: src/OceanBaseConnector/OceanBaseXid.cs; UnitTests/XidTests.cs boundaries/immutability/equality/arbitrary bytes; ConsumerTests/XidConsumerTests.cs five isolated APIs; ConsumerTests.NetStandard/NetStandardConsumerSample.cs compile. No new config/dependencies/database access/execution API.
 
-- [x] 先写XidTests，执行dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 -nr:false --filter FullyQualifiedName~Xid，确认缺API红编译；实现最小值对象后定向全绿。校验null/长度/格式号、输入及输出数组修改、两段拼接相同但边界不同、不同格式/字节/长度、null/其他对象、字典查找及64+64全字节快照。
-- [x] 五资产实际公开消费验证边界、数组隔离、IEquatable/Equals/GetHashCode与默认字符串不泄露，Standard2.0辅助工程直接编译使用API；本机net10宿主不替代五运行时或异机验收。
-- [x] 完整Release五目标/DI三目标编译、完整Unit/Consumer/DI，独立只读代码及范围走查，修复必要问题并重验；同步README/架构/台账、UTF8无BOM/CRLF和diff检查后本地提交，不推送。D09仍进行中，下一模块接固定会话与控制阶段/恢复，不能因本模块通过关闭整体目标。
-本基础模块完成：Release核心五目标/DI三目标0警告/错误，完整Unit2664（新增11）、Consumer849（新增5）、DI8全部通过，0失败/跳过、旧案例移除0；独立只读走查无阻断。本轮全量另捕获D08关闭映射竞态和既有批次早关夹具竞态，均经定向/完整验证及走查修复，分别提交9493278/e601e23；详见台账。D09整体仍进行中，固定会话/控制阶段/恢复与真实验收继续开放。
+- [x] XidTests first: `dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 -nr:false --filter FullyQualifiedName~Xid` fails missing API; minimal value passes. Null/length/format/copy mutation/same concatenation-different boundary/format-byte-length differences/null-other objects/dictionary/64+64 snapshot.
+- [x] Five-asset boundaries/copies/IEquatable/equality/hash/no string leakage; Standard2.0 direct compilation. net10 host does not prove five runtimes/other machines.
+- [x] Five-core/three-DI Release/full tests/independent review/fixes/docs/UTF8-no-BOM/CRLF/diff/local commit, no push. D09 in progress; session/stage/recovery next, overall open.
 
-### D09 MySQL XA阶段与恢复模块实施
+Foundation complete: five-core/three-DI Release 0 warnings/errors; Unit2664(new 11), Consumer849(new 5), DI8 pass, zero failures/skips/removals; review clear. Full suite also found D08 close-mapping and existing batch early-close fixture races, fixed/retested/reviewed and separately committed9493278/e601e23; ledger. D09 stages/recovery/live remain.
 
-目标及接口按架构第6节“D09 MySQL XA阶段与恢复模块”，技术栈沿原五目标C#及CommandExchange/QueryResult，无新依赖。当前分支，不推送，不执行数据库服务端/异机测试。文件范围：OceanBaseXaResource.cs定义公开阶段API/枚举与资源状态，OceanBaseConnection.Xa.cs管理会话所有权和阶段交换；Transactions.cs/Database.cs接业务/本地事务隔离及Close脱离。测试新增XaTests.cs、XaConsumerTests.cs及Standard2.0编译消费；文档同步README/架构/计划/台账。
+### D09 MySQL XA Stages and Recovery
 
-走查重点：Close重开旧资源不能使用新会话；可信错误不提前改变阶段；End(Fail)跨恢复关联仍必须回滚；恢复Int64不能截断为Int32或静默丢弃；取消/畸形OB20/断流不得重放，也不能返回部分恢复结果。
+Architecture§6 D09 API/stack: five-target C#/CommandExchange/QueryResult, no dependencies/current branch/no push/live/other-machine. OceanBaseXaResource.cs public stage APIs/enums/state; OceanBaseConnection.Xa.cs ownership/exchanges; Transactions.cs/Database.cs business/local-transaction isolation and Close detachment. XaTests/XaConsumerTests/Standard2.0 compilation; README/architecture/plan/ledger.
 
-- [x] 先写生命周期/恢复测试并运行确认缺API红编译。测试单/两阶段、Join/Resume/Suspend/Fail、错误阶段/XID/null/枚举、无活动分支业务拒绝、reader互斥、本地事务/数据库切换/环境事务隔离，Close及重开旧资源拒绝；同步/异步均覆盖。
-- [x] 实现最小会话固定资源、MySQL固定关键字/十六进制编码及四列恢复快照。用严格数值/长度/原始字节回归测试0/Int32上下界位模式、空分支、64+64、高位/NUL字节、NULL/非法/宽格式/负数/多结果/过量行，失败不返回部分结果。
-- [x] 标准/OB20覆盖成功、完整服务端拒绝、发前取消、发后取消/超时/断流/Close及协议边界破坏；五资产真实隔离消费公开同步/异步API（认证后MySQL事实由测试显式注入，A05不变）。
-- [x] 完整Release五目标/DI三目标及Unit/Consumer/DI，独立只读代码走查并修复问题；同步文档与范围，UTF8无BOM/CRLF及diff检查后提交本模块，继续Oracle XA及其他未完成项。
+Review stale resources after reopen, no early transition on trusted errors, End(Fail) requiring rollback across recovery association, no Int64 truncation/drop, no replay or partial recovery on cancel/bad OB20/disconnect.
 
-本模块完成：Release零警告/错误，最终完整Unit2717（新增53）、Consumer929（新增80）、DI8全部通过，零失败/跳过、旧案例移除0。走查修复可信XA回滚错误后的会话销毁、空恢复响应的公开异常映射、六个阶段诊断名称及空分支X''编码；红绿及最终证据见台账。D09仍进行中，下一模块继续Oracle DBMS_XA类型绑定、返回码与恢复；A05公开MySQL门槛、TransactionScope拒绝、实库/异机延期不变。
+- [x] Failing lifecycle/recovery APIs: one/two-phase, Join/Resume/Suspend/Fail, invalid stage/XID/null/enum, business rejection without active branch, exclusive reader, local-transaction/database/ambient isolation, stale resources after Close/reopen, sync/async.
+- [x] Minimal pinned resource/fixed MySQL keywords/hex/four-column recovery. Strict numbers/lengths/raw bytes:0/Int32 boundary patterns, empty branch,64+64/high/NUL, NULL/invalid/wide/negative/multiple results/excess rows; no partial recovery.
+- [x] Standard/OB20 success/trusted rejection/precancel/postsend cancel-timeout-disconnect-Close/bad boundaries; five-asset public sync/async with explicit post-auth MySQL facts, A05 unchanged.
+- [x] Five-core/three-DI/full tests/review/fixes/docs/UTF8-no-BOM/CRLF/diff/commit; continue Oracle/open items.
 
-### D09 Oracle DBMS_XA模块实施
+Complete: Release 0 warnings/errors; Unit2717(new 53), Consumer929(new 80), DI8 pass, zero failures/skips/removals. Review fixed destruction after trusted XA rollback errors, empty-recovery exception mapping, six diagnostic names, empty-branch X'' encoding; ledger red-green. D09 in progress; Oracle DBMS_XA types/codes/recovery next. A05/TransactionScope/live/other-machine boundaries unchanged.
 
-目标、技术栈及接口按架构第6节“D09 Oracle DBMS_XA阶段与恢复模块”。本人逐步实现，独立只读设计/代码复查；继续当前master，不推送、不执行实库/异机测试。新增OceanBaseConnection.XaOracle.cs集中私有描述、初始化、0xa1交换和返回码/恢复校验；Xa.cs与OceanBaseXaResource.cs复用阶段发布并返回Prepare票值，OceanBaseException.cs公开XaErrorCode。新增OracleXaTests.cs和OracleXaConsumerTests.cs，既有Standard2.0辅助工程补异常属性编译消费，README/架构/方案/台账同步；不改变公共类型字典或业务命令校验。
+### D09 Oracle DBMS_XA
 
-走查重点：自动提交仅首次确认关闭、同一总预算；0/3/正负错误码语义不同且不得提前发布阶段；私有结构描述不泄入公共类型缓存；statement生命周期和OB20边界；恢复完整快照、精确Int32及16383总成员上限；关闭重开旧资源不得迁移。所有对外XaErrorCode必须来自完整可信响应。
+Architecture§6 D09 target/stack/API; direct implementation/independent design-code review/current master/no push/live/other-machine. New OceanBaseConnection.XaOracle.cs private descriptors/init/0xa1/codes/recovery; Xa.cs/OceanBaseXaResource.cs shared stages/Prepare vote; OceanBaseException.cs XaErrorCode. OracleXaTests/OracleXaConsumerTests/Standard2.0 exception-property compilation; README/architecture/plan/ledger. Public type dictionary/business validation unchanged.
 
-- [x] 先写Oracle生命周期/ReadOnly和恢复夹具，运行dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 -nr:false --filter FullyQualifiedName~OracleXa确认因现有Oracle拒绝而红。分别检查输入结构的有符号格式/原始字节、Start/End标志及Commit Boolean；恢复使用手工复杂结果字节，不用产品编码器生成期望。
-- [x] 实现最小Oracle执行及共享阶段票值；定向测试单/两阶段、Join/Resume/Suspend/Fail、ReadOnly后Idle、版本/选项拒绝、初始化与阶段的ERR/返回码、互斥/Close/重开、超时/取消/断流、畸形尾包/额外结果。新非零返回码通过新回归确认修前失败，保留错误码并废弃会话，不重放。
-- [x] 实现完整恢复，测试空数组、任意字节/空及NULL分支、有符号格式边界、宽/分数/NULL格式、非法长度/NULL元素/多行/缺输出/不匹配类型、成员上限、尾包前中断；无部分结果，无公共类型缓存污染。
-- [x] 五资产同步/异步×标准/OB20实际消费阶段/ReadOnly/恢复、可信错误码/断流/坏边界；辅助工程直接编译消费XaErrorCode。完整Release核心五目标/DI三目标、Unit/Consumer/DI及独立代码和文档走查，修复并复验；UTF8无BOM/CRLF和diff检查后本地提交。按实有证据更新台账及D09状态，环境验收和其他开放任务不得提前关闭。
+Review autocommit disabled only after first confirmation, one budget, distinct0/3/positive/negative codes, no early stages, private descriptors outside public cache, statement/OB20 lifecycle, complete recovery/exact Int32/16383 members, stale resources after reopen. Public XaErrorCode only from complete trusted responses.
 
-本模块约定本地范围完成：Release核心五/DI三目标0警告/错误，完整Unit2803（新增86）、Consumer1029（新增100）、DI8全部通过，零失败/跳过、旧案例移除0；独立走查及红绿修复记录见台账。D09正式状态待验证，实库/协调器/异机及其他开放项继续保留，整体goal未完成，不推送。
+- [x] Oracle lifecycle/ReadOnly/recovery: `dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 -nr:false --filter FullyQualifiedName~OracleXa` first fails existing Oracle rejection. Check signed input format/raw bytes/Start-End flags/Commit Boolean; handcrafted recovery bytes, not product-generated expectations.
+- [x] Minimal Oracle/shared votes: one/two-phase, Join/Resume/Suspend/Fail, ReadOnly→Idle, version/option rejection, initialization/stage ERR/codes, exclusivity/Close/reopen/cancel-timeout-disconnect/bad tail/extra results. New nonzero-code red-green retains code/discards session/no replay.
+- [x] Recovery empty arrays/arbitrary bytes/empty-NULL branches/signed bounds/wide-fraction-NULL formats/bad lengths-NULL members-multiple rows-missing output-wrong types/member bound/tail interruption. No partial results/public cache pollution.
+- [x] Five assets sync/async×standard/OB20 stages/ReadOnly/recovery/trusted codes/disconnect/boundaries; Standard compilation. Five-core/three-DI/full tests/review/fix/docs/UTF8-no-BOM/CRLF/diff/local commit. Evidence-based status only; environment/open work stays open.
 
-### D09 MySQL XA经TLS本地补验（2026-10-20）
+Local complete: five-core/three-DI Release 0 warnings/errors; Unit2803(new 86), Consumer1029(new 100), DI8 pass, zero failures/skips/removals; ledger review/red-green. D09 pending live/coordinator/other-machine acceptance; overall goal incomplete, no push.
 
-复用XaConsumerTests既有认证后模式事实替身和阶段脚本，保留原80项明文入口及全部断言，新增五资产×同步/异步×标准/OB20×success/reject/disconnect/boundary共80项Required TLS用例。SSLRequest和TLS升级沿用共享Handshake，之后标准包和OB20均从TLS收发；阶段互斥、可信错误后显式重试、断流/坏边界结果未知、完整恢复及无重放断言保持。初始握手仍为Oracle夹具，测试在认证后显式注入MySQL模式事实；不放行A05、不证明真实MySQL握手/认证或服务端兼容。
+### D09 MySQL XA over TLS (2026-10-20)
 
-本轮仅单个Consumer脚本参数化传输，产品与共享helper均不改、无新依赖或信任根操作。验证核心五/DI五及测试Release、该脚本完整160项、范围格式/案例增删及独立代码/证据走查后同步台账并提交；无必要修复时不重复上一模块完整Unit/Consumer/DI，保留原始完整报告作为此前证据。真实数据库/OBProxy/协调器、可信CA及异机继续暂缓，五资产由net10宿主隔离消费。
+Reuse XaConsumerTests post-auth mode doubles/stage scripts; preserve80 plaintext cases/assertions, add80 Required TLS=five assets×sync/async×standard/OB20×success/reject/disconnect/boundary. Shared Handshake SSLRequest/upgrade encrypts subsequent traffic. Keep stage exclusivity/trusted-error explicit retry/unknown disconnect-boundary/full recovery/no replay. Initial Oracle fixture then explicit MySQL fact; A05 unchanged, no actual MySQL authentication/server proof.
 
-本地补验完成：Release核心五/DI五及测试工程零警告错误，该脚本160项全部通过，零失败/跳过；原80项无移除，新增80项TLS用例全部通过。独立只读代码走查无阻断；范围格式及原始报告/案例对比见台账，不据本轮关闭真实模式识别或D09验收。
+Parameterize this Consumer script only, product/shared helper unchanged; no dependencies/root operations. Five-core/five-DI/tests Release,160 script cases, scoped format/name comparison/review/evidence/docs/commit. Without necessary fixes, do not repeat prior full Unit/Consumer/DI; retain its report. Live database/OBProxy/coordinator/trusted CA/other-machine deferred; five assets isolated on net10.
 
-## 执行与进度规则
+Complete: five-core/five-DI/tests Release 0 warnings/errors;160 pass, zero failures/skips; old80 removed 0, new TLS80 all pass. Independent review clear; format/raw reports/name comparison in ledger. No real-mode/D09 acceptance closure.
 
-每项任务只有在代码、针对性测试、所属目标编译及进度证据都齐全时标为“完成”。G1/G2/G3/R02 还要求对应真实环境记录；跳过测试不等于通过。每次合并更新[进度台账](obconnector-dotnet-progress.md)的状态、证据、阻塞和下一任务。发现设计假设与真实服务端冲突时，先修订架构设计和本计划，再继续依赖任务。
+## Execution and Progress Rules
 
-统一验证入口（工程创建后执行；实际命令和退出码写入进度台账）：
+Mark a task complete only with code, targeted tests, owning-target compilation, and evidence. G1/G2/G3/R02 additionally require real-environment records; skipped is not passed. Each merge updates [Progress Ledger](obconnector-dotnet-progress.md) status/evidence/blockers/next task. If live behavior contradicts assumptions, revise architecture/plan before dependent work.
+
+Shared verification after project creation; record actual commands/exit codes:
 
 ```powershell
 dotnet restore OceanBaseConnector.slnx
@@ -1064,4 +1063,20 @@ dotnet test tests/OceanBaseConnector.IntegrationTests/OceanBaseConnector.Integra
 dotnet pack src/OceanBaseConnector/OceanBaseConnector.csproj -c Release --no-build
 ```
 
-日常测试和消费工程统一运行于 .NET 10，Windows/Linux CI 构建产品五目标；基线样例用 SetTargetFramework 和 SkipGetTargetFrameworkProperties 显式选择 netstandard2.0，隔离加载测试覆盖 netstandard2.0/netstandard2.1，不把 Standard 资产当可执行测试目标。旧运行时证据在 B09/R01 单独取得。集成测试使用 `OB_MYSQL_CONNECTION_STRING`、`OB_ORACLE_CONNECTION_STRING`、`OB_MYSQL_PROXY_CONNECTION_STRING`、`OB_ORACLE_PROXY_CONNECTION_STRING`；未知认证插件用例另需 `OB_UNSUPPORTED_AUTH_CONNECTION_STRING`（默认 VerifyFull，仅使用测试账户）；关口验收设置 `OB_REQUIRE_INTEGRATION=1`，缺少必需环境时测试失败，日常开发可明确跳过并报告。证书、凭据和原始抓包不写入仓库。
+Daily tests/consumers run.NET10; Windows/Linux CI builds five product targets. Baseline SetTargetFramework/SkipGetTargetFrameworkProperties explicitly selects netstandard2.0; isolated loads cover Standard2.0/2.1, never executable Standard test targets. Older-runtime evidence separately B09/R01. Integration variables: `OB_MYSQL_CONNECTION_STRING`, `OB_ORACLE_CONNECTION_STRING`, `OB_MYSQL_PROXY_CONNECTION_STRING`, `OB_ORACLE_PROXY_CONNECTION_STRING`; unknown-plugin case `OB_UNSUPPORTED_AUTH_CONNECTION_STRING`(default VerifyFull/test account only). Gate acceptance `OB_REQUIRE_INTEGRATION=1` fails missing required environments; daily development may explicitly skip/report. Never store certificates, credentials, raw captures in the repository.
+
+## Configurable Live-database Acceptance Program (2026-10-20, New User Requirement)
+
+Independent net10 console in tests/OceanBaseConnector.Acceptance, using public product APIs only, excluded from product packages, no dependencies. JSON config specifies connection string or environment-variable name, explicit MySql/Oracle mode, groups, object-creation permission, large-value length. Existing strings configure TLS/OB20/trace/Oracle extensions; no duplicated options or A05/pooling bypass. `--list` enumerates all 65 items across 14 groups without credentials/network; `--config` executes; `--report` selects redacted JSON. Invalid config/case failure/user cancellation returns nonzero.
+
+By mode/config cover open/reopen, factory/data source, text CRUD, parameters/prepare, exact types, NULL/Unicode/binary, transactions/savepoints, readers/SequentialAccess/pages, DbBatch/multiple results, GetSchema, uploads, diagnostics, Oracle OUT/RETURNING/procedures/REF CURSOR, arrays, LOB/complex values, explicit XA. Named skips retain requirements for independent faults, KDC/private CA, topology switching, full reset, coordinator crash recovery. One successful connection never proves the full TLS/auth/OB20 matrix.
+
+Create only dedicated random OBA_ table/procedure/type names<=30 characters, never reuse/delete existing objects. Creation disabled means explicit skips. Separate connection per case; record creations; finally clean exact names using new connections. Cleanup failure fails the case/lists residuals without replacing primary failure. XA touches generated XIDs only, never commits/rolls back other recovered branches. Reports omit connection strings/passwords/raw SQL/server error text/stacks. Execution writes objects: use a dedicated test database/tenant. No live connection/deployment this round.
+
+This program replaces earlier current-state statements that no regular live-acceptance code existed. Historical statements remain historical; actual live execution and fault matrices remain unverified.
+
+Implementation steps:
+
+1. Failing config/offline catalog/scheduling/exit-code/redaction/cleanup-report regressions, then console configuration/runner.
+2. Public API live cases/both-mode examples/coverage and skip reasons; compilation never counts as live success.
+3. Existing Unit verifies control flow/local commands without database access; build all products/tests/run local regressions. Independent review/fix/docs/local commit, no push. Actual live execution separately unverified.

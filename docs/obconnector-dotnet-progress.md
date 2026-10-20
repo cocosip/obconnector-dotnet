@@ -1,1770 +1,1369 @@
-# OceanBase Connector for .NET 开发进度台账
+# OceanBase Connector for .NET development progress ledger
 
-基线日期：2026-10-17；当前进度更新：2026-10-20。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。
+Baseline date: 2026-10-17; progress updated: 2026-10-20. References: [Architecture design](obconnector-dotnet-architecture-design.md) and [Development plan](obconnector-dotnet-development-plan.md).
 
-## 当前范围收尾核查（2026-10-20）
+## Configurable database acceptance console and English documentation (2026-10-20)
 
-以323d39c为产品基线，对照开发方案A/B/C/D/R及架构M01–M16，结合公开入口、测试与各模块独立走查核对：已确定契约内可脱离真实服务端完成的本地功能已有实现，未发现需要继续新增的明确本地功能。本结论仅关闭用户此次排除实库和部署后的本地开发范围，不关闭G1–G4，不表示已兼容真实OceanBase，也不表示可以发布。
+The additional user request is implemented locally as the standalone net10.0 executable `tests/OceanBaseConnector.Acceptance`. It references the core driver and uses public APIs, with no product-source changes, new NuGet dependencies, background services, or additional simulated server. JSON selects `Oracle`/`MySql`, a direct connection string or an environment-variable name, groups, and permission to create test objects. Existing driver options control authentication, TLS, OB20, and Oracle extensions. Both example configurations and the usage guide are in that directory. A Release build also produces `bin/Release/net10.0/OceanBaseConnector.Acceptance.exe`.
 
-| 剩余工作 | 当前状态与后续条件 |
+The catalog contains 65 named entries across 14 groups. Cases assert connection reopen, factory/data source, CRUD/prepare/reuse, exact types and Unicode/NULL, transactions/savepoints, sequential streams/cursor pages, batch/schema, binary uploads, Oracle outputs/RETURNING/procedures/REF CURSOR/arrays, temporary LOBs, complex types, XA, diagnostics, and configured slow-query interruption. Mode/option/object-creation prerequisites produce explicit skips. Separate authentication/TLS profiles, actual OB20/trace negotiation, controlled topology/network faults, pooling/reset, coordinator crash recovery, and MySQL zero-date SQL_MODE remain named environment-dependent gaps. A successful subset does not close those matrices. A05 still rejects public MySQL-mode connections; the console cannot bypass that or pooling restrictions.
+
+Cases create random, exactly owned OBA_ tables/procedures/types and generated XA identities. Reverse cleanup uses exact names and preserves original failures; XA cleanup independently attempts End, session close, and rollback of only the owned branch before table cleanup. Reports include timings, observed server mode/version, object states, and sanitized errors without credentials/SQL/values/raw server text. Existing report paths are never overwritten. Ctrl+C remains cancellation even when the driver's unknown-outcome exception contains a linked-token cancellation. Reports are written after execution/cleanup; force termination can leave incomplete reports and server resources, requiring manual checks in the dedicated test environment.
+
+Review exposed missing immutable option validation, NULL scalars being mistaken for zero, XA End failure suppressing later cleanup, the binary-only named-complex result requirement, OracleDecimal scalar conversion, and linked cancellation classification. Targeted regressions first reproduced the failures and then passed. Integer assertions also reject fractional values. Named complex queries explicitly prepare parameterless reads. The final independent code recheck found no remaining blocking issue. This review validates local code/control flow, not real server SQL or resource semantics.
+
+| Local verification | Result | Evidence |
+| --- | --- | --- |
+| Release solution: five core/five DI targets and all tests/console | Passed; zero warnings/errors | TestResults/acceptance-build-final.log |
+| Final review regressions, before/after fixes | 2 failed / 29 passed, then 31 passed / 0 failed/skipped | TestResults/acceptance-final-review-red.log; TestResults/acceptance-final-review-green.log and matching TRX directories |
+| Final full Unit | 3145 passed; zero failed/skipped | TestResults/acceptance-full-unit-final.log; TestResults/acceptance-full-unit-final/ |
+| Full Consumer | 2076 passed; zero failed/skipped | TestResults/acceptance-full-consumer.log; TestResults/acceptance-full-consumer/ |
+| Full DI | 14 passed; zero failed/skipped | TestResults/acceptance-full-di.log; TestResults/acceptance-full-di/ |
+| CLI help/list, both example configs with list, missing config, unknown option | All six passed with asserted exit codes; list has 65 entries without credentials/network | TestResults/acceptance-cli-final.log |
+| Scoped whitespace verification | Passed without changes | TestResults/acceptance-format-verify.log |
+| Two local packages and five-asset consumption | Passed; actual .NET 8.0.32/9.0.21/10.0.13, Standard assets hosted on 10.0.13 | TestResults/acceptance-pack.log; TestResults/acceptance-package-validation.log |
+
+The three full suites total 5235 passed with zero failures/skips. Consumer/DI ran before the last acceptance-only helper fixes; the full Unit suite and solution build were repeated afterward. No product source changed. Both packages contain the final English README and exclude acceptance/testhost assemblies. The standalone executable's `--help` was also checked. `testhost.exe` is the .NET test platform host, not this acceptance executable or an installed service; no testhost process remained after verification.
+
+All repository Markdown documentation is now English: root README, architecture, development plan, progress ledger, Stage A continuation, Java source outline, and the new acceptance guide. Existing English notices/fixture guide remain English. Translation preserves the plan's 193 completed and 34 open checkboxes in their original order, historical section/evidence/commit references, pinned source URLs, and explicit acceptance limitations. UTF-8, code fences, local Markdown links, and diff whitespace were checked. Deliberate Unicode values in C# test payloads remain unchanged.
+
+**Not executed:** real database/OBProxy connections, the new database cases, Linux/Windows deployment, or publication/push. The console is ready for operator-configured acceptance, but its SQL/type/version/permission/LOB/cursor/complex/XA server behavior is unverified. Use a dedicated test database because enabled cases write data and commit some transactions. A05, complete reset/pooling, release decisions, and all real compatibility/deployment gates remain open.
+
+## Historical local scope closure review (2026-10-20)
+
+At product baseline 323d39c, the review of plan A/B/C/D/R, architecture M01–M16, public entry points, tests, and independent module walkthroughs found implementations for the then-defined contracts that could be completed locally without a real server. This was the historical local scope conclusion, subsequently retained at 6fce47f; it does not close G1–G4, establish real OceanBase compatibility, or authorize release. The later request for a standalone, configurable `tests/OceanBaseConnector.Acceptance` real-database acceptance console expands that scope. Its implementation and verification must be recorded separately; the historical conclusion below is not a claim that this newer work is complete.
+
+| Remaining work at that baseline | Status and prerequisite |
 | --- | --- |
-| A05 可信MySQL模式判定 | 尚未实现；缺少真实版本/模式/插件证据，HandshakeFlow仍拒绝没有Oracle状态位的连接。测试注入MySQL事实不代表公共连接可用；取得可信矩阵后才可继续实现 |
-| C01 完整重置与池化、C07 池借还基线 | 尚未实现；PhysicalSession仍拒绝Pooling=true。须先证明目标版本/模式可清理原始会话SQL、临时对象等全部状态，再实现池与隔离验收，不加测试放行开关 |
-| A07/B09/C08/R02 真实验收套件 | IntegrationTests当前只有ConnectionGateTests的四项连接/模式/TLS/认证门槛测试；完整真实CRUD、类型往返、事务和故障套件尚未编写，不能记成“已有套件仅未执行”。这些套件及实库执行留待恢复数据库验收范围后一起完成 |
-| 其他真实验收及部署 | OceanBase/OBProxy版本与两模式、可信私有CA/KDC、LOB/游标/复杂类型/保存点/XA资源语义、协调器及Linux/Windows部署按用户要求不执行、未验证；本地Windows测试不等于Windows部署验收 |
-| R01/R02 发布决定 | 项目许可证、来源/包名审核、正式Framework支持及最终发布审核未完成；由维护者决定，不发布、不推送 |
-| 明确延后或未承诺能力 | Standard GSSAPI/其他系统认证机制沿D15既有裁定延后；DataAdapter/CommandBuilder等按架构保留按需边界。输入TextReader、数组元素Stream没有已确定的本地实施契约，不因Java存在相关能力自动追加需求；输出GetTextReader已有实现 |
+| A05 trusted MySQL mode identification | Unimplemented: real version/mode/plugin evidence is missing. HandshakeFlow still rejects connections without the Oracle status bit. Injecting MySQL facts in tests does not make public MySQL connections available; implementation requires a trusted matrix. |
+| C01 complete reset/pooling; C07 pool checkout/return baseline | Unimplemented: PhysicalSession rejects Pooling=true. First prove that target versions/modes can clear all session state, including raw session SQL and temporary objects, then implement pooling and isolation acceptance; no test bypass switch. |
+| A07/B09/C08/R02 real acceptance suites | At this baseline, IntegrationTests contained only four ConnectionGateTests for connection/mode/TLS/authentication gates. Complete real CRUD, type round-trip, transaction, and fault suites had not been written; they were not existing suites merely awaiting execution. The later standalone acceptance-console requirement supersedes this historical deferral. |
+| Other real acceptance and deployment | OceanBase/OBProxy versions and both modes, trusted private CA/KDC, LOB/cursor/complex-type/savepoint/XA resource semantics, coordinators, and Linux/Windows deployment were not executed or verified at the user's request. Local Windows tests do not establish Windows deployment acceptance. |
+| R01/R02 release decisions | Project license, provenance/package-name review, official Framework support, and final release review remain incomplete and require maintainer decisions; no publication or push. |
+| Explicitly deferred or uncommitted capabilities | Standard GSSAPI/other system authentication mechanisms remain deferred under D15. DataAdapter/CommandBuilder retain the architecture's on-demand boundary. Input TextReader and array-element Stream have no defined local implementation contract; Java support alone adds no requirement. Output GetTextReader is implemented. |
 
-下一步需要的是真实环境证据及验收工作；本次不连接数据库、不部署，不用增加配置、服务或模拟功能填补这些证据。协议模拟仅在既有tests项目中，testhost.exe是dotnet test启动的微软测试宿主，不随产品包交付。
+The next evidence requirements were real-environment acceptance. No database connection or deployment was performed in this historical closure review. Protocol simulations reside only in existing tests projects; testhost.exe is Microsoft's host started by dotnet test and is not shipped in product packages. The later acceptance console introduces configuration and a test application for its explicitly requested purpose; it does not replace real-environment evidence.
 
-收尾复查重新解析上一模块三份原始TRX：Unit3114、Consumer2076、DI14，共5204项，均Completed/Passed，失败/跳过/中止为0；15个产品DLL的SHA256仍与prepare-piece-product-hashes-final.json一致。双包消费记录及原始报告见上次功能验证记录，收尾仅更新本台账，不重建产品或重复启动测试；检查时无testhost进程。各模块先测试、独立走查再本地提交，最近功能提交为323d39c。
+The closure recheck reparsed the preceding module's three raw TRX files: Unit3114, Consumer2076, DI14, total 5204, all Completed/Passed, with 0 failed/skipped/aborted. SHA256 values of 15 product DLLs still matched prepare-piece-product-hashes-final.json. Dual-package consumption and raw reports are in the preceding functional verification record. Closure changed only this ledger, without rebuilding products or rerunning tests; no testhost process was present. Modules were tested and independently reviewed before local commits; the latest functional commit at that point was 323d39c.
 
-## M07 Oracle PrepareExecute流输入组合（2026-10-20）
+## M07 Oracle PrepareExecute with stream input (2026-10-20)
 
-711c3e4后核对M07与D02，接通二进制Stream Input和存储过程/OUT组合。复用现有EnsurePrepared、PIECE_DATA、PrepareExecute及OracleCursorOwner；不新增公开类型、配置、依赖、服务或测试应用。固定Java 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的AbstractQueryProtocol.executePreparedQuery与ComStmtPrepareExecute.send/read给出先prepare取得ID、逐块上传、以该ID执行的依据，只参考行为。
+After 711c3e4, the M07/D02 review connected binary Stream Input with stored procedures/OUT, reusing EnsurePrepared, PIECE_DATA, PrepareExecute, and OracleCursorOwner. No new public type, configuration, dependency, service, or test application was added. At fixed Java SHA 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1, AbstractQueryProtocol.executePreparedQuery and ComStmtPrepareExecute.send/read support preparing for an ID, uploading pieces, then executing with that ID; behavior was referenced without copying source.
 
-每次执行独立prepare，不写入命令经典缓存；参数数不符显式Release，匹配后把临时ID移交当前执行的cursor owner。扩展响应换ID时延迟关旧ID，相同ID不重复关；REF CURSOR继续持有最终父ID，同一command重执行和Dispose不破坏旧游标。InputOutput流在方向规范化前拒绝；Output/ReturnValue仍忽略旧Value，包括与Input相同的Stream，不读取、不注册身份。执行总预算先扣实际请求全部字节，含SQL/长度前缀/扩展头尾/参数，再计hex流值；原版本门槛、事务/独占/总超时和OUT完整终态后原子发布契约保留。
+Each execution prepares independently, outside the command's classic cache. A parameter-count mismatch explicitly Releases the ID; on a match, the temporary ID transfers to that execution's cursor owner. Replacement IDs in extended responses defer closing old IDs; identical IDs close only once. REF CURSOR retains the final parent ID, and command reexecution/Dispose does not invalidate older cursors. InputOutput streams are rejected before direction normalization. Output/ReturnValue ignores old Value, including a Stream shared with Input, without reading or registering its identity. The total execution budget first accounts for all actual request bytes, including SQL/length prefixes/extended headers and trailers/parameters, then hex stream values. Existing version gates, transaction/exclusivity/total timeout, and atomic OUT publication after a complete terminal response remain intact.
 
-首批6项因现有组合拒绝而失败（prepare-piece-red/）；扩展首轮20失败、2通过（prepare-piece-red-expanded/），最小实现后新旧流回归76项通过（prepare-piece-green/）。补充边界首轮28通过、1失败，原因是新预算夹具把19字节SQL误计为20；仅修正测试预算，随后含原过程/游标/流的定向153项通过（prepare-piece-focused/）。独立走查未发现产品缺陷，建议覆盖旧游标存活时同command再次执行：已扩充相同/变化ID两例，验证两个owner和父ID独立、命令释放后两游标仍可读且分别关闭，模块最终29项通过（prepare-piece-reviewed/），复核无剩余问题。
+Initial 6 tests failed because the combination was rejected (prepare-piece-red/); expanded tests initially had20 failed/2 passed (prepare-piece-red-expanded/). The minimal implementation passed 76 new/existing stream regressions (prepare-piece-green/). Added boundaries initially had28 passed/1 failed because the new budget fixture counted19 SQL bytes as20; only the test budget was corrected. Targeted procedure/cursor/stream tests then passed 153 (prepare-piece-focused/). Independent review found no product defect and requested reexecution on the same command while an old cursor survived. Added same/changed-ID cases verified independent owners/parent IDs, continued reading of both cursors after command disposal, and separate closure. Final module tests:29 passed (prepare-piece-reviewed/); recheck found no remaining issue.
 
-新增五资产同步/异步×标准/OB20及OB20尾随错误共30项消费，精确检查prepare ID、PIECE_DATA头与hex、无inline流、0xA1 ID、OUT/计数和两个ID的关闭顺序。测试只使用既有本机环回设施，不进入产品包。初次沙箱MSBuild无输出运行已中止；正常权限单节点重跑完成，最终无testhost残留。范围格式首轮仅发现新测试InlineData属性同排，分行后验证0文件需调整。
+Added 30 consumer tests across five assets, sync/async, standard/OB20, and trailing OB20 errors. Assertions check prepare IDs, PIECE_DATA headers/hex, absence of inline streams, 0xA1 IDs, OUT/counts, and the closing order of both IDs. Fixtures use existing local loopback infrastructure and are excluded from product packages. An initial sandbox MSBuild run with no output was stopped; a normal-permission single-node rerun completed, with no remaining testhost. The first scoped format check found only same-line InlineData attributes; after splitting them, no file required adjustment.
 
-| 最终检查 | 结果 | 原始证据 |
+| Final check | Result | Raw evidence |
 | --- | --- | --- |
-| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/prepare-piece-build-final.log、prepare-piece-test-build-final.log |
-| 完整Unit | 3114通过，0失败/跳过；原3085保留，新增29 | TestResults/prepare-piece-unit-final/ |
-| 完整Consumer | 2076通过，0失败/跳过；原2046保留，新增30 | TestResults/prepare-piece-consumer-final/ |
-| 完整DI | 14通过，0失败/跳过 | TestResults/prepare-piece-di-final/ |
-| 范围格式 | 8个源码/测试文件无需调整 | TestResults/prepare-piece-format-final.log |
-| 双包及五资产实际包消费 | 双包生成、消费通过；实际8.0.32/9.0.21/10.0.13 | TestResults/prepare-piece-pack.log、prepare-piece-package-verification.log |
+| Release core five/DI five and tests | 0 warnings/errors | TestResults/prepare-piece-build-final.log, prepare-piece-test-build-final.log |
+| Full Unit | 3114 passed; 0 failed/skipped; original 3085 retained,29 added | TestResults/prepare-piece-unit-final/ |
+| Full Consumer | 2076 passed; 0 failed/skipped; original 2046 retained,30 added | TestResults/prepare-piece-consumer-final/ |
+| Full DI | 14 passed; 0 failed/skipped | TestResults/prepare-piece-di-final/ |
+| Scoped formatting | 8 source/test files needed no adjustment | TestResults/prepare-piece-format-final.log |
+| Dual packages and actual five-asset consumption | Both packages built/consumed; actual runtimes 8.0.32/9.0.21/10.0.13 | TestResults/prepare-piece-pack.log, prepare-piece-package-verification.log |
 
-三份完整TRX均为Completed，5204项均Passed；逐名比较原案例无删除，见TestResults/prepare-piece-final-summary.json、prepare-piece-inventory-final.json。完整测试期间未重建产品，SHA256未变化（prepare-piece-product-hashes-final.json）。两包各含五产品DLL，无testhost、测试程序集或模拟服务端。实际消费者、包副本及restore图保留在TestResults/package-validation/40f456232fb045c1a177bf63fa2e4ec2/；Standard仍由10.0.13宿主消费，基本包样例不证明各运行时完成组合SQL验收。
+All three full TRX files were Completed with 5204 Passed; name comparisons found no removed cases. See TestResults/prepare-piece-final-summary.json and prepare-piece-inventory-final.json. Products were not rebuilt during full tests; SHA256 values remained unchanged (prepare-piece-product-hashes-final.json). Each package contains five product DLLs and no testhost, test assembly, or simulated server. Actual consumers, package copies, and restore graphs remain at TestResults/package-validation/40f456232fb045c1a177bf63fa2e4ec2/. Standard assets still use a10.0.13 host; basic package samples do not establish combined-SQL acceptance on every runtime.
 
-命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；格式修正后另外build Unit工程；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录。范围dotnet format whitespace --no-restore --verify-no-changes；dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/prepare-piece-packages；pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/prepare-piece-packages。源码走查、UTF8无BOM/CRLF及diff检查后本地提交，不推送、不发布。
+Commands: dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false; Unit was additionally rebuilt after formatting. Unit/Consumer/DI each used dotnet test on its project with -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory and the corresponding directory. Scoped dotnet format whitespace --no-restore --verify-no-changes; dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/prepare-piece-packages; pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/prepare-piece-packages. Source walkthrough, UTF8 without BOM/CRLF, and diff checks preceded the local commit; no push/publication.
 
-真实数据库/OBProxy对该组合及ID替换的接受/资源语义、实库集成及Linux/Windows部署按用户要求不执行、未验证。文本流和数组元素Stream尚未实现，A05可信MySQL判定/C01完整重置、D15延后范围及许可/真实矩阵/发布关口仍开放；本轮不据本地测试关闭整体目标。
+Real database/OBProxy acceptance/resource semantics for this combination and ID replacement, real integration, and Linux/Windows deployment were not executed or verified at the user's request. Text streams and array-element Stream remain unimplemented. A05 trusted MySQL identification/C01 complete reset, D15 deferrals, and license/real matrix/release gates remain open; local tests do not close the overall objective.
 
-## M07 Oracle二进制流参数本地实施（2026-10-20）
+## M07 Oracle binary stream parameters: local implementation (2026-10-20)
 
-c9e967c后继续落实架构M07已列明的Oracle PIECE_DATA。复用Stream输入、参数快照、经典prepare/execute及会话命令预算；不加连接选项、公开类型、依赖、服务或后台任务。固定Java 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的OBStreamParameter.writePieceData/Utils.encodeHexStr/AbstractQueryProtocol.executePreparedQuery/ComStmtExecute给出0xA2、位置头、piece标志、大写hex、长度LE64、逐块应答及EXECUTE类型254/无inline依据，只参考行为、不复制源码。
+After c9e967c, implemented Oracle PIECE_DATA already specified in M07. Reused Stream input, parameter snapshots, classic prepare/execute, and session command budgets; no connection option, public type, dependency, service, or background task. At fixed Java SHA 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1, OBStreamParameter.writePieceData/Utils.encodeHexStr/AbstractQueryProtocol.executePreparedQuery/ComStmtExecute provide behavioral evidence for0xA2, positional headers, piece flags, uppercase hex, LE64 lengths, per-piece acknowledgements, and EXECUTE type 254 with no inline value; no source was copied.
 
-8KiB块加一字节前瞻替代不可靠的available()；短读不是EOF，精确保留前瞻字节，单块/空流LAST、多块FIRST/NEXT/LAST。固定8193字节原始缓冲和16401字节报文缓冲，不读取Length、不seek、不物化全流。累计预算计入hex膨胀和EXECUTE固定头。每块只接受完整OK、应用会话变量并结束标准/OB20边界后才发下一请求；块ACK计数不进入用户RecordsAffected，不提前释放命令租约。块ERR保留服务端码，但必须销毁污染会话；EXECUTE后可信ERR仍沿原契约。真实版本门槛没有来源，不借用Java驱动版本。
+8 KiB pieces plus one-byte lookahead replace unreliable available(). Short reads are not EOF; the lookahead byte is retained exactly. Single/empty streams use LAST; multiple pieces use FIRST/NEXT/LAST. Fixed8193-byte raw and 16401-byte packet buffers avoid Length, seeking, and whole-stream materialization. Cumulative budgets include hex expansion and the fixed EXECUTE header. Each piece requires a complete OK, session-variable application, and completion of standard/OB20 boundaries before the next request. Piece ACK counts do not affect user RecordsAffected or release the command lease early. Piece ERR retains the server code but destroys the contaminated session; trusted ERR after EXECUTE keeps its existing contract. No version gate was invented from the Java driver's version.
 
-首批8项公开同步/异步空/单/多块测试均因Oracle流尚不支持而失败（piece-data-red/），最小实现后连同原MySQL15项共23通过（piece-data-green/）。设计复核要求明确8192/8193/16384及持续单字节短读，均已覆盖。代码走查发现同源重复绑定会使后位置静默变空：先用Oracle重复名称/独立两参数及MySQL两参数共6项证明缺少发包前拒绝（piece-data-identity-red/），再以标准ConditionalWeakTable按引用身份在快照/发包前拒绝；不调用用户Equals，不新增重放/seek/缓冲。修复已独立复核，无剩余确认缺陷。
+Initial 8 public sync/async empty/single/multiple-piece tests failed because Oracle streams were unsupported (piece-data-red/). Minimal implementation plus 15 existing MySQL cases passed 23 (piece-data-green/). Design review requested8192/8193/16384-byte and continuous single-byte short-read cases, all added. Code review found that binding the same source twice silently emptied later positions. Six tests for Oracle duplicate names/two independent parameters and MySQL two parameters first demonstrated missing rejection before sending (piece-data-identity-red/). Standard ConditionalWeakTable now rejects reference-identity reuse at snapshot/before sending, without user Equals, replay, seeking, or buffering. Independent recheck found no remaining confirmed defect.
 
-最终定向102项通过（piece-data-focused-reviewed/），其中新增45项含上述6项，保留原MySQL及客户端prepare回退回归。覆盖混合inline/多流、快照、Prepare不读/当前位置/重复空流/NULL、非法声明及未接入组合、源前后失败、块ERR/坏OK/额外结果/游标/断流、执行ERR/未知结果、等待ACK时独占/取消/超时、ACK后会话报告及源忽略token时立即断会话、按需生成的64MiB编码预算溢出。
+Final targeted 102 passed (piece-data-focused-reviewed/), including45 new cases and the 6 identity cases, retaining MySQL and client-prepare-fallback regressions. Coverage includes mixed inline/multiple streams, snapshots, Prepare without reading/current position/repeated empty stream/NULL, illegal declarations/unconnected combinations, source failures before/after upload, piece ERR/bad OK/extra result/cursor/disconnect, execution ERR/unknown outcome, exclusivity/cancellation/timeout while awaiting ACK, session reports after ACK, immediate session destruction when sources ignore tokens, and a lazily generated64 MiB encoded-budget overflow.
 
-五资产新增20项同步/异步×标准/OB20消费，初次与原LONG_DATA20项合跑为20通过/20失败（piece-data-consumer-focused/）：新夹具的首次EXECUTE普通OK未保留会话事实，重复执行触发既有时区/编码探测，而脚本错误期待下一块。仅改为复用既有Report(ob20,1)报告，不改产品或绕过模式门槛；修后40项全部通过（piece-data-consumer-reviewed/）。格式首轮遇沙箱命名管道权限失败；同范围正常权限只读验证0文件需调整。隔离包验证首轮因沙箱Windows SSL凭据限制无法访问NuGet；正常权限运行现有脚本通过，不修改凭据、信任根或产品。
+Added 20 five-asset sync/async×standard/OB20 consumer cases. Combined with 20 existing LONG_DATA cases, the first run had20 passed/20 failed (piece-data-consumer-focused/): the first EXECUTE fixture's plain OK omitted session facts, triggering valid timezone/encoding probes on reexecution while the script expected another piece. Only the fixture was changed to existing Report(ob20,1); no product change or mode-gate bypass. All 40 then passed (piece-data-consumer-reviewed/). The first format check failed on sandbox named-pipe permissions; normal-permission read-only verification of the same scope needed no adjustment. First isolated package verification could not reach NuGet because of sandbox Windows SSL credential restrictions; the existing script passed with normal permissions, without credential/trust-root/product changes.
 
-| 最终检查 | 结果 | 原始证据 |
+| Final check | Result | Raw evidence |
 | --- | --- | --- |
-| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/piece-data-build-final.log |
-| 完整Unit | 3085通过，0失败/跳过；原3040项保留，新增45项 | TestResults/piece-data-unit-final/、piece-data-unit-inventory.json |
-| 完整Consumer | 2046通过，0失败/跳过；原2026项保留，新增20项 | TestResults/piece-data-consumer-final/ |
-| 完整DI | 14通过，0失败/跳过 | TestResults/piece-data-di-final/ |
-| 范围格式 | 8个源码/测试文件无需调整 | TestResults/piece-data-format-reviewed.log |
-| 双包及五资产实际包消费 | 双包及消费通过；实际8.0.32/9.0.21/10.0.13 | TestResults/piece-data-pack.log、piece-data-package-verified.log |
+| Release core five/DI five and tests | 0 warnings/errors | TestResults/piece-data-build-final.log |
+| Full Unit | 3085 passed; 0 failed/skipped; original 3040 retained,45 added | TestResults/piece-data-unit-final/, piece-data-unit-inventory.json |
+| Full Consumer | 2046 passed; 0 failed/skipped; original 2026 retained,20 added | TestResults/piece-data-consumer-final/ |
+| Full DI | 14 passed; 0 failed/skipped | TestResults/piece-data-di-final/ |
+| Scoped formatting | 8 source/test files needed no adjustment | TestResults/piece-data-format-reviewed.log |
+| Dual packages/actual five-asset consumption | Both passed; actual8.0.32/9.0.21/10.0.13 | TestResults/piece-data-pack.log, piece-data-package-verified.log |
 
-本轮命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录。完整测试期间不重建产品/测试程序集，产品SHA256保留在TestResults/piece-data-product-hashes-final.json。范围dotnet format whitespace --no-restore --verify-no-changes；dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/piece-data-packages；pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/piece-data-packages。实际包消费者、包副本及restore图保留于TestResults/package-validation/7cacff6f6a1e4c75871a12405b674cab/，两个Standard宿主为10.0.13；包基本样例不证明各运行时完成PIECE_DATA SQL验收。
+Commands: dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false; dotnet test on each Unit/Consumer/DI project with -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory and its directory. Products/test assemblies were not rebuilt during full tests; product hashes: TestResults/piece-data-product-hashes-final.json. Scoped dotnet format whitespace --no-restore --verify-no-changes; dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/piece-data-packages; pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/piece-data-packages. Consumers/copies/restore graphs: TestResults/package-validation/7cacff6f6a1e4c75871a12405b674cab/. Both Standard hosts were10.0.13; basic samples do not establish PIECE_DATA SQL acceptance on every runtime.
 
-三份完整TRX均Completed，全部Passed、0失败/跳过/中止；与上一模块逐项核对，原案例移除0，新增Unit45/Consumer20，详见TestResults/piece-data-inventory-final.json。最终15个产品DLL的SHA256与构建后完全一致，testhost进程已全部退出；双包各含5个产品DLL，无测试程序/模拟报文代码。独立代码及文档复核无剩余阻断，最终UTF8无BOM/CRLF与diff检查通过，仅提交功能、测试和文档。
+All three full TRX files were Completed/Passed with 0 failed/skipped/aborted. Comparison against the preceding module found0 removed cases and Unit45/Consumer20 added; TestResults/piece-data-inventory-final.json. Final hashes of15 product DLLs matched the post-build hashes; all testhost processes exited. Both packages contain five product DLLs without test applications/simulated protocol code. Independent code/document review found no blocker; final UTF8 without BOM/CRLF and diff checks passed. Only functionality, tests, and documentation were committed.
 
-本轮尚未接入的Oracle PrepareExecute/数组绑定流组合、文本流明确拒绝，不用空inline值假装成功，后续范围需继续与原需求核对。真实Oracle/OBProxy对piece序列、hex类型、清理和版本接受范围，以及Linux/Windows部署均按用户要求不执行、未验证。所有环回响应仅在tests，不进入产品包、不安装常驻服务；A05/C01、D15延后范围及许可/真实矩阵/发布关口继续开放，本模块不关闭整体目标，不发布、不推送。
+At this module's historical boundary, Oracle PrepareExecute/array-binding streams and text streams remained explicitly rejected rather than returning empty inline values; later scope needed reconciliation with the original requirements. Real Oracle/OBProxy piece sequences, hex types, cleanup/version acceptance, and Linux/Windows deployment were not executed or verified at the user's request. Loopback responses reside only in tests, without shipped simulators/resident services. A05/C01, D15 deferrals, license/real matrix/release gates remain open; no overall completion, publication, or push.
 
-## M07 MySQL二进制流参数本地实施（2026-10-20）
+## M07 MySQL binary stream parameters: local implementation (2026-10-20)
 
-40beb9b后逐项对照架构M01–M16及开发方案A/B/C/D/R，发现M07长参数优化尚未实现，也未落入D06数组绑定。先接入MySQL LONG_DATA；Oracle PIECE_DATA存在独立应答与条件，保持后续未实现项。本轮复用DbParameter.Value、现有参数快照/prepare/execute、PacketChannel的offset/count及原会话/命令预算，不增连接选项、依赖或服务。公开流所有权、Size限制、取消与Prepare边界见README和开发方案M07。
+After40beb9b, comparison against M01–M16 and A/B/C/D/R found M07 long-parameter optimization missing and outside D06 array binding. MySQL LONG_DATA was implemented first; Oracle PIECE_DATA's separate responses/conditions remained a later item. Reused DbParameter.Value, parameter snapshots/prepare/execute, PacketChannel offset/count, and session/command budgets. No connection options, dependencies, or services. Public stream ownership, Size limits, cancellation, and Prepare boundaries are in README and plan M07.
 
-固定Java 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的AbstractQueryProtocol.executePreparedQuery、StreamParameter.writeLongData和ComStmtExecute提供24/statement ID/parameter index、空流上传及跳过inline值的协议依据；只参考行为，不复制源码。使用8192字节数据缓冲，不读Length、不seek、不物化全流；每块结束无应答边界。上传污染标记独立于当前响应状态，源失败/取消时区分上传前可复用、上传后必须销毁，EXECUTE前不报告SQL结果未知，之后沿原契约处理。
+At fixed Java SHA6adc311ba5db8b2f19f98f3e6e4734667fdfdda1, AbstractQueryProtocol.executePreparedQuery, StreamParameter.writeLongData, and ComStmtExecute support command24/statement ID/parameter index, empty-stream upload, and omitted inline values. Behavior only was referenced. An8192-byte buffer avoids Length/seeking/materialization; each piece ends without a response. Upload-contamination tracking is separate from current response state. Source failure/cancellation preserves reuse before upload and destroys the session after upload. Before EXECUTE it does not claim unknown SQL outcome; afterward the existing contract applies.
 
-首批4项公开同步/异步、多块/空流用例先失败再通过（long-data-red/、long-data-green/）。扩展验证最初35通过/1失败，原因是新测试错误期待本地ServerErrorCode为null，已按既有int/0契约修正，不改产品异常API（long-data-focused/）。预算走查发现漏计固定10字节EXECUTE头，long-data-budget-red/证明超限竟进入EXECUTE；修正两路径后通过。最终定向37通过，含15项新增LongData及22项既有prepare/客户端回退；覆盖混合参数、短读/快照、不可seek源、源所有权/位置、Prepare不读、重复执行空流/SQL NULL、非法声明、源失败/取消、异步独占、可信ERR/执行断流和按需生成64MiB预算边界（long-data-focused-reviewed/）。
+Initial 4 public sync/async multiple-piece/empty-stream cases failed then passed (long-data-red/, long-data-green/). Expanded verification initially had35 passed/1 failed because a new test expected local ServerErrorCode=null instead of the existing int/0 contract; only the test changed (long-data-focused/). Review found the fixed10-byte EXECUTE header omitted from budgets; long-data-budget-red/ showed over-budget execution reaching EXECUTE. Both paths were fixed. Final targeted 37 passed, including15 new LongData and 22 prepare/client-fallback regressions, covering mixed parameters, short reads/snapshots, nonseekable sources, ownership/position, Prepare without reads, repeated empty stream/SQL NULL, invalid declarations, source failure/cancellation, async exclusivity, trusted ERR/execution disconnect, and lazily generated64 MiB boundaries (long-data-focused-reviewed/).
 
-新增20项五资产同步/异步×标准/OB20消费全部通过（long-data-consumer-focused/），验证多块无应答请求、EXECUTE类型头/无inline值、同statement再执行空流和statement关闭；MySQL显式注入认证后模式事实，不放宽A05。独立设计与代码走查核对调用者/批次/快照、污染清理及OB20边界，无剩余阻断；Prepare值校验时机与阻塞源取消限制已写明。格式首轮只发现新测试attribute需换行，修正后7文件0调整。
+Added 20 five-asset sync/async×standard/OB20 consumer cases passed (long-data-consumer-focused/), checking multiple response-free pieces, EXECUTE type/no inline value, empty reexecution on the same statement, and statement closure. MySQL facts are explicitly injected after authentication, without relaxing A05. Independent design/code review covered callers/batches/snapshots, contamination cleanup, and OB20 boundaries, with no blocker. Prepare value-validation timing and blocking-source cancellation limits were documented. Initial formatting found only new attributes needing line breaks; seven files then needed no adjustment.
 
-| 最终检查 | 结果 | 原始证据 |
+| Final check | Result | Raw evidence |
 | --- | --- | --- |
-| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/long-data-build-final.log |
-| 完整Unit | 3040通过，0失败/跳过；原3025项保留，新增15项 | TestResults/long-data-unit-verified/*.trx |
-| 完整Consumer | 2026通过，0失败/跳过；原2006项保留，新增20项 | TestResults/long-data-consumer-final/*.trx |
-| 完整DI | 14通过，0失败/跳过 | TestResults/long-data-di-final/*.trx |
-| 范围格式及diff | 初始7个源码/测试文件及后续游标夹具共8个无需调整；diff通过 | TestResults/long-data-format-reviewed.log、long-data-cursor-format.log；git diff --check |
-| 双包及五资产实际包消费 | 双包及五资产消费通过；实际8.0.32/9.0.21/10.0.13 | TestResults/long-data-pack.log、long-data-package-verification.log |
+| Release core five/DI five and tests | 0 warnings/errors | TestResults/long-data-build-final.log |
+| Full Unit | 3040 passed; 0 failed/skipped; original 3025 retained,15 added | TestResults/long-data-unit-verified/*.trx |
+| Full Consumer | 2026 passed; 0 failed/skipped; original 2006 retained,20 added | TestResults/long-data-consumer-final/*.trx |
+| Full DI | 14 passed; 0 failed/skipped | TestResults/long-data-di-final/*.trx |
+| Scoped format/diff | Initial 7 source/test files plus later cursor fixture,8 total, needed no adjustment; diff passed | TestResults/long-data-format-reviewed.log, long-data-cursor-format.log; git diff --check |
+| Dual packages/actual five-asset consumption | Passed; actual8.0.32/9.0.21/10.0.13 | TestResults/long-data-pack.log, long-data-package-verification.log |
 
-本轮命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；三个工程分别dotnet test -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录。范围dotnet format whitespace --no-restore --verify-no-changes；dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/long-data-packages，随后pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/long-data-packages。本轮未重建运行中的测试程序集或产品；Unit首轮结束后，使用--no-dependencies单独重建已空闲的Unit程序集，15个产品DLL前后SHA256完全一致，Consumer运行保持原样。
+Commands: dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false; three project-specific dotnet test runs with -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory. Scoped dotnet format whitespace --no-restore --verify-no-changes; dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/long-data-packages; pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/long-data-packages. Running test/product assemblies were not rebuilt. After initial Unit completion, only the idle Unit assembly was rebuilt with --no-dependencies;15 product DLL hashes remained identical, and the Consumer run was undisturbed.
 
-首轮完整Unit为3039通过/1失败（long-data-unit-final/），失败来自既有游标超量行夹具：客户端按预期收到第二行即断开，夹具仍写尾包触发IOException。仅调整夹具超量分支，在非法行后等待断开，并精确断言内层ProtocolException的超量错误，防止缺尾造成假通过；产品游标逻辑未改。修后相关21项定向及完整3040项通过，保留首轮失败报告。
+Initial full Unit had3039 passed/1 failed (long-data-unit-final/): the existing excess-cursor-row fixture kept writing a trailer after the client correctly disconnected on the second row, causing IOException. Only that fixture branch changed to wait for disconnect after the invalid row and assert the inner ProtocolException's excess-row error, preventing false positives from missing trailers. Product cursor logic was unchanged. Related21 targeted cases and full3040 passed afterward; the first failure report remains preserved.
 
-三份最终完整TRX均Completed，全部Passed，0失败/跳过/中止；与M11基线逐项比较移除0，清单见TestResults/long-data-inventory-final.json。双包实际消费者、包副本及restore图保留于TestResults/package-validation/b25bfe5f75e548429c9acae821a42ccb/。完整测试结束后testhost进程已退出。所有模拟报文代码仅位于tests，不进入产品包、不安装常驻服务；本地协议测试不等同真实数据库兼容验收。
+All three final full TRX files were Completed/Passed,0 failed/skipped/aborted. Name comparison against M11 found0 removed cases; TestResults/long-data-inventory-final.json. Consumers/package copies/restore graphs: TestResults/package-validation/b25bfe5f75e548429c9acae821a42ccb/. testhost exited after full tests. Simulated protocol code is confined to tests, excluded from packages, and installs no resident service. Local protocol tests do not establish real compatibility.
 
-真实OceanBase/OBProxy的LONG_DATA接受范围、清理/错误语义、版本兼容和Linux/Windows部署均按用户要求不执行、未验证。Consumer宿主仍为net10；包基本样例不代表所有运行时均完成长参数SQL验收。下一明确本地功能是M07 Oracle PIECE_DATA；A05/C01、D15延后范围及许可/真实矩阵/发布关口仍开放，不关闭整体目标，不发布、不推送。
+Real OceanBase/OBProxy LONG_DATA acceptance, cleanup/error semantics, version compatibility, and Linux/Windows deployment were not executed or verified at the user's request. Consumer hosts remained net10; basic samples do not establish long-parameter SQL acceptance on every runtime. The next defined local feature was M07 Oracle PIECE_DATA. A05/C01, D15 deferrals, license/real matrix/release gates remain open; no overall closure, publication, or push.
 
-## M11 过程/参数目录本地实施（2026-10-20）
+## M11 procedure/parameter catalogs: local implementation (2026-10-20)
 
-核查发现架构M11的D阶段过程/参数目录尚未落地：现有D02提供过程执行和OUT，C05只提供四个GetSchema集合。本轮细化并接入Procedures/ProcedureParameters，共用现有目录装载、精确整数转换、原事务/RequiredSession/独占、总超时与取消及读尽终态，不新增配置、依赖、DeriveParameters或参数自动构造。五资产同步、现代三资产GetSchemaAsync；原四集合语义和顺序保留，集合清单追加两行。
+M11's D-stage catalogs were missing: D02 executed procedures/OUT and C05 exposed only four GetSchema collections. Added Procedures/ProcedureParameters using existing catalog loading, exact integer conversion, original transaction/RequiredSession/exclusivity, total timeout/cancellation, and terminal-response draining. No configuration, dependency, DeriveParameters, or automatic parameter construction. Sync covers five assets; GetSchemaAsync covers three modern assets. The original four collections retain semantics/order; two rows are appended to the collection list.
 
-MySQL直接读取INFORMATION_SCHEMA.ROUTINES/PARAMETERS并保留ROUTINE_TYPE，不通过名称关联两表而混淆同名过程/函数。Oracle直接列举ALL_PROCEDURES的独立过程/函数及包成员，排除包头，保留PACKAGE_NAME/OVERLOAD/SUBPROGRAM_ID；参数读取ALL_ARGUMENTS顶层非占位行，保留原POSITION、返回行及TYPE_OWNER/TYPE_NAME/TYPE_SUBNAME。包成员/参数无法直接确认的例程类型保留DBNull，不从没有返回行推断PROCEDURE。长度按字节，数值和时间精度分别取值。两集合各5个精确协议绑定限制，MySQL无schema/package及Oracle无catalog的非null限制直接返回固定形状空表；详见架构目录表及开发方案M11。
+MySQL reads INFORMATION_SCHEMA.ROUTINES/PARAMETERS directly and retains ROUTINE_TYPE, without name-joining same-named procedures/functions. Oracle lists standalone procedures/functions and package members from ALL_PROCEDURES, excluding package headers and retaining PACKAGE_NAME/OVERLOAD/SUBPROGRAM_ID. Parameters use top-level nonplaceholder ALL_ARGUMENTS rows, preserving original POSITION, return rows, and TYPE_OWNER/TYPE_NAME/TYPE_SUBNAME. Unconfirmed routine types for members/parameters remain DBNull; absent return rows do not imply PROCEDURE. Lengths use bytes, with numeric and temporal precision read separately. Each collection has five exact protocol-bound restrictions. Nonnull schema/package restrictions in MySQL, and catalog in Oracle, return an empty table of fixed shape. See architecture catalog tables and plan M11.
 
-固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的JDBC4DatabaseMetaData.java:2775/2898/4842/4991及DefaultSQLs提供字典字段依据。Java Oracle过程列表使用ALL_OBJECTS/ALL_ARGUMENTS，ALL_PROCEDURES用于参数元数据关联；本驱动直接列举ALL_PROCEDURES是为保留无参/包/重载身份作出的选择，不宣称同一SQL链或真实服务端已验证。不移植Java模式匹配、名称折叠、mysql.proc回退、JDBC类型数字、虚构长度和可空性。
+Fixed Java SHA6adc311ba5db8b2f19f98f3e6e4734667fdfdda1, JDBC4DatabaseMetaData.java:2775/2898/4842/4991 and DefaultSQLs, supplies dictionary-field evidence. Java Oracle routine listing uses ALL_OBJECTS/ALL_ARGUMENTS, with ALL_PROCEDURES joining parameter metadata. This driver deliberately lists ALL_PROCEDURES directly to preserve parameterless/package/overload identities; this is not the same SQL chain or proven real-server behavior. Java pattern matching/name folding/mysql.proc fallback/JDBC type numbers and invented lengths/nullability were not ported.
 
-初次新测试编译因Prepared夹具的ushort参数传入int失败（routine-schema-red.log），修正测试参数后22项均失败（routine-schema-red-compiled/），证明缺失集合和相应公开行为。最小实现首轮64通过/2失败（routine-schema-green/）；诊断聚合服务端断言发现，两个Oracle限制用例错误期待发包仍含:p，实际既有预处理绑定器依法改为?（routine-schema-restriction-diagnosis/）。只修测试预期，未改绑定器或放宽产品；修后68通过（routine-schema-focused-fixed/）。
+New tests first failed compilation because an int was passed to the Prepared fixture's ushort parameter (routine-schema-red.log). After fixing the test parameter, all 22 failed (routine-schema-red-compiled/), demonstrating the missing collections/public behavior. Minimal implementation initially had64 passed/2 failed (routine-schema-green/). Aggregated server assertions showed two Oracle restriction tests wrongly expected :p on the wire although the existing binder correctly rewrites it to? (routine-schema-restriction-diagnosis/). Only expectations changed; binder/product gates remained intact. Then68 passed (routine-schema-focused-fixed/).
 
-独立设计复核要求明确ALL_PROCEDURES为本驱动选择、未知方向不猜测及同名例程按ROUTINE_TYPE排序，均已落实。代码走查发现旧Batch静态集合计数仍为4，随公开清单更新为6；另补准确过滤左侧字段/CASE及Oracle FUNCTION限制，避免错误绑定包名仍全绿。最终定向77项通过，含新增31个RoutineSchema用例、既有目录及空批次回归（routine-schema-focused-reviewed/）。覆盖两模式/两集合、同步/异步、精确参数、NULL/原始复杂身份、Oracle NUMBER、返回行/重载、错误列名/小数/溢出/额外结果、已知权限ERR复用及异步独占/取消。
+Independent design review required documenting ALL_PROCEDURES as this driver's choice, avoiding guesses for unknown directions, and ordering same-named routines by ROUTINE_TYPE; all addressed. Code review found the old Batch static collection count still4; it was updated to 6. Added exact assertions for restriction left operands/CASE and Oracle FUNCTION, preventing false green results from binding the wrong package field. Final targeted 77 passed, including31 new RoutineSchema cases and catalog/empty-batch regressions (routine-schema-focused-reviewed/). Coverage: both modes/collections, sync/async, exact parameters, NULL/raw complex identities, Oracle NUMBER, return rows/overloads, wrong column names/fractions/overflow/extra results, trusted permission-ERR reuse, async exclusivity/cancellation.
 
-Consumer新增32项：两个Standard同步、三个现代同步/异步，分别两模式×两集合，原目录8项一起定向40通过（routine-schema-consumer-focused/）。MySQL仍使用显式认证后事实夹具，不放宽A05；没有追加TLS/OB20矩阵。所有模拟代码只在tests中运行、不会进入产品包或安装常驻服务。独立代码复核已确认修复及新增断言，无剩余阻断。
+Added 32 Consumer cases: Standard sync and three modern sync/async, both modes×both collections. With8 existing catalog cases,40 targeted passed (routine-schema-consumer-focused/). MySQL still uses explicit post-auth facts; A05 unchanged. No extra TLS/OB20 matrix. Simulations remain in tests, excluded from packages/resident services. Independent recheck confirmed fixes/assertions and found no blocker.
 
-| 最终检查 | 结果 | 原始证据 |
+| Final check | Result | Raw evidence |
 | --- | --- | --- |
-| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/routine-schema-build-final.log |
-| 完整Unit | 3025通过，0失败/跳过；原2994项全部保留，新增31项 | TestResults/routine-schema-unit-final/*.trx |
-| 完整Consumer | 2006通过，0失败/跳过；原1974项全部保留，新增32项 | TestResults/routine-schema-consumer-final/*.trx |
-| 完整DI | 14通过，0失败/跳过 | TestResults/routine-schema-di-final/*.trx |
-| 范围格式 | 7个源码/测试文件无需格式调整 | TestResults/routine-schema-format.log |
-| 双包及五资产实际包消费 | 双包生成、五资产消费通过；实际运行时8.0.32/9.0.21/10.0.13 | TestResults/routine-schema-pack.log、routine-schema-package-verification.log |
+| Release core five/DI five and tests | 0 warnings/errors | TestResults/routine-schema-build-final.log |
+| Full Unit | 3025 passed;0 failed/skipped; original 2994 retained,31 added | TestResults/routine-schema-unit-final/*.trx |
+| Full Consumer | 2006 passed;0 failed/skipped; original 1974 retained,32 added | TestResults/routine-schema-consumer-final/*.trx |
+| Full DI | 14 passed;0 failed/skipped | TestResults/routine-schema-di-final/*.trx |
+| Scoped formatting | 7 source/test files needed no adjustment | TestResults/routine-schema-format.log |
+| Dual packages/actual five-asset consumption | Passed; runtimes 8.0.32/9.0.21/10.0.13 | TestResults/routine-schema-pack.log, routine-schema-package-verification.log |
 
-本轮命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录。Unit定向筛选RoutineSchema/ConnectionSchema/EmptyBatch，Consumer定向RoutineSchema/EachAssetExposesSchema。范围格式dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-changes --include对应7文件 --verbosity diagnostic。打包dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/routine-schema-packages，再pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/routine-schema-packages。使用正常本地TLS私钥权限，不改系统信任根；完整测试期间不重建程序集。
+Commands: dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false; Unit/Consumer/DI dotnet test with -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory. Unit filters: RoutineSchema/ConnectionSchema/EmptyBatch; Consumer: RoutineSchema/EachAssetExposesSchema. Scoped dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-changes --include the 7 files --verbosity diagnostic. dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/routine-schema-packages; pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/routine-schema-packages. Normal local TLS private-key permissions; no system trust-root change or assembly rebuild during full tests.
 
-实际包消费的独立消费者、包副本及restore图保留在TestResults/package-validation/1f4c32cb9ec042fc8842935c65305635；两个Standard资产的消费宿主为10.0.13。
+Consumers/package copies/restore graphs: TestResults/package-validation/1f4c32cb9ec042fc8842935c65305635; both Standard hosts10.0.13. Three full TRX files were Completed/Passed without skips/aborts; per-case comparison against M08: TestResults/routine-schema-inventory-final.json. testhost exited. Final scoped review, UTF8 without BOM/CRLF, and git diff --check passed. Only functionality/tests/docs were committed, excluding logs/artifacts.
 
-三份完整TRX状态均为Completed，全部结果为Passed，无跳过或中止；与M08基线逐项比较的清单结果见TestResults/routine-schema-inventory-final.json。完整消费测试结束后testhost进程已退出。最终范围走查、UTF-8无BOM/CRLF及git diff --check通过；仅提交功能、测试和文档，不提交日志或测试产物。
+Real dictionary fields/permissions/visibility, parameterless/package/overload/complex-type semantics, version/OBProxy, and Linux/Windows deployment were not executed or verified at the user's request. Five-asset Consumer hosts remain.NET10; actual8/9 basic package samples do not prove M11 query success there or on servers. Catalogs guarantee neither cross-query dictionary snapshots nor complex-parameter reconstruction. A05/C01, D15 deferrals, license/real matrix/release gates remain open; no overall closure, publication, or push.
 
-真实字典字段/权限/可见性、无参/包/重载/复杂类型语义与版本/OBProxy，以及Linux/Windows部署均按用户要求不执行、未验证。五资产Consumer宿主仍为.NET10；实际8/9包样例只证明基本包消费，不证明M11查询在这些运行时或服务端成功。目录查询不提供跨查询字典快照或复杂参数重建保证。A05/C01、D15保留范围和许可/真实矩阵/发布关口仍开放，本模块不关闭整体目标，不发布、不推送。
+## Remaining-work review after M08 (2026-10-20)
 
-## M08提交后的剩余工作核查（2026-10-20）
+Baseline ed10e95. A05 trusted MySQL identification and C01 complete reset/pooling lack real-server evidence; no database connection was made at the user's request and synthetic packets do not bypass gates. D15 Standard GSSAPI/other Windows mechanisms remain explicitly deferred. Adapter/command builder are on demand; Java API availability does not justify extra dependencies/configuration. A04 trusted CA, real mode/OBProxy/coordinator/platform acceptance, and license/package-name release gates remain open.
 
-核查基线为ed10e95。A05可信MySQL识别、C01完整重置/池化均缺真实服务端证据；按用户要求不连接数据库，不用合成报文放行。D15 Standard GSSAPI/其他Windows机制已明确延后，adapter/command builder按需实现，不因Java存在相应API就追加依赖或配置。A04可信CA、各阶段实库/OBProxy/协调器/平台与许可/包名发布关口继续开放。
+Independent review found M11 catalogs still planned in architecture stage D: Schema.cs had only four collections and D02 supplied execution/OUT, not catalog discovery. Although precise collection contracts were missing, development did not require a prior database connection. The next work therefore defined minimal GetSchema collections using fixed-Java dictionary evidence/current loading paths, without treating unspecified requirements as environmental blockers or expanding into all Java APIs/DeriveParameters. See plan M11 for scope/tests/real limits; no overall completion claim.
 
-独立范围复核发现M11过程/参数目录仍列在架构D阶段规划，当前Schema.cs仅四集合，D02只交付过程执行与OUT，不能等同目录发现已经完成。该项缺少具体集合契约，但并非必须先连数据库才能开发，因此继续细化最小GetSchema集合，沿固定Java字典来源和当前目录加载路径实施；不将未细化需求当成环境阻塞，也不扩展为整套Java API或DeriveParameters。后续范围、测试与真实限制见开发方案M11段；本核查不声明整体目标完成。
+## M08 Oracle extended Fetch: local implementation (2026-10-20)
 
-## M08 Oracle扩展Fetch本地实施（2026-10-20）
+Architecture/source comparison found ordinary9-byte Fetch and REF CURSOR already implemented; explicit Oracle extended Fetch was missing. Added command-level UseCursorOffset to five assets, defaultfalse, requiring positive FetchSize and authenticated Oracle mode. Classic server prepare is used; first execution strictly probes ob_version()>=2.2.5. Version is cached per physical session and shared with PrepareExecute, whose explicit option/2.2.76 gate remain unchanged. Reopen does not reuse old session cache. Standalone Prepare neither probes nor fetches; execution checks admission without silent fallback.
 
-对照架构M08与源码，普通9字节Fetch和REF CURSOR已经存在，实际缺口是显式Oracle扩展Fetch。五资产新增命令级UseCursorOffset，默认false、须正FetchSize及认证后Oracle模式；经典服务端prepare，首次执行严格探测ob_version()>=2.2.5。版本缓存在物理会话并与PrepareExecute共享，后者原有显式选项及2.2.76门槛不变；关闭重开不复用旧会话缓存。独立Prepare不探测或Fetch，执行时才准入，无静默回退。
+Fixed Java SHA6adc311ba5db8b2f19f98f3e6e4734667fdfdda1, AbstractConnectProtocol.java:1783, AbstractQueryProtocol.java:1423, Packet.java:117, CursorResultSet.java:222, supports admission,19-byte extended requests, direction constants, and separate trailing OK. This implementation chooses NEXT=2, offset=0, final field=1, retaining a forward-only reader without scroll APIs. Java next() actually uses ABSOLUTE; this choice follows protocol comments and has no real-server round-trip evidence. Strict equality of trailing affectedRows to cumulative row position is an implementation consistency constraint, not a proven server guarantee.
 
-固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的AbstractConnectProtocol.java:1783、AbstractQueryProtocol.java:1423、Packet.java:117及CursorResultSet.java:222提供准入、19字节扩展请求、方向常量和独立尾OK依据。这里选择NEXT=2、offset=0、末字段=1，保留向前只读reader而不添加滚动API；Java实际next()调用ABSOLUTE，本选择来自协议说明，尚无真实服务端往返证据。尾affectedRows按累计行位置严格相等校验，是本实现的一致性约束，不能当作已证明的服务端保证。
+The lease survives row termination until a complete trailing OK and standard/OB20 boundaries pass. Position counts do not affect RecordsAffected; extra session reports apply normally. Missing/malformed trailers, invalid counts/flags, cancellation/timeout/disconnect destroy cursor sessions without replay; complete trailing ERR preserves known failure. Ordinary9-byte Fetch/REF CURSOR paths stay unchanged.
 
-每页行终态后保留租约直至完整尾OK及标准/OB20边界通过；尾OK的位置不污染RecordsAffected，额外会话报告正常应用。缺尾、畸形、非法计数/标志、取消、超时及断流销毁游标会话且不重放，完整尾ERR保留已知失败。普通9字节Fetch及REF CURSOR路径不变。
+Initial 14 regressions all failed before implementation (cursor-offset-red/), then passed. Expanded targeted Unit52 passed (cursor-offset-unit-reviewed/): sync/async, both EOF types, default/sequential access, multiple/empty final pages/empty results, version boundaries/cache/reopen/explicit Prepare, statement reuse, delayed trailing OK/cancel/close/timeout/precancel, ERR/missing/truncated/bad counts/flags, no progress/excess rows/lost cursor, and intermediate/final-page timezone reports. Added 100 Consumer cases across five assets×sync/async×standard/OB20 passed (cursor-offset-consumer-green/); sync covers default access and async SequentialAccess, with EOF combinations additionally in Unit.
 
-实现前14项回归全部失败（cursor-offset-red/），随后实现通过；扩展后52项Unit定向全通过（cursor-offset-unit-reviewed/）。涵盖同步/异步、两类EOF、默认/顺序读取、多页/空末页/空结果、版本边界/缓存/重开/显式Prepare、statement复用、尾OK延迟/取消/关闭/超时/预取消、ERR/缺失/截断/坏计数/标志、无进展/超量/丢游标和中间/最终页时区报告。五资产×同步/异步×标准/OB20的Consumer新增100项通过（cursor-offset-consumer-green/）；同步覆盖默认读取，异步覆盖SequentialAccess，两类EOF组合另由Unit覆盖。
+The first two Consumer runs each failed 100 (cursor-offset-consumer-focused/, cursor-offset-consumer-diagnosis/): the version-query fixture omitted terminal timezone facts, so the driver correctly probed timezone while the fixture expected PREPARE. Aggregated server errors exposed the cause; existing Report termination was added without relaxing initialization/protocol checks. cursor-offset-consumer-rebuild.log used a nonmatching filter solely to rebuild and is not passing-test evidence. Original failures are retained.
 
-Consumer初始两轮各100失败（cursor-offset-consumer-focused/、cursor-offset-consumer-diagnosis/），根因是新夹具版本查询终态未报告会话时区，驱动依法补发时区查询而夹具错误期待PREPARE。增加服务端异常聚合定位后补齐既有Report终态；未放宽产品初始化或协议校验。cursor-offset-consumer-rebuild.log使用无匹配过滤器，仅用于重建，不计测试通过。以上失败证据均保留。
-
-| 最终检查 | 结果 | 原始证据 |
+| Final check | Result | Raw evidence |
 | --- | --- | --- |
-| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/cursor-offset-build-final.log |
-| 完整Unit | 2994通过，含新增52；0失败/跳过 | TestResults/cursor-offset-unit-final/*.trx |
-| 完整Consumer | 1974通过，含新增100；0失败/跳过 | TestResults/cursor-offset-consumer-final/*.trx |
-| 完整DI | 14通过，0失败/跳过 | TestResults/cursor-offset-di-final/*.trx |
-| 范围格式 | 9个源码/测试文件无需格式调整 | TestResults/cursor-offset-format.log |
-| 双包及五资产实际包消费 | 包内容/依赖组/隔离哈希及新API编译消费通过，0警告/错误 | TestResults/cursor-offset-pack.log、cursor-offset-package-verification.log；TestResults/package-validation/3f7fbe714de140768dd7498145f17c15/ |
+| Release core five/DI five and tests | 0 warnings/errors | TestResults/cursor-offset-build-final.log |
+| Full Unit | 2994 passed, including52 new;0 failed/skipped | TestResults/cursor-offset-unit-final/*.trx |
+| Full Consumer | 1974 passed, including100 new;0 failed/skipped | TestResults/cursor-offset-consumer-final/*.trx |
+| Full DI | 14 passed;0 failed/skipped | TestResults/cursor-offset-di-final/*.trx |
+| Scoped formatting | 9 source/test files needed no adjustment | TestResults/cursor-offset-format.log |
+| Dual packages/actual five-asset consumption | Contents/dependency groups/isolated hashes/new-API consumption passed;0 warnings/errors | TestResults/cursor-offset-pack.log, cursor-offset-package-verification.log; TestResults/package-validation/3f7fbe714de140768dd7498145f17c15/ |
 
-三份最终TRX状态均为Completed，每项UnitTestResult均通过，无失败/跳过/中止；上轮保存点的2942个Unit和1874个Consumer用例名全部保留。git diff --check通过，最终只更新文档不改变已测程序集。本模块按用户要求测试、走查后本地提交，不推送；临时环回协议夹具仅位于tests中，不进入产品包、不安装常驻服务。
+All three final TRX files were Completed; all UnitTestResult entries passed, with 0 failed/skipped/aborted. All 2942 Unit and 1874 Consumer names from the savepoint baseline remained. git diff --check passed; final edits were documentation-only and did not change tested assemblies. Tests/independent review preceded local commit, without push. Loopback fixtures are tests-only and excluded from packages/resident services.
 
-包基础样例实际运行于.NET8.0.32/9.0.21/10.0.13，两个Standard由10.0.13隔离消费；它直接使用UseCursorOffset，但不执行SQL，不能作为该功能在8/9运行时上的协议验收。跨资产Consumer宿主仍是.NET10。独立只读设计/代码走查完成，复核版本缓存、尾边界、取消/独占与资产契约，无剩余阻断；建议的会话报告、无进展/超量及预取消回归已补齐并通过。
+Basic package samples ran on.NET8.0.32/9.0.21/10.0.13; both Standard assets were isolated on 10.0.13. Samples directly use UseCursorOffset but execute no SQL and do not establish protocol acceptance on 8/9. Cross-asset Consumers remain.NET10-hosted. Independent read-only design/code review covered cache, trailer boundaries, cancellation/exclusivity, and asset contracts, with no blocker; requested session-report/no-progress/excess-row/precancel regressions were added and passed.
 
-本轮命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录；定向加FullyQualifiedName~CursorOffset。范围格式使用dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-changes --include对应9文件 --verbosity diagnostic。打包dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/cursor-offset-packages，再pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/cursor-offset-packages。使用正常本地Windows TLS私钥权限，不改变系统信任根或依赖版本；没有并发重建完整测试使用的程序集。
+Commands: dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false; Unit/Consumer/DI dotnet test with -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory; targeted filter FullyQualifiedName~CursorOffset. Scoped dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-changes --include the 9 files --verbosity diagnostic; dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/cursor-offset-packages; pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/cursor-offset-packages. Normal Windows TLS private-key permissions; no trust-root/dependency changes or concurrent rebuild of active test assemblies.
 
-本模块不关闭整体目标。A05可信MySQL识别、C01完整重置及池化、D15 Standard GSSAPI/其他机制、真实矩阵与许可/包名发布门槛仍开放。按用户要求，真实数据库/OBProxy、NEXT/位置约定兼容、Linux/Windows部署均不执行、未验证。
+This module does not close the overall objective. A05 trusted MySQL identification, C01 complete reset/pooling, D15 Standard GSSAPI/other mechanisms, real matrices, and license/package-name release gates remain open. Real database/OBProxy, NEXT/position compatibility, and Linux/Windows deployment were not executed or verified at the user's request.
 
-## M05 现代事务保存点本地实施（2026-10-20）
+## M05 modern transaction savepoints: local implementation (2026-10-20)
 
-本轮结合架构M05、开发方案和当前代码确认保存点为实际功能缺口，而不是继续追加TLS组合。固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的OceanBaseConnection.java:1515–1558及1127–1140提供两模式语句/Oracle不支持释放的行为依据；没有连接真实数据库。现代net8/net9/net10现覆写SupportsSavepoints、Save/SaveAsync、Rollback(name)/RollbackAsync(name)、Release/ReleaseAsync；两个Standard资产不补同名API。
+Architecture M05, the plan, and current code established savepoints as a functional gap. Fixed Java SHA6adc311ba5db8b2f19f98f3e6e4734667fdfdda1, OceanBaseConnection.java:1515–1558 and 1127–1140, supplies behavioral evidence for both modes' SQL and unsupported Oracle release; no real database was connected. Modern net8/net9/net10 now override SupportsSavepoints, Save/SaveAsync, Rollback(name)/RollbackAsync(name), Release/ReleaseAsync. Standard assets do not gain same-named APIs.
 
-名称限1–30个ASCII字符，字母开头、后续字母/数字/下划线。MySQL引用名称，Oracle沿基线使用未引用名称并拒绝Release。引号、Unicode及__EFSavePoint等前导下划线名称未支持，不能将SupportsSavepoints理解为ORM全兼容。原事务绑定、独占、超时、取消及CommandExchange控制响应共用；回滚到保存点成功后只对原事务/会话增加资源代次，使旧LOB/REF CURSOR/复杂上下文失效，不结束事务。可信ERR只保留本地绑定，不证明服务端事务状态。异步实际等待网络，坏边界及发送后故障不重放。
+Names allow1–30 ASCII characters: initial letter, then letters/digits/underscore. MySQL quotes names; Oracle follows the baseline's unquoted names and rejects Release. Quoted/Unicode/leading-underscore names such as__EFSavePoint are unsupported; SupportsSavepoints does not imply full ORM compatibility. Existing transaction binding/exclusivity/timeout/cancellation/CommandExchange control responses are reused. Successful rollback to a savepoint increments the resource epoch only for the original transaction/session, invalidating old LOB/REF CURSOR/complex contexts without ending the transaction. Trusted ERR preserves local binding only, without proving server transaction state. Async waits on network; malformed boundaries/post-send failures are not replayed.
 
-初始22项Unit在实现前全部失败，实现后全部通过（savepoints-red/、savepoints-green/）；新增资源/旧事务/reader/日志重入回归和诊断后定向30项通过（savepoints-focused-reviewed/）。独立代码走查发现Activity名称缺少映射，新增两项回归准确复现零span后补齐映射。资源代次变异检查也确认：禁用epoch递增时两个未使用旧LOB的OpenRead均不再拒绝，回归失败（savepoints-epoch-mutation-reviewed/），已恢复原实现。
+Initial 22 Unit cases all failed before implementation and passed afterward (savepoints-red/, savepoints-green/). Resource/old-transaction/reader/log-reentrancy additions and diagnostics reached30 targeted passes (savepoints-focused-reviewed/). Independent review found missing Activity-name mappings; two regressions first reproduced zero spans, then mappings were added. Epoch mutation testing confirmed that disabling increments caused two OpenRead cases on previously unused old LOBs to stop rejecting and fail (savepoints-epoch-mutation-reviewed/); the implementation was restored.
 
-Consumer新增5项资产形状和96项三现代资产×同步/异步×两模式×标准/OB20×成功/可信ERR/断流/坏边界；定向101通过。MySQL仍显式注入认证后模式事实，不放宽A05。完整Consumer首轮捕获旧RollbackAsync按名称反射的4项歧义，仅改为精确CancellationToken签名，原7项定向全绿；已失败的旧程序集运行主动中止（1251通过/4失败，TRX状态Failed、运行被主动中止），不计完成证据。首次停止因权限拒绝、未等退出便重建导致一次文件锁失败，均保留原日志；旧进程实际退出后重建零警告/错误。首次缺失依赖产物及NuGet TLS凭据权限错误、共享编译等待和格式工具命名管道拒绝亦不计通过；使用仓库内固定依赖缓存、正常本地权限及UseSharedCompilation=false解决，没有改依赖版本、产品TLS或系统信任根。
+Added 5 asset-shape and 96 three-modern-asset×sync/async×both-mode×standard/OB20×success/trusted-ERR/disconnect/bad-boundary Consumer cases;101 targeted passed. MySQL still injects authenticated facts; A05 unchanged. Initial full Consumer exposed4 ambiguous old RollbackAsync name-reflection cases. Only reflection changed to the exact CancellationToken signature; all 7 original targeted cases passed. The old failing run was actively aborted at 1251 passed/4 failed, TRX Failed/aborted, and is not completion evidence. First stopping it was denied; rebuilding before exit caused a file-lock failure, both retained. After actual exit, rebuilding had0 warnings/errors. Missing initial dependencies, NuGet TLS credential permissions, shared-compiler waits, and format named-pipe denial are not passes. Fixed repository caches, normal permissions, and UseSharedCompilation=false resolved them without dependency/product TLS/trust-root changes.
 
-| 最终检查 | 结果 | 原始证据 |
+| Final check | Result | Raw evidence |
 | --- | --- | --- |
-| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/savepoints-build-verified.log |
-| 完整Unit | 2942通过，含新增保存点30；0失败/跳过 | TestResults/savepoints-unit-final/*.trx |
-| 完整Consumer | 1874通过，含新增保存点101；0失败/跳过 | TestResults/savepoints-consumer-verified/*.trx |
-| 完整DI | 14通过，0失败/跳过 | TestResults/savepoints-di-final/*.trx |
-| 双包及五资产实际包消费 | 包内容/依赖组/隔离哈希及五资产样例通过 | TestResults/savepoints-package-verification.log；TestResults/package-validation/97358313e4c54ad59d484e571d2824a2/ |
-| 范围格式及diff | 7个源码/测试文件无需格式调整，diff检查通过 | TestResults/savepoints-format-verified.log；git diff --check |
+| Release core five/DI five and tests | 0 warnings/errors | TestResults/savepoints-build-verified.log |
+| Full Unit | 2942 passed, including30 savepoint cases;0 failed/skipped | TestResults/savepoints-unit-final/*.trx |
+| Full Consumer | 1874 passed, including101 savepoint cases;0 failed/skipped | TestResults/savepoints-consumer-verified/*.trx |
+| Full DI | 14 passed;0 failed/skipped | TestResults/savepoints-di-final/*.trx |
+| Dual packages/actual five-asset consumption | Contents/dependency groups/isolated hashes/five-asset samples passed | TestResults/savepoints-package-verification.log; TestResults/package-validation/97358313e4c54ad59d484e571d2824a2/ |
+| Scoped format/diff | 7 source/test files needed no adjustment; diff passed | TestResults/savepoints-format-verified.log; git diff --check |
 
-三份最终TRX状态均为Completed，每项UnitTestResult均通过，失败/跳过/中止均为0；另核对首轮已执行的1255个Consumer用例名全部保留在最终报告。包样例的现代资产实际运行于.NET8.0.32/9.0.21/10.0.13，两个Standard由.NET10.0.13隔离消费；不证明保存点在全部旧运行时上的行为。保存点的跨资产协议Consumer宿主仍为.NET10，不把包基础样例当作保存点旧运行时验收。独立只读设计/代码复查已完成，修复Activity映射及旧测试反射调用后无剩余阻断；本地实现、回归及走查完成，随本模块提交，不推送。
+Three final full TRX files were Completed; every UnitTestResult passed,0 failed/skipped/aborted. All 1255 Consumer names executed in the first run appeared in final reports. Package samples ran on.NET8.0.32/9.0.21/10.0.13; Standard assets were isolated on.NET10.0.13. Basic samples do not establish savepoint behavior across older runtimes; savepoint protocol Consumers still use.NET10. Independent read-only design/code review found no blocker after Activity/reflection fixes. Local implementation/regression/review completed for this module's commit; no push.
 
-本轮命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录。定向另加FullyQualifiedName~Savepoint或原事务消费方法过滤。打包dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/savepoints-packages；包验证pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/savepoints-packages。完整测试期间未更改产品行为；失败旧Consumer进程退出后才运行最终测试。
+Commands: dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false; project-specific Unit/Consumer/DI dotnet test with -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory. Targeted FullyQualifiedName~Savepoint or existing transaction consumer filters. dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/savepoints-packages; pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/savepoints-packages. Product behavior was unchanged during full tests; final tests started only after the old failed Consumer process exited.
 
-仍开放的项目明确保留，不以本模块关闭整体目标：A05可信MySQL模式/版本与插件矩阵、C01完整服务端重置和池化、D15 Standard GSSAPI/其他系统机制、A04可信CA/真实名称、各阶段双模式/OBProxy/协调器和发布许可/包名等验收。按用户要求，真实保存点数据/锁/DDL/重名/不存在行为、数据库连接以及Linux/Windows部署均不执行、未验证。无需因本轮新增保存点重做不相关TLS组合。
+Open items remain: A05 trusted MySQL version/mode/plugin matrix, C01 full server reset/pooling, D15 Standard GSSAPI/other system mechanisms, A04 trusted CA/real names, real both-mode/OBProxy/coordinator acceptance, license/package-name release review. Real savepoint data/locks/DDL/duplicate/missing-name behavior, database connections, and Linux/Windows deployment were not executed or verified at the user's request. Unrelated TLS combinations need no rerun for this module. The overall objective remains open.
+## Development status at the recorded baseline
 
-## 当前开发进度
+Product baseline323d39c: defined local contracts in B01–B09, C02–C07, and D01–D15 had implementations/regressions. Recent additions were M05 modern savepoints, M08 Oracle offset Fetch, M11 procedure/parameter catalogs, and M07 MySQL LONG_DATA, Oracle PIECE_DATA, and PrepareExecute stream-input combinations. D15 retains explicit Standard GSSAPI deferrals. Public A05 MySQL mode identification and C01 pooling are unimplemented. Real environments, complete integration suites, and release decisions are covered by the historical closure review above. Version remains experimental `0.1.0-alpha`; local passes are not formal acceptance. Later standalone Acceptance work is an added scope, recorded separately.
 
-当前产品基线为323d39c。B01–B09、C02–C07及D01–D15已确定本地契约内的功能已有实现和回归；近期补齐M05现代事务保存点、M08 Oracle带偏移量Fetch、M11过程/参数目录，以及M07 MySQL LONG_DATA、Oracle PIECE_DATA和PrepareExecute流输入组合。D15仍保留Standard GSSAPI等明确延后边界。A05公共MySQL模式判定和C01池化尚未实现；真实环境、完整集成套件和发布决定见本页“当前范围收尾核查”。项目仍为实验版本 `0.1.0-alpha`，本地通过不等同正式验收。
-
-| 范围 | 当前已实现及本地验证 | 尚未完成 |
+| Scope | Implemented and locally verified | Incomplete |
 | --- | --- | --- |
-| A01/A02/A03/A06 | 工程、连接配置、标准报文/序号/分片、物理会话状态与独占生命周期已完成；后续命令、statement、reader资源管理已接入 | 真实服务端互通另随阶段门槛验收 |
-| A04 | TCP、SSLRequest、TLS升级/拒绝、同步/异步取消及Windows环回已实现；同步建连借用等待句柄缺陷已修复并有压力回归 | 私有CA成功链、真实证书名及跨平台验收 |
-| A05/A07 | 安全认证、Oracle模式位、能力协商、认证错误/脱敏及真实环境测试入口已实现 | 可信MySQL模式判定及版本/插件白名单；双模式直连/OBProxy真实验收。当前公共MySQL连接仍被拒绝 |
-| B01–B09 | 统一provider/factory、现代数据源/DI/日志；文本与预处理命令、命名绑定、逐行/多结果reader、字段元数据、基础/provider-specific类型、本地事务、取消/超时/结果未知及公共API审核已完成本地实现和走查 | 完整双模式真实CRUD、参数/类型往返、事务及故障集成套件尚未编写/执行；跨平台验收未完成，本地夹具不能证明服务端兼容 |
-| C02–C04 | 多地址仅建连前切换；宽精度数值、纳秒/TZ/LTZ/零日期；SequentialAccess字段流及服务端游标已实现并有本地回归 | 真实模式/版本/OBProxy的大值、游标、精确值、资源和性能验收 |
-| C05–C07 | MySQL ChangeDatabase、六个GetSchema集合（含Procedures/ProcedureParameters）及现代异步入口；逐条DbBatch及数据源入口；ActivitySource/Meter、脱敏及Windows协议性能基线已实现并走查 | 真实目录权限/字典、切库、批次及诊断验收；池借还性能尚无实现基础 |
-| C01/C08 | 未开放Pooling=true，公开入口明确拒绝；生产验收缺口已列明 | 连接池及完整重置实现、可信版本/模式白名单、生产矩阵与G3验收 |
-| R01/R02 | 同版本双包、五资产实际包消费、故障/回退README、8/9完整本地Unit/DI及Windows Framework基础包消费工具已完成 | 许可证/来源/包名审核、正式Framework支持决定、真实兼容矩阵和最终发布审核 |
-| D14 | 四位 MySQL YEAR 本地实现，验证记录见末尾；真实验收开放 | 真实 YEAR 列往返、版本/OBProxy矩阵 |
-| D13 | MySQL BIT(1–64) 本地实现，验证记录见末尾；真实验收开放 | 真实 BIT 列往返、版本/OBProxy矩阵 |
-| D12 | MySQL JSON 文本/预处理读写、元数据及字段流本地实现，记录见末尾 | 真实 JSON 列往返、语法验证和版本/OBProxy矩阵 |
-| D11 | Oracle INTERVAL 两种精确值、文本/预处理读写及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
-| D10 | Oracle NCHAR/NVARCHAR2 独立会话字符集、文本/预处理读写、顺序字符流及元数据本地实现，记录见末尾 | 真实列往返、版本/OBProxy 矩阵 |
-| D15 | SHA-2 fast/TLS、固定RSA、显式公钥获取、old password、Ed25519、PAM及现代资产Kerberos GSSAPI本地实现，验证见末尾 | Standard GSSAPI、其他系统机制、真实KDC/私有CA及两模式实库矩阵 |
-| D01 | OB20帧/校验、协商/回退、流式传输及脱敏追踪已有本地实现；五资产Required TLS执行、部分字段消费故障销毁及完整链路追踪TLS补验见末尾 | VerifyFull信任链、真实采样/SHOW TRACE及版本/代理矩阵；关闭不刷新末条待发记录 |
-| D02 | 显式Oracle过程/函数、标量OUT/InputOutput/RETURNING、内部结果隐藏、输出原子发布及事务/statement清理已有本地实现，见末尾 | 真实版本/OBProxy互通；多行/复杂输出及REF CURSOR分别归D06/D05/D03，本路径独立Prepare/FetchSize不支持 |
-| D03 | REF CURSOR输出对象、原会话/事务代次绑定、分页reader和父statement所有权已本地实现，见末尾 | 实库/OBProxy矩阵；游标输入/输入输出及普通结果列cursor值不支持 |
-| D04 | V1/V2解析、显式协商、Blob/Clob列/参数/输出、原会话分块流、WRITE/TRIM及临时对象显式创建/释放已本地接入；Required TLS公开消费补验见末尾 | 真实版本/OBProxy、资源生命周期及可信TLS仍开放 |
-| D05 | 内部嵌套编解码、同会话字典、值构造、命名结果/参数/输出、匿名标量结果/输入/输出及完整本地复核完成，验证见末尾 | 真实字典/DDL、往返及版本/OBProxy资源语义验收 |
-| D06 | Oracle数组绑定、逐项状态/错误、多行OUT/RETURNING及输出原子发布已本地接入 | 真实服务端接受范围、版本/OBProxy及资源语义验收 |
-| D07 | 显式启用、安全标量及精确错误门槛下的客户端预处理回退已本地接入 | 真实语法/字符集及版本/OBProxy验收；不自动扩大回退范围 |
-| D08 | 地址发现、冻结候选快照及建连前轮转选址已本地接入；不迁移已发送SQL | 真实拓扑/发现源、故障及版本/OBProxy验收 |
-| D09 | 不可变XID、MySQL/Oracle固定会话显式XA阶段与完整恢复快照已本地接入 | 真实协调器、两模式实库及恢复/资源语义验收 |
+| A01/A02/A03/A06 | Projects, configuration, standard packets/sequences/fragments, physical-session states/exclusive lifetime; command/statement/reader resource management connected | Real-server interoperability under stage gates |
+| A04 | TCP, SSLRequest, TLS upgrade/rejection, sync/async cancellation, Windows loopback; borrowed synchronous wait-handle bug fixed with stress regression | Private-CA success chain, real certificate names, cross-platform acceptance |
+| A05/A07 | Safe authentication, Oracle mode bit, negotiation, authentication errors/redaction, real-test entry points | Trusted MySQL identification/version/plugin whitelist, real both-mode direct/OBProxy acceptance; public MySQL still rejected |
+| B01–B09 | Provider/factory, modern source/DI/logging, text/prepared commands, named binding, streaming/multiple results, metadata, basic/provider-specific values, local transactions, cancellation/timeout/unknown outcome, public API review | At this baseline complete real both-mode CRUD/parameter/type/transaction/fault suites were unwritten/unexecuted; cross-platform acceptance missing; fixtures do not prove server compatibility |
+| C02–C04 | Address failover only before connection, wide precision, nanoseconds/TZ/LTZ/zero dates, SequentialAccess streams, server cursors | Real mode/version/OBProxy large-value/cursor/exact-value/resource/performance acceptance |
+| C05–C07 | MySQL ChangeDatabase, six GetSchema collections including Procedures/ProcedureParameters and modern async APIs, sequential DbBatch/source entry points, ActivitySource/Meter/redaction, Windows protocol performance baseline | Real dictionary/permissions/database-switch/batch/diagnostics acceptance; pool checkout/return performance lacks an implementation foundation |
+| C01/C08 | Pooling=true explicitly rejected; production gaps documented | Pool/full reset, trusted version/mode whitelist, production matrix/G3 |
+| R01/R02 | Same-version dual packages, actual five-asset consumption, fault/fallback README, full8/9 local Unit/DI, Windows Framework basic-consumption tool | License/provenance/package-name review, official Framework decision, real matrix, final release review |
+| D14 | Four-digit MySQL YEAR; records below | Real YEAR round-trip/version/OBProxy |
+| D13 | MySQL BIT(1–64); records below | Real BIT round-trip/version/OBProxy |
+| D12 | MySQL JSON text/prepared reads/writes, metadata/field streams | Real JSON round-trip/syntax/version/OBProxy |
+| D11 | Two exact Oracle INTERVAL values, text/prepared reads/writes, metadata | Real round-trip/version/OBProxy |
+| D10 | Oracle NCHAR/NVARCHAR2 separate session charset, text/prepared reads/writes, sequential character streams, metadata | Real round-trip/version/OBProxy |
+| D15 | SHA-2 fast/TLS, pinned RSA, explicit key retrieval, old password, Ed25519, PAM, modern Kerberos GSSAPI | Standard GSSAPI, other system mechanisms, real KDC/private CA/both modes |
+| D01 | OB20 framing/checksums/negotiation/fallback/streaming/redacted trace; five-asset Required-TLS execution/partial-field failure destruction/full-trace TLS tests below | VerifyFull chain, real sampling/SHOW TRACE/version/proxy; closing does not flush the last pending trace record |
+| D02 | Explicit Oracle procedure/function, scalar OUT/InputOutput/RETURNING, hidden internal results, atomic output publication, transaction/statement cleanup | Real version/OBProxy; multirow/complex/REF CURSOR output belongs to D06/D05/D03; standalone Prepare/FetchSize unsupported on this path |
+| D03 | REF CURSOR outputs, original-session/transaction-epoch binding, paged reader/parent statement ownership | Real database/OBProxy; cursor Input/InputOutput and ordinary cursor-valued result columns unsupported |
+| D04 | V1/V2 parsing/explicit negotiation, Blob/Clob columns/parameters/outputs, original-session chunk streams, WRITE/TRIM, explicit temporary creation/free; Required-TLS public consumption below | Real version/OBProxy/resource lifecycle/trusted TLS |
+| D05 | Nested codecs, same-session dictionary, value construction, named results/parameters/outputs, anonymous scalar results/inputs/outputs, full local review | Real dictionary/DDL/round-trip/version/OBProxy resources |
+| D06 | Oracle array binding, per-item status/errors, multirow OUT/RETURNING, atomic output publication | Real acceptance/version/OBProxy/resources |
+| D07 | Explicit client-prepare fallback with safe scalars/exact error gates | Real syntax/charset/version/OBProxy; no automatic scope expansion |
+| D08 | Discovery, frozen candidates, preconnection round robin; sent SQL is not migrated | Real topology/discovery/fault/version/OBProxy |
+| D09 | Immutable XID, pinned-session MySQL/Oracle explicit XA phases/full recovery snapshots | Real coordinator/both-mode database/recovery/resource acceptance |
 
-工程现状：核心目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`，DI目标为 `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`；日常测试工程统一声明 `net10.0`，使用SDK10和slnx。包依赖集中管理，两个Standard及net8使用8.x Microsoft通用库，net9使用9.x，net10使用10.x；核心/DI包版本统一取根Version。
+Core and DI now target `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0`. Routine test hosts declare `net10.0`, using SDK10/slnx. CPM selects Microsoft common libraries8.x for both Standard/net8,9.x for net9,10.x for net10; both package versions use root Version.
 
-上一轮 Windows 验证结果如下（历史运行时快照；最新本地结果见页首M07 PrepareExecute流输入组合及“当前范围收尾核查”）：
+Historical Windows runtime snapshot (newer local results are in M07 PrepareExecute and the historical closure review above):
 
-| 实际运行时 | Unit通过 | Consumer通过 | DI通过 | 失败/跳过 |
+| Actual runtime | Unit passed | Consumer passed | DI passed | Failed/skipped |
 | --- | --- | --- | --- | --- |
-| .NET 8.0.31 | 1206 | 实际包消费另验 | 8 | 0/0 |
-| .NET 9.0.20 | 1206 | 实际包消费另验 | 8 | 0/0 |
+| .NET 8.0.31 | 1206 | Actual package consumption checked separately | 8 | 0/0 |
+| .NET 9.0.20 | 1206 | Actual package consumption checked separately | 8 | 0/0 |
 | .NET 10.0.12 | 1206 | 152 | 8 | 0/0 |
 
-报告为 `TestResults/runtime8-unit-final.trx`、`runtime8-di.trx`、`runtime9-unit.trx`、`runtime9-di.trx`及 `runtime10-{unit,consumer,di}-final.trx`。最新Release slnx核心五目标/DI三目标编译为0警告、0错误（`TestResults/framework-slnx-build-final.log`）；默认五资产和可选Framework包验证均通过（`framework-default-package-final.log`、`framework-package-final.log`）。Framework仅证明net48目标在本机4.8.1上的基础Standard2.0包消费，不代表完整SQL/TLS或原版4.8支持。
+Reports: `TestResults/runtime8-unit-final.trx`, `runtime8-di.trx`, `runtime9-unit.trx`, `runtime9-di.trx`, `runtime10-{unit,consumer,di}-final.trx`. Release slnx core-five/DI-three build had0 warnings/errors (`TestResults/framework-slnx-build-final.log`); default five-asset/optional Framework package checks passed (`framework-default-package-final.log`, `framework-package-final.log`). Framework proves only basic Standard2.0 package consumption by net48 on local4.8.1, not full SQL/TLS or original 4.8 support.
 
-最近已提交：`d8d7072`修复同步TCP等待句柄；`0e8229b`补齐8/9完整本地回归并修复测试兼容；`1aeba69`新增可选Windows Framework包消费及生成工程重建修复。已报告走查问题的修复和红绿证据见后文。
+Commits recorded then: `d8d7072` synchronous TCP wait-handle fix; `0e8229b` full8/9 local regression/test compatibility; `1aeba69` optional Windows Framework consumption/generated-project rebuild fix. Review fixes/red-green evidence follow. Stage counts below represent formal acceptance, so B/C gate counts of0 do not mean unimplemented. Each module's counts are historical snapshots; latest full results in this historical ledger are the M07 PrepareExecute record above.
 
-后文阶段计数按正式验收完成项统计，B/C显示0项通过关口不代表没有实现；各模块落地时的测试数量为历史快照，最新全量结果以页首M07 PrepareExecute流输入组合记录为准。
+## Local scope review (2026-10-19)
 
-## 本轮本地范围复核（2026-10-19）
+Under the request to defer other-machine/database-server deployment, checked every unchecked plan item and unsupported source entry. Added only A04 local TLS-handshake interruption verification, without opening unproven MySQL/pooling or claiming deferred extensions.
 
-按“暂不部署其他电脑或数据库服务端”的要求，逐项核对开发方案所有未勾选项及源码中的未支持入口。本轮只补齐 A04 的本地 TLS 握手中断验证；没有放行缺少真实依据的 MySQL 模式或池化，也没有将延期扩展写成已支持。
+Added five `PhysicalSessionTests.SilentTlsHandshakeIsInterruptedAndClosesTransport` regressions: the server receives SSLRequest/TLS records, then stays silent. Sync/async total connection timeout, sync/async close, and async caller cancellation must end opening; the peer must observe disconnect before active test cleanup. Assertions cover final state/original token/no authenticated session info/no command lease. Existing product code passed unchanged. Independent read-only PhysicalSession/TLS/loopback-resource review found no fix required.
 
-新增 `PhysicalSessionTests.SilentTlsHandshakeIsInterruptedAndClosesTransport` 五项回归：服务端先接收 SSLRequest 和 TLS 握手记录，再保持静默；同步/异步总连接超时、同步/异步关闭及异步调用方取消均须结束建连，对端须在测试主动清理前观察到断开。测试还校验最终状态、调用方 token、无认证后会话信息及不可取得命令租约。产品已有实现通过，无需改动产品代码。独立只读走查核对了 PhysicalSession、TLS 升级及环回资源路径，未发现需修复问题。
+A private-CA experiment triggered Windows confirmation for installing/removing trust roots. At the user's stop request, processes were terminated, all related code reverted, and the sole remaining dedicated test root removed; reenumbering confirmed no residue. Passed/failed/aborted reports from that experiment are not completion evidence. Default unit tests must not install/remove trust roots. Trusted private-CA success/name checks remain dedicated-environment acceptance.
 
-私有 CA 测试尝试触发 Windows 安装/删除信任根的人工确认，用户要求停止后，已终止测试进程、撤销全部相关代码并清除唯一残留的专用测试根证书，重新枚举确认无残留。该尝试的通过/失败/中止报告均不作为本轮完成证据；今后默认单元测试不安装或删除信任根。可信私有 CA 成功链和名称验证继续待专用环境验收。
+Actual environment: Windows, SDK10.0.402, .NET 10.0.13.
 
-本轮实际环境为 Windows、SDK 10.0.402、.NET 10.0.13。已重新执行：
-
-| 检查 | 本轮结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx，核心五目标/DI三目标 | 0 警告、0 错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；`TestResults/local-scope-build-reviewed.log` |
-| A04 静默 TLS 中断定向回归 | 5 通过，0 失败/跳过 | `TestResults/tls-interruption-final/*.trx` |
-| 完整 Unit | 1211 通过，0 失败/跳过 | `TestResults/tls-interruption-unit-full/*.trx` |
-| 五资产 Consumer | 152 通过，0 失败/跳过 | `TestResults/tls-interruption-consumer/*.trx` |
-| DI | 8 通过，0 失败/跳过 | `TestResults/tls-interruption-di/*.trx` |
-| 双包及五目标实际包消费 | 两包内容/依赖/哈希与全部消费通过；现代资产实际运行时 8.0.32/9.0.21/10.0.13，Standard 资产宿主 10.0.13 | `TestResults/local-scope-package-verification.log`；`TestResults/package-validation/c33a1bda8cc848fc982dffcddcee342d/` |
+| Release slnx core-five/DI-three | 0 warnings/errors | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`; `TestResults/local-scope-build-reviewed.log` |
+| A04 silent TLS targeted | 5 passed,0 failed/skipped | `TestResults/tls-interruption-final/*.trx` |
+| Full Unit | 1211 passed,0 failed/skipped | `TestResults/tls-interruption-unit-full/*.trx` |
+| Five-asset Consumer | 152 passed,0 failed/skipped | `TestResults/tls-interruption-consumer/*.trx` |
+| DI | 8 passed,0 failed/skipped | `TestResults/tls-interruption-di/*.trx` |
+| Dual-package/five-target actual consumption | Contents/dependencies/hashes/consumers passed; modern8.0.32/9.0.21/10.0.13, Standard host10.0.13 | `TestResults/local-scope-package-verification.log`; `TestResults/package-validation/c33a1bda8cc848fc982dffcddcee342d/` |
 
-测试命令为 `dotnet test tests/<对应工程>/<对应工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/<上表目录>`；定向回归另加 `--filter FullyQualifiedName~SilentTlsHandshakeIsInterruptedAndClosesTransport`。包命令为 `dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/local-scope-packages` 和 `pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/local-scope-packages`。正常 Windows TLS/私钥权限下执行，不更改驱动证书验证策略。首次沙箱还原/TLS权限失败、测试夹具试验和并发构建文件锁失败均不计为通过；还原使用仓库内 `TestResults/nuget-packages` 及 `NUGET_SCRATCH=TestResults/nuget-scratch`，最终恢复固定的 xunit.runner.visualstudio 2.8.2，不采用离线近似版本。未重新执行历史 .NET 8/9 完整 Unit/DI 或 Framework 矩阵；上述实际8/9包样例只补基础消费证据。
+Tests used `dotnet test tests/<project>/<project>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/<directory>`, adding `--filter FullyQualifiedName~SilentTlsHandshakeIsInterruptedAndClosesTransport` for targeted cases. Packaging: `dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/local-scope-packages`; `pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/local-scope-packages`. Normal Windows TLS/private-key permissions; certificate policy unchanged. Initial sandbox restore/TLS permission failures, fixture experiments, and concurrent-build locks are not passes. Restore used `TestResults/nuget-packages`, `NUGET_SCRATCH=TestResults/nuget-scratch`, and ultimately fixed xunit.runner.visualstudio2.8.2 rather than an approximate offline version. Historical full8/9 Unit/DI/Framework matrices were not rerun; actual8/9 package samples add only basic consumption evidence.
 
-此前本地范围复核将 D 阶段整体归为环境阻塞，判断过宽：用户暂缓的是异机/数据库部署联调，可独立实现和本地测试的扩展仍须继续。下表保留真实环境和发布门槛，D 项改为逐项推进本地实现；项目整体仍未完成，原阶段验收状态保持开放。
+The earlier classification of all D work as environment-blocked was too broad: the user deferred remote/database deployment, while independently implementable/testable extensions still required work. Real/release gates stayed open; D work changed to per-item local implementation, without overall completion or changing formal stage acceptance.
 
-| 剩余项 | 本轮处理及原因 |
+| Remaining item | Treatment/reason |
 | --- | --- |
-| A04 私有 CA、非 Windows，A07/B09/C08/R02 真实互通与故障矩阵 | 需人工信任配置、其他电脑或 OceanBase/OBProxy 环境，暂缓 |
-| A05 公共 MySQL 模式判定 | 缺少真实版本/模式/插件证据，不能用缺失 Oracle 位猜测 MySQL，继续安全拒绝 |
-| C01 池与完整重置、C07 池性能 | 缺少服务端完整重置与隔离证明，继续拒绝 Pooling=true |
-| D01–D15 独立扩展 | 从 D14 本地编解码、参数、元数据开始推进；其余本地可实现部分继续评估，不以 G4 或环境缺失整体搁置；目标服务端/模式往返和拓扑/协调器证明单独延期 |
-| G0 产品决定、R01 许可证/来源/包名与正式 Framework 支持 | 需要维护者决定或发布审查，不能由本地编译/夹具替代；不发布或推送 |
+| A04 private CA/non-Windows; A07/B09/C08/R02 real interoperability/fault matrix | Deferred pending manual trust setup, another machine, or OceanBase/OBProxy |
+| A05 public MySQL identification | Missing trusted version/mode/plugin evidence; do not infer MySQL from absent Oracle bit; safe rejection continues |
+| C01 pooling/full reset; C07 pool performance | Missing full-reset/isolation proof; Pooling=true remains rejected |
+| D01–D15 independent extensions | Start with D14 codecs/parameters/metadata, then assess other local portions; do not defer all under G4/environment; real mode/version round-trip/topology/coordinator proof separately deferred |
+| G0 product decisions; R01 license/provenance/name/official Framework | Maintainer/release decisions, not replaceable by builds/fixtures; no publication/push |
 
-## 中断走查问题核销（2026-10-19）
+## Resolution of interrupted-review findings (2026-10-19)
 
-首次核销已将原走查记录与当时 `0f43bf2` 源码、历史修复提交和实际执行的回归逐项核对；再次续接已找回 B01–B05 原始走查报告，并补齐 B01/B02/B04 及 C06/C07 的修复索引。以下问题均已有修复提交，本节续接复核不新增产品代码。
+The first reconciliation compared original findings with then-current `0f43bf2`, historical fix commits, and executed regressions. Resumed review recovered original B01–B05 reports and completed B01/B02/B04/C06/C07 fix indexes. All findings below already had fixes; this reconciliation added no product code.
 
-| 已报告问题 | 修复提交 | 当前回归证据 |
+| Reported issue | Fix commit | Regression evidence |
 | --- | --- | --- |
-| Opened/Closed 日志回调关闭或重开连接，导致状态事件倒序 | `7af799f` | ProviderConnectionTests：OpenedLoggerClosingConnectionPreservesStateEventOrder、ClosedLoggerReopeningConnectionPreservesStateEventOrder |
-| 协商弃用 EOF 后仍要求旧 EOF；超大 CommandTimeout 取得租约后抛错并遗留 Busy | `a142f70` | TextCommandTests：NegotiatedDeprecatedEofOmitsMetadataEofAndUsesOkTerminator、UnrepresentableTimeoutDoesNotAcquireOrStrandTheSession |
-| 终态 ERR 被失败日志回调触发的取消覆盖；Scalar 未跳过前置更新计数 | `a142f70` | TextCommandTests：ServerErrorWinsOverCancellationFromFailureLogger、ScalarSkipsInitialUpdateCountsToReachFirstResultSet |
-| 旧预处理清理超时回调可能破坏新命令；netstandard2.1 缺少异步 prepare/清理覆盖 | `a431ee8` | PhysicalSessionTests：ExpiredLeaseCancellationCannotBreakSubsequentCommand；PreparedCommandTests：PrepareAsyncWaitsAsynchronouslyForMetadata。取消回调绑定原租约，完成后的旧租约不能破坏新操作 |
-| Decimal 仅声明 Precision 时误按 Scale=0；畸形 TIME 天数参与溢出运算 | `b772c0f` | ValueCodecTests：DecimalPrecisionOnlyInfersScaleWhileExplicitZeroRequiresExactInteger、MalformedTimeDayCountIsRejectedBeforeTickArithmetic |
-| netstandard2.1 异步事务/连接/reader 清理被错误条件编译排除 | `e6b50d9` | TransactionConsumerTests：AsyncCleanupReturnsBeforeDelayedRollbackAndWaitsForRestoration，含 Standard2.1 的真实异步延迟回滚 |
-| 预读字符/耗尽字段流绕过命令取消和关闭；完整终结包误判结果未知；字段 token 未进入命令预算 | `230d596` | SequentialAccessTests：缓存字段生命周期、完整终态与取消、字段独立 token 回归 |
-| 游标 ERR 先释放租约再销毁会话；二进制行冒充 FE-OK 确认；分页/初始空结果遗漏或重复处理会话报告；部分 fetch 写入不响应 reader token | `b6881a6` | CursorTests：错误日志重入、二进制伪确认、逐页及空结果会话报告、部分写入取消回归 |
-| 目录整数转换先舍入微小小数，导致非法值误通过整数校验 | `fa37cd5` | ConnectionSchemaEdgeTests：ConnectionSchemaNeverRoundsTinyFractionsBeforeIntegerValidation，覆盖长小数字符串和浮点表示 |
-| 旧 reader 污染新批次计数或关闭重开后的连接；字段失败遗留批次预约；取消异常丢失调用方 token | `f93c15e` | BatchTests：ClosedBatchReaderCountsAreAnIndependentSnapshotAcrossReuse；BatchFaultTests：OldCloseConnectionReaderCannotCloseReopenedSession、BatchFieldStreamFailureReleasesOperationWithoutNeedingExtraClose、BatchPartialSendCancellationRetainsPrefixAndUnknownAttribution、BatchCancellationBetweenStatementsPreservesOriginalCallerToken、BatchNextResultPartialSendRetainsItsOwnReaderToken |
-| 诊断初始化回调抛错导致类型初始化失败；Activity.CurrentChanged 抛错逃逸并遗留 Busy 租约 | `e371ff4` | DiagnosticsConsumerTests：EveryAssetPublishesSafeDiagnosticsWithoutInitializationPoisoning，五资产初始化异常隔离；DiagnosticsTests：ThrowingAmbientContextChangeCallbackCannotStrandCommandOwnership，同步/异步并验证后续命令可用 |
+| Opened/Closed log callbacks close/reopen connections, reversing state events | `7af799f` | ProviderConnectionTests: OpenedLoggerClosingConnectionPreservesStateEventOrder; ClosedLoggerReopeningConnectionPreservesStateEventOrder |
+| Deprecated-EOF negotiation still required old EOF; huge CommandTimeout threw after acquiring lease and stranded Busy | `a142f70` | TextCommandTests: NegotiatedDeprecatedEofOmitsMetadataEofAndUsesOkTerminator; UnrepresentableTimeoutDoesNotAcquireOrStrandTheSession |
+| Failure-log cancellation overwrote terminal ERR; Scalar did not skip leading update counts | `a142f70` | TextCommandTests: ServerErrorWinsOverCancellationFromFailureLogger; ScalarSkipsInitialUpdateCountsToReachFirstResultSet |
+| Old prepared-cleanup timeout could break next command; Standard2.1 lacked async prepare/cleanup overrides | `a431ee8` | PhysicalSessionTests.ExpiredLeaseCancellationCannotBreakSubsequentCommand; PreparedCommandTests.PrepareAsyncWaitsAsynchronouslyForMetadata. Callbacks bind to their original lease; completed leases cannot break new work |
+| Precision-only Decimal incorrectly assumed Scale=0; malformed TIME days entered overflowing arithmetic | `b772c0f` | ValueCodecTests.DecimalPrecisionOnlyInfersScaleWhileExplicitZeroRequiresExactInteger; MalformedTimeDayCountIsRejectedBeforeTickArithmetic |
+| Conditional compilation excluded Standard2.1 async transaction/connection/reader cleanup | `e6b50d9` | TransactionConsumerTests.AsyncCleanupReturnsBeforeDelayedRollbackAndWaitsForRestoration, including genuine delayed async rollback on Standard2.1 |
+| Prefetched characters/exhausted streams bypassed cancellation/close; complete terminators misreported unknown; field token absent from command budget | `230d596` | SequentialAccessTests: cached-field lifecycle, complete terminal/cancellation, independent field-token regressions |
+| Cursor ERR released lease before session destruction; binary row mimicked FE-OK; missing/duplicate page/empty-result session reports; partial fetch writes ignored reader token | `b6881a6` | CursorTests: error-log reentrancy, fake binary acknowledgement, page/empty-result reports, partial-write cancellation |
+| Catalog integer conversion rounded tiny fractions before validation | `fa37cd5` | ConnectionSchemaEdgeTests.ConnectionSchemaNeverRoundsTinyFractionsBeforeIntegerValidation, long fraction strings/floating-point representations |
+| Old readers polluted reused batch counts/reopened connections; field failure stranded batch reservation; cancellation lost caller token | `f93c15e` | BatchTests.ClosedBatchReaderCountsAreAnIndependentSnapshotAcrossReuse; BatchFaultTests.OldCloseConnectionReaderCannotCloseReopenedSession; BatchFieldStreamFailureReleasesOperationWithoutNeedingExtraClose; BatchPartialSendCancellationRetainsPrefixAndUnknownAttribution; BatchCancellationBetweenStatementsPreservesOriginalCallerToken; BatchNextResultPartialSendRetainsItsOwnReaderToken |
+| Diagnostic initialization callbacks poisoned type initialization; Activity.CurrentChanged exceptions escaped and stranded Busy | `e371ff4` | DiagnosticsConsumerTests.EveryAssetPublishesSafeDiagnosticsWithoutInitializationPoisoning across five assets; DiagnosticsTests.ThrowingAmbientContextChangeCallbackCannotStrandCommandOwnership sync/async and subsequent-command reuse |
 
-历史续接复核（代码基线 `e371ff4`）：已核对原始走查报告、当前修复路径及回归，未发现上述报告中仍未修复的产品缺陷。重新执行 Release slnx 编译，核心五目标/DI 三目标 0 警告、0 错误；完整 Windows Unit1205、Consumer152、DI8 全部通过且零跳过，报告为 `TestResults/review-recovery-{unit,consumer,di}.trx`。解析新报告另确认本表中 20 组具名回归均实际执行并通过，包含 Standard2.1 延迟异步回滚及 C06/C07 走查修复；原顺序读取/游标回归亦在完整单测中执行。完整单测使用正常 Windows TLS 证书存储权限，未修改 TLS 策略。本轮仅补齐核销记录，实库、非 Windows、完整旧运行时兼容矩阵仍未验证，A05/C01 和各真实验收关口保持开放。
+Historical resumed review at `e371ff4` checked original reports, fixes, and regressions; no listed product defect remained. Release slnx core-five/DI-three:0 warnings/errors. Full Windows Unit1205/Consumer152/DI8 all passed,0 skipped: `TestResults/review-recovery-{unit,consumer,di}.trx`. Parsed reports confirmed20 named regression groups actually executed/passed, including Standard2.1 delayed rollback and C06/C07 fixes; sequential/cursor cases also ran in full Unit. Normal Windows TLS-store permissions, no policy changes. This was documentation reconciliation only; real/non-Windows/full older-runtime matrices and A05/C01/gates stayed open.
 
-首次核销重新执行 `dotnet build OceanBaseConnector.slnx --no-restore -c Release`：核心五目标、DI 三目标，0 警告/0 错误。Windows 完整 Unit1073、Consumer120、DI8 全部通过且零跳过；报告为 `TestResults/interrupted-review-{unit,consumer,di}.trx`，另解析 TRX 确认当时列出的回归实际执行并通过。完整单测沿用已授权的 Windows TLS 测试证书存储访问，未调整 TLS 策略。
+First reconciliation: `dotnet build OceanBaseConnector.slnx --no-restore -c Release`, core-five/DI-three0 warnings/errors; full Windows Unit1073/Consumer120/DI8 passed,0 skipped, `TestResults/interrupted-review-{unit,consumer,di}.trx`. TRX parsing confirmed then-listed cases executed/passed. Existing authorized TLS-store access was used without policy changes. At that point A04/C04 were pending, A05 lacked trusted public MySQL identification, C05 only had database switching, and C01 lacked a complete-reset whitelist; real/non-Windows/new older-runtime acceptance was unexecuted. Later C05 catalog progress is recorded below.
 
-当时此核销不改变阶段验收状态（C05后续进展见末尾目录模块记录）：A04 待验证；A05 仍缺可信公开 MySQL 模式判定；C04 待验证；C05 仅数据库切换子项落地，目录集合仍未实现；C01 完整重置白名单仍阻塞。真实数据库、非 Windows 及新的旧运行时验收未执行。
+2026-10-19 resumed review confirmed `fa37cd5` implemented C05 catalogs and fixed numeric rounding; C05 became pending verification. Source/regression/independent-review recheck found no listed unresolved issue, added no product code, and did not start C06. Later C06/fixes are below. Release slnx core-five/DI-three0 warnings/errors; Windows Unit1117/Consumer128/DI8 passed,0 skipped: `TestResults/review-resume-{unit,consumer,di}.trx`. Parsed cases included long-fraction/float rejection, cursor failure-log reentrancy/fake ACK/reports/partial-send cancellation, and field-cache lifecycle. Real/non-Windows/new older-runtime acceptance remained deferred; gates unchanged.
 
-2026-10-19 再次续接复核：`fa37cd5` 已实现 C05 目录集合并修复目录数值舍入问题，C05 当前为待验证。再次核对现有代码、对应回归和已有独立走查结论，未发现上述已报告问题仍待修复；该次复核没有新增产品代码，也没有启动 C06。后续 C06 实现和新发现问题修复见本页末记录。
+## Additional fix from resumed verification (2026-10-19)
 
-本次重新编译 Release slnx：核心五目标、DI 三目标，0 警告/0 错误；完整 Windows Unit1117、Consumer128、DI8 全通过且零跳过，报告为 `TestResults/review-resume-{unit,consumer,di}.trx`。解析报告确认上表对应回归均实际执行并通过，包含目录长小数字符串/浮点拒绝、游标失败日志重入/伪确认/状态报告/部分发送取消及字段缓存生命周期。实库、非 Windows 与新的旧运行时验收仍按既有约定暂不执行，阶段关口不变。
+During R02 local delivery verification, full Unit first failed synchronous opening in `DataSourceBatchReaderOwnsConnectionAndSourceDisposalRejectsNewOpens(false)`: `TcpTransport.Connect` WaitOne accessed a disposed SafeWaitHandle. This was a newly found issue, not an unfixed prior report. .NET 10 Socket.BeginConnect→TaskToAsyncResult→Task.AsyncWaitHandle showed fast connects can share a completed Task's borrowed wait handle, which the driver must not dispose. Fix `d8d7072` removes the using disposal while retaining socket/cancellation-registration/timeout/error cleanup.
 
-## 续接验证新增修复（2026-10-19）
+New real-loopback `ConnectSyncRepeatedSuccessDoesNotPoisonLaterConnections`:8 concurrent callers each make1024 synchronous connects/read server bytes. The same ObjectDisposedException reproduced before fixing (`TestResults/tcp-wait-handle-red.trx`; after cleanup correction, `TestResults/tcp-wait-handle-cleanup-red-final.trx`). Afterward14 transport/original-failure cases passed (`TestResults/tcp-wait-handle-cleanup-green-final.trx`). The first full rerun failed because stress TIME_WAIT exhausted Windows ephemeral ports; it is not a pass. The test server now waits for an application ACK and closes with zero linger/Close(0), avoiding interference without changing product socket policy. Cleanup ignores secondary server errors only while propagating the primary client exception; success paths still expose server failures. Final validation/independent review are in R02 below.
 
-R02 本地交付材料验证期间，完整单元测试首次出现 `DataSourceBatchReaderOwnsConnectionAndSourceDisposalRejectsNewOpens(false)` 同步建连失败，内因为 `TcpTransport.Connect` 的 `WaitOne` 访问已释放 `SafeWaitHandle`；这不是前表已报告问题的漏修。核对 .NET 10 runtime 的 Socket.BeginConnect → TaskToAsyncResult → Task.AsyncWaitHandle 实现，确认快速完成的连接可能共享已完成 Task 的等待句柄，驱动不能释放该借用句柄。修复提交为 `d8d7072`，移除错误的 using 释放，socket、取消注册、超时和错误清理流程保留。
+## Progress accounting
 
-新增真实 loopback 回归 `ConnectSyncRepeatedSuccessDoesNotPoisonLaterConnections`：8 个并发调用方各完成 1024 次同步建连并读取服务端字节。修复前复现同一 ObjectDisposedException（首次 TestResults/tcp-wait-handle-red.trx；修正清理后的 TestResults/tcp-wait-handle-cleanup-red-final.trx），修复后连同传输及原失败用例 14 项通过（最终 TestResults/tcp-wait-handle-cleanup-green-final.trx）。首次全量复跑因该压力回归积累 TIME_WAIT 耗尽 Windows 临时端口而失败，不能计为通过；测试服务端改为收到应用确认字节后以零 linger 和 Close(0) 关闭，避免残留连接影响后续测试，不修改产品 socket 策略；清理只在传播客户端主异常时忽略次生服务端异常，成功路径仍暴露服务端失败。最终验证与独立走查记录见本页末 R02 记录。
+- States: `Not started`, `In progress`, `Pending verification`, `Blocked`, `Complete`. Pending verification means code/fixtures are done but required real-environment/target-framework acceptance is not; it does not count as complete.
+- Completion evidence includes commit/PR, dotnet commands/results, reports, actual OceanBase/OBProxy versions/modes, and redacted-log paths. Save a reviewable summary when links may expire.
+- G1/G2/G3 close only when all tasks are Complete and real tenant matrices pass. R02 also requires package consumption and license/release review. Failures, skips, and unavailable environments are recorded separately, never converted to passes.
+- Report completed task counts/gates, not uncalibrated percentages. Relative weeks begin after G0 environment/product decisions; estimates assume one full-time developer and are not release dates.
+- Assign an owner before In progress. Update states/dates/evidence/blockers weekly; recheck public claims at every gate. `To record` means owner/evidence/date are all unset. Scope changes require synchronized architecture/plan/task totals/ledger updates.
 
-## 进度口径
+## G0 implementation prerequisites
 
-- 状态只用 `未开始`、`进行中`、`待验证`、`阻塞`、`完成`。`待验证` 表示代码或夹具已完成，但所属真实环境/目标框架验收尚未完成；不能计入完成数。
-- 每个任务完成时填写证据：提交或 PR、`dotnet` 命令和结果、测试报告、实测 OceanBase/OBProxy 版本、模式与脱敏日志位置。外部链接可能失效时同时保存可复核的摘要。
-- G1/G2/G3 仅在阶段所有任务为 `完成` 且真实租户矩阵通过时关闭；R02 还要求包消费和许可证/发布审查。失败、跳过与环境不可用分别记录，不折算成通过。
-- 进度按已完成任务数及阶段门槛汇报；不使用未经工作量校准的百分比。相对周从 G0 环境和产品决定完成后开始，默认 1 名全职开发者，窗口是估算而非发布日期。
-- 更新节奏：任务进入 `进行中` 前在末列写负责人；每周更新任务状态、实际完成时间、证据和阻塞；每个阶段关口再复核公开能力声明。末列的 `待记录` 表示负责人、证据和完成日均未填写。范围变化时同步修订架构、开发方案、任务总数和本台账。
+These five decisions precede W1 scheduling/G1 closure. A01 scaffolding/A03 fixtures may begin while G0 stays open, but the actual W1 date remains unset. Product decisions: architecture§9. Owners must be roles/names; verbal confirmation is not evidence.
 
-## G0 实施准入
-
-以下五项是排定 W1 和关闭 G1 的前提；G0 未关闭时可先开展 A01 工程骨架、A03 协议夹具，实际 W1 日期仍待定。产品决定详见架构设计 §9；负责人填角色或姓名，不能用“已口头确认”作为完成证据。
-
-| ID | 准入项 | 当前状态 | 完成证据 | 负责人 |
+| ID | Prerequisite | State | Evidence | Owner |
 | --- | --- | --- | --- | --- |
-| G0-1 | 明确首发 OceanBase/OBProxy 最低版本及两模式组合 | 未开始 | 版本矩阵和租户信息（脱敏） | 产品/测试环境负责人待指定 |
-| G0-2 | 准备独立 MySQL/Oracle 租户、直连与 OBProxy、可控故障网络 | 未开始 | 连接测试命令、环境说明和维护窗口 | 测试环境负责人待指定 |
-| G0-3 | 明确 TLS 证书/私有 CA、首发认证插件和允许的明文配置 | 未开始 | 证书名称、信任链、插件及安全决策记录 | 产品/安全负责人待指定 |
-| G0-4 | 决定 .NET Framework 4.8 是否正式支持 | 未开始 | 架构设计 §9 决策记录及消费矩阵更新 | 产品负责人待指定 |
-| G0-5 | 决定首版是否包含 C 阶段及其中池化、高精度能力 | 未开始 | 架构设计 §9 决策记录；若改变 A-C 基线，同步改排期和发布门槛 | 产品负责人待指定 |
+| G0-1 | First-release minimum OceanBase/OBProxy versions/both-mode combinations | Not started | Version matrix/redacted tenant details | Product/test-environment owner TBD |
+| G0-2 | Separate MySQL/Oracle tenants, direct/OBProxy paths, controllable fault network | Not started | Connection commands/environment/maintenance window | Test-environment owner TBD |
+| G0-3 | TLS certificates/private CA, initial plugins, allowed plaintext configurations | Not started | Certificate names/chains/plugins/security decisions | Product/security owner TBD |
+| G0-4 | Decide official .NET Framework4.8 support | Not started | Architecture§9 decision/consumer matrix | Product owner TBD |
+| G0-5 | Decide whether initial release includes C/pooling/high precision | Not started | Architecture§9 decision; revise schedule/gates if A–C changes | Product owner TBD |
 
-## 阶段门槛
+## Stage gates
 
-| 门槛 | 计划窗口 | 验收完成项数 | 关口状态 | 当前实现与验收差距 |
+| Gate | Planned window | Accepted tasks | State | Implementation/acceptance gap |
 | --- | --- | --- | --- | --- |
-| G0 准入 | W0 | 0/5 | 未开始 | 五项决策/环境记录 |
-| G1 协议基础 A | W1-W5 | 4/7 | 阻塞 | A01/A02/A03/A06 完成；A04 本地实现完成、待真实/跨平台验收；A05 还缺可信 MySQL 模式判定规则及版本/插件验收；A07 缺环境与可信版本矩阵；G0 未关闭 |
-| G2 ADO.NET 核心 B | W6-W17（范围修订后待重估） | 0/9 | 进行中 | B01-B09本地实现/走查完成；实际8/9各Unit1206/DI8、10 Unit1206/Consumer152/DI8及五资产包消费通过；真实双模式/跨平台及完整支持矩阵未验收 |
-| G3 生产连接 C | W18-W34 | 0/8 | 进行中 | C01缺可信完整重置白名单而阻塞；C02-C07本地实现完成待真实环境验证，C04真实资源/性能与版本矩阵、C07池性能仍待验收；C08因真实环境证据缺失而阻塞，关口未关闭 |
-| G4 发布候选 R | W35-W37 | 0/2 | 进行中 | R01/R02本地双包/五资产、8/9完整本地回归、Framework4.8.1基础消费及交付材料已完成；许可/来源/包名、正式支持范围及真实矩阵未验收 |
-| D 独立扩展 | 本地可独立部分继续，实库验收延期 | 0/15 | 进行中 | D11–D14 本地实现和验证见末尾；其余逐项实施；每项真实版本和模式证据仍须补齐，不计入 G4 |
+| G0 prerequisites | W0 | 0/5 | Not started | Five decision/environment records |
+| G1 protocol A | W1–W5 | 4/7 | Blocked | A01/A02/A03/A06 complete; A04 local done, real/cross-platform pending; A05 trusted MySQL rules/version/plugin missing; A07 environment/trusted matrix missing; G0 open |
+| G2 ADO.NET B | W6–W17, reassess after scope revision | 0/9 | In progress | B01–B09 local/review done; actual8/9 each Unit1206/DI8,10 Unit1206/Consumer152/DI8 and five-asset consumption passed; real both-mode/cross-platform/full matrix unaccepted |
+| G3 production C | W18–W34 | 0/8 | In progress | C01 blocked on reset whitelist; C02–C07 local done/real pending; C04 resources/performance/version and C07 pooling performance pending; C08 lacks real evidence; gate open |
+| G4 release R | W35–W37 | 0/2 | In progress | Local dual/five-asset packages, full8/9 regression, Framework4.8.1 basic consumption/delivery materials done; license/provenance/name/official support/real matrix unaccepted |
+| D independent extensions | Continue independent local work; real acceptance deferred | 0/15 | In progress | D11–D14 local records below; others per item; every real version/mode needs evidence; excluded from G4 |
+## A. Protocol foundation tasks
 
-## A. 协议基础任务
-
-| ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
+| ID | Window | Deliverable | State | Owner/evidence/date |
 | --- | --- | --- | --- | --- |
-| A01 | W1 | 五目标核心、三目标DI、slnx及统一net10测试/集成/消费入口 | 完成 | 2026-10-19当前工程：SDK10、OceanBaseConnector.slnx、CPM及根Version统一；核心含Standard2.0/2.1和net8/9/10，日常测试工程net10。最新Release编译0警告0错误、完整本地回归及双包/五资产消费通过，报告见首页摘要；CI入口.github/workflows/ci.yml，远端及非Windows执行仍无验收证据；夹具见tests/fixtures |
-| A02 | W1-W2 | 连接串 builder、不可变选项、脱敏 | 完成 | 2026-10-18；`OceanBaseConnectionStringBuilder` + internal `OceanBaseConnectionOptions`（`Build()` 冻结快照，测试证实后续 builder 变更不影响快照）。公开键：`Server`(同义词 `Host`)、`Port`(1-65535，默认 2881)、`User ID`(`Uid`)、`Password`(`Pwd`)、`Database`、`Connection Timeout`(默认 15)、`Command Timeout`(默认 30)、`TLS Mode`(`VerifyFull` 默认/`Required`/`Disabled`，仅名称匹配、拒绝数字串)、`TLS Server Name`、`Persist Security Info`(默认 false)、`ExpectedMode`(`MySQL`/`Oracle`)、`Pooling`(默认 false)；未知键、同义词冲突（`Server`+`Host` 等）、非法端口/超时/布尔/枚举均抛 `ArgumentException`；`KEY=` 空值遵循 ADO.NET 语义移除键、`Build()` 校验必填 `Server`/`User ID`；密码可经 `ToSanitizedConnectionString(true)` 序列化、默认脱敏，异常消息经测试不含密码/冲突值。单测 62×3 TFM 通过（`ConnectionStringBuilderTests`），四目标 Release 构建 0 警告 0 错误 |
-| A03 | W1-W3 | 标准帧/序号/分片/越界夹具 | 完成 | 2026-10-18；`Internal/Protocol/{ByteCursor,PacketChannel,ProtocolException}`。帧规则：3 字节长度 + 1 字节序号；负载 ≥0xFFFFFF 分片、整倍数以空帧终止；`BeginCommand()` 命令边界双序号归零；序号按帧递增、模 256 回绕（257 帧用例验证）；单帧与续帧链均在分配前执行逻辑包上限校验（默认 64MB，可注入更小值验证拒绝）；`ByteCursor` 全部读取经无符号比较防负数/溢出绕过。夹具：`framed-err-packet.json`（帧化 ERR：长度 72、序号 0、错误码 1045、SQLSTATE 28000）由加载器消费并用游标解析断言。测试 98×3 TFM 通过：单包/多分片/空终止帧/错序/截断（含 5 种随机种子×32 截断点）/上限拒绝；`SpyStream` 断言异步读写路径同步调用计数为 0。同步与异步共享 `TakeHeader`/`PrepareHeader`/上限校验，命令解析未混入帧层 |
-| A04 | W2-W4 | TCP、SSLRequest、TLS 验证与拒绝场景 | 待验证 | **本地实现/Windows 环回已完成，真实与跨平台验收未完成。** 2026-10-18；`Internal/Transport/{TcpTransport,TlsUpgrade,TlsHandshakeFlow}` + `Internal/Protocol/{CapabilityFlags,SslRequestPacket}` + `PacketChannel 共享双向序号/ReplaceUnderlyingStream`。TCP 同步（BeginConnect+WaitOne 超时）与异步（现代目标 ct 重载 / 两个 Standard 目标关闭 socket 中止）互不包装；拒绝/超时/取消均释放 socket，异常仅含端点信息。SSLRequest 固定 32 字节（能力 LE32 + 16MB + utf8mb4(45) + 23 零填充），字节级断言。TLS：默认 VerifyFull 走 OS 信任链+主机名校验（SslStream 无自定义回调）；Required 显式接受任意证书；Disabled 不发 SSLRequest 不升级；失败即销毁传输，无降级路径。环回测试（运行时自签证书）覆盖严格顺序（初始握手→CLIENT_SSL 检查→SSLRequest 序号 1→TLS→零认证字节）、VerifyFull 拒绝不受信证书（服务端 TLS 流解密后 0 字节）、服务端无 CLIENT_SSL 时不发任何字节、Disabled 零字节、同步/异步路径一致；`TLS Server Name` 优先于端点主机名（IP+显式 DNS 名称用例）。私有 CA/跨平台/真实主机名不匹配留待 A07 实测记录。测试 113×3 TFM 通过 |
-| A05 | W3-W4 | 认证、模式位、能力协商与夹具 | 待验证 | **本地认证/Oracle 模式/能力实现及合成验证已完成；可信 MySQL 判定、版本/插件矩阵和真实验收未完成。** Codex，2026-10-18：续接 GLM 原型，修复双向序号、session-track 嵌套长度、切换种子 NUL、无插件 native 回退、TLS 能力/字符集/最大包一致性、长属性 lenenc、错误回显脱敏、长度整数边界；合成夹具及环回通过。无可信版本矩阵时拒绝未设置 Oracle 位的连接，MySQL 真实连接暂未开放；插件与版本白名单仍待 G0/G1 |
-| A06 | W3-W5 | 物理会话状态、独占和异常映射 | 完成 | Codex，2026-10-18：PhysicalSession 的 Closed/Connecting/Open/Busy/Broken、独占 lease、未确认响应销毁、同步/异步打开关闭、全过程连接预算与取消、幂等释放、安全异常；环回测试验证截断、关闭不复活、超时、打开后 caller token 取消不投毒。statement/reader资源已由B04/B06接入，后续生命周期修复见走查核销记录 |
-| A07 | W5 | 双模式直连/OBProxy 真实连接门槛 | 阻塞 | Codex，2026-10-18：替换永久失败占位符；四项真实测试覆盖四种连接组合、同步/异步打开关闭、模式不符、TLS 名称错误、未知插件。OB_* 环境未配置，日常运行跳过；强制关口缺环境实际失败。还需租户/TLS/插件/确切版本与可信 MySQL 模式判定；G1 不关闭 |
+| A01 | W1 | Core five targets, DI three targets, slnx, unified net10 test/integration/consumer entry points | Complete | 2026-10-19 snapshot: SDK10, OceanBaseConnector.slnx, CPM/root Version; core Standard2.0/2.1/net8/9/10 and daily net10 hosts. Release 0 warnings/errors; full local regression and dual/five-asset packages passed; summary above. CI:.github/workflows/ci.yml; remote/non-Windows execution unverified. Fixtures:tests/fixtures |
+| A02 | W1–W2 | Connection-string builder/immutable options/redaction | Complete | 2026-10-18: OceanBaseConnectionStringBuilder/internal OceanBaseConnectionOptions; Build freezes snapshots, unaffected by subsequent builder changes. Keys: Server/Host, Port1–65535/default2881, User ID/Uid, Password/Pwd, Database, Connection Timeout/default15, Command Timeout/default30, TLS Mode/VerifyFull default/Required/Disabled (names only, numeric strings rejected), TLS Server Name, Persist Security Info/defaultfalse, ExpectedMode/MySQL/Oracle, Pooling/defaultfalse. Unknown/conflicting synonyms/invalid port/timeout/bool/enum throw ArgumentException. KEY= removes the key under ADO.NET semantics; Build requires Server/User ID. ToSanitizedConnectionString(true) may serialize passwords; default redacts. Exception tests exclude passwords/conflicting values. ConnectionStringBuilderTests62×3 TFM passed; four-target Release 0 warnings/errors |
+| A03 | W1–W3 | Standard frames/sequences/fragments/bounds fixtures | Complete | 2026-10-18: Internal/Protocol/{ByteCursor,PacketChannel,ProtocolException}. Header3-byte length+1-byte sequence; payload>=0xFFFFFF fragments, exact multiples terminate with empty frame. BeginCommand resets both sequence counters; per-frame increment/wrap256 verified over257 frames. Single/chained packets enforce logical limit before allocation (default64MB; injectable smaller limits). ByteCursor unsigned comparisons prevent negative/overflow bypass. framed-err-packet.json: length 72/sequence0/code1045/SQLSTATE28000, loaded/parsed/asserted. Tests98×3 TFM passed: single/multipart/empty terminator/wrong sequence/truncation (5 seeds×32 offsets)/limit rejection. SpyStream confirms0 synchronous calls on async I/O. Sync/async share TakeHeader/PrepareHeader/limits; command parsing stays outside framing |
+| A04 | W2–W4 | TCP/SSLRequest/TLS validation/rejection | Pending verification | Local implementation/Windows loopback done; real/cross-platform pending. 2026-10-18 Internal/Transport/{TcpTransport,TlsUpgrade,TlsHandshakeFlow}, Internal/Protocol/{CapabilityFlags,SslRequestPacket}, shared bidirectional PacketChannel sequence/ReplaceUnderlyingStream. Independent sync BeginConnect+WaitOne timeout and async modern token/Standard socket-close cancellation. Refusal/timeout/cancel dispose sockets; errors expose endpoints only. SSLRequest32 bytes: LE32 capability+16MB+utf8mb4(45)+23 zero bytes. VerifyFull uses OS chain/name with no SslStream callback; Required explicitly accepts any cert; Disabled sends no SSLRequest/upgrade; failure destroys transport without downgrade. Runtime-self-signed loopback checks handshake→CLIENT_SSL→SSLRequest sequence1→TLS→0 auth bytes, VerifyFull untrusted rejection/0 decrypted bytes, no CLIENT_SSL→no write, Disabled0 bytes, sync/async equivalence, TLS Server Name overriding endpoint (IP+DNS). Private CA/cross-platform/real name mismatch await A07. Tests113×3 TFM passed |
+| A05 | W3–W4 | Authentication/mode bits/negotiation/fixtures | Pending verification | Local authentication/Oracle mode/capabilities and synthetic tests done; trusted MySQL/version/plugin/real acceptance missing. Codex2026-10-18 resumed GLM prototype; fixed bidirectional sequence, nested session-track length, switched-seed NUL, native fallback without plugin, TLS capability/charset/max-packet consistency, long-attribute lenenc, error redaction, integer bounds. Synthetic/loopback passed. Missing Oracle bit remains rejected without trusted version matrix; public MySQL unopened; whitelist awaits G0/G1 |
+| A06 | W3–W5 | Physical states/exclusivity/error mapping | Complete | Codex2026-10-18: PhysicalSession Closed/Connecting/Open/Busy/Broken, exclusive lease, destroy unconfirmed responses, sync/async open/close, total connection budget/cancel, idempotent disposal/safe errors. Loopback covers truncation/no resurrection/timeout/post-open caller cancellation without poisoning. B04/B06 connect statement/reader ownership; later fixes indexed above |
+| A07 | W5 | Real both-mode direct/OBProxy connection gate | Blocked | Codex2026-10-18 replaced permanent-failure placeholder. Four tests cover four connection combinations, sync/async open/close, mode mismatch, bad TLS name, unknown plugin. OB_* unset: normal runs skip; enforced gate actually fails on absent environment. Tenant/TLS/plugin/exact-version/trusted-MySQL evidence still needed; G1 open |
 
-## B. ADO.NET 核心任务
+## B. ADO.NET core tasks
 
-| ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
+| ID | Window | Deliverable | State | Owner/evidence/date |
 | --- | --- | --- | --- | --- |
-| B01 | W6-W7（待重估） | 标准provider/factory、现代无池数据源、可选DI与基础日志；ChangeDatabase见C05 | 待验证 | 本地实现、五/三目标编译、环回建连、实际8/9/10 DI/消费及双包依赖验证通过；双模式真实建连、完整支持矩阵及非Windows验收待补 |
-| B02 | W7-W9 | 文本 SQL、OK/ERR、多结果和更新计数 | 待验证 | COM_QUERY 同步/异步、逐行文本 reader、OK/ERR/EOF/FE OK、多结果和更新计数已有 Windows 环回证据；两模式真实CRUD/匹配行语义、非Windows及完整支持矩阵待验收 |
-| B03 | W8-W10 | Oracle 命名占位符词法器及各类 `q` 字面量；MySQL 参数数由服务端确定 | 待验证 | 本地完成词法扫描、名称/顺序映射与发送前绑定校验；基础参数执行已由B04接入，真实参数化集成测试暂缓 |
-| B04 | W9-W12 | 服务端 prepare/execute、二进制结果和 statement ID | 待验证 | 本地实现及 Windows 协议/环回、五目标编译、消费/DI 测试通过；双模式实库、非Windows及完整支持矩阵待验收 |
-| B05 | W10-W13 | 基础值、低精度 `OceanBaseDecimal`、Oracle DATE 与未支持类型拒绝 | 待验证 | 本地精确数值/日期编解码、公开provider-specific访问、五目标消费及Windows协议/环回通过；完整字段元数据已由B06实现，宽精度及精确时间由C03实现；真实类型往返和完整兼容矩阵未验收 |
-| B06 | W11-W14 | 逐行 reader、字段元数据及低精度 provider-specific 访问 | 待验证 | 两套字段schema/独立快照、多结果和生命周期、本地五目标编译及Windows单元/消费/DI通过；ProviderType已由B09审核补齐。双模式真实元数据、非Windows及完整兼容矩阵待验收 |
-| B07 | W13-W15 | 本地事务及环境事务拒绝 | 待验证 | Codex，2026-10-18：本地显式绑定、逐模式隔离映射、同步/异步事务与关闭回滚、日志和未知结果已实现；Unit455/Consumer34/DI8、五目标编译及独立复查通过；实库、非Windows及完整支持矩阵待验收 |
-| B08 | W14-W16 | 取消、超时、结果未知和故障注入 | 待验证 | Codex，2026-10-19：本地故障矩阵已完成，新增43项单元/5项五资产消费测试；修复内部预算超时误判为调用方取消及 Canceled 日志，终态竞争/部分发送/旧命令重开隔离通过；Unit498/Consumer39/DI8、五目标核心/三目标 DI build、格式/pack/依赖分组校验通过，详见本页末；实库/非Windows及完整支持矩阵待验收 |
-| B09 | W17（待重估） | 五目标消费、数据源/DI/日志生命周期、低精度 provider-specific 数值和双模式 G2 验收 | 待验证 | Codex，2026-10-19：本地公共 API 审核、标量 ProviderType/参数映射和 Command 类别修复完成；Unit567/Consumer39/DI8、五/三目标build零警告错误、格式/pack/依赖组通过，Windows核心五资产在8/9/10运行时基础消费通过；详见架构§5和本页末，实库/非Windows/完整旧运行时仍待验收 |
+| B01 | W6–W7, reassess | Provider/factory, modern unpooled source, optional DI/basic logging; ChangeDatabase in C05 | Pending verification | Local implementation, five/three-target build, loopback, actual8/9/10 DI/consumption/dual-package dependencies passed; real both-mode opening/full matrix/non-Windows pending |
+| B02 | W7–W9 | Text SQL/OK/ERR/multiple results/update counts | Pending verification | Windows loopback evidence for sync/async COM_QUERY, streaming text reader, OK/ERR/EOF/FE OK/multiple results/counts; real both-mode CRUD/matched-row semantics/non-Windows/full matrix pending |
+| B03 | W8–W10 | Oracle named-placeholder lexer/q literals; MySQL count from server | Pending verification | Local scanning/name/order mapping/pre-send binding validation; B04 connects parameter execution; real parameter integration deferred |
+| B04 | W9–W12 | Server prepare/execute/binary results/statement IDs | Pending verification | Local Windows protocol/loopback/five-target/Consumer/DI passed; real both-mode/non-Windows/full matrix pending |
+| B05 | W10–W13 | Basic values/low-precision OceanBaseDecimal/Oracle DATE/reject unsupported types | Pending verification | Exact numeric/date codecs/public provider access/five-asset Windows tests passed; B06 supplies metadata, C03 wide/exact time; real round-trip/full matrix pending |
+| B06 | W11–W14 | Streaming reader/field metadata/low-precision provider access | Pending verification | Independent dual-schema snapshots/multiple results/lifetimes/five-target Windows Unit/Consumer/DI passed; B09 adds ProviderType; real both-mode metadata/non-Windows/full matrix pending |
+| B07 | W13–W15 | Local transactions/reject ambient enlistment | Pending verification | Codex2026-10-18: explicit binding/mode isolation/sync-async/close rollback/logging/unknown outcome; Unit455/Consumer34/DI8, five-target build/independent review passed; real/non-Windows/full matrix pending |
+| B08 | W14–W16 | Cancellation/timeout/unknown outcome/fault injection | Pending verification | Codex2026-10-19: local fault matrix,43 Unit/5 Consumer added; fixed budget timeout misclassified as caller cancellation/Canceled logging. Terminal races/partial sends/old-command isolation passed. Unit498/Consumer39/DI8, core-five/DI-three build, format/pack/dependency groups passed; details below; real/non-Windows/full matrix pending |
+| B09 | W17, reassess | Five-asset consumption/source-DI-log lifetimes/low-precision provider values/G2 | Pending verification | Codex2026-10-19: public API/ProviderType/parameter mapping/Command logger fixes. Unit567/Consumer39/DI8, five/three-target0 warnings/errors/format/pack/dependencies and Windows8/9/10 five-asset basics passed. Architecture§5/details below; real/non-Windows/full older-runtime pending |
 
-## C. 生产连接任务
+## C. Production connection tasks
 
-| ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
+| ID | Window | Deliverable | State | Owner/evidence/date |
 | --- | --- | --- | --- | --- |
-| C01 | W18-W23 | 可选池、完整重置和版本白名单 | 阻塞 | 尚未实现连接池及完整重置；缺可信真实版本/模式白名单，Java reset不能代替OceanBase实测；Pooling=true继续拒绝。独立C02-C07已有本地实现 |
-| C02 | W18-W21 | 多地址建连与发包后不重试 | 待验证 | 2026-10-19 Codex；Server列表/共享预算/仅TCP建连故障切换/逐端点TLS及认证；Windows Unit627、Consumer49、DI8及五资产8/9/10独立运行时消费通过；实库/非Windows未验收，见末尾记录 |
-| C03 | W20-W25 | 宽精度、纳秒、时区和整列稳定的零日期 provider-specific 值 | 待验证 | 2026-10-19 Codex；数值、TIMESTAMP(0..9)、TZ/LTZ及零日期本地实现齐备；Unit895/Consumer91/DI8、五/三目标编译/格式/打包及独立走查通过；真实验收/A05公开MySQL握手仍缺，详见本页末 |
-| C04 | W23-W28 | SequentialAccess、大值与服务端游标 | 待验证 | 2026-10-19 Codex；增量报文、顺序字段流和FetchSize只读游标分页本地完成；Unit1037/Consumer111/DI8及核心五/DI三目标编译通过，独立复查缺陷均已修复；真实两模式/OBProxy大值/游标资源及性能矩阵未验收，详见本页末 |
-| C05 | W25-W29 | `GetSchema` 基础集合及异步入口、MySQL `ChangeDatabase` | 待验证 | 2026-10-19 Codex；切换及四个目录集合/限制/现代异步本地完成，核心五/DI三编译、Windows完整测试与五资产消费、独立走查通过；字典/权限/版本真实验收暂缓，证据见末尾目录模块记录 |
-| C06 | W27-W31 | 逐条 `DbBatch`、factory 和已有数据源的批量入口 | 待验证 | 2026-10-19 Codex；现代三资产逐条执行/会话预约/快照/准备复用/计数/失败归因及数据源入口本地完成；Windows Unit1172、Consumer142、DI8和实际8/9/10样例通过，走查问题已修复；实库及非Windows暂缓，见末尾C06记录 |
-| C07 | W29-W32 | 本地 ActivitySource/Meter、脱敏和性能基线 | 待验证 | 2026-10-19 Codex；固定操作/模式/结果/未知标签、会话/命令/事务追踪及两个指标本地完成，监听器异常隔离和独立走查修复通过；Unit1205/Consumer152/DI8、五/三目标编译与实际8/9/10样例通过；Windows协议基线已记录，池/实库/跨平台待验收 |
-| C08 | W33-W34 | 生产版本/模式矩阵与 G3 审核 | 阻塞 | 2026-10-19 已核对本地证据与生产验收差距；G3仍0/8，缺真实两模式/OBProxy/TLS/认证/重置白名单矩阵，按约定暂缓，不用协议夹具关闭门槛 |
+| C01 | W18–W23 | Optional pool/full reset/version whitelist | Blocked | Pool/full reset unimplemented; missing trusted real-version/mode whitelist. Java reset is not OceanBase evidence; Pooling=true rejected. Independent C02–C07 local implementations exist |
+| C02 | W18–W21 | Multiaddress opening/no post-send retry | Pending verification | Codex2026-10-19: Server lists/shared budget/TCP-only failover/per-endpoint TLS/auth. Windows Unit627/Consumer49/DI8 and five-asset8/9/10 basics passed; real/non-Windows pending; below |
+| C03 | W20–W25 | Wide precision/nanoseconds/timezones/stable zero-date provider values | Pending verification | Codex2026-10-19: numeric/TIMESTAMP(0..9)/TZ/LTZ/zero dates locally done. Unit895/Consumer91/DI8, five/three-target build/format/pack/review passed; real/A05 public-MySQL gaps remain; below |
+| C04 | W23–W28 | SequentialAccess/large values/server cursors | Pending verification | Codex2026-10-19: incremental packets/sequential streams/FetchSize read-only paging. Unit1037/Consumer111/DI8/core-five/DI-three passed; review defects fixed. Real both-mode/OBProxy resource/performance matrix pending; below |
+| C05 | W25–W29 | Basic GetSchema/async/MySQL ChangeDatabase | Pending verification | Codex2026-10-19 historical snapshot: switching/four catalogs/restrictions/modern async done; five/three build/full Windows/five-asset/review passed. Real dictionary/permissions/version deferred; catalog record below |
+| C06 | W27–W31 | Sequential DbBatch/factory/source entry points | Pending verification | Codex2026-10-19: three modern assets' execution/reservation/snapshots/prepared reuse/counts/failure attribution/source entry locally done. Unit1172/Consumer142/DI8/actual8/9/10 samples passed; review fixed. Real/non-Windows deferred; below |
+| C07 | W29–W32 | Local ActivitySource/Meter/redaction/performance | Pending verification | Codex2026-10-19 fixed operation/mode/outcome/unknown tags, session/command/transaction tracing/two metrics. Listener isolation/review fixes passed; Unit1205/Consumer152/DI8/five-three builds/actual8/9/10 samples. Windows protocol baseline recorded; pool/real/cross-platform pending |
+| C08 | W33–W34 | Production version/mode matrix/G3 review | Blocked | 2026-10-19 evidence/gap review: G3 remains0/8; real both-mode/OBProxy/TLS/auth/reset-whitelist matrix missing/deferred; fixtures do not close gate |
 
-## 发布与可选扩展
+## Release and optional extensions
 
-| ID | 计划窗口 | 可验收产物 | 状态 | 负责人/完成证据/实际完成日 |
+| ID | Window | Deliverable | State | Owner/evidence/date |
 | --- | --- | --- | --- | --- |
-| R01 | W35-W36 | NuGet 包、许可/包名审查、五目标消费 | 进行中 | 2026-10-20 核心与DI包各五资产实际消费完成，本机Framework4.8.1的Standard2.0基础包/DI消费及绑定重定向通过；独立走查见末尾，正式Framework支持/许可/来源/包名审查仍开放，不发布 |
-| R02 | W36-W37 | 完整回归、发布说明与兼容矩阵 | 进行中 | 2026-10-20 D扩展后Windows实际8.0.31/9.0.20各Unit2912/DI14、恢复默认10.0.12 Unit2912/Consumer1163/DI14全部通过；核心五/DI五Release零警告错误，本轮修复与证据见末尾；最终真实矩阵与发布审查仍开放 |
-| D01 | 本地实现已有；真实验收待环境 | OB20、校验与完整链路追踪 | 待验证 | OB20编解码/校验、协商、流式传输和脱敏追踪已有本地实现；五资产Required TLS及部分字段消费故障验证见末尾；可信TLS、真实采样/SHOW TRACE与版本矩阵仍开放 |
-| D02 | 本地先行，实库延期 | Oracle 过程及 OUT/RETURNING | 进行中 | 公开过程及标量OUT/RETURNING已接入，完整回归/走查见末尾；保留标量范围及独立Prepare/FetchSize限制，真实互通开放 |
-| D03 | 本地先行，实库延期 | REF CURSOR | 待验证 | REF CURSOR输出、流式分页及所有权本地实现/完整回归/独立走查修复完成，见末尾；真实版本/OBProxy互通开放 |
-| D04 | 本地先行，实库延期 | LOB locator、分块读写及临时对象 | 待验证 | locator解析、公开读取/绑定、WRITE/TRIM及临时对象显式创建/释放本地实现、完整回归及独立走查修复完成，见末尾；真实资源验收仍开放 |
-| D05 | 本地先行，实库延期 | ARRAY/STRUCT 与类型字典 | 待验证 | 约定本地范围实现及完整复核通过，见末尾；真实字典/DDL、往返及版本/OBProxy资源语义验收继续延期 |
-| D06 | 本地先行，实库延期 | bulk/array binding及多行输出 | 待验证 | 公开同步/异步、部分失败/位置/逐项DML计数、多行OUT/RETURNING及五资产矩阵本地完成，见末尾；按用户要求提交后暂停 |
-| D07 | 本地先行，实库延期 | 按需客户端预处理回退 | 待验证 | 命令显式开关、精准prepare首错误、基础标量安全编码、原租约/事务/总预算及五资产本地覆盖；MySQL非NULL字符串等待可信collation；见末尾 |
-| D08 | 本地先行，实库延期 | 拓扑发现与负载均衡 | 待验证 | 应用地址源、按数据源/连接实例轮转、共享总预算及逐会话模式/TLS重验；只在TCP建连失败时尝试候选，已发送SQL不重放；见末尾 |
-| D09 | 本地先行，实库延期 | 显式 XA | 待验证 | 不可变XID及两模式固定会话、阶段与恢复本地范围完成；Oracle需显式PrepareExecute，Unit2803/Consumer1029/DI8通过；真实协调器及两模式实库验收仍开放，见末尾 |
-| D10 | G4 后 | Oracle NCHAR/national charset | 待验证 | Codex，2026-10-19：独立会话编码、两种结果/参数读写、顺序字符流及五资产本地实现，验证见末尾；真实列往返和版本/OBProxy 暂缓 |
-| D11 | 本地先行，实库延期 | Oracle INTERVAL | 待验证 | 精确值/编解码/参数/Schema及公共消费本地完成，完整测试与独立走查记录见末尾；真实往返开放 |
-| D12 | 本地先行，实库延期 | MySQL JSON | 待验证 | 本地文本/二进制读写、元数据和字段流，验证见末尾；真实 JSON 列往返仍开放 |
-| D13 | 本地先行，实库延期 | MySQL BIT | 待验证 | 本地编解码/位宽/参数及测试记录见末尾；真实 BIT 列往返仍开放 |
-| D14 | 本地先行，实库延期 | MySQL YEAR | 待验证 | 本地实现/测试/走查记录见末尾；真实 YEAR 列往返仍开放 |
-| D15 | 本地先行，实库延期 | 新认证插件 | 进行中 | SHA-2 fast/TLS、固定RSA、显式取钥、old password、Ed25519、PAM及现代资产Kerberos GSSAPI本地实现；Standard/其他机制、真实KDC/私有CA及两模式实库余项开放，验证见末尾 |
+| R01 | W35–W36 | NuGet/license-name review/five-asset consumption | In progress | 2026-10-20 core/DI five-asset consumption and local Framework4.8.1 Standard2.0/basic DI/binding redirects passed. Review below; official Framework/license/provenance/name open; unpublished |
+| R02 | W36–W37 | Full regression/release notes/matrix | In progress | 2026-10-20 after D extensions, actual Windows8.0.31/9.0.20 each Unit2912/DI14; restored10.0.12 Unit2912/Consumer1163/DI14 passed. Core-five/DI-five Release 0 warnings/errors; fixes/evidence below. Real matrix/final release review open |
+| D01 | Local done; real environment pending | OB20/checksums/full trace | Pending verification | Codecs/checksums/negotiation/streaming/redacted trace; Required-TLS five-asset/partial-field failures below. Trusted TLS/real sampling/SHOW TRACE/version matrix open |
+| D02 | Local first; real deferred | Oracle procedures/OUT/RETURNING | In progress | Public procedure/scalar outputs/full regression/review below; scalar/standalone-Prepare/FetchSize limits retained; real interoperability open |
+| D03 | Local first; real deferred | REF CURSOR | Pending verification | Local outputs/streaming paging/ownership/full regression/review fixes below; real version/OBProxy open |
+| D04 | Local first; real deferred | LOB locators/chunk read-write/temporary objects | Pending verification | Parsing/public reads/binding/WRITE/TRIM/explicit temporary creation/free/full regression/review fixes below; real resource acceptance open |
+| D05 | Local first; real deferred | ARRAY/STRUCT/type dictionary | Pending verification | Defined local scope/full review passed below; real dictionary/DDL/round-trip/version/OBProxy resources deferred |
+| D06 | Local first; real deferred | Bulk/array binding/multirow outputs | Pending verification | Public sync/async/partial failures/positions/item DML counts/multirow outputs/five assets done below; paused after commit at user's request |
+| D07 | Local first; real deferred | On-demand client-prepare fallback | Pending verification | Explicit option/exact first-prepare error/safe scalar encoding/original lease-transaction-total-budget/five assets; nonnull MySQL strings await trusted collation; below |
+| D08 | Local first; real deferred | Topology discovery/load balancing | Pending verification | Application address source/per-source-connection round robin/shared budget/per-session TLS-mode checks; candidates only after TCP opening failure; no sent-SQL replay; below |
+| D09 | Local first; real deferred | Explicit XA | Pending verification | Immutable XID/both-mode pinned phases/recovery locally done; Oracle explicitly requires PrepareExecute. Unit2803/Consumer1029/DI8 passed; real coordinator/both-mode acceptance open |
+| D10 | After G4 | Oracle NCHAR/national charset | Pending verification | Codex2026-10-19 separate session encoding/text-binary reads-writes/sequential characters/metadata/five assets below; real round-trip/version/OBProxy deferred |
+| D11 | Local first; real deferred | Oracle INTERVAL | Pending verification | Exact values/codecs/parameters/schema/public consumption/full tests/review below; real round-trip open |
+| D12 | Local first; real deferred | MySQL JSON | Pending verification | Text/binary read-write/metadata/streams below; real JSON round-trip open |
+| D13 | Local first; real deferred | MySQL BIT | Pending verification | Local codec/width/parameter/test records below; real BIT round-trip open |
+| D14 | Local first; real deferred | MySQL YEAR | Pending verification | Local implementation/tests/review below; real YEAR round-trip open |
+| D15 | Local first; real deferred | Additional authentication plugins | In progress | SHA-2 fast/TLS/pinned RSA/explicit key retrieval/old password/Ed25519/PAM/modern Kerberos GSSAPI done; Standard/other mechanisms/real KDC/private CA/both-mode remaining work open; below |
 
-## 兼容矩阵记录模板
+## Compatibility matrix template
 
-每行都填写服务端与 OBProxy 的**具体版本**、TLS/认证方式、执行的测试套件和结果。下列四行只是必需组合的空白基线，不表示兼容。
+Every row must record exact OceanBase/OBProxy versions, TLS/authentication, suites, and results. These four empty required combinations are not compatibility claims.
 
-| 模式 | 路径 | OceanBase 版本 | OBProxy 版本 | TLS/认证 | A/B/C 结果 | 证据 |
+| Mode | Path | OceanBase version | OBProxy version | TLS/auth | A/B/C results | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| MySQL | 直连 | 待测 | 不适用 | 待测 | 未验证/未验证/未验证 | 待记录 |
-| Oracle | 直连 | 待测 | 不适用 | 待测 | 未验证/未验证/未验证 | 待记录 |
-| MySQL | OBProxy | 待测 | 待测 | 待测 | 未验证/未验证/未验证 | 待记录 |
-| Oracle | OBProxy | 待测 | 待测 | 待测 | 未验证/未验证/未验证 | 待记录 |
+| MySQL | Direct | To test | N/A | To test | Unverified/unverified/unverified | To record |
+| Oracle | Direct | To test | N/A | To test | Unverified/unverified/unverified | To record |
+| MySQL | OBProxy | To test | To test | To test | Unverified/unverified/unverified | To record |
+| Oracle | OBProxy | To test | To test | To test | Unverified/unverified/unverified | To record |
 
-## 风险与变更记录
+## Risks and changes
 
-| ID | 风险/决定 | 影响 | 当前处理 | 关闭证据 |
+| ID | Risk/decision | Impact | Treatment | Closure evidence |
 | --- | --- | --- | --- | --- |
-| K01 | 双模式真实环境和版本尚未确定 | G0 未关闭，所有互通结论不可发布 | 取得版本和可重复测试入口 | 待记录 |
-| K02 | TLS 默认 VerifyFull 需要可验证的证书 | 无证书环境不能以默认设置连接 | G0-3 确认证书/信任根；不得静默降级 | 待记录 |
-| K03 | 服务端完整重置能力随版本/模式变化 | 池化可能泄漏会话状态 | C01/C08 建立白名单；其余组合只直连 | 待记录 |
-| K04 | Java 默认客户端预处理，.NET B 只服务端预处理 | 部分 Java 可执行的参数化 SQL 在 .NET B 失败 | 默认仍显式失败；D07可按命令启用受限回退 | D07本地记录见末尾 |
-| K05 | `netstandard2.0` 可消费范围大于已测试运行时 | 旧运行时行为可能不同 | B09/R01 记录实际消费运行时；.NET Framework 4.8 是否正式支持由 G0-4 决定 | 待记录 |
-| K06 | 首版 A-C 的范围尚未由产品确认 | 若 G0-5 改为 B 阶段发布，G3/G4 排期和对外能力需重设 | G0-5 决定后重定基线，不把未实现的 C 能力写进发布说明 | 待记录 |
+| K01 | Real both-mode environment/versions unset | G0 open; interoperability claims cannot be published | Obtain versions/reproducible tests | To record |
+| K02 | Default VerifyFull requires verifiable certificates | Unconfigured environments cannot connect with defaults | G0-3 certificates/trust; no silent downgrade | To record |
+| K03 | Full reset differs by version/mode | Pooling can leak session state | C01/C08 whitelist; otherwise direct connections | To record |
+| K04 | Java defaults client prepare; .NET B only server prepare | Some Java parameterized SQL fails in .NET B | Explicit failure by default; D07 restricted per-command fallback | D07 local record below |
+| K05 | Standard2.0 consumers exceed tested runtimes | Older runtime behavior can differ | B09/R01 actual runtime records; G0-4 decides official Framework4.8 | To record |
+| K06 | Initial A–C scope lacks product confirmation | A B-stage release decision changes G3/G4 schedule/public scope | Rebaseline after G0-5; do not advertise unimplemented C | To record |
 
-## 进度文档走查记录
+## Progress-document review history
 
-2026-10-18 .NET 接入核查：按用户要求，将数据源/DI/日志设计合并到现有架构设计 §2.1–§2.7，没有独立设计文档。主依据仍为 Java `obconnector-j` 的统一连接、协议和会话模式；Npgsql 10 参考宿主生命周期，`oceanbase-dotnet` 只作有限 DI/日志用法参考。现代 builder/数据源、可选 DI 集成包及标准日志前移 B01，C06 保留 batch，C07 保留本地追踪/指标。核心与集成包采用 CPM、同一根 Version、统一发布；全部测试宿主仍为 .NET 10。现有协议/TLS/模式快照无需重写，后续增加数据源与日志上下文；本次未改产品代码、项目文件或依赖，B/C 状态不变。任务 ID 和数量保持不变，B01/G2 范围扩大，周窗口须重估；A07/G0/G1 的真实环境阻塞不变。
+2026-10-18 .NET integration review: at the user's request, source/DI/logging design was merged into architecture§2.1–§2.7 rather than a separate document. Java obconnector-j connection/protocol/session behavior remains primary; Npgsql10 informs host lifetimes, oceanbase-dotnet only limited DI/logging use. Modern builder/source/optional DI/standard logging moved to B01; C06 retains batch, C07 local tracing/metrics. Core/integration use CPM/root Version/unified release; all test hosts.NET10. Existing protocol/TLS/mode snapshots need no rewrite; later source/log contexts build on them. No product/project/dependency changes; B/C states unchanged. Task IDs/counts unchanged; expanded B01/G2 windows need reassessment; A07/G0/G1 real blockers unchanged.
 
-2026-10-18 续接：CPM 与全局 Version 已实现，本次采用 slnx、global.json、统一 .NET 10 测试/消费宿主，产品保留四目标。A04 原标完成，但私有 CA、真实主机名及跨平台验收无证据，修正为待验证。独立审查发现的 native 回退、同步取消、长属性编码、打开成功/取消竞争已修复；缺模式位安全拒绝，不伪造版本白名单。详见 [续接记录](implementation-stage-a.md)。
+2026-10-18 resumption: CPM/global Version implemented; adopted slnx/global.json/unified.NET10 test-consumer hosts, retaining four product targets at that point. A04's earlier Complete state was corrected to Pending verification for missing private-CA/real-hostname/cross-platform evidence. Independent-review native fallback/sync cancellation/long attributes/open-success-cancel races fixed. Missing mode bit safely rejected, without invented whitelist. See [Stage A continuation](implementation-stage-a.md).
 
-2026-10-18：补记工程约定——仓库统一使用中央包管理(CPM),`Directory.Packages.props` 为全部 NuGet 包版本唯一来源并开启传递依赖钉扎,工程 `PackageReference` 不带 `Version`;产品及未来所有程序集的包版本统一由根 `Directory.Build.props` 的 `Version` 属性提供,csproj 不得各自声明版本。该约定此前仅口头约定未落文档,现已写入架构设计 §2 与开发方案"全局约束与准入"及交付目录,并完成存量工程改造(A01 三个测试工程与产品工程版本属性上收)与回归验证(`dotnet pack` 仍产出 0.1.0-alpha)。
+2026-10-18 conventions recorded: CPM Directory.Packages.props is the sole NuGet version source, with transitive pinning; PackageReference has no Version. Root Directory.Build.props Version supplies all product/future assembly package versions; csproj cannot declare separate versions. Previously verbal only, now recorded in architecture§2, plan global constraints/prerequisites/delivery layout; existing product/three test project properties moved upward/regression checked. dotnet pack still emits0.1.0-alpha.
 
-2026-10-17：核对开发方案与本台账的任务 ID、阶段计数、相对周窗口、Java M01-M16 映射、文档链接和状态口径。D 阶段按独立扩展拆分，G0 中互不依赖的产品决定拆开；当前基线为 G0 5 项、A 7 项、B 9 项、C 8 项、R 2 项、D 15 项，代码任务合计 41 项，全部 `未开始`。G0 尚未关闭，W1 的实际起始日期未定；没有 .NET 编译或 OceanBase 互通证据。下一次走查在 G0 关闭及每个阶段门槛前进行，逐条核对证据而非只检查状态栏。
+2026-10-17 review checked IDs/counts/weeks/Java M01–M16 mapping/links/status definitions. D split into independent extensions; independent G0 product decisions separated. Baseline:G0 five,A seven,B nine,C eight,R two,D fifteen;41 code tasks, all Not started. G0 open/W1 unset; no .NET build/OceanBase evidence. Recheck each evidence item after G0/before every gate, not only state columns.
 
-2026-10-17：修正开发前走查的四项文档问题：低精度 `OceanBaseDecimal` provider-specific 契约纳入 B05/B06 和 G2，宽精度仍在 C03；C03 固定 MySQL 日期列正常值/零值的 provider-specific 类型；B03 补非成对 `q` 分隔符与未闭合字面量；`ChangeDatabase` 在 B 阶段拒绝，C05 验证 MySQL 模式同步/异步切换，Oracle 模式继续拒绝。G0 未关闭不妨碍 A01/A03 的独立准备，但 W1 排期及 G1 关口仍待 G0 完成。任务数量和状态未变。
+2026-10-17 four prerelease review corrections: low-precision OceanBaseDecimal provider contract added B05/B06/G2, wide precision remains C03; C03 stabilizes MySQL normal/zero-date provider types; B03 adds unpaired q delimiters/unterminated literals; ChangeDatabase rejected in B, MySQL sync/async in C05, Oracle still rejects. A01/A03 may prepare independently while G0 open; W1/G1 still require G0. Counts/states unchanged.
+## Weekly update format
 
-## 周报更新格式
-
-每周在本节追加一条，不覆盖旧记录：
+Append weekly entries; do not overwrite history.
 
 ```text
-日期：YYYY-MM-DD
-本周完成：任务 ID；提交/PR；测试命令与结果；实测模式/版本
-进行中与下周目标：任务 ID；预计关闭门槛
-阻塞：任务 ID；原因；负责人；需要的动作和预计解除时间
-范围/设计变化：关联的架构或开发方案章节；无变化写“无”
+Date: YYYY-MM-DD
+Completed: task IDs; commit/PR; test commands/results; actual modes/versions
+In progress/next week: task IDs; expected gate closure
+Blocked: task IDs; cause; owner; required action/estimated resolution
+Scope/design changes: architecture/plan sections; write None if unchanged
 ```
 
-2026-10-17 基线：仅建立架构设计、开发方案和进度台账；G0 未关闭，A/B/C/D/R 均未开始。尚无可报告的 .NET 编译、测试或 OceanBase 互通证据。
+The historical entries below retain their original counts and limitations. Repeated verification wording is consolidated here: unless an entry says otherwise, the local Release command was `dotnet build OceanBaseConnector.slnx -c Release --no-restore`, with 0 warnings/errors; tests used `dotnet test -c Release --no-build --no-restore` on the named projects. Format whitespace with --verify-no-changes, git diff --check, and both product packs passed where recorded. After Standard2.1 was added, the common package profile was core5/DI3 assets,8 dependency groups, unified0.1.0-alpha, exact DI core dependency, Microsoft.Extensions Standard/net8→8.x,net9→9.x,net10→10.x, no extra dependencies except where explicitly stated. Missing package README warnings remained R01 work until packaging added it. Daily/isolated Consumer hosts were net10; loading older assets is not older-runtime acceptance. Real databases/non-Windows/new older-runtime testing stayed deferred at the user's request except for explicitly recorded runtime samples. A05 still rejects absent Oracle mode bits without trusted MySQL rules; C01 Pooling=true remains rejected without a reset whitelist. These repeated limits apply to the entries below and do not erase later evidence or change historical states.
 
-2026-10-18 续接验证：四目标 Release build 0 警告/0 错误；slnx 全套运行 UnitTests 158 通过、ConsumerTests 5 通过、IntegrationTests 4 因环境跳过。TRX 记录在本地 TestResults/。强制 OpenClose 关口在缺四种连接串时退出 1（预期门槛失败）。format whitespace、diff 检查、pack、中央版本/包四目标资产断言通过；独立代码审查及修复后复核未发现新重要问题。产品/包版本 0.1.0-alpha，没有发布、远端 CI 或真实数据库互通结论。下一步先补 G0 和可信 MySQL 模式版本证据，再执行 A07；B 阶段仍未开始。
+2026-10-17 baseline: architecture/plan/ledger only; G0 open, A/B/C/D/R Not started. No .NET build/test/OceanBase evidence.
 
-2026-10-18 B01 本地实施与验证：已实现一个公开连接/工厂、现代无池数据源、可选普通/key DI 注册和数据源级连接日志；command/parameter 为标准对象入口，SQL、reader、事务执行仍显式报不支持，不宣称可执行 SQL。核心和 DI 包同取根 Version=0.1.0-alpha，集成包精确依赖核心 [0.1.0-alpha]。Microsoft.Extensions 通用依赖按 TFM 在 CPM 中选择：netstandard2.0/net8.0 使用 Logging 8.0.3、DI 抽象 8.0.2，net9.0 使用 9.0.10，net10.0 使用 10.0.0；全部测试宿主仍为 net10.0。逐目标依赖回归先失败 5/7，修复后检查 7 个 restore 图和 PE 程序集引用通过；ZIP/XML 检查两个包的 4/3 目标资产、依赖组和统一版本通过。
+2026-10-18 resumed verification: four-target Release 0 warnings/errors; slnx Unit158/Consumer5 passed; Integration4 skipped for environment. TRX in local TestResults/. Enforced OpenClose exited1 without four connection strings: expected gate failure. Format/diff/pack/central-version/four-asset assertions passed; independent review/fix recheck found no new significant issue. Version0.1.0-alpha, unpublished; no remote CI/real compatibility claim. Next G0/trusted MySQL evidence then A07; B not started.
 
-B01 验证命令：dotnet restore OceanBaseConnector.slnx；dotnet build OceanBaseConnector.slnx -c Release --no-restore（0 警告/0 错误）；分别对 UnitTests、ConsumerTests、DependencyInjection.Tests 执行 dotnet test -c Release --no-build --no-restore，184/13/8 全通过，TRX 位于 TestResults/b01-unit.trx、b01-consumer.trx、b01-di.trx。dotnet format OceanBaseConnector.slnx whitespace --verify-no-changes --no-restore 与 git diff --check 通过；两产品工程 dotnet pack -c Release --no-build --no-restore 成功。正式包 README/许可等元数据仍在 R01，当前 pack 保留缺 README 提示。
+2026-10-18 B01: public connection/factory, modern unpooled source, optional ordinary/keyed DI, source-level connection logs; command/parameter objects exist but SQL/reader/transaction execution explicitly unsupported at this point. Core/DI root Version0.1.0-alpha, exact integration dependency[0.1.0-alpha]. CPM: Standard2.0/net8 Logging8.0.3/DI abstractions8.0.2,net9 9.0.10,net10 10.0.0. Per-target dependency regression initially failed 5/7; fixes passed 7 restore graphs/PE references and ZIP/XML4/3 assets/dependency/version checks. `dotnet restore OceanBaseConnector.slnx`; Release 0 warnings/errors; Unit184/Consumer13/DI8 passed: TestResults/b01-unit.trx, b01-consumer.trx, b01-di.trx. Format/diff/both packs passed; README/license metadata remained R01, with missing-README warning.
 
-B01 独立审查及修复：日志回调在 Opened 关闭、在 Closed 重开同一连接的状态事件乱序均由先失败回归复现，改为先发送状态事件再调用外部日志；另覆盖连接并发、日志工厂/过滤/写入抛错、实际 DI 日志覆盖、取消与清理、PersistSecurityInfo、配置冻结和参数归属。复核未发现剩余重要问题。依用户要求未运行真实数据库和非 Windows 测试，未取得旧运行时运行证据；无可信 MySQL 模式版本时继续安全拒绝缺失模式位。B01 保持待验证、G2 保持进行中，下一功能模块为 B02，不将本地通过等同于双模式兼容或可发布。
+B01 review: Opened-close/Closed-reopen event-order regressions failed then passed after publishing state events before external logging. Additional coverage: concurrency, logger factory/filter/write failures, real DI log overrides, cancellation/cleanup, PersistSecurityInfo, frozen configuration, parameter ownership. Recheck found no significant issue. Real/non-Windows/older-runtime evidence absent; A05 safe rejection retained. B01 Pending verification/G2 In progress; next B02, no compatibility/release claim.
 
-2026-10-18 B02 本地实施：复用一个 PhysicalSession/CommandLease 和 PacketChannel，增加 COM_QUERY 同步/异步执行、逐行文本 reader、NULL/空字符串、基础标量、结果切换和 OK 更新计数累加；ExecuteScalar 跳过前置更新计数取得首个结果集单元，再消费剩余响应。传统 EOF 与协商后的 DEPRECATE_EOF（无列 EOF、FE OK 行终止）均覆盖。关闭未读 reader 销毁会话，CloseConnection 另关闭逻辑连接；服务器终态 ERR 可安全复用会话，失败 reader 不能再访问下一命令。LOCAL INFILE、不合法列/行/长度/包数和超限元数据安全拒绝，不触及文件系统、不重放 SQL。B05/B06 之前的精确数值、日期、完整元数据等边界保持显式不支持；特别是 Oracle 类型码 3 不误作 MySQL INT。
+2026-10-18 B02: reused PhysicalSession/CommandLease/PacketChannel for sync/async COM_QUERY, streaming text rows, NULL/empty/basic scalars, result changes/update totals. Scalar skips leading update counts and drains remaining responses. Legacy EOF and DEPRECATE_EOF without metadata EOF/with FE-OK row termination covered. Unread reader close destroys session; CloseConnection also closes logical connection. Terminal server ERR allows reuse; failed readers cannot touch later commands. LOCAL INFILE/invalid columns-rows-lengths-packet counts/oversized metadata rejected without filesystem/replay. Exact numeric/date/full metadata awaited B05/B06; Oracle type 3 was not treated as MySQL INT.
 
-B02 本地验证：dotnet build OceanBaseConnector.slnx -c Release --no-restore 通过，0 警告/0 错误；各 net10.0 宿主 dotnet test -c Release --no-build --no-restore：UnitTests 228、ConsumerTests 13、DependencyInjection.Tests 8 全通过。TRX 位于 TestResults/b02-unit.trx、b02-consumer.trx、b02-di.trx。B02 新增 44 项测试用例，包括公共环回执行和模式感知类型边界；红绿回归覆盖超大超时遗留 Busy、缓冲行忽略 Cancel、失败 reader 触碰下一命令、读取 token 原因、终态 OK/ERR 被日志回调取消覆盖、EOF 协商不匹配和 Scalar 前置更新计数。发包后的取消/超时/关闭返回 IsExecutionOutcomeUnknown=true 并保留原因；无发包的预取消/不支持功能/环境事务拒绝仍可继续建命令。
+B02 Release 0 warnings/errors; Unit228/Consumer13/DI8 passed: TestResults/b02-unit.trx, b02-consumer.trx, b02-di.trx;44 new cases. Red-green cases: huge timeout stranding Busy, buffered rows ignoring Cancel, failed-reader cross-command access, read token cause, terminal OK/ERR overwritten by logger cancellation, EOF mismatch, Scalar leading counts. Post-send cancellation/timeout/close reports IsExecutionOutcomeUnknown=true and preserves cause; precancel/unsupported/ambient-transaction rejection before sends allows later commands. Format/diff/dual packs passed, version 0.1.0-alpha. Review-found EOF/timeout/ERR-cancel races fixed. Real CRUD/unchanged-UPDATE counts/trusted MySQL/non-Windows/older runtimes missing; B02 Pending verification/G2 In progress; next B03.
 
-B02 format whitespace、git diff --check、两个产品包 pack 通过；包仍为统一 0.1.0-alpha，正式 README/发布元数据由 R01 补齐。独立审查发现的 EOF 协商、超大超时占用和终态 ERR/取消竞态均已修复并回归。此次没有运行数据库或非 Windows 测试；MySQL 可信版本/两模式真实 CRUD/真实不变 UPDATE 行数及旧运行时证据仍缺失，B02 保持待验证、G2 保持进行中。下一功能模块为 B03 参数占位符词法与验证。
+2026-10-18 framework addition: core added netstandard2.1, becoming Standard2.0/2.1/net8/net9/net10; DI remained net8/net9/net10. Hostsnet10, both Standard/net8 Microsoft8.x,9/10 corresponding majors; CPM/root Version/unified release unchanged. Existing architecture/plan/ledger updated; four-target records kept as history. Four Consumer cases first failed for missing asset/restore graph then passed after targets/CPM/API conditions. Both Standard TCP paths cancel by closing sockets; SqlState overrides modern only;2.1 TLS uses platform token overloads. Release 0 warnings/errors; Unit228/Consumer18/DI8 passed. Checks: real TFM markers, isolated loading, modern type separation, logging deps/factory, canceled handshake closed state;8 restore graphs/references,5/3 assets,8 nuspec groups/version/exact dependency, format. Real/non-Windows/older runtimes deferred; B01/B02/G2 gates unchanged; README warning R01. Independent read-only Standard2.1 reference/API/conditions/CPM/tests/docs review and diff passed without fixes.
 
+2026-10-18 B03: single-pass Oracle named-binding scan/order map, doubled single/double quotes, paired/unpaired q/nq literals, nonnested block comments, CR/LF line comments, :=. Repeated names reference one parameter in SQL order; Value is never interpolated. One optional colon in names, ASCII OrdinalIgnoreCase; normalized duplicates/missing/extra/unclosed/unsupported syntax fail before sending. MySQL SQL/parameter order stays unchanged; no guessed SQL_MODE/local question-mark count. Non-Input rejected then. Validation uses authenticated mode before lease/send, including missing :name with an empty collection; ExpectedMode cannot infer a closed connection's mode. Old scaffold assertions updated to specific errors. B04 still needed for valid parameter execution/Prepare; unparameterized text uses B02.
 
-2026-10-18 目标框架补充：按用户要求，在核心单包中增加 netstandard2.1；现为 netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0 五目标，DI 包仍为 net8.0/net9.0/net10.0，全部测试及消费宿主仍为 net10.0。两个 Standard 目标与 net8.0 同用 Microsoft.Extensions 8.x 基线，net9.0/10.0 各用对应主版本；CPM、根 Version 和两包统一发布规则不变。同步修订现有架构设计、开发计划和本台账，原四目标记录保留为历史证据。
+B03 initial 52 lexer/mapping cases had40 fail, plus two public sync/async failures proving unbound SQL reached the peer. Implementation passed; nested-looking /* within comments regression confirmed first */ termination. Release core5/DI3 0 warnings/errors; Unit282/Consumer18/DI8 passed: TestResults/b03-unit.trx, b03-consumer.trx, b03-di.trx. Format/diff/packs passed,0.1.0-alpha,README warning R01; independent review no issue. Real/non-Windows/older runtimes deferred; B03 Pending verification/G2 In progress; next B04.
 
-netstandard2.1 验证：消费回归先失败 4 项，确认缺少资产及 restore 图；补目标、CPM 条件和平台 API 判断后通过。TCP 两个 Standard 目标都使用关闭 socket 的取消路径，SqlState 只在现代目标 override；2.1 TLS 采用平台已有的令牌重载。Release slnx 构建 0 警告/0 错误；UnitTests 228、ConsumerTests 18、DependencyInjection.Tests 8 全通过。消费测试检查两个 Standard 资产的实际目标框架标记、独立加载、现代类型隔离、日志依赖、工厂对象，以及握手等待取消后的关闭状态。逐目标检查 8 个 restore 图及程序集引用，ZIP/XML 检查两包 5/3 个资产、8 个 nuspec 依赖组、统一 0.1.0-alpha 和精确核心依赖通过；format whitespace 通过。真实数据库、非 Windows 和旧运行时消费测试依用户要求暂缓，B01/B02 与 G2 的待验证门槛不变；pack 仍提示缺包 README，由 R01 处理。
+2026-10-18 B04: COM_STMT_PREPARE/EXECUTE/CLOSE, basic binary parameters/results/multiple results, statement IDs owned by command/physical session. Oracle B03 order; MySQL original SQL/server-count validation. Prepare forces server preparation without interpolation/replay. Auto prepare/execute share lease/budget; interrupted preparation destroys session without unknown SQL-execution claim; incomplete execution response destroys/reports unknown. SQL changes/reconnect/disposal invalidate IDs; closes defer while another reader is busy.
 
-netstandard2.1 独立只读审查：核对已安装的 .NET Standard 2.1 参考 API、条件编译、CPM 与五/三目标边界、消费测试和文档，未发现需修复问题；git diff --check 通过。
+B04 six initial public protocol tests failed then passed. Count mismatch was wrongly wrapped as database error; corrected ArgumentException with ID close/session reuse. Mid-metadata ERR ID leak fixed via red-green regression. Review-found old-cleanup timeout could cancel later commands: callbacks now cancel their original lease, with cross-lease regression. Standard2.1 reference exposes PrepareAsync/DisposeAsync; genuine async overrides added with failing-then-passing isolated asset and loopback prepare wait/execute/disposal cases. Final Release core5/DI3 0 warnings/errors; Unit327/Consumer19/DI8 passed: TestResults/b04-unit.trx, b04-consumer.trx, b04-di.trx. Coverage: signed/unsigned/IEEE/UTF8/cross-byte NULL bitmap/lenenc/type changes/sync-async/repeated binding/multiple results/errors/cancel/bad binary rows/unread close/reconnect/busy cleanup. Format/diff/dual pack/profile passed. Basic bool/integer/float/UTF8/byte[]/NULL only then; exact/date/NUMBER B05, metadata B06,transactions B07. No A05 bypass. Real/non-Windows/older runtimes deferred; B04 Pending verification/G2 In progress; next B05. Independent re-review no source issue; docs clarify explicit Prepare does not validate Value encoding (execution validates before its own sends), and Standard2.1 async command scope.
 
+2026-10-18 A04/A05 calibration: plan local checkboxes aligned to existing code/evidence; real acceptance remained unchecked. A04 local done; A05 safe auth/Oracle/capabilities done, trusted MySQL rules still missing. Refreshed Windows Transport/Handshake54 passed: TestResults/a04-a05-refresh.trx. No real/private-CA success/non-Windows testing; states remain pending/G1 blocked.
 
-2026-10-18 B03 本地实施：增加 Oracle 命名绑定单次词法扫描及位置映射，支持单/双引号双写、成对/非成对 q 与 nq 字面量、非嵌套块注释、CR/LF 行注释及 :=；重复名称按 SQL 顺序引用同一参数对象，不插入 Value。ParameterName 可带单个冒号，ASCII 名称按 OrdinalIgnoreCase 匹配；规范化重名、缺失/多余、未闭合字面量和不支持绑定语法在发包前失败。MySQL SQL 与参数集合顺序原样保留，不猜测 SQL_MODE 或本地数问号。非 Input 参数方向当前拒绝。
+2026-10-18 B05: shared mode-aware exact number/datetime/RAW codecs; public OceanBaseDecimal(BigInteger coefficient/scale, exact ToDecimal), optional OceanBaseDbType override, low-precision provider-specific getters and GetFieldValue<OceanBaseDecimal>. Oracle metadata separates precision/signed scale; type 3 optimized integers versus246 lenenc decimal, distinct from MySQL INT. Column type fixed by declaration; wide/unknown precision rejected even small/NULL. Oracle DATE retains time, TIMESTAMP202 raw12 bytes in both protocols; MySQL DATE/DATETIME/TIMESTAMP/signed TIME have distinct formats without rounding/truncation/Kind conversion. Protocol reference Java6adc311; architecture§5 boundaries.
 
-B03 命令入口使用已认证会话模式，在获取命令租约及发送之前校验，空参数集合也检测未绑定 :name。关闭连接不能靠 ExpectedMode 确定模式；原脚手架的关闭连接和无名称参数异常预期已改为具体校验错误。合法参数执行及 Prepare 仍由 B04 接入，本模块不宣称已有参数化执行能力。普通无参文本仍走 B02。
+B05 missing exact/time/public sync-async tests failed then passed; old decimal/NUMBER rejection assertions updated, other deferrals retained. Independent review found Precision-only incorrectly assumes Scale0 and malformed binary TIME day overflow. Regressions distinguish omitted/explicit scale, inferred overprecision,8/12-byte day counts 35/10,675,200/uint.MaxValue; failed then passed. Re-review no issue; two stale doc states corrected. Release core5/DI3 0 warnings/errors; Unit369/Consumer24/DI8 passed: TestResults/b05-unit.trx, b05-consumer.trx, b05-di.trx. Five-asset tests check construction/conversion/type identity/inference/reset; hostnet10. Format/diff/pack/profile passed,README R01. B05 Pending verification/G2 In progress; next B06. Real Oracle empty-string/NULL/TIMESTAMP scale/both-mode round-trips/trusted MySQL/non-Windows/older runtime evidence absent. Wide/negative scale/nanoseconds/TZ/zero dates remain C03; metadata B06; G1/G2 open.
 
-B03 验证：词法/映射初始 52 例中 40 例红，公共同步/异步两例红确认缺失绑定 SQL 曾到达对端；实现后通过。另有注释内再次出现 /* 的红绿回归，确认按首个 */ 结束。最终 dotnet build OceanBaseConnector.slnx -c Release --no-restore 五目标核心及三目标 DI 编译 0 警告/0 错误；UnitTests 282、ConsumerTests 18、DependencyInjection.Tests 8 全通过，TRX 位于 TestResults/b03-unit.trx、b03-consumer.trx、b03-di.trx。format whitespace、git diff --check、两个产品包 pack 通过；包版本仍统一为 0.1.0-alpha，README 提示留 R01。独立只读走查未发现文档范围内需修复问题。依用户要求未执行数据库、非 Windows 或旧运行时测试；B03 保持待验证，G2 保持进行中，下一模块为 B04 服务端预处理与语句所有权。
+2026-10-18 B06: retains database/alias/original table-column names/length/flags; internal DbColumn maps GetSchemaTable/IDbColumnSchemaGenerator.GetColumnSchema. Five-target API availability checked against Standard2.0, no dependencies. Independent snapshots, B05 standard/provider types; MySQL character lengths use supported charset, Oracle ordinary lengths preserve server units; convert before saturating large values. Zero-row SELECT retains schema, final NextResult(false) clears columns. Unknown key/unique/updateability/expression facts not guessed; ProviderType awaited B09 (architecture§5).
 
-2026-10-18 B04 本地实施：实现 COM_STMT_PREPARE/EXECUTE/CLOSE、基础二进制参数/结果、多结果和命令/物理会话内的 statement ID 所有权。Oracle 使用 B03 名称映射顺序，MySQL 保留 SQL 并由服务端参数数校验。Prepare 强制准备，无客户端插值或 SQL 重放。自动准备和执行使用同一租约/超时；准备中断不报告未知 SQL 执行，实际发送执行后的不完整响应则销毁会话并报告结果未知。改变 SQL、重连、命令释放均使旧 ID 失效；其他 reader 忙时延迟关闭到下一命令前。
+B06 public text/binary×sync/async four missing-schema cases failed then passed; character-length/uint19 cases initially7 failed, all passed after conversion. Coverage: precision/sign/Chinese source names/invalid UTF8/NULL-empty/multiple results-counts/snapshots/zero rows/CloseConnection early-drained/exclusivity/scalar-conversion destruction. Unread TCP may FIN/RST; fixture accepts only ProtocolException/IOException close outcomes. Five isolated assets consume schema/value/provider data through ADO.NET. Independent lifecycle/source/docs review no fixes; suggested zero-row case added. Release core5/DI3 0 warnings/errors; Unit410/Consumer29/DI8 passed: TestResults/b06-unit.trx, b06-consumer.trx, b06-di.trx. Format/diff/packs/profile passed;README R01. B06 Pending verification/G2 In progress; next B07. Real charset units/Oracle empty strings/MySQL rules/non-Windows/older runtimes absent. Field schema does not imply database catalogs or real compatibility; A04/A05/G0/G1 unchanged.
 
-B04 修复与验证：初始六个公开协议用例红后转绿；服务端参数数不符曾误包装为数据库异常，修复后保留 ArgumentException 并关闭 ID、复用会话。准备元数据中途 ERR 的已知 ID 泄漏由红绿回归修复。独立审查发现旧清理超时可能关闭后续命令，改为只取消所属租约并增加跨租约回归。netstandard2.1 参考 API 已包含 PrepareAsync/DisposeAsync，补齐真实异步覆写；隔离资产入口回归先红后绿，环回进一步验证该资产的准备等待、执行及异步释放。
+2026-10-18 B07: follows Java isolation/autocommit protocol, pins original session/validates explicit command transaction. Defaults MySQL RepeatableRead/Oracle ReadCommitted; Oracle only ReadCommitted/Serializable. After confirmed commit/rollback OK, failed autocommit restoration destroys session but preserves known result; missing terminal/disconnect/cancel reports unknown, never replays. Transaction/connection/CloseConnection-reader modern async cleanup truly awaits rollback; busy sessions destroyed, cleanup allowed under ambient transaction. Closed event precedes old-session rollback, so delayed cleanup cannot affect reopening.
 
-B04 最终 Windows 验证：dotnet build OceanBaseConnector.slnx -c Release --no-restore 核心五目标/DI 三目标 0 警告、0 错误；UnitTests 327、ConsumerTests 19、DependencyInjection.Tests 8 全通过，TRX 位于 TestResults/b04-unit.trx、b04-consumer.trx、b04-di.trx。覆盖有/无符号边界、IEEE 浮点、UTF-8、NULL 位图跨字节、长度编码边界、类型变化、同步/异步执行、重复绑定、多结果、准备/执行错误和取消、畸形二进制行、未读响应关闭、重连和忙会话清理。format whitespace --verify-no-changes、git diff --check 和双包 pack 通过；ZIP/XML 验证两包 5/3 个目标资产、8 个依赖组、统一 0.1.0-alpha 及集成包精确核心依赖，README 提示仍留 R01。框架/依赖策略仍为核心 netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0，DI net8.0/net9.0/net10.0；Standard 与 net8 使用 Microsoft.Extensions 8.x，net9/10 使用对应主版本，CPM 和统一根版本不变。
+B07 Release core5/DI3 0 warnings/errors; Unit455/Consumer34/DI8 passed: TestResults/b07-unit.trx, b07-consumer.trx, b07-di.trx.45 transaction cases added, first6 failed then passed. Review-found async-reader synchronous rollback and late Closed event after reopen fixed with red-green tests; recheck clean. Five assets consume ADO.NET transactions; modern delayed Begin/End proves async; Standard then only sync transaction APIs, not older-runtime acceptance. Separate Transaction logger created before execution; logging failure preserves confirmed result. Format/diff/pack/profile passed, no dependencies,README R01. B07 Pending verification/G2 0/9 In progress; next B08. MySQL internal isolation tests do not open public A05; real/non-Windows/older runtime/A04/A05/G0/G1 gaps remain.
 
-B04 只支持基础 bool/整数/浮点/普通 UTF-8 字符串/byte[]/NULL；精确数值、日期和 Oracle NUMBER 仍属 B05，完整字段元数据属 B06，事务属 B07。没有可信 MySQL 模式版本证据时仍拒绝缺 Oracle 模式位的握手，不为环回成功绕过安全门槛。依用户要求不执行实库、非 Windows 或旧运行时验收；net10.0 宿主加载 Standard 资产不能替代旧运行时证据。B04 保持待验证、G2 保持进行中，下一模块为 B05。
+2026-10-19 B08: unified exchange-state fault matrix for precancel, partial header/payload failure, partial async sends with Cancel/token/timeout, sent request without terminal response, terminal OK/ERR-cancel races, incomplete multiresults, interrupted Commit/Rollback, old-command cancel/dispose after reopening. Before SQL send cancellation allows reuse; interrupted prepare destroys without unknown execution; execution sent without trusted terminal destroys/reports unknown, no replay. Complete terminal response wins over cancellation even if transport conservatively destroyed; intermediate MoreResults OK is not completion. Silent loopback proves no server execution; postexecution real disconnect still needs live acceptance.
 
-B04 独立复审：源码/测试未发现剩余需修复问题；文档复核后明确显式 Prepare 不校验 Value 编码、执行入口才在自身发包前校验，并补充 netstandard2.1 的命令异步入口范围。
+B08 internal I/O budget token was misclassified as caller cancellation; fixes preserve external token/distinguish caller/Cancel/budget and TimeoutException cause. Only direct/wrapped OperationCanceledException logs Canceled; budget abort is not caller cancel. Of8 receive timeout cases,4 failed then passed. Seven partial-async-send cases added; reverting fix failed 3 timeout cases, restoring passed. Independent re-review clean. Release core5/DI3 0 warnings/errors; Unit498/Consumer39/DI8 passed: TestResults/b08-unit.trx, b08-consumer.trx, b08-di.trx (+43Unit/+5Consumer). Five assets check original precancel tokens/loopback command timeouts onnet10. Format/diff/packs/profile/no dependencies passed;README R01. B08 Pending verification; next B09; G2 0/9 In progress. Real/non-Windows/older runtimes absent. A04 real TLS pending; A05 trusted identification remains an implementation gap, not merely environment verification; G0/G1 unchanged.
 
-2026-10-18 A04/A05 进度校准：此前台账已列本地证据，但开发计划中的本地完成项漏勾，现按代码和测试补齐，真实环境验收仍独立保留未勾。A04 本地实现完成，A05 本地安全认证/Oracle 模式/能力实现完成但 MySQL 允许规则仍需可信版本证据。重新运行 Windows Transport/Handshake 筛选套件 54 项全部通过（TestResults/a04-a05-refresh.trx）；没有执行实库、可信私有 CA 成功链或非 Windows 测试，不把待验证改为整体完成，G1 仍阻塞。
+2026-10-19 B09: preserved enum0..9, appended basic scalars10..26. Both schemas' ProviderType uses public enum integers; mode NUMBER/OracleDate/Timestamp/String/Binary mapping in architecture§5. Overrides reuse strict DbType/mode encoding; Null only accepts null, deferred types rejected. Added 65 mode/type cases; first49 demonstrated gaps then passed, including Oracle nonnull/typed-null TIME rejection. Existing five-asset cases gained ProviderType/override assertions. Deliberate Java API differences merged into architecture, no extra document. Command1100/1101 incorrectly used Connection logger; four public sync/async success/failure cases failed then passed after safe command-logger construction. Event IDs/redaction/factory ownership/filter-write isolation unchanged; DI logger-count expectations updated. Independent review clean.
 
-2026-10-18 B05 本地实施：统一模式感知的精确数值、日期时间和 RAW 编解码；新增公共 OceanBaseDecimal（BigInteger 系数/scale、精确 ToDecimal）、可选 OceanBaseDbType 覆盖，以及低精度列的 GetProviderSpecificFieldType/Value/Values 和 GetFieldValue<OceanBaseDecimal>。Oracle 列定义读取独立 precision/有符号 scale；类型码 3 按优化整数布局、246 按长度编码十进制文本解析，不混用 MySQL INT。低精度列的类型随元数据固定，宽精度/未知精度即使值很小或 NULL 也拒绝。Oracle DATE 保留时分秒，TIMESTAMP 202 两协议读取原始 12 字节；MySQL DATE/DATETIME/TIMESTAMP 和有符号 TIME 采用各自线格式，禁止隐式舍入、日期截断或 Kind 转换。协议依据核对 Java 基线 6adc311，具体边界见架构 §5。
+B09 Release core5/DI3 0 warnings/errors; Unit567/Consumer39/DI8 passed: TestResults/b09-unit.trx, b09-consumer.trx, b09-di.trx (+69Unit). Format/diff/dual pack/profile/no dependencies passed;README R01. Independent RuntimeConsumerSample.cs compiled with SDK10 csc/reference packs8/9/10; private dependencies/LatestPatch runtimeconfig prevent net10 dependency unification. Standard2.0/2.1/net8 ran8.0.31+Logging8,net9 9.0.20+Logging9,net10 10.0.12+Logging10. All five passed original-token precancel, authenticated Oracle query, NUMBER/decimal, both ProviderTypes, CloseConnection. Commands/response files/results: artifacts/b09-runtime-smoke; plan B09 reproduction. Basic samples do not prove old-runtime DI/all APIs/Framework4.8/real both modes. B09 Pending verification/G2 0/9; next C01. A04/A05/real/non-Windows/reset-whitelist gates remain.
 
-B05 回归与审查：初始缺失精确数值/时间用例及公共同步/异步入口回归由红转绿；原 B03/B04 的 decimal/Oracle NUMBER 未支持预期更新为新契约，其他延期类型继续拒绝。独立只读审查发现仅设 Precision 时误用 Scale=0，以及二进制 TIME 天数溢出绕过；分别增加省略/显式 scale 区分、推断 scale 超精度及 8/12 字节天数 35/10,675,200/uint.MaxValue 回归，先红后绿。修复后源码复审未发现剩余需修复问题，文档复审发现的两处旧状态声明已同步修正。
+2026-10-19 C01/C02: no trusted OceanBase/OBProxy full-reset version/mode whitelist. Java2.4.14 reset relies on tracked state outside specific MariaDB combinations and cannot prove raw SET/ALTER SESSION/temporary-object cleanup. C01 Blocked,Pooling=true rejected; proceed independent C02 without test pool bypass or calling destruction a pool.
 
-B05 最终 Windows 验证：dotnet build OceanBaseConnector.slnx -c Release --no-restore 核心五目标/DI 三目标编译 0 警告、0 错误；UnitTests 369、ConsumerTests 24、DependencyInjection.Tests 8 全通过，TRX 位于 TestResults/b05-unit.trx、b05-consumer.trx、b05-di.trx。消费测试逐个隔离加载五目标资产，校验 OceanBaseDecimal 构造/转换/类型身份、参数推断和覆盖重置；宿主统一 net10.0。format whitespace --verify-no-changes、git diff --check 和双包 pack 通过；ZIP/XML 校验 5/3 个资产、8 个依赖组、统一 0.1.0-alpha、集成包精确核心依赖及 Microsoft.Extensions 按 Standard/net8→8.x、net9→9.x、net10→10.x 分组。包 README 提示仍留 R01。
+C02 uses existing Server/Host ordered comma lists,host[:port],[IPv6][:port],bare IPv6; absent port inherits Port. OceanBaseEndpoint/options parse/freeze. PhysicalSession sync/async tries next only on TCP socket-opening failure; one total Open budget,0 infinite. Explicit reopen restarts first address. TLS/auth/protocol/mode/business failures never switch/replay. Per-endpoint snapshots preserve TLS/credentials/mode/database; source retains original list; SNI/auth _server_host use actual host; connection/close/command/transaction logs use actual redacted endpoint. Initial 26 invalid/public-fallback tests all failed then passed;60Unit/10Consumer added. Release 5/3 0 warnings/errors; Unit627/Consumer49/DI8 passed: TestResults/c02-unit-final.trx, c02-consumer.trx, c02-di.trx. Coverage: all fail/mode-auth errors/handshake-SQL disconnect/no retry/cancel-close/infinite-total-timeout/source/reopen/untouched candidates/per-address TLS/name/cert/password. Review removed timing-dependent assertion that last candidate must remain untouched; two total-duration tests passed. Shared budget verified by one CreateBudget outside loop, budget tokens for TCP/async handshake and transport-closing registrations for sync TLS/auth; recheck clean.
 
-B05 保持待验证、G2 保持进行中，下一模块为 B06。依用户要求未执行实库、非 Windows 或旧运行时验收；真实 Oracle 空字符串/NULL 语义、TIMESTAMP scale 变体和两模式往返仍无证据。可信 MySQL 模式版本矩阵仍未建立，缺 Oracle 模式位时继续安全拒绝，不为合成测试放行。宽精度/负 scale、纳秒/时区、零日期留 C03，完整字段元数据留 B06，不以本地测试关闭 G1/G2。
+C02 RuntimeConsumerSample added failed-first-address query; Standard2.0/2.1/net8 on 8.0.31,net9 on 9.0.20,net10 on 10.0.12 with Logging8/9/10 passed; artifacts/c02-runtime-smoke. Format/diff/pack/profile/no dependencies passed;README R01. C02 Pending verification/G3 0/8 In progress; next C03; C01/A05 remain blocked. Real both modes/OBProxy/non-Windows/IPv6 network/trusted private-CA success/old-runtime DI/full APIs unverified.
 
-2026-10-18 B06 本地实施：保留列定义的数据库名、别名/原始表列名、长度和 flags；新增内部 DbColumn 映射，统一提供 GetSchemaTable 与 IDbColumnSchemaGenerator.GetColumnSchema。五目标接口均已核对可用的 .NET Standard 2.0 参考 API，无新依赖。两套 schema 返回独立快照，标准/provider-specific 类型沿用 B05；MySQL 字符长度按已支持字符集换算、Oracle 普通字符长度保留服务器单位、大长度先换算再饱和。零行 SELECT 保留 schema，最终 NextResult(false) 清空旧列。未提供的 key/unique/updateability/表达式等不猜测；ProviderType 暂未知，B09 需补齐枚举覆盖契约，见架构 §5。
+2026-10-19 C03 numbers: DecimalCodec/ResultColumn support MySQL DECIMAL(65,20),Oracle NUMBER(38),unknown precision/negative scale. Metadata fixes standard types; small/NULL wide values never narrow. Decimal getters convert exactly; parameters use plain decimal text, not decimal/double. p0/s0 retains coefficient/scale; p0 known-nonzero scale rescales exactly within Oracle38/MySQL65 while schema precision stays unknown. Scale-only parameters do not invent Precision38; valid large exponents accepted. Two regressions failed then passed: c03-scale-red.trx,c03-number-green-final.trx. Review fixed MySQL negative-scale expanded integer zeros (Precision5 wrongly accepted123000) and zero coefficients wrongly rejected:1/2 failing cases, c03-precision-red.trx,c03-zero-red.trx;68 targeted passed,c03-number-targeted.trx. Changes mode-limited; Oracle signed scale intact. Recheck clean/docs merged. Old wide-rejection expectations updated; overflow/unsigned/rounding/malicious exponent-scale/input-length rejection retained; public sync/async text/binary read/schema/conversion/write covered. +45Unit/+5Consumer; Release 5/3 0 warnings/errors; Unit672/Consumer54/DI8 passed: TestResults/c03-number-unit-final.trx,c03-number-consumer-final.trx,c03-number-di.trx. Format/diff/pack/profile passed;README R01. C03 In progress,next nanoseconds/TZ/LTZ/zero dates; G3 0/8. MySQL internal tests/Oracle public consumers do not bypass A05; real/non-Windows/new runtime/C01/G0/G1 gaps unchanged.
 
-B06 测试与走查：公开文本/二进制、同步/异步四例先因 schema 缺失失败后通过；字符长度/uint 上限 19 例中 7 例先红，换算实现后全部通过。另覆盖整数精度/符号、中文来源名称、无效 UTF-8、NULL/空串、多结果/更新计数、快照不可变、零行 SELECT、提前关闭/读尽的 CloseConnection、未读响应独占及 scalar 转换失败销毁。关闭未读 TCP 可能产生 FIN 或 RST，环回断言限定为 ProtocolException/IOException 两类关闭结果。五目标隔离消费经标准 ADO.NET 接口读取实际 schema/值及 provider 类型。独立源码、关联生命周期和最终文档走查无需修复项，已补走查建议的零行 schema 回归。
+2026-10-19 C03 nanoseconds without timezone: five-target OceanBaseTimestamp stores Unspecified whole seconds/nanoseconds/scale; construction/ToDateTime reject rounding,years1..9999. Text/binary202 use shared12-byte codec. Standard p<=7 DateTime,p8/9 OceanBaseTimestamp; provider getters/schemas always OceanBaseTimestamp, including small/NULL. Inference DateTime2/reused Timestamp; provider values only Oracle TIMESTAMP. Preserve provider scale/default DateTime7; explicit0..9 exact rescaling only. Other MySQL dates/Oracle DATE/deferred TZ/LTZ unchanged. Initial 3 gaps failed then passed(c03-nanos-red.trx,c03-nanos-value-green.trx), then12 codec/public tests(c03-nanos-codec-red.trx,c03-nanos-codec-green.trx). Coverage1ns/999999999ns,7/8/9digits,boundary dates,invalid components/payload/scale,typed-null/default/Kind/protocols/sync-async read-write. Empty payload exposed mistaken zero-date classification; TIMESTAMP length now checked first with ProtocolException. Review clean; suggested exact9→8/8→9 and DateTime scale9 tests added, retaining parameter values/docs. +44Unit/+5Consumer; Release 5/3 0 warnings/errors; Unit716/Consumer59/DI8 passed: TestResults/c03-nanos-unit-final.trx,c03-nanos-consumer.trx,c03-nanos-di.trx. Format/diff/pack/profile passed;README R01. C03 In progress,next TZ/LTZ/zero dates; G3 0/8. Java OBTIMESTAMPParameter fixes scale9,driver preserves explicit/provider scale; result column/payload scale equality and years outside1..9999 need real validation. Other gates unchanged; no real/non-Windows/new old-runtime testing.
 
-B06 最终 Windows 验证：dotnet build OceanBaseConnector.slnx -c Release --no-restore 核心五目标/DI 三目标 0 警告、0 错误；UnitTests 410、ConsumerTests 29、DependencyInjection.Tests 8 全通过，报告 TestResults/b06-unit.trx、b06-consumer.trx、b06-di.trx。format whitespace --verify-no-changes、git diff --check、两包 pack 通过；ZIP/XML 校验 5/3 目标资产、8 个依赖组、统一 0.1.0-alpha、精确核心依赖及 Standard/net8→8.x、net9→9.x、net10→10.x 依赖分组通过。包 README 提示仍归 R01。全部测试宿主仍 net10.0，隔离加载资产不等于旧运行时通过。
+2026-10-19 interrupted-review resumption: historical B01 events/B02 terminal-cancel/B04 cleanup/B05 precision-TIME/C03 number-nanos fixes had committed regressions. New review found Standard2.1 connection/reader/transaction async lifecycle incorrectly NET8-gated. NETStandard.Library.Ref2.1.0 confirmed APIs; four conditions expanded to NETSTANDARD2_1, reusing async implementations. ChangeDatabaseAsync explicitly unsupported then; no new switch capability, source/batch/dependency targets unchanged. Six Consumer failures reproduced five delayed-ROLLBACK cleanup entry points plus missing transaction override (TestResults/review-async-red.trx).17 targeted passed(review-async-green-final.trx): async Begin/Commit/Rollback,original precancel,connection CloseAsync/DisposeAsync,transaction DisposeAsync,reader CloseAsync/DisposeAsync await rollback/autocommit restoration via public APIs on 2.1/net10. Full Unit716/Consumer71/DI8 passed: review-fixes-{unit,consumer,di}.trx; Release 5/3 0 warnings/errors,format/diff/pack/profile passed;README R01. Independent review checked shared async paths/precancel/delays/red-green evidence; stale architecture corrected,three docs clean. Review fix only,no TZ/LTZ advancement; C03 In progress/G3 0/8;A04/A05/C01/gates unchanged. No real/non-Windows/new older-runtime acceptance; Consumersnet10.
+2026-10-19 C03 TZ/review resumption: five-target OceanBaseTimestampWithTimeZone, type 200 text/binary reads, fixed standard/provider schema types, exact DateTimeOffset conversion, inference/explicit TimestampWithTimeZone(enum27, existing values unchanged). Local fields/nanoseconds/offset/server name-abbreviation retained without client-zone reinterpretation. LTZ/zero dates still missing; C03 In progress. Review fixed three protocol issues: negative-hour result minutes are magnitude, so(-3,+30)=-03:30; result lengths are lenenc while parameters use one-byte lengths,251..255 cannot use generic WriteBytes and>255 rejects before send; result internal name/abbreviation also lenenc,251..255 need3-byte prefixes/max payload530. Fixed server SHA5e8a63d29dae9fde5e962b8fcc7b167d438fc343 stmt_execute/ob_time_convert supports parameter-0:30/non9 scales, not target interoperability proof. Server names may override offsets through its zone table; contradictory name/offset round-trip preservation is not guaranteed. Layout/evidence merged architecture§5.
 
-B06 保持待验证、G2 保持进行中，下一模块为 B07 本地事务。依用户要求继续暂缓实库及非 Windows，旧运行时亦无验收证据；MySQL 可信模式版本矩阵及 Oracle 字符长度/真实空字符串语义仍待环境。不改变 A04/A05、G0/G1 的缺口，不因字段 schema 已实现声称数据库目录 GetSchema 或两模式实库兼容已完成。
+Initial 9 codec/5 public failures then passed; review reproduced7 failures,c03-tz-review-red.trx, then47 passed,c03-tz-review-green.trx. Coverage: both result protocols/public sync-async reads/writes,positive-negative-subhour offsets,DST repeated local times,0..9,NULL/stable schema,exact conversion/rescale,strict UTF8,bad payload,530-byte results,parameter250/251/255 and 256/526 rejection. Overlong public parameters send neither prepare nor execute,session reusable. First full run's3 failures were obsolete unsupported-TZ assertions; replaced with pre-send Guid rejection/removing supported200 deferral while retaining others. Long-name251/255 cases first failed,c03-tz-name-red.trx; corrected ReadTimeZoneIdentity/max length then57 passed,c03-tz-targeted-final.trx. NULL/oversized internal lengths rejected before allocation; parameter inner/outer lengths stay one byte,so long result names are not writable-parameter evidence. Release 5/3 0 warnings/errors; Unit772/Consumer76/DI8 passed: TestResults/c03-tz-unit-final.trx,c03-tz-consumer-final.trx,c03-tz-di-final.trx. Format/diff/dual-pack/profile passed;net10 hosts,README R01. Independent final review confirmed fixes/evidence/stable typed-null/exact conversion/three docs,no required issue. C03 In progress,next trusted LTZ/zero dates;G3 0/8,A04/A05/C01/G0/G1 unchanged. No real/non-Windows/new older-runtime testing.
 
-2026-10-18 B07 本地事务：沿 Java 会话隔离/自动提交协议，固定原物理会话并显式校验命令事务；默认 MySQL RepeatableRead / Oracle ReadCommitted，Oracle 只开放 ReadCommitted/Serializable。完整提交/回滚 OK 已确认后恢复自动提交失败时销毁会话并保留已确认结果；断线/取消无终态则报告结果未知，绝不重放。事务释放、连接关闭及 CloseConnection reader 的现代异步清理走真实异步回滚；忙会话销毁，环境事务中仍可清理。关闭事件先于旧会话回滚，延迟清理不会影响新会话。
+2026-10-19 C03 LTZ state prerequisite: command OK/FEOK session variables had been discarded,so authentication variables alone could use stale timezone. PhysicalSession now retains an independent invalidatable time_zone report; SQL send atomically captures/clears it,QueryResult freezes each result's snapshot and clears subsequent sources. Valid terminal/transaction OK reports update; classic EOF/ERR never guess. Prepare/close do not execute SQL; unsent cancellation does not invalidate. Close/Break clear state; lease identities block late reports/new-command pollution/session resurrection. No query/public config/dependency added;type 201 still unsupported then,query completion/parameter-zone consistency later.
 
-验证：`dotnet build OceanBaseConnector.slnx -c Release --no-restore` 五目标核心/三目标 DI 0 警告/错误；Windows 单元455、消费34、DI8 全部通过（`TestResults/b07-unit.trx`、`b07-consumer.trx`、`b07-di.trx`）；事务新增45项，其中首批6项由桩失败转通过。独立走查发现的 reader 异步清理同步回滚、重开后迟到 Closed 事件均经失败后通过的回归修复，复查无剩余需修复项。五资产经公共 ADO.NET 事务接口消费，现代三资产延迟响应验证异步 Begin/End；两个 Standard 资产仅同步事务入口，未作为旧运行时验收。日志使用独立 Transaction 类别并在执行前创建 logger，后端失败不改变已确认结果。格式/diff 检查、双包生成和 ZIP/XML 资产5/3组、依赖8组、统一0.1.0-alpha与 DI 精确核心依赖检查通过；无新增依赖，Microsoft.Extensions 仍按目标8/9/10分组。NuGet README 提示仍留 R01。
+Initial 12 state failures,c03-ltz-state-red.trx;23 targeted passed,c03-ltz-state-green.trx: sync/async,independent authentication snapshots,three reports A→absent→unknown,EOF/FEOK,empty/row prefetch,ERR/unsent cancel,prepare/close,transaction controls,close/break/old leases. Two initial green-run fixture assertions incorrectly expected EndOfStreamException instead of ProtocolException on close; corrected,not a product bug. Raw SYSTEM/arbitrary names do not establish valid LTZ interpretation. Review found a later result's first-packet ERR threw before Header,retaining preceding A. Two sync/async cases failed,c03-ltz-state-review-red.trx; capture/invalidation moved before Receive;25 passed,c03-ltz-state-green.trx. Connection remains usable with unknown zone,never restored from authentication. Release 5/3 0 warnings/errors;Unit797/Consumer76/DI8 passed: TestResults/c03-ltz-state-unit-final.trx,c03-ltz-state-consumer-final.trx,c03-ltz-state-di-final.trx. Format/diff/pack/profile passed;review confirmed ERR fix/docs clean,README R01. C03 In progress;LTZ query/type 201/parameter consistency/zero dates still pending;other gates/real/non-Windows/old-runtime limits unchanged.
 
-B07 保持待验证，G2 仍0/9、进行中，下一模块 B08。MySQL 仅有内部隔离映射测试，公共握手仍受 A05 可信版本规则缺口阻止；实库及非 Windows 按用户要求暂缓，旧运行时未验证。A04/A05、G0/G1 缺口不变。
+2026-10-19 LTZ end-to-end resumption: previous work had only a plan/eight gap tests,not delivery. Added five-target OceanBaseTimestampLocalTimeZone/enum28,type 201 text/binary/fixed schemas/provider types/exact DateTime/parameter writes. Retains local fields/nanoseconds/scale/server session identity,without client DST reconstruction/original offset recovery. NULL preserves stable type with unknown zone,subject to mode/scale; nonnull requires valid result snapshot. MySQL201/wrong explicit types including typed-null mode boundaries rejected.
 
+Before Oracle business SQL,valid reports reused; missing/SYSTEM/invalid reports trigger SELECT SESSIONTIMEZONE FROM DUAL on the same lease/cancel/timeout budget. Strict one UTF8 column/one valid nonnull identity row,complete terminal drain before publication. Internal query does not mark user SQL sent. Ordinary parameter errors precede query; LTZ identity mismatch rejects before prepare/execute. Without ongoing reports,subsequent execution adds a query round-trip;active readers never query;multiple results without new reports cannot reuse old zones. Fixed Java/server local-field/session/MYSQL_ONLY tracing evidence merged architecture§5. Review fixed query-scalar/terminal-report conflict retaining stale reports and explicit Timestamp being overwritten to 201 by LTZ inference. Three sync/async failures,c03-ltz-review-red.trx,then49 passed,c03-ltz-review-green.trx. Drained conflict clears report/fails but keeps Open,next execution rechecks;explicit Timestamp+LTZ fails before send. Coverage:nanoseconds/NULL/schema/public text-prepared IO,ordinal identity match,extra rows-results/invalid UTF8/NULL/long identity/disconnect,budget timeout/original token/Cancel,requery after ERR,ordinary binding first,true201 multiple-result snapshots. Five-asset LTZ added,net10 host.
 
-2026-10-19 B08 本地故障矩阵：统一交换状态机覆盖发送前取消、部分头/负载写入失败、部分异步发送时 Cancel/token/超时、已发送但无终态响应、完整 OK/ERR 与取消竞争、多结果尚未结束、Commit/Rollback 中断及 Close 后重开的旧命令取消/释放。未发 SQL 时取消保留可复用会话；准备中断销毁会话但不声明 SQL 执行结果未知；发送执行请求且无可信终态时报告结果未知并销毁，绝不重放。完整终态响应优先于解析前取消，即使传输已保守销毁，仍保留已确认成功/服务端错误；带 MoreResults 的中间 OK 不算完整完成。合成“收到请求但不返回”的环回不证明服务端确实执行，真实执行后断线留待实库验收。
+First full failures came from fixtures missing the new query,wrong deprecated-EOF response,and Windows server writing terminal after disconnect; adapted flow/eliminated invalid writes. Sandbox certificate import failed,normal-permission rerun passed without product TLS changes. Release 5/3 0 warnings/errors;Unit846/Consumer81/DI8 passed: TestResults/c03-ltz-unit-final.trx,c03-ltz-consumer-final.trx,c03-ltz-di-final.trx. Format/diff/pack/profile passed;review no required product issue,three docs synchronized,README R01. C03 In progress,zero dates/real acceptance remain,G3 0/8,other gates unchanged. No real/non-Windows/new older-runtime testing;SESSIONTIMEZONE permissions/zone tables/real DST require live evidence.
 
-B08 修复及审查：异步 I/O 抛出的内部预算 token 原先被当作外部取消，现保留外部 token、按调用方取消/Cancel/预算到期归因，超时返回 TimeoutException 原因。日志仅把直接或 OceanBaseException 包装的 OperationCanceledException 标为 Canceled，不把超时内部中止标成调用方取消。接收路径超时8例中4例先红后绿；审查建议补齐部分异步发送后取消，新增7例，恢复旧逻辑时其中超时3例失败、恢复修复后全绿。独立只读复查无剩余需修复项。
+2026-10-19 C03 zero dates: five-target OceanBaseDate/OceanBaseDateTime retain all/partial-zero components,microseconds/scale;default is all-zero,not DateTime.MinValue/NULL. MySQL DATE10/DATETIME12/TIMESTAMP7 standard type stays DateTime;normal reads unchanged,zero-component GetValue/GetDateTime/GetFieldValue<DateTime>/GetValues throw InvalidCastException. Provider/schema types are fixed Date/DateTime per column across normal/zero/NULL rows;IsDBNull tests protocol NULL only. Inference Date/DateTime;provider values accepted only for matching MySQL types;wrong mode/type/precision fails before send. Partial-zero or zero date/nonzero clock encodes4/7/11 bytes;zero length only when every component zero;zero-length reads preserve declared scale. Initial 9 public/stable-schema/conversion cases failed,c03-zero-red.trx,then passed;expanded 49 passed,c03-zero-targeted.trx: normal/all-partial-zero/leap/boundary years/strict format/binary components-microseconds/exact scale/mode/sync-async mixed text-prepared/provider bulk/NULL/writes/TIMESTAMP7. Five assets added 10 DATE/DATETIME mixed/write cases. Four initial expanded failures were default literal choosing valid DateTime0001-01-01 instead of OceanBaseDate;explicit default(OceanBaseDate) fixed tests,not product normalization. Old DATE scale6 fixture corrected to 0,invalid declarations separately tested. Review clean;suggested mixed TIMESTAMP/shorter fractions added. Release 5/3 0 warnings/errors;Unit895/Consumer91/DI8 passed: TestResults/c03-zero-unit-final.trx,c03-zero-consumer-final.trx,c03-zero-di-final.trx. Format/diff/pack/profile passed,README R01. Three docs merged contracts. C03 local subitems complete,In progress→Pending verification,G3 0/8,next C04. Explicit post-auth MySQL test facts do not open A05/no product test switch. Real SQL_MODE zero/year0 acceptance,TIMESTAMP timezone/written scale pending;other ALLOW_INVALID_DATES invalid calendars still rejected. Real/non-Windows/new older-runtime unexecuted,net10 hosts,other gates unchanged.
 
-B08 最终 Windows 验证：Release slnx 核心五目标/DI 三目标编译0警告/0错误；Unit498、Consumer39、DI8 全通过（TestResults/b08-unit.trx、b08-consumer.trx、b08-di.trx），相比 B07 新增43项单元与5项消费测试。五资产在 net10.0 宿主分别验证公共预取消 token 和真实环回命令超时；不等同旧运行时验证。format whitespace --verify-no-changes、diff 检查和双包 pack 通过；ZIP/XML 校验核心5/DI3资产、8依赖组、统一0.1.0-alpha、DI 精确核心版本、Microsoft.Extensions 的 Standard/net8→8.x、net9→9.x、net10→10.x 分组，无新依赖。包 README 提示继续留 R01。
+2026-10-19 C04 incremental payload prerequisite: PacketChannel.OpenPayload/OpenPayloadAsync reads only 4-byte frame header initially,body on demand;continuations/empty terminators retain sequence/cumulative64 MiB bound. Unconsumed payload exclusively owns channel,blocking reads/writes/reset/TLS replacement. Early disposal/truncation/corruption/body cancellation closes transport;precanceled open leaves idle channel untouched. Buffered ReadPacket sync/async now share implementation while returning arrays. Ordinary reader still buffers a row;SequentialAccess/cursors not yet enabled;parameter/mode/lease contracts unchanged. Initial 21 missing-API cases failed then passed,c04-payload-red.trx,c04-payload-green.trx;two whole-packet overlimit transport-close cases failed then passed,c04-buffered-red.trx,c04-packet-green.trx.29 new cases:32 MiB lazy payload,sync allocations<256 KiB,no prefetch,continuation/exact full empty terminator,sequence wrap,multipart I/O/cancel,early cumulative limit/close.54 packet targeted passed,c04-packet-targeted.trx. Allocation tests do not establish public-reader/real memory-throughput. Release 5/3 0 warnings/errors;Unit924/Consumer91/DI8 passed: TestResults/c04-payload-unit-final.trx,c04-payload-consumer-final.trx,c04-payload-di-final.trx. Format/diff/UTF8-no-BOM/CRLF/pack/profile passed,README R01. Review covered packet/payload/state/cleanup/handshake/CommandExchange,no required fix. Docs C04 In progress,next reader streams/characters then evidence-based cursors. Java2.4.14 standard input still assembles packets;cursor mode/options/normal versus extended Oracle fetch are distinct,not proven .NET capability. Real/non-Windows/new runtimes deferred;other gates unchanged.
 
-B08 保持待验证，下一模块 B09 公共 API 审核；G2 仍0/9、进行中。实库与非 Windows 按用户要求暂缓，旧运行时亦无验收证据。A04 本地已完成、待真实/跨平台 TLS 验收；A05 可信 MySQL 模式判定规则仍是实现缺口，版本/插件/真实握手证据亦缺，不把该缺口归为单纯环境验证，也不放行缺 Oracle 模式位的公共握手。G0/G1 门槛不变。
+2026-10-19 C04 reader/review: QueryResult/CommandExchange single-owner incremental payload;SequentialAccess text/prepared-binary sync/async,legacy/deprecated EOF,field streams/explicit whole-field materialization;default row buffer retained. GetBytes/GetChars/GetStream/GetTextReader,async Stream/TextReader/value getters,NULL/provider precision obey forward-only field/offset access. Skipping columns/rows/results drains with 8 KiB buffer. Sequential GetChars(null-buffer) length probing rejected;strict UTF8 retains BOM/surrogates. Whole-value/byte/character modes cannot mix;old field streams invalidate on field/row/result change/close. Unread close destroys session;CloseConnection also logical connection. Review fixed cached chars/exhausted streams bypassing Cancel/timeout/close,complete EOF/ERR misclassified unknown after receive-before-parse cancellation,and field token absent from command budget. Eight lifecycle/two token/two earlier binary-framing cases failed then passed. Unknown destroys/no replay;known terminals win late cancellation.42 sequential+12 reused zero-date cases cover cross-frame lazy32 MiB,reader return before body,sync-drain allocation<1 MiB,NULL/offset/async/skip/multiresult/UTF8/early close/blocking token-Cancel-timeout-close;not real memory/throughput proof. Release 5/3 0 warnings/errors;Unit978/Consumer101/DI8 passed: TestResults/c04-reader-unit-final.trx,c04-reader-consumer-final.trx,c04-reader-di-final.trx. First sandbox full run10 TLS failures from Windows credential/private-key permissions;authorized outside-sandbox full rerun passed,policy unchanged. Format/diff/UTF8-no-BOM/CRLF/pack/profile passed,README R01. Five assets each added sequential-stream/nanosecond-write cases(5 each),net10 hosts. Docs local checks updated,C04 In progress;cursors/real resource-performance pending;other gates unchanged.
 
+2026-10-19 C04 server cursors/review: OceanBaseCommand.FetchSize default0 ordinary stream;positive snapshots page size,forces server prepare/read-only execute flag1;negative rejected,no-result statements reject before execute. Sync/async/default/sequential use COM_STMT_FETCH with same ID/session/lease/total budget,per-page sequence reset. MySQL binary rows;Oracle resent metadata validated. Legacy EOF/MySQL FE-OK strictly confirm cursor. Oracle deprecated-EOF omits execute/fetch metadata EOF per fixed Java;first fetch confirms even empty results. Continuing pages require CursorExists/progress;LastRowSent releases lease. Excess rows/metadata changes/multiple results-OUT/unconfirmed/no-progress fail without fallback/reexecution. HasRows prefetches first row/sequential prefix;NextResult drains all pages;early close/cancel destroys original session;drained statements reusable,FetchSize0 returns ordinary flow. Review fixed ERR lease-release-before-destroy enabling log reentry,and 0x00 binary row masquerading as deprecated-EOF cursor ACK(four red-green cases). CommandExchange now destroys before Complete/callbacks,retaining1064/known outcome;ACK must start0xFE,fake row destroys unknown/no fetch. Two red-green intermediate-report cases fixed stale timezone;two initial-empty LastRowSent cases fixed double-clearing final reports;each report observed once. Two partial-fetch-write reader-token cases fixed using same budget/no replay. Independent delta/Oracle-EOF review clean.
 
-2026-10-19 B09 本地审核与修复：保留 OceanBaseDbType0..9，追加10..26基础标量族，reader两套schema的ProviderType使用公开枚举整数；模式相关NUMBER/OracleDate/Timestamp及String/Binary归一映射见架构§5。参数override复用严格DbType编码与模式检查，Null只允许空值，延期类型仍拒绝。新增65项类型/模式测试，首批49项证明缺口后通过，包含Oracle TIME非空/typed-null拒绝；5资产既有消费用例补ProviderType/override断言。公开能力与Java有意差距归档进既有架构文档，不另建文档。
+Added 59 cursor Unit;70 targeted passed(including11 existing ByteCursor). Paging16 combinations:sync-async×default-sequential×both-mode×legacy-deprecated EOF,plus empty pages/results,invalid responses/metadata,total budget,partial cancel,log reentry,early close,NextResult drain/reuse. Ten five-asset Oracle legacy/deprecated consumers. Evidence:TestResults/c04-cursor-review-{red,green}.trx,c04-cursor-oracle-eof-red.trx,c04-cursor-state-red.trx,c04-cursor-empty-state-red.trx,c04-cursor-complete-green.trx. Final `dotnet build OceanBaseConnector.slnx --no-restore -c Release` core5/DI3 0 warnings/errors;full Windows Unit1037/Consumer111/DI8 passed,0 skipped:TestResults/c04-cursor-unit-final-checked.trx,c04-cursor-consumer-final-checked.trx,c04-cursor-di-final-checked.trx. Authorized outside-sandbox TLS-store access,policy unchanged. Format/diff/UTF8-no-BOM/CRLF/dual-package profile in TestResults/c04-cursor-pack passed;README R01. Three docs merged evidence;C04→Pending verification,next C05,G3 0/8,other gates unchanged. No real both-mode/OBProxy/non-Windows/new runtime acceptance;net10 consumers. At this historical point offset/scroll cursors,REF CURSOR,locator LOB unimplemented;no real resource/large-value performance claim. Local master commit,no push.
 
-B09日志核查确认命令1100/1101原先误用Connection类别，导致只启用Command类别的应用看不到命令日志；新增同步/异步成功/失败4项公共环回回归先全红后全绿。命令logger在构造时安全创建，沿用既有过滤/写入异常隔离，不变更事件ID、脱敏或日志工厂所有权；DI创建logger数量预期同步更新。独立源码走查无剩余需修复项。
+2026-10-19 C05 database switching: MySQL ChangeDatabase COM_INIT_DB encodes exact names;Standard2.1/modern genuine async overrides,Standard2.0 no nonexistent API. Oracle/ambient transaction/busy session reject before sends;null/empty/NUL/invalid UTF16/oversize rejected,no USE interpolation. Physical Database publishes after a single valid zero-count OK,before lease release/logs. Trusted ERR preserves old database/reuse;invalid/partial send/cancel/timeout destroys/reports unknown,no replay. Options/source retain configured database;reopen restores it;old replies cannot update new sessions. Idle local transaction allowed without changing object/binding/commit. Prepared IDs record database;execution rechecks after lease,reprepares on change,old IDs use close queue;failed switch retains original ID. Initial 5 failed then passed:TestResults/c05-database-red.trx,c05-database-green.trx.36 new Unit cover sync-async/exact case-special names/known errors/mode-parameters-ambient rejection/6 invalid responses×sync-async/partial writes/precancel-wait-cancel-timeout-close/exclusivity/local binding/late cancel/log publication/source isolation/old reply reopen/statement reuse. Nine five-asset cases Standard2.0 sync,2.1/8/9/10 sync-async;explicit authenticated MySQL fixture,A05 unchanged.36/9 targeted passed:TestResults/c05-database-lifecycle.trx,c05-database-consumer-targeted.trx. Independent related-path review clean;not delegated.
 
-最终Windows验证：`dotnet build OceanBaseConnector.slnx -c Release --no-restore`核心五/DI三目标0警告0错误；Unit567、Consumer39、DI8全通过（TestResults/b09-unit.trx、b09-consumer.trx、b09-di.trx），相比B08增加69项单元。format whitespace、diff、双pack及ZIP/XML5/3资产/8依赖组/统一0.1.0-alpha/DI精确核心版本/按TFM划分Microsoft.Extensions8/9/10全部通过；未新增依赖，NuGet README提示留R01。
+C05 switching final Release 5/3 0 warnings/errors;Windows Unit1073/Consumer120/DI8 passed,0 skipped:TestResults/c05-database-unit-final.trx,c05-database-consumer-final.trx,c05-database-di-final.trx. Authorized TLS-store access/no policy changes;format/diff/UTF8-no-BOM/CRLF/pack profile at TestResults/c05-database-pack passed;README R01. Existing three docs merged,no new design doc;master commit/no push. C05 still In progress then:MetaDataCollections/DataSourceInformation/Tables/Columns/restrictions/GetSchemaAsync missing. Raw USE reports/tracking outside verified contract;Database tracks ChangeDatabase only(architecture§4). Real/non-Windows/new runtime acceptance absent;net10 consumers;other gates open.
 
-独立运行时基础消费：版本管理的RuntimeConsumerSample.cs经SDK10 csc和8/9/10 reference pack编译；私有依赖目录及LatestPatch runtimeconfig防止net10宿主统一旧依赖。Standard2.0/2.1/net8→.NET8.0.31+日志程序集8，net9→9.0.20+日志9，net10→10.0.12+日志10，五次均通过原token预取消、已认证Oracle环回查询、NUMBER/decimal、两套ProviderType及CloseConnection。命令、响应文件和结果位于artifacts/b09-runtime-smoke，复现方式见开发计划B09。日常xUnit工程仍net10.0；此基础样例不代表旧运行时DI、全部API、.NET Framework4.8或真实双模式兼容通过。
+2026-10-19 C05 catalogs: first four collections MetaDataCollections/DataSourceInformation/Tables/Columns,shapes/types/NULL/restriction order in architecture§5. Case-insensitive collection names;unsupported rejected. Exact-bound restrictions preserve case/quotes/%/_,no LIKE expansion. MySQL catalog=TABLE_SCHEMA/schema=NULL;Oracle schema=OWNER/catalog=NULL;restrictions on absent identity components return empty tables. INFORMATION_SCHEMA versus ALL_OBJECTS(TABLE/VIEW)/ALL_TAB_COLUMNS,no dialect mixing/fallback. DSI retains authenticated raw version/known parameter syntax;unknown facts DBNull/Unknown. Five-target three sync overrides,modern three async overrides using async execution/read/dispose;static collections no network. Catalog commands bind current transaction/original session,drain before return;error/exclusivity/cancel/unknown-no-replay unchanged. Initial 13 all failed then passed:TestResults/c05-schema-{red,green}.trx.44 Unit cover both-mode×sync-async×Tables-Columns,safe special bindings,static snapshots,absent identities,ambient/busy/local transaction,permission1143,cancel-total timeout-close,partial write,empty results,pure sync/async I/O,exact Oracle NUMBER integers,wrong columns/multiple results/overflow/fractions,restriction-array snapshots/reopen. Review found Convert.ToDecimal rounding tiny fractions before integer checks;two long-string/double red-green cases fixed via exact DecimalCodec/OceanBaseDecimal text and CLR integer/decimal only,explicit float rejection. Recheck clean;44 targeted passed:TestResults/c05-schema-review-{red,green}.trx.
 
-B09保持待验证，G2仍0/9；下一模块C01。按用户要求未执行实库和非Windows测试，真实两模式/OBProxy及完整运行时矩阵仍缺。A04本地完成、真实TLS验收未完；A05可信MySQL模式判定仍是实现缺口，不以样例Oracle成功放行MySQL。C01必须保留无可信完整重置白名单时拒绝池化的边界。
+Eight five-asset consumers check static/public Oracle catalogs/API shape;Standard sync,modern sync-async,net10 host,A05 unchanged. Release 5/3 0 warnings/errors;Unit1117/Consumer128/DI8 passed,0 skipped:TestResults/c05-schema-unit-final.trx,c05-schema-consumer-final.trx,c05-schema-di-final.trx. Authorized TLS store/no downgrade;dual-pack profile TestResults/c05-schema-pack passed;README R01. Format/UTF8-no-BOM/CRLF/diff passed. C05→Pending verification,both local submodules done;three docs merge contract/Java gaps/steps/evidence,master commit/no push. Real dictionaries/visibility/case configuration/Oracle DATA_DEFAULT LONG/COLUMN_ID/both-mode-OBProxy/non-Windows/new runtimes untested;fixtures do not close G3. Java full key/index/procedure/type/schema/synonym metadata beyond initial collections remains D-stage work. A05/C01/G0/G1 unchanged;next C06.
+2026-10-19 C06 sequential DbBatch/review: modern assets add OceanBaseBatch/OceanBaseBatchCommand/collection/internal reader,factory/connection CanCreateBatch/creation;Standard hides modern types. Existing OceanBaseCommand executes each item,without merged SQL/implicit transaction/extra commit-rollback/unknown replay. Start snapshots SQL/parameter metadata/values(copy byte[]),caches per-item preparation. Collection single ownership;remove/replace/clear/dispose closes owned statements,not caller connection/transaction. Connection batches inherit Command Timeout;each item has its own prepare-execute-read budget,0 infinite. Batch reserves original PhysicalSession until reader closes,blocking commands/catalogs/switches/transactions between items or within completion logs;reopen cannot migrate suffix. NextResult drains current item's results then starts next;schemas/provider values/SequentialAccess retained. Scalar skips counts,takes first row-column then drains suffix. Known item updates accumulate,query/unexecuted=-1;total ignores-1,no counts=-1,empty batch0. Explicit transactions bind exactly,ambient rejected;OceanBaseException.BatchCommand points to original item with code/SQLSTATE/unknown semantics. Data-source DbDataSource wrapper auto opens/closes,reader injects CloseConnection;platform contract rejects Prepare/Connection/Transaction;factory creates items.
 
+Review fixed four red-green defects: old reader shared new execution counts→independent execution snapshots;old normal/batch CloseConnection readers could close reopened sessions→atomic original-PhysicalSession match under connection lock;linked token leaked→original caller preserved with separate NextResult token/Cancel attribution;field-stream/async materialization failure stranded reservation→CommandExchange notifies/releases batch before external logs. Added cancellation after first item/Prepare/partial suffix token cases and log-close-reopen suffix rejection/new-session reuse. Cleanup drops old-operation references;async CloseConnection releases reservation then awaits rollback/autocommit restore,with delayed regression. Final independent source/lifecycle/cancel/sample/docs review clean.
 
-2026-10-19 C01核查与C02实施：未取得任何可信的OceanBase/OBProxy完整重置版本/模式白名单；Java2.4.14 reset在非特定MariaDB组合依赖驱动跟踪状态，也不能证明原始SET/ALTER SESSION和临时对象清理。C01记为阻塞，Pooling=true继续拒绝。按暂缓实库要求先推进独立C02，未添加测试专用池化开关或将销毁连接冒充连接池。
+Added 55Unit/14Consumer;first6 public cases failed then passed. Evidence:TestResults/c06-batch-{red,green}.trx,c06-batch-count-red.trx,c06-batch-review-{red,green}.trx,c06-batch-token-red.trx,c06-batch-token-edge-{red,green}.trx. Coverage:sync-async counts,known-error prefix/stop suffix,empty/multiple/scalar/sequential,prepare reuse/disposal,explicit/ambient transactions,collection/config/byte[] snapshots,log reentry/old session/field faults/EOF/partial send/timeout/Cancel/real-loopback close while waiting. Initial partial-send fixture needed Oracle timezone report to avoid internal probe;virtual stream close did not wake waits,so replaced with real loopback close. These were fixture issues,not product defects. Both modes use explicit post-auth facts,A05 unchanged;all fixes included full suite.
 
-C02使用既有Server/Host键的有序逗号候选，支持host[:port]、[IPv6][:port]和无端口IPv6；省略端口继承Port。解析/冻结位于OceanBaseEndpoint与OceanBaseConnectionOptions，PhysicalSession同步/异步仅在TCP建连socket故障时尝试下一地址；全Open共享预算、0无限。每次显式重开从首候选开始，TLS/认证/协议/模式错误及所有业务执行均不切换、不重放。逐端点快照保留TLS/凭据/模式/数据库配置；DataSource保留原列表，SNI和认证_server_host使用实际主机，成功/关闭/命令/事务日志记录实际端点并脱敏。
+Release 5/3 0 warnings/errors;Windows Unit1172/Consumer142/DI8 passed,0 skipped:TestResults/c06-batch-unit-final-checked.trx,c06-batch-consumer-final.trx,c06-batch-di-final.trx. Normal authorized TLS store/no downgrade. Consumersnet10;independently compiled BatchRuntimeConsumerSample.cs ran.NET8.0.31/9.0.20/10.0.12,checking counts/known-ERR attribution/source-reader results/closure,Logging8/9/10:TestResults/c06-batch-runtime/net{8,9,10}.0/result.log. No daily old-target hosts added. Format/diff/UTF8-no-BOM/CRLF/dual-pack profile TestResults/c06-batch-pack passed;README R01. Three docs updated;C06 Not started→Pending verification,master commit/no push;next C07,G3 0/8,other gates unchanged. No real both-mode/OBProxy/non-Windows acceptance;partial runtime samples are not full matrices;sequential batches are not atomic.
 
-C02本地验证：首批26项非法候选/公开fallback测试先全失败后全通过；共新增60项单元和10项五资产同步/异步消费。Release slnx五/三目标0警告/错误，Unit627、Consumer49、DI8通过（TestResults/c02-unit-final.trx、c02-consumer.trx、c02-di.trx）。覆盖全部失败、模式不匹配、认证错误、握手/SQL断线不重试、取消/关闭、无超时配置、总超时、数据源、重开首候选、未用候选不接触、逐地址TLS和显式名称、证书拒绝及密码保护。独立走查发现总预算测试错误依赖拒绝耗时，已删除对末候选必须未接触的断言；现回归仅证实Open总耗时上界（2项单独通过），共享预算不重置由循环外一次CreateBudget的源码确认：TCP及异步握手传预算token，同步TLS/认证由预算注册关闭传输中断；无剩余需修复项。
+2026-10-19 C07 diagnostics/performance: shared five-asset OceanBaseConnector ActivitySource/Meter with assembly version;Counter<long> oceanbase.client.operations and seconds Histogram<double> oceanbase.client.operation.duration. Fixed operations open/execute/prepare/change_database/transaction.begin-commit-rollback;catalogs count underlying execute,batch per item,internal timezone/automatic prepare not doubled. Four tags only operation/authenticated mode/outcome/unknown,with success/error/cancel/timeout separate from unknown. No SQL/parameter/database/endpoint/credential/error-text/connection-ID tags. Spans inherit caller parent but immediately restore Current;reader spans end only at terminal,early close once as unknown. State publication/lease release/batch cleanup precede finish callbacks;listeners run outside locks.
 
-五资产实际Windows基础消费使用扩展的RuntimeConsumerSample.cs，新增首地址失败后的查询；Standard2.0/2.1/net8在8.0.31、net9在9.0.20、net10在10.0.12，日志程序集8/9/10全部通过。私有依赖、SDK10 csc响应文件和LatestPatch runtimeconfig方法沿用B09，材料在artifacts/c02-runtime-smoke。格式/diff、双包5/3资产及8依赖组、统一0.1.0-alpha和Microsoft.Extensions按TFM8/9/10检查通过；未新增依赖，包README提示留R01。
+Standard assets explicitly add DiagnosticSource8.0.1 via CPM;modern use runtime APIs,no10.x leakage. Initial 8 diagnostics failed then passed:TestResults/c07-diagnostics-{red,green}.trx. Rejected-sampling allocation regression failed then passed using fixed names/no operation object without sampling or metric listeners;runtime 48 bytes/sample retained. Five Consumer failures reproduced source/instrument callback TypeInitializationException;separate protected initialization channels fixed,c07-diagnostics-init-{red,green}.trx. A failed channel can remain unavailable,but driver results/connections remain usable. Independent review found restoring Activity.Current could throw through CurrentChanged before execute try,escaping with Busy lease. Two sync/async red cases,c07-diagnostics-review-red.trx;safe Restore then33 targeted passed,c07-diagnostics-review-green.trx. Coverage:reuse/Current-parent/terminal lifetime/idempotent early close/ERR/cancel-timeout-close-unknown/precancel-prevalidation exclusion/transaction/explicit prepare/redacted MySQL switch/listener failures/reentrant ownership ordering. MySQL facts explicit,A05 unchanged;review clean/no secondary defect.
 
-C02保持待验证，G3仍0/8、进行中；C01阻塞且A05可信MySQL模式判定仍是实现缺口，下一可本地推进模块C03。真实两模式/OBProxy、非Windows、IPv6网络和可信私有CA成功链未执行；旧运行时DI/完整API矩阵亦未验收，不把基础环回或源码走查替代实测。
+Added 33Unit(including9 protocol/3 diagnostic microbaselines),10five-asset Consumer;hostsnet10. Release 5/3 0 warnings/errors;Unit1205/Consumer152/DI8 passed,0 skipped:TestResults/c07-diagnostics-unit-final.trx,c07-diagnostics-consumer-final.trx,c07-diagnostics-di-final.trx. Authorized TLS store;initial sandbox NuGet credential failure resolved by normal restore,no cert/TLS change. Extended independent BatchRuntimeConsumerSample ran8.0.31/9.0.20/10.0.12,checking8 spans/metrics,known failure,parent/redaction,Logging/DiagnosticSource8/9/10:TestResults/c07-diagnostics-runtime/net{8,9,10}.0/result.log.
 
-2026-10-19 C03 数值子项续接与修复：DecimalCodec/ResultColumn 贯通 MySQL DECIMAL(65,20)、Oracle NUMBER(38)、未知精度标记和负 scale；标准类型由声明固定，宽精度/未知精度列的小值和 NULL 不缩窄。GetDecimal/GetFieldValue<decimal> 只精确转换，参数用普通十进制文本写回，不经 decimal/double。p0/s0 保留载荷系数/scale；p0 且已知非零 scale 使用 Oracle38/MySQL65 精度上限精确重标度，schema 精度仍未知。参数仅声明 Scale 时不凭空套用 Precision=38，合法大指数不误拒绝；两项回归先红后绿（c03-scale-red.trx、c03-number-green-final.trx）。
+Windows baseline:.NET 10.0.12,Windows10.0.26200,Intel64 Family6 Model158 Stepping10,Release. Synchronous client thread allocations;loopback server/preallocated responses/warmup excluded. Prepared400 executions prepare once/reuse ID;multiple-results400;sequential8×4 MiB=32 MiB verifies bytes/client allocation<2 MiB. One final full-run sample (time total ms/alloc client-thread total bytes):
 
-独立走查发现并修复两项 MySQL 负 scale 问题：声明 Precision 未计算展开后的整数零位（Precision5 错误接受123000），以及零系数因负 scale 被误判超界。分别有1项、2项先红后绿的回归（c03-precision-red.trx、c03-zero-red.trx；最终数值筛选68项通过，c03-number-targeted.trx）。修复按模式限定，不改 Oracle 的有符号 scale 语义；最终只读复查无剩余代码问题，文档澄清已合入既有设计/计划。旧 B 阶段“拒绝宽精度”的测试预期同步调整，保留越界、unsigned、需舍入、恶意指数/scale 和输入长度拒绝；公开同步/异步、文本/二进制测试覆盖读取、稳定 schema、精确转换与参数写回。
-
-本地验证：净增45项单元、5项五资产消费；Release slnx 核心5目标/DI3目标编译0警告/错误，Windows Unit672、Consumer54、DI8全部通过（TestResults/c03-number-unit-final.trx、c03-number-consumer-final.trx、c03-number-di.trx），测试宿主均为net10。格式、git diff检查及双包生成通过，ZIP/XML核查核心5资产、DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心依赖和Microsoft.Extensions按Standard/net8→8、net9→9、net10→10分组均通过。包缺少README的既有提示继续留R01。
-
-C03 仍为进行中，下一步为纳秒/TZ/LTZ及MySQL零日期子项；不将数值子项提交当成C03整体完成，G3仍0/8。未执行实库、非Windows或新的旧运行时验收；MySQL数值映射来自内部夹具，公开五资产环回为认证Oracle模式，A05可信MySQL规则仍缺，不为数值测试放开握手。C01完整重置白名单及G0/G1环境缺口不变。
-
-2026-10-19 C03 不带时区的纳秒子项：新增五目标共享OceanBaseTimestamp，保留Unspecified整秒、纳秒及scale；构造和ToDateTime禁止舍入，年份范围保持1..9999。文本/二进制type202结果共用12字节解码，p<=7标准DateTime、p8/9标准OceanBaseTimestamp，所有p的provider-specific访问和两套schema固定为OceanBaseTimestamp，小值/NULL不缩窄。参数推断DateTime2/复用Timestamp身份，仅Oracle TIMESTAMP接受provider值；默认保留provider scale，DateTime默认7，显式0..9仅精确重标度。普通MySQL时间、Oracle DATE及延期TZ/LTZ仍保持原有边界。
-
-测试与走查：首批3项缺口回归全红后全绿（c03-nanos-red.trx、c03-nanos-value-green.trx），随后codec/公开环回12项先失败后通过（c03-nanos-codec-red.trx、c03-nanos-codec-green.trx）。覆盖1ns/999999999ns、7/8/9位、边界日期、非法组件/载荷/scale、typed-null、默认值、Kind、两种结果协议及同步/异步读取/写回；新增空载荷回归暴露type202被误归为零日期，现先校验TIMESTAMP长度、明确ProtocolException。独立只读走查无必须修复项；补充建议的9→8/8→9成功精确重标度与DateTime显式scale9回归，保留参数原值，最终文档合入既有设计/计划。
-
-本地验证：新增44项Unit、5项五资产消费；Release slnx核心5目标/DI3目标0警告/错误，Windows Unit716、Consumer59、DI8全部通过（TestResults/c03-nanos-unit-final.trx、c03-nanos-consumer.trx、c03-nanos-di.trx）；全部日常测试宿主net10，五资产消费在隔离加载上下文经标准ADO.NET读取/转换/写回。格式、diff及双包检查通过，5/3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本及Microsoft.Extensions按Standard/net8→8、net9→9、net10→10保持正确。既有NuGet README提示仍留R01。
-
-C03继续进行中，下一步TZ/LTZ和MySQL零日期；G3仍0/8，C01/A05及G0/G1缺口不变。Java OBTIMESTAMPParameter固定写scale9，而本驱动选择保留显式/provider scale，结果端仍严格要求列scale等于载荷scale；这两项策略和1..9999外年份的协议范围需后续真实矩阵核验。未执行数据库服务器、非Windows或新的旧运行时测试，不以本地夹具关闭互通验收。
-
-2026-10-19 中断走查续接：先核对历史审查和修复提交，B01关闭事件、B02终态/取消、B04语句清理、B05精度/TIME及C03数值/纳秒问题均已有回归和提交。再次走查发现 netstandard2.1 连接、reader、事务异步生命周期错误受 NET8 条件限制；直接读取 NETStandard.Library.Ref 2.1.0 参考程序集确认 API 后，将四处条件扩至 NETSTANDARD2_1，复用共享异步实现。ChangeDatabaseAsync 同时提供明确的不支持失败，不新增目录切换能力；数据源/batch 目标和 Microsoft.Extensions 版本矩阵保持原约定。
-
-新增消费回归先复现6项失败（TestResults/review-async-red.trx）：2.1资产五种清理入口阻塞于延迟ROLLBACK，且事务异步覆写缺失。修复后定向17项全通过（review-async-green-final.trx），覆盖异步Begin/Commit/Rollback、原token预取消、连接CloseAsync/DisposeAsync、事务DisposeAsync及reader CloseAsync/DisposeAsync等待回滚和自动提交恢复；2.1与net10的延迟清理均经公开ADO.NET接口验证。最终Windows Unit716、Consumer71、DI8全部通过（review-fixes-{unit,consumer,di}.trx）；Release slnx核心五/DI三目标0警告0错误，格式/diff、双pack及5/3资产、8依赖组、统一0.1.0-alpha、DI精确核心依赖和Microsoft.Extensions8/9/10检查通过。NuGet README提示继续留R01。
-
-独立只读复查已核对共享异步路径、预取消、延迟回滚测试和红绿TRX；指出的架构旧段落已修正，三份文档最终复核无剩余需修复项。本次只修复走查遗漏，不推进TZ/LTZ：C03保持进行中，G3仍0/8；A04/A05、C01及真实环境关口不变。未执行实库、非Windows或新的旧运行时测试；隔离资产消费宿主仍为net10，不能代替旧运行时验收。
-
-
-2026-10-19 C03 TZ 子项与中断走查续接：新增五目标共享 OceanBaseTimestampWithTimeZone，贯通 type200 的文本/二进制读取、固定标准/provider-specific字段类型与schema、精确 DateTimeOffset 转换、参数自动推断及显式 TimestampWithTimeZone（末尾27，既有枚举不变）。本地字段、纳秒、offset及服务端名称/缩写一并保留；不以客户端时区重新解释。LTZ会话时区及MySQL零日期仍未实现，C03继续进行中。
-
-独立走查发现并修复三项协议问题：一是服务端负小时结果使用分钟幅值，(-3,+30)为-03:30，不能以异号为由拒绝；二是结果使用长度编码但参数必须单字节长度，251..255字节不能调用通用WriteBytes，超过255字节须发包前拒绝；三是结果内部名称/缩写也用长度编码，251..255字节占3字节前缀，不能沿用参数单字节字段，最大结果载荷相应为530字节。根据固定服务端提交5e8a63d29dae9fde5e962b8fcc7b167d438fc343的stmt_execute与ob_time_convert补证，参数(-0:30)和非9 scale有源码支持，仍不等于目标版本互通验收。名称存在时服务端可优先按其时区表/缩写解析，不承诺矛盾名称/offset写回后仍保留offset；布局和链接已合并架构§5，未新增独立设计文档。
-
-缺口测试先有9项codec与5项公共接口失败后通过；本轮审查修复又以c03-tz-review-red.trx复现7项失败，修复后c03-tz-review-green.trx的47项通过。回归覆盖两种结果协议、同步/异步公开读取/参数写回、正负/不足小时偏移、DST重复本地时刻、0..9精度、NULL与schema稳定、精确转换/重标度、严格UTF-8、畸形载荷、530字节结果以及250/251/255参数和256/526拒绝；超长参数公开回归确认未发送准备/执行包且会话可继续使用。完整首轮3项失败为旧TZ未支持断言，已替换为Guid发送前拒绝并移除已支持类型200的延期断言，保留其他未支持类型检查。
-
-长名称结果另以c03-tz-name-red.trx复现251/255字节名称两项失败，修复ReadTimeZoneIdentity长度编码及最大载荷后，c03-tz-targeted-final.trx定向57项全通过；NULL/超限内部长度在分配前拒绝。参数内部与外部长度仍保持单字节，不把长名称结果夹具当作可写参数。
-
-最终本地验证：Release slnx核心五目标/DI三目标0警告0错误，Windows Unit772、Consumer76、DI8全部通过（TestResults/c03-tz-unit-final.trx、c03-tz-consumer-final.trx、c03-tz-di-final.trx）。五资产消费均由net10宿主隔离加载，不能代替旧运行时验收。格式/diff、双包和ZIP/XML资产/依赖检查通过：核心5资产、DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本、Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10。既有NuGet README提示留R01。独立只读最终复审已核对三项修复、红绿证据、稳定类型/typed-null/精确转换及三份文档，无剩余必须修复项。
-
-C03仍进行中，下一步LTZ可信会话时区与MySQL零日期；G3仍0/8，A04/A05真实验收、A05可信MySQL模式判定、C01完整重置白名单及G0/G1缺口不变。按用户要求未运行数据库服务器及非Windows测试，也未新增旧运行时验收；源码和环回证据不代替目标版本互通。当前提交仅完成TZ子项和本轮走查修复，不把C03整体标记完成。
-
-
-2026-10-19 C03 LTZ前置状态通路：核查发现命令OK/FEOK已解析的会话变量原被丢弃，仅靠认证SessionVariables会误用旧时区。现PhysicalSession保存独立可失效time_zone报告，SQL发送时原子捕获/清空，QueryResult每结果冻结快照并清空后续来源，合法终态OK/事务控制报告更新，经典EOF/ERR不猜测。prepare/close不执行SQL，未发包取消不失效；Close/Break清空且租约身份校验阻止晚到响应污染新命令或复活关闭会话。未增加网络查询、公开配置或依赖；type201仍未开放，查询补全/参数时区一致性继续后续实现。
-
-回归先复现12项缺口失败（c03-ltz-state-red.trx）；最小实现后23项定向通过（c03-ltz-state-green.trx），覆盖同步/异步、认证快照独立、三结果报告A→无报告→未知、经典EOF/FEOK、空/有行预读、SQL ERR/未发送取消、准备/关闭、事务逐Control、关闭/故障和旧租约隔离。初次绿运行两项测试误将关闭时ProtocolException当成EndOfStreamException，修正服务端断言后通过，不作为产品缺陷记录。该报告状态不是已验证的时区解释保证，不以原始SYSTEM/任意名称直接解析LTZ。完整验证和走查结果续记于下。
-
-独立走查补充修复：前一结果报告A后，后一结果首包ERR会在进入Header前抛出，原实现未清除A。同步/异步两项回归先失败（c03-ltz-state-review-red.trx），将快照捕获/失效移到Receive之前后，c03-ltz-state-green.trx最终25项全部通过；连接仍可用但时区为未知，不回填认证值。
-
-最终本地验证：Release slnx核心五目标/DI三目标0警告0错误，Windows Unit797、Consumer76、DI8全部通过（TestResults/c03-ltz-state-unit-final.trx、c03-ltz-state-consumer-final.trx、c03-ltz-state-di-final.trx）；25项状态回归纳入完整单元套件。格式/diff、双包及ZIP/XML的5/3资产、8依赖组、统一0.1.0-alpha、DI精确核心依赖及Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10全部通过。独立只读最终复审已确认ERR修复和三份文档，无剩余必须修复项。既有NuGet README提示仍留R01。
-
-C03继续进行中：LTZ可靠查询补全、type201全链路和参数时区一致性、MySQL零日期仍需实现；不把会话报告通路当作LTZ交付。A04/A05真实验收、A05可信MySQL判定、C01完整重置和G0/G1/G3缺口不变。遵用户要求未执行实库或非Windows，net10隔离消费不替代旧运行时验收。
-
-
-2026-10-19 中断续接LTZ全链路：上次只留下计划和8项缺口测试，未将未实现功能计入交付。本次新增五目标共享OceanBaseTimestampLocalTimeZone和末尾枚举28，贯通201文本/二进制、固定schema/provider类型、精确DateTime转换及参数写回。保留本地字段/纳秒/scale/服务端会话标识，不用客户端时区推算DST或恢复原始offset。NULL可在未知时区下保持稳定类型，但模式和scale照常校验；非NULL值没有有效结果快照时失败。MySQL201及错误显式类型（含typed NULL模式边界）拒绝。
-
-Oracle业务执行前复用有效报告，缺失/SYSTEM/非法时同租约和取消/超时预算查询SELECT SESSIONTIMEZONE FROM DUAL；严格限定一列UTF-8字符串、一行有效非NULL标识，排空终态后发布，内部查询不标记用户SQL已发送。普通参数错误在查询前拒绝，LTZ标识与当前会话不匹配在prepare/execute前拒绝。无持续报告时会增加后续执行的一轮查询；活动reader不查询，多结果没有新报告时不沿用旧时区。依据固定Java及server源码的本地字段、会话上下文与MYSQL_ONLY追踪配置说明已合并架构§5，未新增设计文档。
-
-独立走查发现并修复两项问题：内部查询标量/终态报告冲突后仍保留报告，可能影响下次LTZ解释；显式Timestamp被LTZ值自动覆盖为201。c03-ltz-review-red.trx的3项同步/异步回归先失败，修复后49项定向通过（c03-ltz-review-green.trx）：已排空的冲突清空报告并失败，连接保持Open但下一次必须重查；显式Timestamp+LTZ在发包前拒绝。覆盖纳秒/NULL/schema、文本/预处理公开读写、逐字时区匹配、查询额外行/结果/非法UTF-8/NULL/超长/断连、同预算超时、原caller token及同步Cancel、服务端ERR后重查、普通绑定先拒绝和真实201多结果快照。五资产增加LTZ隔离消费，仍由net10宿主运行。
-
-首次完整回归的失败分别为旧测试夹具未补答新查询、deprecated EOF补答格式不符，以及Windows断连时服务器仍发送终态的竞争；已显式适配查询流程并消除无效响应写入。沙箱内TLS证书导入失败在正常权限下重跑，不改动产品TLS实现。最终Release slnx核心五/DI三目标0警告0错误；Windows Unit846、Consumer81、DI8全部通过（TestResults/c03-ltz-unit-final.trx、c03-ltz-consumer-final.trx、c03-ltz-di-final.trx）。格式/diff、双包ZIP/XML检查通过：核心5资产、DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本、Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10。独立复审确认生产代码无剩余必须修复项，三份文档已同步当前口径；既有NuGet README提示保留R01。
-
-C03继续进行中，剩余MySQL零日期及真实验收；G3仍0/8，A04/A05真实验收、A05可信MySQL模式判定和C01完整重置缺口不变。本次未执行数据库服务器、非Windows或新的旧运行时测试；本地源码/环回/隔离消费不代替目标版本与OBProxy互通，SESSIONTIMEZONE权限、时区表和真实DST仍需验证。
-
-
-2026-10-19 C03零日期子项：新增五目标共享OceanBaseDate/OceanBaseDateTime，保留全零及部分零的日期分量、微秒和scale；默认值为全零，不采用DateTime.MinValue或NULL替代。MySQL DATE10/DATETIME12/TIMESTAMP7的标准类型仍固定DateTime，正常值标准读取不变，零分量GetValue/GetDateTime/GetFieldValue<DateTime>/GetValues抛InvalidCastException。Provider-specific类型及两套schema整列分别固定Date/DateTime值类型，混合正常/零值和协议NULL可稳定访问；IsDBNull只判断协议NULL。参数自动推断Date/DateTime，仅MySQL对应类型接受provider值，错误模式/类型/精度在发包前拒绝。部分零或零日期带非零时钟使用4/7/11字节字段，仅全部分量为零时编码零长度；零长度读取也保存列声明scale。
-
-先以9项公共类型/稳定元数据/零日期转换失败（c03-zero-red.trx）证明缺口；实现后9项通过，扩展至49项定向全部通过（c03-zero-targeted.trx），覆盖正常/全零/部分零、闰日/边界年份、严格格式、二进制长度/分量/微秒、精度不截断、模式拒绝、同步/异步文本和预处理混合reader、provider批量访问、NULL、写回和TIMESTAMP7。五资产消费增加10项DATE/DATETIME混合值和参数写回。初次扩展测试4项失败源于测试中default字面量选择了DateTime重载（合法0001-01-01）而非OceanBaseDate重载，改为显式default(OceanBaseDate)后通过；这不作为产品缺陷或零日期归一化记录。原有DATE scale6测试夹具按契约改为0，非法声明另有拒绝回归。
-
-独立只读走查未发现必须修复项，建议的TIMESTAMP混合行和少于声明精度小数已补入定向回归。最终Release slnx核心五/DI三目标0警告0错误；Windows Unit895、Consumer91、DI8全部通过（TestResults/c03-zero-unit-final.trx、c03-zero-consumer-final.trx、c03-zero-di-final.trx）。格式/diff、双包ZIP/XML资产/版本检查通过：核心5资产、DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心依赖及Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10。NuGet README既有提示继续留R01。
-
-三份现有文档已合并零日期构造/转换、协议、参数及精度契约，未新增设计文档。C03本地子项已齐备，状态从进行中改为待验证，G3仍0/8；下一可本地推进模块C04。A05可信MySQL认证仍未实现，reader及五资产MySQL测试通过明确内部模式夹具替换认证后事实完成，不增加产品测试开关或放宽握手，不据此宣称公开MySQL连接可用。SQL_MODE对零分量/年份0的接受、TIMESTAMP时区语义及目标版本写回scale待实库确认；其他ALLOW_INVALID_DATES非法日历仍拒绝。未执行数据库服务器、非Windows或新的旧运行时测试，五资产消费宿主为net10；A04/A05真实验收、C01完整重置及G0/G1缺口不变。
-
-
-2026-10-19 C04报文增量读取前置：PacketChannel新增内部OpenPayload/OpenPayloadAsync，打开只读取4字节帧头，正文按调用方请求读取；续帧/空终结帧保持序号和累计64 MiB上限。未完整消费的payload独占通道，禁止另一次读包/写包、重置序号或替换TLS传输；提前释放、截断、损坏和正文取消关闭传输，预取消打开不消费空闲通道。ReadPacket同步/异步改为共用同一实现并保留显式数组返回；普通reader仍缓存当前行，未开放SequentialAccess或游标，不更改参数/模式/租约策略。
-
-初始21项增量API缺失回归失败后通过（c04-payload-red.trx、c04-payload-green.trx）；整包超限未关闭传输的2项回归先红后绿（c04-buffered-red.trx、c04-packet-green.trx）。新测试扩展至29项，含32 MiB按需生成载荷、同步循环分配小于256 KiB、正文不预读、续帧/精确满帧空终结、混合读包序号回绕、分片I/O/中途取消、累计上限提前拒绝及提前关闭；报文定向共54项通过（c04-packet-targeted.trx）。该分配断言不代表公开reader或真实服务端内存/吞吐验收。
-
-最终Release slnx核心五/DI三目标0警告0错误；Windows Unit924、Consumer91、DI8通过（TestResults/c04-payload-unit-final.trx、c04-payload-consumer-final.trx、c04-payload-di-final.trx）。格式/diff和UTF-8无BOM/CRLF检查通过；双包核心5资产、DI3资产、8依赖组及统一0.1.0-alpha/DI精确核心版本/Microsoft.Extensions 8/9/10矩阵核对通过，既有NuGet README提示保留R01。独立只读走查已检查整包/增量路径、帧状态、失败资源清理及握手/CommandExchange调用，无必须修复项。三份文档同步C04进行中；下一步QueryResult/reader有序字段流和字符解码，再按模式/版本/能力证据实现游标。Java 2.4.14标准输入流仍拼接整包，游标由不同模式/执行选项决定并有普通/Oracle扩展fetch差别，不直接照搬为已验证.NET能力。实库、非Windows和新的旧运行时测试暂未执行；A05可信MySQL判定、C01完整重置和G0/G1/G3缺口不变。
-
-2026-10-19 C04 reader 续接及中断走查修复：QueryResult/CommandExchange 接入单所有者增量 payload，SequentialAccess 同步/异步支持文本与预处理二进制、旧 EOF/弃用 EOF、逐字段流与显式整字段物化；默认 reader 保留当前行缓冲。GetBytes/GetChars/GetStream/GetTextReader、异步 Stream/TextReader/值 getter、NULL 和 provider-specific 精度遵守字段/偏移只前进约束；跳列/行/结果复用 8 KiB 缓冲区排空。GetChars 的 null buffer 字符长度探测在顺序模式拒绝，严格 UTF-8 保留 BOM 和代理项；整值/字节/字符访问不混用，前一个字段流在换列/行/结果或关闭时失效。未读完提前关闭销毁会话，CloseConnection 同时关闭逻辑连接。
-
-独立只读走查发现的缓存字符及已耗尽流绕过 Cancel/超时/连接关闭已修复；进一步回归修复完整终结 EOF/ERR 收完后、解析前取消被误报未知结果，以及字段自身 token 取消未进入命令预算。新增生命周期8项先红后绿、字段token2项先红后绿；前序非法二进制字段framing2项亦由先失败回归覆盖。未知结果销毁会话并禁止重放，已知服务端终结结果不被后到取消覆盖。42项新顺序读取用例及12项复用零日期读写回归覆盖跨帧32 MiB按需生成大值、正文未到达即可返回reader、同步drain托管分配低于1 MiB、NULL/偏移/异步传输/跳列/多结果/UTF-8/提前关闭和阻塞读取token/Cancel/超时/连接关闭；内存断言不是实库内存峰值或吞吐基线。
-
-Release slnx核心五/DI三目标编译0警告0错误；完整Windows Unit978、Consumer101、DI8通过（TestResults/c04-reader-unit-final.trx、c04-reader-consumer-final.trx、c04-reader-di-final.trx）。最初沙箱全量单测的10项TLS用例因Windows证书凭据/私钥存储访问失败，获授权的沙箱外完整重跑全部通过，未修改TLS校验策略。格式、diff、UTF-8无BOM/CRLF与双包检查通过，核心5/DI3资产、统一0.1.0-alpha、DI精确核心依赖及Microsoft.Extensions 8/9/10矩阵通过；既有NuGet README提示保留R01。新增五资产隔离顺序流消费及纳秒provider写回各5项，宿主为net10；不能代替旧运行时完整验收。三份既有文档合并契约、勾选本地完成项并明确C04仍进行中；剩余服务端游标、真实两模式/OBProxy大值内存/吞吐及资源验收。未执行实库、非Windows或新的旧运行时测试；A05可信MySQL判定、C01完整重置及G0/G1/G3缺口不变。
-
-2026-10-19 C04 服务端游标及中断走查修复：新增统一 OceanBaseCommand.FetchSize，默认0为普通结果流，正数快照分页行数、强制服务端prepare并设置只读execute flag=1，负数拒绝；无结果列语句在execute前拒绝。QueryResult同步/异步、默认/SequentialAccess共用COM_STMT_FETCH控制，保持同一statement ID/物理会话/命令租约和总超时，每页重置报文序号。MySQL直接读二进制行，Oracle校验重发列元数据。旧EOF及MySQL FE-OK严格确认游标；Oracle协商弃用EOF时按固定Java源码省略execute/fetch元数据EOF，由首次fetch确认结果，空结果也不跳过确认。继续页必须CursorExists且有进展，LastRowSent才释放租约；超额行、元数据变化、多结果/OUT、不确认及无进展均失败，不回退重执行。HasRows预取首行/顺序前缀，NextResult读尽所有页，提前关闭或取消销毁原会话；读尽可复用statement，FetchSize改回0恢复普通结果流。
-
-独立走查发现两项必须修复缺陷并以4项先失败回归修复：游标ERR先释放租约后销毁会话，日志重入可发送新命令；以及0x00二进制行可冒充弃用EOF的游标确认包。当前CommandExchange在Complete/回调前销毁游标会话，保留已知1064错误和IsExecutionOutcomeUnknown=false；游标确认包必须以0xFE开头，恶意行确认在执行结果未知状态下销毁会话且不发fetch。另以2项先失败回归修复中间页未消费会话状态报告，避免沿用旧时区；再以2项先失败回归修复初始LastRowSent空结果把终结报告重复清除，最终包及非终态报告均只观察一次。此前reader token不能中断部分fetch写入的2项回归亦已修复，取消进入同一命令预算，不重放未知SQL。独立差异复查已核对这些修复及Oracle弃用EOF通路，无剩余必须修复项。
-
-本次新增59项游标单测，定向Cursor共70项通过（其中11项为既有ByteCursor测试）；分页覆盖同步/异步×默认/顺序×两模式×旧/弃用EOF共16组合，另测空最终页/初始空结果、非法响应、元数据、分页总预算、部分写入取消、失败日志重入、提前关闭、NextResult排空和statement复用。五资产隔离游标消费10项覆盖Oracle旧/弃用EOF。红绿证据为TestResults/c04-cursor-review-{red,green}.trx、c04-cursor-oracle-eof-red.trx、c04-cursor-state-red.trx、c04-cursor-empty-state-red.trx及c04-cursor-complete-green.trx。
-
-最终 dotnet build OceanBaseConnector.slnx --no-restore -c Release：核心五/DI三目标0警告0错误；Windows完整Unit1037、Consumer111、DI8通过且0跳过（TestResults/c04-cursor-unit-final-checked.trx、c04-cursor-consumer-final-checked.trx、c04-cursor-di-final-checked.trx）。完整单测在已授权沙箱外运行以访问Windows TLS测试证书存储，未降低TLS校验。dotnet format whitespace --verify-no-changes、git diff --check、UTF-8无BOM/CRLF和双包检查通过；TestResults/c04-cursor-pack中核心5/DI3资产、统一0.1.0-alpha、DI精确核心版本[0.1.0-alpha]及Microsoft.Extensions按TFM为8/9/10的依赖组均通过，既有NuGet包README提示仍留R01。
-
-三份既有文档已合并当前契约、源码依据、进度及验证证据；C04由进行中改为待验证，下一可本地推进模块C05。G3仍0/8，A04真实/跨平台验收、A05可信公开MySQL握手、C01完整重置白名单及G0/G1缺口不变。未执行真实两模式/OBProxy、非Windows或新的旧运行时验收；隔离消费宿主为net10，不能代替旧运行时完整验收。offset/滚动游标、REF CURSOR和locator LOB未实现，不据本地夹具宣称目标版本互通或真实游标资源/大值性能已验证。当前master完成本阶段提交，不推送。
-
-2026-10-19 C05 数据库切换模块：MySQL ChangeDatabase 使用 COM_INIT_DB 原样编码名称，Standard2.1及现代目标覆写真正异步入口，Standard2.0不补不存在的API。Oracle/环境事务/忙会话在发送前拒绝；null/空/NUL/非法UTF-16/超包拒绝，不拼接USE SQL。物理会话保存当前Database，合法单一零计数OK后、租约释放/日志回调前发布；已知ERR保留原Database并允许后续命令，非法响应/部分发送/取消/超时销毁会话并报告执行结果未知，不重放。配置和数据源保持原始Database，关闭/重开恢复配置；旧回复不能更新新会话。允许当前空闲的本地事务，但不改变其对象、绑定和提交状态。准备语句保存准备时Database，获得执行租约后重核对，不同则重新prepare，旧ID由既有关闭队列清理，失败切换保留原ID。
-
-首批5项失败证明尚未实现切换/预取消后，补实现通过（TestResults/c05-database-red.trx、c05-database-green.trx）。新增36项单测覆盖同步/异步、大小写/特殊字符名称精确字节、已知错误、参数/模式/环境事务拒绝、6种非法响应×同步异步、部分写入、预取消/网络等待取消/总超时/关闭、reader独占及本地事务绑定、完整终态与后到取消、日志回调发布/数据源隔离、旧响应后重开及成功/失败的statement复用。五资产9项隔离消费覆盖Standard2.0同步及Standard2.1/net8/net9/net10同步/异步，真实查询目标仍为协议夹具，使用明确的认证后MySQL事实夹具，不放宽A05。定向36项、消费9项通过（TestResults/c05-database-lifecycle.trx、c05-database-consumer-targeted.trx）。独立只读走查覆盖相关会话/日志/配置/事务/预处理路径，无必须修复项；没有委托实现。
-
-最终Release dotnet build OceanBaseConnector.slnx --no-restore -c Release 核心五/DI三目标0警告0错误；完整Windows Unit1073、Consumer120、DI8全部通过且0跳过（TestResults/c05-database-unit-final.trx、c05-database-consumer-final.trx、c05-database-di-final.trx）。完整单测沿用已授权沙箱外TLS证书存储访问，未修改TLS规则。格式、diff、UTF-8无BOM/CRLF与双包检查通过；TestResults/c05-database-pack中核心5/DI3资产、统一0.1.0-alpha、DI核心精确区间[0.1.0-alpha]及Microsoft.Extensions按TFM的8/9/10依赖组核对通过，既有NuGet README提示仍留R01。三份现有文档合并当前契约和实施记录，不新增设计文档；当前master提交，不推送。
-
-当时C05仍进行中：MetaDataCollections、DataSourceInformation、Tables、Columns及限制参数/现代GetSchemaAsync尚未实现；后续完成目录模块再转待验证，不将数据库切换子项当作C05整体完成。原始SQL USE的状态报告/追踪不属于本模块已验证契约，当前Database跟踪通过ChangeDatabase改变的数据库，详见架构§4。真实两模式/OBProxy、非Windows与新的旧运行时验收均未执行；隔离消费宿主net10不代替旧运行时完整验收。A04/A05真实关口、A05可信公共MySQL握手、C01完整重置及G0/G1/G3缺口保持开放。
-
-2026-10-19 C05 目录模块：四个首批集合MetaDataCollections、DataSourceInformation、Tables、Columns本地实现完成，列形状、类型、NULL及限制顺序固定在架构§5。集合名不区分大小写，未支持集合明确拒绝；限制用精确绑定值，保留大小写/引号/%/_，不做LIKE展开。MySQL目录映射catalog=TABLE_SCHEMA、schema=NULL，Oracle映射schema=OWNER、catalog=NULL，不存在标识部分的限制返回空表。MySQL使用INFORMATION_SCHEMA，Oracle使用ALL_OBJECTS（TABLE/VIEW）和ALL_TAB_COLUMNS，不混方言或自动回退。DSI保留认证版本原文和已知参数语法，未知能力为DBNull/Unknown。五目标覆写三个同步入口，现代三目标覆写三个异步入口，使用异步执行、读取和释放；静态集合无网络I/O。目录命令绑定当前事务并固定原物理会话，返回前读尽终态，原错误/独占/取消/未知结果不重放契约保留。
-
-首批13项回归全部失败证明基类未实现入口后转绿（TestResults/c05-schema-{red,green}.trx）。最终44项单测覆盖两模式×同步/异步×Tables/Columns、特殊字符安全绑定、静态集合独立快照、缺失标识部分、环境事务/忙会话、当前本地事务、权限1143、取消/总超时/关闭、部分写入、空结果、纯同步/纯异步传输、Oracle NUMBER精确整数、畸形列名/多结果/溢出/小数、限制数组快照和会话重开。独立只读走查发现通用Convert.ToDecimal先舍入微小小数再误判整数，以长小数字符串和double的2项先失败回归修复：文本经过精确DecimalCodec/OceanBaseDecimal转换，仅CLR整数/decimal走通用转换，浮点等表示明确拒绝；独立差异复查无剩余必须修复项。红绿证据TestResults/c05-schema-review-{red,green}.trx，44项定向通过。
-
-五资产8项隔离消费验证公开静态集合、Oracle目录及API暴露，Standard两个资产仅同步、现代三个资产同步/异步，宿主net10；测试不改变A05公共MySQL认证。最终Release slnx核心五/DI三目标0警告0错误；完整Windows Unit1117、Consumer128、DI8通过且0跳过（TestResults/c05-schema-unit-final.trx、c05-schema-consumer-final.trx、c05-schema-di-final.trx）。完整单测沿用已授权的Windows TLS证书存储访问，未降低校验策略。双包TestResults/c05-schema-pack核对核心5/DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本[0.1.0-alpha]及Microsoft.Extensions按TFM为8/9/10；既有缺包README提示保留R01。
-
-格式检查、UTF-8无BOM/CRLF及git diff --check通过。C05由进行中改为待验证，两个本地子模块均已落地；三份现有文档合并契约、Java差距、步骤和证据，当前master提交不推送。真实字典版本、权限可见性/大小写配置、Oracle DATA_DEFAULT LONG和COLUMN_ID语义、两模式/OBProxy及非Windows/新的旧运行时验收仍未执行，不能据协议夹具关闭G3。Java完整键/索引/过程/类型/模式/同义词元数据不属于首批集合，留D阶段。A05可信公开MySQL判定、C01完整重置和G0/G1缺口不变；下一可本地推进模块C06逐条DbBatch。
-
-
-2026-10-19 C06逐条DbBatch及中断走查修复：现代三资产新增OceanBaseBatch、OceanBaseBatchCommand、命令集合和内部reader，factory/connection公开CanCreateBatch及创建入口；两个Standard资产不暴露现代类型。复用已有OceanBaseCommand逐条执行，不合并SQL、不隐式开启事务、不发送额外提交/回滚、不重放结果未知语句。开始时快照全部SQL/参数元数据和值（复制byte[]），缓存每条准备语句；集合单一归属，移除/替换/清空/释放关闭自有statement，不释放调用方连接/事务。连接创建的batch继承Command Timeout，每条包含prepare/execute/read的独立预算，0无限。
-
-批次预约原PhysicalSession直到reader关闭，普通命令、目录、切库和事务操作不能在条目间或完成日志回调中插入，关闭重开不能让后缀迁入新会话。NextResult排空当前语句全部结果后启动下一条，兼容两套schema、provider-specific值和SequentialAccess字段流；Scalar跳过更新计数，取首个有列结果的首行首列后排空后缀。每条已知更新累加、查询/未执行为-1，总计忽略-1、无计数为-1、空批次为0。显式事务精确绑定、环境事务拒绝；服务端/协议/未知结果OceanBaseException通过BatchCommand指向原条目，保留错误码、SQLSTATE和未知结果语义。数据源复用平台DbDataSource包装自动打开/关闭、reader注入CloseConnection；按平台契约拒绝Prepare和Connection/Transaction，条目通过factory.CreateBatchCommand创建。
-
-独立走查指出并修复四类问题，均补入先失败回归：旧reader通过共享条目读写新执行计数，改为每次执行独立计数；普通/batch旧CloseConnection reader可能关闭重开后的会话，在连接锁下按原PhysicalSession原子匹配后关闭；批次内部linked token泄漏到取消异常，保留初始调用方token并区分NextResult自己的token及Cancel；字段流/异步物化失败未释放预约，CommandExchange在外部日志回调前通知batch失败并释放。后续边界回归覆盖首条后取消、Prepare取消及NextResult后缀部分发送的token归因，另验证日志回调关闭重开时后缀被拒绝且新连接可用。清理移除缓存命令对旧操作的引用；reader异步CloseConnection在释放预约后等待ROLLBACK/恢复自动提交，新增延迟响应回归通过。独立只读最终复核产品代码、邻接生命周期、取消、消费样例及文档，无剩余必须修复项。
-
-新增55项Unit和14项Consumer，首批6项公共入口先失败后通过；红绿证据TestResults/c06-batch-{red,green}.trx、c06-batch-count-red.trx、c06-batch-review-{red,green}.trx、c06-batch-token-red.trx和c06-batch-token-edge-{red,green}.trx。覆盖同步/异步逐条计数、错误前缀/停止后缀、空批次、多结果/标量/顺序字段流、准备复用与释放、事务/环境事务拒绝、集合与配置冻结、byte[]快照、日志重入、旧会话隔离、字段故障、EOF/部分发送/超时/Cancel及真实环回等待响应时关闭。首轮部分发送用例中，Oracle首条OK未报告时区会触发内部探测，已补正确时区报告使故障落在业务SQL；虚拟流关闭不唤醒等待的问题改用真实环回关闭用例，不把两类夹具问题计作产品缺陷。两个模式均有明确内部认证后事实夹具，不改公共MySQL认证门槛。独立计数/原会话关闭/取消/字段故障修复已进入完整套件。
-
-最终本地验证：Release slnx核心五/DI三目标0警告0错误；Windows完整Unit1172、Consumer142、DI8全部通过且0跳过（TestResults/c06-batch-unit-final-checked.trx、c06-batch-consumer-final.trx、c06-batch-di-final.trx）。完整Unit沿用已授权的Windows TLS证书存储访问，不降低TLS策略。Consumer五资产隔离宿主仍是net10；另用BatchRuntimeConsumerSample.cs独立编译样例在实际.NET8.0.31/9.0.20/10.0.12运行，通过批次计数、已知ERR归因、数据源reader结果及关闭，实际Logging程序集主版本分别为8/9/10，输出见TestResults/c06-batch-runtime/net{8,9,10}.0/result.log；未新增日常旧目标测试宿主。
-
-格式、git diff --check及UTF-8无BOM/CRLF检查通过；TestResults/c06-batch-pack双包核对核心5/DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本[0.1.0-alpha]和Microsoft.Extensions按两个Standard/net8→8、net9→9、net10→10，既有NuGet缺README提示仍留R01。三份既有文档同步契约、步骤、进度与证据，C06从未开始改为待验证，当前master提交且不推送；下一可本地推进模块C07。G3仍0/8，A04/A05真实关口、A05可信公共MySQL模式判定和C01完整重置白名单缺口不变。未执行真实两模式/OBProxy或非Windows验收；实际旧运行时的局部环回样例不替代完整兼容/集成矩阵，逐条批次无原子性保证。
-
-
-2026-10-19 C07本地诊断与性能基线：五资产共用OceanBaseConnector ActivitySource/Meter及程序集版本，新增Counter<long> oceanbase.client.operations和秒单位Histogram<double> oceanbase.client.operation.duration。固定操作覆盖open、execute、prepare、change_database和transaction.begin/commit/rollback；目录查询计入底层execute，batch逐条计数，内部时区查询和自动prepare不重复计数。共同四标签只含操作、认证模式、结果和执行结果未知；成功/错误/取消/超时与未知结果独立表达。未记录SQL、参数、库名、端点、凭据、异常文本或连接ID。span继承调用方父上下文但立即恢复Current，reader未读终态不提前结束，提前关闭以未知结果结束且只记录一次。状态发布/租约释放与batch失败清理先于结束回调，监听器不在内部锁内调用。
-
-两个Standard资产通过CPM新增DiagnosticSource8.0.1；net8/net9/net10使用各自运行时内置诊断API，没有向旧资产引入10.x。首批8项公共诊断回归失败后通过（TestResults/c07-diagnostics-{red,green}.trx）；随后采样拒绝仍分配诊断对象的回归先失败，改用固定span名称并在拒绝采样且无指标监听时不创建操作对象，运行时自身48字节/次采样分配据实保留。五资产隔离消费又以5项先失败复现源注册/instrument发布回调导致TypeInitializationException，将初始化通道分别保护，c07-diagnostics-init-{red,green}.trx转绿；首次失败通道可不可用，但驱动后续连接和结果不受影响。
-
-独立只读走查发现恢复Activity.Current的setter仍可能通过Activity.CurrentChanged抛异常，在命令执行try之前逃逸并遗留Busy租约。同步/异步两项回归先失败（c07-diagnostics-review-red.trx），统一使用捕获回调异常的Restore后，33项定向全部通过（c07-diagnostics-review-green.trx）。测试包括同命令再次执行、Current/父上下文、终态前不结束、提前关闭幂等、已知ERR、取消/超时/关闭与未知结果、预取消/取得操作前验证不计数、事务发布、显式prepare、MySQL切库脱敏、各类监听器异常及回调重入的独占/释放顺序；MySQL使用明确认证后事实夹具，不放宽A05。独立走查最终无剩余必须修复项，无额外次要缺陷。
-
-新增33项Unit（含9项协议性能基线和3项诊断微基线）、10项五资产隔离Consumer；全部普通宿主仍net10。最终Release slnx核心五/DI三目标0警告0错误，Windows完整Unit1205、Consumer152、DI8全部通过且0跳过（TestResults/c07-diagnostics-unit-final.trx、c07-diagnostics-consumer-final.trx、c07-diagnostics-di-final.trx）。完整Unit继续使用已授权的Windows TLS证书存储访问；初次NuGet还原因沙箱TLS凭证不可用失败，在正常权限restore后通过，未修改证书或降低TLS校验。扩展既有BatchRuntimeConsumerSample独立编译样例，在实际.NET8.0.31/9.0.20/10.0.12验证8个span/metric、已知失败、父上下文与脱敏，Logging及DiagnosticSource程序集主版本均匹配8/9/10，见TestResults/c07-diagnostics-runtime/net{8,9,10}.0/result.log。
-
-Windows本地基线环境为.NET10.0.12、Windows10.0.26200、Intel64 Family6 Model158 Stepping10，Release；同步客户端测量当前线程分配，服务端为环回协议夹具，预分配响应和预热不计入测量。每组预处理400次仅prepare一次并复用statement ID；多结果400次；顺序大值8次各4MiB，共32MiB，验证实际读到的字节数且客户端分配低于2MiB。最终完整套件的一次记录如下（time为总毫秒，alloc为客户端线程总字节）：
-
-| 场景 | 无监听 time / alloc | 拒绝采样 time / alloc | 追踪及指标启用 time / alloc |
+| Scenario | No listeners time/alloc | Rejected sampling time/alloc | Tracing/metrics time/alloc |
 | --- | --- | --- | --- |
-| 预处理400次 | 47.193 / 1001600 | 49.394 / 1020800 | 54.040 / 1379200 |
-| 多结果400次 | 70.038 / 1379200 | 69.472 / 1398400 | 72.669 / 1756800 |
-| 顺序32MiB | 34.424 / 171680 | 24.269 / 172064 | 19.361 / 179232 |
+| Prepared400 | 47.193/1001600 | 49.394/1020800 | 54.040/1379200 |
+| Multiple results400 | 70.038/1379200 | 69.472/1398400 | 72.669/1756800 |
+| Sequential32 MiB | 34.424/171680 | 24.269/172064 | 19.361/179232 |
 
-诊断Start/Finish微基线各10000次：无监听6.195ms/0字节，拒绝采样1.185ms/480000字节，Activity启用16.811ms/9440000字节。采样/启用数值含运行时Activity机制；分配分别约0/48/944字节每次，无监听不创建每次诊断对象/标签/额外Stopwatch。计时受JIT和调度影响，单次结果不用于宣称启用更快或生产吞吐无退化；这是首份可重复基线，尚无历史同环境回归对比，不虚构退化结论。复现命令为dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-build --no-restore --filter FullyQualifiedName~DiagnosticsTests --logger "trx;LogFileName=c07-diagnostics-baseline.trx" --results-directory TestResults，TRX保留逐组输出。
+Start/Finish10000 microbaseline:no listener6.195ms/0 bytes,rejected1.185ms/480000 bytes,Activity16.811ms/9440000 bytes(~0/48/944 bytes each,including runtime mechanisms). No-listener path adds no per-operation object/tags/Stopwatch. JIT/scheduling affect timings;single samples prove neither enabled-faster nor no production regression. This is first reproducible baseline,no comparable historical regression data. Reproduce:`dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-build --no-restore --filter FullyQualifiedName~DiagnosticsTests --logger "trx;LogFileName=c07-diagnostics-baseline.trx" --results-directory TestResults`;TRX retains group output.
 
-格式、UTF-8无BOM/CRLF和git diff --check通过，TestResults/c07-diagnostics-pack双包检查核心5/DI3资产、8依赖组、统一0.1.0-alpha、DI精确核心版本[0.1.0-alpha]、Microsoft.Extensions 8/9/10及仅两个Standard资产显式DiagnosticSource8.0.1。既有NuGet缺README提示仍归R01。三份既有文档已更新，C07待验证，当前master提交不推送；不据本地基线关闭G3，真实两模式/OBProxy、非Windows及高并发池借还暂缓，C01未开放所以未用非池测试冒充池基线。A05可信公共MySQL认证和G0/G1缺口不变；后续先核对C08尚缺证据，再推进可本地开展的发布准备。
+Format/UTF8-no-BOM/CRLF/diff/dual-pack profile TestResults/c07-diagnostics-pack passed,DiagnosticSource8.0.1 explicit only in Standard. README R01. Docs updated,C07 Pending verification,master commit/no push. G3 remains open;real modes/OBProxy/non-Windows/high-concurrency pool checkout deferred. C01 unavailable,so unpooled runs are not pool baselines;A05/G0/G1 unchanged. Next review C08 evidence then local release preparation.
 
-2026-10-19 C08证据核对与R01本地包准备：核对现有本地实现/协议证据后，C08改为阻塞，G3仍0/8；真实两模式/OBProxy/TLS/认证及完整重置白名单缺口不能由本地包消费补齐。R01按现有设计推进，两个产品显式固定现有包ID，新增src/Directory.Build.props导入根属性后统一仓库/作者描述/包内README与THIRD-PARTY-NOTICES；根Version、CPM、五/三目标和DI精确核心依赖保持统一。README公开实验版本、真实组合全部未验证、A05公共MySQL握手拒绝、Pooling=true拒绝、结果未知不重放及未支持能力，没有把D阶段当作已支持。归属清单从实际依赖元数据核对，包含CPM提升为直接依赖的DI抽象；参考Java LGPL不自动成为本项目许可证。项目许可证已向维护者询问，尚未确定，也未作源码来源/商标和包名授权结论。
+2026-10-19 C08/R01: reviewed local evidence;C08 Blocked,G3 0/8. Real both-mode/OBProxy/TLS/auth/reset-whitelist gaps cannot be closed by package consumption. R01 fixes existing package IDs;src/Directory.Build.props imports root and shares repository/authors/description/package README/THIRD-PARTY-NOTICES. Root Version/CPM/five-three targets/exact DI dependency unchanged. README states experimental/unverified real combinations/A05 rejection/Pooling rejection/unknown no replay/unsupported capabilities,without advertising D then. Attribution checked actual dependency metadata including CPM-promoted DI abstractions. Java LGPL reference does not set this project's license. Maintainer asked about license,still undecided;source provenance/trademark/name authorization unreviewed.
 
-新增eng/Verify-Packages.ps1与tests/PackageConsumer/Program.cs：先对旧包验证README缺失而失败（TestResults/r01-package-readme-red.log），再以一次slnx pack生成两包，检查实际ZIP/nuspec、核心5/DI3资产、8依赖组、按TFM的Microsoft 8/9/10、仅Standard显式DiagnosticSource8.0.1和DI核心精确[0.1.0-alpha]。验证器使用全新目录/缓存、产品ID只映射至本地包源、PackageReference和包SHA512核对，拒绝旧同版本缓存替代本次产物；既有依赖缓存仅作离线依赖源。临时五目标样例采用独立CPM，不新增日常旧目标测试工程，不引用产品ProjectReference。全部样例验证factory、公开类型身份/数值、现代API可见性、预取消及凭据隐藏、实际Logging/DiagnosticSource程序集主版本；现代样例另验证普通/keyed DI和数据源别名/释放与batch入口，使用样例宿主自带的ASP.NET Core容器，产品不增加宿主依赖。实际.NET8.0.31/9.0.20/10.0.12运行通过，两个Standard资产在隔离.NET10.0.12宿主通过；这不是完整旧运行时或真实服务器兼容矩阵。
+Added eng/Verify-Packages.ps1/tests/PackageConsumer/Program.cs. Old package first failed missing README:TestResults/r01-package-readme-red.log. Single slnx pack builds both,checks ZIP/nuspec5/3 assets/8 groups/Microsoft8-9-10/Standard-only DiagnosticSource8.0.1/exact[0.1.0-alpha]. Fresh dirs/caches/local-only source mapping for product IDs/PackageReference/SHA512 prevent stale same-version substitution;existing cache only offline dependency source. Temporary five-target samples have independent CPM,no daily old-host project/no product ProjectReference. All check factory/type identity/numbers/API shape/precancel/credential hiding/actual Logging-DiagnosticSource majors;modern also ordinary/keyed DI/source aliases/disposal/batch using host ASP.NET Core container,without product host dependency. Actual8.0.31/9.0.20/10.0.12 passed,Standard isolated10.0.12,not full runtime/server matrix. Two corruptions(remove README/widen exact DI core to minimum) each exited1 with matching reason:TestResults/r01-negative/78dcd9057dbf4297a1b5c7c899cad852. Windows CI slnx pack/consumption added,setup-dotnet installs8/9;non-Windows jobs not locally run. Independent files/dependency/cache review clean except Requires/README minimum PowerShell7.0 lacked HashData;corrected7.1+,actual7.6.6/.NET 10.0.12.
 
-两项损坏产物检查分别删除包内README、将DI核心约束从精确区间放宽为最低版本，验证器均退出1并输出对应原因；日志保留于TestResults/r01-negative/78dcd9057dbf4297a1b5c7c899cad852下。Windows CI改为统一slnx pack并接入实际包消费验证，所需8/9运行时通过setup-dotnet安装；现有非Windows作业未在本地执行。独立只读走查核对全部新增文件、依赖和缓存隔离，没有发现其他需修复项；唯一最低PowerShell版本问题（7.0不支持所用HashData）已将Requires及README修正为7.1+，本机实际7.6.6/.NET10.0.12执行。
+R01 final Release 5/3 0 warnings/errors;Unit1205/Consumer152/DI8 passed,0 skipped:TestResults/r01-unit-final.trx,r01-consumer-final.trx,r01-di-final.trx. Normal TLS-store/no downgrade. Packages/logs:TestResults/r01-pack,TestResults/r01-package-green.log,which records generated samples/caches/graphs. Rerun sandbox audit-query failureNU1900 is retained;normal TLS-credential full rerun passed all five assets without disabling audit/TLS. PowerShell syntax/format/diff/UTF8-no-BOM/CRLF passed,master commit/no push. Two technical R01 checks complete;license/provenance/name/trademark open,R01 In progress,unpublished. Real/non-Windows/full historical runtime/A05/C01/G0/G1/G3/R02 gaps remain.
 
-最终本地Release slnx核心五/DI三目标编译0警告0错误，完整Windows Unit1205、Consumer152、DI8通过且0跳过（TestResults/r01-unit-final.trx、r01-consumer-final.trx、r01-di-final.trx）；完整单测沿用正常Windows TLS证书存储访问，没有降低TLS校验。新包及实际包消费日志为TestResults/r01-pack和TestResults/r01-package-green.log，生成样例、独立缓存与还原图路径由该日志记录。最终包复跑曾因沙箱NuGet漏洞数据查询失败报NU1900；使用正常Windows TLS凭据完整重跑后五资产全部通过，没有禁用漏洞查询或TLS校验。PowerShell语法、格式/diff和UTF-8无BOM/CRLF检查通过后，在当前master提交不推送。R01两项技术验收勾选，许可/来源及包名/商标项保持开放，状态为进行中；未发布包，真实数据库、非Windows和完整历史运行时矩阵仍暂缓，A05/C01/G0/G1/G3/R02缺口不变。
+2026-10-19 R02 local delivery/review closure: fault/unknown/unread-reader/confirmed transaction versus later cleanup failure/sequential batch counts-nonatomicity/TCP failover/redaction/auth-TLS/0.1.0-alpha upgrade-fallback guidance merged root README/shipped in both packages. Disposing a field stream does not complete its reader. Review corrected trusted COMMIT ERR:explicit rollback only if session Open/transaction active,otherwise new connection to inspect status. Architecture/plan corrected nonexistent mode/endpoint exception properties;logs/diagnostics correlate them;modern inherited BatchCommand links items. No separate design doc/unimplemented API added.
 
-2026-10-19 R02 本地交付材料及续接修复闭环：故障、结果未知、提前关闭 reader、可信事务结果与后续清理失败、逐条批次计数/原子性边界、多地址 TCP 切换、脱敏日志/诊断、认证/TLS 支持限制以及 0.1.0-alpha 升级/回退指南合并到根 README，随两个包交付。明确释放字段流不代表所属 reader 完成；按独立走查修正可信 COMMIT ERR 的说明，仅在会话仍 Open 且事务仍活动时保留显式回滚能力，否则新建连接核对状态。同步更正既有架构/方案中异常暴露模式或端点属性的误述，实际由日志/诊断关联；现代目标通过继承的 BatchCommand 关联批次条目。不另建独立设计文档，不添加未实现的 API。
+First full Unit1204passed/1failed exposed borrowed TCP wait-handle bug,with fix/red-green evidence above. First stress rerun exhausted ports:Unit218failed/Consumer1failed,TestResults/r02-{unit,consumer}-port-exhausted.trx retained. Fixture close/error ordering corrected;no failed run counted as pass,no system port-range/timeout/product retry changes. Independent docs/product/cleanup review clean. Release core5/DI3 0 warnings/errors:TestResults/r02-build-final.log. Full Unit1206/Consumer152/DI8 passed,0 skipped:TestResults/r02-{unit,consumer,di}-final.trx. Parsed20 named review groups/new TCP case actually passed,including Standard2.1 async cleanup. TestResults/r02-pack dual packages/five samples actual8.0.31/9.0.20/10.0.12/isolated10 Standard passed:TestResults/r02-package-final.log;restore dir TestResults/package-validation/e2b0d53c4b4a4880b643a9bfaf723532. Both packaged README files exactly matched source;UTF8-no-BOM/CRLF/diff passed. Normal TLS/audit kept enabled. R02 local material/verification only,In progress;G4 In progress0/2,C08 Blocked. R01 license/provenance/name,G0/G1/full G3/real matrix open;unpublished/unpushed. Real/non-Windows deferred;A04 real-cross-platform/A05 trusted public MySQL/C01 reset gates unchanged.
+## R02 full Windows .NET 8/9 local regression (2026-10-19)
 
-本轮首次完整 Unit 为1204通过/1失败，发现并修复同步 TCP 共享等待句柄释放问题，修复及红绿回归见前文。首次压力回归全量复跑还造成端口耗尽（Unit218失败/Consumer1失败，保留 TestResults/r02-{unit,consumer}-port-exhausted.trx），调整测试关闭顺序与异常保留后重新执行；没有把失败轮次计为通过，也没有修改系统端口范围、超时或产品连接重试策略。独立只读走查已对文档、产品修复和测试清理闭环，无剩余需修复项。
+Current master/core5/DI3/CPM/0.1.0-alpha retained,no daily older-target hosts. Existing Unit/DI built with temporary TargetFrameworks/TargetFramework overrides,then default slnx restore/build restored;project declarations remainnet10. deps confirm net8 Logging8.0.3/DI8.0.1/Abstractions8.0.2,net9 all 9.0.10,no net10 substitution. Three fixture fixes:net8 lacks X509CertificateLoader,so target-specific PFX API;PrepareAsync isolated tests select Standard2.1/current modern asset,retaining async assertions;five MeterListeners get nonthrowing MeasurementsCompleted callbacks. Initialnet8 Unit1197passed/9failed and diagnostics24passed/9failed exposed stale throwing subscriptions/allocations. Actual8.0.31 source shows Dispose unsubscribes only with nonnull completion callback. Empty completion callbacks yielded33/33 diagnostics and 1206/1206 Unit,without weakened assertions/product changes. README/architecture§2.6 document host ownership/tested-patch cleanup.
 
-最终 Release slnx 编译核心五/DI三目标0警告0错误（TestResults/r02-build-final.log）；完整 Windows Unit1206、Consumer152、DI8全通过且0跳过（TestResults/r02-{unit,consumer,di}-final.trx）。解析最终TRX确认既有20组具名走查回归及新增TCP回归均实际执行通过，Standard2.1异步清理仍覆盖。统一 pack 后 TestResults/r02-pack 双包验证通过，五资产样例分别在实际.NET8.0.31/9.0.20/10.0.12及隔离.NET10 Standard宿主执行，日志为TestResults/r02-package-final.log；独立还原目录TestResults/package-validation/e2b0d53c4b4a4880b643a9bfaf723532。另逐字核对两个包内README与源文件一致，UTF-8无BOM/CRLF及diff检查通过。单元证书与包还原采用正常Windows TLS权限，未禁用审计或降低TLS校验。
-
-R02仅完成本地材料和本地验证，状态保持进行中；G4同步为进行中、仍0/2，C08仍因真实证据缺失而阻塞。R01项目许可证/来源/包名审查、G0/G1及完整G3/真实版本矩阵均未关闭，未发布、未推送。真实数据库与非Windows验收继续按约定暂缓；A04待真实/跨平台验收、A05公开MySQL模式可信判定缺口和C01池重置白名单不变。
-
-## R02 Windows .NET 8/9 完整本地回归补验（2026-10-19）
-
-沿用当前 master 和既有产品五目标/DI三目标、CPM及统一0.1.0-alpha，不新增旧目标日常测试工程。临时同时传入 TargetFrameworks/TargetFramework 构建现有 Unit/DI 套件，随后恢复整个 slnx 默认还原和构建；所有测试工程声明仍为net10.0。deps图确认net8使用Logging8.0.3、DI8.0.1/Abstractions8.0.2，net9均9.0.10；没有用net10依赖替代旧目标依赖。
-
-本轮修复三处测试兼容问题：net8不具备X509CertificateLoader，证书夹具按目标使用对应PFX导入API；PrepareAsync隔离回归改为Standard2.1及当前运行时对应现代资产，保持原异步协议断言；五处MeterListener都提供非抛出MeasurementsCompleted回调。后者来自net8首轮完整Unit1197通过/9失败，以及诊断定向24通过/9失败，涉及残留抛出回调污染后续采集和分配断言。核对实际8.0.31 runtime源码，Dispose只在完成回调非空分支中解除instrument订阅；加空完成回调后诊断33/33及完整1206/1206通过，没有放宽任何断言或修改产品诊断逻辑。README与架构§2.6明确宿主监听器所有权及已验证补丁版本的清理要求。
-
-| 实际Windows运行时 | Unit | Consumer | DI | 失败/跳过 |
+| Actual Windows runtime | Unit passed | Consumer | DI passed | Failed/skipped |
 | --- | --- | --- | --- | --- |
-| .NET 8.0.31 | 1206 | 五资产包消费另验 | 8 | 0/0 |
-| .NET 9.0.20 | 1206 | 五资产包消费另验 | 8 | 0/0 |
-| .NET 10.0.12（恢复默认） | 1206 | 152 | 8 | 0/0 |
+| .NET 8.0.31 | 1206 | Five-asset packages separately checked | 8 | 0/0 |
+| .NET 9.0.20 | 1206 | Five-asset packages separately checked | 8 | 0/0 |
+| .NET 10.0.12 restored default | 1206 | 152 passed | 8 | 0/0 |
 
-证据：TestResults/runtime8-unit-final.trx、runtime8-di.trx、runtime9-unit.trx、runtime9-di.trx和runtime10-{unit,consumer,di}-final.trx。TRX诊断输出记录实际运行时，runtime{8,9,10}-host.json另保留testhost的coreclr.dll加载路径；runtime-matrix-dependencies.json保留旧目标依赖核对。红绿记录保留runtime8-prepare-{red,green}.trx、runtime8-unit.trx、runtime8-diagnostics-{red,green}.trx及runtime8-listeners-red.trx。源码依据为 https://raw.githubusercontent.com/dotnet/runtime/v8.0.31/src/libraries/System.Diagnostics.DiagnosticSource/src/System/Diagnostics/Metrics/MeterListener.cs ，本地留存TestResults/runtime8.0.31-MeterListener.cs。失败轮次不折算为通过，不推广到所有net8补丁。
+Reports:TestResults/runtime8-unit-final.trx,runtime 8-di.trx,runtime 9-unit.trx,runtime 9-di.trx,runtime 10-{unit,consumer,di}-final.trx. TRX logs actual runtime;runtime{8,9,10}-host.json records loaded coreclr.dll;runtime-matrix-dependencies.json records deps. Red-green:runtime 8-prepare-{red,green}.trx,runtime 8-unit.trx,runtime 8-diagnostics-{red,green}.trx,runtime 8-listeners-red.trx. Source:[MeterListener8.0.31](https://raw.githubusercontent.com/dotnet/runtime/v8.0.31/src/libraries/System.Diagnostics.DiagnosticSource/src/System/Diagnostics/Metrics/MeterListener.cs),saved TestResults/runtime8.0.31-MeterListener.cs. Failed runs remain failures;no claim for every net8 patch.
 
-恢复默认Release slnx核心五/DI三目标编译0警告0错误（TestResults/runtime-matrix-build-final.log）。重新pack到TestResults/runtime-matrix-pack，Verify-Packages使用独立缓存7161e6b0c911479bb53cdc0c460d9ea0核对双包内容、同版本和精确核心依赖、8/9/10依赖组及实际五资产消费，全部通过（TestResults/runtime-matrix-package-final.log）；Standard2.0/2.1包消费仍在net10隔离宿主执行，不冒充Framework4.8。正常Windows证书存储/NuGet TLS权限运行，未禁用审计或降低TLS校验。
+Restored Release 5/3 0 warnings/errors:TestResults/runtime-matrix-build-final.log. Pack TestResults/runtime-matrix-pack;fresh cache7161e6b0c911479bb53cdc0c460d9ea0 verified contents/version/exact dependency/8-9-10 groups/five consumers,all passed:TestResults/runtime-matrix-package-final.log. Standard hosts remain isolatednet10,not Framework4.8. Normal TLS-store/NuGet/audit,no downgrade. Independent BatchRuntimeConsumerSample recompiled for three modern references;actual8.0.31/9.0.20/10.0.12 batch/diagnostics passed:TestResults/runtime{8,9,10}-batch-final.log. Initial missing fixture argument command error retained runtime 8-batch-invocation-error.log,not product failure. Independent review checked seven final TRX,runtimes/deps/default targets/build/package README,no issue;diff/UTF8-no-BOM/CRLF passed. No new product functionality;11 prior review classes/TCP borrowed-handle defect fixed,now fixture/runtime evidence completed. R02 In progress/G4 0/2;real/non-Windows/Framework4.8/full matrix/license-provenance-name/A04/A05/C01 remain open;no publication/push.
 
-修改过的独立BatchRuntimeConsumerSample另按三个现代参考程序集重新编译，实际8.0.31/9.0.20/10.0.12批次/诊断断言均通过（TestResults/runtime{8,9,10}-batch-final.log）。首次调用遗漏夹具参数造成的命令错误单独保留runtime8-batch-invocation-error.log，补齐参数后通过，不归为产品故障。独立只读闭环复核核对全部七份最终TRX、实际运行时、依赖图、默认目标、编译和包内README，无剩余需修复项；git diff --check及UTF-8无BOM/CRLF检查通过。
+## R01/R02 basic Windows Framework package consumption (2026-10-19)
 
-本轮不新增产品功能；先前11类走查问题及TCP借用等待句柄缺陷已修复，本轮补齐旧运行时测试发现的夹具问题和进度证据。R02仍进行中、G4仍0/2；真实数据库与非Windows按约定暂缓，Framework4.8、完整兼容矩阵及许可/来源/包名审核未完成。A04真实/跨平台验收、A05可信公共MySQL模式判定和C01完整重置白名单仍开放，不发布、不推送。
+Only locally runnable consumption advanced then,without prematurely starting D dependent on G4/real matrices. Verify-Packages adds explicit -VerifyNetFramework,default five-asset path retained,non-Windows explicitly rejected. Option generates temporary net48 host in isolated consumption dir,refers to compiled Standard2.0 library and PackageReferences this core package. Checks SHA512,lib/netstandard2.0/OceanBaseConnector.dll/Microsoft.Extensions8.x. Installed4.8 targeting pack,no extra reference download;generated binding redirects/exe.config retained. Core5/DI3/CPM/Version/daily net10 unchanged. Desktop CLR reuses PackageConsumer.Verify basics:factory/connection-command-parameter/numeric identities,modern APIs hidden,Logging/DiagnosticSource8,closed state/precancel/redaction. Output Host=.NET Framework4.8.9337.0,registry Release 533509 means installed4.8.1. CLR4.0.30319.42000/net48 name do not prove original 4.8;Standard2.1 not used for Framework.
 
-## R01/R02 Windows Framework 基础包消费（2026-10-19）
+TestResults/framework-verifier-red.log shows old script rejecting option. First implementation run failed using old Framework restore-graph key,retained TestResults/framework-verifier-green.log;correct SDK10 net48 key then passed. Rebuilding generated parent exposed40 duplicate attributes from recursive framework-host/obj glob:framework-consumer-rebuild-red.log. Excluding framework-host/**/*.cs yielded five-target0 warnings/errors:framework-consumer-rebuild-green.log. Assertions intact. Default Release 5/3 0 warnings/errors:TestResults/framework-slnx-build-final.log;repack TestResults/framework-pack. Fresh default/optional caches passed:TestResults/framework-default-package-final.log(cdf06f55d0184c058e30de717ea84a5d),framework-package-final.log(9305f9f46ee342339e437d635ff92afd). Optional also runs full five assets,Framework host builds0 warnings/errors/actually passes. Reproduce:pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/framework-pack -VerifyNetFramework. README packaged;architecture/plan boundaries merged,no separate design doc. Independent five-file/package hash/asset/dependency/redirect/log/rebuild/README review clean;diff/UTF8-no-BOM/CRLF/bytewise package README passed. Verification/docs only,no product/existing Unit changes,so recent Unit1206/Consumer152/DI8 not repeated. Actual checks:both package paths/real Framework/generated rebuild. No real database/non-Windows/original 4.8/full SQL-TLS-core APIs;official Framework decision open. R01/R02 In progress/G4 0/2,A05/C01 unchanged,no publication/push.
 
-本轮复核余项后只推进本机可运行的消费验证，不提前启动依赖G4或实库矩阵的D扩展。eng/Verify-Packages.ps1增加显式-VerifyNetFramework选项；默认五资产流程继续保留，非Windows使用该选项会明确拒绝。指定选项时在本次独立包消费目录下临时生成net48宿主，引用已编译的Standard2.0消费库并通过PackageReference还原本次核心包；检查包SHA512、compile资产lib/netstandard2.0/OceanBaseConnector.dll及Microsoft.Extensions 8.x依赖。使用已安装4.8 targeting pack，不下载额外参考包；自动生成宿主binding redirects并保留exe.config。核心五目标、DI三目标、CPM/Version和所有日常net10测试工程均不改变。
+## D14 local MySQL YEAR (2026-10-19)
 
-真实桌面CLR执行复用原PackageConsumer.Verify的全部基础断言：provider factory、连接/命令/参数及公开数值类型身份、现代API在Standard资产不可见、Logging/DiagnosticSource程序集主版本8、未建连状态、预取消及凭据脱敏。输出确认Host=.NET Framework 4.8.9337.0、注册表Release=533509，对应本机安装Framework4.8.1；4.0.30319.42000只是CLR版本，不把它或net48目标名误报为原版4.8实际运行证据。Standard2.1仍不用于Framework。
+After7a70bd6,four-digit YEAR keeps OceanBaseDbType.Year=9,ushort/DbType.UInt16;type 13,text four ASCII digits,binary LE16,0 or1901–2155. Standard/provider types identical;schema YEAR/ProviderType9/precision4/scale0. Oracle/YEAR(2)/invalid precision/text/range/CLR mismatch rejected,no two-digit inference/date conversion. Explicit Year including NULL validated before prepare,reuses unsigned SMALLINT;ordinary UInt16 unchanged. Internal YearCodec only,reusing column/parameters/schema/sequential paths,no dependency/public value.27 unsupported failures:TestResults/year-red/*.trx;implementation then corrected fixture command-sequence boundary/pass. First five-asset fixture lacked post-auth Oracle bit and A05 rejected it;fixed bit,then test-only MySQL facts,product gate unchanged.
 
-红绿证据：TestResults/framework-verifier-red.log记录原脚本拒绝新参数；实现时首次完整执行因错误使用旧式Framework还原图键失败，TestResults/framework-verifier-green.log保留失败，修正为SDK10实际net48键后通过。进一步重建生成父工程，暴露递归源码glob包含framework-host及其obj导致40个重复特性错误（framework-consumer-rebuild-red.log）；排除framework-host/**/*.cs后，五目标重建0警告0错误（framework-consumer-rebuild-green.log）。未改弱任何消费断言。
+Windows.NET10.0.13 evidence,all 0 failed/skipped:
 
-默认Release slnx核心五/DI三目标编译0警告0错误（TestResults/framework-slnx-build-final.log），重新统一pack到TestResults/framework-pack。最终默认验证与可选Framework验证都从新独立缓存通过，分别保留TestResults/framework-default-package-final.log（cdf06f55d0184c058e30de717ea84a5d）和framework-package-final.log（9305f9f46ee342339e437d635ff92afd）；可选路径也执行完整原五资产检查，Framework宿主另外编译0警告0错误并实际通过。复现命令为pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/framework-pack -VerifyNetFramework。源README重新随包交付，现有架构/计划合并边界，不新增独立设计文档。
-
-独立只读走查已复核五文件差异、实际包SHA512/Standard2.0资产、8.x依赖及生成绑定重定向、默认/可选两份最终日志、父工程红绿重建和包内README一致性，无剩余需修复项。git diff --check、UTF-8无BOM/CRLF及两个包README逐字节核对通过。
-
-只增加工程验证与文档，没有修改产品或既有单元测试源码，因此未重复运行刚通过的完整Unit1206/Consumer152/DI8；本轮实际测试是两个包验证路径、真实Framework消费和生成工程的重建回归。真实数据库、非Windows和原版Framework4.8均未执行，完整SQL/TLS/核心API及Framework正式支持决定仍开放。R01/R02继续进行中，G4仍0/2，A05可信MySQL判定及C01完整重置门槛不变，不发布、不推送。
-
-## D14 MySQL YEAR 本地实现（2026-10-19）
-
-从 `7a70bd6` 继续实现四位 YEAR。`OceanBaseDbType.Year` 保持枚举值 9，映射 `ushort` / `DbType.UInt16`；结果类型码 13，文本四位 ASCII、二进制固定两字节小端，允许 0 或 1901–2155。标准/provider-specific 值和字段类型一致，Schema 提供 YEAR、ProviderType=9、precision=4、scale=0。Oracle 模式、YEAR(2)、非法精度、非法文本/范围及 CLR 类型不匹配均明确拒绝，不做两位年份推断或日期转换。显式 Year 参数在 prepare 前验证（含 NULL），复用无符号 SMALLINT 编码；普通 UInt16 保留完整范围。
-
-复用现有 ResultColumn、PreparedParameters、ResultDbColumn 和顺序读取路径，仅增加内部 YearCodec，未引入依赖或公开值类型。失败用例先运行，27 项因未支持 YEAR 失败（`TestResults/year-red/*.trx`）；实现后修正夹具的命令序号边界并通过。五资产消费夹具首次未带认证后 Oracle 状态位，被既有 A05 安全拒绝；修正夹具状态位后，仅在测试内注入认证后 MySQL 模式，产品认证门槛未修改。
-
-最终证据（Windows / .NET 10.0.13）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx 核心五目标、DI 三目标 | 0 警告、0 错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
-| YEAR 定向 Unit | 29 通过，0 失败/跳过 | `TestResults/year-targeted/*.trx` |
-| YEAR 五资产公共 API 消费（文本/预处理） | 10 通过，0 失败/跳过 | `TestResults/year-consumer-targeted-final/*.trx` |
-| 完整 Unit | 1240 通过，0 失败/跳过 | `TestResults/year-unit-full/*.trx` |
-| 完整 Consumer | 162 通过，0 失败/跳过 | `TestResults/year-consumer-full/*.trx` |
-| DI | 8 通过，0 失败/跳过 | `TestResults/year-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false |
+| Targeted Unit | 29 passed | TestResults/year-targeted/*.trx |
+| Five-asset text/prepared API | 10 passed | TestResults/year-consumer-targeted-final/*.trx |
+| Full Unit | 1240 passed | TestResults/year-unit-full/*.trx |
+| Full Consumer | 162 passed | TestResults/year-consumer-full/*.trx |
+| DI | 8 passed | TestResults/year-di-full/*.trx |
 
-测试命令沿用 `dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/<上述目录>`；定向分别附加 `--filter FullyQualifiedName~Year` 和 `--filter FullyQualifiedName~YearConsumerTests`。覆盖同步/异步、默认/SequentialAccess、文本/二进制、正常/零/NULL、后续字段对齐、参数重用及无效参数发包前拒绝；五资产均经 DbConnection/DbDataReader 公共 API 实际读取和参数写入。独立只读走查核对编解码、参数、reader、顺序帧边界、Schema、测试与文档，未发现需修复问题。`git diff --check` 通过。
+Tests:dotnet test tests/<project>/<project>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/<directory>;target filters FullyQualifiedName~Year and FullyQualifiedName~YearConsumerTests. Coverage sync-async/default-sequential/text-binary/normal-zero-NULL/next-field alignment/reuse/pre-send invalid rejection;five assets actually read/write via DbConnection/DbDataReader. Independent codec/parameter/reader/frame/schema/tests/docs review clean;diff passed. D14 local done,Pending verification:real YEAR INSERT/SELECT/version-OBProxy-mode matrix absent,public MySQL A05-gated. No trust-root/remote-database deployment/package-old-runtime-Framework rerun. A05/C01/D01–D13/D15 open,not whole-project completion.
 
-D14 本地实现完成，正式状态保持待验证：真实 YEAR 列 INSERT/SELECT、目标 OceanBase/OBProxy 版本及模式矩阵未执行，公共 MySQL 建连仍受 A05 门槛限制。未操作信任根，未部署其他电脑/数据库，未重新验证打包、旧运行时或 Framework。C01、A05 及 D01–D13/D15 仍未完成，不能将本模块通过解释为项目全部完成。
+## D13 local MySQL BIT (2026-10-19)
 
-## D13 MySQL BIT 本地实现（2026-10-19）
+Afterda03fe6,BIT(1–64) keeps enum8,ulong/UInt64,including BIT1(no bool). Type16,column Length=bits,both protocols lenenc big-endian raw bytes,exact ceil(bits/8),unused high bits rejected;2^63/UInt64.MaxValue retained. Standard/provider identical;schema ColumnSize bits,no numeric precision-scale. Oracle/invalid width-scale including NULL rejected. Explicit Bit only UInt64,Size0→64/1..64 declared,Precision/Scale0,overflow before prepare;unsigned BIGINT reused,ordinary UInt64 unchanged. Internal BitCodec only,reused columns/parameters/readers/schema,no dependencies/public type. Lengths checked fixed OceanBase bit_cell_str,endianness fixed Java RowProtocol.parseBit;behavior only,no source copying/live proof. TestResults/bit-red/*.trx:66 unsupported failed/5 invalid-metadata rejection passed. Tests corrected distinction extra byte versus nonzero unused high bits,then71 passed;public loopback/pre-rejection expanded to 81. Reused YEAR fixture as BitAndYearConsumerTests,retaining10YEAR/adding10BIT.
 
-从 `da03fe6` 继续实现 BIT(1–64)。`OceanBaseDbType.Bit` 保持枚举值 8，映射 `ulong` / `DbType.UInt64`，BIT(1) 也不转 bool。结果类型码 16，列 Length 表示位宽；文本/二进制均为长度编码的大端原始字节，精确要求 ceil(位宽/8) 字节，并拒绝超出位宽的高位，保留 2^63 和 UInt64.MaxValue。标准/provider-specific 类型一致，Schema ColumnSize 为位数，NumericPrecision/Scale 不填十进制精度。Oracle、非法位宽/scale 含 NULL 均拒绝。显式 Bit 参数只接受 UInt64，Size=0 为 64 位、1–64 为声明位宽，Precision/Scale=0，超界在 prepare 前拒绝；复用无符号 BIGINT 绑定，不改变普通 UInt64 的行为。
+Windows.NET10.0.13 evidence,all 0 failed/skipped:
 
-仅增加内部 BitCodec，复用 ResultColumn、PreparedParameters、顺序/默认 reader 和既有 Schema 路径，无新依赖或公开值类型。长度规则另对照固定 OceanBase 源码 `bit_cell_str`（见开发方案链接），大端解释对照固定 Java `RowProtocol.parseBit`；仅参考行为，不复制源码，也不将源码阅读作为实库验收。
-
-先运行失败测试：`TestResults/bit-red/*.trx` 中 66 项因 BIT 尚未实现失败、5 项非法元数据拒绝通过；实现后修正测试对“多一字节”与“未使用高位非零”异常的区分，71 项通过。随后增加公共环回读写/预先拒绝，最终定向 Unit 81 项通过。复用并扩展五资产 YEAR 消费测试为 `BitAndYearConsumerTests`，原 10 项 YEAR 保留，新增 10 项 BIT，避免重复整套握手/模式夹具。
-
-最终证据（Windows / .NET 10.0.13）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx 核心五目标、DI 三目标 | 0 警告、0 错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
-| BIT 定向 Unit | 81 通过，0 失败/跳过 | `TestResults/bit-targeted/*.trx` |
-| BIT/YEAR 五资产公共 API 消费 | 20 通过，0 失败/跳过 | `TestResults/bit-year-consumer-targeted/*.trx` |
-| 完整 Unit | 1321 通过，0 失败/跳过 | `TestResults/bit-unit-full/*.trx` |
-| 完整 Consumer | 172 通过，0 失败/跳过 | `TestResults/bit-consumer-full/*.trx` |
-| DI | 8 通过，0 失败/跳过 | `TestResults/bit-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false |
+| BIT targeted Unit | 81 passed | TestResults/bit-targeted/*.trx |
+| BIT/YEAR five-asset API | 20 passed | TestResults/bit-year-consumer-targeted/*.trx |
+| Full Unit | 1321 passed | TestResults/bit-unit-full/*.trx |
+| Full Consumer | 172 passed | TestResults/bit-consumer-full/*.trx |
+| DI | 8 passed | TestResults/bit-di-full/*.trx |
 
-完整测试命令同上节，替换结果目录；定向分别附加 `--filter FullyQualifiedName~TextCommandTests.Bit` 和 `--filter FullyQualifiedName~BitAndYearConsumerTests`。覆盖全部 64 种位宽的零/最高位/最大值，符号边界与原始字节解释，NULL、精度/长度/位宽错误、参数类型及重置；公共环回覆盖同步/异步、文本/预处理、默认/SequentialAccess、后续字段、预处理重用、NULL 参数和会话复用。独立只读走查核对参数预校验、两种结果/顺序帧路径、无符号边界、Schema、消费者及文档，未发现需修复问题。`git diff --check` 通过。
+Commands as YEAR,filters FullyQualifiedName~TextCommandTests.Bit/FullyQualifiedName~BitAndYearConsumerTests. All 64 widths zero/highest/max,sign/raw bytes,NULL/precision-length-width/type/reset;public sync-async/text-prepared/default-sequential/next fields/reuse/NULL/session reuse. Independent prevalidation/result-frame/unsigned/schema/consumer/docs review clean;diff passed. D13 local done/Pending verification;real BIT INSERT/SELECT/target-width conversion/version-OBProxy-mode absent,A05 unchanged. No trust-root/deployment/package-old-runtime-Framework reruns;A05/C01/D01–D12/D15 open.
 
-D13 本地实现完成，正式状态保持待验证。真实 BIT 列 INSERT/SELECT（含服务端目标位宽转换）、OceanBase/OBProxy 版本及模式矩阵未执行，公共 MySQL 仍由 A05 拒绝。未操作信任根、未部署其他电脑/数据库，未重跑打包/旧运行时/Framework。其余 A05、C01、D01–D12/D15 继续开放。
+## D12 local MySQL JSON (2026-10-19)
 
-## D12 MySQL JSON 本地实现（2026-10-19）
+After31b2c7a,enum7,string/DbType.String. MySQL245 text/binary use lenenc strict UTF8. Accept binary collation63/existing UTF8;Oracle/other charsets rejected before NULL reads too. Nonnumeric scale neither constrained nor interpreted. Schema JSON/Json/string/IsLongtrue,ColumnSize/NumericPrecision/NumericScale unset. Unicode/whitespace/wide-number text preserved;JSON null/empty JSON string/SQL NULL distinct. Explicit Json accepts only string/null/DBNull,MySQL/Precision-Scale0,VAR_STRING/existing limits,no object serialization. Server owns syntax/column conversion;synthetic invalid-JSON ERR3140/22032 followed by statement/session reuse is not live syntax proof. Existing reader/character-stream/async/lifetime paths,no parser/dependency/public type. Fixed Java/OceanBase references in plan D12,behavior only.
 
-从 `31b2c7a` 继续实现 JSON。沿用 `OceanBaseDbType.Json`（枚举值 7），标准/provider-specific 值为 string，DbType.String；MySQL 类型码 245 的文本和二进制行都复用长度编码严格 UTF-8 字符串读取。接受 binary collation 63 及现有 UTF-8 collation，Oracle 和其他字符集在 NULL 读取前也验证。JSON 是非数值列，不限制或解释服务端 scale；Schema 为 JSON/Json/string、IsLong=true，ColumnSize/NumericPrecision/NumericScale 均不填。原始 Unicode、空白和宽精度数字文本保持不变，JSON 文本 null、空 JSON 字符串与 SQL NULL 分别处理。
+TestResults/json-red/*.trx:15 unsupported failed/4 invalid metadata passed. Large-field shared WithLength fixture only encoded one-byte lengths;fixed full lenenc then37 targeted passed,json-targeted/*.trx retains prior4 failures. Nonnumeric-scale test failed under old restriction(json-scale-red/*.trx),restriction removed;final full passes,five-asset scale31. Strict UTF8/mode/parameter precision intact. Windows.NET10.0.13:
 
-显式 Json 参数仅接受 string/null/DBNull，要求 MySQL 且 Precision/Scale=0，复用 VAR_STRING 编码和既有长度限制，不隐式序列化对象。语法和目标列转换交由服务端验证；环回回归发送非法 JSON 文本并返回 ERR 3140/22032 后，证明同一 statement/session 可继续执行，不把合成 ERR 当作实库语法验证。默认/SequentialAccess、GetChars/GetTextReader、异步及生命周期复用现有字符串路径，没有新增解析器、依赖或公开值类型。协议依据见开发方案 D12 的固定 Java/OceanBase 源码引用，只参考行为，不复制代码。
-
-红绿证据：`TestResults/json-red/*.trx` 中 15 项因 JSON 未支持失败、4 项非法元数据拒绝通过。大字段回归发现共享 WithLength 夹具只生成单字节长度，将其修正为完整长度编码前缀后定向 37 项通过；`json-targeted/*.trx` 保留此前四项失败。随后新增非数值 scale 回归，在旧限制下失败（`json-scale-red/*.trx`），移除错误限制后最终完整回归通过，五资产消费使用 scale=31 验证。没有放宽严格 UTF-8、模式或参数精度检查。
-
-最终证据（Windows / .NET 10.0.13）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx 核心五目标、DI 三目标 | 0 警告、0 错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
-| 完整 Unit（含 JSON 37 项） | 1358 通过，0 失败/跳过 | `TestResults/json-unit-full/*.trx` |
-| 完整 Consumer（含 JSON 五资产 20 项） | 192 通过，0 失败/跳过 | `TestResults/json-consumer-full/*.trx` |
-| DI | 8 通过，0 失败/跳过 | `TestResults/json-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false |
+| Full Unit,JSON37 | 1358 passed,0 failed/skipped | TestResults/json-unit-full/*.trx |
+| Full Consumer,JSON20 | 192 passed,0 failed/skipped | TestResults/json-consumer-full/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/json-di-full/*.trx |
 
-完整测试命令同上节，替换结果目录。最终 TRX 已解析核对总数和 JSON 用例实际执行；覆盖同步/异步、文本/预处理、默认/顺序读取、多结果与独立 Schema、Unicode/宽数字、NULL、参数写回、坏 UTF-8 和 8KB 字段流。独立只读走查核对参数预校验/编码、两种结果协议、Schema、顺序字段流、测试及文档，未发现需修复问题。`git diff --check` 通过。
+Same commands/appropriate directories;final TRX parsed totals/actual JSON execution. Coverage sync-async/text-prepared/default-sequential/multiple results/schema/Unicode-wide numbers/NULL/writes/bad UTF8/8KB streams. Independent parameter/result/schema/streams/tests/docs review clean;diff passed. D12 local done/Pending verification;real INSERT/SELECT/syntax/version-OBProxy absent,A05 unchanged. No trust-root/deployment/package-old-runtime-Framework rerun;A05/C01/D01–D11/D15/overall objective open.
 
-D12 本地实现完成，正式状态保持待验证。真实 JSON 列 INSERT/SELECT、服务端语法拒绝及目标 OceanBase/OBProxy 版本矩阵未执行，A05 公共 MySQL 门槛未修改。未操作信任根、未部署其他电脑/数据库，未重跑打包、旧运行时或 Framework；A05、C01 和 D01–D11/D15 仍未完成，项目整体目标保持开放。
+## D11 local Oracle INTERVAL (2026-10-19)
 
-## D11 Oracle INTERVAL 本地实现（2026-10-19）
+After808dfed,immutable OceanBaseIntervalYearToMonth/OceanBaseIntervalDayToSecond,standard/provider exact structs,DbType.Object,enums5/6. Separate sign/year-month or day-hour-minute-second-nanosecond/leading precision/DS fractional precision,valid default zero. YM not converted to fixed duration;DS ToTimeSpan exact100ns/Int64 ticks including MinValue,overflow/nondivisible nanos rejected. Invariant signed ToString preserves precision. Oracle204/205 both protocols lenenc7/14-byte dedicated LE layout,not strings/MySQL temporal. Column scale=leading precision or leading*10+fraction,checked against payload. Wrong mode including NULL,bad length/sign/components/precision/rounding rejected. Schema exact identities,no NumericPrecision/Scale. Inferred Object/exact or explicit parameters use native codes;Precision0 uses value,otherwise declaration;unset Scale uses value,explicit0 cannot truncate nanos;invalid before prepare. Existing prevalidation/readers/results/resources,no dependencies/implicit string-TimeSpan conversion. Fixed Java parameters/DataTypeUtilities/both RowProtocols and OceanBase SHA5e8a63d29dae9fde5e962b8fcc7b167d438fc343 interval_ym/ds_cell_str/encode_interval_ym-ds/ObIntervalScaleUtil(plan paths),behavior only/no copying/live proof.
 
-从 `808dfed` 继续实现 INTERVAL YEAR TO MONTH / DAY TO SECOND。新增不可变 `OceanBaseIntervalYearToMonth` / `OceanBaseIntervalDayToSecond`，标准及 provider-specific 访问均为对应精确结构，DbType.Object，沿用 provider 枚举值 5/6。保存独立符号、年/月或天/时/分/秒/纳秒、前导精度与 DS 小数精度；默认结构为合法零。年月区间不转换为固定时长，DS ToTimeSpan 在 100ns 和 Int64 ticks 范围内精确转换，包括 TimeSpan.MinValue；超界或纳秒不能整除 100 时抛错。ToString 使用 invariant 带符号文本并保留声明精度。
+TestResults/interval-red/*.trx six unsupported failures→six passed interval-targeted-initial/*.trx. Expanded27passed/1failed:fixture replaced deliberately bad YMscale99 with default9;nullable default corrected,full Unit30 cases passed. First Consumer192 old passed/20 new failed from missing timezone report/probe;existing SessionTimeZoneFixture reused,targeted 20/full212 passed. Original failure reports retained,not passes;product timezone/auth unchanged. Windows.NET10.0.13:
 
-Oracle 类型码 204/205 在文本及预处理行中均读取长度编码的 7/14 字节专用小端数据；不误作普通字符串或 MySQL temporal 布局。列 scale 分别为前导精度及“前导精度*10+小数精度”，与字段内精度核对。拒绝其他模式（含 NULL）、非法长度/符号/分量/精度及舍入；Schema 提供精确类型和 provider 身份，不把区间精度填作 NumericPrecision/Scale。显式参数或 DbType.Object 下的精确值使用原生类型码，Precision=0 采用值精度、非零为声明前导精度，Scale 未设置采用值 scale、显式 0 不截断纳秒；无效值在 prepare 前拒绝。复用命令预校验、默认/SequentialAccess、多结果和资源管理，未引入依赖或隐式字符串/TimeSpan 转换。
-
-协议依据为固定 Java 基线的 INTERVAL 参数、DataTypeUtilities 和两种 RowProtocol，以及固定 OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343` 的 interval_ym/ds_cell_str、encode_interval_ym/ds、ObIntervalScaleUtil（开发方案已记录文件）。仅参考协议行为，不复制源码；只读源码核对不能代替真实版本验收。
-
-红绿证据：`TestResults/interval-red/*.trx` 的 6 项因类型未支持失败，实现后原 6 项通过（`interval-targeted-initial/*.trx`）。扩展回归首次 27 通过/1 失败，定位为夹具将测试中的非法 YM scale=99 替换为缺省 9；改为可空缺省值后，最终完整 Unit 含全部 30 项 INTERVAL 回归通过。首次完整 Consumer 中原 192 项通过、新 20 项失败，定位为新夹具遗漏 Oracle 时区报告/后续探测；复用既有 SessionTimeZoneFixture 后定向 20 项通过，最终完整 212 项通过。上述失败报告保留，不计入最终通过结果，产品时区行为与认证策略未修改。
-
-最终证据（Windows / .NET 10.0.13）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx 核心五目标、DI 三目标 | 0 警告、0 错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
-| 完整 Unit（含 INTERVAL 30 项） | 1388 通过，0 失败/跳过 | `TestResults/interval-unit-full/*.trx` |
-| INTERVAL 五资产公共 API 消费 | 20 通过，0 失败/跳过 | `TestResults/interval-consumer-targeted-final/*.trx` |
-| 完整 Consumer | 212 通过，0 失败/跳过 | `TestResults/interval-consumer-full-final/*.trx` |
-| DI | 8 通过，0 失败/跳过 | `TestResults/interval-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false |
+| Full Unit,INTERVAL30 | 1388 passed,0 failed/skipped | TestResults/interval-unit-full/*.trx |
+| Five-asset INTERVAL API | 20 passed,0 failed/skipped | TestResults/interval-consumer-targeted-final/*.trx |
+| Full Consumer | 212 passed,0 failed/skipped | TestResults/interval-consumer-full-final/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/interval-di-full/*.trx |
 
-完整测试命令同前节，替换结果目录；定向附加 `--filter FullyQualifiedName~IntervalConsumerTests`。覆盖 0–9 全部前导精度与小数精度组合、正负最大值、默认零、精确 TimeSpan 边界、区域无关文本、畸形数据、声明精度/类型拒绝、同步/异步×文本/预处理×默认/顺序读取、NULL/后续字段/多结果 Schema 快照及参数重用。五资产通过实际加载的产品程序集和 DbConnection/DbDataReader 公共 API 读取并写回两种精确值。独立只读走查核对完整模块和时区夹具修正，未发现需修复问题；`git diff --check` 通过。
+Same commands,filter FullyQualifiedName~IntervalConsumerTests. All 0..9 leading/fraction combinations,positive-negative maxima/default zero/exact TimeSpan/invariant text/bad data/declaration-type rejection/sync-async×text-prepared×default-sequential/NULL-next fields/multiple schema snapshots/reuse. Five assets read/write actual loaded values via public ADO.NET. Independent complete-module/timezone-fixture review/diff passed. Local done/Pending verification;real columns/precision/version-OBProxy deferred. No trust-root/deployment/package-old-runtime-Framework rerun;A05/C01/D01–D10/D15/overall open,no publication/push.
 
-D11 本地实现完成，正式状态保持待验证。真实 INTERVAL 列 INSERT/SELECT、精度转换及 OceanBase/OBProxy 版本矩阵暂缓；未操作信任根或部署其他电脑/数据库，未重跑打包、旧运行时或 Framework。A05、C01 和 D01–D10/D15 等整体余项继续开放，不发布、不推送。
+## D10 local Oracle NCHAR/NVARCHAR2 (2026-10-19)
 
-## D10 Oracle NCHAR/NVARCHAR2 本地实现（2026-10-19）
+After8a21dbd,enums3/4,string/DbType.String,no public type/dependency. Oracle208/207 text/prepared results/parameters use lenenc bytes. Separate NCHARACTER_SET_CONNECTION selects UTF8/UTF8MB4 or strict BOM-free UTF16BE,retaining supplementary characters/explicit BOM/trailing NCHAR spaces. National NULL/binary input uses connection encoding/output results encoding;results NULL/binary uses source collation(existing UTF8/UTF1654/55/101). Unknown not guessed,ordinary string staysUTF8. Schema preserves provider identities/server character length,no numeric precision-scale. NULL fields retain identity without encoding;NULL parameters retain type 6/bitmap. Immutable NationalCharacterSet snapshots use existing exclusivity/send-invalidation/per-result rules. Oracle execution reuses only complete three-charset reports;otherwise same-lease/budget query strictly one row/three strings/one result,decoding names by their UTF8/UTF16 columns,no session modification. Restores parsed timezone;conflicting reports clear facts/fail. Later nonnull national results require fresh complete reports. Whole/sequential character paths share column encoding/lifetime/cancel/memory. Explicit values prevalidate type/Unicode/Size(CLR UTF16 units)/Precision-Scale0 before lease,then actual encoding byte limits before prepare;UTF8 budget cannot reject valid UTF16. Fixed Java/server evidence in plan D10,behavior only;fixtures updated,A05/TLS/pooling unchanged.
 
-从 `8a21dbd` 继续实现 national 字符类型。沿用 OceanBaseDbType.NChar/NVarchar2（枚举值3/4）和 string/DbType.String，不增加公开类型或依赖。Oracle208/207在文本、预处理结果和参数中使用长度编码字节；独立会话 NCHARACTER_SET_CONNECTION 决定 UTF8/UTF8MB4 或无 BOM 的严格 UTF16BE 编解码，保留补充平面字符、显式 BOM 字符及 NCHAR 尾部空格。national 为 NULL/binary 时输入按报告的 connection 编码、输出按 results 编码；results 为 NULL/binary 时使用列源 collation（支持既有 UTF8 和 UTF16 的54/55/101）。未知编码不猜测，普通 string 参数仍用UTF8。Schema保持两个provider身份及服务端字符长度，不填数值精度/scale；NULL字段保留身份且不需编码，NULL参数沿用类型6/位图。
+Initial 4 unsupported failures TestResults/nchar-red/*.trx→14codec→30public passes. Existing command regression1049passed/9failed:one obsolete unsupported assertion,two incorrect EOF fixtures,six sandbox TLS-key permissions. Assertions/fixtures corrected,full Unit with normal permissions,no roots. Added empty-probe test initially failed because a fully consumed error allows Open under shared Fail;test now requires rejected operation but not destroying synchronized session;unread staysBroken. Review fixed UTF16 probe decoding/UTF8 pre-budget errors,added regressions;recheck clean. Final 55 targeted passed:nchar-reviewed-targeted/*.trx. Consumer conditional-inference compile error corrected with explicit Encoding,not counted as pass. Windows.NET10.0.13:
 
-NationalCharacterSet 保存不可变会话快照；复用 PhysicalSession、CommandExchange 和 QueryResult 的独占、发送前失效及每结果快照规则。Oracle业务执行前，只有完整的三个charset报告可复用，否则同租约/总预算查询三个会话值，严格限定一行三字符串列、单结果；内部查询按其列的UTF8/UTF16编码读取名称，不修改会话。查询恢复已解析的时区，矛盾报告清除事实并拒绝；多结果缺少新完整报告时，后续非NULL national值明确失败。读取整值与SequentialAccess/GetChars/GetTextReader共用列编码，原流生命周期、取消和内存规则保持一致。显式参数在取得租约前验证类型、Unicode、Size（CLR UTF16 code unit）及Precision/Scale=0，之后按实际会话编码在prepare前限字节；不以UTF8大小误拒绝合法UTF16参数。
-
-协议依据见开发方案D10，固定Java和OceanBase源码仅用于核对行为，不复制代码或替代实库证据。同步更新既有会话报告与探测夹具，不改变公共A05 MySQL模式门槛、TLS策略或池化拒绝。
-
-红绿与走查证据：首批4项均因未支持类型失败（`TestResults/nchar-red/*.trx`），实现后14项codec通过，扩展公共读写后30项通过。已有命令回归首次1049通过/9失败，包含1项过时的不支持断言、2项夹具未沿用协商EOF格式、6项沙箱TLS私钥权限失败；修正断言/夹具后，以既有完整Unit权限运行，未操作信任根。新增空探测结果回归先失败：完整响应已消费，原共享Fail契约允许会话保持Open，测试改为拒绝操作但不要求销毁已同步会话；未读响应仍必须Broken。独立走查发现内部探测UTF16解码和national预校验UTF8字节预算问题，均修正并补回归；后续复查无剩余问题。最终55项定向全部通过（`nchar-reviewed-targeted/*.trx`）。Consumer曾有条件表达式类型推断编译错误，显式声明Encoding后修复；未将该次编译计为通过。
-
-最终证据（Windows / .NET10.0.13）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx核心五目标、DI三目标 | 0警告、0错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
-| 完整Unit（含national55项） | 1442通过，0失败/跳过 | `TestResults/nchar-unit-full/*.trx` |
-| 完整Consumer（含national五资产40项） | 252通过，0失败/跳过 | `TestResults/nchar-consumer-full/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/nchar-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false |
+| Full Unit,national55 | 1442 passed,0 failed/skipped | TestResults/nchar-unit-full/*.trx |
+| Full Consumer,national40 | 252 passed,0 failed/skipped | TestResults/nchar-consumer-full/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/nchar-di-full/*.trx |
 
-完整测试命令同前节，替换结果目录；最终TRX已解析核对总数及55/40项新测试实际执行。覆盖同步/异步×文本/预处理×默认/顺序读取，跨解码缓冲区的字符值、不同存储/线上编码、坏Unicode、NULL/后续普通列、参数重用/发包前拒绝、编码修改与不可变结果快照、完整/缺失/冲突报告、UTF16名称探测、大CJK字符串预校验、非法形状、总超时与取消。五资产消费通过实际产品程序集及DbConnection/DbDataReader公开入口，运行宿主为net10，不冒充五套运行时。独立走查复查和`git diff --check`通过。
+Same commands;TRX parsed totals/55-40 actual execution. Coverage sync-async×text-prepared×default-sequential,cross-buffer characters,storage-wire encodings,bad Unicode,NULL/ordinary following columns,reuse/pre-send rejection,encoding changes/immutable snapshots,complete-missing-conflicting reports,UTF16 probes,large CJK prevalidation,bad shapes,total timeout/cancel. Five-asset public consumption hostnet10,not five runtimes. Independent recheck/diff passed. Local done/Pending verification;real NCHAR/NVARCHAR2 INSERT/SELECT/character lengths/empty strings/version-OBProxy deferred. No deployment/trust-root/package-old-runtime-Framework rerun;A05/C01/D01–D09/D15/overall open,no publication/push.
+## D15 initial local SHA-2 authentication (2026-10-19)
 
-D10本地实现完成，正式状态保持待验证；真实NCHAR/NVARCHAR2列INSERT/SELECT、服务端字符长度/空字符串语义及目标版本/OBProxy矩阵暂缓。未部署其他电脑/数据库、未操作信任根，未重跑打包、旧运行时或Framework。A05、C01及D01–D09/D15等余项仍开放，项目整体未完成，不发布、不推送。
+Afterc4ee8b3,caching_sha2_password fast/full-password under VerifyFull and sha256_password VerifyFull response. Internal AuthenticationConversation reuses handshake frames/capabilities/TLS/total connection budget/mode/error cleanup,no dependency/public option. Fixed SHA256 vectors verify stage2+seed order;20-byte challenges,empty/Unicode strict UTF8/NUL boundaries checked.01 03 sends nothing and awaits final OK/ERR;01 04 sends password+NUL only after authenticated TLS. One account-plugin switch after initial response;after fast/full,further challenges/switches rejected. Unknown/malformed/repeated/truncated terminals fail;fast response alone never opens connection. Native/clear/A05/ExpectedMode unchanged.
 
-## D15 SHA-2认证首批本地实现（2026-10-19）
+Initial 6 public handshake cases failed then passed:TestResults/sha2-red/*.trx,sha2-green/*.trx. Boundaries47passed/4failed:two wrongly prohibited switch after initial sha256,two NUL values already rejected by ADO.NET builder. Test-only corrections→58 passed,sha2-boundaries-green/*.trx(original sha2-boundaries/*.trx retained). Required-TLS included66 passed,sha2-targeted/*.trx;added six final-truncation/A05/ExpectedMode cases,total 72 in full Unit. Consumer first10passed/20failed,sha2-consumer-targeted/*.trx:fixture mistook timezone probe for business SQL. Existing SessionTimeZoneFixture/exact SQL→30 passed,sha2-consumer-green/*.trx;sha256 initial weak-channel rejection added,total 40 in full Consumer. Both Standard/three modern sync-async public APIs,Standard2.0 OpenAsync base entry;hostsnet10,not five runtimes. Independent state-machine/TLS/packet/session/tests review clean;stale D15-undelivered doc changed to partial local/open remainder. README/design/plan distinguish state/encoding,Required-TLS loopback,and real trust. No roots/install prompts. Required TLS proves encrypted fast auth/full-password rejection;VerifyFull full-password branch has state/encoding evidence only,no private-CA success claim.
 
-从 `c4ee8b3` 继续实现 `caching_sha2_password` fast auth与受VerifyFull限制的完整密码路径，以及 `sha256_password` 的VerifyFull响应。新增内部AuthenticationConversation复用现有握手帧、能力、TLS、连接预算、模式判定和异常清理，不新增依赖或公共选项。SHA256固定token向量核对stage2后接seed的顺序；20字节挑战、空密码、Unicode严格UTF8和NUL边界明确验证。`01 03`不写客户端包，必须继续等待最终OK/ERR；`01 04`只在身份验证通过的TLS后发送密码加NUL。初始响应后允许一次账户插件切换，fast/full后拒绝继续挑战或切换；未知插件、畸形/重复消息和截断最终包均失败，不将fast结果误认为可用连接。native/clear、A05公共MySQL拒绝及ExpectedMode检查保持既有路径。
+Windows SDK10.0.402/.NET 10.0.13:
 
-首批6项公共握手测试先因未支持插件失败（`TestResults/sha2-red/*.trx`），实现后6项全部通过（`sha2-green/*.trx`）。边界测试首轮47通过/4失败（`sha2-boundaries/*.trx`）：两项错误期待sha256初始响应后不可切换账户插件，两项NUL在ADO.NET连接串基类先被拒绝；修正测试后58项通过（`sha2-boundaries-green/*.trx`），没有为适配错误断言修改产品。含Required TLS环回的66项全部通过（`sha2-targeted/*.trx`），另补最终包截断和A05/ExpectedMode边界6项，最终完整测试实际执行SHA-2共72项。
-
-五资产公开DbConnection/DbCommand消费首轮10通过/20失败（`sha2-consumer-targeted/*.trx`）：认证成功后的时区probe被新夹具误当业务命令。复用既有SessionTimeZoneFixture处理内部probe并精确断言业务SQL后30项通过（`sha2-consumer-green/*.trx`）；再增加sha256初始弱通道拒绝共40项，在完整Consumer中全部执行。两套Standard和现代三个资产均有同步/异步公开入口消费，Standard2.0的OpenAsync沿用基类入口；宿主统一net10，不冒充五套运行时验收。
-
-独立只读走查覆盖新状态机、握手/TLS/PacketChannel/PhysicalSession和全部新测试，未发现产品缺陷；文档复查指出首页仍称D15未开发，已更正为部分本地实现、余项开放。README、架构及开发方案明确区分状态/编码测试、Required TLS环回和真实可信TLS链。测试不安装/删除信任根、不弹出信任确认；Required TLS只证明加密后的fast认证及完整密码拒绝，VerifyFull完整密码分支仅有状态/编码证据，不宣称私有CA成功链已验证。
-
-最终证据（Windows / SDK10.0.402 / .NET10.0.13）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx核心五目标、DI三目标 | 0警告、0错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
-| 完整Unit（SHA-2新增72项） | 1514通过，0失败/跳过 | `TestResults/sha2-unit-full/*.trx` |
-| 完整Consumer（SHA-2新增40项） | 292通过，0失败/跳过 | `TestResults/sha2-consumer-full/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/sha2-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false |
+| Full Unit,+72 SHA-2 | 1514 passed,0 failed/skipped | TestResults/sha2-unit-full/*.trx |
+| Full Consumer,+40 SHA-2 | 292 passed,0 failed/skipped | TestResults/sha2-consumer-full/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/sha2-di-full/*.trx |
 
-完整测试命令同前节，替换结果目录；TRX已解析核对实际新增案例和零失败/跳过。UTF8无BOM/CRLF及git diff --check通过，当前master本地提交不推送。D15状态保持进行中：RSA公钥配置/检索、其他插件及真实两模式/OBProxy/TLS矩阵仍开放；A05、C01及D01–D09未完成。异机/实库继续暂缓，未重跑打包、旧运行时或Framework，没有据本地测试关闭项目整体或生产发布关口。
+Same test commands/directories,TRX parsed new cases/zero failures-skips;UTF8-no-BOM/CRLF/diff passed,local master commit/no push. D15 In progress,RSA configuration/retrieval/other plugins/real both-mode-OBProxy-TLS open;A05/C01/D01–D09 incomplete. Remote/real deferred;packages/older-runtime/Framework not rerun;overall/production gates open.
 
-## D15 RSA认证后续本地实现（2026-10-19）
+## D15 local RSA authentication continuation (2026-10-19)
 
-从 `5db7b98` 补齐SHA-2固定RSA公钥与显式公钥获取路径。新增连接键/属性Server RSA Public Key/ServerRsaPublicKey（默认空的SPKI PEM文本）及Allow Public Key Retrieval/AllowPublicKeyRetrieval（默认false）；冻结快照、多地址副本、大小写、序列化往返、默认PEM脱敏和长度/布尔验证均覆盖，不引入文件I/O或依赖。已验证TLS优先原密码路径；非空密码在无VerifyFull时必须有固定公钥或显式取钥选项，clear插件仍拒绝弱通道。固定key优先，无效不回退检索；默认不请求服务端key，不隐式降低TLS。获取key无身份验证且可被中间人替换，README明确风险；Disabled下业务SQL/结果仍为明文。
+After5db7b98,added pinned RSA/explicit key retrieval. Server RSA Public Key/ServerRsaPublicKey defaultempty SPKI PEM,Allow Public Key Retrieval/AllowPublicKeyRetrieval defaultfalse. Frozen/multiaddress/case/serialization/default PEM redaction/length-bool validation,no file I/O/dependency. Verified TLS prefers existing password path;nonnull password without VerifyFull requires pinned key or opt-in retrieval;clear still rejects weak channels. Pinned key wins,invalid never falls back;default never requests key/downgrades TLS. Unauthenticated retrieved key can be replaced by a MITM,documented;Disabled leaves business SQL/results plaintext. RsaPassword validates SPKI DER via ByteCursor:RSA OID/canonical lengths-positive integers/no trailing,PEM<=16 KiB,modulus2048–8192 bits,positive odd exponent3..64 bits. Private/nonRSA/weak/malformed keys rejected. BCL ImportParameters/Encrypt across five assets uses protocol OAEP-SHA1 over strict UTF8 password+NUL XOR repeated20-byte seed;plaintext<=keybytes-42. Failures omit potentially key-bearing inner exceptions. sha256 request01,caching-full02;01-prefixed PEM(optional single NUL)→ciphertext→finalOK/ERR only. EarlyOK/repeated key-challenge/full-stage switch fail;budget/no-retry/cleanup unchanged.
 
-RsaPassword复用ByteCursor校验SPKI DER，仅RSA OID、规范长度/正整数、无尾随数据，最长16KiB PEM、2048–8192位模数、至少3且不超过64位的正奇数指数；拒绝私钥、非RSA和弱/畸形key。BCL RSA.ImportParameters/Encrypt跨五目标使用协议OAEP-SHA1，对严格UTF8密码加NUL与20字节挑战循环XOR后加密，明文含NUL不超过密钥字节数减42。解析/导入/加密失败不附可能含key材料的内部异常。sha256取钥请求01、caching full请求02；读01前缀PEM（允许一个NUL终止符）后发密文，仅等最终OK/ERR。key未到就OK、重复key/挑战或完整认证阶段切换均失败；错误/取消/超时沿用总连接预算、无重试和传输清理。
+Initial 8 fixed-key handshakes failed unknown key then passed:TestResults/rsa-red/*.trx,rsa-green/*.trx;expanded fixed-retrieved×initial-switched×sync-async16. Mixed RSA/SHA-2 first101passed/8failed,rsa-options-and-flow/*.trx,all sandbox Windows TLS-credential failures;normal full-Unit permissions passed without cert-policy change. RSA-boundary71 passed,rsa-boundaries/*.trx(filter includes existing matches). Review found initial sha256 retrieval incorrectly blocked first account switch;four reverse-negotiation cases failed,rsa-switch-review-red/*.trx. InitialFE now allowed once/old retrieval cleared,full caching remains final-locked;92 targeted passed,rsa-reviewed-targeted/*.trx. Empty-password review referenced fixed Java/MySQL8 empty/oneNUL markers. Four initial tests2failed/2passed,rsa-empty-red/*.trx;full-password empty now NUL before key/retrieval logic,caching initial still empty token,nonnull security unchanged. Four passed full suite;independent recheck clean.
 
-红绿记录：首批8项固定key公开握手先因未知连接键失败（`TestResults/rsa-red/*.trx`），实现后8项通过（`rsa-green/*.trx`），再扩为固定/获取×初始/切换×同步/异步16项。首次混合RSA/SHA-2回归101通过/8失败（`rsa-options-and-flow/*.trx`），失败均为在普通沙箱下运行TLS环回的Windows凭据访问限制；未修改证书策略，最终以既有完整Unit执行权限全部通过。RSA边界定向71项通过（`rsa-boundaries/*.trx`，过滤含既有匹配项）。
+Added 82Unit:options/freeze/address/redaction,independent private-key decryption/Unicode/max OAEP,malicious PEM-DER/algorithm-size-exponent,invalid pinned no fallback,TLS preference,retrieval order/earlyOK/ERR,plugin timeout-close-cancel,switch/empty.40 five-asset public consumers fixed-retrieved×both-plugin×sync-async,server decrypts Unicode/exact SQL;40 targeted passed,rsa-consumer-targeted/*.trx;net10 hosts,Standard2.0 async base,not five runtimes. Windows SDK10.0.402/.NET 10.0.13:
 
-独立走查发现初始sha256取钥后错误拒绝首次账户插件切换；4项反向协商网络回归先失败（`rsa-switch-review-red/*.trx`）。调整为初始阶段允许一次FE并清旧取钥状态，caching full阶段保留final锁；定向92项通过（`rsa-reviewed-targeted/*.trx`）。复查同时提示空密码线上语义：固定Java空包规则和MySQL8服务端sha256入口接受空包/单NUL作为无密码标记。新增4项初始握手测试先2失败/2通过（`rsa-empty-red/*.trx`），SHA-2完整密码路径对空密码优先返回NUL，不受key/检索配置干扰；caching初始仍空token，非空密码安全边界不变。最终完整回归中四项全部通过。独立修复复查无剩余产品问题。
-
-新增82项Unit包含选项冻结/多地址/脱敏、RSA独立私钥解密与Unicode/最大OAEP明文、恶意PEM/DER/算法/尺寸/指数、固定key无效不回退、TLS优先、取钥顺序、early OK/服务端ERR、两插件网络超时/关闭/取消、账户插件切换及空密码。五资产新增40项DbConnection/DbCommand公开消费，固定/获取×两插件×同步/异步，独立服务端解密确认Unicode密码并执行精确业务SQL；定向40项通过（`rsa-consumer-targeted/*.trx`）。消费宿主为net10，Standard2.0异步入口沿用基类，不称为五运行时验收。
-
-最终证据（Windows / SDK10.0.402 / .NET10.0.13）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx核心五目标、DI三目标 | 0警告、0错误 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false` |
-| 完整Unit（RSA新增82项） | 1596通过，0失败/跳过 | `TestResults/rsa-unit-full/*.trx` |
-| 完整Consumer（RSA新增40项） | 332通过，0失败/跳过 | `TestResults/rsa-consumer-full/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/rsa-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false |
+| Full Unit,+82 RSA | 1596 passed,0 failed/skipped | TestResults/rsa-unit-full/*.trx |
+| Full Consumer,+40 RSA | 332 passed,0 failed/skipped | TestResults/rsa-consumer-full/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/rsa-di-full/*.trx |
 
-TRX已解析核对实际新增案例和零失败/跳过；UTF8无BOM/CRLF和git diff --check通过，当前master本地提交不推送。D15仍进行中，其他插件、私有CA成功链及真实两模式/OBProxy版本矩阵未完成；A05、C01和D01–D09仍开放。未操作信任根、部署数据库或其他电脑，未重跑打包/旧运行时/Framework；本地RSA环回不替代实库或生产验收。
+TRX parsed cases/counts;UTF8-no-BOM/CRLF/diff passed,master commit/no push. D15 In progress,other plugins/private-CA success/real both-mode-OBProxy versions open;A05/C01/D01–D09 open. No roots/deployment/package-old-runtime-Framework rerun;RSA loopback is not production acceptance.
 
-## D01 OB20报文与校验子模块（2026-10-19）
+## D01 OB20 framing/checksum submodule (2026-10-19)
 
-从`8ba667b`继续D01，先实现内部Ob20Packet及Ob20Checksum，不改变连接选项、标准PacketChannel或握手行为。单帧7+24字节头与4字节尾、24位外长/请求ID、CRC16/ARC和raw CRC32C；ParseHeader在正文分配前核对身份、序号、头校验及正文上限。正文包含extra长度前缀与内容；严格检查extra边界，以借用原帧视图分别返回extra和MySQL字节，不二次复制正文。不解释legacy/new extra内容或未知flags/reserved，不把外层序号强行等同内层序号；实际压缩、last/reroute及追踪语义由后续模块处理。
+After8ba667b,internal Ob20Packet/Ob20Checksum only,options/PacketChannel/handshake unchanged.7+24-byte header/4-byte trailer,24-bit outer length/request ID,CRC16/ARC/rawCRC32C. ParseHeader checks identity/sequence/header CRC/body bound before allocation. Body extra-length prefix/content strictly bounded;borrowed original-frame views expose extra/MySQL bytes without recopy. Legacy/new extra/unknown flags-reserved not interpreted;outer sequence not forced equal inner;compression/last/reroute/trace later. Independent fixed Java SHA6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 fields/original CRC classes compiled JDK21 to TestResults/ob20-reference;independently LE-assembled13-byte MySQL frame→fixed48-byte OB20. ASCII123456789 CRC16bb3d/rawCRC32C58e3fa20. Repository stores only bytes/numbers,no reference implementation/tables/dependency;oracle is independent of product round-trip.
 
-独立夹具依据固定Java提交`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的协议字段和原CRC类。用本机JDK21将只读参考CRC类编译到`TestResults/ob20-reference`，独立小端组装13字节MySQL帧，输出固定48字节OB20报文；同时确认ASCII输入123456789的CRC16为bb3d、raw CRC32C为58e3fa20。仓库仅保留字节/数值夹具，未复制参考实现或查表常量、未增加依赖；原校验器与产品往返不是同一实现。
+Missing types caused compile failure TestResults/ob20-red.log,no tests/TRX. Initial 31 targeted passed,ob20-targeted/*.trx;ArraySegment Assert.Empty analyzer fixed to Count;expanded 40 actually passed full/no warnings. Fixed encoding-decoding/segmented CRC/all truncation-trailing/header-body-trailer corruption/checksum-disabled structural checks/malicious UInt32/empty/extra bound/24-bit maxima/request-sequence/unknown-reserved/borrowed views. Independent Java/protocol review clean. Windows SDK10.0.402/.NET 10.0.13:
 
-首轮先写测试，因尚缺Ob20Packet/Ob20Checksum而编译失败（`TestResults/ob20-red.log`），并未执行测试或生成TRX。实现后首批31项定向通过（`ob20-targeted/*.trx`）；分析器指出ArraySegment不宜用Assert.Empty，改为Count断言，补足边界后最终完整回归零警告且40项全部实际执行。测试覆盖固定编码/解码、分段CRC、全位置截断/尾随、头/正文/尾篡改、独立关闭校验仍验证结构、恶意UInt32长度、空值、extra包含在上限内、24位极限、请求/序号边界、未知标志/保留字段和原帧视图。独立只读走查对照固定Java及关联协议检查，无必须修复项。
-
-最终证据（Windows / SDK10.0.402 / .NET10.0.13）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标、DI三目标 | 0警告、0错误 | `TestResults/ob20-build.log` |
-| 完整Unit（OB20新增40项） | 1636通过，0失败/跳过 | `TestResults/ob20-unit-full/*.trx` |
-| 完整Consumer（既有公共路径） | 332通过，0失败/跳过 | `TestResults/ob20-consumer-full/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/ob20-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/ob20-build.log |
+| Full Unit,+40 OB20 | 1636 passed,0 failed/skipped | TestResults/ob20-unit-full/*.trx |
+| Full Consumer,existing APIs | 332 passed,0 failed/skipped | TestResults/ob20-consumer-full/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/ob20-di-full/*.trx |
 
-编译命令`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试命令同前节，替换上述结果目录，最终TRX已解析核对计数及新增40项实际通过。格式/diff检查通过后本地提交，不推送。
+Build same -m:1 -nr:false -p:UseSharedCompilation=false;tests same commands/new dirs,TRX parsed40;format/diff passed/local commit/no push. D01 In progress;negotiation/streaming/cancel-fragment-last-reroute lifetimes/full trace unconnected. Codec does not imply public OB20. Continue local parts;real/remote deferred,no roots/deployment/package-old-runtime-Framework rerun;overall open.
 
-D01保持进行中：能力协商、PacketChannel流式收发、取消/分片/last/reroute生命周期和完整链路追踪尚未接入；本地编解码不代表公开连接已支持OB20。后续继续这些可本地开发项，真实OceanBase/OBProxy与异机验收暂缓。未操作信任根、未部署数据库、未重跑打包/旧运行时/Framework，项目整体目标未完成。
+## D01 OB20 streaming/negotiation (2026-10-19)
 
-## D01 OB20流式传输与能力协商（2026-10-19）
+After2796e78,PacketChannel/handshake/session/commands-prepare-probes/cursors connected. Use OB20/UseOb20 defaultfalse,frozen/address/serialization retained. Only with connection-attribute negotiation sends __proxy_capability_flag=256;after authentication/mode and server OB_PROTOCOL_V2 confirmation,wraps standard/TLS stream. Unrequested/unsupported/no attributes falls back standard;authentication always standard frames. TLS/A05/pooling unchanged;later reports do not switch protocol. Ob20Stream fixed64 KiB write/8 KiB extra-skip buffers,on-demand reads/incremental CRC,no whole-frame prefetch;32 MiB allocation regression passed.24-bit request IDs increment/wrap;outer sequences start0,response continues/byte wrap,inner MySQL fragmentation/empty terminator independent. Response/prepare/probe/fetch boundaries require last/no body residue;response-free CLOSE separately ends. TrailerCRC verified before final body segment returned;extra CRC-included/skipped by length. Unknown flags/reroute/actual compression fail,no replay. Cursor page boundaries do not clear SQL-sent flag,so later faults stay unknown;trusted ordinary ERR allows reuse after full response.
 
-从`2796e78`接入PacketChannel、握手、物理会话、命令/prepare/状态探测和分页游标。新连接键Use OB20及builder属性UseOb20默认false，冻结、多地址及序列化均保持选项。只在协商连接属性时发送`__proxy_capability_flag=256`，认证完成、模式确定且服务端确认OB_PROTOCOL_V2后包装现有标准/TLS流；未请求、能力不足或无连接属性则使用标准流。认证包仍是标准帧，不放宽TLS、A05或Pooling限制，后续会话报告不改变已选协议。
+Initial missing stream compile:ob20-stream-red.log;40 negotiation consumers unknown-option failures:ob20-negotiation-red/*.trx. Standalone Consumer build left stale assets causing24 failures;slnx rebuild passed,no adapting product to old assets. Review found product/mock shared wrong short __proxy_capability. Fixed-Java SendHandshakeResponsePacket constant corrected tests first20failed/20passed:ob20-attribute-review-red/*.trx;product long-key/all-target rebuild then passed. New ERR-reuse test initially lacked subsequent timezone/national probes;fixture corrected exact SQL/reports,no product weakening. Two test compile/input mistakes fixed,not product defects/pass evidence.
 
-Ob20Stream以固定64KiB写缓冲分帧、8KiB缓冲跳过extra，按调用方请求读取并增量CRC，不整帧预读；32MiB顺序消费分配回归通过。24位request ID逐请求递增回绕，OB20序号从0开始并由响应接续、按字节回绕；原MySQL分片/空终结独立保持。每个响应、prepare、探测和fetch边界均检查last及剩余正文；无响应COM_STMT_CLOSE单独结束。正文最后一段返回前验证尾CRC，extra参与校验并按长度跳过，未知标志/reroute/实际压缩失败，不重放已发SQL。cursor分页仅检查边界而不清SQL已发标记，后续错误保留结果未知语义；可信普通ERR完成响应后仍可复用连接。
+Added 26Unit:sync-async/short reads/no prefetch/cross-frame-extra/258frame wrap/CRC-last-trailing-identity-reroute-truncation/fixed writes/no-response close/unconsumed response blocks next/precancel/options/exact0xFFFFFF inner empty terminator/257outer shared sequence. Added 62Consumer:five-assets×sync-async×enabled-unrequested-unsupported-noattributes40;public CRC-last-trailing-timeout-cancel-close12;trustedERR/reports2;cursor three-page success/page2CRC/missing-last/cancel8. Hostsnet10. Cursor cancel after second fetch sent/waiting,not after confirmed partial body consumption. Windows SDK10.0.402/.NET 10.0.13:
 
-红绿与走查：初始流式测试因缺实现编译失败（`ob20-stream-red.log`），首批40协商消费因未知选项失败（`ob20-negotiation-red/*.trx`）。中途Consumer单独构建未更新全部资产，导致24项消费失败；重建slnx后通过，未修改产品去适配旧资产。独立走查发现产品与模拟服务同用错误短属性`__proxy_capability`；对照固定Java基线SendHandshakeResponsePacket的常量，更正测试后20失败/20通过（`ob20-attribute-review-red/*.trx`），产品改长键并全目标重建后通过。新增ERR复用测试首轮失败是夹具漏掉错误后的时区/national探测，补齐精确SQL与探测结果后通过，没有放宽产品状态校验。两项测试编译/选项输入错误已修复，不作产品缺陷或通过证据。
-
-本轮新增Unit26项：同步/异步、短读、不整帧预读、跨帧/extra、258帧序号回绕、CRC/last/尾随/身份/reroute/截断拒绝、固定写分片/无响应关闭、未消费响应禁止新请求、预取消、选项冻结，以及0xFFFFFF内层精确倍数空终结和257外帧共享序号。新增Consumer62项：五资产×同步/异步×启用/未请求/服务端不支持/无属性40项，公开命令CRC/last/尾随/超时/取消/关闭12项，可信ERR后复用及状态探测2项，cursor三页成功/第二页CRC/缺last/取消8项；消费宿主统一net10，不代表五运行时验收。cursor取消发生于第二次fetch已发出并等待响应期间，未验证已读部分OB20正文后的取消。
-
-最终证据（Windows / SDK10.0.402 / .NET10.0.13）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标、DI三目标 | 0警告、0错误 | `TestResults/ob20-stream-build-final.log` |
-| 完整Unit（OB20共66，流式新增26） | 1662通过，0失败/跳过 | `TestResults/ob20-stream-unit-full/*.trx` |
-| 完整Consumer（OB20新增62） | 394通过，0失败/跳过 | `TestResults/ob20-stream-consumer-full/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/ob20-stream-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/ob20-stream-build-final.log |
+| Full Unit,OB20 total 66/+26 stream | 1662 passed,0 failed/skipped | TestResults/ob20-stream-unit-full/*.trx |
+| Full Consumer,+62 OB20 | 394 passed,0 failed/skipped | TestResults/ob20-stream-consumer-full/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/ob20-stream-di-full/*.trx |
 
-编译及完整测试命令沿用上一节，仅替换结果目录；TRX已解析核对总数及66/62项OB20实际执行。独立修复复查未发现必须修复项，文档与代码边界另复核后本地提交，不推送。未操作信任根或部署数据库/异机，未重跑打包/旧运行时/Framework；OB20经TLS的实际环回、完整链路追踪及真实版本/OBProxy矩阵仍开放。D01保持进行中，下一步继续可本地实现的完整链路追踪；A05/C01及其他D项、发布关口不据本轮关闭。
+Same build/test commands/new dirs;TRX parsed66/62. Independent fix recheck clean;docs/code boundaries reviewed/local commit/no push. No roots/deployment/package-old-runtime-Framework rerun;OB20-over-TLS actual loopback/full trace/real-version-OBProxy open. D01 In progress,next full trace;A05/C01/otherD/release open.
 
-## D01 完整链路追踪本地实现（2026-10-19）
+## D01 local full link tracing (2026-10-19)
 
-从`540689c`接入显式Enable Full Link Trace选项、握手扩展能力、Ob20TraceContext及现有命令/事务Activity上下文。默认关闭，要求Use OB20；仅请求时发送311552，服务端缺FULL_LINK_TRACE则保留普通OB20。legacy ObObj varchar和new-extra嵌套TLV均支持；首请求帧附加extra、CRC覆盖extra、响应尾CRC通过后才原子应用策略，单帧接收extra上限64KiB。level按signed byte解释，普通采样受level/采样率/记录策略约束，SHOW可独立启用；响应策略只影响后续请求，当前记录使用开始时快照。
+After540689c,Enable Full Link Trace explicit/defaultoff/requires Use OB20,handshake capabilities,Ob20TraceContext/existing command-transaction Activity. Requested capability311552 only when enabled;missing FULL_LINK_TRACE keeps ordinary OB20. Legacy ObObj varchar/new nested TLV extra supported. Extra in first request frame/covered CRC;strategy atomically applied only after response trailerCRC;extra<=64 KiB/frame. Level signed byte;normal sampling requires level/rate/record policy,SHOW independently enabled. Response policy affects later requests;current record uses start snapshot. Wire trace IDs correlate Activity,or ambient/internal IDs without listeners;prepare-probe-pages share trace,each request wire span separate;transaction references outer Activity. Driver/SHOW records only fixed module/IDs/times,no SQL/params/credentials/endpoints/arbitrary tags-baggage. One bounded pending record sent next request;close does not flush last/no extraSQL/replay. Server query times only bounded,not metrics/AppInfo API.
 
-wire trace ID关联已有Activity；无监听者时使用环境上下文或内部生成ID，prepare/探测/分页共享trace，每请求wire span独立；事务控制关联已有外层Activity。driver/SHOW记录只含固定模块、ID及时间，不发送SQL、参数、凭据、端点或任意Activity标签/baggage。只保留一个有界待发记录，随下一请求发送；关闭连接不额外刷新最后记录，不新增SQL或重放。服务端query时间字段只做边界校验，未导出指标或新增AppInfo定制API。
+Independent fixed Java SHA6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 FullLinkTrace/OceanBaseProtocolV20/ObObj/OceanBaseSerialize behavior,no source copying. JDK21 original serializers/minimal temporary Buffer generated independent legacy/new bytes:TestResults/ob20-trace-reference-output.log;temporary source only TestResults. Missing-type/option compile:ob20-trace-red.log. Before negotiation/assets Consumer36failed/4passed:ob20-trace-consumer-red/*.trx. Review legacy key case-insensitive/Java69 length C5 00 bounded nonshortest varint:3failed→6passed,ob20-trace-legacy-review-{red,green}/*.trx. Unknown duplicate TLVs incorrectly rejected:2failed/11passed→13passed,ob20-trace-boundaries-{red,green}/*.trx. Unsigned level incorrectly enabled128/255:4failed/2passed→signed fix/27 targeted passed,ob20-trace-level-{red,green}/*.trx. Concurrent implicit builds MSB3026/test Read CA2022 corrected sequential build/assertions,final warning-free.
 
-独立协议依据为固定Java基线`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的FullLinkTrace、OceanBaseProtocolV20、ObObj和OceanBaseSerialize；只核对行为，不复制实现。用JDK21对原ObObj/OceanBaseSerialize及最小临时Buffer夹具执行，得到独立legacy/new-extra固定字节，输出`TestResults/ob20-trace-reference-output.log`，临时源码只存TestResults。
+Added 27Unit:independent bytes/trace order/options-dependency/truncation/atomic policies/malicious-duplicate-unknown/0-1sampling-SHOW/legacy length-terminator/CRC publication/128 KiB three-frame first extra.70Consumer:five-assets×sync-async×legacy-modern-off-missingcapability-noListener50;prepare/two-pagecursor/no-responseclose/transaction4;malformed-limit-CRC/inflight cancel after server sent partial body16,without confirmed client consumption. Assert Broken/unknown/token/no replay;net10 hosts.
 
-红绿证据：初始缺类型/选项编译失败见`ob20-trace-red.log`；未接入握手和资产时Consumer36失败/4通过见`ob20-trace-consumer-red/*.trx`。独立走查发现legacy键需忽略大小写、Java长度69采用C5 00有界非最短varint；先3失败后6通过见`ob20-trace-legacy-review-{red,green}/*.trx`。未知重复TLV误拒绝先2失败/11通过后13通过见`ob20-trace-boundaries-{red,green}/*.trx`。再次走查发现level无符号解释会将128/255启用，先4失败/2通过，再改signed byte，27项追踪定向全通过，见`ob20-trace-level-{red,green}/*.trx`。曾并发隐式build发生MSB3026重试及测试Read返回值CA2022，已改顺序build并修断言，最终编译无警告。
-
-新增Unit27项覆盖独立Java字节、trace线序、冻结/依赖、逐字节截断、原子策略、恶意标量/重复/未知、0/1采样及SHOW、legacy长度/终止符、CRC后发布和128KiB三帧首帧extra。新增Consumer70项：五资产×同步/异步×legacy/modern/关闭/缺追踪能力/无监听者50项；prepare/两页cursor/无响应close/事务4项；畸形/超限/CRC/服务端仅发送部分正文后的在途取消16项（未确认客户端消费位置），确认Broken、结果未知、token及无重放。Consumer均为net10宿主，不能当作五运行时验收。
-
-| 本轮检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx核心五目标/DI三目标 | 0警告、0错误 | `TestResults/ob20-trace-build-final.log` |
-| 完整Unit（本轮新增27项） | 1689通过，0失败/跳过 | `TestResults/ob20-trace-unit-final/*.trx` |
-| 完整Consumer（本轮新增70项） | 464通过，0失败/跳过 | `TestResults/ob20-trace-consumer-final/*.trx` |
-| 完整DI | 8通过，0失败/跳过 | `TestResults/ob20-trace-di-final/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/ob20-trace-build-final.log |
+| Full Unit,+27 | 1689 passed,0 failed/skipped | TestResults/ob20-trace-unit-final/*.trx |
+| Full Consumer,+70 | 464 passed,0 failed/skipped | TestResults/ob20-trace-consumer-final/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/ob20-trace-di-final/*.trx |
 
-编译使用`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；测试使用`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/ob20-trace-<unit|consumer|di>-final`。已解析TRX确认27/70项新回归均执行通过。完整Unit使用正常Windows TLS凭据访问，未修改信任库或证书策略；未重跑打包/旧运行时/Framework。
+Same build;dotnet test tests/<project>/<project>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/ob20-trace-<unit|consumer|di>-final. TRX parsed27/70. Normal TLS credentials,no roots/policy changes;packages/old-runtime/Framework not rerun. Independent docs narrowed cancel evidence to server send,not client reading two bytes. D01 local tracing/build/regression/review done,Pending verification:real sampling/SHOW TRACE/OB20-TLS loopback/version-OBProxy open,last pending record not flushed at close. Remote/database deployment deferred;A05/C01/D02–D09/otherD15/release/overall open,no push.
 
-最终独立文档复查已将取消证据收窄到服务端发送位置，不宣称客户端已读两字节。D01本地追踪实现、编译、回归及独立走查已完成，正式状态待验证：真实采样/SHOW TRACE、OB20经TLS环回与目标版本/OBProxy矩阵仍开放；最后待发记录不在关闭时刷新。异机及数据库部署按要求暂缓。A05公共MySQL判定、C01池、D02–D09、D15其他插件和发布审查仍未完成，整体目标不关闭，不推送。
+## D02 Oracle PrepareExecute packet submodule (2026-10-19)
 
-## D02 Oracle PrepareExecute报文子模块（2026-10-19）
+Afterf6ba0e1,internal OraclePrepareExecutePacket;public CommandType/Direction/standard execution unchanged. Reuses PreparedParameters/lenenc strings;0xA1/ID/iteration1/noncursor/defaultmode/no bundledclose/SQLrawCRC32C/reserved follow fixed Java. SQL UTF8/parameter total checked64 MiB before SQL/request allocation,count<=65535. Response parses17-byte header only,strict marker/filler/bool/full length/4096column bound,retains unknown uint flags,no metadata array or completion based on headerOK. Fixed Java SHA6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 ComStmtPrepareExecute.send-read/JDBC4ServerPreparedStatement.calculateCheckSum/originalCRC referenced. Independent request hand-assembled in reference order,original CRC compiled JDK21:TestResults/oracle-prepare-execute-reference/,TestResults/oracle-prepare-execute-reference.log. Java send not actually executed;no copied source/constants/live claim.
 
-从`f6ba0e1`开始D02，先实现内部OraclePrepareExecutePacket；公开CommandType、ParameterDirection及标准查询执行行为不变。请求复用既有PreparedParameters编码和长度编码字符串写入，0xA1/statement ID/iteration=1/非游标/默认模式/无捆绑关闭/SQL rawCRC32C/保留字段与固定Java基线一致；UTF-8字节数及参数编码总长在SQL字节和整包分配前验证64MiB上限，数量最多65535。响应仅解析17字节扩展头，严格marker/filler/布尔/完整长度/4096列上限，保留未知uint flags，不分配metadata数组或据头OK完成命令。
+Missing-type compile failed:TestResults/oracle-prepare-execute-red.log;21 targeted passed:TestResults/oracle-prepare-execute-first/*.trx. Fixed request/Unicode-original SQL CRC/Int64-NULL bytes/length prefixes0-250-251-65535-65536-16777216/count-dimension-64 MiB/invalid Unicode/all 17-byte truncation-trailing/bad fields/65535params/unknown flags. Independent review clean,total formula/CRC seeds/finalization matched.
 
-依据只读Java提交`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`的ComStmtPrepareExecute.send/read、JDBC4ServerPreparedStatement.calculateCheckSum和原OceanBaseCRC32C。独立请求夹具按参考字段顺序手工构造，由JDK21编译原CRC类计算校验，临时源码与字节输出在`TestResults/oracle-prepare-execute-reference/`及`TestResults/oracle-prepare-execute-reference.log`；未实际执行Java ComStmtPrepareExecute.send，不复制源码/常量到产品，不把夹具当实库互通。
-
-先添加测试，因缺OraclePrepareExecutePacket编译失败，见`TestResults/oracle-prepare-execute-red.log`；实现后定向21项全通过，见`TestResults/oracle-prepare-execute-first/*.trx`。覆盖独立固定请求、Unicode与原SQL校验、既有Int64/NULL参数字节、0/250/251/65535/65536/16777216字节长度前缀、计数/维度/64MiB超限、非法Unicode、17字节头所有截断/尾随、坏marker/filler/布尔/列数、65535参数及未知扩展位。独立只读代码走查未发现必须修复项，确认整体长度公式与原CRC初值/终值一致。
-
-| 本轮检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx核心五目标/DI三目标 | 0警告、0错误 | `TestResults/oracle-prepare-execute-build.log` |
-| 完整Unit（本轮新增报文21项） | 1710通过，0失败/跳过 | `TestResults/oracle-prepare-execute-unit-full/*.trx` |
-| 完整Consumer | 464通过，0失败/跳过 | `TestResults/oracle-prepare-execute-consumer-full/*.trx` |
-| 完整DI | 8通过，0失败/跳过 | `TestResults/oracle-prepare-execute-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/oracle-prepare-execute-build.log |
+| Full Unit,+21 packet | 1710 passed,0 failed/skipped | TestResults/oracle-prepare-execute-unit-full/*.trx |
+| Full Consumer | 464 passed,0 failed/skipped | TestResults/oracle-prepare-execute-consumer-full/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/oracle-prepare-execute-di-full/*.trx |
 
-编译命令沿用上一节；测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/oracle-prepare-execute-<unit|consumer|di>-full`。已解析TRX确认新增21项均实际执行；本轮没有新的公开Consumer案例，完整Consumer通过只证明既有功能未回归，不代表Oracle PrepareExecute网络执行通过。完整Unit使用正常Windows TLS凭据访问，未操作信任根，未重跑打包/旧运行时/Framework。
+Same build/test flags,results TestResults/oracle-prepare-execute-<unit|consumer|di>-full. TRX confirms21 new;no new public Consumer,so464 proves existing regressions only,not PrepareExecute network support. Normal TLS credentials,no roots/package-old-runtime-Framework rerun. Packet submodule local done;D02 In progress. Metadata/internal-normal results/finalOK-ERR/atomic OUT/transaction-reader-ID ownership-faults next;public procedure/OUT/RETURNING unsupported then. Real/remote deferred,no push/overall closure.
 
-报文子模块已本地实现、测试及独立走查；D02保持进行中。后续继续参数/列元数据、内部/普通结果及最终OK/ERR、输出原子发布、事务/reader/statement所有权与故障清理，公开存储过程/OUT/RETURNING仍不支持，不能据此关闭D02或项目。实库和异机联调按要求暂缓，不推送。
+## D02 extended response stream/terminal execution (2026-10-19)
 
-## D02 扩展响应流与执行终态（2026-10-19）
+After8c4877d,internal QueryResult explicit Oracle parameter count,only Oracle binary/noncursor.17-byte header/count checked,parameter/result metadata share4 MiB;optional EOFs,header-specified columns/binary rows. Both result/no-result require separate finalOK/ERR;normal/sequential row terminal retains lease until trailer. TrailingOK accumulates counts/session facts;MoreResults continues ordinary results. TrustedERR known/reusable;malformed/cancel/timeout/unread trailing close use pending-exchange cleanup,no replay. Initial missing constructor/OracleHeader compile:TestResults/oracle-execute-response-red.log.48 response cases:sync-async/EOFs/normal-sequential/results-noresults/lease beforetail/errors/trusted-tailERR reuse/later multiresults-counts/timezone snapshots/early close/cancel-timeout/disconnect. First6 cancellation-timeout failures were fixture EndOfStreamException expectations versus PacketChannel ProtocolException/TCP IOException;assertions fixed,product mapping intact. Early-close/server-row-terminator race fixed with send-completion barrier,also awaited in cancel fixture;post-cleanup disconnect not evidence.
 
-从`8c4877d`继续D02，内部QueryResult新增显式Oracle参数数量入口，仅允许Oracle二进制非游标响应。消费17字节扩展头、核对参数数目，参数定义与结果定义共享4MiB预算，处理可选参数/列EOF，直接读取头指定的列和二进制行。有/无结果均须读取独立最终OK/ERR；普通及SequentialAccess的行终结不提前释放租约，尾OK累计更新计数并观察会话，尾MoreResults继续普通结果。现有可信ERR保持已知结果并允许复用；畸形、取消、超时和提前关闭未读尾包沿既有未决交换清理，不重放SQL。
-
-先添加环回测试，缺少构造参数及OracleHeader导致编译失败，见`TestResults/oracle-execute-response-red.log`。新增48项响应回归，覆盖同步/异步、两EOF格式、普通/顺序、有/无结果、尾包前租约保持、错误响应、可信尾ERR后复用、后续多结果/更新计数、会话时区快照、提前关闭、取消/超时及对端断开。初次6项取消/超时测试失败是夹具只捕获EndOfStreamException，而PacketChannel将EOF映射为ProtocolException，TCP重置为IOException；修正测试断言后通过，不修改产品异常映射。新增早关闭测试曾与服务端写行终结竞争，已用发送完成屏障消除竞争，取消夹具同样等待该屏障，不以主动清理后的断开作为证据。
-
-| 本轮检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx核心五目标/DI三目标 | 0警告、0错误 | `TestResults/oracle-execute-response-build.log` |
-| 定向报文/响应 | 69通过，0失败/跳过 | `TestResults/oracle-execute-response-reviewed/*.trx` |
-| 完整Unit（本轮新增响应48项） | 1758通过，0失败/跳过 | `TestResults/oracle-execute-response-unit-full/*.trx` |
-| 完整Consumer | 464通过，0失败/跳过 | `TestResults/oracle-execute-response-consumer-full/*.trx` |
-| 完整DI | 8通过，0失败/跳过 | `TestResults/oracle-execute-response-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/oracle-execute-response-build.log |
+| Targeted packet/response | 69 passed,0 failed/skipped | TestResults/oracle-execute-response-reviewed/*.trx |
+| Full Unit,+48 response | 1758 passed,0 failed/skipped | TestResults/oracle-execute-response-unit-full/*.trx |
+| Full Consumer | 464 passed,0 failed/skipped | TestResults/oracle-execute-response-consumer-full/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/oracle-execute-response-di-full/*.trx |
 
-编译命令沿用上一节；测试使用`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/oracle-execute-response-<unit|consumer|di>-full`。独立只读走查核对Java响应布局、同步/异步和顺序读取、尾包租约、MoreResults、ERR/未知结果、会话快照及默认路径，未发现必须修复项。完整Unit使用正常Windows TLS凭据访问，未修改证书信任或验证策略；Consumer为既有公开功能回归，不能证明公开PrepareExecute支持。
+Same build/test flags,results TestResults/oracle-execute-response-<unit|consumer|di>-full. Independent Java layout/sync-async/sequential/tail lease/MoreResults/known-unknown/session/default-path review clean. Normal TLS credentials,no trust-policy change;Consumer existing regression only. Internal response done;output flags/OUT publication/public StoredProcedure/nonInput still unsupported then. Next public gate/version/options/atomic publication/ownership. OB20 execution/real/remote/package-old-runtime-Framework unverified;D02/overall In progress,no push.
 
-内部响应子模块已实现并本地验证；尚未解释内部输出结果标志或发布OUT值，公开CommandType.StoredProcedure和非Input参数方向仍拒绝。后续继续公开入口、可信版本/选项门槛、输出原子发布及事务/statement所有权接入。未验证PrepareExecute的OB20环回、实库、异机、打包/旧运行时/Framework，本轮不把这些列为通过；D02及整体目标保持进行中，不推送。
+## D02 public procedures/scalar outputs (2026-10-19)
 
+After821e828,Use Oracle Prepare Execute/UseOraclePrepareExecute defaultoff;only authenticated Oracle StoredProcedure or Text with output directions. First execute queries select ob_version() from dual on same lease/budget;strict numeric dotted>=2.2.76,physical session caches successful supported/unsupported probes,not ERR/handshake compatibility version. Probe failure not unknown userSQL,no fallback/retry. Safe qualified routine identifiers generate boundPLSQL;one ReturnValue first,Input snapshots/InputOutput preserved,pure OUT/return NULL,duplicate output positions reject before send. Flags only 0/1/3/4;1-3RETURNING/4PLOUT hidden internal results,matching columns/server metadata. Scalar at mostone row,zero→DBNull,multirow/array rejected;standalone Prepare/FetchSize unsupported. Outputs staged until all results/OB20 boundary succeed,then atomically before lease release/logs. Tail/laterERR,cancel-timeout/decode/unread close retain old values;drained reader may publish before close. Explicit transaction rules retained;responseID immediately deferred-close queued,flushed next request/idle command cleanup,no extended-ID cache.
 
-## D02 公开过程与标量输出接入（2026-10-19）
+Missing plan/public options failed:TestResults/oracle-command-plan-red.log,oracle-procedure-public-red.log. Review P1:cancel/close after receiving finalOK could break session,skip boundary,yet publish. Added precommit budget/Busy checks then boundary validation before publication. Four deterministic sync-async×cancel-close cases failed then passed:TestResults/oracle-output-commit-{red,green}.log/associatedTRX. Independent recheck clean.
 
-从`821e828`继续，新增默认关闭的`Use Oracle Prepare Execute`/UseOraclePrepareExecute；仅已认证Oracle会话的StoredProcedure和含输出方向的Text使用扩展。首次执行在同一租约/预算查询`select ob_version() from dual`，严格数字点分版本须至少2.2.76；成功探测的支持/不支持结果缓存物理会话，ERR不缓存，不信握手兼容版本。版本探测失败不标记为用户SQL结果未知，不回退重试。过程/函数只接受安全限定标识符并生成绑定PL/SQL块，单个ReturnValue排在首绑定；输入快照，InputOutput保留输入，纯OUT/ReturnValue发送NULL，重复输出位置发包前拒绝。
-
-公开层只接受扩展flags 0、1、3、4，1/3 RETURNING及4 PL OUT作为内部输出隐藏；列数匹配，复用服务端元数据解码。标量至多一行，零行填DBNull，多行及array binding明确拒绝；本路径独立Prepare及FetchSize不支持。所有输出暂存，全部结果和OB20边界成功后、租约释放与日志回调前一次发布。尾ERR、后续ERR、取消/超时、解码失败、未读尽即关闭保留旧值；完整消费时可在reader关闭前发布。事务沿显式绑定规则，响应statement ID立即入延迟关闭队列，下次请求或命令空闲清理刷新，不缓存复用扩展ID。
-
-先验证缺实现的plan编译失败及公开选项失败，证据为`TestResults/oracle-command-plan-red.log`和`oracle-procedure-public-red.log`。独立走查发现P1：最终OK已接收后，取消/关闭先破坏会话，完成路径可能跳过边界仍发布输出。修复成功发布前的预算token及Busy检查，之后验证响应边界再发布；确定性同步/异步、取消/关闭4项修前全失败、修后全通过，见`TestResults/oracle-output-commit-{red,green}.log`及对应TRX。复查接受修复，未发现新增必须修复项。
-
-本轮实际验证：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx核心五目标/DI三目标 | 0警告、0错误 | `TestResults/oracle-procedure-build-final.log` |
-| 定向Oracle回归 | 151通过，0失败/跳过 | `TestResults/oracle-procedure-targeted-final-fixed/*.trx`；其后增强InputOutput固定报文断言，已由完整Unit覆盖 |
-| 完整Unit | 1840通过，0失败/跳过 | `TestResults/oracle-procedure-unit-full/*.trx` |
-| 五资产Consumer | 494通过，0失败/跳过 | `TestResults/oracle-procedure-consumer-full/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/oracle-procedure-di-full/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/oracle-procedure-build-final.log |
+| Targeted Oracle | 151 passed,0 failed/skipped | TestResults/oracle-procedure-targeted-final-fixed/*.trx;later stronger InputOutput fixed-byte assertions covered full Unit |
+| Full Unit | 1840 passed,0 failed/skipped | TestResults/oracle-procedure-unit-full/*.trx |
+| Five-asset Consumer | 494 passed,0 failed/skipped | TestResults/oracle-procedure-consumer-full/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/oracle-procedure-di-full/*.trx |
 
-编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/oracle-procedure-<unit|consumer|di>-full`。已解析TRX确认全部实际Passed及4项发布竞态执行。新增82项Unit覆盖安全绑定、函数/过程、零参数、两EOF、同步/异步/Sequential、输出暂存、多结果、RETURNING零/一行与InputOutput固定报文、非法输出、版本缓存/ERR/畸形/取消/超时、事务与statement清理。新增30项Consumer在五资产用公共DbConnection/DbCommand验证标准/OB20成功，以及OB20完整尾OK后夹带额外包时拒绝且不发布旧OUT。
+Same build/test flags,results TestResults/oracle-procedure-<unit|consumer|di>-full. Parsed all Passed/four commit races. Added 82Unit:safe binding/functions-procedures/zero params/EOFs/sync-async-sequential/staging/multiresults/RETURNING zero-one/InputOutput fixed bytes/invalid output/version cache-ERR-malformed-cancel-timeout/transactions-ID cleanup.30Consumer five-asset public standard/OB20 success and complete OB20 tailOK plus extra packet rejects/no oldOUT publication. Normal TLS permissions,no roots/policy change. No package-old-runtime-Framework/TLS extended-execution/real/remote rerun. D02 In progress,not unrestricted routine/complex compatibility;REF CURSOR/LOB/complex/arrays D03–D06. A05/C01/D03–D09/otherD15/release/overall open,no push. Final independent doc/delta/TRX/four-race review clean,version/output/scalar/Prepare/FetchSize limits consistent,real claims not expanded.
+## D03 REF CURSOR outputs/streaming (2026-10-19)
 
-完整Unit使用正常Windows TLS凭据权限，未安装/删除信任根或改变验证策略；本轮未重跑打包、旧运行时/Framework，也未做扩展执行经TLS环回、实库或异机验证。D02保持进行中，不宣称无限制过程或复杂输出兼容；后续REF CURSOR、LOB、复杂类型与数组绑定分属D03–D06。A05、C01、D03–D09、D15其他插件及发布门槛仍开放，整体目标未完成，不推送。
+Afterefb2ac3,Oracle public REF CURSOR:appended OceanBaseDbType.RefCursor/DbType.Object,Output/ReturnValue,Size-Precision-Scale0;Input/InputOutput rejected,pure outputNULL. Type163 fixedLE32 ID;nonnull staged OceanBaseRefCursor atomically publishes with scalar outputs after all responses/boundaries;NULL/zero-row→DBNull. Nonnull cursor-valued ordinary result columns rejected,not integers. GetDataReader/Async opens once/default128 rows/positive fetchSize/Default-SequentialAccess-CloseConnection. Pins original session/transaction reference/connection transaction epoch,existing exclusive lease;lease failure/precanceled call does not consume opening chance. Old cursor invalid after transaction end/later cycles/reopen. Multiple cursors read sequentially;duplicate IDs alias same object. Fetch uses original timeout/timezone-national probes/per-page snapshots.9-byte FETCH first response metadata/rows,later metadata/progress/count/LastRowSent checks;no whole-result buffering. OracleCursorOwner holds parent until all cursors released;parent command disposal does not break returned cursors. Drain/fail/Dispose release once,cursor IDs before final parent in deferred-close queue,idle Dispose flushes. Unread objects require Dispose;reexecution does not dispose old outputs;connection closes server resources. Unread cursor-reader close/fetchERR/malformed/disconnect destroys original session. Fetch does not execute business SQL,so its failures do not reclassify completed procedure unknown;ERR retains code.
 
-最终独立文档/增量复查通过，无必须修复项；复查者另行只读解析完整TRX及4项发布竞态，核对版本门槛、输出边界与标量/Prepare/FetchSize限制一致，未扩大实库声明。
+Fixed Java SHA6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 ColumnType.CURSOR163/BinaryRowProtocol.getInternalComplexCursorLE32/RefCursor-JDBC4ServerPreparedStatement separate FETCH-CLOSE,behavior only/no copying/live claim. Missing API compile:TestResults/ref-cursor-red.log;basic8 passed then32 ownership/fault coverage,ref-cursor-ownership/*.trx. Review terminal race:final fetch received,cancel/close breaks session,old Complete skips boundary/succeeds. Four deterministic sync-async×cancel-close failed;OwnCursor adds only independent REF CURSOR fetch guard/shared output budget-Busy checks,retaining C04 trusted userSQL terminal precedence. New4+oldC04 terminal4 passed:TestResults/ref-cursor-terminal-{red,green}.log/TRX;review accepted. Added 30five-asset sync-async/standard-OB20/extra inner packet after final fetch;parent disposed yet readable,exact fetch/close order. First10 failed because mock did not reset standard sequence between two response-free closes;fixture only fixed.30 targeted passed:TestResults/ref-cursor-consumer-{first,fixed}.log/TRX,product sequence checks intact.
 
-
-## D03 REF CURSOR 输出与流式读取（2026-10-19）
-
-从`efb2ac3`继续，实现Oracle REF CURSOR输出的本地公开路径：追加OceanBaseDbType.RefCursor（DbType.Object），Output/ReturnValue且Size/Precision/Scale为0；拒绝输入与输入输出，纯输出发NULL。Oracle类型163使用固定4字节LE游标ID，非NULL输出暂存为OceanBaseRefCursor，和标量一起等待所有响应/协议边界成功后原子发布；NULL或零行输出仍为DBNull。普通结果列非NULL cursor值明确拒绝，不把ID当普通整数使用。
-
-GetDataReader/GetDataReaderAsync每个对象只打开一次reader，默认128行每页，正fetchSize，可用Default/SequentialAccess/CloseConnection。固定原物理会话、事务引用和连接事务代次，复用现有独占租约；获取租约失败或调用时token已取消不消耗打开机会。事务结束、后来事务周期及连接关闭重开后不得复用旧游标；多个游标依次读取，重复ID输出别名共享同一对象。独立fetch沿原命令超时，复用时区/national状态探测与逐页状态快照。9字节COM_STMT_FETCH首响应直接消费metadata和行，后续页继续既有元数据一致性、进展、行数和LastRowSent检查；默认/Sequential不缓存整个结果。
-
-OracleCursorOwner保留父statement直到本次所有游标释放，parent command.Dispose不破坏已返回游标；读尽、失败和Dispose原子一次释放，先游标ID再最后父statement进入既有延迟关闭队列，空闲Dispose刷新。未读取对象须Dispose，重执行不替调用方释放旧输出；连接关闭释放服务端资源。未读尽即关闭reader/游标、fetch ERR或畸形/断网均销毁原会话。后续fetch不再执行业务SQL，其取消、超时和错误不把已完成的过程改判结果未知，真实ERR保留错误码。
-
-协议依据为只读Java固定提交`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`：ColumnType.CURSOR=163，BinaryRowProtocol.getInternalComplexCursor读取4字节ID，RefCursor/JDBC4ServerPreparedStatement使用独立COM_STMT_FETCH/COM_STMT_CLOSE。只核对行为及字段，不复制Java实现，不将本地夹具声称为真实互通。
-
-TDD首轮因缺RefCursor类型/对象编译失败（`TestResults/ref-cursor-red.log`），基础8项绿后补32项所有权/故障覆盖（`ref-cursor-ownership/*.trx`）。独立走查发现终态竞态：最终fetch包已接收，取消或关闭先破坏会话，旧Complete会跳过边界并成功结束。新4项确定性同步/异步×取消/关闭修前全失败；OwnCursor新增仅REF CURSOR独立fetch的终态保护，与已有输出hook共享预算/Busy检查，保持C04用户SQL可信终态优先规则。修后新4项及原C04终态4项全部通过，见`TestResults/ref-cursor-terminal-{red,green}.log`及TRX；独立复查接受修复。
-
-新增五资产30项Consumer覆盖同步/异步、标准/OB20及最后fetch尾包夹带额外内层包拒绝；父command已释放后仍可读取，精确核对fetch和游标/父statement关闭。首次10失败来自测试服务端连续两个无响应close间未重置标准包序号，仅修夹具；最终定向30项全过，见`TestResults/ref-cursor-consumer-{first,fixed}.log`及TRX，不改变产品序号或边界验证。
-
-
-修后最终验证如下：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/ref-cursor-build-reviewed.log` |
-| 完整Unit | 1876通过，0失败/跳过 | `TestResults/ref-cursor-unit-reviewed/*.trx`；新增REF CURSOR 36项均Passed |
-| 五资产Consumer | 524通过，0失败/跳过 | `TestResults/ref-cursor-consumer-reviewed/*.trx`；新增30项 |
-| DI | 8通过，0失败/跳过 | `TestResults/ref-cursor-di-reviewed/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/ref-cursor-build-reviewed.log |
+| Full Unit | 1876 passed,0 failed/skipped;36 new REF CURSOR Passed | TestResults/ref-cursor-unit-reviewed/*.trx |
+| Five-asset Consumer | 524 passed,0 failed/skipped;+30 | TestResults/ref-cursor-consumer-reviewed/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/ref-cursor-di-reviewed/*.trx |
 
-编译为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`，测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/ref-cursor-<unit|consumer|di>-reviewed`。已逐项解析TRX确认新36项及4项终态竞态均实际执行；Unit涵盖原D02输出提交与C04可信SQL终态契约。完整Unit使用正常Windows TLS凭据权限，未操作信任根或改变验证策略。
+Standard single-node/nonshared build;dotnet test tests/<project>/<project>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/ref-cursor-<unit|consumer|di>-reviewed. Parsed36 new/four races,including D02 output/C04 trusted terminal. Normal TLS permissions,no roots/policy change. D03 local output done/Pending verification;real/TLS/remote/package-old-runtime-Framework unexecuted. Input/InputOutput/ordinary nonnull cursor columns unsupported;D04–D09 next,A05/C01/otherD15/release/overall open,no push. Independent code/docs/finalTRX/36+4 review clean,claims match limits.
 
-D03本地输出契约已实现，正式状态待验证；实库、扩展经TLS、异机、打包和旧运行时/Framework本轮均未执行。不支持REF CURSOR输入/输入输出和普通结果列非NULL cursor值；LOB/复杂类型/批量绑定/客户端回退/拓扑/XA仍按D04–D09继续，A05/C01/D15余项和发布验收仍开放，整体目标未完成，不推送。
+## D04 internal LOB locator parsing (2026-10-19)
 
-最终独立代码/文档复查通过，无必须修复项；复查者只读核实修后完整报告、36项REF CURSOR与4项终态竞态，确认声明和未验收边界一致。
+Aftere4af17b,internal LobLocator only boundaries/data positions,no capability/210-211/result-parameter/public-stream changes. V1 fixed-Java40-byte header/17-byte rowid,empty/compatible locators. V2 fixed-server ObLobCommon/memory headers:simple/extern/uninitialized-initialized disk/disk-outrow but payload-inrow/pure outrow/empty-extern synthetic. Inline ArraySegment borrows body,no copy;pure outrow stores Int64 byte length,does not allocate for>4 GiB/Int64max. TEMP_FULL parsed,TEMP_DELTA/unknown layout/V1 nonzero storage rejected,no guessing oldV2magic. Missing-type compile:TestResults/lob-locator-red.log. Initial 31passed/2failed:xUnit enumerated default ArraySegment;test now separately Array=null/Count0,no product adaptation. Added two valid empty-extern offsets/TEMP_FULL-DELTA,37 targeted passed:TestResults/lob-locator-green/*.trx. All fixed-locator byte truncations/overflow-overlap/trailing/malformed memory-disk flags/freed/negative snapshot/Int64overflow/metadata-payload mismatch/opaque extension-rowkey boundaries. Independent C++ fill/get_inrow_data/get_lob_data_byte_len review confirmed offsets/metadata exclusion/arithmetic,no issue. Java actualHEAD6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/server5e8a63d29dae9fde5e962b8fcc7b167d438fc343,behavior only/no copied third-party implementation.
 
-
-## D04 LOB locator 内部解析（2026-10-19）
-
-从`e4af17b`开始D04，新增内部LobLocator，仅处理协议边界和数据位置，不改变握手能力、210/211结果列、参数或公开流接口。V1核对固定Java例子的40字节头与17字节rowid，支持空/兼容locator；V2核对固定服务端ObLobCommon/内存头，覆盖simple、extern、未初始化/初始化disk、disk行外但payload行内、纯行外及空extern synthetic头。内联值保留原数组的ArraySegment，不复制正文；纯行外仅保留Int64字节长度，超过4GiB和Int64最大值不据此申请正文内存。TEMP_FULL可解析，TEMP_DELTA/未知布局和V1非零storage option明确拒绝，不猜测老V2 magic布局。
-
-先加入测试并记录缺少LobLocator的编译失败（TestResults/lob-locator-red.log），实现后首轮31通过/2失败：xUnit把默认ArraySegment当集合枚举而抛错，已将测试改为分别断言Array=null与Count=0，产品没有为该错误断言调整。再补空extern两个合法偏移与TEMP_FULL/DELTA后，最终37项定向全部通过（TestResults/lob-locator-green/*.trx）。回归包括所有固定长度locator的逐字节截断、偏移溢出/重叠、尾随数据、畸形memory/disk flags、freed、负snapshot、Int64溢出、元数据与实际payload长度不符及opaque扩展/rowkey边界。
-
-独立只读走查核对全部实现、测试与固定C++的fill/get_inrow_data/get_lob_data_byte_len，确认空extern两种偏移、借用视图始终绕过metadata及偏移算术边界，无必须修复项。Java checkout实际HEAD为6adc311ba5db8b2f19f98f3e6e4734667fdfdda1，服务端引用固定为5e8a63d29dae9fde5e962b8fcc7b167d438fc343；只参考协议行为，没有复制第三方实现。
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误 | TestResults/lob-locator-build.log |
-| 完整Unit | 1913通过，0失败/跳过，包含新增37项 | TestResults/lob-locator-unit/*.trx |
-| 五资产Consumer | 524通过，0失败/跳过 | TestResults/lob-locator-consumer/*.trx |
-| DI | 8通过，0失败/跳过 | TestResults/lob-locator-di/*.trx |
+| Release core5/DI3 | 0 warnings/errors | TestResults/lob-locator-build.log |
+| Full Unit | 1913 passed,0 failed/skipped;+37 | TestResults/lob-locator-unit/*.trx |
+| Consumer | 524 passed,0 failed/skipped | TestResults/lob-locator-consumer/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/lob-locator-di/*.trx |
 
-编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试命令为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/lob-locator-<unit|consumer|di>`。已解析TRX核对实际通过/执行计数，Unit使用正常Windows TLS凭据权限，未安装/删除信任根或改变TLS策略。UTF8无BOM/CRLF、git diff --check及独立走查通过后本地提交，不推送。
+Same build/test flags,TestResults/lob-locator-<unit|consumer|di>;TRX counts parsed,normal TLS/no roots-policy changes. UTF8-no-BOM/CRLF/diff/independent review passed,local commit/no push. D04 In progress,next options/capabilities/210-211/parameters-outputs/session-transaction/DBMS_LOB.READ streams/public consumers. Real-OBProxy/remote/TLS/package-old-runtime-Framework unverified;internal parsing does not deliver public/fullD04;overall open.
 
-D04整体仍进行中，下一步继续显式能力/选项、210/211类型及参数/输出对象、原物理会话/事务绑定、DBMS_LOB.READ分块流与公开消费。未验证实库/OBProxy、异机或扩展经TLS；本轮未重新打包或执行旧运行时/Framework矩阵。内部解析不能证明公开LOB可用或完整D04已交付，整体目标保持开放。
+## D04 public LOB reads/binding/chunk streams (2026-10-19)
 
+Aftercc0cc1d,UseLobLocators/separate client capability/210-211/Blob-Clob parameters-outputs/OceanBaseLob/original-session DBMS_LOB.READ. One stream opens only after original reader consumed;active stream reserves original session,reopen/transaction reference-epoch/disposed handle invalidates. Input revalidated under connection lock,InputOutput inferred type frozen in plan. Explicit Output/ReturnValue/InputOutput publish via D02 complete terminal atomically,ERR preserves old,NULLDBNull. BLOB byte/CLOB Unicode-scalar offsets;chunks<=32767 bytes or8191scalars/32764UTF8,no full cache/new connection. Exact NUMBER amount/buffer-versus-remaining length/no-progress/type checks. Original timeout fixed to handle,cancel/Dispose interrupts actual network;bad chunk destroys session,does not reclassify originalSQL unknown. Modern stream/handle DisposeAsync;Standard2.0 internal async command cleanup shared DisposeCoreAsync.
 
-## D04 公开 LOB 读取、绑定及分块流（2026-10-19）
+Failures/fixes retained:TestResults/lob-public-red.log missing API;first12 inline-outrow/sync-async/sequential passed,lob-public-first. Lifecycle10passed/2failed,lob-lifecycle-red:product Dispose failed to cancel inflight command;other test wrongly expected IOException instead of ProtocolException. Review found v2 bit wrong proxy namespace,output declaration mismatch unchecked,token TextReader/stream async cleanup missing. lob-boundary-red10failed/1passed:three handshake/six mismatch/inflight cancel,then fixed. lob-async-number-red5failed/2passed:three token-text timeout/two valid NUMBER amount rejected;real async reads/exact integers fixed,tiny fraction/38digit overflow still rejected. lob-getter-red two failures:malformed locator bypassed exchange cleanup;default/sequential getters now destroy pending session. Second review InputOutput inferred/input versus output type mismatch:lob-output-red18 cases/4failed;frozen types fixed Output/Return/InputOutput/NULL/ERR. Internal async command cleanup shared across five assets.
 
-在`cc0cc1d`之后接入UseLobLocators、独立client capability属性、210/211列及Blob/Clob参数/输出、OceanBaseLob和原会话DBMS_LOB.READ分块流。原reader消费完后才能打开一次，活动流预约原会话；连接重开、事务引用或epoch变化及已释放handle均失效。输入参数在连接锁内再次校验原上下文，InputOutput推断类型在计划创建时冻结；显式Output/ReturnValue及输入输出的LOB输出沿D02完整终态原子发布，尾ERR保留旧值，NULL使用DBNull。
-
-BLOB按字节、CLOB按Unicode标量推进offset；每块最多32767字节或8191标量/32764 UTF8字节，不整值缓存或另建连接。NUMBER amount精确转换、buffer与locator剩余字节长度一致性、无进展及类型错配均校验。原command timeout固定到handle，取消/Dispose作用于实际在途网络读取；错误chunk销毁会话，内部读取失败不重新把原SQL标为结果未知。现代stream/handle支持DisposeAsync，Standard2.0内部异步命令清理仍通过共享DisposeCoreAsync完成。
-
-失败与修复证据：
-
-- 初始公开能力缺失编译失败见`TestResults/lob-public-red.log`；第一批12项行内/行外、同步/异步与顺序读取通过见`lob-public-first`。
-- lifecycle首轮10通过/2失败（`lob-lifecycle-red`）：一项为产品handle释放未取消在途command，另一项为测试错误期待IOException；PacketChannel关闭实际映射ProtocolException，已修正夹具断言。
-- 独立走查发现LOB v2位写错proxy命名空间、LOB输出未验证声明类型，以及TextReader异步入口/stream异步清理缺失。修前`lob-boundary-red`为10失败/1通过，包含握手三项、错配输出六项及handle在途取消；修后相应回归通过。
-- `lob-async-number-red`为5失败/2通过：三个带token文本异步入口超时、两种合法NUMBER amount被拒绝；改为实际异步网络读取及精确整数转换后通过，微小小数和38位溢出值仍拒绝。
-- `lob-getter-red`两项失败证明畸形locator未通过所属exchange清理，修后默认/顺序getter均销毁未完成会话。
-- 第二次走查发现InputOutput按原handle推断的类型与输出校验不一致，`lob-output-red`18项中4失败；冻结类型后输出/返回/输入输出、NULL/尾ERR全部通过。异步路径的内部command清理也已改为五目标共用异步实现。
-
-最终验证：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误 | TestResults/lob-public-build-reviewed.log |
-| LOB定向Unit | 108通过，包含既有41项 | TestResults/lob-public-unit-targeted/*.trx |
-| 新增五资产公开LOB消费 | 60通过，标准/OB20/尾部夹带包，同步/异步，BLOB/CLOB | TestResults/lob-public-consumer-targeted/*.trx |
-| 完整Unit | 1980通过，0失败/跳过，较解析提交新增67项、无删除 | TestResults/lob-public-unit-reviewed/*.trx |
-| 完整Consumer | 584通过，0失败/跳过，新增60项 | TestResults/lob-public-consumer-reviewed/*.trx |
-| DI | 8通过，0失败/跳过 | TestResults/lob-public-di-reviewed/*.trx |
+| Release core5/DI3 | 0 warnings/errors | TestResults/lob-public-build-reviewed.log |
+| Targeted LOB Unit | 108 passed,including existing41 | TestResults/lob-public-unit-targeted/*.trx |
+| New five-asset public LOB | 60 passed,standard/OB20/trailing extra,sync-async,BLOB-CLOB | TestResults/lob-public-consumer-targeted/*.trx |
+| Full Unit | 1980 passed,0 failed/skipped;+67/0 removed | TestResults/lob-public-unit-reviewed/*.trx |
+| Full Consumer | 584 passed,0 failed/skipped;+60 | TestResults/lob-public-consumer-reviewed/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/lob-public-di-reviewed/*.trx |
 
-编译为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/lob-public-<unit|consumer|di>-reviewed`。实际解析TRX核对执行/通过/失败/跳过计数，并与1913项基线对比确认新增67、移除0。完整Unit使用正常Windows TLS凭据权限，不安装/删除信任根，不改变证书策略。五资产Consumer在本机.NET10宿主加载各目标程序集，不能冒称Standard旧运行时或.NET8/9完整验收。
+Same build/test flags,TestResults/lob-public-<unit|consumer|di>-reviewed;parsed counts/1913 baseline+67/0removed. Normal TLS/no roots-policy changes. Five-assetnet10 hosts do not prove oldStandard/net8-9 full acceptance. Final independent CTS/cancel/reservation/session-transaction epoch/type snapshots/async cleanup/bad getter/docs review clean. Plan/design/README/ledger synchronized,UTF8-no-BOM/CRLF/diff/local commit,no push. Reads/binding local only,D04 In progress;modification/temporary creation/ownership APIs not yet implemented,Dispose client-only/no implicit FREETEMPORARY. Real-OBProxy/TLS/remote/package-old-runtime-Framework unaccepted;resource semantics/A05/C01/D05–D09/otherD15/release/overall open.
 
-独立只读最终复查未发现新的必须修复项，核对CTS生命周期、在途取消、预约及物理会话/事务epoch、类型快照、异步清理、畸形getter与README/架构边界。同步开发方案、架构、README和本台账，UTF8无BOM/CRLF及git diff --check通过后本地提交，不推送。
+## D04 LOB WRITE/TRIM (2026-10-19)
 
-本子模块仅完成本地公开读取/绑定；D04整体仍进行中。未提供LOB修改、临时对象创建或数据库所有权管理API，Dispose仅释放客户端handle/流，不擅自FREETEMPORARY。真实OceanBase/OBProxy、扩展经TLS、异机、打包和旧运行时/Framework矩阵本轮未验收；LOB资源语义及其他A05/C01/D05–D09/D15和发布余项继续开放，整体目标未完成。
+After57b7c4a,OceanBaseLob.WriteBytes/WriteText/Truncate/async,original-session DBMS_LOB.WRITE/TRIM/original transaction-epoch-timeout. Public0-based positions convert+1/Int64;BLOBbytes/CLOBscalars,chunks32767 bytes/8191scalars,surrogate pairs retained. Whole UTF16/slices/positions validate before first send;empty sends noSQL but validates context. Whole modification reserves session,blocking interleaving commands/transactions/modifications/streams even between released per-chunk leases. Source locator updates only after each complete response/boundary;later chunks/binding/reads use new locator. Failure invalidates source,ByteLength retains last success;trustedERR allows connection reuse,NULL output after confirmed terminal breaks session,malformed/unconfirmed keeps unknown modification. Dispose/Async cancels inflight,async cleanup true I/O. Multichunk non-atomic,no autocommit/prefix rollback/replay. Fixed Java Blob-Clob WRITE/TRIM parameter order referenced,no copying;DBMS_LOB_MANAGER not evidence for read-write/temporary creation.
 
-## D04 LOB WRITE/TRIM 修改（2026-10-19）
+Missing API red compile:TestResults/lob-write-red.log;first4 chunk tests passed. Fault cases showed failed handle still usable,lob-write-fault-red2failed/1passed,then invalidation fixed. Review found inline stream captured payload before reservation;while waiting lock same-length overwrite could finish,yet stream read old. Deterministic BLOB/CLOB both old-not-new:red TestResults/lob-write-snapshot-red.log/TRX. Initialize after reservation→both passed;existing connection lock/public operations only,no product hook. Added old/current/later transaction/reopen rejection,completion-log reentry between chunks proves reservation,DisposeAsync/type/bad output.136LOB targeted passed:TestResults/lob-write-lifecycle/*.trx. Independent concurrency/lifecycle/five-consumer/docs recheck clean.
 
-从`57b7c4a`继续，OceanBaseLob新增WriteBytes/WriteText/Truncate及异步入口，原会话执行DBMS_LOB.WRITE/TRIM并绑定原事务/epoch/timeout。公开位置从0开始，协议加1并保留Int64；BLOB按字节、CLOB按Unicode标量，分块上限分别32767字节/8191标量，保持surrogate pair。首包前校验全部UTF16、片段和位置范围，空输入不发SQL但仍校验上下文。整个修改持预约，块间即使命令已释放租约，也不能插入其他命令、事务、修改或流。
-
-每块完整终态和协议边界成功后才用返回locator更新源handle；后续块、参数及读取使用新值。错误使源handle失效，ByteLength保留最后成功快照；可信ERR允许继续使用原连接，NULL输出在已确认终态后破坏会话，畸形或未确认响应保留修改结果未知。Dispose/DisposeAsync取消在途修改，异步命令释放使用异步I/O。多块修改非原子，不自动提交、回滚成功前缀或重放失败块。接口参数顺序参考固定Java基线Blob/Clob的DBMS_LOB.WRITE/TRIM行为，不复制实现；未把DBMS_LOB_MANAGER管理包当作LOB读写或临时对象创建依据。
-
-先添加公开入口失败测试，缺Write API的红编译见`TestResults/lob-write-red.log`。分块首批4项通过后，故障用例证明失败后旧locator仍可用，`lob-write-fault-red`为2失败/1通过；失败时使源handle失效后已通过。独立走查另发现行内读取在预约前捕获旧payload：线程等待连接锁期间完成同长覆盖，随后取得预约仍读旧值。BLOB/CLOB确定性测试修前均返回old而非new（`lob-write-snapshot-red.log`及TRX）；将流初始化移到成功预约之后，两项修后通过。测试只用既有连接锁协调实际公开操作，没有产品测试hook。
-
-补充原事务/后续事务结束、连接重开后的修改拒绝；在首块成功命令的完成日志内重入，直接验证块间空闲租约仍受修改预约保护；覆盖同步/异步DisposeAsync、错类型/畸形输出。最终LOB相关136项定向通过，见`TestResults/lob-write-lifecycle/*.trx`。独立只读复查接受并发修复，核对新生命周期测试、五目标Consumer及README/架构，没有剩余必须修复项。
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/lob-write-build-final.log` |
-| 完整Unit | 2008通过，0失败/跳过；新增28项修改/并发回归全部执行 | `TestResults/lob-write-unit-final/*.trx` |
-| 五资产Consumer | 644通过，0失败/跳过；新增60项修改消费全部执行 | `TestResults/lob-write-consumer-final/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/lob-write-di-final/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/lob-write-build-final.log |
+| Full Unit | 2008 passed,0 failed/skipped;+28 modification/concurrency executed | TestResults/lob-write-unit-final/*.trx |
+| Five-asset Consumer | 644 passed,0 failed/skipped;+60 executed | TestResults/lob-write-consumer-final/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/lob-write-di-final/*.trx |
 
-编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/lob-write-<unit|consumer|di>-final`。已解析TRX核对实际执行/通过计数；Consumer覆盖同步/异步、标准/OB20成功、WRITE后TRIM与读取新值、OB20尾OK后夹带包拒绝且旧ByteLength不更新。完整Unit使用正常Windows TLS凭据权限，未安装/删除信任根或改变TLS验证策略。UTF8无BOM/CRLF及diff检查后本地提交，不推送。
+Same build/test flags,TestResults/lob-write-<unit|consumer|di>-final;TRX counts parsed. Consumers sync-async/standard-OB20,WRITE→TRIM→new reads,extra packet after tailOK rejects/oldByteLength unchanged. Normal TLS/no roots-policy change;UTF8-no-BOM/CRLF/diff/local commit,no push. Only localWRITE/TRIM closed;temporary ownership unimplemented then,D04/overall In progress,A05/C01/D05–D09/otherD15/release open. Real-OBProxy/remote/TLS/temporary resources/package-old-runtime-Framework unverified;deferred environment not complete and does not block later local work.
 
-本轮仅关闭D04的WRITE/TRIM本地修改子模块。临时对象创建/所有权管理仍未实现，D04和整体目标保持进行中；A05/C01/D05–D09/D15其他插件及发布审查余项继续开放。真实数据库/OBProxy、异机、扩展经TLS和临时对象资源语义未验收，本轮未重跑打包或旧运行时/Framework矩阵；按要求暂缓的环境工作不计为已完成，也不阻止后续本地模块开发。
+## D04 temporary LOB creation/explicit free (2026-10-19)
 
-## D04 临时 LOB 创建与显式释放（2026-10-19）
+Connection.CreateTemporaryLob/Async,creator-handle FreeTemporary/Async,Blob/Clob only/existing option-negotiation-version gate. Typed BLOB/CLOB local variable,DBMS_LOB.CREATETEMPORARY(cache=FALSE,dur=SESSION),thenOUT;owned handle bound original session/explicit transaction/epoch/CommandTimeout. Free uses typed local receiving locator/FREETEMPORARY,independent string success marker,not invalid freed locator. Whole free retains modification reservation/cancel-timeout;success/inflight failure invalidates source. Borrowed query/output handles cannot free;other independent aliases not synchronously invalidated. Dispose client-only/cancels;explicit Free before transaction-end/Dispose required. Unfreed/failedSESSION objects can survive to original-session end. Transaction-end invalidates,no new-session/transaction freeing/background cleanup/commit/rollback/replay. Post-createSQL-send failures including trusted tailERR or unsafe delivery destroy original session to reclaim possible orphan;reopened session unaffected. Unsent probeERR/unsupported version preserves session;trustedERR known classification. Fixed official-doc SHA2a5ae3a23a51729d065cec716508eb26cb064106 CREATETEMPORARY/FREETEMPORARY/ISTEMPORARY,architectureD04 permalinks. Java createBlob-Clob creates client empties,not server evidence;docs constrain API,loopback not resource proof.
 
-新增连接CreateTemporaryLob/Async与创建者handle的FreeTemporary/Async，仅支持Blob/Clob并沿用现有显式选项、协商及Oracle版本门槛。创建使用固定BLOB/CLOB局部变量，DBMS_LOB.CREATETEMPORARY(cache=FALSE, dur=SESSION)后赋给OUT参数；按原物理会话、显式事务、epoch和连接CommandTimeout交付拥有释放权的handle。释放使用typed局部变量接收输入locator并调用FREETEMPORARY，以独立字符串标记确认成功，不解析已invalid的释放后locator。整个释放操作保留修改预约与取消/超时策略，成功及在途失败均使源handle失效；普通查询/输出handle没有释放权，不承诺同步使其他独立借用handle失效。
+TestResults/lob-temporary-red.log missing API. First fixture missed fixed16-byte request trailer:8failed/2passed→10passed after correction,not product defect. Review NULL type 6 cannot disambiguate overloaded BLOB/CLOB create;typed locals+OUT. Exact requests first4failed,lob-temporary-type-red→10passed,lob-temporary-type-green. Second review valid locator then tailERR never publishes,old factory left orphan/session. Corrected tests1failed/4passed,lob-temporary-cleanup-red;terminal records actual businessSQL-sent,so factory destroys original RequiredSession. Sync-asyncERR/probe-not-killed regressions passed. On sync invalid-output early disconnect,fixture tolerates only residual terminal-write IOException,not product failure.46targeted passed,lob-temporary-cleanup-reviewed:create/free/BLOB-CLOB/clientDispose/borrowed rejection/transaction-end-reopen/active streams/cancel-timeout-Dispose/type-NULL-malformed/logreentry. Independent HasSentSql/locks/original cleanup/ownership review no blocker.
 
-Dispose/DisposeAsync仅清理客户端并取消在途操作，必须在事务结束和Dispose前显式FreeTemporary；未释放或释放失败的SESSION对象可能保留至原会话结束。事务结束使handle失效，不能借助新会话/事务释放，不后台清理、提交、回滚或重放。创建SQL开始发送后发生失败（包括可信尾ERR）或成功后无法安全交付时，销毁原会话回收可能无主的资源；关闭重开后的新会话不受影响。未发送创建SQL的版本探测ERR/不支持版本保持会话可用，可信ERR继续保留已知失败分类。
-
-协议依据为固定OceanBase官方文档提交`2a5ae3a23a51729d065cec716508eb26cb064106`的CREATETEMPORARY、FREETEMPORARY及ISTEMPORARY，永久链接见架构D04临时对象段；Java createBlob/createClob仅创建客户端空对象，不能证明服务端创建。官方文档约束接口，本地环回不替代实际资源验收。
-
-失败、修复与走查：
-
-- `TestResults/lob-temporary-red.log`记录缺API的红编译。首次夹具未跳过Oracle请求固定16字节尾（8失败/2通过），修正后10项通过，不把夹具失败当作产品缺陷。
-- 独立走查发现直接向重载CREATETEMPORARY绑定NULL的线上类型6无法区分BLOB/CLOB；改为typed局部变量加OUT。精确请求断言修前4项失败（`lob-temporary-type-red`），修后10项通过（`lob-temporary-type-green`）。
-- 第二次走查发现有效locator后尾ERR不会原子发布输出，工厂原逻辑保留会话而留下无主临时对象。修正测试后1失败/4通过（`lob-temporary-cleanup-red`）；命令终态保存实际业务SQL发送状态，工厂据此销毁原RequiredSession。同步/异步尾ERR及版本探测不误杀回归修后通过。同步无效输出提前断开时，夹具仅容忍残余终结包写入IOException，不能将其视为产品失败。
-- 临时LOB定向46项全通过（`lob-temporary-cleanup-reviewed`），包含BLOB/CLOB创建/释放、Dispose不调用数据库、借用拒绝、显式事务/结束/重开、活动流、取消/超时/Dispose中断、错类型/NULL/畸形及完成日志重入；独立复查确认无新的阻塞项，含HasSentSql快照、锁顺序、原会话清理及所有权边界。
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/lob-temporary-build-final.log` |
-| 完整Unit | 2054通过，0失败/跳过；较上一提交新增46项、移除0项 | `TestResults/lob-temporary-unit-final/*.trx` |
-| 五资产Consumer | 724通过，0失败/跳过；新增80项临时LOB消费实际执行 | `TestResults/lob-temporary-consumer-final/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/lob-temporary-di-final/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/lob-temporary-build-final.log |
+| Full Unit | 2054 passed,0 failed/skipped;+46/0removed | TestResults/lob-temporary-unit-final/*.trx |
+| Five-asset Consumer | 724 passed,0 failed/skipped;+80 executed | TestResults/lob-temporary-consumer-final/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/lob-temporary-di-final/*.trx |
 
-编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/lob-temporary-<unit|consumer|di>-final`。解析TRX核对实际执行/通过计数及新增用例；Consumer覆盖五资产同步/异步、标准/OB20创建→写入→读取新值→释放、创建/释放两处尾包夹带拒绝及locator更新后仍保留所有权。完整Unit使用正常Windows TLS凭据权限，未安装/删除信任根或改变TLS策略。UTF8无BOM/CRLF与git diff --check通过后本地提交，不推送。
+Same build/test flags,TestResults/lob-temporary-<unit|consumer|di>-final;parsed totals/newcases. Five assets sync-async/standard-OB20 create→write→readnew→free,extra-tail rejection at create/free,ownership survives locator update. Normal TLS/no roots-policy change;UTF8-no-BOM/CRLF/diff/local commit,no push. D04 defined local interfaces done→Pending verification. Real-OBProxy resources/TLS/remote deferred;packages/old-runtime/Framework not rerun. Overall open,nextD05;A05/C01/D05–D09/otherD15/release open.
+## D05 internal nested object/collection codecs (2026-10-19)
 
-D04本地接口范围已接入，状态改为待验证；真实OceanBase/OBProxy资源生命周期、扩展经TLS和异机验收继续暂缓，本轮未重新打包或执行旧运行时/Framework矩阵。整体目标仍未完成，下一步推进D05；A05、C01、D05–D09、D15其他插件和发布余项保持开放。
+Immutable ComplexType member layouts drive recursive ComplexValueCodec results/parameters. Objects have no outer length; collections begin with lenenc element count. Result NULL bitmaps start at bit2, parameter bitmaps at bit0. Null nested objects, objects with null members, empty collections/objects remain distinct without consuming following fields. NUMBER retains Oracle precision via OceanBaseDecimal; strict UTF8 strings, independent RAW, existing exact DATE/TIMESTAMP codecs. Internal scalar codes cover only NUMBER, VARCHAR2/CHAR, RAW, DATE, TIMESTAMP; LOB/cursor members, public types/dictionary/column-parameter entry points not yet enabled. Root limits: depth32, cumulative65535 members including NULL, existing64 MiB-10 byte budget. Counts/bitmaps/remaining bytes checked before allocation, NUMBER text<=512 bytes, fixed temporal length checked before body. Parameters validate kind/count/exact values/Unicode, without stringification/truncation/swallowed errors. Lenenc prefixes1/3/4/9 bytes; UTF8 budget precedes allocation. Fixed upstream permalinks in architecture D05; behavior only, no Java copying.
 
-## D05 内部嵌套对象/集合编解码（2026-10-19）
+Missing types red compile: TestResults/complex-codec-red-corrected.log. First implementation incorrectly declared existing long packet limit int; compile corrected before tests. Actual first40 passed/2 failed (complex-codec-second), both hand-built fixture errors: empty-string length and 40000-element bitmap final byte. Corrected→42 passed (complex-codec-green). Review found >0xFFFFFF scalar budget counted4-byte prefix while writing9. New case failed to reject (complex-codec-prefix-red), then fixed; added 0xFFFFFF/0x1000000 transitions/exact-limit success/+1 rejection. Two temporal regressions requested illegal large bodies before validation (complex-codec-temporal-red); TemporalCodec.ValidateFieldLength moved first, duplicate TIMESTAMP branch removed. Final 59 targeted passed (complex-codec-reviewed): nesting/bitmap/0-250-251-65535 members/empty-NULL/Unicode-badUTF8/wideNUMBER/integer-decimal/RAW/date-nanos/malformed/mode/depth-count-bytes/layout snapshots. Independent fix recheck no blocker.
 
-ComplexType新增不可变成员布局，ComplexValueCodec按完整布局递归读取结果和编码参数：对象不带外层长度，集合先带长度编码元素数；每层结果NULL位图从bit2开始，参数从bit0开始。NULL嵌套对象、成员为NULL的对象、空集合与空对象独立处理，解析不吞掉后续字段。NUMBER沿OceanBaseDecimal保留Oracle精度，字符串严格UTF8，RAW独立字节，DATE/TIMESTAMP复用既有精确codec。当前内部规范标量码仅覆盖NUMBER、VARCHAR2/CHAR、RAW、DATE和TIMESTAMP；LOB/cursor成员、公开类型、字典及复杂列/参数入口均未在本层开放。
-
-每个根值最多32层、累计65535个成员（包含NULL），整个复杂值预算沿既有64MiB减10字节；先核验计数/位图和剩余报文再分配，NUMBER文本最多512字节，DATE/TIMESTAMP在读取正文前验证固定长度。参数检查值种类、对象成员数、精确数字/日期及Unicode，禁止任意字符串化、日期截断或吞掉编码错误。前缀按既有长度编码1/3/4/9字节计算，字符串先算UTF8字节预算再分配。固定上游依据及永久链接见架构D05内部编解码段，只参考协议行为、不复制Java源码。
-
-红绿与走查证据：
-
-- 缺ComplexType/codec的红编译见`TestResults/complex-codec-red-corrected.log`；首个实现曾将既有long包上限声明为int，编译错误修正后开始实际测试。首批实际40通过/2失败（`complex-codec-second`）均为夹具手工报文错误：空字符串长度及40000元素位图末字节，修正后42项通过（`complex-codec-green`）。
-- 独立走查发现大型标量大于0xFFFFFF时，预算按4字节而实际写9字节前缀。新增回归修前未抛超限异常（`complex-codec-prefix-red`），修后通过；另补0xFFFFFF/0x1000000前缀转换、恰好总长上限成功及超1字节拒绝。
-- 走查另建议时间字段先检查固定长度再复制正文。新增两个回归修前请求了非法大正文（`complex-codec-temporal-red`），改为先复用TemporalCodec.ValidateFieldLength后通过。重复的TIMESTAMP长度分支随之移除。
-- 最终定向59项通过（`complex-codec-reviewed`），覆盖嵌套、位图边界、0/250/251/65535成员、空值/NULL、Unicode/非法UTF8、宽NUMBER、整数/decimal、RAW、日期/纳秒scale、畸形长度、模式拒绝、深度/累计计数/字节预算与布局快照。独立只读复查确认两个发现修复，无剩余阻断项。
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/complex-codec-build-final.log` |
-| 完整Unit | 2113通过，0失败/跳过；较上一提交新增59项、移除0项 | `TestResults/complex-codec-unit-final/*.trx` |
-| 五资产Consumer | 724通过，0失败/跳过；本层未开放公共API，未新增消费用例 | `TestResults/complex-codec-consumer-final/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/complex-codec-di-final/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/complex-codec-build-final.log |
+| Full Unit | 2113 passed,0 failed/skipped;+59/0 removed | TestResults/complex-codec-unit-final/*.trx |
+| Consumer | 724 passed,0 failed/skipped;no public API/new cases here | TestResults/complex-codec-consumer-final/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/complex-codec-di-final/*.trx |
 
-编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/complex-codec-<unit|consumer|di>-final`。已解析TRX核对实际执行/通过计数及新增/移除情况。完整Unit使用正常Windows TLS凭据权限，未安装/删除信任根或改变TLS策略。同步架构、开发方案和本台账，UTF8无BOM/CRLF及diff检查后本地提交，不推送。
+Standard single-node/nonshared build/test flags, results TestResults/complex-codec-<unit|consumer|di>-final. Parsed counts/case deltas; normal Windows TLS permissions, no roots/policy changes. Architecture/plan/ledger synchronized; UTF8 without BOM/CRLF/diff passed, local commit/no push. Internal submodule done, D05 In progress; next same-session dictionary/identities/cache then public values/extended headers/sequential/D02 outputs. README still rejects public ARRAY/STRUCT. Real dictionary-DDL/OceanBase-OBProxy/remote/package-old-runtime-Framework unverified; overall open.
 
-本轮完成D05内部codec子模块，D05整体仍进行中：下一步是同会话类型字典、schema/type身份及缓存失效，再接入公开值、复杂列/参数附加类型头、顺序读取和D02输出。README继续明确不支持公共ARRAY/STRUCT，不以内部夹具证明服务端兼容。真实数据库/OBProxy、字典DDL可见性、异机、打包和旧运行时/Framework矩阵本轮未验证，整体目标保持开放。
+## D05 same-session type dictionary/public value construction (2026-10-19)
 
-## D05同会话类型字典与公开值构造（2026-10-19）
+After7dfa958, GetComplexType/GetComplexTypeAsync(schemaName,typeName,transaction), ClearComplexTypeCache(transaction). Exact case-sensitive schema/type identity; parameterized ALL_TYPES and ALL_TYPE_ATTRS/ALL_COLL_TYPES queries. Whole load reserves original session/transaction epoch with explicit binding, no separate connection. Validates columns/owner-name-kind/attribute counts/continuous ordinals/unique names/single collection element/nested kind. Unknown types/cycles/LOB-cursor-national members rejected. Public OceanBaseComplexType/Members immutable; CreateValue returns OceanBaseComplexValue using exact codec/budget checks. Nested values require corresponding member descriptors; arrays/RAW independent snapshots. RAW budget precedes copy, cumulative public member budget precedes recursion. Reopen/transaction switch/Clear invalidates old construction/binding, content remains inspectable; invalidates all parent-child dependencies. External DDL requires explicit clear/reload without active reader, no fabricated version. Timeout is per query, not whole recursive load. Graph<=32; whole session cache<=65535 members/65535 named types/4 MiB dictionary UTF8, name<=512UTF8 bytes. New descriptors/budgets publish together under lock only on success; failures publish/charge nothing; cache hits already charged, full cache explicitly clearable.
 
-从`7dfa958`继续，实现GetComplexType/GetComplexTypeAsync(schemaName, typeName, transaction)及ClearComplexTypeCache(transaction)。根身份使用精确区分大小写的schema/type二元组，名称参数化查询ALL_TYPES、ALL_TYPE_ATTRS/ALL_COLL_TYPES；完整装载预约原物理会话，固定原事务epoch并显式绑定事务，不另建字典连接。校验结果列形状、owner/name/kind、对象属性总数及连续序号/唯一名称、集合唯一元素与嵌套kind；不猜测未支持类型。循环图、LOB/cursor/national charset成员明确拒绝。
+Missing API red compile: TestResults/complex-dictionary-red.log. Basic11 passed, expanded 19 passed/3 failed (complex-dictionary-boundaries): two missing post-CLOSE sequence resets, one wrong direct OperationCanceledException expectation after SQL sent. Existing unknown-outcome/sequence contracts retained; tests corrected→22 passed. RAW70 MiB pre-rejection copied body: two failures (complex-dictionary-raw-red), pre-copy check fixed, sync/async extra allocation<1 MiB. Review found prewarmed children bypassed per-load budgets: cached1-member Child +65535-member Parent wrongly accepted (complex-dictionary-cache-red). Whole-session charging fixed. First green fixture only caught IOException but normal close was ProtocolException; catch fixed, mapping unchanged. Independent review confirmed atomic cache/charge, failures preserve existing cache, Clear/context resets; no blocker. Final 46 passed (complex-dictionary-targeted-final): object/collection,32 success/33 reject,counts/exact-Unicode-NULL/RAW/nested identity/case-schema/cache/session-transaction/precancel-inflight-timeout/async-exclusivity/bad dictionary/no child publication. Added 20 five-asset×sync-async×standard-OB20 actual dictionary bindings/snapshots/invalidation. README VARCHAR alias omission fixed; construction is not column/parameter delivery.
 
-公开OceanBaseComplexType/Members不可变，CreateValue构造OceanBaseComplexValue并复用既有codec检查精确标量与值预算；嵌套必须使用对应成员的描述，数组及RAW快照独立。RAW先检查预算再复制，公开值累计成员预算在递归展开前校验。关闭重开、事务切换或显式清缓存使旧描述/值不能继续构造/绑定，内容快照仍可检查；清空同时失效所有父子依赖。外部类型DDL不自动感知，须在无活动reader时清空并重载，不伪造服务端版本。每个查询使用连接CommandTimeout，并非整个递归装载的总超时。
-
-类型图最多32层；当前会话缓存累计最多65535成员、65535命名类型及4MiB字典UTF8文本，单个名称最多512 UTF8字节。成功后同锁发布全部新描述及预算，失败不发布子类型或扣减额度；缓存命中已收费，额度满时可显式清空重载。
-
-红绿与独立走查：
-
-- 缺公开API的红编译见`TestResults/complex-dictionary-red.log`。基础11项通过后，扩展首轮19通过/3失败（`complex-dictionary-boundaries`）：两项为事务夹具未在无响应statement-close后重置序号，一项错误期待已发SQL取消直接抛OperationCanceledException。对齐既有结果未知契约及序号后22项通过，未为错误断言改变产品行为。
-- 超限RAW复制回归修前2项失败（`complex-dictionary-raw-red`）：拒绝70MiB输入前先复制了正文。改为复制前检查预算，最终同步/异步均通过，额外分配小于1MiB。
-- 独立只读走查发现，预热子类型可绕过原按单次新装载计费的预算。预热1成员Child再装载65535属性Parent的回归修前未抛异常（`complex-dictionary-cache-red`），改为整个会话缓存累计计费后拒绝。首次修后夹具只捕获IOException，PacketChannel的正常断开实际为ProtocolException；修正捕获后通过，未改变产品断开映射。复查确认收费与缓存同锁发布、失败不污染既有缓存，Clear/context切换归零，无剩余阻断。
-- 最终46项定向通过（`complex-dictionary-targeted-final`），覆盖对象/集合及32层成功/33层拒绝、成员预算、精确/Unicode标量与NULL、RAW快照、嵌套身份、大小写/schema、缓存刷新、原会话重开/事务代次、预取消/在途取消/超时、异步等待与独占、畸形字典及失败不发布子缓存。五资产×同步/异步×标准/OB20新增20项消费，覆盖实际字典查询/精确绑定、值快照及缓存失效。
-- 文档走查发现README未列出已支持的VARCHAR同义标量，已补充；未将公开值构造当作复杂列/参数读写完成。
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/complex-dictionary-build-final.log` |
-| 完整Unit | 2159通过，0失败/跳过；较上一提交新增46项、移除0项 | `TestResults/complex-dictionary-unit-final/*.trx` |
-| 五资产Consumer | 744通过，0失败/跳过；新增20项、移除0项 | `TestResults/complex-dictionary-consumer-final/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/complex-dictionary-di-final/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/complex-dictionary-build-final.log |
+| Full Unit | 2159 passed,0 failed/skipped;+46/0 removed | TestResults/complex-dictionary-unit-final/*.trx |
+| Consumer | 744 passed,0 failed/skipped;+20/0 removed | TestResults/complex-dictionary-consumer-final/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/complex-dictionary-di-final/*.trx |
 
-编译命令沿上一节；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/complex-dictionary-<unit|consumer|di>-final`。已解析TRX核对执行/通过及新增/移除计数。完整Unit使用正常Windows TLS凭据权限，不安装/删除信任根或改变TLS策略；四份公开/设计/进度文档同步，UTF8无BOM/CRLF和git diff --check后本地提交，不推送。
+Same build/test flags, results TestResults/complex-dictionary-<unit|consumer|di>-final; parsed counts/deltas. Normal TLS/no roots-policy changes; four public/design/progress docs/UTF8-no-BOM/CRLF/diff/local commit, no push. Submodule done/D05 In progress; extended columns/binary-sequential/type headers/atomic outputs/public IO next. Public commands still rejected ARRAY/STRUCT then. Real dictionary-DDL/OceanBase-OBProxy/TLS/remote/package-old-runtime-Framework unverified; overall open.
 
-本子模块完成，D05整体仍进行中：复杂列扩展metadata、二进制行/SequentialAccess边界、参数附加type header、D02原子输出和完整公开读写继续实施。当前公共命令仍拒绝ARRAY/STRUCT值。真实字典/DDL可见性、OceanBase/OBProxy、异机及扩展经TLS未验收，本轮未重跑打包或旧运行时/Framework矩阵；不据局部实现关闭D05或整体目标。
+## D05 named complex result reading (2026-10-19)
 
-## D05命名复杂结果读取（2026-10-19）
+Afterf49de3a, type 160 extended schema/type/version, preloaded same-session dictionary, ordinary binary/SequentialAccess single-field reads. Names strict UTF8/noNUL/<=512 bytes, version nonnegative Int64 retained, not invented dictionary version. Execution under connection lock validates original session/transaction/epoch and captures published dictionary; successful copy-on-publish/whole invalidation, readers use original snapshot without queries/per-read whole-cache copies. Values OceanBaseComplexValue with corresponding nested descriptors, independent RAW/GetValues; sync/async generic getters connected. Array/Struct appended enum; DataTypeName actual name, ColumnSize unknown. Binary scan finds exact layout field slice; sequential bit2/depth/member/length/byte validation materializes current field while following large field stays streamed. Empty/NULL/nested skip/fixed next column checked. Ordinary/REF CURSOR paging compares extended schema/type/version and destroys undrained session on change. Text/anonymous/missing-stale dictionary rejected at metadata even NULL. Parameters/outputs still missing then; D02 metadata and CaptureOutput explicitly reject160 inclNULL, preventing generic decoder bypass. External DDL still explicit reload, no proven server version/layout consistency.
 
-从`f49de3a`继续，接入type160列扩展schema/type/version解析、同会话预载字典、普通二进制行及SequentialAccess单字段读取。名称严格UTF8、无NUL、最多512字节；version保留非负Int64，不伪造字典版本。执行开始时在连接锁下检查原物理会话/事务/epoch并捕获已发布字典，缓存改为成功后复制发布/整体失效；reader只用原快照，不另发字典查询或每次复制整份缓存。
+Initial missing metadata/descriptor/enum compile: complex-results-red.log, then first9 cases passed. Review found ordinary Oracle complex output accidentally accepted; NULL/nonnull two cases failed to reject (complex-results-output-red/*.trx), both entry points fixed, recheck clean. First8 boundary failures were incorrect expected errors after sentSQL; corrected, then two transaction fixtures wrongly reported autocommit on; second control fixed. Four initial paging failures lacked prepared result columns; fixture columns=1 fixed. Final 48 targeted passed (complex-results-targeted-final/*.trx): identities/version/malformed-limit metadata/RAW-nested snapshots/normal-sequential-skip/NULL/cache-transaction/member limit/inflight cancel-close/page version change. Nine metadata assertions tightened to exact error types in full suite. Delayed4 MiB following-field test completes complex getter before body sent, then streams/drains with sync allocation<1 MiB; local boundary/allocation only, not real peak/throughput. Existing20 five-asset×sync-async×standard-OB20 consumers extended dictionary/snapshots with ordinary/sequential binary/public identity/exact/NULL/next-column reads; net10 hosts, not five runtimes.
 
-命名列返回OceanBaseComplexValue，嵌套值保留对应描述，RAW及GetValues输出独立；GetValue及泛型同步/异步getter均接入。ProviderType在枚举末尾追加Array/Struct，DataTypeName保留类型名，ColumnSize未知。二进制行按完整布局扫描出精确字段区间；顺序路径按每层bit2位图、深度/累计成员/长度及字节预算物化当前字段，后续大字段保持流式。空集合、NULL、嵌套跳过及后续定长列分别验证；普通服务端游标与REF CURSOR的共享分页路径核对扩展schema/type/version，变化后废弃未消费会话。
-
-文本复杂结果、匿名集合和缺失/失效字典在结果metadata阶段拒绝，NULL不能绕过。公共复杂参数/输出尚未接入；D02在输出metadata及CaptureOutput均显式拒绝160（含NULL），防止新增通用decoder绕过输出声明边界。字典无法自动感知外部DDL，仍须由调用方清缓存并重载；本轮不宣称version与字典布局具有服务端一致性证明。
-
-红绿与走查证据：
-
-- 缺列metadata/描述/枚举API的初始红编译见`complex-results-red.log`，首批9项读取/边界回归通过后继续扩展。
-- 独立走查发现复杂decoder意外放行普通Oracle输出。两项NULL/非NULL回归修前均未抛异常（`complex-results-output-red/*.trx`），双入口拒绝修复后通过；复查无剩余必须修复项。
-- 首轮边界8失败来自已发SQL错误应映射OceanBaseException/结果未知的断言，修正后另2项事务夹具仍错误报告autocommit开启；修正第二条控制响应后通过，未改变产品错误契约。新增分页首轮4失败来自prepare夹具未声明结果列，补columns=1后通过。
-- 最终48项定向全部通过（`complex-results-targeted-final/*.trx`），覆盖身份/version边界、畸形/超限metadata、RAW及嵌套快照、普通/顺序读取与跳过、NULL、字典清空/事务代次、超限集合拒绝、在途取消/连接关闭及分页版本变化。最终又收紧9项畸形metadata断言到具体异常类型，纳入完整回归。
-- 延迟大字段测试在4MiB后续字段尚未发送时完成当前复杂值getter，随后流式读尽该字段；同步drain托管分配少于1MiB。这仅证明本地夹具边界及该段分配，不代表实库内存峰值或吞吐。
-- 扩展既有20项五资产×同步/异步×标准/OB20消费：在字典和值快照断言之外，增加普通及顺序二进制读取、实际资产公共类型身份、精确值、NULL与后续列。全部由net10宿主运行，不替代五套运行时验收。
-
-最终编译/完整测试结果核对后记录于下表；本子模块只关闭命名结果读取，D05整体继续进行中。匿名集合、复杂参数type header及输出声明/原子发布继续下一子模块；真实数据库/OBProxy、外部DDL可见性、扩展经TLS和异机验收按要求暂缓，本轮未重跑打包及旧运行时/Framework矩阵，不推送。
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/complex-results-build-final.log` |
-| 完整Unit | 2207通过，0失败/跳过；新增48项、移除0项 | `TestResults/complex-results-unit-reviewed/*.trx` |
-| 五资产Consumer | 744通过，0失败/跳过；既有20项字典消费扩展复杂列读取 | `TestResults/complex-results-consumer-final/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/complex-results-di-final/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/complex-results-build-final.log |
+| Full Unit | 2207 passed,0 failed/skipped;+48/0 removed | TestResults/complex-results-unit-reviewed/*.trx |
+| Consumer | 744 passed,0 failed/skipped;existing20 extended | TestResults/complex-results-consumer-final/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/complex-results-di-final/*.trx |
 
-编译命令为`dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`；完整测试沿上一节命令，结果目录换为上表路径。最后收紧畸形metadata异常类型断言后重新编译并重跑完整Unit，2207项仍全部通过；TRX已解析核对计数及与上次提交的新增/移除。完整Unit沿正常Windows TLS凭据权限，不安装/删除信任根或修改TLS验证。独立只读走查修复后两次复查均无剩余必须修复项；README/架构/计划/台账同步，UTF8无BOM/CRLF和git diff --check后本地提交。
+Same build/test flags, table directories; tightened metadata assertions then rebuilt/reran full Unit2207, parsed deltas. Normal TLS/no roots-policy changes. Independent fix rechecked twice, no required issue; README/design/plan/ledger/UTF8-no-BOM/CRLF/diff/local commit. Named results only closed,D05 In progress;anonymous/type headers/output contracts next. Real-DDL/OceanBase-OBProxy/TLS/remote deferred;packages/old-runtime/Framework not rerun,no push/overall closure.
 
-## D05命名复杂参数与输出绑定（2026-10-19）
+## D05 named complex parameters/output binding (2026-10-19)
 
-从`d8c9835`继续，新增OceanBaseParameter.ComplexType；设置时声明DbType.Object及对应Array/Struct，设置DbType、非复杂provider type或ResetDbType清除声明。非NULL输入/InputOutput可从不可变值推断；NULL/Output/ReturnValue保留显式描述。值须使用相同描述，kind及零Size/Precision/Scale先验证。快照共享不可变描述和值，StartCommand取得租约前核验原连接/物理会话/事务epoch/cache身份，Clear、跨连接、重开及事务变化均发包前拒绝；独立Prepare允许尚未赋值的参数。
+Afterd8c9835, OceanBaseParameter.ComplexType sets DbType.Object/Array-Struct; setting any DbType, noncomplex provider type, or ResetDbType clears declaration. Nonnull Input/InputOutput may infer immutable descriptor; NULL/Output/ReturnValue require explicit. Value must use same descriptor, kind and zeroSize-Precision-Scale checked. Snapshots share immutable descriptors/values; StartCommand validates original connection/session/transaction epoch/cache before lease. Clear/crossconnection/reopen/transaction change rejected before send; independent Prepare permits unset values. ARRAY/STRUCT both type 160 named headers: lenenc schema/type/version 0, all headers precede all values. ComplexNULL only bitmap/no body,still160 identity. Fixed server SHA5e8a63d29dae9fde5e962b8fcc7b167d438fc343 obmp_stmt_execute.cpp L761–806/L1068–1113/L2268–2280: anonymous element read only emptytypeName, version read/discarded, named PL layout by schema/name. Evidence not real round-trip;0 is not DDL version, explicit reload required. Direct existing writer,headers/prior scalars/complex share64 MiB-10,no full extra payload copy,parameter bitmaps bit0. OracleCommandPlan snapshots output descriptors; pure outputs clear oldValue but keep type header,InputOutput retains inferred descriptor. Metadata checks160/original identity even NULL/zero rows,undeclared rejected. CaptureOutput rechecks/decodes,atomic publication after all responses/OB20;ERR/laterERR/cancel-close/unread retain all old values. Changing original parameter descriptor during execute does not affect snapshot.
 
-ARRAY和STRUCT统一发送命名type160头：length-encoded schema/type/version0，全部类型头先于全部值；复杂NULL只设位图、不写值，仍保留160及身份。依据固定OceanBase服务端`5e8a63d29dae9fde5e962b8fcc7b167d438fc343`的obmp_stmt_execute.cpp L761–806、L1068–1113及L2268–2280：只在空typeName时读匿名element，version读取后不存储，命名类型按schema/name装载PL布局；该证据不等于实库往返验收。0不是DDL版本证明，外部DDL仍须显式刷新。复杂值直接写既有writer，类型头、前序标量及复杂值共享64MiB-10预算，无额外完整复杂payload副本，参数每层bitmap仍从bit0开始。
+Missing API compile: complex-parameters-red.log. First13 parameter cases passed/3 output failed original rejection (complex-parameters-first); output snapshot/checks fixed. Two stale-cache values reached prepare (complex-parameters-session-red-final); prelease checks fixed. First green two follow-up queries failed missing fixture post-CLOSE reset; corrected without protocol/mapping change. Public parameter4 passed, then output28 failed same reset before version probe (complex-parameters-public); BeginCommand added→58 boundaries passed (complex-parameters-boundaries). Waited test exit before rerun, no concurrent restart. Final 232 Complex targeted passed (complex-parameters-targeted-final),79 new: mixed headers/NULL/long Unicode names/nested bit0 bytes/shared budget/reset/cache-crossconnection-reopen-transactions/public prepare/PLOutput-InputOutput-Return/zero rows/bad metadata/ERR-laterERR/cancel-close/earlyclose. Existing20 five-asset standard-OB20 cases extended nonnull/typedNULL/named reads/PLoutputs;20 targeted passed (complex-parameters-consumer-targeted),no new Consumer names,net10 hosts. Independent source/newtests/docs no blocker; corrected wording that all DbType setters inclObject clear declaration,not just scalar;implementation not delegated.
 
-OracleCommandPlan保存执行时的输出描述，Output/ReturnValue清旧Value时保留类型头，InputOutput保留推断描述。QueryResult在metadata阶段核验type160及原描述身份，NULL/零行同样验证；未声明复杂输出仍拒绝。CaptureOutput再次核验后解码为公共快照，全响应及OB20边界成功后才原子发布；尾ERR、后续结果ERR、取消/关闭和未读尽关闭保留全部旧Value。执行中修改原参数ComplexType不影响本次声明。
-
-红绿与走查证据：
-
-- API缺失红编译见`complex-parameters-red.log`。首轮参数13项通过、输出3项仍因原显式拒绝失败（`complex-parameters-first`），补输出快照与校验后通过。
-- 清缓存后原值继续进入prepare的2项回归修前失败（`complex-parameters-session-red-final`），加租约前身份校验后拒绝。首轮green仍有2项失败位于后续可用性查询：夹具遗漏无响应statement-close后的序号重置，修正夹具后通过，不改产品序号或错误映射。
-- 公开参数4项通过后，输出首轮28项失败（`complex-parameters-public`）：同一夹具序号问题发生于字典关闭后的版本探测。补BeginCommand后，58项参数/输出边界全部通过（`complex-parameters-boundaries`）。等待测试进程完成后再重跑，没有并发重启同一测试。
-- 最终Complex定向232项全部通过（`complex-parameters-targeted-final`），其中本模块新增79项。覆盖独立混合头/NULL/Unicode长名称/嵌套bit0字节、共享报文预算、声明与类型重置、失效cache/跨连接/重开/事务两边界、公开普通预处理及PL Output/InputOutput/ReturnValue、NULL/零行/错误metadata、尾ERR/后续ERR/取消/关闭及提前关闭。
-- 扩展既有20项五资产×同步/异步×标准/OB20消费：同描述非NULL输入和显式NULL绑定、命名结果读取及PL复杂输出；20项定向通过（`complex-parameters-consumer-targeted`）。未新增Consumer案例，全部使用net10宿主，不替代五运行时或实库矩阵。
-- 独立只读走查及新增测试/文档复查均无阻断；修正“仅标量DbType清除声明”的措辞，所有DbType设置（含Object）都会清除声明。未委派实现。
-
-最终完整编译/回归结果：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误 | `TestResults/complex-parameters-build-final.log` |
-| 完整Unit | 2286通过，0失败/跳过；新增79项，另2项旧案例改名、覆盖未移除 | `TestResults/complex-parameters-unit-final/*.trx` |
-| 五资产Consumer | 744通过，0失败/跳过；既有20项字典/结果消费扩展参数及输出执行 | `TestResults/complex-parameters-consumer-final/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/complex-parameters-di-final/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/complex-parameters-build-final.log |
+| Full Unit | 2286 passed,0 failed/skipped;+79;two old cases renamed,no coverage removed | TestResults/complex-parameters-unit-final/*.trx |
+| Consumer | 744 passed,0 failed/skipped;existing20 extended | TestResults/complex-parameters-consumer-final/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/complex-parameters-di-final/*.trx |
 
-编译命令沿上一节；完整测试为`dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/complex-parameters-<unit|consumer|di>-final`。TRX已解析确认执行/通过及新增/移除，比较时将2项旧案例的契约名称更新归一化。完整Unit使用正常Windows TLS凭据权限，不安装/删除信任根或修改TLS策略。独立只读走查及复查无剩余阻断，README/架构/计划/台账同步，UTF8无BOM/CRLF和git diff --check后本地提交。
+Same flags/results TestResults/complex-parameters-<unit|consumer|di>-final. Parsed counts/deltas normalized two renamed contracts. Normal TLS/no roots-policy changes;independent recheck/docs/UTF8-no-BOM/CRLF/diff/local commit. Named bindings done;anonymous/D05 review continue,overall open. Real dictionary-DDL/OceanBase-OBProxy/TLS/remote deferred,no package-old-runtime-Framework rerun/no push.
 
-命名参数/输出子模块完成；匿名集合及D05整体复核继续推进，整体目标未完成。真实字典/DDL、OceanBase/OBProxy、扩展经TLS及异机验收按要求暂缓，本轮不重新打包、不重跑旧运行时/Framework矩阵，不推送。
+## D05 anonymous scalar collection results (2026-10-19)
 
-## D05匿名标量集合结果读取（2026-10-19）
+Aftere854d12, emptytypeName creates read-only metadata descriptor without dictionary; empty-name cache cannot replace layout. Element codes0/3/246 NUMBER,253/254 VARCHAR2-CHAR,203RAW,12DATE,202TIMESTAMP. Fixed Java getAnonymousArrayComplexType/BinaryRowProtocol behavior,no copying. Schema/emptyTypeName retained,public IsAnonymous/DataTypeNameARRAY. No dictionary session;CreateValue/parameter-output binding still rejected then;named contexts unchanged. Shared codec/budgets/resultbit2/single-field boundaries/independent values-RAW;NULL/empty/exact numbers-nanos/next fields readable-skippable. Cursor must successfully match first page before rejecting next changed element/version/destroying session. Text/unknown element/incomplete anonymous-complex identity rejected at metadata inclNULL.
 
-从`e854d12`继续，空typeName按列metadata创建只读集合描述，不查询字典，也不允许空名称字典项替换该布局。支持元素码0/3/246（统一NUMBER）、253/254（VARCHAR2/CHAR）、203（RAW）、12（DATE）及202（TIMESTAMP）。沿固定Java基线getAnonymousArrayComplexType和BinaryRowProtocol协议行为实现，不复制源码；schema及空TypeName原样保留，公开IsAnonymous，reader DataTypeName为ARRAY。匿名描述没有字典会话，CreateValue及参数/输出绑定仍明确拒绝；命名描述继续原连接/事务/cache身份校验。
+API red compile: anonymous-results-red.log;17 first passed anonymous-results-first. Expanded36passed/1failed of37:manual TIMESTAMP used DATE LE year instead of century/year;fixture fixed→37 passed anonymous-results-boundaries-green,TemporalCodec unchanged. Added member-limit/field async cancel/empty-name cache/NULL-nonnull output rejection;45 first43passed/2failed because output fixture lacked ParameterName,preempting target check;names added→45passed anonymous-results-targeted-final,product checks intact. Existing20 five-asset standard-OB20 consumers add fourth anonymousRAW column/emptyname/IsAnonymous/value;full744,no added/removed names. First full Unit2330passed/1failed (anonymous-results-unit-final):old LOB wrong-type fixture kept sending EOF/OK after rejected row,reset write. Changed to await disconnect after row,without swallowing writes;assert preciseProtocolException/oldlocator/no replay/Broken. First fixture correction stopped at metadata,5 passed but30seconds;review identified timeout false evidence,not accepted. Stop moved to real CaptureOutput boundary/exact error→5 passed 122ms (anonymous-results-lob-fixture-final),productLOB unchanged. Independent anonymous/context/read-write rejection/named-path recheck clean,suggested first-success-page-before-change test added,not delegated.
 
-普通/顺序二进制读取复用现有ComplexValueCodec、预算、结果bit2位图与单字段正文边界；值及RAW保持独立快照。支持NULL、空集合、标量精确数值/纳秒、读取或跳过后续字段。服务端游标先读取匹配首个结果页，再在下页元素码或version变化时失败并废弃会话。文本复杂结果、未知元素或缺少完整身份的匿名complex在metadata阶段拒绝，NULL也不能绕过。
-
-验证与走查过程：
-
-- 首轮API红编译见`anonymous-results-red.log`，首批17项通过见`anonymous-results-first`。扩展37项首轮36通过/1失败，原因是手写TIMESTAMP夹具误用DATE年份小端布局；改为世纪/年后37项通过（`anonymous-results-boundaries-green`），未修改正确的TemporalCodec。
-- 新增超限成员数、字段异步取消、空名称字典不能替换布局及NULL/非NULL匿名输出拒绝。45项首轮43通过/2失败：输出夹具缺ParameterName，在预期断言前先被名称校验拒绝；补齐名称后45项通过（`anonymous-results-targeted-final`）。覆盖未通过放宽产品校验取得。
-- 五资产×同步/异步×标准/OB20的既有20项字典消费，增加第四列匿名RAW集合并检查空类型名、IsAnonymous及值；全Consumer744项通过，没有增加或移除Consumer案例。
-- 首轮完整Unit2330通过/1失败（`anonymous-results-unit-final`）：既有LOB wrong-type夹具在收到错误类型输出行、客户端拒绝后继续发送EOF/OK，模拟服务端写入遇到连接重置。夹具改为在输出行后等待客户端断开，不吞写入异常；客户端增加精确ProtocolException断言，保留旧locator、禁止重放及会话废弃断言。
-- LOB夹具初次修复误停在列metadata后，5项虽通过但耗时30秒；独立走查指出其通过原因是超时，该结果不作为修复证据。将停止点移到真正的CaptureOutput拒绝边界并收紧异常后，5项122毫秒通过（`anonymous-results-lob-fixture-final`）。产品LOB代码未改。
-- 独立只读走查及复查确认匿名布局、nullable context、公开读写拒绝及命名类型路径无剩余阻断；指出并修复上述夹具问题，同时补充成功游标页后才触发metadata变化的覆盖。未委派实现。
-
-最终完整编译/回归结果（进程均结束，退出码0）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误；修复后的Unit夹具另经定向编译 | `TestResults/anonymous-results-build-final.log`、`anonymous-results-lob-fixture-final.log` |
-| 完整Unit复查 | 2331通过，0失败/跳过；较上次新增45项、移除0项 | `TestResults/anonymous-results-unit-recheck/*.trx` |
-| 五资产Consumer | 744通过，0失败/跳过；扩展既有20项标准/OB20公开消费 | `TestResults/anonymous-results-consumer-final/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/anonymous-results-di-final/*.trx` |
+| Release core5/DI3 | 0 warnings/errors;fixed Unit fixture separately built | TestResults/anonymous-results-build-final.log,anonymous-results-lob-fixture-final.log |
+| Full Unit recheck | 2331 passed,0 failed/skipped;+45/0 removed | TestResults/anonymous-results-unit-recheck/*.trx |
+| Consumer | 744 passed,0 failed/skipped;existing20 extended | TestResults/anonymous-results-consumer-final/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/anonymous-results-di-final/*.trx |
 
-编译及完整测试命令沿上一节，结果目录换为上表路径；TRX已解析核对计数和案例名称，新增45项且没有移除旧案例。完整Unit使用正常Windows TLS凭据权限，没有安装/删除信任根或改变验证策略。README、架构、计划及台账同步，独立只读复查无剩余阻断；UTF8无BOM/CRLF及git diff --check通过后在当前master本地提交，不推送。
+All processes ended exit0. Same build/tests/table paths,TRX names/deltas parsed. Normal TLS/no roots-policy change;README/design/plan/ledger/recheck/UTF8-no-BOM/CRLF/diff/local master commit,no push. Result submodule done;anonymous construction/binding/fullD05 continue. Real dictionary-DDL/OceanBase-OBProxy/TLS/remote deferred,no package-old-runtime-Framework rerun/live claim;overall open.
 
-匿名标量集合结果子模块完成；匿名构造/绑定及完整D05复核继续推进，整体目标保持开放。真实字典/DDL、OceanBase/OBProxy、扩展经TLS及异机验收按要求暂缓，本轮不重新打包、不重跑旧运行时/Framework矩阵，不据本地协议测试宣称实库兼容。
+## D05 anonymous collection construction/input binding (2026-10-19)
 
-## D05匿名集合构造与输入绑定（2026-10-19）
+Two connection.CreateArrayType overloads:six canonical scalars or preloaded same-session named object/collection element,sync/no network/no alias inference. Anonymous root retains connection/session/explicit transaction/epoch,Clear invalidates;named elements also require exact cached descriptor reference. Only Input accepts factory descriptor/value;typedNULL retains header. Three output directions/read-only result descriptors still rejected then. Shared snapshots/RAWcopy/depth32/64 MiB-10/all-headers-before-values,no dependency. Red compile anonymous-parameters-red.log;first16 had two fixture post-CLOSE sequence failures,corrected;32 new all passed,36 boundary targeted. Six scalar/NULL/empty/independent full bytes/named element header/invalid value-direction/crossconnection-reopen-Clear/transaction begin-end/public sync-async ordinaryprepare-PrepareExecute. Existing20 standard-OB20 consumers extend mixed parameters/typedNULL/header order/invalidation.
 
-连接新增两个CreateArrayType重载：六种规范标量或同会话预载命名对象/集合元素；同步无网络，不推断别名。匿名根保留原连接、物理会话、显式事务和epoch上下文，Clear后失效；命名元素仍核验缓存引用身份。仅Input接受工厂描述及其值，typed NULL保留附加类型头；匿名输出三个方向和只读结果描述仍拒绝。共用既有快照、RAW复制、32层深度及64MiB-10字节预算，头先于值，不新增依赖。
-
-红编译见anonymous-parameters-red.log。首轮16项中2项失败来自夹具statement-close后的序号未重置，修正夹具后新增32项全通过，边界定向36项通过；没有为错误夹具更改产品协议。新增案例覆盖六标量/NULL/空、独立完整字节、命名元素头、无效值/方向、跨连接/重开/Clear及事务开始/结束边界，以及同步/异步普通prepare/PrepareExecute公开执行。扩展既有20项五资产标准/OB20消费，检查混合参数、typed NULL、全部头先于值及描述失效。
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx核心五目标/DI三目标 | 0警告/错误，退出0 | TestResults/anonymous-parameters-build-first.log |
-| 完整Unit | 2363通过，0失败/跳过；新增32、移除0 | TestResults/anonymous-parameters-unit-first/*.trx |
-| 五资产Consumer | 744通过，0失败/跳过 | TestResults/anonymous-parameters-consumer-first/*.trx |
-| DI | 8通过，0失败/跳过 | TestResults/anonymous-parameters-di-first/*.trx |
+| Release core5/DI3 | 0 warnings/errors,exit0 | TestResults/anonymous-parameters-build-first.log |
+| Full Unit | 2363 passed,0 failed/skipped;+32/0 removed | TestResults/anonymous-parameters-unit-first/*.trx |
+| Consumer | 744 passed,0 failed/skipped | TestResults/anonymous-parameters-consumer-first/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/anonymous-parameters-di-first/*.trx |
 
-编译命令沿用dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；完整测试使用对应csproj的dotnet test -c Release --no-build --no-restore -m:1 -nr:false --logger trx。已解析TRX核对计数并比较上一轮案例名。完整Unit使用正常Windows TLS凭据权限，未操作信任根。独立只读走查核对工厂上下文、命名缓存身份、方向归一化前检查、协议头/正文、预算及测试，无阻断问题；另修正ComplexType属性XML的named-only过时说明。README、架构、计划及台账同步，UTF8无BOM/CRLF及diff检查后本地提交，不推送。
+Same single-node/nonshared build and project-specific dotnet test -c Release --no-build --no-restore -m:1 -nr:false --logger trx;TRX counts/names compared. Normal TLS/no roots. Independent factory/context/cache/direction-before-normalization/header-body/budget/tests no blocker;stale named-only ComplexType XML corrected. Docs/UTF8-no-BOM/CRLF/diff/local commit,no push. Input module done;anonymous outputs/fullD05/D06–D09/overall open;real-OBProxy/remote deferred,packages/old-runtime/Framework not rerun.
 
-本模块完成；匿名输出及完整D05复核、D06–D09等继续开放，整体目标未完成。真实数据库/OBProxy与异机验收按要求暂缓，本轮未重跑打包或旧运行时/Framework矩阵，本地夹具不能证明实库兼容。
+## D05 anonymous scalar collection outputs/full local review (2026-10-19)
 
-## D05匿名标量集合输出及完整本地复核（2026-10-19）
+Afterace6a99, six-scalar factory collections support PrepareExecute Output/InputOutput/ReturnValue. Pure output/return explicitly ComplexType;InputOutput may infer factory value;read-only result descriptors remain unbindable. Metadata validates anonymous layout/binds execution snapshot,NUMBER0/3/246 normalized. Wire schema/element/version retained;schema without named identity is not factory identity. Named outputs still exact dictionary descriptor. Anonymous complex-element outputs lack complete named identity,reject before sends,no guessing from declaration. Initial 36 six-scalar×three-direction×sync-async failed old Input-only rule (anonymous-outputs-red),then76 targeted passed (anonymous-outputs-green). Final 71 new:36 public scalar round-trips,22mixed-NULL-empty-zerorow-tailERR-badmetadata,4cancel-close,3NUMBERaliases,6three-direction stale-descriptor sync-async. Existing factory cases updated scalar declarations,named-complex-element outputs add rejection,no old removal. Existing20 five-asset standard-OB20 cases extend mixed named/anonymous exact bytes/typedNULL/results/original references. Badmetadata rejected before rows,mock awaits disconnect there;cancel/close timing only server-sent outputEOF,not confirmed client consumption.
 
-从ace6a99继续，工厂六标量集合开放PrepareExecute的Output/InputOutput/ReturnValue。Output/ReturnValue显式声明ComplexType，InputOutput可从原工厂值推断；只读结果描述仍不可绑定。metadata阶段核验匿名布局并绑定执行快照描述，NUMBER元素0/3/246沿既有规则规范化；原线上metadata的schema/元素码/version保留，无命名类型身份的schema不作为工厂身份。命名输出继续要求字典描述引用一致。匿名复杂元素输出缺少完整命名身份，发包前拒绝，不从声明猜测未知结果结构。
-
-36项六标量×三方向×同步/异步先因旧Input-only限制失败（anonymous-outputs-red），实现后首轮定向76项通过（anonymous-outputs-green）。最终新增71项：六标量公开往返36、混合输出/NULL/空/零行/尾ERR/错误metadata22、取消/关闭4、NUMBER别名3、失效描述三方向同步/异步6。原工厂案例保留并改为验证标量输出声明，命名复杂元素工厂补三个输出方向拒绝；未移除既有案例。扩展原20项五资产标准/OB20消费，检查命名和匿名混合输出的完整发送字节、NULL声明、结果值及原描述引用。元数据错误在行前拒绝，夹具在该边界等待断开，避免以发送/关闭竞态掩盖拒绝路径。取消/关闭夹具仅以服务端已发输出EOF为时序点，不宣称客户端已消费。
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx核心五目标/DI三目标 | 0警告/错误，退出0 | TestResults/anonymous-outputs-build-first.log |
-| 完整Unit | 2434通过，0失败/跳过；新增71、移除0 | TestResults/anonymous-outputs-unit-first/*.trx |
-| 五资产Consumer | 744通过，0失败/跳过 | TestResults/anonymous-outputs-consumer-first/*.trx |
-| DI | 8通过，0失败/跳过 | TestResults/anonymous-outputs-di-first/*.trx |
+| Release core5/DI3 | 0 warnings/errors,exit0 | TestResults/anonymous-outputs-build-first.log |
+| Full Unit | 2434 passed,0 failed/skipped;+71/0 removed | TestResults/anonymous-outputs-unit-first/*.trx |
+| Consumer | 744 passed,0 failed/skipped | TestResults/anonymous-outputs-consumer-first/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/anonymous-outputs-di-first/*.trx |
 
-编译与测试命令沿用上一节，仅更换anonymous-outputs结果目录；已解析TRX并比较前轮案例名。完整Unit使用正常Windows TLS凭据权限，无信任根操作。独立只读走查核对输出快照、metadata身份、原会话/事务/缓存校验、预算及错误/取消/终态，无阻断问题。跨连接/重开/事务输出边界沿用相同StartCommand校验，现有输入边界回归及新增输出Clear回归覆盖共享路径；未将其称为新增逐组合输出测试。
+Same commands/anonymous-outputs directories,TRX names compared;normal TLS/no roots. Independent snapshots/identity/context/budget/error-cancel-terminal review no blocker. Crossconnection/reopen/transaction outputs share StartCommand checks;existing input/new outputClear cases cover shared path,not claimed new per-combination output tests.
 
-完整D05需求对应复核如下：
-
-| 本地约定要求 | 实现及验证对应 |
+| Defined local requirement | Implementation/evidence |
 | --- | --- |
-| OBJECT/COLLECTION嵌套、精确六标量、方向位图及预算 | ComplexType、ComplexValueCodec和codec测试 |
-| 精确字典、嵌套装载、同会话预约、失败不发布 | OceanBaseConnection.ComplexTypes、dictionary测试 |
-| 原会话/事务代次、缓存失效和不可变快照 | ValidateComplexBinding、StartCommand及边界测试 |
-| 命名普通/顺序/分页结果和后续字段 | ResultColumn、SequentialRow.Complex、QueryResult.Cursor及result测试 |
-| 命名参数/输出、声明快照、NULL/零行及原子发布 | PreparedParameters、OracleCommandPlan、QueryResult及parameter测试 |
-| 匿名标量结果、工厂标量/命名元素输入和标量输出 | ComplexColumnMetadata、CreateArrayType、anonymous测试及五资产消费 |
+| Nested OBJECT/COLLECTION,exact six scalars,directional bitmaps,budgets | ComplexType/ComplexValueCodec/codec tests |
+| Exact dictionary/nested loading/session reservation/no partial publication | OceanBaseConnection.ComplexTypes/dictionary tests |
+| Original session/transaction epoch/cache invalidation/immutable snapshots | ValidateComplexBinding/StartCommand/boundaries |
+| Named ordinary/sequential/paged results/following fields | ResultColumn/SequentialRow.Complex/QueryResult.Cursor/result tests |
+| Named parameters/outputs/declaration snapshots/NULL-zero rows/atomic publication | PreparedParameters/OracleCommandPlan/QueryResult/parameter tests |
+| Anonymous scalar results/factory scalar-named inputs/scalar outputs | ComplexColumnMetadata/CreateArrayType/anonymous tests/five consumers |
 
-独立完整性复核未发现文档明确要求但尚未实现的本地D05功能；匿名复杂元素无身份结果/输出拒绝、LOB/cursor/national charset成员及循环图拒绝均为既有明确边界，未缩小要求。D05约定本地范围实现完成，正式状态改为待验证，下一本地模块D06；真实字典/DDL可见性、OceanBase/OBProxy往返及资源语义、扩展经TLS和异机验收继续延期。README、架构、计划及台账同步，UTF8无BOM/CRLF和diff检查后本地提交，不推送。本轮未重跑打包或旧运行时/Framework矩阵，整体目标保持开放。
+Independent completeness review found no explicitly required local D05 function missing. Identityless anonymous-complex results/outputs,LOB-cursor-national members/cycles remain existing explicit rejections,not reduced requirements. Defined local D05 done→Pending verification,nextD06. Real dictionaries/DDL/OceanBase-OBProxy round-trips/resources/TLS/remote deferred. README/design/plan/ledger/UTF8-no-BOM/CRLF/diff/local commit,no push;packages/old-runtime/Framework not rerun,overall open.
+## D06 array binding/multirow outputs: local completion and pause (2026-10-19)
 
-## D06数组绑定及多行输出：本地完成并暂停（2026-10-19）
+After0330193, completed all D06, updated progress, committed, and paused at the user's request. Five assets expose OceanBaseCommand.ExecuteArray(rowCount)/ExecuteArrayAsync(rowCount,token), requiring Oracle, explicitly bound current transaction, Use Oracle Prepare Execute, and existing>=2.2.76 gate. INSERT/UPDATE/DELETE/MERGE, BEGIN/DECLARE/CALL, StoredProcedure supported. Input/InputOutput use equal-length same-session factory anonymous collections; pure outputs declare factory collection types. Six scalars and preloaded named object/collection elements supported, excluding LOB/cursor/national members. D02-deferred multirow OUT/RETURNING uses this independent array API; ordinary D02/D05 scalar contracts retained.
 
-从0330193继续，按用户要求完成整个D06后统一更新进度、提交并暂停。五资产均提供OceanBaseCommand.ExecuteArray(rowCount)/ExecuteArrayAsync(rowCount, token)，要求Oracle、显式绑定当前事务、Use Oracle Prepare Execute及既有2.2.76版本门槛。支持INSERT/UPDATE/DELETE/MERGE、BEGIN/DECLARE/CALL及StoredProcedure；Input/InputOutput使用同会话工厂匿名集合、长度一致，Output/ReturnValue声明工厂匿名集合类型。六标量及预载命名对象/集合元素已接入，不引入LOB/cursor/national charset集合成员。D02移交的多行OUT/RETURNING使用独立数组入口，普通D02/D05标量语义保留。
+Fixed OceanBase SHA5e8a63d29dae9fde5e962b8fcc7b167d438fc343 obmp_stmt_prexecute.cpp/obmp_stmt_execute.cpp supports iteration2/mode128, retaining per-item DML results without aggregation optimization. Response flags2 array,3 RETURNING,6/7 PL OUT. Successful DML without RETURNING first column is update count; failures/PL/RETURNING use position. Per-item errors retain codes, not potentially value-bearing text. No-output DML counts checked against trailing total; PL/RETURNING item counts null, complete server aggregate retained without invented counts. Immutable OceanBaseArrayBindingResult stores positional status/codes/multirow outputs. ArrayBindingResult publishes complete/provable partial results before lease release/log callbacks; unknown suffix=Unknown, unsentSQL=null. Outputs object[][](input position→rows) publish only after complete response/OB20/budget/Busy checks;NULL=DBNull,zero rows empty. TailERR/cancel/timeout/disconnect preserve old outputs. Caller owns transaction,no commit/rollback/replay/new connection; original session/epoch/cache/deferred close retained. Outputs<=4093columns/65535 values/64 MiB raw bytes, explicit rejection beyond.
 
-沿固定OceanBase 5e8a63d29dae9fde5e962b8fcc7b167d438fc343的obmp_stmt_prexecute.cpp/obmp_stmt_execute.cpp实现iteration2、mode128，保留逐项DML结果并禁用聚合优化。响应array标志2、RETURNING 3、PL OUT 6/7；无RETURNING DML成功首列按更新数，失败/PL/RETURNING按位置。逐项错误保留错误码，不公开可能带绑定值的错误文本；无输出DML逐项数核对尾累计数，PL/RETURNING逐项数为null，完整响应仍保留服务端累计数，不伪造计数。
-
-OceanBaseArrayBindingResult按输入位置提供不可变状态、错误码及多行输出；ArrayBindingResult在原租约释放和日志回调前保存完整或可证明的部分结果，未知后缀为Unknown，未发送SQL时为null。完整响应、OB20边界、取消及Busy状态核验成功后，输出参数才发布为object[][]（输入位置→多行），NULL为DBNull、零行为空数组；尾ERR/取消/超时/断流保留旧值。事务保持调用者所有，不提交、回滚、重放或另建连接，沿原会话/事务代次/缓存身份及延迟statement关闭路径。输出最多4093列、65535个值、64MiB原始字段字节，超限明确失败。
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx核心五/DI三目标 | 0警告/错误，退出0 | TestResults/array-binding-full-build-final.log |
-| 完整Unit | 2555通过，0失败/跳过；新增121、移除0 | TestResults/array-binding-full-unit-final/*.trx |
-| 完整五资产Consumer | 774通过，0失败/跳过；新增30 | TestResults/array-binding-full-consumer-final/*.trx |
-| DI | 8通过，0失败/跳过 | TestResults/array-binding-full-di-final/*.trx |
-| D06定向 | 121通过；最终列数上限也由完整Unit覆盖 | TestResults/array-binding-reviewed-focus/*.trx |
+| Release core5/DI3 | 0 warnings/errors,exit0 | TestResults/array-binding-full-build-final.log |
+| Full Unit | 2555 passed,0 failed/skipped;+121/0 removed | TestResults/array-binding-full-unit-final/*.trx |
+| Full Consumer | 774 passed,0 failed/skipped;+30 | TestResults/array-binding-full-consumer-final/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/array-binding-full-di-final/*.trx |
+| D06 targeted | 121 passed;final column bound also in full Unit | TestResults/array-binding-reviewed-focus/*.trx |
 
-编译命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false。Unit/Consumer/DI分别执行dotnet test -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/array-binding-full-{unit,consumer,di}-final，保存原退出码后输出日志，全部退出0。完整Unit使用正常Windows TLS凭据权限，无信任根操作或验证降级。五资产消费覆盖同步/异步、标准协议和OB20、多行RETURNING、部分错误及尾附加数据不发布；单元另覆盖六标量三输出方向、命名元素身份、PL停止前缀、事务、声明失败不发包、取消/关闭/超时/断流、预算和RAW快照。
+Build:dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false. Each project dotnet test -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/array-binding-full-{unit,consumer,di}-final,original exit codes captured before printing logs,all 0. Normal TLS permissions,no roots/downgrade. Consumers sync/async/standard/OB20/multirow RETURNING/partial errors/extra-tail no publication. Unit also six-scalar×three-output-direction,named identity,PL stopped prefix,transactions,pre-send declarations,cancel-close-timeout-disconnect,budgets/RAW snapshots. Independent request review no blocker. Full review found missing actual array flags and repeated whole-group RAW copies per output column. Eight red cases then2/3/6/7/six-scalar-direction passed;200columns/256KiBRAW initially allocated~50 MiB,once-per-input copy reduced below8 MiB. Added zero-row scalar metadata,invalid-row preserves proven status,missing PL items,column bound. Fixtures corrected post-CLOSE sequence and wait after bad third row,without product retry. Final author review/full regression no blocker.
 
-独立请求走查无阻断；完整D06走查提出真实array响应标志缺失、按输出列反复复制整组RAW两项，均以红绿回归修复：真实标志先复现8项失败，再通过2/3/6/7及六标量三方向矩阵；200输出列/256KiB RAW分配回归先捕获约50MiB分配，改为按输入项一次复制后低于8MiB上限。另补零行标量元数据、坏行不修改已证明状态、PL缺项和列数上限校验。测试夹具修正标准statement-close后序号重置、坏第三行后的断开等待，不以产品重试掩盖。作者最终走查及完整回归无未解决阻断。
+Requirement mapping:request/total budget→OraclePrepareExecutePacket/RequestTests;partial status/position/count→OracleArrayBindingPlan/ResultTests;multirow/atomic OUT→OracleCommandPlan/ExecutionTests;session-transaction-cancel→StartCommand/CommandExchange/fault tests;five-asset standard/OB20→ArrayBindingConsumerTests. README/design/plan/ledger/UTF8-no-BOM/CRLF/diff/local commit,no push. Paused after commit,not starting D07 then;next D07 fallback. A05/C01/D08/D09/otherD15/release open. D06 local done/Pending verification;real-OBProxy/remote/TLS deferred,package-old-runtime-Framework not rerun;overall goal incomplete.
 
-本地要求对应：请求/整包预算→OraclePrepareExecutePacket及RequestTests；部分成功/失败位置/逐项计数→OracleArrayBindingPlan及ResultTests；多行OUT/RETURNING/原子发布→OracleCommandPlan及ExecutionTests；原会话/事务/取消清理→共享StartCommand/CommandExchange及故障测试；五资产标准/OB20→ArrayBindingConsumerTests。README、架构、计划和台账同步，UTF8无BOM/CRLF与diff检查后本地提交，不推送。
+## D07 basic-scalar client-prepare fallback (2026-10-19)
 
-本次提交后按用户要求暂停，不启动D07。下次从D07客户端预处理回退继续；A05公共MySQL可信判定、C01池及完整重置、D08拓扑/负载、D09 XA、D15其他插件和发布审核仍开放。D06本地约定范围完成，正式状态为待验证；真实数据库/OBProxy、异机及扩展经TLS联调仍暂缓，本轮未重跑打包或旧运行时/Framework矩阵。本地夹具不能证明实库兼容，整体goal未完成。
+After1840a4c, user requested module tests/review/local master commit,no push. Conflicting leftover Oracle-only/connection-level/no-commit plan from another session was explicitly authorized for direct correction; one unified D07 plan retained. Command.AllowClientSidePrepareFallback defaultfalse,five-target sync/async. Only auto-prepare first response1295/HY000 after complete standard/OB20 boundary can send one COM_QUERY on same lease/transaction/total budget. Explicit Prepare/FetchSize/PrepareExecute/metadata-EXECUTE errors/disconnect/cancel never fall back. No ID/failure cache,next run still prepare. Existing text/sequential/multiple-result/unknown rules reused. Safe input integers/finite floats/exact decimal/binary/NULL/ordinary Oracle strings eligible;special types inclNULL/outputs rejected. Oracle binding order retained,strings CAST VARCHAR2/doubled quotes,RAW HEXTORAW,conservative4000/2000 bytes/NUL rejection,exact invariant numbers. MySQL validates backslash-on/off/ANSI_QUOTES three combinations,executable comments/uncertain syntax rejected. Nonnull MySQL strings await trusted collation,explicitly rejected without hardcoded default. Expressions parenthesized,SQL/options/values/RAW frozen at entry,totalSQL including command<=64 MiB. Values may appear in serverSQL logs;driver diagnostics still omit SQL/params.
 
+Red compile:client-prepare-red.log/client-prepare-public-red.log. Initial fixtures wrongly used DbException.ErrorCode/Oracle CLR mapping;correct ServerErrorCode/decimal→25 passed,no product mapping change. Review found Oracle float literals lostF/D,stringCHAR padding,MySQLSingle shortened decimal,missing ANSI_QUOTES. Two float/four others failed:client-prepare-float-red.log/client-prepare-review-red.log. F/D,exact Single→Double with exponent,VARCHAR2 CAST,third lexical check fixed;MySQL collation safely rejected,no new probes/config abstraction. Added 42Unit(22encoding/20execution),30Consumer:repeated/q/comments,culture/exact-float/Unicode-injection/RAW-budget/defaultoff/exact error-missingSQLSTATE-stage boundaries/sync-async text/original transaction-snapshot/prepare cancel-timeout-disconnect/fiveassets standard-OB20-extra-tail.42targeted client-prepare-reviewed-focus;58 with D06 faults client-prepare-array-fixture-reviewed;63 with temporaryLOB client-prepare-fixtures-final.
 
-## D07基础标量客户端预处理回退（2026-10-19）
+First full Unit2566passed/26failed:24 sandbox key permissions,two D06 cancel-close fixtures confused server-sent with client-received. Normal permissions solved certificates,no roots/downgrade;only Cancel/Close allows first itemUnknown/Succeeded,second strictlyUnknown,other fault assertions retained/reviewed. Normal run's TCP stress read timed out,also serial run2596passed/1failed(client-prepare-unit-complete). Eight Task.Run sync callers blocked shared pool needed by async server. LongRunning dedicated threads retained 8×1024connects,5second connect-read budgets/byte ACK. One targeted passed(client-prepare-tcp-fixture-green),review verified real TcpTransport;final default scheduling/no serial runsettings2597passed. Full run also exposed temporaryLOB Free wrongtype/Write malformed-locator fixtures writing EOF/OK after CaptureOutput rejection. LobMutationReply rejectOutput waits at real boundary for Write/Create/Free;removed Create swallowingIOException,added precise innerProtocolException,retained ownership/Broken/unknown/no-replay.20 related passed(client-prepare-lob-fixtures-green),productLOB unchanged. Four new files whitespace check passed;expanded existing-file format found historical multiple attributes per line,without unrelated whole-file reformat. UTF8-no-BOM/CRLF/diff separately checked;packages/old-runtime/Framework not rerun.
 
-从1840a4c继续，按本轮用户要求完成模块测试、独立走查后在当前master提交，不推送。另一会话遗留的Oracle-only/连接级开关/不提交实施段与本轮要求冲突，用户明确授权直接合并修复；保留统一D07实施段。公开命令AllowClientSidePrepareFallback默认false，五目标同步/异步均已接入。仅自动prepare首响应1295/HY000、完整通过标准/OB20响应边界验证后，保留原租约/事务/总预算发送一次COM_QUERY。显式Prepare、FetchSize、PrepareExecute、metadata及EXECUTE阶段错误、断线、取消都不回退。没有statement ID或失败结论缓存；下次仍先prepare。文本结果复用原reader/顺序字段流/多结果及未知结果契约。
-
-基础输入整数、有限浮点、精确decimal、二进制、NULL及Oracle普通字符串可回退；特殊类型及其NULL、输出方向仍拒绝。Oracle复用原绑定位置，字符串CAST为VARCHAR2并双写引号，RAW用HEXTORAW，保守4000/2000字节限制及NUL拒绝；数字不经区域性或缩窄。MySQL校验反斜杠开/关和ANSI_QUOTES三种词法组合，拒绝执行式注释/不确定语法；非NULL字符串等待可信会话collation，明确拒绝，不硬编码默认排序规则。所有表达式加括号，参数/RAW及SQL/开关在执行入口冻结，最终SQL含命令字节最多64MiB。回退值可能出现在服务端SQL日志，驱动诊断仍不记录SQL或参数。
-
-验证与走查记录：
-
-- 编码及公共API红编译分别见client-prepare-red.log、client-prepare-public-red.log。首轮夹具误用DbException.ErrorCode和Oracle字段CLR类型，按现有ServerErrorCode/decimal契约修正后25项通过，未为夹具修改产品类型映射。
-- 独立走查发现Oracle普通数字字面量丢失F/D浮点类型、字符串变成CHAR补空格语义、MySQL Single十进制缩短及ANSI_QUOTES组合遗漏。浮点2项及其余4项先失败记录见client-prepare-float-red.log、client-prepare-review-red.log；补F/D、MySQL先精确提升Double并保留指数、Oracle VARCHAR2 CAST、第三种词法校验后通过。MySQL字符串collation缺口按最小安全边界明确拒绝，未新增会话查询或配置抽象。
-- 最终42项新Unit（22编码+20执行）和30项新Consumer，覆盖重复位置/q引号/注释、文化区/精确数值/浮点、Unicode/注入字符、RAW/预算、默认关闭/精准错误/缺SQLSTATE/metadata及执行阶段、同步异步文本reader、原事务/快照、prepare前后取消/超时/断流，以及五资产标准/OB20及尾附加数据拒绝。42项见client-prepare-reviewed-focus；含D06故障的58项见client-prepare-array-fixture-reviewed，扩至临时LOB共63项见client-prepare-fixtures-final。
-- 首次完整Unit为2566通过/26失败：24项为沙箱证书私钥导入权限，另两项D06取消/关闭夹具把服务端写出当成客户端已接收。正常Windows权限解决证书问题，不安装信任根或降低TLS校验；D06仅Cancel/Close允许首项Unknown或Succeeded，第二项严格Unknown，其余故障原断言保留，独立复核通过。
-- 正常权限回归中既有TCP压力测试读超时，串行测试集合仍复现（2596通过/1失败，client-prepare-unit-complete）。8个Task.Run同步阻塞客户端与异步服务端共享线程池，改为LongRunning专用线程后，保留8×1024次连接、5秒连接/读取超时和字节确认。定向1项通过见client-prepare-tcp-fixture-green，独立走查确认未绕过TcpTransport；最终完整Unit按默认调度运行，不使用串行runsettings，2597项全通过。
-- 完整回归另暴露临时LOB Free的错误类型、Write的畸形locator响应夹具在客户端拒绝完整输出行后继续发送EOF/OK，导致模拟服务端写入重置。LobMutationReply统一rejectOutput等待边界，贯通Write及临时Create/Free，删除Create原有吞IOException逻辑；错误类型/畸形值增加InnerException精确ProtocolException断言，旧所有权/连接销毁/未知结果/不重放断言保留。20项相关测试通过见client-prepare-lob-fixtures-green。独立走查核对产品CaptureOutput及codec的真实拒绝点，不改产品LOB行为。
-- 新增四个源码/测试文件的dotnet format whitespace校验通过；对既有文件的扩展格式检查发现历史同一行多个测试属性，不作无关整文件重排。UTF8无BOM/CRLF及git diff --check单独核验。未重新打包或运行旧运行时/Framework矩阵。
-
-最终完整编译/回归结果（退出码均为0）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx核心五/DI三目标 | 0警告、0错误 | `TestResults/client-prepare-build-final.log` |
-| 完整Unit，默认测试调度 | 2597通过，0失败/跳过；本轮新增42项，未删除旧案例 | `TestResults/client-prepare-unit-final/11855_VIRTIAL-PC_2026-10-19_20_40_28_net10.0.trx` |
-| 完整五资产Consumer | 804通过，0失败/跳过；新增30项 | `TestResults/client-prepare-consumer-reviewed/*.trx` |
-| DI | 8通过，0失败/跳过 | `TestResults/client-prepare-di-reviewed/*.trx` |
+| Release core5/DI3 | 0 warnings/errors | TestResults/client-prepare-build-final.log |
+| Full Unit,default scheduling | 2597 passed,0 failed/skipped;+42/no old removal | TestResults/client-prepare-unit-final/11855_VIRTIAL-PC_2026-10-19_20_40_28_net10.0.trx |
+| Full Consumer | 804 passed,0 failed/skipped;+30 | TestResults/client-prepare-consumer-reviewed/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/client-prepare-di-reviewed/*.trx |
 
-编译及完整测试命令沿上一模块，不加filter或runsettings，结果目录使用上表路径。已解析最终TRX确认全部执行/通过；与当前HEAD测试diff核对原案例未移除。完整Unit使用正常Windows证书私钥权限，没有安装/删除信任根或降低TLS验证；首轮失败及试验配置不计为通过证据。另按用户要求删除global.json，并移除架构/方案中的SDK锁定要求，使用支持net10.0的已安装SDK；删除后Release全解决方案0警告/错误，见`TestResults/sdk-unpin-build-final.log`。
+All exit0; same full commands as preceding module,no filter/runsettings,table dirs. Parsed final execution/pass counts/HEAD test diff confirms no old removal. Normal key permissions,no roots/TLS weakening;initial failures/experimental settings not passes. User also requested removing global.json/SDK pin requirements from architecture-plan,using installed net10-capable SDK;postdeletion full Release 0 warnings/errors:TestResults/sdk-unpin-build-final.log. Independent recheck clean;source-tests/docs/UTF8-no-BOM/CRLF/diff/local master commit,no push. D07 local done/Pending verification;D08/D09/A05/C01/otherD15/release/overall open. Real-OBProxy/remote deferred;TLS extensions/packages/old-runtime/Framework not rerun;fixtures not real acceptance.
 
-独立只读走查及复查无剩余阻断；源码/测试、README、架构、方案和台账同步，UTF8无BOM/CRLF及diff检查后在当前master本地提交，不推送。D07约定本地范围完成，正式状态待验证；D08/D09、A05、C01、D15其他插件及发布审核保持开放，整体goal未完成。真实数据库/OBProxy及异机测试按要求暂缓，扩展经TLS、打包及旧运行时/Framework矩阵本轮未重跑；本地夹具不作为实库兼容证据。
+## D08 address discovery/round-robin selection (2026-10-19)
 
-## D08地址发现与轮转选址（2026-10-19）
+After12fa814,reused C02 opening. Load Balance=Sequential|RoundRobin,defaultSequential. RoundRobin rotates each explicitOpen start,tries each candidate once circularly,only TCP socket-opening failure advances. Threadsafe cursor shared per modern source,direct connection instance retains across Close/Open;new connection string/AddressResolver resets direct cursor,no global cursor. Five-target IOceanBaseAddressResolver sync/async;connection.AddressResolver configurable only closed,builder.UseAddressResolver freezes reference/source-owned connections cannot override. Once per explicitOpen invokes corresponding resolver;result replaces configured candidates,existing Server syntax/inheritedPort,<=65536chars/256candidates. Empty/error/overlimit/invalid fails immediately,no seed/stale fallback. Application owns disposal/concurrency;sync cooperates cancellation,async returns Task promptly,callbacks return promptly/nonthrowing. Server still required;adapter only,no built-in OCP/TNS/role routing/cache/background reconnect. Discovery/TCP/TLS/auth share total budget;async ignored-token wait still aborts,late success never connects/late error observed,callbacks outside locks. New sessions reauthenticate/mode-TLS check,A05 intact. Transaction/sentSQL disconnect does not rediscover/failover/reconnect/replay;caller explicit Close/Open only. Application guarantees trusted same logical tenant addresses.
 
-从12fa814继续，复用C02的PhysicalSession建连链路。新增连接串Load Balance=Sequential|RoundRobin，默认Sequential；RoundRobin轮换每次显式Open的起点并环形尝试候选一次，仅TCP socket建连失败允许下一候选。线程安全游标按现代数据源共享，直接连接按实例跨Close/Open保留；重新设置连接串或AddressResolver重置直接连接游标，不使用全局游标。
+Configuration missingAPI red:topology-config-red.log,first8passed topology-config-green;execution API red:topology-execution-red.log,first35passed topology-execution-green.56newUnit:strict enum/freeze/serialization/wrap-overflow-concurrency/discovery refresh-replace-port/lifecycle/invalid-throw/cancel-close-timeout-late/TLS-name-reject/auth-mode/transaction no-replay. Four initial boundary failures:two wrong fixture initSQL corrected to SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED/set autocommit = 0,two sandbox keypermissions. Product transaction/TLS unchanged;normal permissions52passed topology-boundaries-green. Review found Close invoked callbacks under session lock/callback errors blocked cleanup. Two cross-thread-state/throwing callback regressions failed(topology-close-lock-red,topology-close-callback-red). Now lock closes transport/setsClosed,then cancel outside lock/catchesAggregateException;two passed topology-close-callback-green. Two2second-discovery+silent-handshake cases prove3second total(topology-shared-budget-green). Mutation resetting after discovery made both fail~5seconds(topology-shared-budget-mutation-red);source restored/full rebuild. One CreateBudget/CancelAfter,not fixture-wait proxy.40five-asset×sync-async×standard-OB20×success-disconnect verify resolver/reopen rotation/different results/unknown no reconnect. Resolver helper compiles Standard2.0/interface with isolated assets,no DispatchProxy incompatible collectible interface.40passed topology-consumer-green. Independent repeated review budget mutation/callbacks/API ownership clean,not delegated.
 
-五目标公开IOceanBaseAddressResolver的同步/异步方法，连接AddressResolver仅关闭时可设置，数据源builder.UseAddressResolver在Build冻结引用、其连接不可改写。每次显式Open调用对应方法一次，新结果替换配置候选，按现有Server语法解析并继承Port；最多65536字符、256候选。空值、错误、超限或无效结果立即失败，不回退种子或陈旧快照。接口由应用持有、释放并保证并发安全，同步实现合作取消、异步实现及时返回Task，取消回调须及时返回且不能抛错。配置Server仍必填；本地实现提供适配器入口，没有内置OCP/TNS格式、角色路由、缓存或后台重连。
-
-发现、TCP、TLS及认证共用原总连接预算。异步resolver即使忽略token也可中止等待，迟到成功不建连、迟到异常被观察；用户回调不在驱动锁中调用。新物理会话仍重新认证和检查模式/TLS，A05公共MySQL限制保留。事务及已发送SQL断流后不发现、不切换、不透明重连或重放；调用方只能显式Close/Open创建新会话。应用须保证发现地址属于可信同一逻辑租户。
-
-验证与独立走查：
-
-- 配置API缺失红编译见topology-config-red.log，配置首轮8项通过（topology-config-green）；resolver API缺失红编译见topology-execution-red.log，执行首轮35项通过（topology-execution-green）。新增56项Unit覆盖严格枚举/快照/序列化、轮转环绕/溢出/并发、发现刷新/替换/端口继承、生命周期/冻结、非法结果/抛错、取消/关闭/超时/迟到结果、TLS名称/拒绝、认证/模式失败和事务断流不重放。
-- 首轮边界4项失败：2项事务夹具误写初始化SQL，改为实际SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED和set autocommit = 0；2项来自沙箱证书私钥权限。产品事务/TLS策略未改，正常Windows权限下52项边界通过（topology-boundaries-green）。
-- 独立走查发现Close在session锁内调用取消回调，且回调异常可能阻止资源释放。增加跨线程读取原session状态和抛错回调2项回归，修前失败（topology-close-lock-red、topology-close-callback-red）；改为锁内先关闭传输/置Closed、锁外取消并捕获AggregateException，修后2项通过（topology-close-callback-green）。
-- 发现耗时2秒后静默握手的2项回归验证3秒总预算（topology-shared-budget-green）；临时在发现后重置预算的变异使2项均在约5秒失败（topology-shared-budget-mutation-red），随后恢复源码并完整重编译。最终源码仅CreateBudget设置一次CancelAfter，不以夹具等待时限代替总预算断言。
-- 新增40项五资产×同步/异步×标准/OB20×成功/断流消费，验证公开发现、重开轮转、不同地址结果及未知结果不重连。resolver实现放在既有Standard2.0消费辅助工程，与目标资产一起隔离加载，同时验证基线接口可编译；未使用无法引用collectible接口的DispatchProxy。40项定向通过（topology-consumer-green）。
-- 独立只读走查及多次复查无剩余本地范围阻断；核对共享预算变异、取消回调、公开五资产消费及接口/文档所有权契约。未委派实现。
-
-最终完整验证（进程结束、退出码均为0）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误 | TestResults/topology-build-final.log |
-| 完整Unit | 2653通过，0失败/跳过；新增56、移除0 | TestResults/topology-unit-final/*.trx |
-| 五资产Consumer | 844通过，0失败/跳过；新增40、移除0 | TestResults/topology-consumer-final/*.trx |
-| DI | 8通过，0失败/跳过 | TestResults/topology-di-final/*.trx |
-| 新增源码/测试空白格式校验 | 退出0 | TestResults/topology-format-final.log |
+| Release core5/DI3 | 0 warnings/errors | TestResults/topology-build-final.log |
+| Full Unit | 2653 passed,0 failed/skipped;+56/0 removed | TestResults/topology-unit-final/*.trx |
+| Consumer | 844 passed,0 failed/skipped;+40/0 removed | TestResults/topology-consumer-final/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/topology-di-final/*.trx |
+| New-file whitespace | Exit0 | TestResults/topology-format-final.log |
 
-编译命令为dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；完整测试命令为dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/topology-<unit|consumer|di>-final。已解析最终TRX并与D07最后通过报告比较案例名称，确认全部执行/通过和零移除。完整Unit使用正常Windows证书私钥权限，没有安装/删除信任根或降低TLS验证。global.json仍保持删除。README、架构、方案及台账同步，UTF8无BOM/CRLF与git diff --check通过后在当前master本地提交，不推送。
+Processes ended/all exit0. Same single-node/nonshared build/tests,TestResults/topology-<unit|consumer|di>-final. TRX compared D07 names,all executed/passed/0removed. Normal key permissions,no roots/TLS weakening;global.json remains deleted. README/design/plan/ledger/UTF8-no-BOM/CRLF/diff/local master commit,no push. Defined adapter/selection local done/Pending verification;real topology/OceanBase-OBProxy coordination/fault/remote deferred. Packages/old-runtime/Framework not rerun,local TLS not real cert compatibility. D09/A05/C01/otherD15/release/overall open.
 
-D08约定本地适配器与选址范围完成，正式状态待验证；真实拓扑服务/OceanBase/OBProxy协调、故障与异机验收按要求暂缓。本轮未重新打包或重跑旧运行时/Framework矩阵，本地TLS夹具不证明真实部署证书兼容。D09、A05、C01、D15其他插件及发布审核继续开放，整体goal未完成。
+## D08 close-error mapping/existing batch-fixture review (2026-10-19)
 
-## D08关闭错误映射与既有批次夹具复查（2026-10-19）
+D09 first full run exposed three prior syncClose failures:RSA key wait,SHA-2 finalOK wait,multiaddress silent handshake sometimes OceanBaseException instead of OperationCanceledException. TestResults/xid-unit-full/*.trx:2661passed/3failed,not XID bytes/not dismissed as environment. D08 outside-lock cancellation created race:Close setsClosed/closes transport under lock,handshake can map before _closing.Cancel outside lock. Break retainedClosed,but MapOpenError checked only token. Fix reads authoritativeClosed too,caller token still first,other timeout/server mappings unchanged;no callbacks reintroduced under locks/no second flag. Independent review session cannot reopen/State no reversed lock order.23 RSA/SHA-2/address/resolver interruption cases passed(TestResults/close-mapping-green/*.trx),original failures retained;final full below.
 
-D09基础模块首轮全量回归发现三个既有同步主动关闭案例失败：RSA公钥等待、SHA-2最终OK等待及多地址静默握手的Close路径均偶发返回OceanBaseException，预期OperationCanceledException。证据为TestResults/xid-unit-full/*.trx（2661通过、3失败），不是XID字节值问题，也没有将失败当作环境问题略过。根因是D08将取消回调移出锁后，Close先在锁内置Closed并关闭传输，握手线程可能在锁外_closing.Cancel前完成错误映射；Break本身保留Closed，但MapOpenError此前只看令牌。
+Second full2663passed/1failed(TestResults/xid-unit-reviewed/*.trx):BatchEarlyReaderCloseNeverExecutesSuffix(false,true) server wrote tailEOF after client prefetched first row/returned then disposed undrained reader. Only unread branch stops after metadata+first row/leaves EOF pending/awaits disconnect;other BatchTextResult users complete normally,no swallowed new write errors. No-suffix/Broken assertions retained;Dispose<5seconds proves not default30second timeout. Independent stop/bound review clean;four sync-async×unread cases passed 109ms(TestResults/batch-early-close-fixture-green/*.trx),product batch unchanged. Close-map commit9493278/batch-fixture e601e23,local master/no push.
+## D09 immutable XID identity foundation (2026-10-19)
 
-修复在MapOpenError同时读取权威Closed状态，调用方token仍优先，其余超时/服务器错误映射不变；不将用户回调放回锁内，也不增加第二个关闭标志。独立只读走查确认session不可重开、State读取没有反向锁序。23项RSA/SHA-2/多地址中断及resolver锁外回调定向全部通过（TestResults/close-mapping-green/*.trx），原三项失败回归保留；最终全量结果见下节。
+After06b5ed0,five-target sealed OceanBaseXid:IEquatable<OceanBaseXid>,Int32formatId/two byte arrays. Full signedInt32 exceptNULLXID-1,global1–64 bytes/branch0–64,bothnonnull. Constructor/getters defensively copy; equality/hash include format,independent segment boundaries/full bytes. Default object text does not expose identity. No implicit string-Guid/serialization/XA execution/dependency. Fixed Java SHA6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 OceanBaseXid/OceanBaseXaResource and server SHA5e8a63d29dae9fde5e962b8fcc7b167d438fc343 ObXATransID(src/storage/tx/ob_xa_define.h/.cpp). Driver deliberately avoids Java mutable-array ownership. Public coordinator domainInt32;later MySQL UInt32 bit pattern/Oracle signed values;recovered out-of-domain serverInt64 must fail,not truncate/drop. No database commands executed here.
 
-第二轮全量2663通过、1失败（TestResults/xid-unit-reviewed/*.trx），失败为BatchEarlyReaderCloseNeverExecutesSuffix(false,true)的模拟服务端写尾EOF时遇连接重置。客户端ExecuteReader预读首行便可返回，随即Dispose主动废弃未读响应，旧夹具继续写尾包形成竞态。仅该unread分支停止在metadata和首行后，保持尾EOF未发送并等待断开；共享BatchTextResult的其他调用仍完整终结，没有吞新的写入异常。原后续命令未执行与连接Broken断言保留。补Dispose耗时小于5秒断言，明显短于默认30秒命令预算，不能以等终态超时来假通过。独立走查确认停止点和完成上界正确，4项同步/异步×unread定向109毫秒全部通过（TestResults/batch-early-close-fixture-green/*.trx），产品批次逻辑未改。关闭映射修复提交9493278，批次夹具修复提交e601e23；均为当前master本地提交，不推送。
+11Unit first missingAPI compile(TestResults/xid-red.log) then11passed(TestResults/xid-green/*.trx):Int32min/-2/0/max,reserved-1,null/0/65length,emptybranch,64+64arbitraryNUL/highbits,defensive-copy identity/hash/dictionary stability,different fields/segment boundaries. Five isolated Consumers/public contract;Standard2.0 helper directly compiled. Independent design/code/docs review no XID blocker,implemented without delegation.
 
-## D09不可变XID身份基础模块（2026-10-19）
-
-从06b5ed0继续。核心五目标提供sealed OceanBaseXid : IEquatable<OceanBaseXid>；构造接收Int32 formatId和两段字节，FormatId保留完整有符号值，仅拒绝NULLXID -1；全局ID 1–64字节、分支0–64字节，两者非null。构造及GetGlobalTransactionId()/GetBranchQualifier()防御复制；Equals/GetHashCode按格式号、独立段界及完整字节定义身份，默认对象字符串不含身份。没有隐式字符串/Guid转换、序列化格式、XA执行入口或新依赖。
-
-身份结构/两段上限依据固定Java 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的OceanBaseXid/OceanBaseXaResource及OceanBase 5e8a63d29dae9fde5e962b8fcc7b167d438fc343的ObXATransID（src/storage/tx/ob_xa_define.h/.cpp），本驱动不复制Java保留和返回可变原数组的行为。公开域为协调器Int32；后续MySQL须保留32位无符号位模式、Oracle保留有符号值，恢复遇超出公开域的服务端Int64身份必须明确失败，不截断/丢弃。此为后续编码/恢复契约，本模块没有执行这些数据库命令。
-
-先写11项Unit，缺OceanBaseXid API红编译见TestResults/xid-red.log，实现后11项定向通过（TestResults/xid-green/*.trx）。覆盖Int32最小/-2/0/最大值、保留-1、null/0/65长度、空分支、64+64任意字节/NUL/高位值、输入及取回数组修改后身份/散列/字典查找不变、各字段不同及相同拼接字节不同段界。新增五资产隔离Consumer 5项验证公开契约，既有Standard2.0辅助工程增加直接编译消费。独立设计与代码只读走查，以及README/架构/方案复查均无XID模块阻断；实现本人完成，没有委派实现。
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误；最终Dispose耗时断言另经Unit定向编译 | TestResults/xid-build-final.log、batch-early-close-fixture-green.log |
-| 完整Unit最终复核 | 2664通过，0失败/跳过；新增11、移除0 | TestResults/xid-unit-final/*.trx |
-| 五资产Consumer | 849通过，0失败/跳过；新增5、移除0 | TestResults/xid-consumer-reviewed/*.trx |
-| DI | 8通过，0失败/跳过 | TestResults/xid-di-reviewed/*.trx |
-| 新增源码/测试空白格式校验 | 退出0 | TestResults/xid-format-verify.log |
+| Release core5/DI3 | 0 warnings/errors;final Dispose-duration fixture separately built | TestResults/xid-build-final.log,batch-early-close-fixture-green.log |
+| Final full Unit | 2664 passed,0 failed/skipped;+11/0 removed | TestResults/xid-unit-final/*.trx |
+| Consumer | 849 passed,0 failed/skipped;+5/0 removed | TestResults/xid-consumer-reviewed/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/xid-di-reviewed/*.trx |
+| New-file whitespace | Exit0 | TestResults/xid-format-verify.log |
 
-编译命令为dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；完整测试沿dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/<上表目录>。最终Unit使用正常Windows证书私钥权限，不安装/删除信任根或降低TLS验证；首轮/第二轮失败不计通过。已解析最终TRX并与D08最后通过报告逐案例比较，确认全部执行/通过、Unit新增11、Consumer新增5且旧案例移除0；Unit最终进程退出0。global.json保持删除。README、架构、方案及台账同步，UTF8无BOM/CRLF与diff检查后在当前master本地提交，不推送。
+Same single-node/nonshared build/full test flags/table dirs;normal key permissions,no roots/downgrade. First/second failed runs not passes. Final TRX names compared D08,+11Unit/+5Consumer/0removed,Unit exit0. global.json remains deleted. README/design/plan/ledger/UTF8-no-BOM/CRLF/diff/local master commit,no push. D09 In progress,identity only;pinned sessions/phases/recovery next. TransactionScope rejected;real coordinator/both-mode-OBProxy/remote deferred;packages/old-runtime/Framework not rerun,value object/fixtures not real XA proof,overall open.
 
-D09仍为进行中：本模块仅交付身份基础，固定物理会话、显式阶段操作与恢复入口尚未实现，下一模块继续接入；TransactionScope保持拒绝，真实事务协调器、两模式数据库/OBProxy及异机测试按要求延期。本轮未重跑打包、旧运行时/Framework矩阵，不据纯值对象或本地夹具宣称实库XA兼容，整体goal未完成。
+## SNI loopback fixture connection budget fix (2026-10-19)
 
+MySQLXA full runs twice failed only existing MultiAddressTlsUsesActualHostOrExplicitName(asynchronous=true,explicitName=false),5second OpenAsync TLS wait:2708passed/1failed(TestResults/xa-unit-final/*.trx),2712passed/1failed(TestResults/xa-unit-reviewed/*.trx),0skips. Four isolated combinations passed but4.13–4.39seconds(TestResults/xa-tls-investigate/*.trx),not ignored/converted to pass. Inspected shared5second Configuration/TCP/listener. Local System.Net.TcpClient to 127.0.0.1 bound-not-listening2095ms;localhost→IPv4-only listener2070ms,~4.16seconds preTLS(TestResults/xa-refused-timing.log). Only non-timing SNI fixture setsConnectionTimeout15;SSLRequest/auth _server_host=localhost/actual-explicitSNI assertions retained. Product timeout-retry/TLS-trust unchanged,no roots. Full slow-handshake cause not established,no blanket product-performance clearance. FourSNI+two totalOpen-budget cases passed 6/0failed/skipped(TestResults/xa-tls-budget-green/*.trx). Dedicated timeout stays1second/duration<4seconds,not relaxed. Independent review accepted fixture-only budget;then fullUnit2713/Consumer929/DI8 passed,0failed/skipped(TestResults/xa-unit-accepted/*.trx). This was then-current XA workspace;later SQL-review fixes/final results below.
 
-## SNI环回夹具连接预算修复（2026-10-19）
+## D09 MySQL pinned-session XA phases/recovery snapshots (2026-10-19)
 
-D09 MySQL XA完整回归两次仅既有MultiAddressTlsUsesActualHostOrExplicitName(asynchronous=true, explicitName=false)耗尽5秒连接预算，异常停在OpenAsync的TLS握手等待。两轮分别为2708通过/1失败（TestResults/xa-unit-final/*.trx）与2712通过/1失败（TestResults/xa-unit-reviewed/*.trx），均未跳过；原方法独立四种组合全通过，但各耗时4.13–4.39秒（TestResults/xa-tls-investigate/*.trx）。没有将失败直接略过或当成通过。
+After99a82e7,five-target connection.GetXaResource/OceanBaseXaResource.Start-End-Prepare-Commit-Rollback-Recover sync/Task APIs. Resource pins original session untilClose;commands/prepare/batch onlyActive,Transaction=null,local transactions/database switching/TransactionScope rejected. Close destroys transport without completing branch;reopen creates new resource,old cannot migrate. Idle/Active/Ended/Suspended/Prepared and XID strictly match;End(Fail) preserves rollback-only throughJoin/Resume,must rollback. Persisted recovered XID may complete branch. Successful phases increment epoch/invalidate oldLOB-complex contexts. Existing exchange/result operation-budget/cancel/boundary/unknown-no-replay,no dependency. Recover onlyIdle/full independent snapshot. Four-column types,ASCII unsigned numbers,raw bytes/segment lengths exact. Format0..0xfffffffe→UInt32 bitpattern→publicInt32;negative/widerInt64/reserved-1 rejected,identities not conflated. <=65536branches;overlimit/malformed/multiresult/interruption returns no partial. Mid-recovery tests after server-sent row do not prove client parsed it. A05 unchanged,explicit postauth MySQL facts;OracleDBMS_XA explicitly unsupported then.
 
-继续检查共享Configuration的5秒预算、TcpTransport与环回监听方式。直接使用本机System.Net.TcpClient测量：访问127.0.0.1未监听但已绑定端口耗时2095ms，localhost连IPv4-only listener耗时2070ms；这两段无TLS的连接行为已合计约4.16秒（TestResults/xa-refused-timing.log），原SNI场景建连余量不足。仅该夹具显式ConnectionTimeout=15；目的仍是检查SSLRequest、认证_server_host=localhost及实际/显式SNI名称，所有断言保留。没有改产品超时/重试、TLS校验或证书信任，没有安装/删除信任根；底层慢握手的全部原因未定位，不宣称排除所有产品性能问题。
+Missing resource/enums compile:TestResults/xa-red.log. Added 53Unit:one-two-phase/Join-Resume-Suspend-Fail/state-XID-arguments/reader-batch exclusivity/local-ambient-switch isolation/Close-reopen/known-unknown/recovery domain-limit-completeness/redaction.80Consumer five-assets×sync-async×standard-OB20 success-reject-disconnect-badboundary;reject uses emptybranch/bqual_length0/matching raw,others nonempty. Standard2.0 helper directly compiles async APIs. Independent repeated read-only reviews,implementation not delegated:
 
-修复后上述SNI四种组合及专门整条Open总预算测试两种组合，共6项通过，0失败/跳过（TestResults/xa-tls-budget-green/*.trx）。专用超时测试仍是1秒预算且耗时小于4秒，不借SNI修复放宽。独立只读走查确认仅是非计时场景夹具预算修复；完整复核Unit2713通过、0失败/跳过（TestResults/xa-unit-accepted/*.trx），Consumer929与DI8也通过。此结果基于当时XA工作区版本，XA语法走查后续新增修复及最终结果另见后文。
+- Trusted XA_RBROLLBACK/RBTIMEOUT/RBDEADLOCK1402/1613/1614 cannot retainActive/Ended. Phase/business exchanges destroy after complete boundary,retain server code/known outcome;ordinary trusted rejection retains phase. Codes checked fixed mysql_errno.h/ob_errno.def;six error positions passed.
+- EmptyOK/malformed empty recovery metadata leaked ProtocolException;four red(TestResults/xa-empty-red/*.trx),mapped OceanBaseException/destroyed. Complete known result not marked unknown,incomplete follows existing rule;then passed.
+- Six operation diagnostic names absent,onlyopen span;red TestResults/xa-diagnostics-red/*.trx,explicit mappings fixed;six spans/counts/parent links/noidentity leak passed.
+- Fixed server SHA5e8a63d29dae9fde5e962b8fcc7b167d438fc343 MySQLlexer-parser/XAresolver:emptybqual X'',bare0xinvalid;format lowercase0x+eightUInt32hex incl0x00000000. Did not copy Java emptybranch/zeroformat empty-text defect. Four format-boundary mismatches red(TestResults/xa-empty-branch-reviewed-red/*.trx),then53targeted/80Consumer passed(xa-encoding-targeted,xa-encoding-consumer). Source evidence is not real execution.
 
-## D09 MySQL固定会话、显式XA阶段与恢复快照（2026-10-19）
+Prior SNI failures/fix retained above,fixture commitde068af,not passes. Final source rebuilt/full runs all ended/exit0:
 
-接99a82e7的不可变XID基础，在核心五目标提供connection.GetXaResource()与OceanBaseXaResource的Start/End/Prepare/Commit/Rollback/Recover同步及Task异步入口。资源绑定原物理会话，直到Close专用；普通命令/预处理/批次仅Active分支可执行，Transaction为null，本地事务和切库拒绝，环境TransactionScope继续拒绝。Close只销毁传输，不隐式完成分支；重开取得新资源，旧资源不能绑定新会话。Idle/Active/Ended/Suspended/Prepared阶段和XID严格匹配，End(Fail)跨Join/Resume保留rollback-only，必须回滚；允许按持久化XID完成已恢复分支。阶段成功后递增事务epoch，旧LOB/复杂类型上下文失效。沿用CommandExchange/QueryResult的单操作预算、取消、协议边界及结果未知不重放约束，没有新增依赖。
-
-Recover仅在Idle返回完整独立快照；四列类型、ASCII无符号数值、精确原始字节与两段长度均验证。格式号0..0xfffffffe按UInt32位模式还原公开Int32，拒绝负数/更宽Int64/保留-1，不能混淆不同服务端身份。最多65536个分支，超限或畸形/多结果/中断均失败，不返回部分结果。断流/取消/Close回归包括服务端已发送一行后中断，不将发送位置当作客户端已解析证据。A05公共MySQL识别门槛未放宽；本地测试显式注入认证后的MySQL事实。Oracle DBMS_XA当前明确拒绝，仍待后续模块。
-
-实现前缺资源/枚举API红编译见TestResults/xa-red.log；新增53项Unit涵盖单/两阶段、Join/Resume/Suspend/Fail、阶段/XID/参数边界、业务reader/批次互斥、本地/环境事务和切库隔离、Close/重开、可信错误及未知结果、严格恢复域/上限/完整性和安全诊断。新增80项五资产Consumer覆盖同步/异步、标准/OB20、成功/拒绝/断流/坏边界；reject路径使用空分支并恢复bqual_length=0及匹配raw字节，其他路径保留非空分支。Standard2.0辅助工程直接编译消费全部异步API。独立只读多轮走查，未委派实现，修复如下：
-
-- 完整可信的XA_RBROLLBACK/RBTIMEOUT/RBDEADLOCK（1402/1613/1614）不能继续保留本地Active/Ended。阶段及业务交换在验证完整边界后销毁会话，仍保留服务端码及结果已知标记；普通可信拒绝保持原阶段。码值核对固定服务端mysql_errno.h/ob_errno.def；六种错误位置回归通过。
-- 空OK或畸形空元数据的恢复响应曾泄露内部ProtocolException：四项修前失败见TestResults/xa-empty-red/*.trx。恢复层映射为OceanBaseException并废弃会话，完整终态结果不误标未知，未完成响应沿原未知规则；修后回归通过。
-- 六种XA操作的诊断名称曾缺失，监听回归仅得到open span，修前失败见TestResults/xa-diagnostics-red/*.trx。补全显式映射，验证六操作span及成功/失败计数、父子关联与身份不泄露，修后通过。
-- 固定服务端5e8a63d29dae9fde5e962b8fcc7b167d438fc343的sql_parser_mysql_mode.l/.y及XA resolver确认：空bqual必须使用X''，裸0x非法；格式号用小写0x加八位UInt32十六进制，包括0x00000000。未复制Java空分支及零格式号的空正文缺陷。四个格式边界修前实际SQL不匹配（TestResults/xa-empty-branch-reviewed-red/*.trx），修复后定向53项及五资产80项全部通过（xa-encoding-targeted、xa-encoding-consumer）。源码核对不是实库执行证据。
-
-全量期间两轮原SNI夹具预算失败与修复保留在前节，夹具修复独立提交de068af；不把失败计作通过。最终源码版本重新编译和完整回归，所有进程已结束，退出码均为0：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release核心五目标/DI三目标 | 0警告、0错误 | TestResults/xa-encoding-build.log |
-| 完整Unit，默认调度 | 2717通过，0失败/跳过；相对XID模块新增53、移除0 | TestResults/xa-encoding-unit-full/*.trx |
-| 完整五资产Consumer | 929通过，0失败/跳过；相对XID模块新增80、移除0 | TestResults/xa-encoding-consumer-full/*.trx |
-| DI | 8通过，0失败/跳过 | TestResults/xa-encoding-di-full/*.trx |
-| 新增源码/测试空白格式校验 | 退出0 | TestResults/xa-encoding-format.log |
+| Release core5/DI3 | 0 warnings/errors | TestResults/xa-encoding-build.log |
+| Full Unit,default scheduling | 2717 passed,0 failed/skipped;+53/0 removed versus XID | TestResults/xa-encoding-unit-full/*.trx |
+| Full Consumer | 929 passed,0 failed/skipped;+80/0 removed versus XID | TestResults/xa-encoding-consumer-full/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/xa-encoding-di-full/*.trx |
+| New-file whitespace | Exit0 | TestResults/xa-encoding-format.log |
 
-编译命令为dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；完整测试为dotnet test tests/<工程>/<工程>.csproj -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory TestResults/xa-encoding-<unit|consumer|di>-full。解析最终TRX核对全部执行/通过，并与XID模块最后报告逐案例比较确认新增及零移除。完整Unit使用正常Windows证书私钥权限，没有安装/删除信任根或降低TLS验证。独立代码及文档最终复查无阻断，README/架构/方案/台账同步，UTF8无BOM/CRLF和diff检查后在当前master本地提交，不推送；global.json仍保持删除。
+Same single-node/nonshared build/full tests,TestResults/xa-encoding-<unit|consumer|di>-full. TRX compared XID names/allpassed/deltas. Normal key permissions,no roots/downgrade;independent code/docs recheck clean;README/design/plan/ledger/UTF8-no-BOM/CRLF/diff/local master commit,no push;global.json deleted. D09 In progress,next Oracle structured XIDs/returncodes/recovery. Real coordinator/OceanBase-OBProxy/remote deferred;packages/old-runtime/Framework/TLS extensions not rerun. Injected MySQL fixtures prove neither public opening nor real XA;A05/C01/otherD15/release/overall open.
 
-D09仍进行中，下一模块接Oracle DBMS_XA结构化身份绑定、返回码与恢复；真实协调器、OceanBase/OBProxy及异机测试按用户要求延期。本轮未重跑打包、旧运行时/Framework或扩展经TLS矩阵，本地MySQL注入夹具不证明公共MySQL建连或实库XA兼容；A05、C01、D15其他插件和发布关口继续开放，整体goal未完成。
+## Binary-reader early-close fixture race fix (2026-10-19)
 
+OracleXA initialUnit2801passed/2failed/0skipped(TestResults/xa-oracle-unit-full/*.trx). Existing BinaryReaderOwnsResponseAndCloseConnectionHonorsBothConsumptionPaths(consume=false,asynchronous=false) server tailEOF write raced CloseConnection destroying undrained transport. Unrelated to XA product path;test intentionally closes early. TailEOF now onlyconsume=true;unread response remains pending. Reader ownership/metadata/fullread/close assertions retained,no swallowed error/product change. Independent review passed;four reader+86OracleXA=90targeted passed(TestResults/xa-oracle-local-accepted/*.trx),finalUnit2803/0failed/skipped(TestResults/xa-oracle-unit-accepted/*.trx). Then-current Oracle workspace;new XA/recovery-limit fixture changes below. Reader fix separately committed,not real XA claim.
 
-## 二进制reader早关夹具竞态修复（2026-10-19）
+## D09 Oracle DBMS_XA phases/codes/full recovery (2026-10-19)
 
-Oracle XA首轮完整Unit得到2801通过/2失败/0跳过（TestResults/xa-oracle-unit-full/*.trx），其中既有BinaryReaderOwnsResponseAndCloseConnectionHonorsBothConsumptionPaths(consume=false, asynchronous=false)在ReaderSchemaTests写末尾EOF时遇到客户端CloseConnection已关闭传输。与XA产品路径无关：测试本就要求提前关闭丢弃未消费响应，服务端继续写终态造成竞态。
+After5e8f51f,reuses six resource sync/async APIs/original session/single-branch state/exclusivity/epoch. Oracle requiresUse Oracle Prepare Execute=true/>=2.2.76;first operation same budget confirms set autocommit = 0 untilClose. Fixed private SYS.DBMS_XA_XID/DBMS_XA_XID_ARRAY descriptors use existing complex codec/0xa1,no public cache registration. Start/End fixedflags,CommitBoolean. Close no implicit completion;newOpen reinitializes,oldresource cannot migrate. Returncode exactlyone column/row/nonnull exactInt32/complete terminal.0success;Prepare3→ReadOnly/releases localbranch. Other signed codes OceanBaseException.XaErrorCode,ServerErrorCode reservedERR;trustedcode failureunknown=false/conservative destroy/no automatic retry. ReadOnly noCommit needed;Idle two-phaseCommit still persisted-XID recovery entry. Init/finalOK strictlyzero counts/autocommit/noextraresult-cursor-output;init also no active transaction. Incomplete-terminal cancel-timeout-disconnect-close/badOB20 remainsunknown. Recovery fixed-Java PL/SQL arrayOUT path,private outputs only after complete tail→independent OceanBaseXid[]. SignedInt32except-1/global1–64/branch0–64;OracleNULLRAWbranch→empty,globalNULL rejected.65535complex-member budget→max16383branches. NULLarray-element/malformed identity/wide-fraction/wrongtype/missing-multirow/interruption returns no partial. Hand-built responses/independent request decoder,not product-generated expectations.
 
-仅在consume=true时发送末尾EOF，未消费路径保留未完成响应；reader独占、元数据、完整读取及关闭连接断言保留，不吞异常或改产品。独立只读走查通过；四种reader组合及86项Oracle XA共90项定向通过（TestResults/xa-oracle-local-accepted/*.trx），最终完整Unit2803通过/0失败/0跳过（TestResults/xa-oracle-unit-accepted/*.trx）。本记录中的完整运行基于当时Oracle XA工作区，Oracle新增及其超限恢复夹具修正另见后文；reader夹具单独提交，不据此宣称XA实库兼容。
+Initialsix public cases failed NotSupported(TestResults/xa-oracle-red/*.trx),then basic/codes passed. Tail-status4failed/1passed(xa-oracle-tail-red);OracleCompletion readable only after completeEnd/strictOK fixed. Review found permissive initControl;first regression missingreset misread ProtocolException as disconnect. CorrectBeginCommand→five true failures/106XA-request bytes(xa-oracle-init-red2). Strictinit→no phase request/41targeted passed(xa-oracle-init-green). Early malformedscalar/type/multirow/memberlimit mocks wrote trailers after rejection,SocketException;now stop at actual offending packet/waitclose,no swallowing. Exact protocol/numeric causes;multirow retains OracleCommandPlan.NotSupportedException,timeout/IOnot accepted substitutes. Initialfull2801/2 failures also caught earlier reader race,fix32a7fc8;failures not passes. Independent design/product/consumers/finalfixtures/docs review clean. Coverage one-two-phase/Join-Resume-Suspend-Fail/ReadOnly/version-precancel/init-phaseERR explicit retry/25signedcodes/badscalar/tail interruption-exclusivity/recovery-domain-members/publiccache isolation/reopen.
 
+Local Windows/net10 hosts,not five runtime acceptance:
 
-## D09 Oracle DBMS_XA阶段、返回码与完整恢复（2026-10-19）
-
-从5e8f51f继续，复用GetXaResource及六种同步/异步API、原物理会话/单分支状态、互斥和事务epoch。Oracle要求Use Oracle Prepare Execute=true及既有2.2.76版本门槛，首次操作在同一预算内确认set autocommit = 0，保持至Close。SYS.DBMS_XA_XID/DBMS_XA_XID_ARRAY固定私有描述通过原复杂类型编码器和0xa1执行，不注册公共类型缓存；Start/End传固定标志，Commit传Boolean。Close不隐式完成事务，新Open重新初始化，旧资源不得迁移。
-
-返回码必须来自恰好一列、一行、非NULL的精确Int32及完整终态；0成功，Prepare另接受3并返回ReadOnly、释放本地分支。其他正负返回码由OceanBaseException.XaErrorCode保留，ServerErrorCode仍专属于ERR；可信码错误unknown=false并保守销毁会话，不自动重试。ReadOnly后无需Commit，Idle两阶段Commit仍是按协调器持久化XID恢复的入口。初始化及最终OK严格检查零计数、自动提交/额外结果/游标/输出标志，初始化还拒绝活动事务。未收到可信完整终态的取消/超时/断流/关闭或坏OB20边界仍按结果未知处理。
-
-恢复使用固定Java基线观察到的PL/SQL数组OUT路径，完整尾包后才读取私有输出并返回独立OceanBaseXid[]。格式为有符号Int32且非-1，全局ID为1–64字节，分支为0–64字节；Oracle NULL RAW分支规范为空，全局NULL仍拒绝。沿65535复杂成员总预算，最多16383分支；NULL数组/元素、畸形身份、宽值/分数、错误类型、缺少/多行输出或中断均不返回部分结果。测试用手工结构和独立请求解码核对字节，不用产品编码器生成期望。
-
-走查及红绿记录：
-
-- 起始6项Oracle公开调用因原NotSupportedException全部失败（TestResults/xa-oracle-red/*.trx）；实现后基础及返回码用例通过。
-- 尾包状态校验回归修前4失败/1通过（xa-oracle-tail-red），增加仅在完整End成功后可读取的OracleCompletion及严格OK检查后通过。
-- 独立走查发现初始化复用宽松Control校验。初版测试未重置序号，错误地将ProtocolException视为断开；修正BeginCommand后5项真实失败且观察到106字节XA阶段请求（xa-oracle-init-red2）。收紧初始化校验后无阶段请求，41项定向通过（xa-oracle-init-green）。
-- 初期畸形scalar/type/多行/超成员测试在客户端已拒绝后继续写尾包，出现夹具SocketException；改为停在触发拒绝的数据包并等待关闭，不吞写入错误。根异常断言核对协议/数值错误；多行沿既有OracleCommandPlan的NotSupportedException，超时/IO均不能冒充预期拒绝。完整首轮2801通过/2失败另捕获既有reader早关竞态，已单独修复提交32a7fc8；没有将失败计为通过。
-- 独立只读设计、产品代码、五资产Consumer、最终夹具及README/架构复查均无剩余阻断。覆盖单/两阶段、Join/Resume/Suspend/Fail、ReadOnly、版本与发前取消、初始化及阶段ERR显式重试、25种正负码、标量畸形、尾包前中断/互斥、恢复边界/成员上限、公共字典隔离及关闭重开。
-
-最终本机Windows证据（日常宿主.NET10，不代表五个运行时验收）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx，核心五目标/DI三目标 | 0警告、0错误；集成工程仅编译未运行 | TestResults/xa-oracle-build-final.log |
-| 夹具修正后Unit重编译 | 0警告、0错误 | TestResults/xa-oracle-unit-rebuild.log及xa-oracle-local-accepted.log |
-| Oracle定向及reader四种组合 | 90通过，0失败/跳过（Oracle新增86项） | TestResults/xa-oracle-local-accepted/*.trx |
-| Oracle五资产同步/异步×标准/OB20 | 100通过，0失败/跳过 | TestResults/xa-oracle-assets/*.trx |
-| 最终完整Unit | 2803通过，0失败/跳过；相对MySQL模块新增86、移除0 | TestResults/xa-oracle-unit-accepted/*.trx |
-| 完整五资产Consumer | 1029通过，0失败/跳过；相对MySQL模块新增100、移除0 | TestResults/xa-oracle-consumer-full/*.trx |
-| 完整DI | 8通过，0失败/跳过 | TestResults/xa-oracle-di-full/*.trx |
-| 范围格式、UTF8无BOM/CRLF及diff | 通过 | TestResults/xa-oracle-format.log、xa-oracle-test-format.log及提交前检查 |
+| Release core5/DI3 | 0 warnings/errors;Integration compiled only | TestResults/xa-oracle-build-final.log |
+| Unit fixture rebuild | 0 warnings/errors | TestResults/xa-oracle-unit-rebuild.log,xa-oracle-local-accepted.log |
+| Oracle targeted+four reader combinations | 90 passed,0 failed/skipped;86newOracle | TestResults/xa-oracle-local-accepted/*.trx |
+| Oracle five-asset sync-async/standard-OB20 | 100 passed,0 failed/skipped | TestResults/xa-oracle-assets/*.trx |
+| Final full Unit | 2803 passed,0 failed/skipped;+86/0 removed versus MySQL | TestResults/xa-oracle-unit-accepted/*.trx |
+| Full Consumer | 1029 passed,0 failed/skipped;+100/0 removed | TestResults/xa-oracle-consumer-full/*.trx |
+| DI | 8 passed,0 failed/skipped | TestResults/xa-oracle-di-full/*.trx |
+| Scoped format/UTF8-no-BOM/CRLF/diff | Passed | TestResults/xa-oracle-format.log,xa-oracle-test-format.log,precommit checks |
 
-D09约定本地两模式范围完成，正式状态待验证；真实协调器、OceanBase/OBProxy、异机及扩展经TLS验收仍按要求暂缓，本轮未重跑打包或旧运行时/Framework矩阵。A05公开MySQL身份门槛、C01完整重置/池、D15其他插件、许可/发布及各环境关口继续开放，TransactionScope仍拒绝，整体goal未完成。global.json已在ea7fde9按用户要求删除，本轮确认未恢复；不推送。
+D09 defined local both-mode scope done/Pending verification. Real coordinator/OceanBase-OBProxy/remote/TLS deferred;packages/old-runtime/Framework not rerun. A05/C01/otherD15/license-release/environment gates open,TransactionScope rejected,overall incomplete. global.json removed at user request inea7fde9,confirmed not restored;no push.
 
-## R01 XA公开契约实际包消费复核（2026-10-19）
+## R01 actual package consumption of XA public contracts (2026-10-19)
 
-沿既有eng/Verify-Packages.ps1和tests/PackageConsumer/Program.cs，补充不可变XID身份/返回数组复制、OceanBaseException.XaErrorCode可空类型及关闭连接GetXaResource拒绝的消费断言。不打开连接，不调用XA阶段，不修改产品实现或增加依赖。
+Existing eng/Verify-Packages.ps1/tests/PackageConsumer/Program.cs gained immutable XID/copy getters,nullable XaErrorCode,and closedGetXaResource rejection assertions. No opening/XA stages/product/dependency changes. Oldc07package rejected missingREADME by existing checks. OldR02passed contents,firstrestore failed auditmetadata access;normal network retry restored,then allfive failed compile for missingXA APIs:TestResults/xa-package-old-red.log. Environment failures are not red-test evidence. dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/xa-final-pack built same-version dualpackages:TestResults/xa-package-pack.log,using finalD09 compiled assets/no product rebuild. ./eng/Verify-Packages.ps1 -PackageDirectory TestResults/xa-final-pack exit0:TestResults/xa-package-final.log(final afterreview). Checks5/3assets/docs/groups/exactcore/fresh-cache SHA512/selected assets;five consumers0 warnings/errors,actual.NET8.0.31/9.0.20/10.0.12,Standard isolated10.0.12 passed,no audit/warning relaxation.
 
-- 旧c07包先因缺少README被既有内容检查拒绝；旧R02包通过内容检查，首次还原遇NuGet漏洞元数据访问失败。正常网络权限重试后还原成功，五目标均因缺少XA公开API编译失败，见TestResults/xa-package-old-red.log；环境失败不计红灯证据。
-- dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/xa-final-pack成功生成同版本双包，见TestResults/xa-package-pack.log。产品沿D09最终已编译资产，本轮未重编译产品。
-- ./eng/Verify-Packages.ps1 -PackageDirectory TestResults/xa-final-pack退出0，见TestResults/xa-package-final.log（走查修正后最终复验）。验证器检查五/三资产、文档、依赖组和精确核心版本，在独立缓存核对本次nupkg的SHA512和选中资产；五目标消费编译0警告/错误，本机.NET8.0.31、9.0.20、10.0.12运行通过，两个Standard资产在.NET10.0.12隔离宿主通过。未关闭漏洞审计或放宽警告。
+Unchanged fullUnit/Consumer/DI not rerun,recent2803/1029/8 above. Review found closed-connection test conflated returningnull/throwing;catch-only rejection flag/assert outsidecatch added,finalfive passed. Local commit/no push;real/remote/Framework unexecuted,R01license-provenance-name/release open,global.json deleted. OtherD15plugins next fixed-Java review.
+## D15 Java-registered Plugins and Legacy Password Authentication (2026-10-19)
 
-本轮不重跑未改动产品的完整Unit/Consumer/DI，最近完整证据仍为上节2803/1029/8。独立只读走查发现关闭连接断言未区分正常返回null与抛异常，已增加仅在catch设置的拒绝标记并在catch外断言，最终五资产复验全部通过。代码走查后本地提交，不推送；实库、异机及Framework未执行，R01许可/来源/包名与发布关口保持开放，global.json保持删除。D15其他插件后续以固定Java参考驱动为依据继续核查。
+Per the user's clarification, inspected D:/java-code/obconnector-j: HEAD is pinned to 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 with no local changes. The SPI registers eight plugins. Native/clear/SHA256/caching SHA2 already exist; mysql_old_password, dialog/PAM, client_ed25519, and auth_gssapi_client all enter D15 follow-up scope without asking the user to select plugins. This module delivers legacy password first; the other three remain unimplemented at this point.
 
-## D15 Java注册插件范围与旧密码认证（2026-10-19）
+mysql_old_password reuses post-TLS AuthenticationConversation, PacketChannel, and the total connection budget. Support initial/named switch and single-byte FE legacy switch, retaining the one-switch limit. The short switch uses a defensive copy of the original challenge; SHA2 full-authentication stages forbid switching. Use the first eight ASCII challenge bytes without zero padding. Hash Java UTF16 password characters, skip space/Tab, preserve unchecked Int64 overflow and low31-bit hashes. Empty password produces empty response; otherwise eight bytes plus NUL. The weak legacy hash requires VerifyFull, with no downgrade option or RSA bypass; protocol41/secure-connection requirements remain.
 
-按用户补充核对D:/java-code/obconnector-j：HEAD为固定6adc311ba5db8b2f19f98f3e6e4734667fdfdda1且无本地修改。SPI注册8插件；native/clear/SHA256/caching SHA2已有实现，剩余mysql_old_password、dialog/PAM、client_ed25519、auth_gssapi_client全部纳入D15后续，不再要求用户自行选插件。本模块先交付旧密码；其他三个仍未实现。
+Red/green and review history:
 
-mysql_old_password复用既有TLS后的AuthenticationConversation、PacketChannel和总连接预算。显式初始/命名切换及单字节FE旧切换接入，一次插件切换上限保留；短切换使用防御复制的原挑战，SHA2完整阶段不允许切换。前8字节ASCII挑战不补零，密码按Java UTF16字符规则、跳过空格/Tab并保留unchecked Int64溢出及低31位散列；空密码为空响应，非空8字节加NUL。旧散列较弱，仅VerifyFull允许，不增加降级开关，RSA配置不放行，protocol41/secure connection握手要求保留。
+- Initial 12 cases all fail for missing support (TestResults/old-password-red/*.trx). After integration,15 state/fixed-vector cases pass (old-password-green). Add six actual Required TLS rejection cases: sync/async across three entry paths; final 21 pass (old-password-local-final).
+- Independently execute original Java OldPasswordPlugin and Ed25519PasswordPlugin algorithms in ignored TestResults/java-auth-reference, stubbing only unused I/O dependencies. Five legacy ASCII/Unicode/space-Tab vectors match local tests; see TestResults/java-auth-reference-vectors.log. Reference Java source remains temporary, never product/tracked source.
+- First full Unit:2822 pass/2 fail/0 skip (old-password-unit-full). Two new TLS initial cases correctly reject client-side, but server close reads receive Windows TLS resets. Reuse existing ReadUpToAsync close helper, retaining zero response bytes, exact client VerifyFull error, and Broken assertions; no swallowed assertions/product changes. Corrected21 targeted cases pass; full rerun below.
+- Independent read-only review checks algorithm/overflow, empty passwords, seed copying, RSA retrieval/full-stage interactions, TLS gates, fixtures; no remaining product blocker. Successful VerifyFull authentication has state/encoding evidence only, without claiming a private-CA success chain or live compatibility.
 
-红绿及走查记录：
+Final local Windows evidence (database integration tests not run):
 
-- 首批12项均因未支持失败（TestResults/old-password-red/*.trx）；接入后15项状态/固定向量通过（old-password-green）。追加实际Required TLS同步/异步×三入口拒绝6项，最终定向21项通过（old-password-local-final）。
-- 独立执行原Java OldPasswordPlugin及Ed25519PasswordPlugin算法，保留在忽略的TestResults/java-auth-reference内，仅stub掉未调用的I/O依赖；旧密码ASCII、Unicode和空格/Tab五个向量与本地测试一致，见TestResults/java-auth-reference-vectors.log。原Java源码只用于临时对照，不引入产品或受跟踪源码。
-- 首轮完整Unit为2822通过/2失败/0跳过（old-password-unit-full）：两个新TLS initial入口在客户端按预期拒绝后，服务端读关闭遇Windows TLS连接重置。改为复用现有ReadUpToAsync关闭辅助方法，仍要求零响应字节、客户端精确VerifyFull错误和Broken状态，不吞断言或改产品；修正后21项定向通过，完整复验另记下表。
-- 独立只读走查核对算法/溢出、空密码、seed复制、RSA取钥/完整阶段交互、TLS门槛及夹具，无剩余产品阻断。成功VerifyFull认证目前只有状态/编码证据，未宣称私有CA成功链或实库兼容。
-
-最终本机Windows证据（未运行数据库集成测试）：
-
-| 检查 | 结果 | 证据 |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Release slnx，核心五目标/DI三目标 | 0警告、0错误；集成工程仅编译 | TestResults/old-password-build-final.log |
-| 关闭夹具修正后Unit重编译 | 0警告、0错误 | TestResults/old-password-unit-rebuild.log |
-| 新模块定向 | 21通过、0失败/跳过 | TestResults/old-password-local-final/*.trx |
-| 最终完整Unit | 2824通过、0失败/跳过；相对Oracle XA新增21、移除0 | TestResults/old-password-unit-final/*.trx |
-| 完整五资产Consumer | 1059通过、0失败/跳过；新增三入口拒绝30、移除0 | TestResults/old-password-consumer-full/*.trx |
-| 完整DI | 8通过、0失败/跳过 | TestResults/old-password-di-full/*.trx |
-| 范围格式校验 | 退出0 | TestResults/old-password-format.log |
+| Release slnx, five core/three DI targets | 0 warnings/errors; integration project compiled only | TestResults/old-password-build-final.log |
+| Unit rebuild after close-fixture correction | 0 warnings/errors | TestResults/old-password-unit-rebuild.log |
+| New module targeted | 21 pass,0 fail/skip | TestResults/old-password-local-final/*.trx |
+| Final full Unit | 2824 pass,0 fail/skip;21 added,0 removed versus Oracle XA | TestResults/old-password-unit-final/*.trx |
+| Full five-asset Consumer | 1059 pass,0 fail/skip;30 three-entry rejection cases added,0 removed | TestResults/old-password-consumer-full/*.trx |
+| Full DI | 8 pass,0 fail/skip | TestResults/old-password-di-full/*.trx |
+| Scoped format | Exit0 | TestResults/old-password-format.log |
 
-构建与测试命令沿D09，结果目录使用上表；最终Unit使用正常Windows证书私钥权限，没有安装/删除信任根或降低TLS验证。已解析TRX比较案例名称和计数；独立文档复核无阻断。README/架构/方案/台账同步，UTF8无BOM/CRLF及diff检查后在当前master本地提交，不推送。D15继续进行中，剩余dialog/PAM、Ed25519、GSSAPI；A05、C01、许可/发布及真实两模式/OBProxy/TLS/异机关口保持开放，本轮未重跑打包、旧运行时或Framework。global.json保持删除，整体goal未完成。
+Build/test commands follow D09 with the result directories above. Final Unit uses normal Windows certificate private-key permissions, without installing/removing roots or weakening TLS. Parsed TRX case names/counts were compared; independent documentation review found no blocker. Synchronize README/architecture/plan/ledger, UTF8 without BOM/CRLF/diff checks, then commit locally on current master, no push. D15 remains in progress: dialog/PAM, Ed25519, GSSAPI next. A05/C01/license/release/live both-mode/OBProxy/TLS/other-machine gates stay open. No package/old-runtime/Framework rerun this round. global.json stays deleted; overall goal incomplete.
 
+## D15 Ed25519 Authentication: Local Implementation (2026-10-19)
 
-## D15 Ed25519认证本地实现（2026-10-19）
+Implement client_ed25519 initial/named switch against pinned Java6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 Ed25519PasswordPlugin. Strict 32-byte raw challenge; named switches preserve trailing zeros and reject33 bytes with a supposed terminator. SHA512-expand strict UTF8 passwords and sign64 bytes; empty password produces empty response. Invalid Unicode/NUL rejects with redaction; finally clear encoded passwords/expanded keys. Use BouncyCastle.Cryptography2.7.0 public ExpandedKey.Sign, avoiding seed-API double hashing. CPM pins version; five assets declare runtime dependency/MIT source. No Java port/manual curve arithmetic. Existing final OK/ERR, one switch, mode gate, total budget remain; signatures do not replace business TLS.
 
-按固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的Ed25519PasswordPlugin实现client_ed25519初始及命名切换。严格32字节原始挑战，命名切换保留尾零（不接受33字节含所谓终止符）；严格UTF8密码SHA512展开后签名64字节，空密码为空响应。无效Unicode/NUL脱敏拒绝，编码密码及展开密钥在finally清除。使用BouncyCastle.Cryptography 2.7.0公开ExpandedKey.Sign，避免普通seed API二次散列；CPM固定版本，五资产声明运行时依赖及MIT来源，不复制Java实现或自编曲线运算。沿用最终OK/ERR、一次切换、模式门槛及连接总预算；签名认证不替代业务TLS。
+Initial 15 cases:14 fail/1 pass (TestResults/ed25519-red/*.trx) from missing plugin. An overly broad invalid-Unicode assertion initially matched unsupported-plugin failure; tighten message to include Unicode, then 15 pass (ed25519-green). Original Java independently runs in ignored directory: four ASCII/Unicode/single-character/trailing-zero vectors in TestResults/java-auth-reference-vectors.log; no tracked reference source. Expanded 24 Unit cases cover malicious lengths, repeat switches, final ERR/unexpected continuation, cancel/close/product timeout. Five-asset public Consumer adds60 sync/async initial/switch ASCII/Unicode/empty-password cases executing local protocol SQL, without databases.
 
-先写15项测试观察14失败/1通过（TestResults/ed25519-red/*.trx），失败源于未支持插件；其中无效Unicode最初宽泛异常断言误匹配未支持异常，已收紧为消息包含Unicode后取得15通过（ed25519-green）。原Java算法在忽略目录独立执行，ASCII/Unicode/单字符及挑战尾零四向量见TestResults/java-auth-reference-vectors.log；未将参考源码加入受跟踪文件。扩展后新增24项Unit覆盖恶意长度、重复切换、最终ERR/意外继续、取消/关闭/产品超时；五资产公开Consumer新增60项，覆盖同步/异步、初始/切换、ASCII/Unicode/空密码并执行本地协议SQL，未连接数据库。
+Independent review finds timeout tests might mistake WaitAsync watchdog timeout for product timeout. Add opening.IsFaulted before finally closes the connection; correct SHA2/RSA/silentTLS equivalents, without product change. Re-review confirms no double hashing, correct trailing zeros, consistent docs/dependencies, no blocker. First formatting across existing RSA/SHA2/TLS files finds historical multiple-statement whitespace; format only new files, verify scope/diff, no broad legacy reformat.
 
-独立只读走查发现新超时测试可能误把WaitAsync测试看门狗当产品超时，已在finally关闭前加入opening.IsFaulted；同步修正SHA2、RSA及静默TLS同类断言，未改变产品。复查确认原问题关闭、算法不二次散列、尾零/文档/依赖范围一致，无剩余阻断。首次格式检查包含既有RSA/SHA2/TLS测试文件时报告历史多语句空白；只格式化本轮新增文件，并以范围校验和diff检查确认，未批量重排旧测试。
-
-| 验证 | 结果 | 证据 |
+| Verification | Result | Evidence |
 | --- | --- | --- |
-| 带NuGet审计还原 | 成功 | TestResults/ed25519-restore.log |
-| Release核心五/DI三及测试项目构建 | 0警告/错误 | TestResults/ed25519-build-final.log |
-| 扩展Ed25519针对测试 | 24通过 | TestResults/ed25519-local/*.trx |
-| 五资产公开Ed25519消费 | 60通过 | TestResults/ed25519-assets/*.trx |
-| 旧包缺加密依赖反向检查 | 正确拒绝 | TestResults/ed25519-missing-dependency-red.log |
-| 本轮双NuGet包及五资产真实还原/运行 | 全通过 | TestResults/ed25519-pack.log、ed25519-package-final.log |
-| 完整Unit | 2848通过，0失败/跳过 | TestResults/ed25519-unit-final/*.trx |
-| 完整Consumer | 1119通过，0失败/跳过 | TestResults/ed25519-consumer-final/*.trx |
-| 完整DI | 8通过，0失败/跳过 | TestResults/ed25519-di-final/*.trx |
-| 新源码/新增测试/包消费范围格式校验 | 退出0 | TestResults/ed25519-format-final.log |
+| Restore with NuGet audit | Success | TestResults/ed25519-restore.log |
+| Release five-core/three-DI/tests build | 0 warnings/errors | TestResults/ed25519-build-final.log |
+| Expanded targeted Ed25519 | 24 pass | TestResults/ed25519-local/*.trx |
+| Five-asset public Ed25519 consumption | 60 pass | TestResults/ed25519-assets/*.trx |
+| Old-package missing-crypto-dependency negative check | Correctly rejected | TestResults/ed25519-missing-dependency-red.log |
+| Both current NuGet packages/five-asset actual restore/run | All pass | TestResults/ed25519-pack.log, ed25519-package-final.log |
+| Full Unit | 2848 pass,0 fail/skip | TestResults/ed25519-unit-final/*.trx |
+| Full Consumer | 1119 pass,0 fail/skip | TestResults/ed25519-consumer-final/*.trx |
+| Full DI | 8 pass,0 fail/skip | TestResults/ed25519-di-final/*.trx |
+| Scoped new-source/new-test/package-consumer format | Exit0 | TestResults/ed25519-format-final.log |
 
-构建：dotnet build OceanBaseConnector.slnx -c Release --no-restore；测试：dotnet test各Unit/Consumer/DI项目-c Release --no-build --no-restore --logger trx --results-directory上表路径。实际包通过dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/ed25519-pack和eng/Verify-Packages.ps1 -PackageDirectory TestResults/ed25519-pack验证，干净缓存按SHA512核对本轮包、五目标编译0警告/错误、本机.NET8/9/10及Standard隔离host通过，包含实际传递依赖的固定Java签名。Unit使用正常Windows证书私钥权限，没有操作信任根或降低TLS验证。
+Build: dotnet build OceanBaseConnector.slnx -c Release --no-restore. Tests: dotnet test each Unit/Consumer/DI project with -c Release --no-build --no-restore --logger trx --results-directory and the paths above. Actual packages: dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/ed25519-pack, then eng/Verify-Packages.ps1 -PackageDirectory TestResults/ed25519-pack. Clean caches verify current-package SHA512; five-target consumer compilation0 warnings/errors; actual .NET 8/9/10 and isolated Standard hosts pass, including pinned Java signatures through actual transitive dependencies. Unit uses normal Windows certificate permissions without trust-root operations/TLS weakening.
 
-已解析最终TRX并与旧密码基线逐案例比较：Unit新增24、Consumer新增60，均无移除，DI仍8。README/架构/方案/台账同步，UTF8无BOM/CRLF和diff检查后当前master本地提交。
+Final TRX versus legacy-password baseline: Unit+24/Consumer+60, no removals, DI 8 unchanged. Synchronize README/architecture/plan/ledger, UTF8-no-BOM/CRLF/diff, local master commit.
 
-D15仍进行中，dialog/PAM与GSSAPI继续按Java推进；真实两模式/OceanBase/OBProxy、可信TLS成功链及异机验收按要求延期，Framework本轮未执行。A05、C01、许可/来源/发布及其他真实环境关口继续开放。global.json保持删除，不推送，整体goal未完成。
+D15 remains in progress, dialog/PAM/GSSAPI continue per Java. Real both-mode OceanBase/OBProxy, trusted TLS success, other-machine acceptance deferred; Framework not run. A05/C01/license/source/release/other real-environment gates stay open. global.json deleted, no push, overall incomplete.
 
+## D15 dialog/PAM: Local Implementation (2026-10-19)
 
-## D15 dialog/PAM本地实现（2026-10-19）
+Continue a3e6d66, following pinned SendPamAuthPacket for initial/named dialog. Send primary Password first, then Password2/Password3 for each nonOK/ERR/FE continuation; never interpret prompts or call application callbacks. VerifyFull every round, strict UTF8, NUL even for empty passwords; missing next number fails with redaction. Final state/one switch/mode/budget share existing handshake, no dependency/TLS downgrade.
 
-从a3e6d66继续，沿固定Java SendPamAuthPacket接入dialog初始及命名切换，先主Password，随后每个非OK/ERR/FE继续包按Password2、Password3等发送，不解释服务端提示、不做回调。每轮VerifyFull、严格UTF8、空密码也加NUL；缺下一编号脱敏失败。最终结果、一次切换、模式确认和连接预算继续共享既有握手路径，没有新依赖或TLS降级。
+Builder indexer/connection strings accept PasswordN without leading zeros,2..Int32.MaxValue, without allocating to maximum suffix. ToSanitizedConnectionString(false), options ToString, default DataSource omit all passwords. Full builder.ConnectionString and explicit ToSanitizedConnectionString(true) still round-trip secrets and require protection. Immutable options copy readonly dictionary; ForEndpoint retains credentials; later builder mutations do not affect connection snapshots.
 
-Builder索引器/连接串接受无前导零的PasswordN（2..Int32.MaxValue），不按最大编号分配数组。ToSanitizedConnectionString(false)、选项ToString和默认DataSource去除全部密码；builder.ConnectionString及显式ToSanitizedConnectionString(true)仍按既有语义完整往返，应当保护。不可变选项复制只读字典，ForEndpoint保留附加凭据，修改builder不影响既有连接快照。
+Initial 21 TDD cases:13 fail/8 pass (TestResults/pam-red/*.trx), missing PasswordN/dialog. First implementation17 pass/4 fail (pam-green): two NUL values already reject at ADO.NET indexer; two unpaired surrogates become replacement characters through xUnit InlineData and miss the intended case. Construct surrogates inside tests, separately assert config-NUL/auth-UTF8 rejection;21 pass (pam-green-final), without weakening validation. Add Required TLS initial/switch sync/async rejection:25 pass (pam-local). Five-asset public round-trip/all-secret-redaction/Disabled rejection:20 pass (pam-assets). Add empty/Unicode primary bytes/repeated-switch assertions into full regression.
 
-TDD初批21项为13失败/8通过（TestResults/pam-red/*.trx），缺口为未知PasswordN和dialog。首次实现后17通过/4失败（pam-green）：两个NUL输入实际在ADO.NET索引器入口已被拒绝，另两个未配对代理字符在xUnit InlineData传输时变成替代字符，未测试到目标。修正为在测试内构造代理字符，并分别断言配置入口NUL拒绝和认证UTF8拒绝，21通过（pam-green-final），未据测试问题放宽产品校验。追加Required TLS初始/切换同步/异步拒绝后25通过（pam-local）；五资产公开配置全串往返/全部秘密脱敏/Disabled拒绝20通过（pam-assets）。再补主密码空/Unicode字节和重复切换断言，纳入完整回归。
+Independent line-by-line Java/builder/options/shared-auth review finds no product blocker. Clarify that ToSanitizedConnectionString(false) redacts; builder.ConnectionString does contain secrets. TrustedTLS multiround success remains state/encoding evidence only; Required/Disabled loopback proves rejection, not real compatibility/private trust chains. No root installation/removal.
 
-独立走查逐行对照Java和builder/options/共享认证调用，未发现产品阻断；指出文档应限定ToSanitizedConnectionString(false)脱敏，不能笼统声称builder.ConnectionString不含秘密，已澄清。可信TLS多轮成功仅为状态/编码证据；Required与Disabled环回只证明拒绝，不安装/删除信任根或宣称实库兼容。
-
-| 验证 | 结果 | 证据 |
+| Verification | Result | Evidence |
 | --- | --- | --- |
-| Release核心五/DI三及测试项目构建 | 0警告/错误 | TestResults/pam-build-final.log |
-| 完整Unit | 2875通过，0失败/跳过 | TestResults/pam-unit-final/*.trx |
-| 完整Consumer | 1139通过，0失败/跳过 | TestResults/pam-consumer-final/*.trx |
-| 完整DI | 8通过，0失败/跳过 | TestResults/pam-di-final/*.trx |
-| 首批PAM定向及Required拒绝 | 25通过 | TestResults/pam-local/*.trx |
-| 五资产公开PAM配置/秘密/拒绝 | 20通过 | TestResults/pam-assets/*.trx |
-| 范围格式校验 | 退出0 | TestResults/pam-format-final.log |
+| Release five-core/three-DI/tests build | 0 warnings/errors | TestResults/pam-build-final.log |
+| Full Unit | 2875 pass,0 fail/skip | TestResults/pam-unit-final/*.trx |
+| Full Consumer | 1139 pass,0 fail/skip | TestResults/pam-consumer-final/*.trx |
+| Full DI | 8 pass,0 fail/skip | TestResults/pam-di-final/*.trx |
+| Initial targeted PAM/Required rejection | 25 pass | TestResults/pam-local/*.trx |
+| Five-asset public PAM config/secrets/rejection | 20 pass | TestResults/pam-assets/*.trx |
+| Scoped format | Exit0 | TestResults/pam-format-final.log |
 
-完整测试命令沿上节，目录换为pam-unit-final/pam-consumer-final/pam-di-final；最终TRX逐案例对比Ed25519基线：Unit新增27、Consumer新增20，无移除，DI仍8。README/架构/方案/台账同步，独立复查无剩余阻断，UTF8无BOM/CRLF及git diff --check通过。
+Full commands follow previous section with pam-unit-final/pam-consumer-final/pam-di-final. Parsed final TRX versus Ed25519: Unit+27/Consumer+20, no removals, DI 8. README/architecture/plan/ledger synchronized, re-review clear, UTF8-no-BOM/CRLF/git diff --check pass.
 
-D15仍进行中，下一项按Java推进GSSAPI。A05、C01、许可/来源/发布、真实两模式/OceanBase/OBProxy/可信TLS成功链及异机验收继续开放；真实服务端和其他机器测试按要求暂缓。本轮未重跑打包、旧运行时或Framework；Ed25519实际包证据保留在上节，不能当作PAM实库证据。global.json保持删除，当前master本地提交不推送，整体goal未完成。
+D15 in progress, GSSAPI next per Java. A05/C01/license/source/release/live both-mode OceanBase/OBProxy/trusted TLS/other-machine remain open. Server/other-machine tests deferred. No package/old-runtime/Framework rerun; prior Ed25519 package evidence is not PAM live evidence. global.json stays deleted; current master local commit/no push; overall incomplete.
 
+## D15 GSSAPI Authentication: Local Implementation (2026-10-19 to 20)
 
-## D15 GSSAPI认证本地实现（2026-10-19至20）
+Continue e5af6ff, comparing pinned Java6adc311ba5db8b2f19f98f3e6e4734667fdfdda1 SendGssApiAuthPacket/StandardGssapiAuthentication/WindowsNativeSspiAuthentication/GssUtility, without copying. Initial/named auth_gssapi_client; strict UTF8 double-NUL fields for SPN/mechanism, preserve switch trailing zeros,<=16 KiB total, extra bytes zero only. Empty mechanism defaultsKerberos; NTLM/Negotiate/unknown reject. Service Principal Name overrides SPN,<=1024 characters/no control-invalidUnicode/no realm rewrite/reverse DNS; frozen/ForEndpoint retained.
 
-从e5af6ff继续，逐项核对固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的SendGssApiAuthPacket、StandardGssapiAuthentication、WindowsNativeSspiAuthentication及GssUtility，不复制源码。初始/命名切换接入auth_gssapi_client，双NUL字段按严格UTF8解析为SPN与mechanism，保留切换数据尾零，总长不超过16KiB且额外数据只能为零。空mechanism默认Kerberos，NTLM/Negotiate/未知机制明确拒绝；Service Principal Name覆盖SPN，最长1024字符、无控制符/无效Unicode，不改realm、不做反向DNS，选项冻结和ForEndpoint保留。
+Only net8/net9/net10 directly use NegotiateAuthentication/current OS tickets, no dependency/reflection/custom SSPI. Standard rejects even on modern hosts. Create context only after VerifyFull. Raw tokens through PacketChannel, no01 prefix/NegotiateStream framing. Require Completed/IsAuthenticated/IsMutuallyAuthenticated/actual Kerberos, then still await database final OK. EarlyOK/FE-or-continuation after completion rejects; OS errors redacted. Conversation owns context; both handshake using scopes cover success/errors/cancel/switch. Deterministic factory supplied per session, no global test hook.
 
-首批仅net8/net9/net10直接使用系统NegotiateAuthentication与当前系统票据，无新依赖、反射桥或自编SSPI。两个Standard资产即使运行于现代host也明确拒绝此插件。VerifyFull后才创建上下文；token直接交PacketChannel，不加01或NegotiateStream帧。系统Completed、IsAuthenticated、IsMutuallyAuthenticated及实际Kerberos全部满足后仍等待数据库最终OK，提前OK及完成后FE/续轮拒绝；系统错误脱敏。AuthenticationConversation持有上下文，两个握手入口using覆盖成功、异常、取消和切换释放；确定性工厂每会话传入，无全局测试钩子。
+Native synchronous negotiation may wait for KDC; CancellationToken cannot forcibly stop it. Check budgets before/after native calls/network, never concurrently Dispose an executing context. Java-native other mechanisms/Standard remain open; no full Java compatibility claim. No real credential cache/KDC access; doubles/dispatch loopback/weak TLS rejection prove neither Kerberos nor trusted TLS success.
 
-系统同步协商可能等待KDC，CancellationToken无法强制中断原生调用。驱动在原生调用前后及网络阶段检查连接预算，不并发Dispose仍在执行的上下文。Java Windows native其他机制和Standard支持仍开放，不能据此声称完整Java兼容。未读取真实凭据缓存或连接KDC；本地替身、分发阶段环回及弱TLS拒绝不能证明真实Kerberos或可信TLS成功链。
+TDD first gssapi-red.log is missing-type/property compilation failure, not assertion RED. API skeleton:18 cases16 fail/2 pass (gssapi-contract-red); state skeleton:24 cases6 fail/18 pass (gssapi-state-red), then 24 pass (gssapi-green). Review finds postcompletion FE escaping final state; synchronize initial/continuation IsComplete with shared final gate. Add Security/DllNotFound/EntryPointNotFound redaction. Five dispatch cases:early OK/postcompletion FE/finalERR/immediate disposal leaving GSS/success. Two sync/async read-phase cases cancel as platform step returns, proving no returned-token send/context disposal; seven pass (gssapi-dispatch). Deterministic platform/read-phase evidence, not real TLS/Kerberos.
 
-TDD首次gssapi-red.log为缺类型/属性的编译失败，不算断言RED；API骨架阶段18项为16失败/2通过（gssapi-contract-red），状态骨架阶段24项为6失败/18通过（gssapi-state-red），随后24通过（gssapi-green）。独立走查发现完成后FE可逃离GSS最终态，已将初始及续轮IsComplete同步到共享最终态；同时补系统Security/DllNotFound/EntryPointNotFound异常脱敏。新增5项分发场景覆盖提前OK、完成后FE、最终ERR、离开GSS时立即释放及成功；另2项同步/异步读取阶段在平台步骤返回时主动取消，验证不发送返回token且释放上下文（gssapi-dispatch七项通过）。这些是确定性平台替身与读取阶段证据，不是真实TLS/Kerberos会话。
+Mutation removes two final-state synchronizations:complete-fe fails exactly (gssapi-final-gate-red:1 fail/4 pass). Finally restore/rebuild;37 targeted Unit/22 Consumer pass. First fullUnit host exits after 1064 passes:interrupted, not full success (gssapi-unit-final.log/TRX). No failed assertion/application-crash event obtained. Rerun with --blame-crash/--diag, retaining diagnostics; final below.
 
-临时删除两处最终态同步的变异检查使complete-fe准确失败（gssapi-final-gate-red：1失败/4通过），finally恢复源码后重新构建，全部GSSAPI定向Unit37、Consumer22通过。首次完整Unit在1064通过后测试宿主退出，结果为中断，不能算完整通过（gssapi-unit-final.log及对应TRX）；未取得失败断言或系统应用崩溃事件。随后开启--blame-crash及--diag保留诊断并重跑，最终结果见下表。
-
-| 验证 | 结果 | 证据 |
+| Verification | Result | Evidence |
 | --- | --- | --- |
-| Release核心五/DI三及测试项目构建 | 0警告/错误 | TestResults/gssapi-build-final.log |
-| GSSAPI定向Unit | 37通过，0失败/跳过 | TestResults/gssapi-unit-targeted/*.trx |
-| 五资产配置/秘密/弱TLS拒绝及Standard能力拒绝 | 22通过，0失败/跳过 | TestResults/gssapi-consumer-targeted/*.trx |
-| 完整Unit诊断重跑 | 2912通过，0失败/跳过，退出0，未复现宿主退出 | TestResults/gssapi-unit-verified/*.trx、gssapi-unit-verified.log、gssapi-unit-diagnostic.log |
-| 完整Consumer | 1161通过，0失败/跳过 | TestResults/gssapi-consumer-final/*.trx |
-| 完整DI | 8通过，0失败/跳过 | TestResults/gssapi-di-final/*.trx |
-| 范围格式校验 | 退出0 | TestResults/gssapi-format-final.log |
+| Release five-core/three-DI/tests build | 0 warnings/errors | TestResults/gssapi-build-final.log |
+| Targeted GSSAPI Unit | 37 pass,0 fail/skip | TestResults/gssapi-unit-targeted/*.trx |
+| Five-asset config/secrets/weak TLS/Standard capability rejection | 22 pass,0 fail/skip | TestResults/gssapi-consumer-targeted/*.trx |
+| Full Unit diagnostic rerun | 2912 pass,0 fail/skip,exit0; host exit not reproduced | TestResults/gssapi-unit-verified/*.trx, gssapi-unit-verified.log, gssapi-unit-diagnostic.log |
+| Full Consumer | 1161 pass,0 fail/skip | TestResults/gssapi-consumer-final/*.trx |
+| Full DI | 8 pass,0 fail/skip | TestResults/gssapi-di-final/*.trx |
+| Scoped format | Exit0 | TestResults/gssapi-format-final.log |
 
-构建为dotnet build OceanBaseConnector.slnx -c Release --no-restore；完整测试为dotnet test各Unit/Consumer/DI工程-c Release --no-build --no-restore --logger trx --results-directory对应路径，Unit诊断轮另加--blame-crash --diag TestResults/gssapi-unit-diagnostic.log。Unit使用正常Windows证书私钥权限，不操作信任根；测试运行中未重建产品。解析TRX与PAM基线逐案例比较：Unit新增37、Consumer新增22，无移除，DI仍8。首次宿主退出原因未确定，未据后续通过将其归因于环境或声称已修复。
+Build:dotnet build OceanBaseConnector.slnx -c Release --no-restore. Full tests:dotnet test each Unit/Consumer/DI with -c Release --no-build --no-restore --logger trx --results-directory matching paths. Diagnostic Unit adds --blame-crash --diag TestResults/gssapi-unit-diagnostic.log. Normal Windows certificate permissions/no roots; no product rebuild during tests. TRX versus PAM:Unit+37/Consumer+22/no removals/DI 8. Initial host-exit cause remains unknown; later passes neither prove an environmental cause nor a fix.
 
-独立只读复查确认最终态保护、原始token、每会话工厂、分发/取消测试和释放路径无剩余阻断；README/架构/台账的现代/Standard支持范围、原生取消限制与未验收项一致。方案完成项、UTF8无BOM/CRLF及diff检查后当前master本地提交，不推送。global.json保持删除。
+Independent read-only re-review confirms final gate/raw tokens/per-session factory/dispatch-cancel/disposal clear. README/architecture/ledger agree on modern/Standard scope/native-cancel limits/unverified items. Update plan completion, UTF8-no-BOM/CRLF/diff, local master commit/no push; global.json deleted.
 
-D15保持进行中：Standard GSSAPI、Java Windows native其他机制、真实票据/KDC/可信TLS成功链及两模式实库矩阵仍开放；A05、C01、许可/来源/发布等余项不据此关闭。本轮未重跑实际包、旧运行时或Framework；不执行真实数据库服务端、其他机器及真实凭据/KDC测试，整体goal未完成。
+D15 in progress:Standard GSSAPI/Java-native other mechanisms/real tickets-KDC/trusted TLS/both-mode live matrix open. A05/C01/license/source/release unaffected. No actual package/old-runtime/Framework rerun. No real database/other-machine/credentials-KDC tests; overall incomplete.
 
-## D15 PAM/GSSAPI实际包交付（2026-10-20）
+## D15 Actual PAM/GSSAPI Package Delivery (2026-10-20)
 
-扩展tests/PackageConsumer/Program.cs的公开契约：SPN typed/indexer读写与序列化、主Password及Password2/Password2147483647完整往返、脱敏时去除全部密码并保留SPN、预取消Open不建连；现代DI数据源及factory数据源同样检查附加密码脱敏。独立走查补充了SPN索引器、完整往返的主密码和SPN断言，产品源码未改变。
+Extend tests/PackageConsumer/Program.cs:typed/indexer SPN read-write/serialization, primary Password/Password2/Password2147483647 full round-trip, redaction of all passwords retaining SPN, precancelled Open never connects. Modern DI/factory sources also redact extras. Independent review adds SPN indexer/primary-password/SPN full-round-trip assertions; product unchanged.
 
-Ed25519历史包反向检查首次因NuGet审计源访问失败未完成（TestResults/pam-gssapi-package-old-red.log），保持审计后重跑，五目标因缺ServicePrincipalName/ServicePrincipalNameKey而编译失败，准确拒绝旧API资产（pam-gssapi-package-old-red-verified.log），不冒充运行时断言RED。本轮双包由dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/pam-gssapi-pack生成（pam-gssapi-pack.log）。eng/Verify-Packages.ps1验证两包内容/依赖组、唯一缓存SHA512还原及五资产选择，最终消费者编译0警告/错误，实际.NET8.0.31/9.0.20/10.0.12和两个Standard隔离宿主全部通过（pam-gssapi-package-final.log，生成目录TestResults/package-validation/166ba5126a304a4fb7aaa69f2cdbf06a）。
+Historical Ed25519 negative check initially cannot finish due to NuGet audit-source failure (TestResults/pam-gssapi-package-old-red.log). Rerun with audit retained:all five targets fail compilation for missing ServicePrincipalName/ServicePrincipalNameKey, correctly rejecting old API assets (pam-gssapi-package-old-red-verified.log), not runtime assertion RED. Generate both packages with dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/pam-gssapi-pack (pam-gssapi-pack.log). eng/Verify-Packages.ps1 checks contents/groups,unique-cache SHA512 restore/five-asset selection; consumer compilation0 warnings/errors,actual .NET 8.0.31/9.0.20/10.0.12/two isolated Standard hosts pass (pam-gssapi-package-final.log; generated TestResults/package-validation/166ba5126a304a4fb7aaa69f2cdbf06a).
 
-本轮仅包消费断言和文档，未重复已通过的产品完整回归；范围编译/断言、独立走查和diff检查后本地提交。没有数据库/KDC、可信TLS或异机验收，没有发布/推送或安装信任根；Framework本轮未执行，不能用这些配置契约推断原生GSSAPI已互通。global.json保持删除；用户指出的DI缺少Standard目标另行修正。
-## B01/R01 DI Standard目标与连接注册修正（2026-10-20）
+Only package assertions/docs this round; do not repeat passed full product regressions. Scoped compilation/assertions/review/diff then local commit. No database/KDC/trusted TLS/other-machine acceptance/publish/push/roots. Framework not run; configuration contracts do not prove native GSSAPI interoperability. global.json deleted; user-reported missing Standard DI targets handled separately.
 
-用户指出OceanBaseConnector.DependencyInjection缺少Standard目标。先前把整个DI包限制为现代DbDataSource适配范围过窄：DI抽象本身提供Standard资产，已有OceanBaseConnection五目标亦足以实现连接注册。本轮两个包统一为netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0；不把现代DbDataSource类型扩到缺少参考API的Standard，也不发布空DI资产。
+## B01/R01 DI Standard Targets and Connection Registration Correction (2026-10-20)
 
-五目标新增AddOceanBaseConnection(IServiceCollection,string)，每次解析创建独立关闭的Transient连接，未被其他provider占用时提供DbConnection转发工厂，不覆盖其注册。注册先规范化配置、检查重复具体类型后才新增描述符，失败不留下部分注册；懒实例化时注入可选宿主ILoggerFactory，由容器/作用域释放连接，外部日志工厂归原所有者。沿直接连接的可变配置和打开前凭据可见性，不共享一个请求级连接、不隐式池化、不添加生命周期选项或keyed连接API。现代数据源注册的单例/key/别名与回调契约保持独立，仍不会隐式注册连接。
+The user identified missing Standard targets in OceanBaseConnector.DependencyInjection. Restricting the entire DI package to modern DbDataSource was too narrow: DI abstractions have Standard assets, and five-target OceanBaseConnection supports connection registration. Both packages now target netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0. Do not expose modern DbDataSource on Standard without reference APIs or publish empty DI assets.
 
-六项新回归在缺入口时全失败（TestResults/di-standard-red/*.trx，反射定位入口避免编译失败冒充断言RED），实现后改为直接静态调用以验证公开编译契约，完整DI14全通过；覆盖懒创建、独立实例、配置隔离、作用域释放、宿主logger不被驱动释放、既有generic服务、重复/无效输入不部分注册。DependencyVersionTests新增两个Standard目标，十项目标restore/PE依赖图检查通过，未抬高旧资产到10.x。
+All five targets add AddOceanBaseConnection(IServiceCollection, string). Each resolution creates an independent closed Transient connection; a DbConnection forwarding factory is registered only when another provider has not claimed it. Normalize configuration/check duplicate concrete registrations before adding descriptors, leaving no partial registration on failure. Lazy creation injects optional host ILoggerFactory; container/scope owns connections, original owner retains logger factory. Preserve direct-connection mutability/preopen credential visibility. No shared request connection, implicit pooling, lifetime options, keyed connection API. Modern singleton/key/alias/callback data-source rules remain separate and never implicitly register connections.
 
-包验证器同步两包五资产及十依赖组、Standard测试容器8.0.1、精确同版核心和唯一缓存SHA512校验，实际包消费者所有目标执行注册/配置/独立连接/作用域释放；现代数据源与key测试继续执行，Standard明确检查没有现代数据源注册方法。Framework可选分支也核对两个本轮包的SHA512与Standard2.0资产。旧五/三资产包被验证器准确拒绝（di-standard-assets-red.log），不能由缓存或空包满足新目标。
+Six regressions all fail without the API (TestResults/di-standard-red/*.trx); reflection locates the entry so compilation failure is not mislabeled assertion RED. After implementation, use direct static calls to check public compilation; full DI 14 pass. Cover lazy/independent instances, config isolation, scope disposal, external logger ownership, existing generic services, no partial registration on duplicate/invalid input. DependencyVersionTests adds both Standard targets; ten restore/PE dependency checks pass without raising old assets to 10.x.
 
-| 验证 | 结果 | 证据 |
+Package verifier checks five assets/ten dependency groups, Standard test container8.0.1, exact same-version core, unique-cache SHA512. Actual consumers register/configure/resolve independent connections/dispose scopes on all targets; modern source/key tests retained; Standard confirms modern source-registration methods absent. Optional Framework branch checks both current-package hashes/Standard2.0 assets. Prior five/three-asset packages correctly reject (di-standard-assets-red.log); caches/empty assets cannot satisfy targets.
+
+| Verification | Result | Evidence |
 | --- | --- | --- |
-| CPM还原，保持NuGet审计 | 成功 | TestResults/di-standard-restore.log |
-| 核心五/DI五目标及测试工程Release | 0警告/错误 | TestResults/di-standard-build-final.log |
-| 完整DI | 14通过，0失败/跳过；相对原8项新增6，无移除 | TestResults/di-standard-final/*.trx |
-| 核心五/DI五目标restore和PE依赖版本 | 10通过，0失败/跳过 | TestResults/di-standard-dependencies-final/*.trx |
-| 双NuGet包 | 两包各五资产及五依赖组，DI精确引用同版核心 | TestResults/di-standard-pack.log、di-standard-package-final.log |
-| 实际五资产包消费 | .NET8.0.31/9.0.20/10.0.12和两个Standard隔离host全通过，编译0警告/错误 | TestResults/di-standard-package-final.log |
-| 本机Framework消费 | net48宿主实际Framework4.8.1、Release533509，两个Standard2.0包及基本DI配置/释放通过，编译0警告/错误 | 同上；TestResults/package-validation/6b891c0c43d641d5aba7c1af6676d8f8/ |
-| 范围格式校验 | 退出0、0文件需改；首次workspace加载提示后诊断复跑无警告/错误 | TestResults/di-standard-format-final.log |
+| CPM restore with NuGet audit | Success | TestResults/di-standard-restore.log |
+| Five-core/five-DI/tests Release | 0 warnings/errors | TestResults/di-standard-build-final.log |
+| Full DI | 14 pass, 0 fail/skip; 6 added versus 8, 0 removed | TestResults/di-standard-final/*.trx |
+| Five-core/five-DI restore/PE dependency versions | 10 pass, 0 fail/skip | TestResults/di-standard-dependencies-final/*.trx |
+| Both NuGet packages | Five assets/five groups each; DI exact same-version core | TestResults/di-standard-pack.log, di-standard-package-final.log |
+| Actual five-asset package consumption | .NET 8.0.31/9.0.20/10.0.12/two isolated Standard hosts pass; compile 0 warnings/errors | TestResults/di-standard-package-final.log |
+| Local Framework consumption | net48 host on actual Framework 4.8.1 Release 533509; both Standard2.0 packages/basic DI config-disposal pass; compile 0 warnings/errors | Same log; TestResults/package-validation/6b891c0c43d641d5aba7c1af6676d8f8/ |
+| Scoped format | Exit0, 0 files need changes; diagnostic rerun after initial workspace warning has no warnings/errors | TestResults/di-standard-format-final.log |
 
-命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；dotnet test tests/OceanBaseConnector.DependencyInjection.Tests -c Release --no-build --no-restore --logger trx --results-directory TestResults/di-standard-final；Consumer同参数另加--filter FullyQualifiedName~DependencyVersionTests。dotnet pack使用--no-build --no-restore及-o TestResults/di-standard-pack；pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/di-standard-pack -VerifyNetFramework执行本轮实际包验收。测试期间未重建产品。
+Commands: dotnet build OceanBaseConnector.slnx -c Release --no-restore; dotnet test tests/OceanBaseConnector.DependencyInjection.Tests -c Release --no-build --no-restore --logger trx --results-directory TestResults/di-standard-final. Consumer uses the same options plus --filter FullyQualifiedName~DependencyVersionTests. dotnet pack uses --no-build --no-restore -o TestResults/di-standard-pack; pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/di-standard-pack -VerifyNetFramework performs actual-package verification. No product rebuild during tests.
 
-独立代码走查确认Transient连接/别名所有权、条件编译、重复注册原子性和宿主日志归属无阻断；README、架构、方案及本台账当前目标已同步五/五，历史五/三记录保持原始日期。UTF8无BOM/CRLF及diff检查后在master本地提交，不推送。global.json保持删除。
+Independent code review confirms Transient/alias ownership, conditional APIs, atomic duplicates, host logging ownership; no blocker. README/architecture/plan/ledger current targets updated to five/five; dated five/three history unchanged. UTF8-no-BOM/CRLF/diff, local master commit/no push; global.json deleted.
 
-未修改核心协议/会话代码，未重复上一模块已经通过的完整Unit2912/Consumer1161；本轮运行完整DI、十目标依赖检查和实际包消费。没有真实数据库、异机、可信TLS或KDC测试；Framework证据仅是本机4.8.1基本包/DI消费，不代表原版4.8或完整SQL/TLS兼容，其他旧运行时矩阵仍开放。A05/C01及真实验收/许可/发布关口不因此关闭，整体goal未完成。
+No core protocol/session changes, so no repeat prior full Unit 2912/Consumer 1161. This round runs full DI, ten-target dependencies, actual packages. No live database/other-machine/trusted TLS/KDC. Framework proves local4.8.1 basic package/DI only, not original 4.8/full SQL-TLS; other old-runtime matrices open. A05/C01/live/license/release gates unaffected; overall incomplete.
 
-## R02 D扩展后的Windows现代运行时回归（2026-10-20）
+## R02 Windows Modern-runtime Regression after D Extensions (2026-10-20)
 
-前次完整.NET8/9回归停留在Unit1206/DI8；D01–D15本地扩展及DI五目标修正后，本轮重新运行当前完整Unit/DI，不以包消费样例代替完整套件。日常测试工程仍声明net10.0，临时通过TargetFrameworks和TargetFramework双属性构建net8/net9测试宿主；最终恢复默认产品核心五/DI五目标还原和Release构建，global.json保持删除。
+Previous full .NET 8/9 evidence stopped at Unit 1206/DI 8. After D01–D15 and five-target DI, rerun full current Unit/DI rather than relying on package samples. Daily projects remain net10.0; temporarily override both TargetFrameworks/TargetFramework for net8/net9 hosts, then restore default five-core/five-DI restore/Release. global.json stays deleted.
 
-net8首轮Unit编译在OracleXaTests.cs:427报CS0023（current-runtime8-unit-build.log）：当前编译器在旧目标引用API下将数组Reverse扩展调用选为返回void的MemoryExtensions.Reverse(Span<T>)。改为显式Enumerable.Reverse(global).ToArray()保留独立反向副本，不修改原全局ID；修后0警告/错误（current-runtime8-unit-build-fixed.log）。初次DI准备因NuGet签名源SSL凭据失败未完成（current-runtime8-di-build.log，其错误上下文标net10），保持签名/审计检查提升重试后实际net8构建通过（current-runtime8-di-build-verified.log），不将准备失败计作测试结果。
+Initial net8 Unit compile fails OracleXaTests.cs:427 CS0023 (current-runtime 8-unit-build.log): old reference APIs cause array Reverse to select void MemoryExtensions.Reverse(Span<T>). Explicit Enumerable.Reverse(global).ToArray() preserves an independent reversed copy/original ID; corrected build0 warnings/errors (current-runtime 8-unit-build-fixed.log). Initial DI preparation fails NuGet signature-source SSL credentials (current-runtime 8-di-build.log, context labels net10). Retain signature/audit and retry with elevated permissions; actual net8 build passes (current-runtime 8-di-build-verified.log). Preparation failure is not a test result.
 
-net9完整首轮2911通过/1失败（current-runtime9-unit/*.trx）：复杂字典错误列夹具发送首行后，驱动拒绝列形状并销毁未读会话，夹具继续发送最终EOF时遇到连接重置。原用例单独重跑2通过只说明竞态不稳定，不作为修复证据。首次仅保留元数据的修正被独立走查发现遗漏reader首行预取；该轮current-runtime9-unit-fixed尝试已中断、无完整报告，不计通过。最终夹具发送错误元数据及一条合法二进制首行，省略最终EOF后只读断连；保留NotSupportedException、Broken及断连断言，不改产品代码或吞掉服务端写入异常。修后定向2项通过（current-runtime9-dictionary-reviewed/*.trx），完整8/9结果另列如下。
+First full net9:2911 pass/1 fail (current-runtime 9-unit/*.trx). Malformed dictionary-column fixture sends first row; driver rejects shape/destroys unread session, and server EOF write races reset. Two isolated passes show intermittent race only, not a fix. First metadata-only correction misses reader prefetch, caught by independent review; current-runtime 9-unit-fixed interrupted/no full report, not passed. Final fixture sends malformed metadata plus one valid binary row, omits EOF, then only reads disconnect. Preserve NotSupportedException/Broken/disconnect; no product change/swallowed server-write exception. Two targeted corrected cases pass (current-runtime 9-dictionary-reviewed/*.trx); full8/9 below.
 
-独立只读走查确认显式LINQ保持XID原始字节语义，修正后的夹具满足首行预取及未消费终态，解决了断连后继续写入竞态。当前架构表同步五/五DI、D10 national字符、D09显式XA、D04临时LOB和现代GSSAPI系统组件事实，历史日期下五/三及旧计数保持原始记录。真实数据库/OBProxy、其他机器、可信CA成功链及真实KDC/系统凭据测试继续按约定暂缓，不据本地回归关闭R02真实矩阵或其他关口。
+Read-only review confirms explicit LINQ preserves raw XID bytes and fixture honors prefetch/unconsumed terminator, eliminating writes after disconnect. Current architecture reflects five/five DI, D10 national chars, explicit D09 XA, D04 temporary LOB, modern GSSAPI system components; dated counts/five-three history retained. Live OceanBase/OBProxy/other-machine/trusted CA/KDC-credentials deferred; local regressions do not close R02/live gates.
 
-| 验证 | 结果 | 证据 |
+| Verification | Result | Evidence |
 | --- | --- | --- |
-| 实际.NET8.0.31完整Unit/DI | 2912/14通过，零失败/跳过；Unit在最终夹具修正后重建并复验 | TestResults/current-runtime8-unit-final/*.trx、current-runtime8-di/*.trx |
-| 实际.NET9.0.20完整Unit/DI | 2912/14通过，零失败/跳过；首轮失败另保留 | TestResults/current-runtime9-unit-final/*.trx、current-runtime9-di/*.trx |
-| 默认还原及核心五/DI五Release | 成功，0警告/错误；两个产品各五张restore目标图已恢复 | TestResults/current-runtimes-default-restore.log、current-runtimes-default-build.log、current-runtimes-default-graphs.json |
-| 恢复后实际.NET10.0.12完整Unit/Consumer/DI | 2912/1163/14通过，零失败/跳过；Consumer含十目标restore/PE依赖校验 | TestResults/current-runtimes-default-unit/*.trx、current-runtimes-default-consumer/*.trx、current-runtimes-default-di/*.trx |
-| 实际宿主及依赖边界 | TRX诊断stdout确认8.0.31/9.0.20/10.0.12；8/9测试host deps分别为8.x/9.x日志及DI依赖，无10.x混入 | TestResults/current-runtimes-final-summary.json、current-runtimes-dependencies.json及对应bin/Release输出 |
-| 原案例保留 | 三运行时Unit相对GSSAPI基线无增删（归一化运行时参数）；DI14无增删；Consumer相对1161仅新增两个DI Standard依赖案例 | TestResults/current-runtimes-case-comparison.json、current-runtimes-consumer-comparison.json |
-| 范围格式检查 | 退出0，0文件需更改 | TestResults/current-runtimes-format.log |
+| Actual .NET 8.0.31 full Unit/DI | 2912/14 pass, 0 fail/skip; Unit rebuilt/reverified after final fixture fix | TestResults/current-runtime8-unit-final/*.trx, current-runtime 8-di/*.trx |
+| Actual .NET 9.0.20 full Unit/DI | 2912/14 pass, 0 fail/skip; first failure retained | TestResults/current-runtime9-unit-final/*.trx, current-runtime 9-di/*.trx |
+| Default restore/five-core/five-DI Release | Success, 0 warnings/errors; both products' five restore graphs restored | TestResults/current-runtimes-default-restore.log, current-runtimes-default-build.log, current-runtimes-default-graphs.json |
+| Restored actual .NET 10.0.12 full Unit/Consumer/DI | 2912/1163/14 pass, 0 fail/skip; Consumer includes ten-target restore/PE checks | TestResults/current-runtimes-default-unit/*.trx, current-runtimes-default-consumer/*.trx, current-runtimes-default-di/*.trx |
+| Actual host/dependency boundaries | Diagnostic TRX stdout confirms 8.0.31/9.0.20/10.0.12; 8/9 host deps use logging/DI 8.x/9.x, no 10.x | TestResults/current-runtimes-final-summary.json, current-runtimes-dependencies.json, corresponding bin/Release output |
+| Original cases retained | Unit unchanged on three runtimes versus GSSAPI after runtime-argument normalization; DI 14 unchanged; Consumer+2 Standard DI dependency cases versus 1161 | TestResults/current-runtimes-case-comparison.json, current-runtimes-consumer-comparison.json |
+| Scoped format | Exit0, 0 files need changes | TestResults/current-runtimes-format.log |
 
-命令：临时宿主用dotnet build/test各Unit及DI工程-c Release -p:TargetFrameworks=net8.0 -p:TargetFramework=net8.0（net9同理）；test均另带--no-build --no-restore --logger trx --results-directory对应目录。最终dotnet restore OceanBaseConnector.slnx及dotnet build OceanBaseConnector.slnx -c Release --no-restore恢复默认，再对Unit/Consumer/DI执行相同test参数而不带目标覆盖。完整测试期间均未重建产品。格式检查使用dotnet format whitespace Unit工程--no-restore --verify-no-changes --include两处测试文件。
+Commands: temporary Unit/DI dotnet build/test -c Release -p:TargetFrameworks=net8.0 -p:TargetFramework=net8.0 (likewise net9). Tests additionally --no-build --no-restore --logger trx --results-directory matching paths. Restore dotnet restore OceanBaseConnector.slnx and dotnet build OceanBaseConnector.slnx -c Release --no-restore, then Unit/Consumer/DI with the same test options without overrides. No product rebuild during full tests. Format: dotnet format whitespace for Unit --no-restore --verify-no-changes --include the two test files.
 
-本轮仅测试及文档修正，未重复实际打包、Framework或真实认证验收；双包五资产实际交付仍以上一模块di-standard-package-final为证据。最终证据独立只读复核、UTF8无BOM/CRLF与diff检查后在master本地提交，不推送；R02保持进行中，整体goal不据此关闭。
+Tests/docs only; no repeated actual packages/Framework/real authentication. Prior di-standard-package-final remains five-asset delivery evidence. Independent evidence review/UTF8-no-BOM/CRLF/diff/local master commit/no push. R02 in progress, overall open.
 
-## D01 OB20经TLS及公开部分响应消费补验（2026-10-20）
+## D01 OB20 over TLS and Public Partial-response Consumption (2026-10-20)
 
-补齐D01明确保留的本地传输组合缺口，新增Ob20TlsConsumerTests.cs共80项：五资产×同步/异步×四协商情形40项复用既有服务端脚本，验证Required TLS内的OB20协商、未请求/未支持/无属性时保留标准帧、文本DML、参数化prepare/execute及无响应statement关闭；另40项通过公开SequentialAccess字段流实际读出128/1024字节，再触发CRC错误、取消、命令总超时或显式连接关闭，检查状态、结果未知、异步调用方token及对端断连，任何额外请求都会使服务端断言失败。
+Fill documented local transport gaps with 80 Ob20TlsConsumerTests.cs cases. Five assets×sync/async×four negotiation cases=40 reuse scripts: Required TLS negotiation, standard fallback when unrequested/unsupported/no attributes, text DML, prepared parameters, no-response statement close. Another40 actually read 128/1024 bytes via public SequentialAccess before bad CRC/cancel/total command timeout/connectionClose, checking state/unknown outcome/async caller token/peer disconnect. Any extra request fails server assertions.
 
-测试工程链接现有TestCertificateFactory，独立拥有每例临时自签名证书和SslStream；共享Handshake仅在TLS场景读取32字节带CLIENT_SSL的SSLRequest、升级并替换底层流，保留PacketChannel包序号。全部旧调用沿原默认参数执行，不改变认证、协商或产品源码。Consumer仍是net10隔离加载五资产，不称五运行时验收；Required仅证明加密传输，不证明VerifyFull身份/信任链。不安装/删除信任根，不使用数据库或KDC。
+Tests link existing TestCertificateFactory; each owns temporary self-signed certificate/SslStream. Shared Handshake reads 32-byte CLIENT_SSL SSLRequest only for TLS, upgrades/replaces underlying stream while retaining PacketChannel sequence. Old callers keep defaults; no auth/negotiation/product changes. Five assets isolated on net10, not five-runtime acceptance. Required proves encryption, not VerifyFull identity/trust. No roots/database/KDC.
 
-首轮定向70通过/10失败（TestResults/ob20-tls-focused/*.trx）：关闭场景曾额外断言field.CanRead=false，但此属性只反映字段流对象状态，源码及既有契约均未承诺它随连接Close变为false。修正为Closed状态、新命令在本地拒绝及服务端观察断连，保留实际128字节消费证据，不修改产品来满足错误假设。修后完整定向80通过（ob20-tls-focused-fixed/*.trx）。另临时保持正确CRC执行十个CRC故障用例，十项全部按预期以“没有抛出异常”失败（ob20-tls-valid-crc-control/*.trx）；说明正常尾帧可完整消费，不是夹具的其他错误导致故障用例假通过。已恢复CRC破坏后重新构建，控制版本不提交。
+First focused run70 pass/10 fail (TestResults/ob20-tls-focused/*.trx): close cases wrongly assume field.CanRead=false. This property reflects stream-object state; code/contract never promised connectionClose changes it. Assert Closed/new-command local rejection/peer disconnect instead, preserving actual128-byte consumption; no product change for a false assumption. Corrected80 pass (ob20-tls-focused-fixed/*.trx). Temporarily keep valid CRC for ten CRC-fault cases:all ten fail as intended because no exception is thrown (ob20-tls-valid-crc-control/*.trx). This proves valid tails drain and fault cases are not passing from unrelated fixture errors. Restore corrupted CRC/rebuild; mutation not committed.
 
-独立只读走查核对TLS流/证书所有权、SSLRequest和认证序号、标准回退、prepare关闭、首128字节消费位置及保留外帧尾、取消/超时映射、关闭状态和服务端无重放断言，无阻断。历史“未覆盖TLS/未确认客户端消费位置”的旧模块记录保留，当前能力表及架构已指向本轮新增证据。实库/OBProxy、可信CA、其他机器、完整链路追踪经TLS和LOB/XA扩展经TLS仍不据本轮关闭。
+Independent review checks certificate/stream ownership, SSLRequest/auth sequence, fallback, prepare-close, 128-byte consumption/retained outer tail, cancel-timeout mapping, close/peer/no replay; no blocker. Keep historical missingTLS/unknown-consumption statements dated; current tables/architecture point to new evidence. Live/OBProxy/trusted CA/other-machine/full trace TLS/LOB-XA-TLS remain open then.
 
-| 验证 | 结果 | 证据 |
+| Verification | Result | Evidence |
 | --- | --- | --- |
-| 核心五/DI五目标及测试工程Release | 0警告/错误 | TestResults/ob20-tls-build-final.log |
-| 完整Unit | 2912通过，0失败/跳过 | TestResults/ob20-tls-unit-final/*.trx |
-| 完整Consumer | 1243通过，0失败/跳过；相对上一轮1163新增80，无移除；新增80项在完整报告中均通过 | TestResults/ob20-tls-consumer-final/*.trx、ob20-tls-case-comparison.json |
-| 完整DI | 14通过，0失败/跳过 | TestResults/ob20-tls-di-final/*.trx |
-| 新增定向及CRC反向校验 | 修后80通过；保持正确CRC时10项全部以未抛异常拒绝，最终源码已恢复错误CRC | TestResults/ob20-tls-focused-fixed/*.trx、ob20-tls-valid-crc-control/*.trx |
-| 范围格式校验 | 退出0，0文件需更改 | TestResults/ob20-tls-format.log |
+| Five-core/five-DI/tests Release | 0 warnings/errors | TestResults/ob20-tls-build-final.log |
+| Full Unit | 2912 pass, 0 fail/skip | TestResults/ob20-tls-unit-final/*.trx |
+| Full Consumer | 1243 pass, 0 fail/skip; +80 versus 1163, 0 removed; all 80 pass in full report | TestResults/ob20-tls-consumer-final/*.trx, ob20-tls-case-comparison.json |
+| Full DI | 14 pass, 0 fail/skip | TestResults/ob20-tls-di-final/*.trx |
+| Targeted/CRC negative check | Corrected80 pass; valid CRC makes10 fail for no exception; final source restores bad CRC | TestResults/ob20-tls-focused-fixed/*.trx, ob20-tls-valid-crc-control/*.trx |
+| Scoped format | Exit0, 0 files need changes | TestResults/ob20-tls-format.log |
 
-命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；Unit/Consumer/DI分别执行dotnet test对应工程-c Release --no-build --no-restore --logger trx --results-directory对应目录。定向过滤两个新公开TLS方法；反向校验过滤部分消费方法并限制DisplayName~crc。解析TRX核对计数、失败原因和旧案例保留（ob20-tls-final-summary.json、ob20-tls-case-comparison.json）。测试运行时未重建产品，未引入依赖包或改变产品源码。
+Commands: dotnet build OceanBaseConnector.slnx -c Release --no-restore; Unit/Consumer/DI dotnet test matching project -c Release --no-build --no-restore --logger trx --results-directory matching directory. Targeted filters two public TLS methods; negative check filters partial-consumption method and DisplayName~crc. Parse TRX counts/reasons/original retention (ob20-tls-final-summary.json, ob20-tls-case-comparison.json). No product rebuild during tests/dependency/product change.
 
-最终证据和文档经独立只读复核，UTF8无BOM/CRLF及diff检查后本地提交，不推送。未重跑实际打包、旧运行时或Framework；本轮五资产消费的宿主为.NET10。D01正式状态仍待真实验收，A05/C01、D15余项及许可/发布关口保持开放，整体goal未完成。
+Independent final evidence/docs review/UTF8-no-BOM/CRLF/diff/local commit/no push. No actual-package/old-runtime/Framework rerun; five-asset host .NET 10. D01 pending real acceptance; A05/C01/D15/license/release open, overall incomplete.
 
-## D01 完整链路追踪经TLS补验（2026-10-20）
+## D01 Full-link Tracing over TLS (2026-10-20)
 
-沿用Ob20TraceConsumerTests的原协议脚本和断言，保留原70项明文用例及案例名称，新增70项Required TLS用例：五资产同步/异步modern/legacy关联、关闭追踪、缺能力及无监听者50项；当前目标prepare/execute、两页cursor、无响应statement关闭、事务隔离/提交及autocommit恢复4项；modern/legacy同步/异步畸形extra、64KiB上限、CRC和部分响应取消16项。关联用例在解密后的extra内确认trace/span、parent、driver/SHOW记录及无SQL/凭据/baggage值；故障用例确认Broken、结果未知、调用方token及对端断连，无额外请求。部分响应取消只记录服务端已发送范围，不据此声称客户端消费了正文；公开字段消费位置的证据仍以上一模块为准。
+Reuse Ob20TraceConsumerTests scripts/assertions, preserve70 plaintext identities, add 70 Required TLS:five assets sync/async modern/legacy correlation/disabled/missing capability/no listeners50; current-target prepare-execute/two-page cursor/no-response close/transaction isolation-commit-autocommit restore4; modern/legacy sync/async bad extra/64 KiB limit/CRC/partial-cancel16. Decrypted extra verifies trace/span/parent/driver-SHOW records/no SQL-credentials-baggage. Faults assert Broken/unknown outcome/caller token/peer disconnect/no extra requests. Partial cancellation records server-sent range only, not client body consumption; previous module proves public consumption position.
 
-三个测试入口共享原有脚本主体，仅参数化是否加密；无TLS的旧70项不创建证书。每例TLS脚本独立拥有临时自签名证书和SslStream，先读取32字节带CLIENT_SSL的SSLRequest，服务端加密升级后替换同一PacketChannel底层流、保留包序号，后续报文均经过TLS。复用既有证书fixture，不改产品源码、配置、依赖或信任根，不复制另一套追踪断言。
+Three entry points share scripts and parameterize encryption only; original 70 plaintext cases create no certificates. Each TLS case owns certificate/SslStream, reads 32-byte CLIENT_SSL request, upgrades same PacketChannel/preserves sequence; all later traffic encrypted. Existing fixture/no product/config/dependency/root change/no duplicate trace assertions.
 
-先加入TLS测试但未接入脚本升级时，net10 modern同步/异步两项均在TLS建连失败（TestResults/trace-tls-red/*.trx）；这是夹具缺少TLS升级的预期失败，不是产品缺陷。接入升级后定向140项全部通过（trace-tls-focused/*.trx），逐名对比上一模块完整Consumer，原70项追踪测试无删除、新增70项TLS测试全部通过（trace-tls-focused-comparison.json）。独立只读代码走查无必须修复项，覆盖序号、TLS读写路径、原断言保留、所有权、异常和无重放边界。
+Before script TLS upgrade, two net10 modern sync/async cases fail TLS connection (TestResults/trace-tls-red/*.trx):expected fixture deficiency, not product defect. After upgrade140 targeted pass (trace-tls-focused/*.trx); previous full Consumer name comparison retains 70/adds70 passingTLS (trace-tls-focused-comparison.json). Read-only review sequence/TLS paths/assertion retention/ownership/errors/no replay clear.
 
-最终本地验证如下，原始TRX计数及案例身份已逐项解析核对（TestResults/trace-tls-final-summary.json、trace-tls-case-comparison.json）：
+Final raw TRX counts/identities parsed (TestResults/trace-tls-final-summary.json, trace-tls-case-comparison.json):
 
-| 验证 | 结果 | 证据 |
+| Verification | Result | Evidence |
 | --- | --- | --- |
-| 核心五/DI五及测试工程Release | 0警告/错误 | TestResults/trace-tls-build.log |
-| 完整Unit | 2912通过，0失败/跳过 | TestResults/trace-tls-unit-final/*.trx |
-| 完整Consumer | 1313通过，0失败/跳过；相对上一模块1243新增70、移除0；新增70项均通过 | TestResults/trace-tls-consumer-final/*.trx、trace-tls-case-comparison.json |
-| 完整DI | 14通过，0失败/跳过 | TestResults/trace-tls-di-final/*.trx |
-| 追踪定向 | 原明文70及新增TLS70全部通过 | TestResults/trace-tls-focused/*.trx、trace-tls-focused-comparison.json |
-| 未接入TLS升级的红灯 | net10 modern同步/异步2项均在TLS建连失败 | TestResults/trace-tls-red/*.trx |
-| 范围格式检查 | 退出0，0文件需更改 | TestResults/trace-tls-format.log |
+| Five-core/five-DI/tests Release | 0 warnings/errors | TestResults/trace-tls-build.log |
+| Full Unit | 2912 pass, 0 fail/skip | TestResults/trace-tls-unit-final/*.trx |
+| Full Consumer | 1313 pass, 0 fail/skip; +70 versus 1243, 0 removed; all additions pass | TestResults/trace-tls-consumer-final/*.trx, trace-tls-case-comparison.json |
+| Full DI | 14 pass, 0 fail/skip | TestResults/trace-tls-di-final/*.trx |
+| Targeted trace | Plaintext 70/TLS 70 all pass | TestResults/trace-tls-focused/*.trx, trace-tls-focused-comparison.json |
+| RED before TLS upgrade | Two net10 modern sync/async TLS connection failures | TestResults/trace-tls-red/*.trx |
+| Scoped format | Exit0, 0 files need changes | TestResults/trace-tls-format.log |
 
-命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；三个完整测试分别dotnet test对应工程-c Release --no-build --no-restore --logger trx --results-directory对应目录；定向另加--filter FullyQualifiedName~Ob20TraceConsumerTests，红灯限制EveryAssetCorrelatesFullLinkTraceOverTls、net10.0和modern。格式检查为Consumer工程dotnet format whitespace --no-restore --verify-no-changes --include本轮测试文件绝对路径。完整测试期间不重建产品。
+Commands: dotnet build OceanBaseConnector.slnx -c Release --no-restore; each full test uses dotnet test matching project -c Release --no-build --no-restore --logger trx --results-directory matching directory. Targeted --filter FullyQualifiedName~Ob20TraceConsumerTests; RED restricts EveryAssetCorrelatesFullLinkTraceOverTls/net10.0/modern. Consumer dotnet format whitespace --no-restore --verify-no-changes --include absolute current test path. No product rebuild during full tests.
 
-五资产仍由net10宿主隔离消费，不是五运行时验收。Required只证明本机加密传输，VerifyFull、实库采样/SHOW TRACE、版本/OBProxy、LOB/XA经TLS及其他机器仍待验收；本轮未重跑打包、Framework和旧运行时，产品源码未改。不关闭D01、A05/C01/D15余项或整体goal；最终证据独立复核及UTF8无BOM/CRLF、diff检查后本地提交，不推送。
+Five isolated assets on net10, not five runtimes. Required proves local encryption only; VerifyFull/live sampling-SHOWTRACE/version-OBProxy/LOB-XA-TLS/other-machine open. No package/Framework/old-runtime rerun/product change. D01/A05/C01/D15/overall remain open. Independent final review/UTF8-no-BOM/CRLF/diff/local commit/no push.
 
-## D02–D05/D09 Oracle扩展经TLS本地消费补验（2026-10-20）
+## D02–D05/D09 Oracle Extensions over TLS: Local Consumption (2026-10-20)
 
-为文档中仍保留的Oracle扩展TLS组合缺口，七组Consumer脚本保留原明文方法、MemberData和断言，通过同一主体的encrypted参数新增Required TLS入口；每例创建独立自签名证书及SslStream，复用共享Handshake的32字节CLIENT_SSL检查、TLS加密状态和PacketChannel序号。标准包由替换后的channel收发，OB20包直接通过tls流收发。成功路径等待服务端脚本结束，原服务端断言不能被忽略；失败、反射异常及客户端资源清理策略不改。
+Seven Consumer scripts retain plaintext methods/MemberData/assertions and add Required TLS via encrypted parameter on the same bodies. Per-case self-signed certificate/SslStream/shared Handshake32-byte CLIENT_SSL/encryption/sequence. Standard packets use replaced channel; OB20 directly uses tls stream. Success awaits server script completion, never ignores assertions. Failure/reflection errors/client cleanup unchanged.
 
-| 脚本 | 原明文案例 | 新增Required TLS案例 | 保留的主要断言 |
+| Script | Original plaintext | New Required TLS | Retained main assertions |
 | --- | --- | --- | --- |
-| OracleProcedureConsumerTests | 30 | 30 | 标量OUT只在完整终态及OB20边界验证后发布 |
-| RefCursorConsumerTests | 30 | 30 | 父command释放后原会话cursor可读、游标/父statement清理及尾随响应拒绝 |
-| LobConsumerTests | 60 | 60 | BLOB/CLOB原会话分块READ、字符/字节长度和错误后的连接状态 |
-| LobMutationConsumerTests | 60 | 60 | WRITE/TRIM参数、返回locator更新及写入结果未知边界 |
-| TemporaryLobConsumerTests | 80 | 80 | 创建/写入/显式释放、创建或释放尾随响应失败及释放后失效 |
-| OracleXaConsumerTests | 100 | 100 | START/END/PREPARE/COMMIT/RECOVER/ROLLBACK、只读票、XA错误/断连及完整恢复快照 |
-| ComplexTypeDictionaryConsumerTests | 20 | 20 | 类型字典精确布局、不可变复杂值、绑定/输出及缓存清除后旧描述符拒绝 |
+| OracleProcedureConsumerTests | 30 | 30 | Scalar OUT publishes only after full terminal/OB20 boundary |
+| RefCursorConsumerTests | 30 | 30 | Cursor remains readable on original session after parent command disposal; cursor/parent close/trailing-body rejection |
+| LobConsumerTests | 60 | 60 | Same-session chunked BLOB/CLOB READ/character-byte lengths/posterror state |
+| LobMutationConsumerTests | 60 | 60 | WRITE/TRIM arguments/updated locator/unknown write outcome |
+| TemporaryLobConsumerTests | 80 | 80 | Create/write/explicit free/create-free trailing failures/invalidation after release |
+| OracleXaConsumerTests | 100 | 100 | START/END/PREPARE/COMMIT/RECOVER/ROLLBACK/readonly vote/XA errors-disconnect/full snapshot |
+| ComplexTypeDictionaryConsumerTests | 20 | 20 | Exact dictionary layouts/immutable values/bind-OUT/stale descriptors after cache clear |
 
-不新增产品接口、配置、依赖或信任根操作，不复制另一套协议断言。独立只读代码走查已核对七文件全路径、共享Handshake及PacketChannel升级，未发现必须修复项。最终原始TRX均为Completed，零失败/跳过；逐名核对原完整Consumer1313项到1693项新增380、删除0，新增380全部通过，七组计数与上表一致（TestResults/oracle-tls-final-summary.json、oracle-tls-case-comparison.json、oracle-tls-final-groups.json）。定向报告亦保留原380项、新增380全部通过（oracle-tls-focused-comparison.json、oracle-tls-focused-groups.json）。
+No product API/config/dependency/root change/duplicate assertions. Independent read-only review covers all seven files, shared Handshake/PacketChannel upgrade; no fix required. Final TRX Completed/zero fail-skip. Full Consumer 1313→1693, +380/-0, all additions pass/group counts match (TestResults/oracle-tls-final-summary.json, oracle-tls-case-comparison.json, oracle-tls-final-groups.json). Targeted retains 380/adds380 all pass (oracle-tls-focused-comparison.json, oracle-tls-focused-groups.json).
 
-| 验证 | 结果 | 证据 |
+| Verification | Result | Evidence |
 | --- | --- | --- |
-| 核心五/DI五及测试工程Release | 0警告/错误 | TestResults/oracle-tls-build.log |
-| 七组定向回归 | 明文380及TLS380全部通过 | TestResults/oracle-tls-focused/*.trx |
-| 完整Unit | 2912通过，0失败/跳过 | TestResults/oracle-tls-unit-final/*.trx |
-| 完整Consumer | 1693通过，0失败/跳过；旧案例无移除，新增380均通过 | TestResults/oracle-tls-consumer-final/*.trx |
-| 完整DI | 14通过，0失败/跳过 | TestResults/oracle-tls-di-final/*.trx |
-| 范围格式检查 | 退出0，0文件需更改 | TestResults/oracle-tls-format.log |
+| Five-core/five-DI/tests Release | 0 warnings/errors | TestResults/oracle-tls-build.log |
+| Seven targeted groups | Plaintext 380/TLS 380 all pass | TestResults/oracle-tls-focused/*.trx |
+| Full Unit | 2912 pass, 0 fail/skip | TestResults/oracle-tls-unit-final/*.trx |
+| Full Consumer | 1693 pass, 0 fail/skip; 0 original removals/new 380 all pass | TestResults/oracle-tls-consumer-final/*.trx |
+| Full DI | 14 pass, 0 fail/skip | TestResults/oracle-tls-di-final/*.trx |
+| Scoped format | Exit0, 0 files need changes | TestResults/oracle-tls-format.log |
 
-命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore --logger trx --results-directory对应目录。定向另加--filter，以七个原公开测试方法名前缀用OR连接，同时匹配原方法及OverTls入口。格式为Consumer工程dotnet format whitespace --no-restore --verify-no-changes --include七文件绝对路径。完整测试期间不重建产品；最终证据独立只读复核、UTF8无BOM/CRLF及diff检查后在当前master本地提交，不推送。
+Commands: dotnet build OceanBaseConnector.slnx -c Release --no-restore; Unit/Consumer/DI dotnet test matching project -c Release --no-build --no-restore --logger trx --results-directory matching directory. Targeted --filter OR-combines seven original method prefixes to match plaintext/OverTls. Consumer dotnet format whitespace --no-restore --verify-no-changes --include seven absolute paths. No product rebuild during full tests. Independent evidence review/UTF8-no-BOM/CRLF/diff/local master commit/no push.
 
-五资产由net10宿主隔离消费，只验证本机Required加密传输；不等同VerifyFull信任链、五运行时或真实OceanBase/OBProxy兼容。LOB全部取消组合、复杂值全部往返、MySQL XA经TLS、真实XA协调器、系统票据及其他机器不在这批脚本覆盖内。本轮产品源码未改，不重复打包/Framework/旧运行时。A05/C01、D15余项、D01真实采样/SHOW TRACE和发布关口仍开放，不关闭整体goal。
+Five isolated assets/net10 prove local Required encryption only, not VerifyFull/five runtimes/live OceanBase-OBProxy. Not all LOB cancellations/complex round-trips/MySQL XA-TLS/real coordinator/system tickets/other-machine scenarios covered. No product changes/repeated package-Framework-old-runtime tests. A05/C01/D15/D01 live sampling-SHOWTRACE/release gates open; overall incomplete.
 
-## D09 MySQL XA经TLS本地补验及本轮收尾（2026-10-20）
+## D09 MySQL XA over TLS and Round Completion (2026-10-20)
 
-XaConsumerTests保留原80项明文入口、数据和全部阶段/恢复断言，新增80项Required TLS消费：五资产×同步/异步×标准/OB20×成功/可信拒绝/断连/错误边界。复用既有证书及共享Handshake，仅参数化当前脚本传输，不改产品源码、共享helper、依赖或信任根。初始握手仍为Oracle夹具，认证后显式注入MySQL模式事实；这些是本机模拟协议测试，不是真实MySQL认证或服务端兼容证明，不放行A05。
+XaConsumerTests retains 80 plaintext entry cases/data/all stage-recovery assertions, adds80 Required TLS=five assets×sync/async×standard/OB20×success/trusted rejection/disconnect/bad boundary. Existing certificates/shared Handshake, parameterized transport only; product/shared helper/dependencies/roots unchanged. Initial Oracle handshake fixture then explicitly injected MySQL fact:local handcrafted protocol, not real MySQL authentication/server compatibility; A05 unchanged.
 
-已运行Release核心五/DI五及测试工程编译，零警告/错误（TestResults/xa-tls-build.log）；模块全部160项通过、零失败/跳过（TestResults/xa-tls-focused/*.trx）。逐名对比上一模块完整报告：原80项无删除，新增80项TLS全部通过（xa-tls-case-comparison.json）。范围格式检查退出0、0文件需更改（xa-tls-format.log）。独立只读代码走查未发现阻断，确认TLS升级后标准channel与OB20均使用SslStream、包序号及原异常/阶段/资源断言保留。最终TRX及案例身份由主执行者直接解析核对；本轮未另外委派最终报告复核。
+Five-core/five-DI/tests Release 0 warnings/errors (TestResults/xa-tls-build.log); all 160 module cases pass, zero fail-skip (TestResults/xa-tls-focused/*.trx). Name comparison to prior full report:original 80 retained, newTLS80 all pass (xa-tls-case-comparison.json). Scoped format exit0/0 changes (xa-tls-format.log). Read-only review no blocker:standard channel/OB20 use SslStream after upgrade, sequence/original errors-stages-resources preserved. Primary executor parses final TRX/case identity directly; no separate final-report delegation this round.
 
-命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore；dotnet test Consumer工程-c Release --no-build --no-restore --filter FullyQualifiedName~EveryAssetPinsXaPhasesAndRecoversWithoutReplaying --logger trx --results-directory TestResults/xa-tls-focused；Consumer工程dotnet format whitespace --no-restore --verify-no-changes --include本轮测试文件绝对路径。产品与共享helper未改，故不重复上一模块完整Unit2912/Consumer1693/DI14；该完整报告为此前证据，不能把新增80项写成已跑过的新完整回归。
+Commands: dotnet build OceanBaseConnector.slnx -c Release --no-restore; Consumer dotnet test -c Release --no-build --no-restore --filter FullyQualifiedName~EveryAssetPinsXaPhasesAndRecoversWithoutReplaying --logger trx --results-directory TestResults/xa-tls-focused. Consumer dotnet format whitespace --no-restore --verify-no-changes --include current absolute test path. Product/shared helper unchanged, so do not repeat prior full Unit 2912/Consumer 1693/DI 14. That report is prior evidence; never describe new 80 as a newly executed full regression.
 
-用户追问测试范围后已明确：最近几轮为代码走查加本机手工协议环回，没有连接真实OceanBase、OBProxy、数据库服务器、KDC或其他机器；涉及真实服务端语义只记录待验证，模拟通过不关闭兼容矩阵。按用户收尾要求，本次只更新文档并提交当前已验证改动，停止继续追加TLS组合测试；后续恢复时回到实际功能缺口核对。A05可信MySQL判定、C01完整重置/池化、D15余项、许可/发布及实库/异机关口仍开放，整体目标未完成。global.json保持不存在；当前master本地提交，不推送。
+After the user's question, scope was clarified:recent rounds are code review/local handcrafted protocol loopback, without real OceanBase/OBProxy/database/KDC/other machines. Server semantics remain unverified; simulated success never closes compatibility. Per user wrap-up, update docs/commit verified changes only, stop adding TLS permutations; future work resumes actual feature-gap review. A05 trusted MySQL identification, C01 full reset-pooling, D15 remaining, license-release/live-other-machine gates open; overall incomplete. global.json absent; local master commit/no push.
