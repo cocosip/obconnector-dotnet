@@ -226,7 +226,7 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public void SupportedTypedNullsUseNullBitmapAndOracleBinaryUsesVarString()
+        public void SupportedTypedNullsUseNullBitmapAndOracleBinaryUsesRaw()
         {
             var parameters = new[]
             {
@@ -235,7 +235,7 @@ namespace OceanBaseConnector.UnitTests
                 new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Timestamp, Scale = 7, Value = DBNull.Value }
             };
             Assert.Equal(new byte[] { 7, 1, 6, 0, 6, 0, 6, 0 }, PreparedParameters.Encode(parameters, OceanBaseCompatibilityMode.Oracle));
-            Assert.Equal(new byte[] { 0, 1, 253, 0, 2, 0, 255 }, PreparedParameters.Encode(new[] { new OceanBaseParameter { Value = new byte[] { 0, 255 } } }, OceanBaseCompatibilityMode.Oracle));
+            Assert.Equal(new byte[] { 0, 1, 203, 0, 2, 0, 255 }, PreparedParameters.Encode(new[] { new OceanBaseParameter { Value = new byte[] { 0, 255 } } }, OceanBaseCompatibilityMode.Oracle));
         }
 
         [Theory]

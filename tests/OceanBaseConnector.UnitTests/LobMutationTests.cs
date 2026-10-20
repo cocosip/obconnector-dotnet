@@ -129,7 +129,7 @@ namespace OceanBaseConnector.UnitTests
                     var request = new ByteCursor(await StatementCommand(channel, 0xa1)); request.Skip(10);
                     Assert.Equal("BEGIN DBMS_LOB.WRITE(?, ?, ?, ?); END;", Encoding.UTF8.GetString(request.ReadLengthEncodedBytes()));
                     Assert.Equal(4u, request.ReadUInt32()); Assert.Equal(0, request.ReadUInt8()); Assert.Equal(1, request.ReadUInt8());
-                    Assert.Equal((ushort)type, request.ReadUInt16()); Assert.Equal((ushort)3, request.ReadUInt16()); Assert.Equal((ushort)8, request.ReadUInt16()); Assert.Equal((ushort)253, request.ReadUInt16());
+                    Assert.Equal((ushort)type, request.ReadUInt16()); Assert.Equal((ushort)3, request.ReadUInt16()); Assert.Equal((ushort)8, request.ReadUInt16()); Assert.Equal(character ? (ushort)253 : (ushort)203, request.ReadUInt16());
                     Assert.Equal(locator, request.ReadLengthEncodedBytes()); var amount = request.ReadUInt32(); Assert.Equal((ulong)offset, request.ReadUInt64());
                     Assert.InRange(amount, 1u, character ? 8191u : 32767u); var chunk = request.ReadLengthEncodedBytes();
                     Assert.Equal(data.AsSpan(sent, chunk.Length).ToArray(), chunk);

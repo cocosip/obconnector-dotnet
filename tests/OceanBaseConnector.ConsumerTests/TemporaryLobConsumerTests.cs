@@ -82,7 +82,7 @@ namespace OceanBaseConnector.ConsumerTests
                     {
                         Assert.Equal((ushort)type, request.ReadUInt16());
                         if (operation == 1)
-                        { Assert.Equal((ushort)3, request.ReadUInt16()); Assert.Equal((ushort)8, request.ReadUInt16()); Assert.Equal((ushort)253, request.ReadUInt16()); }
+                        { Assert.Equal((ushort)3, request.ReadUInt16()); Assert.Equal((ushort)8, request.ReadUInt16()); Assert.Equal(character ? (ushort)253 : (ushort)203, request.ReadUInt16()); }
                         else Assert.Equal((ushort)6, request.ReadUInt16());
                         Assert.Equal(Locator(operation == 1 ? Array.Empty<byte>() : data), request.ReadLengthEncodedBytes());
                         if (operation == 1)
