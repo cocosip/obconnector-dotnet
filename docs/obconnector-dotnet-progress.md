@@ -2,6 +2,14 @@
 
 Baseline date: 2026-10-17; progress updated: 2026-10-20. References: [Architecture design](obconnector-dotnet-architecture-design.md) and [Development plan](obconnector-dotnet-development-plan.md).
 
+## Oracle routine catalog OVERLOAD compatibility (2026-10-20)
+
+The real ALL_PROCEDURES and ALL_ARGUMENTS directories return OVERLOAD as NUMBER, while Procedures/ProcedureParameters expose that column as a string. Both Oracle SELECT lists now project CAST(OVERLOAD AS VARCHAR2(40)) AS OVERLOAD. Public column types/order, NULLs, numeric SUBPROGRAM_ID, parameterized restrictions, shared strict row conversion and MySQL queries remain unchanged.
+
+The existing eight both-mode/sync-async directory tests first failed the four Oracle SQL projections while the four MySQL cases passed. After correction, all **145** schema Unit cases and **50** schema Consumer cases pass. Full Release build has zero warnings/errors; independent review found no actionable issues (`TestResults/routine-overload-*`).
+
+The official real Oracle schema group passes **2**, fails **0**, skips **63** unselected cases, with zero cleanup failures (`TestResults/live-oracle-routine-overload-01.json`). This includes both routine collections through schema.collections. Independent cleanup confirms its one exact owned object is absent and zero owned prepared XA branches remain. The scoped whitespace/diff/private-value checks pass; no supplied account/connection details are committed. Deployment, publication and push remain unperformed.
+
 ## Oracle offset-fetch tail marker compatibility (2026-10-20)
 
 Real extended cursor fetches mark row EOFs with MoreResultsExists while a separate tail OK remains pending: continuing page status 0x0048 and final page status 0x00C8. Only the offset-tail-pending branch now removes that marker before the existing cursor validation/state transition. The separate tail still must pass status/counter and complete-response checks before another fetch or lease release. Ordinary cursors, REF CURSOR and tail MoreResultsExists/PS_OUT rejection retain their paths.

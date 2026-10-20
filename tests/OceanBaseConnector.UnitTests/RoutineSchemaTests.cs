@@ -66,6 +66,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Contains(mysql ? parameters ? "INFORMATION_SCHEMA.PARAMETERS" : "INFORMATION_SCHEMA.ROUTINES" : parameters ? "ALL_ARGUMENTS" : "ALL_PROCEDURES", sql);
                 if (!mysql)
                 {
+                    Assert.Contains("CAST(OVERLOAD AS VARCHAR2(40)) AS OVERLOAD", sql);
                     if (parameters) { Assert.Contains("DATA_LEVEL = 0", sql); Assert.Contains("DATA_TYPE IS NOT NULL", sql); Assert.Contains("POSITION = 0", sql); Assert.Contains("'IN/OUT'", sql); }
                     else { Assert.Contains("PROCEDURE_NAME IS NOT NULL", sql); Assert.Contains("'PACKAGE'", sql); }
                 }
