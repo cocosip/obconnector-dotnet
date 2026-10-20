@@ -302,13 +302,17 @@ C06 批量本地契约：现代三个资产公开 `OceanBaseBatch : DbBatch`、`
 
 Timeout 是每条命令包含准备、执行和读取的总秒数，0 表示无限，条目间重建预算；不是整批墙钟上限。Cancel 中止当前请求并阻止后缀。异步初始执行 token、NextResult/字段读取自己的 token 和内部 Cancel 分开归因，原调用方已取消时优先保留原 token；完整终态结果不被后到取消覆盖，部分发送或无可信终态的 SQL 仍报告未知结果并销毁，不重放。服务端及协议/未知结果 OceanBaseException 通过继承的 DbException.BatchCommand 指向原集合条目，保留原错误码/SQLSTATE/原因；本地参数/配置校验仍保留原异常类型。
 
-数据源 batch 使用 .NET 的 DbDataSource 包装：ExecuteNonQuery/Scalar 自动打开并在 finally 关闭，reader 注入 CloseConnection，释放 batch 同时释放其内部连接；来源的冻结配置、日志、脱敏和释放关口不变。平台包装明确拒绝 Connection/Transaction 和 Prepare，使用 factory.CreateBatchCommand 添加条目（不依赖平台包装的 CreateBatchCommand）。池化仍受 C01 阻塞，bulk/array binding、隐式原子性和额外的 JDBC 批量优化均未实现。Windows 的隔离消费和三个实际运行时样例不替代真实 MySQL/Oracle 租户、OBProxy 或跨平台验收。
+数据源 batch 使用 .NET 的 DbDataSource 包装：ExecuteNonQuery/Scalar 自动打开并在 finally 关闭，reader 注入 CloseConnection，释放 batch 同时释放其内部连接；来源的冻结配置、日志、脱敏和释放关口不变。平台包装明确拒绝 Connection/Transaction 和 Prepare，使用 factory.CreateBatchCommand 添加条目（不依赖平台包装的 CreateBatchCommand）。池化仍受C01阻塞；D06另提供显式Oracle数组绑定，DbBatch本身不提供bulk、隐式原子性或额外的JDBC批量优化。Windows 的隔离消费和三个实际运行时样例不替代真实 MySQL/Oracle 租户、OBProxy 或跨平台验收。
 
 D03 REF CURSOR本地契约：Oracle类型163的非NULL二进制输出为固定4字节LE游标ID。末尾追加OceanBaseDbType.RefCursor，映射DbType.Object，只允许PrepareExecute的Output/ReturnValue、零Size/Precision/Scale；请求仍发送NULL。输出类型由服务端metadata确认，所有游标对象与标量一起暂存并原子发布，失败回收未发布资源，不把ID公开为整数。普通结果列或文本协议的非NULL cursor值明确拒绝；NULL仍为DBNull。
 
 OceanBaseRefCursor.GetDataReader/GetDataReaderAsync返回既有OceanBaseDataReader，每个对象只打开一次；默认fetchSize128，必须为正数，可用Default/SequentialAccess/CloseConnection。获取租约失败和调用时token已取消不消耗单次机会。对象固定原物理会话、事务引用与连接事务代次，读取前在连接锁内复核，事务结束或后来事务周期、连接重开均不能复用旧游标。同一连接同时只允许一个reader，多个输出游标须依次读取。fetch使用9字节COM_STMT_FETCH及独立命令序号，首响应先取得metadata后直接读行，后续页复用既有metadata一致性/进展/行数/LastRowSent检查及流式Sequential路径，不重新执行SQL或缓存整个结果。每次打开独立使用原命令超时预算；获取结果状态沿既有会话时区/national编码探测和每页状态快照规则。
 
 每次扩展执行的OracleCursorOwner在所有输出游标释放前保留父statement；command.Dispose只清理已可释放资源。读尽、失败或游标Dispose均原子一次入延迟关闭队列，最后释放再排父statement关闭，空闲Dispose刷新队列；别名ID共享同一对象，避免重复关闭。未读取对象必须Dispose，连接关闭释放服务端资源；重执行不隐式释放旧参数值。未读完的reader/游标关闭、fetch ERR或协议/网络错误销毁原会话。后续fetch不再执行业务SQL，取消/超时及故障不将已成功完成的原过程改判结果未知；仍保留真实错误码/取消token。上述为本地实现，真实目标版本/OBProxy、TLS扩展执行及异机矩阵待验收。
+
+M07长参数上传（2026-10-20本地接入）：MySQL二进制Input的Value可为Stream，推断/显式DbType.Binary；执行入口拒绝不兼容模式/声明、非零Size/Precision/Scale、不可读源及客户端prepare回退。Prepare沿既有规则只验证绑定/参数数，值校验留待执行，不读源。参数元数据和源引用快照后，按原位置读至EOF、不seek/读取Length/释放源；再次执行由调用者管理源位置。普通byte[]路径不变，Oracle PIECE_DATA和文本流仍未实现。
+
+固定8KiB数据缓冲及7字节LONG_DATA头，每块独立命令且无应答，空流也发空数据块；EXECUTE保留类型头、跳过流的inline值。每块经ResponseComplete(false)结束OB20/标准协议无应答边界。所有流、inline编码和10字节EXECUTE头共用64MiB预算；异步源/网络用原命令总预算token，不缓冲全流或另建任务。源须合作取消，驱动不能强制中断用户源的阻塞Read/忽略token的ReadAsync；已上传期间仍立即销毁原会话。污染标记独立于当前响应状态，上传后取消/异常/关闭均不允许带残余数据的会话复用；EXECUTE前失败不报告SQL结果未知，发送后沿既有契约处理。固定Java的AbstractQueryProtocol.executePreparedQuery、StreamParameter.writeLongData及ComStmtExecute提供报文依据，真实OceanBase/OBProxy接受与清理语义仍未验证。
 
 ### D06 数组批量执行
 

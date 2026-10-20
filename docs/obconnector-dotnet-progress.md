@@ -2,6 +2,33 @@
 
 基线日期：2026-10-17；当前进度更新：2026-10-20。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。
 
+## M07 MySQL二进制流参数本地实施（2026-10-20）
+
+40beb9b后逐项对照架构M01–M16及开发方案A/B/C/D/R，发现M07长参数优化尚未实现，也未落入D06数组绑定。先接入MySQL LONG_DATA；Oracle PIECE_DATA存在独立应答与条件，保持后续未实现项。本轮复用DbParameter.Value、现有参数快照/prepare/execute、PacketChannel的offset/count及原会话/命令预算，不增连接选项、依赖或服务。公开流所有权、Size限制、取消与Prepare边界见README和开发方案M07。
+
+固定Java 6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的AbstractQueryProtocol.executePreparedQuery、StreamParameter.writeLongData和ComStmtExecute提供24/statement ID/parameter index、空流上传及跳过inline值的协议依据；只参考行为，不复制源码。使用8192字节数据缓冲，不读Length、不seek、不物化全流；每块结束无应答边界。上传污染标记独立于当前响应状态，源失败/取消时区分上传前可复用、上传后必须销毁，EXECUTE前不报告SQL结果未知，之后沿原契约处理。
+
+首批4项公开同步/异步、多块/空流用例先失败再通过（long-data-red/、long-data-green/）。扩展验证最初35通过/1失败，原因是新测试错误期待本地ServerErrorCode为null，已按既有int/0契约修正，不改产品异常API（long-data-focused/）。预算走查发现漏计固定10字节EXECUTE头，long-data-budget-red/证明超限竟进入EXECUTE；修正两路径后通过。最终定向37通过，含15项新增LongData及22项既有prepare/客户端回退；覆盖混合参数、短读/快照、不可seek源、源所有权/位置、Prepare不读、重复执行空流/SQL NULL、非法声明、源失败/取消、异步独占、可信ERR/执行断流和按需生成64MiB预算边界（long-data-focused-reviewed/）。
+
+新增20项五资产同步/异步×标准/OB20消费全部通过（long-data-consumer-focused/），验证多块无应答请求、EXECUTE类型头/无inline值、同statement再执行空流和statement关闭；MySQL显式注入认证后模式事实，不放宽A05。独立设计与代码走查核对调用者/批次/快照、污染清理及OB20边界，无剩余阻断；Prepare值校验时机与阻塞源取消限制已写明。格式首轮只发现新测试attribute需换行，修正后7文件0调整。
+
+| 最终检查 | 结果 | 原始证据 |
+| --- | --- | --- |
+| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/long-data-build-final.log |
+| 完整Unit | 3040通过，0失败/跳过；原3025项保留，新增15项 | TestResults/long-data-unit-verified/*.trx |
+| 完整Consumer | 2026通过，0失败/跳过；原2006项保留，新增20项 | TestResults/long-data-consumer-final/*.trx |
+| 完整DI | 14通过，0失败/跳过 | TestResults/long-data-di-final/*.trx |
+| 范围格式及diff | 初始7个源码/测试文件及后续游标夹具共8个无需调整；diff通过 | TestResults/long-data-format-reviewed.log、long-data-cursor-format.log；git diff --check |
+| 双包及五资产实际包消费 | 双包及五资产消费通过；实际8.0.32/9.0.21/10.0.13 | TestResults/long-data-pack.log、long-data-package-verification.log |
+
+本轮命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；三个工程分别dotnet test -c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录。范围dotnet format whitespace --no-restore --verify-no-changes；dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/long-data-packages，随后pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/long-data-packages。本轮未重建运行中的测试程序集或产品；Unit首轮结束后，使用--no-dependencies单独重建已空闲的Unit程序集，15个产品DLL前后SHA256完全一致，Consumer运行保持原样。
+
+首轮完整Unit为3039通过/1失败（long-data-unit-final/），失败来自既有游标超量行夹具：客户端按预期收到第二行即断开，夹具仍写尾包触发IOException。仅调整夹具超量分支，在非法行后等待断开，并精确断言内层ProtocolException的超量错误，防止缺尾造成假通过；产品游标逻辑未改。修后相关21项定向及完整3040项通过，保留首轮失败报告。
+
+三份最终完整TRX均Completed，全部Passed，0失败/跳过/中止；与M11基线逐项比较移除0，清单见TestResults/long-data-inventory-final.json。双包实际消费者、包副本及restore图保留于TestResults/package-validation/b25bfe5f75e548429c9acae821a42ccb/。完整测试结束后testhost进程已退出。所有模拟报文代码仅位于tests，不进入产品包、不安装常驻服务；本地协议测试不等同真实数据库兼容验收。
+
+真实OceanBase/OBProxy的LONG_DATA接受范围、清理/错误语义、版本兼容和Linux/Windows部署均按用户要求不执行、未验证。Consumer宿主仍为net10；包基本样例不代表所有运行时均完成长参数SQL验收。下一明确本地功能是M07 Oracle PIECE_DATA；A05/C01、D15延后范围及许可/真实矩阵/发布关口仍开放，不关闭整体目标，不发布、不推送。
+
 ## M11 过程/参数目录本地实施（2026-10-20）
 
 核查发现架构M11的D阶段过程/参数目录尚未落地：现有D02提供过程执行和OUT，C05只提供四个GetSchema集合。本轮细化并接入Procedures/ProcedureParameters，共用现有目录装载、精确整数转换、原事务/RequiredSession/独占、总超时与取消及读尽终态，不新增配置、依赖、DeriveParameters或参数自动构造。五资产同步、现代三资产GetSchemaAsync；原四集合语义和顺序保留，集合清单追加两行。

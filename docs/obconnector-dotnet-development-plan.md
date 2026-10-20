@@ -430,6 +430,22 @@ C05 目录集合实施细化（2026-10-19；实现选择，复用既有命令/re
 
 目录模块本地验证：首批13项失败转绿，最终44项定向/8项五资产消费通过；独立走查发现的数值先舍入问题用2项失败回归修复并复查通过。Release核心五/DI三目标0警告0错误，Windows完整Unit1117/Consumer128/DI8通过（TestResults/c05-schema-*-final.trx）；格式、UTF-8无BOM/CRLF、diff、核心5/DI3包资产及统一版本/按TFM的依赖矩阵通过。C05转待验证，真实目录/权限/版本互通仍留空，下一可本地推进C06。
 
+### M07 MySQL二进制流参数本地实施（2026-10-20）
+
+架构M07的长参数优化尚无实现。先交付MySQL LONG_DATA；Oracle PIECE_DATA有独立应答，保持未实现、后续独立推进，不把LOB locator或DbBatch当作长参数上传。沿当前checkout实施，不增加依赖、连接选项或独立服务。
+
+契约：Input参数Value为Stream，推断或显式DbType.Binary，仅MySQL经典服务端prepare/execute；执行时Oracle、其他声明、非零Size/Precision/Scale、不可读流及客户端prepare回退发包前拒绝。读取当前位置至EOF，不读取Length、不seek、不关闭或自动重绕源；再次执行由调用者提供当前位置/新源。Prepare只核验绑定和服务端参数数，不读取流，值及声明校验沿既有参数规则留在执行入口。执行快照参数元数据和源引用，来源由调用者独占；普通byte[]路径不变。
+
+使用固定8192字节数据块和7字节头（24、statement ID LE32、parameter index LE16），每块独立序号0且无应答；空流也发送一次仅含头的LONG_DATA。最终EXECUTE有类型头但无该流的inline值。复用PacketChannel已有offset/count写入，单个缓冲区不物化全流；累计流字节、inline编码及10字节EXECUTE头共用64MiB执行预算，超限不截断后执行。每块ResponseComplete(false)校验无应答边界，兼容OB20后续请求。异步使用源ReadAsync及传输异步I/O，传入命令总预算token；源自身须合作取消，同步Read或忽略token的ReadAsync仍须等待源返回，不另建后台任务。
+
+首块发送后至EXECUTE可信终态间保留污染标记，异常/取消/关闭必须销毁原会话，防止残余长参数复用。EXECUTE发送前失败不称SQL结果未知，发送后沿既有结果未知契约；完整服务端ERR保留错误码，绝不回退/重放。真实服务端LONG_DATA接受范围、错误清理及OBProxy版本兼容仍待实库验收，A05不放宽。
+
+文件范围：OceanBaseParameter.cs推断、PreparedParameters.cs校验/跳过inline流、OceanBaseCommand.cs快照/发包顺序、CommandExchange.LongData.cs分块/预算及CommandExchange.cs污染清理；LongDataTests.cs及现有五资产消费测试体系。README、架构和台账同步。
+
+- [x] 公开执行入口先红：同步/异步多块/空流、混合inline参数、无seek/Length及调用者所有权。
+- [x] 最小实现及故障回归：发包前拒绝、Prepare不读、源抛错/取消、独占、已上传后不执行与原会话销毁、执行后结果未知和可信ERR；既有参数/prepare回退回归通过。
+- [x] 五资产公开消费、Release全目标、完整Unit/Consumer/DI、范围格式及双包消费；独立走查修复后本地提交。实库/部署不执行、未验证；Oracle PIECE_DATA保持后续项。
+
 ### M11 过程/参数目录本地实施（2026-10-20）
 
 目标：落实架构M11仍在D阶段规划的过程/参数目录。D02已有过程执行不代表目录发现已实现；在C05现有GetSchema路径新增Procedures、ProcedureParameters，不添加DeriveParameters、adapter、命令生成或连接配置。沿当前master续接，无新依赖；同步五资产、GetSchemaAsync现代三资产，Standard异步API边界不变。
@@ -574,11 +590,11 @@ Oracle 类型码 204/205，两种行协议均为长度编码的 7/14 字节小�
 | M04 握手、模式、能力 | A05、D01 |
 | M05 会话与本地事务 | A06、B07、C01、C05 |
 | M06 SQL 与预处理 | B02-B04、D02、D07 |
-| M07 参数和批量 | B03-B04、C06、D06 |
+| M07 参数和批量 | B03-B04、C06、D06；M07长参数上传独立切片 |
 | M08 结果与游标 | B02、B06、C04、D03 |
 | M09 类型、字符集与时间 | B05、C03、D10-D14 |
 | M10 LOB 与复杂类型 | C04、D04-D05 |
-| M11 元数据 | B06、C05、D02 |
+| M11 元数据 | B06、C05、M11过程/参数目录及D05类型字典 |
 | M12 HA 与地址发现 | C02、D08 |
 | M13 内置池 | C01 |
 | M14 XA | D09 |

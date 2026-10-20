@@ -296,8 +296,11 @@ namespace OceanBaseConnector.UnitTests
                 await StatementCommand(channel, 28); await CursorMetadata(channel, 6);
                 if (fault != "empty-progress") await channel.WritePacketAsync(CursorRow(42));
                 if (fault == "excess") await channel.WritePacketAsync(CursorRow(43));
-                await channel.WritePacketAsync(Eof(fault == "empty-progress" ? (byte)70 : fault == "lost" ? (byte)6 : (byte)134));
-                await channel.WritePacketAsync(Ok(fault == "empty-progress" ? (byte)0 : fault == "lost" ? (byte)1 : (byte)2));
+                if (fault != "excess")
+                {
+                    await channel.WritePacketAsync(Eof(fault == "empty-progress" ? (byte)70 : (byte)6));
+                    await channel.WritePacketAsync(Ok(fault == "empty-progress" ? (byte)0 : (byte)1));
+                }
                 Assert.Equal(0, await channelStreamRead(channel).WaitAsync(TimeSpan.FromSeconds(10)));
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port));
@@ -310,6 +313,7 @@ namespace OceanBaseConnector.UnitTests
                     while (await reader.ReadAsync()) { }
                 });
                 Assert.True(error.IsExecutionOutcomeUnknown); Assert.Equal(ConnectionState.Broken, connection.State);
+                if (fault == "excess") Assert.Contains("exceeds the requested row count", Assert.IsType<ProtocolException>(error.InnerException).Message);
             }
             finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));

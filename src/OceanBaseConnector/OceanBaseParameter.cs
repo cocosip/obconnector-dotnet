@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.IO;
 
 namespace OceanBaseConnector
 {
@@ -112,7 +113,7 @@ namespace OceanBaseConnector
         private static DbType InferType(object? value)
         {
             if (value == null || value == DBNull.Value || value is string) return DbType.String;
-            if (value is byte[]) return DbType.Binary;
+            if (value is byte[] || value is Stream) return DbType.Binary;
             if (value is bool) return DbType.Boolean;
             if (value is byte) return DbType.Byte;
             if (value is sbyte) return DbType.SByte;

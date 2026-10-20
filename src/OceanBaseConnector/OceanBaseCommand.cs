@@ -90,6 +90,7 @@ namespace OceanBaseConnector
                 var text = operation.Binary && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode) : operation.Bindings.CommandText;
                 ValidateCursorStatement(operation.FetchSize, statement);
+                if (statement != null) execution.SendLongData(statement.Id, operation.Bindings.Parameters, parameters.Length);
                 execution.BeforeSuccessfulCompletion = operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
                 execution.Send(operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(0, operation.Bindings.CommandText, operation.Bindings.Parameters)
                     : operation.Oracle != null ? OraclePrepareExecutePacket.Build(0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
@@ -148,6 +149,7 @@ namespace OceanBaseConnector
                 var text = operation.Binary && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode) : operation.Bindings.CommandText;
                 ValidateCursorStatement(operation.FetchSize, statement);
+                if (statement != null) await execution.SendLongDataAsync(statement.Id, operation.Bindings.Parameters, parameters.Length).ConfigureAwait(false);
                 execution.BeforeSuccessfulCompletion = operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
                 await execution.SendAsync(operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(0, operation.Bindings.CommandText, operation.Bindings.Parameters)
                     : operation.Oracle != null ? OraclePrepareExecutePacket.Build(0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
@@ -215,7 +217,10 @@ namespace OceanBaseConnector
                 if (oracle != null && (prepareOnly || _fetchSize > 0)) throw new NotSupportedException("PrepareExecute prepares during execution and does not support standalone Prepare or FetchSize.");
                 var bindings = oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
                 var clientFallback = AllowClientSidePrepareFallback && !prepareOnly && !_explicitPreparation && _fetchSize == 0 && oracle == null;
-                if (clientFallback)
+                var streams = false;
+                foreach (var parameter in bindings.Parameters) streams |= parameter.Value is System.IO.Stream;
+                if (streams && clientFallback) throw new NotSupportedException("Stream parameters require server preparation without client fallback.");
+                if (clientFallback || streams)
                 {
                     var snapshots = new OceanBaseParameter[bindings.Parameters.Length];
                     for (var i = 0; i < snapshots.Length; i++) snapshots[i] = bindings.Parameters[i].Snapshot();

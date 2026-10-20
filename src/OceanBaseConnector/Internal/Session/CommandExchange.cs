@@ -24,6 +24,7 @@ namespace OceanBaseConnector.Internal.Session
         private readonly Stopwatch _elapsed = Stopwatch.StartNew();
         private readonly object _gate = new object();
         private bool _responsePending;
+        private bool _longDataPending;
         private bool _sqlSent;
         private bool _anySqlSent;
         private readonly bool _logCommand;
@@ -59,7 +60,7 @@ namespace OceanBaseConnector.Internal.Session
                 _statementCloses = session.TakeStatementCloses();
                 _registration = _budget.Token.Register(() =>
                 {
-                    lock (_gate) { if (_responsePending && !_terminal) session.Break(); }
+                    lock (_gate) { if ((_responsePending || _longDataPending) && !_terminal) session.Break(); }
                 });
             }
             catch
@@ -152,7 +153,7 @@ namespace OceanBaseConnector.Internal.Session
         internal void ResponseComplete(bool expectsResponse = true)
         { lock (_gate) { _channel.CompleteResponse(expectsResponse); _responsePending = false; _sqlSent = false; } }
 
-        internal void Send(byte[] request, bool executesSql = true)
+        internal void Send(byte[] request, bool executesSql = true, int? count = null)
         {
             try
             {
@@ -160,12 +161,12 @@ namespace OceanBaseConnector.Internal.Session
                 { BeginSend(false); _channel.WritePacket(PreparedStatement.ClosePacket(id)); ResponseComplete(expectsResponse: false); }
                 _statementCloses = Array.Empty<uint>();
                 BeginSend(executesSql);
-                _channel.WritePacket(request);
+                _channel.WritePacket(request, 0, count ?? request.Length);
             }
             catch (Exception error) { throw Fail(error); }
         }
 
-        internal async Task SendAsync(byte[] request, bool executesSql = true, CancellationToken readerToken = default)
+        internal async Task SendAsync(byte[] request, bool executesSql = true, CancellationToken readerToken = default, int? count = null)
         {
             using var registration = readerToken.Register(Cancel);
             try
@@ -174,7 +175,7 @@ namespace OceanBaseConnector.Internal.Session
                 { BeginSend(false); await _channel.WritePacketAsync(PreparedStatement.ClosePacket(id), _budget.Token).ConfigureAwait(false); ResponseComplete(expectsResponse: false); }
                 _statementCloses = Array.Empty<uint>();
                 BeginSend(executesSql);
-                await _channel.WritePacketAsync(request, _budget.Token).ConfigureAwait(false);
+                await _channel.WritePacketAsync(request, 0, count ?? request.Length, _budget.Token).ConfigureAwait(false);
             }
             catch (Exception error) { throw Fail(ReaderCanceled(error, readerToken)); }
         }
@@ -249,7 +250,7 @@ namespace OceanBaseConnector.Internal.Session
         {
             if (_terminal || Volatile.Read(ref _finished) != 0) return error;
             if (error is OceanBaseException databaseError && databaseError.IsExecutionOutcomeUnknown) return error;
-            if (_responsePending) _lease.Dispose();
+            if (_responsePending || _longDataPending) _lease.Dispose();
             else _lease.CompleteIfActive();
             Exception cause = error;
             var caller = _cancellationOrigin?.Invoke() ?? _caller;
