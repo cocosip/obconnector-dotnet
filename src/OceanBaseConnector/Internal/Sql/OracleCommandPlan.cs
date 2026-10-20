@@ -59,6 +59,13 @@ namespace OceanBaseConnector.Internal.Sql
             return output;
         }
 
+        internal void ValidateOutputColumns(ResultColumn[] columns)
+        {
+            if (Outputs.Length == 0 || columns.Length != Outputs.Length)
+                throw new ProtocolException("Oracle output metadata does not match the bound output parameters.");
+            for (var i = 0; i < columns.Length; i++) ValidateOutputColumn(i, columns[i]);
+        }
+
         internal void CaptureOutput(ResultColumn[] columns, byte[]?[] row)
         {
             if (ArrayBinding != null) { ArrayBinding.Capture(columns, row); return; }

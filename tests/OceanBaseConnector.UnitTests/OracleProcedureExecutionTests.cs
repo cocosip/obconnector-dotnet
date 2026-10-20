@@ -23,13 +23,13 @@ namespace OceanBaseConnector.UnitTests
             await channel.WritePacketAsync(end); channel.BeginCommand();
         }
 
-        private static async Task OracleOutputReply(PacketChannel channel, bool deprecated, uint flags = 4, bool rows = true, bool extraRow = false)
+        private static async Task OracleOutputReply(PacketChannel channel, bool deprecated, uint flags = 4, bool rows = true, bool extraRow = false, bool metadataOutput = false)
         {
             await channel.WritePacketAsync(OracleExecuteHeader(2, 1, flags));
             await channel.WritePacketAsync(Column("in", 8)); await channel.WritePacketAsync(Column("out", 8));
             if (!deprecated) await channel.WritePacketAsync(Eof());
             await channel.WritePacketAsync(Column("output", 8));
-            if (!deprecated) await channel.WritePacketAsync(Eof());
+            if (!deprecated) await channel.WritePacketAsync(metadataOutput ? new byte[] { 254, 0, 0, 0, 16 } : Eof());
             if (rows) await channel.WritePacketAsync(new byte[] { 0, 0, 42, 0, 0, 0, 0, 0, 0, 0 });
             if (extraRow) await channel.WritePacketAsync(new byte[] { 0, 0, 43, 0, 0, 0, 0, 0, 0, 0 });
             var end = deprecated ? Ok() : Eof(); if (deprecated) end[0] = 254;
@@ -41,12 +41,14 @@ namespace OceanBaseConnector.UnitTests
             foreach (var async in new[] { false, true })
                 foreach (var sequential in new[] { false, true })
                     foreach (var deprecated in new[] { false, true })
-                        foreach (var function in new[] { false, true }) yield return new object[] { async, sequential, deprecated, function };
+                        foreach (var function in new[] { false, true })
+                            foreach (var metadataOutput in new[] { false, true })
+                                if (!deprecated || !metadataOutput) yield return new object[] { async, sequential, deprecated, function, metadataOutput };
         }
 
         [Theory]
         [MemberData(nameof(OraclePublicExecutionCases))]
-        public async Task OracleProcedurePublishesOnlyAfterTailAndReusesVersionAndClosesStatements(bool async, bool sequential, bool deprecated, bool function)
+        public async Task OracleProcedurePublishesOnlyAfterTailAndReusesVersionAndClosesStatements(bool async, bool sequential, bool deprecated, bool function, bool metadataOutput)
         {
             var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -60,7 +62,7 @@ namespace OceanBaseConnector.UnitTests
                 {
                     var request = await StatementCommand(channel, 0xa1, deprecated);
                     Assert.Equal(OraclePrepareExecutePacket.Build(0, sql, 2, encoded), request);
-                    await OracleOutputReply(channel, deprecated);
+                    await OracleOutputReply(channel, deprecated, flags: metadataOutput ? 0u : 4u, metadataOutput: metadataOutput);
                     if (i == 0) { waiting.SetResult(); await release.Task; }
                     await channel.WritePacketAsync(Ok(2));
                     var close = await StatementCommand(channel, 25, deprecated); Assert.Equal(new byte[] { 25, 42, 0, 0, 0 }, close);
@@ -220,6 +222,9 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, "multirow")] [InlineData(true, "multirow")]
         [InlineData(false, "missing")] [InlineData(true, "missing")]
         [InlineData(false, "decode")] [InlineData(true, "decode")]
+        [InlineData(false, "metadata-count")] [InlineData(true, "metadata-count")]
+        [InlineData(false, "metadata-no-outputs")] [InlineData(true, "metadata-no-outputs")]
+        [InlineData(false, "ordinary")] [InlineData(true, "ordinary")]
         public async Task OracleInvalidOutputsAreAtomicAndBreakUnknownExchanges(bool async, string fault)
         {
             var server = Server(async channel =>
@@ -232,27 +237,33 @@ namespace OceanBaseConnector.UnitTests
                     await channel.WritePacketAsync(Column("p")); await channel.WritePacketAsync(Column("p"));
                     await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(Ok()); return;
                 }
-                await channel.WritePacketAsync(OracleExecuteHeader(2, fault == "decode" ? (ushort)2 : (ushort)1));
+                var metadataOutput = fault.StartsWith("metadata-", StringComparison.Ordinal);
+                await channel.WritePacketAsync(OracleExecuteHeader(2, fault == "decode" || fault == "metadata-count" ? (ushort)2 : (ushort)1,
+                    flags: metadataOutput || fault == "ordinary" ? 0u : 4u));
                 await channel.WritePacketAsync(Column("p")); await channel.WritePacketAsync(Column("p")); await channel.WritePacketAsync(Eof());
                 await channel.WritePacketAsync(Column("first", 8));
-                if (fault == "decode") await channel.WritePacketAsync(Column("bad", 253));
-                await channel.WritePacketAsync(Eof());
+                if (fault == "decode" || fault == "metadata-count") await channel.WritePacketAsync(Column("bad", 253));
+                await channel.WritePacketAsync(metadataOutput ? new byte[] { 254, 0, 0, 0, 16 } : Eof());
+                if (metadataOutput) return;
                 if (fault == "decode") await channel.WritePacketAsync(new byte[] { 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 1, 255 });
                 else
                 {
                     await channel.WritePacketAsync(new byte[] { 0, 0, 42, 0, 0, 0, 0, 0, 0, 0 });
-                    await channel.WritePacketAsync(new byte[] { 0, 0, 43, 0, 0, 0, 0, 0, 0, 0 });
+                    if (fault == "ordinary") { await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(Ok()); }
+                    else await channel.WritePacketAsync(new byte[] { 0, 0, 43, 0, 0, 0, 0, 0, 0, 0 });
                 }
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
                 await connection.OpenAsync(); using var command = connection.CreateCommand(); command.CommandType = CommandType.StoredProcedure; command.CommandText = "p";
-                var first = new OceanBaseParameter { ParameterName = "first", Value = "first old", Direction = ParameterDirection.Output };
+                var first = new OceanBaseParameter { ParameterName = "first", Value = "first old", Direction = fault == "metadata-no-outputs" ? ParameterDirection.Input : ParameterDirection.Output };
                 var second = new OceanBaseParameter { ParameterName = "second", Value = "second old", Direction = fault == "decode" ? ParameterDirection.Output : ParameterDirection.Input };
                 command.Parameters.Add(first); command.Parameters.Add(second);
                 var error = await Assert.ThrowsAsync<OceanBaseException>(async () => { if (async) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery(); });
                 Assert.True(error.IsExecutionOutcomeUnknown); Assert.Equal("first old", first.Value); Assert.Equal("second old", second.Value);
+                if (fault.StartsWith("metadata-", StringComparison.Ordinal))
+                    Assert.Equal("Oracle output metadata does not match the bound output parameters.", Assert.IsType<ProtocolException>(error.InnerException).Message);
                 Assert.Equal(ConnectionState.Broken, connection.State);
             }
             finally { connection.Close(); server.Stop(); }

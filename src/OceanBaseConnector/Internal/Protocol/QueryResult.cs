@@ -106,7 +106,16 @@ namespace OceanBaseConnector.Internal.Protocol
             if (packet.Length != 5 || packet[0] != 254) throw new ProtocolException("Expected a protocol 4.1 EOF packet.");
             return (ServerStatusFlags)(packet[3] | (packet[4] << 8));
         }
-        private static void EndColumns(byte[] packet) => ReadEof(packet);
+        private void EndColumns(byte[] packet)
+        {
+            var flags = ReadEof(packet);
+            // Some Oracle servers mark PL outputs here instead of in the PrepareExecute header.
+            if (_oracleTailPending && !_oracleOutputResult && _oraclePlan != null && (flags & ServerStatusFlags.PsOutParameters) != 0)
+            {
+                _oraclePlan.ValidateOutputColumns(Columns);
+                _oracleOutputResult = true;
+            }
+        }
         private ResultColumn ParseColumn(byte[] packet, bool parameter = false, int ordinal = 0)
         {
             if (packet.Length > 4 * 1024 * 1024 - _metadataBytes) throw new ProtocolException("Result metadata size limit exceeded.");

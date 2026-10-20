@@ -2,6 +2,16 @@
 
 Baseline date: 2026-10-17; progress updated: 2026-10-20. References: [Architecture design](obconnector-dotnet-architecture-design.md) and [Development plan](obconnector-dotnet-development-plan.md).
 
+## Oracle PL output metadata compatibility (2026-10-20)
+
+Real Oracle 4.4.2.2 PL responses can have zero PrepareExecute extension flags while marking the column-definition EOF with `PS_OUT_PARAMETERS` (`0x1000`). Ignoring that marker exposed the hidden rowset and eventually reported missing bound outputs. QueryResult now recognizes this metadata marker, validates the bound output count and declared complex types, and uses the existing hidden-output reader. Publication still waits for the final execution tail and any subsequent results; ordinary rowsets without the marker are not treated as outputs. This matches the pinned Java `AbstractQueryProtocol.readResultSet` metadata-EOF behavior. The separate handshake-dialect experiment did not fix this failure and was removed from product code.
+
+Focused regression verification passed 152 tests. The new cases first failed: eight successful-output variants exposed a visible rowset, and four malformed-metadata variants reached transport closure instead of rejecting the metadata. Tests cover synchronous/asynchronous and default/sequential execution, stored-procedure/function outputs, delayed publication, statement closure/session reuse, mismatched output counts, unexpected outputs, and unmarked ordinary rows. Existing deprecated-EOF paths retain their header-based behavior.
+
+Focused real acceptance now passes REF CURSOR, streamed scalar OUT, and temporary CLOB. Scalar numeric OUT and stored procedures reach a separate unconstrained-NUMBER scale issue; temporary BLOB reaches a separate binary-mutation error. These remain failures, including the BLOB cleanup callback failure. Independent inventory confirms the one owned object from this run and the two from the earlier handshake experiment are absent, with zero owned prepared XA branches. Evidence is retained in ignored `TestResults/live-oracle-out-eof-cases-01.*` and `TestResults/live-oracle-out-eof-cleanup-01.log`; diagnostics contain no supplied connection values. This is not a full Oracle acceptance pass.
+
+Before commit, the full Release solution built with zero warnings/errors; Unit passed 3178, Consumer passed 2076, and DI passed 14, all with zero failures/skips (`TestResults/out-eof-build.log`, `TestResults/out-eof-{unit,consumer,di}/results.trx`). Independent review found no actionable issues. Scoped production whitespace verification and `git diff --check` passed. The private-value audit found zero matches in tracked files, diagnostic text, and reachable historical objects. No deployment, publishing, or push was performed.
+
 ## Live acceptance and verified mode identification (2026-10-20)
 
 The user supplied both test modes and authorized real acceptance. Connection details are confined to child-process environment/memory; no supplied address, schema, tenant, account, password, or connection string belongs in source, configuration examples, reports, documentation, or Git. Diagnostics are redacted in memory before display or persistence. A scan of tracked files, diagnostic text, and reachable historical Git objects found zero supplied private values.
