@@ -21,6 +21,18 @@ namespace OceanBaseConnector
         protected override DbConnection? DbConnection => _owner.IsActiveTransaction(this) ? _owner : null;
         public override void Commit() => _owner.EndTransaction(this, true);
         public override void Rollback() => _owner.EndTransaction(this, false);
+#if NET8_0_OR_GREATER
+        public override bool SupportsSavepoints => true;
+        public override void Save(string savepointName) => _owner.ExecuteSavepoint(this, savepointName, "SAVEPOINT");
+        public override void Rollback(string savepointName) => _owner.ExecuteSavepoint(this, savepointName, "ROLLBACK TO");
+        public override void Release(string savepointName) => _owner.ExecuteSavepoint(this, savepointName, "RELEASE SAVEPOINT");
+        public override Task SaveAsync(string savepointName, CancellationToken cancellationToken = default) =>
+            _owner.ExecuteSavepointAsync(this, savepointName, "SAVEPOINT", cancellationToken);
+        public override Task RollbackAsync(string savepointName, CancellationToken cancellationToken = default) =>
+            _owner.ExecuteSavepointAsync(this, savepointName, "ROLLBACK TO", cancellationToken);
+        public override Task ReleaseAsync(string savepointName, CancellationToken cancellationToken = default) =>
+            _owner.ExecuteSavepointAsync(this, savepointName, "RELEASE SAVEPOINT", cancellationToken);
+#endif
         protected override void Dispose(bool disposing)
         {
             if (disposing) _owner.DisposeTransaction(this);

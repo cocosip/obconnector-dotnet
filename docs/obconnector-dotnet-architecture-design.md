@@ -280,6 +280,10 @@ B07 本地事务沿 Java 的会话协议设置隔离和自动提交（[自动提
 
 五资产公共事务消费已在 .NET 10 宿主通过，`netstandard2.1` 和现代资产有延迟响应验证异步 Begin/End，2.1 与 net10 另验证连接关闭/释放、事务释放和 reader 关闭/释放等待异步回滚及恢复自动提交。预取消 Begin/Commit/Rollback 保留原 token 且不发控制 SQL；Windows 环回另覆盖结果未知、清理及状态事件。`netstandard2.0` 仅实现其参考 API 中的同步事务入口；.NET 10 宿主消费不能证明旧运行时兼容。真实双模式隔离与提交语义、OBProxy、非 Windows 及旧运行时证据仍待补；缺 Oracle 模式位的公共握手安全门槛不变。
 
+M05保存点：现代net8/net9/net10覆写DbTransaction的SupportsSavepoints、Save/SaveAsync、Rollback(name)/RollbackAsync(name)、Release/ReleaseAsync；两个Standard资产不增补同名方法。仅活动本地事务的原会话可执行，环境事务、已结束/关闭重开旧事务及活动reader均发包前拒绝。名称限1–30个ASCII字符，首字符字母，其余字母/数字/下划线；不接受引号、Unicode或前导下划线（含ORM默认__EFSavePoint）。MySQL按Java基线发送反引号名称及SAVEPOINT/ROLLBACK TO SAVEPOINT/RELEASE SAVEPOINT；Oracle使用未引用名称及SAVEPOINT/ROLLBACK TO，Release明确不支持。客户端不维护名称目录或猜测服务端重名/不存在行为，现有公开MySQL模式门槛不变。
+
+保存点复用CommandExchange、原事务超时及同步/异步网络入口；控制OK须关闭自动提交、无多结果且标准/OB20边界完整，不要求懒事务已设置InTransaction。成功不结束事务、不恢复自动提交；回滚成功在连接锁内核验原事务/会话身份并递增事务资源epoch，保守使旧LOB、REF CURSOR及复杂类型上下文失效。状态发布后在连接锁外完成exchange及日志/诊断，Activity名称固定oceanbase.transaction.savepoint，不记录名称/SQL。完整ERR保留本地事务绑定供调用者决定，不宣称无状态字段的ERR证实了服务端事务状态；取消/超时/断流/坏边界销毁会话且不重放。只有本地合成协议证据，真实数据/锁/DDL及版本/代理语义仍待实库验收。
+
 B08 本地取消契约：发送前取消不写包、归还租约并保留调用方 token；发送执行请求后若未收到可信终态，则销毁所属物理会话、报告结果未知且不重放。准备阶段中断也销毁会话，但不宣称 SQL 已执行。内部链接预算 token 仅用于中止 I/O，不能直接把它当作外部取消原因；调用方取消保留原 token，Cancel 映射取消，纯预算到期映射 TimeoutException。命令/事务 Canceled 日志反映归因后的异常，不把超时内部中止算成调用方取消。
 
 完整 OK/ERR 已读取时保留确认结果，即使取消发生在解析之前且已保守销毁传输；多结果的中间 OK 尚不能确认整个命令完成。Close 后重开仅由新物理会话处理新请求，旧命令的 Cancel/Dispose 不影响它。同步/异步故障注入覆盖部分头/负载 I/O 失败，异步写入固定前缀后使用真实预算 token 等待 Cancel/token/超时，另覆盖无终态响应、事务中断及五资产公共取消/超时消费。Windows 环回不证明真实服务端已执行；真实双模式/OBProxy 故障时序、非 Windows 与旧运行时仍待验收。

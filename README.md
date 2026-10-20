@@ -19,6 +19,7 @@
 
 - 公共握手目前只接受能通过认证后状态确认的 Oracle 模式。**缺少可信的 MySQL 模式判定规则，公共 MySQL 模式连接仍被拒绝。** MySQL 的本地测试使用显式认证后夹具；设置 `ExpectedMode=MySql` 不会绕过判定。
 - `Pooling=true` 被拒绝，完整会话重置及版本白名单尚未验证。默认不使用连接池。
+- 现代 net8/net9/net10 的活动本地事务提供 `Save(name)`、`Rollback(name)` 及对应 Async，`SupportsSavepoints=true`；MySQL 另支持 `Release(name)` / Async，Oracle 明确拒绝释放。名称限 1–30 个 ASCII 字符，首字符字母，其余字母/数字/下划线；前导下划线（例如 ORM 自动生成的 `__EFSavePoint`）、引号及 Unicode 名称暂不支持。保存点不结束事务，业务命令仍须绑定原事务；回滚到保存点后须重新取得此前的 LOB、REF CURSOR 和复杂类型描述/值。Standard 资产不补保存点 API。仅有本地协议证据，真实数据、锁、DDL、重名和不存在名称的服务端语义尚未验收。
 - 默认支持文本命令和输入参数，参数化执行使用服务端 prepare。`OceanBaseCommand.AllowClientSidePrepareFallback=true` 可按命令显式启用回退：仅自动 prepare 首响应明确返回 `1295/HY000` 且完整通过协议边界验证时，在原会话/事务/超时预算内发送一次文本 SQL；不缓存失败结论，下次执行仍先 prepare。显式 `Prepare()`、FetchSize、Oracle PrepareExecute、执行阶段错误、断线和取消均不降级或重放。不支持环境 `TransactionScope`；显式 XA 的开发边界见下述 D09。locator LOB 需显式启用下述选项。
 - `Server` 候选默认按声明顺序尝试；`Load Balance=RoundRobin`（builder 属性 `LoadBalance`）轮换每次显式 `Open` 的首选地址，TCP socket 建连失败时环形尝试其余地址一次。轮转状态按现代数据源共享；直接连接按实例跨 Close/Open 保留，重新设置连接串或地址源时重置。没有全局轮转状态，已有会话/事务/reader 不迁移，执行故障不自动重连或重放 SQL。
 - 五资产可设置 `OceanBaseConnection.AddressResolver`，现代数据源通过 `OceanBaseDataSourceBuilder.UseAddressResolver(...)` 固定配置。应用实现 `IOceanBaseAddressResolver` 的同步 `Resolve(token)` 和异步 `ResolveAsync(token)`，每次 Open 调用匹配方法一次，返回现有 Server 语法的可信同租户地址列表（最多65536字符/256候选，省略端口继承 Port）。结果替换本次候选，空/非法/失败不回退种子或旧结果；配置 Server 仍必填并用于发现前诊断。发现、TCP、TLS和认证共用总连接预算；异步取消后不采用迟到结果，同步实现须合作取消，异步方法须及时返回 Task。resolver 及其资源由应用持有并保证并发安全，取消回调须及时返回且不抛错；不内置 OCP/TNS 协议或角色路由。每个新会话仍重新 TLS/认证/模式初始化，真实拓扑兼容待验收。

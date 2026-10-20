@@ -34,6 +34,41 @@ namespace OceanBaseConnector.UnitTests
         });
         private static byte[] TimeZone() => TextCommandTests.TimeZoneOk("+00:00");
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task SavepointDiagnosticsPublishSpansAndExcludeNames(bool asynchronous)
+        {
+            using var parent = new Activity("application").Start(); using var capture = new Capture();
+            var server = Server(async channel =>
+            {
+                foreach (var sql in new[] { "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED", "set autocommit = 0",
+                    "SAVEPOINT PrivateName", "ROLLBACK TO PrivateName", "ROLLBACK", "set autocommit = 1" })
+                {
+                    await Request(channel, sql);
+                    await channel.WritePacketAsync(Ok(sql == "set autocommit = 1" ? (byte)2 : (byte)0)); channel.BeginCommand();
+                }
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync(); using var transaction = await connection.BeginTransactionAsync();
+                if (asynchronous) { await transaction.SaveAsync("PrivateName"); await transaction.RollbackAsync("PrivateName"); }
+                else { transaction.Save("PrivateName"); transaction.Rollback("PrivateName"); }
+                await transaction.RollbackAsync();
+                var spans = capture.Spans.Where(x => x.OperationName == "oceanbase.transaction.savepoint").ToArray();
+                Assert.Equal(2, spans.Length);
+                foreach (var span in spans)
+                {
+                    Check(span, "transaction.savepoint", "oracle", "success", false);
+                    Assert.Equal(parent.Id, span.ParentId); Assert.DoesNotContain("PrivateName", string.Join(";", span.TagObjects)); Assert.Empty(span.Events);
+                }
+                Assert.Same(parent, Activity.Current);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         [Fact]
         public async Task XaDiagnosticsCoverEveryPhaseAndExcludeBranchIdentity()
         {

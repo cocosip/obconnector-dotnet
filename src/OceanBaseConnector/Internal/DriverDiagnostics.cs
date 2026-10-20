@@ -47,6 +47,7 @@ namespace OceanBaseConnector.Internal
             "transaction.begin" => "oceanbase.transaction.begin",
             "transaction.commit" => "oceanbase.transaction.commit",
             "transaction.rollback" => "oceanbase.transaction.rollback",
+            "transaction.savepoint" => "oceanbase.transaction.savepoint",
             "xa.start" => "oceanbase.xa.start",
             "xa.end" => "oceanbase.xa.end",
             "xa.prepare" => "oceanbase.xa.prepare",

@@ -2,6 +2,31 @@
 
 基线日期：2026-10-17；当前进度更新：2026-10-20。依据：[架构设计](obconnector-dotnet-architecture-design.md)和[开发方案](obconnector-dotnet-development-plan.md)。
 
+## M05 现代事务保存点本地实施（2026-10-20）
+
+本轮结合架构M05、开发方案和当前代码确认保存点为实际功能缺口，而不是继续追加TLS组合。固定Java基线6adc311ba5db8b2f19f98f3e6e4734667fdfdda1的OceanBaseConnection.java:1515–1558及1127–1140提供两模式语句/Oracle不支持释放的行为依据；没有连接真实数据库。现代net8/net9/net10现覆写SupportsSavepoints、Save/SaveAsync、Rollback(name)/RollbackAsync(name)、Release/ReleaseAsync；两个Standard资产不补同名API。
+
+名称限1–30个ASCII字符，字母开头、后续字母/数字/下划线。MySQL引用名称，Oracle沿基线使用未引用名称并拒绝Release。引号、Unicode及__EFSavePoint等前导下划线名称未支持，不能将SupportsSavepoints理解为ORM全兼容。原事务绑定、独占、超时、取消及CommandExchange控制响应共用；回滚到保存点成功后只对原事务/会话增加资源代次，使旧LOB/REF CURSOR/复杂上下文失效，不结束事务。可信ERR只保留本地绑定，不证明服务端事务状态。异步实际等待网络，坏边界及发送后故障不重放。
+
+初始22项Unit在实现前全部失败，实现后全部通过（savepoints-red/、savepoints-green/）；新增资源/旧事务/reader/日志重入回归和诊断后定向30项通过（savepoints-focused-reviewed/）。独立代码走查发现Activity名称缺少映射，新增两项回归准确复现零span后补齐映射。资源代次变异检查也确认：禁用epoch递增时两个未使用旧LOB的OpenRead均不再拒绝，回归失败（savepoints-epoch-mutation-reviewed/），已恢复原实现。
+
+Consumer新增5项资产形状和96项三现代资产×同步/异步×两模式×标准/OB20×成功/可信ERR/断流/坏边界；定向101通过。MySQL仍显式注入认证后模式事实，不放宽A05。完整Consumer首轮捕获旧RollbackAsync按名称反射的4项歧义，仅改为精确CancellationToken签名，原7项定向全绿；已失败的旧程序集运行主动中止（1251通过/4失败，TRX状态Failed、运行被主动中止），不计完成证据。首次停止因权限拒绝、未等退出便重建导致一次文件锁失败，均保留原日志；旧进程实际退出后重建零警告/错误。首次缺失依赖产物及NuGet TLS凭据权限错误、共享编译等待和格式工具命名管道拒绝亦不计通过；使用仓库内固定依赖缓存、正常本地权限及UseSharedCompilation=false解决，没有改依赖版本、产品TLS或系统信任根。
+
+| 最终检查 | 结果 | 原始证据 |
+| --- | --- | --- |
+| 核心五/DI五及测试Release | 0警告、0错误 | TestResults/savepoints-build-verified.log |
+| 完整Unit | 2942通过，含新增保存点30；0失败/跳过 | TestResults/savepoints-unit-final/*.trx |
+| 完整Consumer | 1874通过，含新增保存点101；0失败/跳过 | TestResults/savepoints-consumer-verified/*.trx |
+| 完整DI | 14通过，0失败/跳过 | TestResults/savepoints-di-final/*.trx |
+| 双包及五资产实际包消费 | 包内容/依赖组/隔离哈希及五资产样例通过 | TestResults/savepoints-package-verification.log；TestResults/package-validation/97358313e4c54ad59d484e571d2824a2/ |
+| 范围格式及diff | 7个源码/测试文件无需格式调整，diff检查通过 | TestResults/savepoints-format-verified.log；git diff --check |
+
+三份最终TRX状态均为Completed，每项UnitTestResult均通过，失败/跳过/中止均为0；另核对首轮已执行的1255个Consumer用例名全部保留在最终报告。包样例的现代资产实际运行于.NET8.0.32/9.0.21/10.0.13，两个Standard由.NET10.0.13隔离消费；不证明保存点在全部旧运行时上的行为。保存点的跨资产协议Consumer宿主仍为.NET10，不把包基础样例当作保存点旧运行时验收。独立只读设计/代码复查已完成，修复Activity映射及旧测试反射调用后无剩余阻断；本地实现、回归及走查完成，随本模块提交，不推送。
+
+本轮命令：dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false；Unit/Consumer/DI分别dotnet test对应工程-c Release --no-build --no-restore -m:1 -nr:false --logger trx --results-directory对应目录。定向另加FullyQualifiedName~Savepoint或原事务消费方法过滤。打包dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -m:1 -nr:false -o TestResults/savepoints-packages；包验证pwsh -NoProfile -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/savepoints-packages。完整测试期间未更改产品行为；失败旧Consumer进程退出后才运行最终测试。
+
+仍开放的项目明确保留，不以本模块关闭整体目标：A05可信MySQL模式/版本与插件矩阵、C01完整服务端重置和池化、D15 Standard GSSAPI/其他系统机制、A04可信CA/真实名称、各阶段双模式/OBProxy/协调器和发布许可/包名等验收。按用户要求，真实保存点数据/锁/DDL/重名/不存在行为、数据库连接以及Linux/Windows部署均不执行、未验证。无需因本轮新增保存点重做不相关TLS组合。
+
 ## 当前开发进度
 
 当前已实现 B01–B09 的本地核心能力和 C02–C07 的本地功能；R01/R02 包消费及运行时验证工具已落地，`7a70bd6` 增补 A04 静默 TLS 握手中断回归，`da03fe6`/`31b2c7a` 完成 D14 YEAR/D13 BIT 本地实现。`808dfed` 完成 D12 MySQL JSON、`8a21dbd` 完成 D11 Oracle INTERVAL 本地实现；D10 NCHAR/NVARCHAR2 本地实现与验证见末尾。连接池 C01 尚未实现，A05 的公共 MySQL 模式判定尚未完成，D02已接入显式Oracle过程与标量OUT/RETURNING，本地收尾记录见末尾，D03 REF CURSOR输出已本地接入（验证见末尾），D04已接入公开LOB读取/绑定、原会话分块流、WRITE/TRIM及临时对象显式创建/释放（验证见末尾），真实资源验收仍开放，D05内部编解码、同会话字典、公开值构造、命名复杂结果读取及参数/输出绑定、匿名标量集合结果已落地（验证见末尾），匿名输入及标量输出已本地接入，D05约定本地范围复核完成、真实验收待验证，D06数组绑定及多行输出的本地约定范围已完成（见末尾），D07基础标量客户端预处理回退已本地接入（见末尾），D08地址发现与轮转选址已本地接入（见末尾），D09的不可变XID身份值及MySQL/Oracle固定会话、显式阶段与完整恢复快照已本地接入，真实协调器及两模式实库验收仍开放；D01 的OB20报文/校验、能力协商、流式传输和完整链路追踪已有本地实现，验证与限制见末尾。D15 的 SHA-2/RSA、mysql_old_password、Ed25519、dialog/PAM及现代资产Kerberos GSSAPI路径已有本地实现，Standard GSSAPI、Java Windows native其他机制及真实验收仍开放。真实 OceanBase/OBProxy 互通没有验收证据，项目仍为实验版本 `0.1.0-alpha`。

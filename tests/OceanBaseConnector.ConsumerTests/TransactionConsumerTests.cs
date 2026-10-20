@@ -68,7 +68,7 @@ namespace OceanBaseConnector.ConsumerTests
                 Assert.Equal(asynchronousApis, connectionType.GetMethod("CloseAsync", flags) != null);
                 Assert.Equal(asynchronousApis, connectionType.GetMethod("DisposeAsync", flags) != null);
                 Assert.Equal(asynchronousApis, transactionType.GetMethod("CommitAsync", flags) != null);
-                Assert.Equal(asynchronousApis, transactionType.GetMethod("RollbackAsync", flags) != null);
+                Assert.Equal(asynchronousApis, transactionType.GetMethod("RollbackAsync", flags, null, new[] { typeof(CancellationToken) }, null) != null);
                 Assert.Equal(asynchronousApis, transactionType.GetMethod("DisposeAsync", flags) != null);
                 using var connection = (DbConnection)Activator.CreateInstance(connectionType)!;
                 connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled";

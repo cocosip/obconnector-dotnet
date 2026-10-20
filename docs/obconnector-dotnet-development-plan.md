@@ -231,6 +231,22 @@ B07 本地实现：沿 Java 的 `SET SESSION TRANSACTION ISOLATION LEVEL ...`、
 
 2026-10-19 中断走查续接修正：直接检查 NETStandard.Library.Ref 2.1.0 的 netstandard.dll 元数据，确认连接/reader/事务异步生命周期 API 已存在；将四处仅 NET8_0_OR_GREATER 的条件扩大至 NETSTANDARD2_1，复用同一异步实现。先以隔离消费的 2.1 五种延迟回滚清理和事务覆写共6项失败证明缺口，修复后17项定向通过，补充 COMMIT/ROLLBACK 等待网络及预取消原 token 的检查。完整验证与延期边界见进度台账；不把本次修复当作 C03 TZ/LTZ 子项完成。
 
+### M05 现代事务保存点本地实施（2026-10-20）
+
+依据架构M05及固定Java基线OceanBaseConnection的setSavepoint/rollback(Savepoint)/releaseSavepoint。下一功能为现代net8/net9/net10资产覆写DbTransaction.SupportsSavepoints、Save/SaveAsync、Rollback(name)/RollbackAsync(name)和Release/ReleaseAsync；两个Standard资产不补参考API中不存在的同名方法。技术栈、依赖和连接配置不变，当前checkout本地提交，不推送。
+
+设计：只在原连接的活动本地事务内执行，复用CommandExchange与事务控制响应校验、独占租约、原事务超时和取消规则。MySQL发送SAVEPOINT/ROLLBACK TO SAVEPOINT/RELEASE SAVEPOINT，名称使用反引号；Oracle发送SAVEPOINT/ROLLBACK TO，明确拒绝Release，不假装成功。首批名称只接受1–30个ASCII字符，首字符字母，后续字母/数字/下划线，Oracle使用未引用标识符，与Java模式分支一致；拒绝null/空白/引号/注释/分号及超长名称，不记录名称。不在客户端维护保存点目录或猜测服务端存在性/重名/删除行为。
+
+保存点成功不结束事务、不恢复自动提交。回滚到保存点经可信终态确认后递增事务资源代次，保守使既有LOB/REF CURSOR/复杂类型上下文失效；后续业务仍绑定同一个事务。完整ERR保留活动事务供调用者决定，取消/超时/断流/错误响应或OB20边界不能重放、不能保留可复用会话。预取消、无效名称、已结束/关闭重开旧事务、活动reader及环境事务均在发包前拒绝。
+
+文件范围：OceanBaseTransaction.cs公开现代覆写；新增OceanBaseConnection.Savepoints.cs复用Transactions.cs控制交换及状态保护；SavepointTests.cs和SavepointConsumerTests.cs覆盖本地协议与五资产形状/三资产实际消费；同步README、架构和台账。走查重点为注入、事务错误脱离、锁内回调/重入、回滚后的资源失效以及异步等待网络。
+
+- [x] 先写公开同步/异步生命周期、名称拒绝和错误路径回归，确认现有基类不支持而失败；实现最小共享控制路径，定向全绿。
+- [x] 三现代资产两模式、标准/OB20消费及异步延迟、尾随响应/断流测试；Standard资产验证无新增API。MySQL仅使用显式认证后模式事实夹具，A05不变。
+- [x] 核心五/DI五Release及完整Unit/Consumer/DI、范围格式与diff检查；独立只读代码走查、必要修复和复验后同步证据并提交。真实保存点数据/锁/DDL行为、数据库/OBProxy和Linux/Windows部署继续标记未验证。
+
+补充约束：完整ERR没有事务状态字段，仅保留本地绑定，不证明服务端事务状态。名称子集暂不包含ORM默认的__EFSavePoint，不能由SupportsSavepoints推导ORM全兼容；未找到OceanBase Oracle模式引号名称的独立语法证据，本模块不猜测扩展。独立走查发现并经两项红绿回归修复保存点Activity名称映射；完整Consumer捕获原RollbackAsync按名称反射的重载歧义，仅将原断言改为精确CancellationToken签名，无删除用例或改变产品API。
+
 ### B08 取消、超时与结果未知
 
 **产物：**发送前取消返回 `OperationCanceledException`；发包开始且无可信终态响应时返回 `OceanBaseException(IsExecutionOutcomeUnknown=true)` 并销毁物理会话。`DbCommand.Cancel()` 使用相同状态机。
