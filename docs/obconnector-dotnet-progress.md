@@ -2,6 +2,18 @@
 
 Baseline date: 2026-10-17; progress updated: 2026-10-20. References: [Architecture design](obconnector-dotnet-architecture-design.md) and [Development plan](obconnector-dotnet-development-plan.md).
 
+## Oracle XA execution completion compatibility (2026-10-20)
+
+Real scalar DBMS_XA calls return code zero with one affected row and CursorExists in the execution tail. Hidden recovery output tails also report one row and retain PsOutParameters. The old control-only validator rejected both valid execution shapes. Validation now distinguishes initialization, scalar phases and recovery: initialization remains strict; execution permits zero or one affected row and only its own marker. Extra results, autocommit, LastRowSent, nonzero insert IDs, excessive counts, malformed data and incomplete response boundaries remain errors. No XA phase, identity, epoch, output publication or replay rules changed.
+
+The new scalar and recovery regressions first reproduced Invalid DBMS_XA completion. All **96** focused XA Unit cases and **200** Oracle XA Consumer cases pass, covering five assets, sync/async, standard/OB20 and local TLS. Existing consumer scripts retain zero-count completions for synchronous paths and exercise observed row completions for asynchronous paths. Full Release build has zero warnings/errors; scoped production whitespace, diff and private-value checks passed. Independent code review found no actionable issues (`TestResults/xa-completion-*`).
+
+The official real Oracle XA group passes **2**, fails **0**, skips **63** unselected cases, with zero cleanup callback failures. Independent inventory found neither of its two owned tables and zero owned prepared XA branches. Both recorded identities also passed independent rollback checks (`TestResults/live-oracle-xa-completion-01.*`). Two earlier raw phase probes each left zero owned objects/prepared branches after independent cleanup.
+
+Complete Oracle acceptance now reports **47 passed, 3 failed, 15 skipped, 1 cleanup callback failure** (`TestResults/live-oracle-xa-completion-full-01.json`). Array binding (600/HY004), omitted complex owner identity, and collection-valued table CREATE (600/0A000) remain failures. The cleanup callback failure is the DROP of a table whose CREATE failed. No failure was weakened or relabeled. Independent inventory checked all **39** exact owned entries with zero objects remaining, zero owned prepared branches, and successful rollback checks for both recorded identities. Supplied connection/account values remain absent from tracked files, diagnostic text and reachable Git history. Deployment, publication and push remain unperformed.
+
+Complete Unit regressions pass **3217**, Consumer passes **2076**, and DI passes **14**, with zero failures/skips (`TestResults/xa-completion-unit-full/results.trx`, `TestResults/xa-completion-consumer-full/results.trx` and `TestResults/xa-completion-di/results.trx`).
+
 ## Oracle nullable complex type versions (2026-10-20)
 
 Real named-complex prepare metadata can encode its version as the length-encoded NULL marker. ComplexColumnMetadata now retains a nullable version instead of passing it through the strict non-NULL integer reader. The new internal nullable reader consumes exactly one NULL byte and delegates all numeric encodings to the existing bounded reader. Ordinary count/length readers remain strict; NULL versions remain distinct from version zero during cursor metadata matching.

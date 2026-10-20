@@ -89,18 +89,18 @@ namespace OceanBaseConnector.ConsumerTests
                 await Reply(Frame(1, new byte[] { 1 }).Concat(Frame(2, OracleXaColumn(253))).Concat(Frame(3, eof))
                     .Concat(Frame(4, new byte[] { 7, 52, 46, 51, 46, 53, 46, 48 })).Concat(Frame(5, eof)).ToArray());
                 await Text("set autocommit = 0"); await Reply(Frame(1, new byte[] { 0, 0, 0, 0, 0, 0, 0 }));
-                await Stage("START", 0, false); await Reply(OracleXaFrames(2));
-                await Stage("END", 0x04000000); await Reply(OracleXaFrames(2));
+                await Stage("START", 0, false); await Reply(OracleXaFrames(2, rowCompletion: asynchronous));
+                await Stage("END", 0x04000000); await Reply(OracleXaFrames(2, rowCompletion: asynchronous));
                 await Stage("PREPARE");
                 if (kind == "disconnect") return;
-                var prepared = OracleXaFrames(1, kind == "readonly" ? 3 : kind == "code" ? 100 : 0, badStatus: kind == "boundary" && !ob20);
+                var prepared = OracleXaFrames(1, kind == "readonly" ? 3 : kind == "code" ? 100 : 0, badStatus: kind == "boundary" && !ob20, rowCompletion: asynchronous);
                 if (kind == "boundary" && ob20) prepared = prepared.Concat(Frame(9, new byte[] { 0 })).ToArray();
                 await Reply(prepared);
                 if (kind == "success" || kind == "readonly")
                 {
-                    if (kind == "success") { await Stage("COMMIT", 0); await Reply(OracleXaFrames(2)); }
-                    await Stage("RECOVER"); await Reply(OracleXaFrames(1, recovery: true));
-                    await Stage("ROLLBACK"); await Reply(OracleXaFrames(1));
+                    if (kind == "success") { await Stage("COMMIT", 0); await Reply(OracleXaFrames(2, rowCompletion: asynchronous)); }
+                    await Stage("RECOVER"); await Reply(OracleXaFrames(1, recovery: true, rowCompletion: asynchronous));
+                    await Stage("ROLLBACK"); await Reply(OracleXaFrames(1, rowCompletion: asynchronous));
                 }
                 await ObserveClose(stream, budget.Token);
             });
@@ -154,16 +154,17 @@ namespace OceanBaseConnector.ConsumerTests
                 .Concat(Encoding.ASCII.GetBytes(name)).Concat(new byte[] { 0 }).ToArray();
         }
 
-        private static byte[] OracleXaFrames(byte parameters, long code = 0, bool recovery = false, bool badStatus = false)
+        private static byte[] OracleXaFrames(byte parameters, long code = 0, bool recovery = false, bool badStatus = false, bool rowCompletion = false)
         {
             var complex = OracleXaColumn(160, recovery ? "DBMS_XA_XID_ARRAY" : "DBMS_XA_XID");
             var packets = new List<byte[]> { new byte[] { 0, 42, 0, 0, 0, 1, 0, parameters, 0, 0, 0, 0, recovery ? (byte)4 : (byte)0, 0, 0, 0, 1 }, complex };
             if (parameters == 2) packets.Add(OracleXaColumn(3));
-            var eof = new byte[] { 254, 0, 0, 0, 0 }; packets.Add(eof); packets.Add(recovery ? complex : OracleXaColumn(8)); packets.Add(eof);
+            var eof = new byte[] { 254, 0, 0, (byte)(rowCompletion && !recovery ? 0x40 : 0), 0 }; packets.Add(eof); packets.Add(recovery ? complex : OracleXaColumn(8)); packets.Add(eof);
             packets.Add(recovery
                 ? new byte[] { 0, 0, 1, 0, 0, 11 }.Concat(Encoding.ASCII.GetBytes("-2147483648")).Concat(new byte[] { 3, 0, 39, 255, 0 }).ToArray()
                 : new byte[] { 0, 0 }.Concat(BitConverter.GetBytes(code)).ToArray());
-            packets.Add(eof); packets.Add(new byte[] { 0, 0, 0, badStatus ? (byte)8 : (byte)0, 0, 0, 0 });
+            packets.Add(eof); packets.Add(new byte[] { 0, (byte)(rowCompletion ? 1 : 0), 0,
+                (byte)((badStatus ? 8 : 0) | (rowCompletion && !recovery ? 0x40 : 0)), (byte)(rowCompletion && recovery ? 0x10 : 0), 0, 0 });
             return packets.SelectMany((packet, i) => Frame((byte)(i + 1), packet)).ToArray();
         }
     }

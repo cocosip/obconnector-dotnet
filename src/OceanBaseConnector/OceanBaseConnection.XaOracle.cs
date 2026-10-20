@@ -90,7 +90,7 @@ namespace OceanBaseConnector
                 var code = OracleXaInteger(result.Columns[0].DecodeBinary(result.Row![0]));
                 if (asynchronous ? await result.ReadAsync(CancellationToken.None).ConfigureAwait(false) : result.Read())
                     throw new ProtocolException("DBMS_XA returned more than one value.");
-                ValidateOracleXaCompletion(result);
+                ValidateOracleXaCompletion(result, operation);
                 if (code == 0) return OceanBaseXaVote.Prepared;
                 if (operation == XaOperation.Prepare && code == 3) return OceanBaseXaVote.ReadOnly;
                 var error = new OceanBaseException("DBMS_XA returned an unsuccessful XA code.", xaErrorCode: code);
@@ -118,7 +118,7 @@ namespace OceanBaseConnector
                 var result = await RunOracleXa(resource, exchange, plan, asynchronous).ConfigureAwait(false);
                 if (result.Columns.Length != 0)
                     throw new ProtocolException("Unexpected DBMS_XA recovery result.");
-                ValidateOracleXaCompletion(result);
+                ValidateOracleXaCompletion(result, XaOperation.Recover);
                 plan.PublishOutputs();
                 if (!(output.Value is OceanBaseComplexValue array) || !ReferenceEquals(array.Type, XaOracleArrayType) || array.Count > 16383)
                     throw new ProtocolException("Invalid DBMS_XA recovery snapshot.");
@@ -161,18 +161,21 @@ namespace OceanBaseConnector
             return (int)number;
         }
 
-        private static void ValidateOracleXaCompletion(QueryResult result)
+        private static void ValidateOracleXaCompletion(QueryResult result, XaOperation operation)
         {
             var ok = result.OracleCompletion;
             if (ok == null) throw new ProtocolException("Missing DBMS_XA completion.");
-            ValidateOracleXaOk(ok);
+            ValidateOracleXaOk(ok, operation);
         }
 
-        private static void ValidateOracleXaOk(OkPacket ok)
+        private static void ValidateOracleXaOk(OkPacket ok, XaOperation? operation = null)
         {
-            if (ok.AffectedRows != 0 || ok.LastInsertId != 0 ||
+            // Execution tails describe a single SELECT row or a hidden recovery output row.
+            var allowed = !operation.HasValue ? ServerStatusFlags.None
+                : operation == XaOperation.Recover ? ServerStatusFlags.PsOutParameters : ServerStatusFlags.CursorExists;
+            if (ok.AffectedRows > (operation.HasValue ? 1 : 0) || ok.LastInsertId != 0 ||
                 (ok.StatusFlags & (ServerStatusFlags.Autocommit | ServerStatusFlags.MoreResultsExists | ServerStatusFlags.PsOutParameters |
-                    ServerStatusFlags.CursorExists | ServerStatusFlags.LastRowSent)) != 0)
+                    ServerStatusFlags.CursorExists | ServerStatusFlags.LastRowSent) & ~allowed) != 0)
                 throw new ProtocolException("Invalid DBMS_XA completion.");
         }
 

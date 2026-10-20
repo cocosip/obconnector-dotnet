@@ -54,7 +54,7 @@ namespace OceanBaseConnector.UnitTests
             cursor.ReadUInt32(); Assert.Equal(0u, cursor.ReadUInt32()); Assert.False(cursor.HasRemaining);
         }
 
-        private static async Task OracleXaScalarReply(PacketChannel channel, int parameterCount, long code = 0, bool tail = true, ushort tailStatus = 0, string? malformed = null)
+        private static async Task OracleXaScalarReply(PacketChannel channel, int parameterCount, long code = 0, bool tail = true, ushort tailStatus = 0, string? malformed = null, byte affected = 0)
         {
             await channel.WritePacketAsync(OracleExecuteHeader((ushort)parameterCount, 1, flags: 0));
             await channel.WritePacketAsync(ComplexColumn("SYS", "DBMS_XA_XID"));
@@ -70,10 +70,10 @@ namespace OceanBaseConnector.UnitTests
             if (malformed == "null" || malformed == "text" || malformed == "fraction" || malformed == "wide" || malformed == "multiple")
             { Assert.Equal(0, await channelStreamRead(channel)); return; }
             await channel.WritePacketAsync(Eof(0));
-            if (tail) await channel.WritePacketAsync(new byte[] { 0, (byte)(malformed == "affected" ? 1 : 0), (byte)(malformed == "insert" ? 1 : 0), (byte)tailStatus, (byte)(tailStatus >> 8), 0, 0 });
+            if (tail) await channel.WritePacketAsync(new byte[] { 0, (byte)(malformed == "affected" ? 2 : affected), (byte)(malformed == "insert" ? 1 : 0), (byte)tailStatus, (byte)(tailStatus >> 8), 0, 0 });
         }
 
-        private static async Task OracleXaRecoveryReply(PacketChannel channel, byte[] collection, bool tail = true, string? malformed = null)
+        private static async Task OracleXaRecoveryReply(PacketChannel channel, byte[] collection, bool tail = true, string? malformed = null, ushort tailStatus = 0, byte affected = 0)
         {
             await channel.WritePacketAsync(OracleExecuteHeader(1, 1, flags: 4));
             await channel.WritePacketAsync(ComplexColumn("SYS", "DBMS_XA_XID_ARRAY")); await channel.WritePacketAsync(Eof(0));
@@ -85,7 +85,7 @@ namespace OceanBaseConnector.UnitTests
             if (malformed == "members") { Assert.Equal(0, await channelStreamRead(channel)); return; }
             if (malformed == "multiple") { await channel.WritePacketAsync(row); Assert.Equal(0, await channelStreamRead(channel)); return; }
             await channel.WritePacketAsync(Eof(0));
-            if (tail) await channel.WritePacketAsync(Ok(status: 0));
+            if (tail) await channel.WritePacketAsync(new byte[] { 0, affected, 0, (byte)tailStatus, (byte)(tailStatus >> 8), 0, 0 });
         }
 
         [Theory]
@@ -205,7 +205,6 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(2)]
         [InlineData(8)]
         [InlineData(0x1000)]
-        [InlineData(0x40)]
         [InlineData(0x80)]
         public async Task OracleXaRejectsAutocommitAndNonControlTerminalFlags(ushort flags)
         {
@@ -219,6 +218,90 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync();
                 var error = await Assert.ThrowsAsync<OceanBaseException>(() => connection.GetXaResource().StartAsync(XaId));
+                Assert.Null(error.XaErrorCode); Assert.Equal(ConnectionState.Broken, connection.State);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false, 0, 0)]
+        [InlineData(true, 0, 0)]
+        [InlineData(false, 1, 0x40)]
+        [InlineData(true, 1, 0x40)]
+        public async Task OracleXaAcceptsSingleRowCompletionForEveryPhase(bool asynchronous, byte affected, ushort flags)
+        {
+            var server = Server(async channel =>
+            {
+                await OracleXaInitialize(channel);
+                await OracleXaRequest(channel, "START", 0);
+                await OracleXaScalarReply(channel, 2, affected: affected, tailStatus: (ushort)(flags | 1));
+                await OracleXaRequest(channel, "END", 0x04000000, previous: true);
+                await OracleXaScalarReply(channel, 2, affected: affected, tailStatus: flags);
+                await OracleXaRequest(channel, "PREPARE", previous: true);
+                await OracleXaScalarReply(channel, 1, affected: affected, tailStatus: flags);
+                await OracleXaRequest(channel, "COMMIT", 0, previous: true);
+                await OracleXaScalarReply(channel, 2, affected: affected, tailStatus: flags);
+                await OracleXaRequest(channel, "RECOVER", previous: true);
+                await OracleXaRecoveryReply(channel, OracleXaCollection("-2", new byte[] { 0, 39, 255 }, Array.Empty<byte>()),
+                    affected: affected, tailStatus: affected == 0 ? (ushort)0 : (ushort)0x1000);
+                await OracleXaRequest(channel, "ROLLBACK", previous: true);
+                await OracleXaScalarReply(channel, 1, affected: affected, tailStatus: flags);
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
+            try
+            {
+                await connection.OpenAsync(); var resource = connection.GetXaResource();
+                await XaStart(resource, asynchronous); await XaEnd(resource, asynchronous);
+                Assert.Equal(OceanBaseXaVote.Prepared, asynchronous ? await resource.PrepareAsync(XaId) : resource.Prepare(XaId));
+                await XaCommit(resource, asynchronous, false);
+                var recovered = asynchronous ? await resource.RecoverAsync() : resource.Recover();
+                Assert.Equal(XaId, Assert.Single(recovered));
+                await XaRollback(resource, asynchronous); Assert.Equal(ConnectionState.Open, connection.State);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task OracleXaRecoveryAcceptsSingleOutputCompletion(bool asynchronous)
+        {
+            var server = Server(async channel =>
+            {
+                await OracleXaInitialize(channel); await OracleXaRequest(channel, "RECOVER");
+                await OracleXaRecoveryReply(channel, OracleXaCollection(null, null, null, count: 0), affected: 1, tailStatus: 0x1000);
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
+            try
+            {
+                await connection.OpenAsync(); var resource = connection.GetXaResource();
+                Assert.Empty(asynchronous ? await resource.RecoverAsync() : resource.Recover());
+                Assert.Equal(ConnectionState.Open, connection.State);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(2, 0)]
+        [InlineData(0, 2)]
+        [InlineData(0, 8)]
+        [InlineData(0, 0x40)]
+        [InlineData(0, 0x80)]
+        public async Task OracleXaRecoveryRejectsNonOutputCompletion(byte affected, ushort flags)
+        {
+            var server = Server(async channel =>
+            {
+                await OracleXaInitialize(channel); await OracleXaRequest(channel, "RECOVER");
+                await OracleXaRecoveryReply(channel, OracleXaCollection(null, null, null, count: 0), affected: affected, tailStatus: flags);
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
+            try
+            {
+                await connection.OpenAsync();
+                var error = await Assert.ThrowsAsync<OceanBaseException>(() => connection.GetXaResource().RecoverAsync());
                 Assert.Null(error.XaErrorCode); Assert.Equal(ConnectionState.Broken, connection.State);
             }
             finally { connection.Close(); server.Stop(); }
