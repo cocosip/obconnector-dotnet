@@ -1,6 +1,6 @@
 # Verified compatibility and release scope
 
-Updated 2026-10-21. Runtime code baseline: commit `304642e`, with the dependency-range and test-tool updates described below; project version: `0.1.0-alpha`. These results cover the specified profiles, not every OceanBase deployment or feature combination.
+Updated 2026-10-21. Runtime code baseline: commit `304642e`, with the dependency-range and test-tool updates described below; project version: `0.1.0`. These results cover the specified profiles, not every OceanBase deployment or feature combination.
 
 ## Current real-database evidence
 
@@ -44,7 +44,7 @@ This limitation is specific to a nested-table-valued table column. It does not m
 
 ## Independent package versions
 
-This project owns its release sequence. Root `Directory.Build.props` defines `Version=0.1.0-alpha` for both `OceanBaseConnector` and `OceanBaseConnector.DependencyInjection`. DI requires that core package version or newer (`[0.1.0-alpha,)`), without an exact-version constraint. Neither the official OceanBase .NET driver's `1.3.1` nor Connector/J's `2.4.14` is this project's version. Future version changes belong only in the root property, followed by building, packing and verifying both packages together.
+This project owns its release sequence. Root `Directory.Build.props` defines `Version=0.1.0` for both `OceanBaseConnector` and `OceanBaseConnector.DependencyInjection`. DI requires that core package version or newer (`[0.1.0,)`), without an exact-version constraint. Neither the official OceanBase .NET driver's `1.3.1` nor Connector/J's `2.4.14` is this project's version. Future version changes belong only in the root property, followed by building, packing and verifying both packages together.
 
 Dependency minimums are separately centralized in root `Directory.Packages.props` with `ManagePackageVersionsCentrally=true` and transitive pinning. All project PackageReferences omit inline versions. Every central dependency uses an inclusive minimum with no upper bound. Microsoft minimums are uniformly 8.0.0 on Standard2.0/2.1/net8, 9.0.0 on net9 and 10.0.0 on net10; the SDK does not determine those minimums.
 
@@ -54,4 +54,4 @@ BouncyCastle.Cryptography is a runtime dependency with `[2.7.0,)`; 2.7.0 remains
 
 The maintainer reports the previously discussed CI issue resolved. This review does not independently claim a remote CI result. Local candidate checks passed 3271 Unit, 2112 Consumer and 14 DI cases, a Release build with zero warnings/errors, and actual package consumers for all five assets. The four separate integration-gate tests were skipped without their configured environment; they are distinct from the real acceptance-console runs above. Final logs: `TestResults/release-parity/final-{restore,build,unit,consumer,di,integration,dependency-audit,pack,package-consumers}.log` and `final-tests/*.trx`. Higher-patch package consumption is retained under `TestResults/release-parity/higher-dependencies/`.
 
-The Alpha scope covers the tested direct 4.4.2.2 profiles with explicit limitations. Pooling remains rejected because complete session reset is unimplemented. Trusted-TLS/plugin matrices, OBProxy, additional server versions, controlled topology/network faults, XA coordinator crash recovery and complete runtime/deployment matrices remain open. The Oracle report remains nonzero for the excluded server limitation; it must not be described as an all-green suite. Source-provenance and package-name/trademark review remain separate publication work. These checks do not establish general stable/RC readiness or authorize publication.
+The 0.1.0 scope covers the tested direct 4.4.2.2 profiles with explicit limitations. Pooling remains rejected because complete session reset is unimplemented. Trusted-TLS/plugin matrices, OBProxy, additional server versions, controlled topology/network faults, XA coordinator crash recovery and complete runtime/deployment matrices remain open. The Oracle report remains nonzero for the excluded server limitation; it must not be described as an all-green suite. Source-provenance and package-name/trademark review remain separate publication work. These checks do not establish general stable/RC readiness or authorize publication.

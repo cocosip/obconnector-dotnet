@@ -11,6 +11,6 @@
       csproj may declare its own <Version>. NuGet dependency versions are
       likewise centralized in Directory.Packages.props.
     -->
-    <Version>0.1.0-alpha</Version>
+    <Version>0.1.0</Version>
   </PropertyGroup>
 </Project>
