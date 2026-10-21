@@ -36,7 +36,19 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingOverTls(string target, bool async, string kind)
             => EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingCore(target, async, kind, encrypted: true);
 
-        private static async Task EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingCore(string target, bool async, string kind, bool encrypted)
+        public static IEnumerable<object[]> OracleBatchAssets() => OracleAssets().Where(value => !((string)value[0]).StartsWith("netstandard", StringComparison.Ordinal));
+
+        [Theory]
+        [MemberData(nameof(OracleBatchAssets))]
+        public Task ModernAssetsPublishBatchOutputsOnlyAfterValidatedCompletion(string target, bool async, string kind)
+            => EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingCore(target, async, kind, encrypted: false, batchExecution: true);
+
+        [Theory]
+        [MemberData(nameof(OracleBatchAssets))]
+        public Task ModernAssetsPublishBatchOutputsOnlyAfterValidatedCompletionOverTls(string target, bool async, string kind)
+            => EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingCore(target, async, kind, encrypted: true, batchExecution: true);
+
+        private static async Task EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingCore(string target, bool async, string kind, bool encrypted, bool batchExecution = false)
         {
             using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -80,16 +92,25 @@ namespace OceanBaseConnector.ConsumerTests
                 var command = connection.CreateCommand(); command.CommandText = "pkg.proc"; command.CommandType = CommandType.StoredProcedure;
                 var input = command.CreateParameter(); input.ParameterName = "input"; input.Value = 7L; command.Parameters.Add(input);
                 var output = command.CreateParameter(); output.ParameterName = "output"; output.Value = "old"; output.Direction = ParameterDirection.Output; command.Parameters.Add(output);
+                using var batch = batchExecution ? connection.CreateBatch() : null;
+                if (batch != null)
+                {
+                    var item = batch.CreateBatchCommand(); item.CommandText = command.CommandText; item.CommandType = command.CommandType;
+                    command.Parameters.Clear(); item.Parameters.Add(input); item.Parameters.Add(output); batch.BatchCommands.Add(item);
+                }
+                int Execute() => batch == null ? command.ExecuteNonQuery() : batch.ExecuteNonQuery();
+                Task<int> ExecuteAsync() => batch == null ? command.ExecuteNonQueryAsync(budget.Token) : batch.ExecuteNonQueryAsync(budget.Token);
                 if (kind == "trailing")
                 {
-                    var error = await Assert.ThrowsAnyAsync<DbException>(async () => { if (async) await command.ExecuteNonQueryAsync(budget.Token); else command.ExecuteNonQuery(); });
+                    var error = await Assert.ThrowsAnyAsync<DbException>(async () => { if (async) await ExecuteAsync(); else Execute(); });
                     Assert.True((bool)error.GetType().GetProperty("IsExecutionOutcomeUnknown")!.GetValue(error)!);
                     Assert.Equal("old", output.Value); Assert.Equal(ConnectionState.Broken, connection.State);
                 }
                 else
                 {
-                    Assert.Equal(2, async ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery()); Assert.Equal(42L, output.Value);
+                    Assert.Equal(2, async ? await ExecuteAsync() : Execute()); Assert.Equal(42L, output.Value);
                 }
+                if (batch != null) { if (async) await batch.DisposeAsync(); else batch.Dispose(); }
                 if (async) await command.DisposeAsync(); else command.Dispose();
                 connection.Close(); await serving.WaitAsync(budget.Token);
             }
