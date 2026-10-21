@@ -16,7 +16,10 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, true, false)] [InlineData(true, true, false)]
         [InlineData(false, false, true)] [InlineData(true, false, true)]
         [InlineData(false, true, true)] [InlineData(true, true, true)]
-        public async Task RefCursorOutputStreamsPagesAndKeepsParentUntilReleased(bool async, bool deprecated, bool sequential)
+        public Task RefCursorOutputStreamsPagesAndKeepsParentUntilReleased(bool async, bool deprecated, bool sequential)
+            => ReadRefCursorPagesAndRelease(async, deprecated, sequential);
+
+        internal static async Task ReadRefCursorPagesAndRelease(bool async, bool deprecated, bool sequential)
         {
             var server = Server(async channel =>
             {

@@ -44,6 +44,7 @@ namespace OceanBaseConnector.Internal
             "execute" => "oceanbase.execute",
             "prepare" => "oceanbase.prepare",
             "change_database" => "oceanbase.change_database",
+            "cursor.fetch" => "oceanbase.cursor.fetch",
             "transaction.begin" => "oceanbase.transaction.begin",
             "transaction.commit" => "oceanbase.transaction.commit",
             "transaction.rollback" => "oceanbase.transaction.rollback",

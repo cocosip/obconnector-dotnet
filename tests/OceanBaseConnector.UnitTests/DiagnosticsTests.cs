@@ -35,6 +35,18 @@ namespace OceanBaseConnector.UnitTests
         private static byte[] TimeZone() => TextCommandTests.TimeZoneOk("+00:00");
 
         [Theory]
+        [InlineData(false)] [InlineData(true)]
+        public async Task RefCursorDiagnosticsPublishSpanAndMetrics(bool asynchronous)
+        {
+            using var parent = new Activity("application").Start(); using var capture = new Capture();
+            await TextCommandTests.ReadRefCursorPagesAndRelease(asynchronous, false, false);
+            var span = Assert.Single(capture.Spans, x => x.GetTagItem("db.operation.name") is string operation && operation == "cursor.fetch");
+            Check(span, "cursor.fetch", "oracle", "success", false); Assert.Equal(parent.Id, span.ParentId);
+            Assert.Single(capture.Counts, x => Equals(x.Tags["db.operation.name"], "cursor.fetch"));
+            Assert.Single(capture.Durations, x => Equals(x.Tags["db.operation.name"], "cursor.fetch")); Assert.Same(parent, Activity.Current);
+        }
+
+        [Theory]
         [InlineData(false)]
         [InlineData(true)]
         public async Task SavepointDiagnosticsPublishSpansAndExcludeNames(bool asynchronous)
