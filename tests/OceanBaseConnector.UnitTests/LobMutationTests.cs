@@ -129,12 +129,13 @@ namespace OceanBaseConnector.UnitTests
                     var request = new ByteCursor(await StatementCommand(channel, 0xa1)); request.Skip(10);
                     Assert.Equal("BEGIN DBMS_LOB.WRITE(?, ?, ?, ?); END;", Encoding.UTF8.GetString(request.ReadLengthEncodedBytes()));
                     Assert.Equal(4u, request.ReadUInt32()); Assert.Equal(0, request.ReadUInt8()); Assert.Equal(1, request.ReadUInt8());
-                    Assert.Equal((ushort)type, request.ReadUInt16()); Assert.Equal((ushort)3, request.ReadUInt16()); Assert.Equal((ushort)8, request.ReadUInt16()); Assert.Equal(character ? (ushort)253 : (ushort)203, request.ReadUInt16());
+                    Assert.Equal((ushort)type, request.ReadUInt16()); Assert.Equal((ushort)3, request.ReadUInt16()); Assert.Equal((ushort)8, request.ReadUInt16()); Assert.Equal((ushort)253, request.ReadUInt16());
                     Assert.Equal(locator, request.ReadLengthEncodedBytes()); var amount = request.ReadUInt32(); Assert.Equal((ulong)offset, request.ReadUInt64());
                     Assert.InRange(amount, 1u, character ? 8191u : 32767u); var chunk = request.ReadLengthEncodedBytes();
-                    Assert.Equal(data.AsSpan(sent, chunk.Length).ToArray(), chunk);
-                    Assert.Equal((long)amount, character ? Encoding.UTF8.GetString(chunk).EnumerateRunes().LongCount() : chunk.LongLength);
-                    sent += chunk.Length; offset += amount; locator = ExternalLob(2 + sent); locator[16] = (byte)(sent % 251);
+                    var actual = character ? chunk : Convert.FromHexString(Encoding.ASCII.GetString(chunk));
+                    Assert.Equal(data.AsSpan(sent, actual.Length).ToArray(), actual);
+                    Assert.Equal((long)amount, character ? Encoding.UTF8.GetString(actual).EnumerateRunes().LongCount() : actual.LongLength);
+                    sent += actual.Length; offset += amount; locator = ExternalLob(2 + sent); locator[16] = (byte)(sent % 251);
                     await LobMutationReply(channel, type, locator); await StatementCommand(channel, 25); channel.BeginCommand();
                 }
                 await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));

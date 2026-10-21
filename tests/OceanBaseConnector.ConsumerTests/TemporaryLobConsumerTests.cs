@@ -82,11 +82,11 @@ namespace OceanBaseConnector.ConsumerTests
                     {
                         Assert.Equal((ushort)type, request.ReadUInt16());
                         if (operation == 1)
-                        { Assert.Equal((ushort)3, request.ReadUInt16()); Assert.Equal((ushort)8, request.ReadUInt16()); Assert.Equal(character ? (ushort)253 : (ushort)203, request.ReadUInt16()); }
+                        { Assert.Equal((ushort)3, request.ReadUInt16()); Assert.Equal((ushort)8, request.ReadUInt16()); Assert.Equal((ushort)253, request.ReadUInt16()); }
                         else Assert.Equal((ushort)6, request.ReadUInt16());
                         Assert.Equal(Locator(operation == 1 ? Array.Empty<byte>() : data), request.ReadLengthEncodedBytes());
                         if (operation == 1)
-                        { Assert.Equal(character ? 4u : (uint)data.Length, request.ReadUInt32()); Assert.Equal(1ul, request.ReadUInt64()); Assert.Equal(data, request.ReadLengthEncodedBytes()); }
+                        { Assert.Equal(character ? 4u : (uint)data.Length, request.ReadUInt32()); Assert.Equal(1ul, request.ReadUInt64()); var buffer = request.ReadLengthEncodedBytes(); Assert.Equal(data, character ? buffer : Convert.FromHexString(Encoding.ASCII.GetString(buffer))); }
                     }
                     request.Skip(16); Assert.False(request.HasRemaining);
                     var response = Frame(1, new byte[] { 0, 91, 0, 0, 0, 1, 0, (byte)parameters, 0, 0, 0, 0, 4, 0, 0, 0, 1 });

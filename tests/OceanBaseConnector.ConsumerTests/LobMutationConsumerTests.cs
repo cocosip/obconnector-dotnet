@@ -68,11 +68,11 @@ namespace OceanBaseConnector.ConsumerTests
                     Assert.Equal(trim == 0 ? "BEGIN DBMS_LOB.WRITE(?, ?, ?, ?); END;" : "BEGIN DBMS_LOB.TRIM(?, ?); END;", Encoding.UTF8.GetString(request.ReadLengthEncodedBytes()));
                     Assert.Equal((uint)parameters, request.ReadUInt32()); Assert.Equal(0, request.ReadUInt8()); Assert.Equal(1, request.ReadUInt8()); Assert.Equal((ushort)type, request.ReadUInt16());
                     if (trim == 0)
-                    { Assert.Equal((ushort)3, request.ReadUInt16()); Assert.Equal((ushort)8, request.ReadUInt16()); Assert.Equal(character ? (ushort)253 : (ushort)203, request.ReadUInt16()); }
+                    { Assert.Equal((ushort)3, request.ReadUInt16()); Assert.Equal((ushort)8, request.ReadUInt16()); Assert.Equal((ushort)253, request.ReadUInt16()); }
                     else Assert.Equal((ushort)8, request.ReadUInt16());
                     Assert.Equal(Locator(trim == 0 ? Array.Empty<byte>() : data), request.ReadLengthEncodedBytes());
                     if (trim == 0)
-                    { Assert.Equal(character ? 4u : (uint)data.Length, request.ReadUInt32()); Assert.Equal(1ul, request.ReadUInt64()); Assert.Equal(data, request.ReadLengthEncodedBytes()); }
+                    { Assert.Equal(character ? 4u : (uint)data.Length, request.ReadUInt32()); Assert.Equal(1ul, request.ReadUInt64()); var buffer = request.ReadLengthEncodedBytes(); Assert.Equal(data, character ? buffer : Convert.FromHexString(Encoding.ASCII.GetString(buffer))); }
                     else Assert.Equal(character ? 3ul : 5ul, request.ReadUInt64());
                     var response = Frame(1, new byte[] { 0, 91, 0, 0, 0, 1, 0, (byte)parameters, 0, 0, 0, 0, 4, 0, 0, 0, 1 });
                     for (var i = 0; i < parameters; i++) response = response.Concat(Frame((byte)(2 + i), Column(253))).ToArray();

@@ -18,8 +18,20 @@ namespace OceanBaseConnector.Internal.Session
             var command = Command("DBMS_LOB.WRITE");
             command.Parameters.Add(new OceanBaseParameter { ParameterName = "amount", Value = amount });
             command.Parameters.Add(new OceanBaseParameter { ParameterName = "offset", Value = checked(offset + 1) });
-            command.Parameters.Add(new OceanBaseParameter { ParameterName = "buffer", Value = buffer });
+            // Connector/J sends BLOB write buffers as uppercase hexadecimal text (VARSTRING).
+            // OceanBase's Oracle DBMS_LOB.WRITE path rejects binary RAW bindings above 2 KiB.
+            command.Parameters.Add(new OceanBaseParameter { ParameterName = "buffer",
+                DbType = _lob.IsCharacter ? DbType.String : DbType.AnsiString,
+                Value = _lob.IsCharacter ? buffer : Hex((byte[])buffer) });
             return Execute(command, async, token, caller);
+        }
+
+        private static string Hex(byte[] bytes)
+        {
+            const string digits = "0123456789ABCDEF";
+            var result = new char[bytes.Length * 2];
+            for (var i = 0; i < bytes.Length; i++) { result[i * 2] = digits[bytes[i] >> 4]; result[i * 2 + 1] = digits[bytes[i] & 15]; }
+            return new string(result);
         }
         internal Task Trim(long length, bool async, CancellationToken token, CancellationToken caller)
         {
