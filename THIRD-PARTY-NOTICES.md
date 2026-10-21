@@ -8,14 +8,14 @@ The NuGet packages declare their runtime dependencies rather than embedding thos
 
 | Dependency | Version / target | License / source |
 | --- | --- | --- |
-| BouncyCastle.Cryptography | 2.7.0 for all core assets | MIT, https://github.com/bcgit/bc-csharp; used through its public expanded-key Ed25519 API |
-| Microsoft.Extensions.Logging.Abstractions | 8.0.3 for both Standard assets and net8; 9.0.10 for net9; 10.0.0 for net10 | MIT, https://github.com/dotnet/runtime |
-| Microsoft.Extensions.DependencyInjection.Abstractions | 8.0.2 for Standard / net8; 9.0.10 for net9; 10.0.0 for net10. The core package promotes the logging dependency through central transitive pinning; the DI package also references it directly. | MIT, https://github.com/dotnet/runtime |
-| System.Diagnostics.DiagnosticSource | 8.0.1 for both Standard assets; modern assets use the runtime API | MIT, https://github.com/dotnet/runtime |
+| BouncyCastle.Cryptography | >=2.7.0 for all core assets, no upper bound | MIT, https://github.com/bcgit/bc-csharp; used through its public expanded-key Ed25519 API |
+| Microsoft.Extensions.Logging.Abstractions | Minimum 8.0.0 for both Standard assets and net8; 9.0.0 for net9; 10.0.0 for net10; no upper bounds | MIT, https://github.com/dotnet/runtime |
+| Microsoft.Extensions.DependencyInjection.Abstractions | Minimum 8.0.0 for Standard / net8; 9.0.0 for net9; 10.0.0 for net10; no upper bounds. The core package promotes the logging dependency through central transitive pinning; the DI package also references it directly. | MIT, https://github.com/dotnet/runtime |
+| System.Diagnostics.DiagnosticSource | Minimum 8.0.0 for both Standard assets, no upper bound; modern assets use the runtime API | MIT, https://github.com/dotnet/runtime |
 
 The Standard dependency graphs also contain Microsoft.Bcl.AsyncInterfaces 8.0.0, System.Buffers 4.5.1, System.Memory 4.5.5, System.Numerics.Vectors 4.4.0, System.Runtime.CompilerServices.Unsafe 6.0.0 and System.Threading.Tasks.Extensions 4.5.4. Their NuGet metadata either declares MIT or links to the upstream corefx license. NETStandard.Library 2.0.3 and Microsoft.NETCore.Platforms 1.1.0 are build/reference dependencies; their legacy NuGet metadata links to https://github.com/dotnet/standard/blob/master/LICENSE.TXT and http://go.microsoft.com/fwlink/?LinkId=329770 respectively. They are not bundled as provider assemblies.
 
-Versions are centrally managed in the repository's Directory.Packages.props. The actual dependency groups and transitive graph in the generated packages and restore assets are authoritative.
+Inclusive minimums without upper bounds are centrally managed in the repository's Directory.Packages.props. The versions above describe the declared minimums; applications may resolve newer dependencies. Test SDK/xUnit/runner packages are development tooling and are not declared runtime dependencies of either product package. The actual dependency groups and transitive graph in the generated packages and restore assets are authoritative.
 
 ## Behavioral and protocol references
 

@@ -1,37 +1,41 @@
 <Project>
   <!--
-    Central Package Management: all NuGet package versions are pinned here
-    and only here. Projects reference packages without Version metadata.
+    Central Package Management: dependency minimum versions are declared here.
+    Ranges include the minimum and have no upper bound; project references omit Version metadata.
   -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
-  <!-- Product dependencies follow the target's major version, not the SDK/test host. -->
+  <!-- Dependency minimums follow the product target, not the SDK/test host. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' Or '$(TargetFramework)' == 'netstandard2.1' Or '$(TargetFramework)' == 'net8.0'">
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
-    <PackageVersion Include="System.Diagnostics.DiagnosticSource" Version="8.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="[8.0.0,)" />
+    <PackageVersion Include="System.Diagnostics.DiagnosticSource" Version="[8.0.0,)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[8.0.0,)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="[8.0.0,)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="[9.0.0,)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[9.0.0,)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="[9.0.0,)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="[10.0.0,)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[10.0.0,)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="[10.0.0,)" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-    <PackageVersion Include="xunit" Version="2.9.2" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageVersion Include="BouncyCastle.Cryptography" Version="[2.7.0,)" />
+  </ItemGroup>
+
+  <!-- Test tooling is not a dependency of either published product package. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="[18.11.0,)" />
+    <PackageVersion Include="xunit" Version="[2.9.3,)" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="[4.0.1,)" />
   </ItemGroup>
 </Project>

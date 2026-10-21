@@ -9,10 +9,10 @@
     <ProjectReference Include="../OceanBaseConnector/OceanBaseConnector.csproj" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
-  <!-- Keep the optional integration package bound to its matching provider release. -->
+  <!-- Require this provider release or newer without an exact-version constraint. -->
   <Target Name="PinCorePackageDependency" AfterTargets="_GetProjectReferenceVersions">
     <ItemGroup>
-      <_ProjectReferencesWithVersions Update="@(_ProjectReferencesWithVersions)" ProjectVersion="[$(Version)]" />
+      <_ProjectReferencesWithVersions Update="@(_ProjectReferencesWithVersions)" ProjectVersion="[$(Version),)" />
     </ItemGroup>
   </Target>
 </Project>

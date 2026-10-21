@@ -13,13 +13,18 @@ $feed = (Resolve-Path -LiteralPath $PackageDirectory).Path
 [xml]$rootProperties = Get-Content -LiteralPath (Join-Path $repository 'Directory.Build.props') -Raw
 $version = [string]$rootProperties.Project.PropertyGroup.Version
 [xml]$packageVersions = Get-Content -LiteralPath (Join-Path $repository 'Directory.Packages.props') -Raw
-$cryptoVersion = [string]($packageVersions.SelectSingleNode('//PackageVersion[@Include="BouncyCastle.Cryptography"]')).Version
+$cryptoMinimum = ([string]($packageVersions.SelectSingleNode('//PackageVersion[@Include="BouncyCastle.Cryptography"]')).Version) -replace '^\[|,\)$', ''
 $targets = @('netstandard2.0', 'netstandard2.1', 'net8.0', 'net9.0', 'net10.0')
 $packages = @('OceanBaseConnector', 'OceanBaseConnector.DependencyInjection')
 $hashes = @{}
 
 function Assert-Package($condition, [string]$message) {
     if (!$condition) { throw $message }
+}
+
+# NuGet may normalize [minimum,) to its equivalent bare minimum in nuspec metadata.
+function Test-MinimumVersion([string]$range, [string]$minimum) {
+    return $range -eq $minimum -or $range -match ('^\[' + [regex]::Escape($minimum) + ',\s*\)$')
 }
 
 function Invoke-Dotnet([string[]]$arguments) {
@@ -57,21 +62,23 @@ foreach ($id in $packages) {
             $group = @($groups | Where-Object targetFramework -eq $nuspecTarget)
             Assert-Package ($group.Count -eq 1) "$id is missing dependency group $target."
             $dependencies = @($group[0].dependency)
+            Assert-Package (@($dependencies | Where-Object { $_.id -eq 'Microsoft.NET.Test.Sdk' -or $_.id -like 'xunit*' }).Count -eq 0) "$id/$target must not publish test-tool dependencies."
             $major = if ($target -like 'netstandard*') { 8 } else { [int]$target.Substring(3).Split('.')[0] }
             $extensions = @($dependencies | Where-Object id -Like 'Microsoft.Extensions.*')
             Assert-Package ($extensions.Count -gt 0) "$id/$target is missing Microsoft.Extensions dependencies."
             foreach ($dependency in $extensions) {
-                Assert-Package ($dependency.version -match "^\[?$major\.") "$id/$target has wrong Microsoft.Extensions major."
+                $minimum = switch ($major) { 8 { '8.0.0' } 9 { '9.0.0' } 10 { '10.0.0' } }
+                Assert-Package (Test-MinimumVersion $dependency.version $minimum) "$id/$target must allow $($dependency.id) $minimum or newer without an upper bound."
             }
             if ($id -eq $packages[1]) {
                 $core = @($dependencies | Where-Object id -eq $packages[0])
-                Assert-Package ($core.Count -eq 1 -and $core[0].version -eq "[$version]") 'DI must pin the exact matching core version.'
+                Assert-Package ($core.Count -eq 1 -and (Test-MinimumVersion $core[0].version $version)) 'DI must allow the current core version or newer without an upper bound.'
             } else {
                 $cryptography = @($dependencies | Where-Object id -eq 'BouncyCastle.Cryptography')
-                Assert-Package ($cryptography.Count -eq 1 -and $cryptography[0].version -eq $cryptoVersion) "$target must declare the centrally managed cryptography dependency."
+                Assert-Package ($cryptography.Count -eq 1 -and (Test-MinimumVersion $cryptography[0].version $cryptoMinimum)) "$target must declare the centrally managed cryptography dependency."
                 $diagnostics = @($dependencies | Where-Object id -eq 'System.Diagnostics.DiagnosticSource')
                 if ($target -like 'netstandard*') {
-                    Assert-Package ($diagnostics.Count -eq 1 -and $diagnostics[0].version -eq '8.0.1') "$target must reference DiagnosticSource 8.0.1."
+                    Assert-Package ($diagnostics.Count -eq 1 -and (Test-MinimumVersion $diagnostics[0].version '8.0.0')) "$target must allow DiagnosticSource 8.0.0 or newer without an upper bound."
                 } else {
                     Assert-Package ($diagnostics.Count -eq 0) "$target must use runtime DiagnosticSource."
                 }
@@ -123,7 +130,7 @@ Write-ConsumerFile 'Directory.Packages.props' @"
   <ItemGroup>
     <PackageVersion Include="OceanBaseConnector" Version="[$version]" />
     <PackageVersion Include="OceanBaseConnector.DependencyInjection" Version="[$version]" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="[8.0.0,)" />
   </ItemGroup>
 </Project>
 "@
