@@ -95,7 +95,7 @@ namespace OceanBaseConnector.UnitTests
                 if (failurePhase == 4)
                 {
                     channel.BeginCommand();
-                    await Query(channel, "select ob_version(), @@ob_compatibility_mode from dual");
+                    await Query(channel, ServerIdentity.MySqlQuery);
                     await channel.WritePacketAsync(Error());
                 }
                 if (failurePhase == 3)

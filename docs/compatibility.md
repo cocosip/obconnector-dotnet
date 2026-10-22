@@ -12,8 +12,9 @@ The tables distinguish recorded passes, failures, explicitly unsupported behavio
 | OBProxy, either mode | Unverified | No verified proxy-version/routing/fault matrix. Direct-server results do not establish OBProxy compatibility. |
 | Native MySQL / native Oracle | Unsupported | This provider targets OceanBase; MySQL wire compatibility does not bypass OceanBase identity confirmation. |
 
-All successful opens confirm `ob_version()` and `@@ob_compatibility_mode` in one read-only query.
-The reported mode must agree with authentication; missing, unknown or conflicting identity data
+All successful opens confirm `ob_version()` and `@@ob_compatibility_mode` in one read-only query;
+MySQL-mode opens also confirm `@@autocommit` in the same query and reject sessions with autocommit
+disabled (see the unsupported table below). The reported mode must agree with authentication; missing, unknown or conflicting identity data
 fails Open. Product versions are distinct from the MySQL-compatible greeting. A parseable new
 release is not rejected merely because it has no recorded acceptance run, but an untested
 release is not thereby supported or certified. No blanket minimum OceanBase release is claimed
@@ -70,6 +71,7 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 | Area | Unsupported behavior |
 | --- | --- |
 | Pooling | Physical connection reuse and complete session reset. |
+| Disabled autocommit | MySQL-mode sessions whose `@@autocommit` is 0; Open fails because the provider cannot commit implicit transactions. Connector/J forces `SET autocommit=1` instead; this driver sets no session variables. |
 | Ambient transactions | `TransactionScope` / `EnlistTransaction`; explicit XA is a separate API. |
 | Standard assets | `DbDataSource`, `DbBatch`, savepoint APIs and GSSAPI authentication. |
 | Savepoints | Oracle release; quoted/Unicode names and leading underscores such as `__EFSavePoint`. |

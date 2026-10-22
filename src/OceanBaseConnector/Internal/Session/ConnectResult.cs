@@ -35,13 +35,18 @@ namespace OceanBaseConnector.Internal.Session
         public string ServerVersion { get; private set; } = string.Empty;
         internal Version? ProductVersion { get; private set; }
 
-        internal void ConfirmIdentity(string version, string mode)
+        internal void ConfirmIdentity(string version, string mode, bool? autocommit)
         {
             var parsed = OceanBaseServerVersion.Parse(version);
             if (parsed == null) throw new OceanBaseException("OceanBase identity requires a supported product version format.");
             var expected = Mode == OceanBaseCompatibilityMode.Oracle ? "ORACLE" : "MYSQL";
             if (!string.Equals(mode, expected, StringComparison.OrdinalIgnoreCase))
                 throw new OceanBaseException("OceanBase session compatibility mode does not match authentication.");
+            if (Mode == OceanBaseCompatibilityMode.MySql && autocommit == false)
+                throw new OceanBaseException(
+                    "The MySQL-mode server session reports autocommit disabled. This provider cannot commit implicit transactions: " +
+                    "statements outside an explicit transaction would hold locks and be rolled back when the connection closes. " +
+                    "Enable autocommit for the login or tenant, then open the connection again.");
             ServerVersion = version;
             ProductVersion = parsed;
         }

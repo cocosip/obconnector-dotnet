@@ -24,20 +24,38 @@ namespace OceanBaseConnector.UnitTests.Session
             return data.ToArray();
         }
 
-        private static async Task IdentityResponse(PacketChannel channel, bool oracle, string? version = "4.4.2.2", bool extraRow = false, string? reportedMode = null)
+        private static byte[] AutocommitColumn()
+        {
+            using var data = new MemoryStream();
+            foreach (var value in new[] { "def", "", "", "", "@@autocommit", "" })
+            { data.WriteByte((byte)value.Length); data.Write(Encoding.ASCII.GetBytes(value)); }
+            data.Write(new byte[] { 12, 63, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0 });
+            return data.ToArray();
+        }
+
+        private static async Task IdentityResponse(PacketChannel channel, bool oracle, string? version = "4.4.2.2", bool extraRow = false, string? reportedMode = null, string? autocommit = "1")
         {
             channel.BeginCommand();
-            Assert.Equal("select ob_version(), @@ob_compatibility_mode from dual", Encoding.ASCII.GetString((await channel.ReadPacketAsync())[1..]));
-            await channel.WritePacketAsync(new byte[] { 2 });
+            Assert.Equal(oracle ? ServerIdentity.OracleQuery : ServerIdentity.MySqlQuery, Encoding.ASCII.GetString((await channel.ReadPacketAsync())[1..]));
+            await channel.WritePacketAsync(new byte[] { (byte)(oracle ? 2 : 3) });
             await channel.WritePacketAsync(IdentityColumn());
             await channel.WritePacketAsync(IdentityColumn());
+            if (!oracle) await channel.WritePacketAsync(AutocommitColumn());
             var eof = new byte[] { 254, 0, 0, oracle ? (byte)0 : (byte)2, 0 };
             await channel.WritePacketAsync(eof);
             var mode = Encoding.ASCII.GetBytes(reportedMode ?? (oracle ? "ORACLE" : "MYSQL"));
-            var row = (version == null ? new byte[] { 251 } : new[] { (byte)version.Length }.Concat(Encoding.ASCII.GetBytes(version)).ToArray())
-                .Concat(new[] { (byte)mode.Length }).Concat(mode).ToArray();
-            await channel.WritePacketAsync(row);
-            if (extraRow) await channel.WritePacketAsync(row);
+            using var row = new MemoryStream();
+            if (version == null) row.WriteByte(251);
+            else { row.WriteByte((byte)version.Length); row.Write(Encoding.ASCII.GetBytes(version)); }
+            row.WriteByte((byte)mode.Length); row.Write(mode);
+            if (!oracle)
+            {
+                if (autocommit == null) row.WriteByte(251);
+                else { row.WriteByte((byte)autocommit.Length); row.Write(Encoding.ASCII.GetBytes(autocommit)); }
+            }
+            var rowBytes = row.ToArray();
+            await channel.WritePacketAsync(rowBytes);
+            if (extraRow) await channel.WritePacketAsync(rowBytes);
             await channel.WritePacketAsync(eof);
         }
 
@@ -157,6 +175,60 @@ namespace OceanBaseConnector.UnitTests.Session
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
+        public async Task MySqlIdentityRejectsDisabledAutocommit(bool asynchronous)
+        {
+            var server = LoopbackServer.Start(async client =>
+            {
+                var channel = new PacketChannel(client.GetStream());
+                await channel.WritePacketAsync(BuildInitialHandshake(serverVersion: "5.7.25"));
+                await channel.ReadPacketAsync();
+                await channel.WritePacketAsync(BuildAuthOk(oracleMode: false));
+                await IdentityResponse(channel, oracle: false, autocommit: "0");
+            });
+            try
+            {
+                using var transport = await TcpTransport.ConnectAsync("127.0.0.1", server.Port, TimeSpan.FromSeconds(10), default);
+                var channel = new PacketChannel(transport.Stream);
+                var error = asynchronous
+                    ? await Assert.ThrowsAsync<OceanBaseException>(() => HandshakeFlow.AuthenticateAsync(transport, channel, BuildOptions(), default))
+                    : Assert.Throws<OceanBaseException>(() => HandshakeFlow.Authenticate(transport, channel, BuildOptions()));
+                Assert.Contains("Enable autocommit", error.Message);
+            }
+            finally { server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false, "2")]
+        [InlineData(true, "2")]
+        [InlineData(false, null)]
+        [InlineData(true, null)]
+        public async Task MySqlIdentityRequiresWellFormedAutocommit(bool asynchronous, string? autocommit)
+        {
+            var server = LoopbackServer.Start(async client =>
+            {
+                var channel = new PacketChannel(client.GetStream());
+                await channel.WritePacketAsync(BuildInitialHandshake(serverVersion: "5.7.25"));
+                await channel.ReadPacketAsync();
+                await channel.WritePacketAsync(BuildAuthOk(oracleMode: false));
+                await IdentityResponse(channel, oracle: false, autocommit: autocommit);
+            });
+            try
+            {
+                using var transport = await TcpTransport.ConnectAsync("127.0.0.1", server.Port, TimeSpan.FromSeconds(10), default);
+                var channel = new PacketChannel(transport.Stream);
+                var error = asynchronous
+                    ? await Assert.ThrowsAsync<OceanBaseException>(() => HandshakeFlow.AuthenticateAsync(transport, channel, BuildOptions(), default))
+                    : Assert.Throws<OceanBaseException>(() => HandshakeFlow.Authenticate(transport, channel, BuildOptions()));
+                Assert.Contains("autocommit setting", error.Message);
+            }
+            finally { server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task IdentitySupportsDeprecatedEof(bool asynchronous)
         {
             var server = LoopbackServer.Start(async client =>
@@ -166,10 +238,11 @@ namespace OceanBaseConnector.UnitTests.Session
                 await channel.ReadPacketAsync();
                 await channel.WritePacketAsync(BuildAuthOk(oracleMode: false));
                 channel.BeginCommand(); await channel.ReadPacketAsync();
-                await channel.WritePacketAsync(new byte[] { 2 });
+                await channel.WritePacketAsync(new byte[] { 3 });
                 await channel.WritePacketAsync(IdentityColumn());
                 await channel.WritePacketAsync(IdentityColumn());
-                await channel.WritePacketAsync(new byte[] { 7, (byte)'4', (byte)'.', (byte)'4', (byte)'.', (byte)'2', (byte)'.', (byte)'2', 5, (byte)'M', (byte)'Y', (byte)'S', (byte)'Q', (byte)'L' });
+                await channel.WritePacketAsync(AutocommitColumn());
+                await channel.WritePacketAsync(new byte[] { 7, (byte)'4', (byte)'.', (byte)'4', (byte)'.', (byte)'2', (byte)'.', (byte)'2', 5, (byte)'M', (byte)'Y', (byte)'S', (byte)'Q', (byte)'L', 1, (byte)'1' });
                 await channel.WritePacketAsync(new byte[] { 254, 0, 0, 2, 0, 0, 0, 0 });
             });
             try
@@ -201,10 +274,10 @@ namespace OceanBaseConnector.UnitTests.Session
                     return head.Concat(ReadExact(stream, (head[0] | head[1] << 8 | head[2] << 16))).ToArray();
                 }
                 var request = Ob20Packet.Parse(ReadFrame(), 1234, 0, 0);
-                Assert.Equal("select ob_version(), @@ob_compatibility_mode from dual", Encoding.ASCII.GetString(request.Payload.ToArray()[5..]));
-                var row = new byte[] { 7, (byte)'4', (byte)'.', (byte)'4', (byte)'.', (byte)'2', (byte)'.', (byte)'2', 5, (byte)'M', (byte)'Y', (byte)'S', (byte)'Q', (byte)'L' };
+                Assert.Equal(ServerIdentity.MySqlQuery, Encoding.ASCII.GetString(request.Payload.ToArray()[5..]));
+                var row = new byte[] { 7, (byte)'4', (byte)'.', (byte)'4', (byte)'.', (byte)'2', (byte)'.', (byte)'2', 5, (byte)'M', (byte)'Y', (byte)'S', (byte)'Q', (byte)'L', 1, (byte)'1' };
                 var eof = new byte[] { 254, 0, 0, 2, 0 };
-                var response = Frame(1, new byte[] { 2 }).Concat(Frame(2, IdentityColumn())).Concat(Frame(3, IdentityColumn())).Concat(Frame(4, eof)).Concat(Frame(5, row)).Concat(Frame(6, eof)).ToArray();
+                var response = Frame(1, new byte[] { 3 }).Concat(Frame(2, IdentityColumn())).Concat(Frame(3, IdentityColumn())).Concat(Frame(4, AutocommitColumn())).Concat(Frame(5, eof)).Concat(Frame(6, row)).Concat(Frame(7, eof)).ToArray();
                 await stream.WriteAsync(Ob20Packet.Build(1234, 0, 1, response));
                 Assert.Equal(new byte[] { 1, 0, 0, 0, 14 }, Ob20Packet.Parse(ReadFrame(), 1234, 1, 0).Payload.ToArray());
                 await stream.WriteAsync(Ob20Packet.Build(1234, 1, 1, Frame(1, new byte[] { 0, 0, 0, 2, 0, 0, 0 })));

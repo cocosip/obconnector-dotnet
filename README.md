@@ -61,7 +61,7 @@ Each resolution creates a closed transient connection owned by its container sco
 - Oracle extensions include stored procedures, OUT parameters, REF CURSOR, LOB locators, complex types and array binding. Procedures and output parameters require `Use Oracle Prepare Execute=true`; locator LOBs also require `Use Lob Locators=true`.
 - Explicit XA, multiple server addresses, custom address resolution, logging, tracing and metrics.
 - Connection pooling and ambient `TransactionScope` are not supported. `Pooling=true` is rejected.
-- Every connection confirms `ob_version()` and the tenant compatibility mode. Recognized version formats are accepted; versions beyond the recorded deployment and OBProxy still need real-server validation.
+- Every connection confirms `ob_version()` and the tenant compatibility mode; MySQL-mode opens also require `@@autocommit` enabled, rejecting sessions whose implicit transactions this provider could not commit. Recognized version formats are accepted; versions beyond the recorded deployment and OBProxy still need real-server validation.
 
 The driver does not automatically replay SQL. If `OceanBaseException.IsExecutionOutcomeUnknown` is true, reconcile the operation before retrying a write or commit. Batches run sequentially and need an explicit transaction for atomicity. Dispose readers, commands and connections; closing an unread reader can destroy its session.
 

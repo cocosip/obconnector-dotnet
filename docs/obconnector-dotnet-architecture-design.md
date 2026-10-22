@@ -28,11 +28,16 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `Treat Tiny As Boolean` | true | MySQL signed `TINYINT(1)` with zero scale returns `bool`: zero is false, every nonzero value is true. Set false to read the full `sbyte` value. Unsigned TINYINT, other widths, Oracle types and BIT are unaffected. |
 | `Use Affected Rows` | false | MySQL UPDATE reports matched rows by default (`CLIENT_FOUND_ROWS`). Set true to request changed rows instead. Commands, readers and batches retain the counts returned by the server. |
 
-Every connection performs one read-only `select ob_version(), @@ob_compatibility_mode from dual`
-after authentication. The mode must match authentication and `ExpectedMode` when supplied.
+Every connection performs one read-only identity query after authentication:
+`select ob_version(), @@ob_compatibility_mode from dual`, extended with `, @@autocommit` in MySQL mode.
+The mode must match authentication and `ExpectedMode` when supplied.
 `ServerVersion` and schema product-version metadata report the actual `ob_version()` value;
 the original MySQL-compatible greeting is retained internally and does not select features.
 Malformed identity results and unknown version formats fail Open without publishing a session.
+MySQL-mode sessions must report `@@autocommit` enabled: the provider has no API to commit implicit
+transactions, so Open fails instead of accepting a session whose statements outside an explicit
+transaction would hold locks and roll back when the connection closes. Connector/J instead forces
+`SET autocommit=1` after connecting; this driver mutates no session variables.
 Three- or four-component numeric versions, optional `v`, OceanBase-marked versions and printable
 build suffixes are recognized. An OceanBase marker selects the product version after the marker,
 never a preceding MySQL-compatible version. There is no exact-release allowlist or user version override.
@@ -105,7 +110,7 @@ Conversions requiring rounding or loss of precision throw. Timezone-free values 
 
 ## Transactions, batches and failures
 
-Assign the active transaction to each business command. MySQL supports ReadUncommitted, ReadCommitted, RepeatableRead and Serializable; Oracle supports ReadCommitted and Serializable. Unspecified isolation uses MySQL RepeatableRead or Oracle ReadCommitted. Ambient `TransactionScope` is unsupported.
+Assign the active transaction to each business command. MySQL supports ReadUncommitted, ReadCommitted, RepeatableRead and Serializable; Oracle supports ReadCommitted and Serializable. Unspecified isolation uses MySQL RepeatableRead or Oracle ReadCommitted. Ambient `TransactionScope` is unsupported. MySQL-mode sessions with `@@autocommit` disabled are rejected at Open; see the identity rules above.
 
 On .NET 8/9/10, `Save(name)` and `Rollback(name)` operate on the active transaction; `Release(name)` is MySQL-only. Names must contain 1–30 ASCII letters/digits/underscores and start with a letter. Leading underscores, including `__EFSavePoint`, are rejected. Reacquire LOBs, cursors and complex-type values after savepoint rollback.
 
