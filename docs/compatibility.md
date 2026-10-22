@@ -1,57 +1,77 @@
-# Verified compatibility and release scope
+# Compatibility and known gaps
 
-Updated 2026-10-21. Runtime code baseline: commit `304642e`, with the dependency-range and test-tool updates described below; project version: `0.1.0`. These results cover the specified profiles, not every OceanBase deployment or feature combination.
+The tables distinguish recorded passes, failures, explicitly unsupported behavior and unverified combinations. Implemented APIs and passing local fixtures do not establish server compatibility.
 
-## Current real-database evidence
+## Server and topology matrix
 
-The repository's unchanged 65-case acceptance console was rerun on Windows/.NET 10 against direct OceanBase 4.4.2.2 tenants. Both profiles explicitly selected TLS Disabled; Oracle enabled PrepareExecute and LOB locators. MySQL supplied the existing read-only slow-query profile for cancellation/timeout. No credentials, endpoint identities or private SQL are included here.
+| Target | Status | Boundary |
+| --- | --- | --- |
+| Direct OceanBase 4.4.2.2, MySQL mode | Partially verified | Recorded acceptance: 38 passed, 27 skipped; TLS disabled. |
+| Direct OceanBase 4.4.2.2, Oracle mode | Partially verified; suite fails | Recorded acceptance: 49 passed, 1 failed, 15 skipped, 1 cleanup failure; TLS disabled. |
+| Other versions through MySQL mode or an unidentified greeting | Rejected by identity confirmation | `ob_version()` must return exactly `4.4.2.2`. |
+| Other Oracle-mode server versions | Unverified | Feature minimums such as PrepareExecute >=2.2.76 and offset Fetch >=2.2.5 are runtime checks, not a supported-version matrix. Unidentified greetings also use the identity gate above. |
+| OBProxy, either mode | Unverified | No verified proxy-version/routing/fault matrix. Direct-server results do not establish OBProxy compatibility. |
+| Native MySQL / native Oracle | Unsupported | This provider targets OceanBase; MySQL wire compatibility does not bypass OceanBase identity confirmation. |
 
-| Profile | Passed | Failed | Skipped | Cleanup callback failures | Exit code |
+## Recorded database tests
+
+The following results were recorded on 2026-10-21 for runtime-code baseline `304642e` with dependency updates, on Windows/.NET 10. Both profiles connected directly to OceanBase 4.4.2.2 with TLS disabled. Oracle enabled PrepareExecute and LOB locators; MySQL configured a slow query for cancellation and timeout tests.
+
+| Mode | Passed | Failed | Skipped | Cleanup failures | Exit code |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| MySQL mode | 38 | 0 | 27 | 0 | 0 |
-| Oracle mode | 49 | 1 | 15 | 1 | 1 |
+| MySQL | 38 | 0 | 27 | 0 | 0 |
+| Oracle | 49 | 1 | 15 | 1 | 1 |
 
-The sole Oracle failure is `complex.collection`, explained below. Other skipped cases retain their individual mode/environment reasons. Evidence remains in ignored `TestResults/release-parity-{mysql,oracle}-02.json` and `.log`; the failure was not changed to a skip or a pass.
+The Oracle suite did not pass. Skips include mode-specific and missing-environment cases; they are not passes. The original report paths were `TestResults/release-parity-{mysql,oracle}-02.json`. Those ignored reports are absent from this checkout, so these counts are retained from the [original verification record](https://github.com/cocosip/obconnector-dotnet/blob/f63d57c/docs/obconnector-dotnet-progress.md), not recomputed from reports or a new database run.
 
-Independent cleanup checked all 28 MySQL, 39 Oracle and eight Java report-owned entries: zero remaining objects and zero owned prepared XA branches. Both exact Oracle XID rollback checks succeeded; both MySQL XIDs were already absent. The original failed cleanup callback remains in the Oracle report. Evidence: `TestResults/release-parity-{mysql,oracle}-02-cleanup.log` and `TestResults/release-parity-java-01-cleanup.log`.
+### Failed: Oracle nested-table columns
 
-## Oracle collection column: server limitation, confirmed against Java
-
-The failure occurs in the second statement, before any INSERT, collection binding or result decoding:
+`complex.collection` fails at the second statement, before binding any collection value:
 
 ```sql
 CREATE TYPE OBA_NUMBER_LIST AS TABLE OF NUMBER;
 CREATE TABLE OBA_COLLECTION_TABLE (id INTEGER PRIMARY KEY, value OBA_NUMBER_LIST);
 ```
 
-These are illustrative names; actual comparisons used unique, owned test names and cleaned them afterward.
+On the tested server, both .NET and Connector/J 2.4.14 returned error `600 / 0A000` (`nested table type not supported`). Java reproduced this with ordinary prepare and combined PrepareExecute. The pinned [server DDL resolver](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/sql/resolver/ddl/ob_ddl_resolver.cpp#L3930) also rejects nested-table column types.
 
-| Operation | .NET current candidate | Connector/J 2.4.14 ordinary server prepare | Connector/J 2.4.14 combined PrepareExecute |
-| --- | --- | --- | --- |
-| Create named `TABLE OF NUMBER` type | Succeeds | Succeeds | Succeeds |
-| Create a column of that named nested-table type | Server error 600 / SQLSTATE 0A000 | Same server error | Same server error |
-| Named OBJECT insert and binary result round trip | `complex.object` passes | Literal/bound predicates and warm/cold type caches pass | Same cases pass |
+This is a limitation of collection-valued table columns on that server. It does not establish a limitation on collection procedure parameters or array binding. The recorded `complex.object` and `oracle.array-binding` cases passed. Java's [collection example](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/test/java/com/oceanbase/jdbc/ComplexOracleTest.java#L411) uses a procedure parameter, a different operation.
 
-The Java error text is `OBE-00600: internal error code, arguments: -4007, nested table type not supported`. The .NET acceptance report intentionally records codes rather than server text. The Java binary's SHA-256 is `3168e7e3f2f14f35738d7c695e05012bf351f623757c7baada29659d2afa2ad4`; its source baseline is commit `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`. Fresh comparison output: `TestResults/release-parity-java-01.log`.
+The cleanup failure was an attempted DROP of the table whose CREATE failed. The original record reports independent cleanup finding no remaining owned objects or prepared XA branches. It does not cancel the failed case or change exit code 1. Original comparison/cleanup paths were `TestResults/release-parity-java-01.log`, `TestResults/release-parity-java-01-cleanup.log` and `TestResults/release-parity-{mysql,oracle}-02-cleanup.log`; these files are also absent from this checkout.
 
-The same Java comparison also verified Oracle temporary BLOB writes through 8 KiB. The .NET candidate initially sent `DBMS_LOB.WRITE` BLOB buffers as RAW bytes, which failed at 4000 bytes with server code 25137 / SQLSTATE 22003. Connector/J sends uppercase hexadecimal text for this procedure buffer; the .NET mutation path now matches it. A 100 KiB multi-piece BLOB write, patch, truncate and read passed after the fix, with 11 focused LOB regressions and the full local suites passing.
+## Deferred acceptance cases
 
-This diagnosis is also consistent with the pinned public [OceanBase DDL resolver](https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/sql/resolver/ddl/ob_ddl_resolver.cpp#L3930): after resolving the column UDT, `udt_info->is_nested_table()` returns `OB_NOT_SUPPORTED` and reports `nested table type`. This source reference corroborates the live response; it is not a claim that the deployed binary was built from that exact revision.
+These six entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs) have explicit `DeferredReason` values. They report skips, not successful validation.
 
-The existing [.NET acceptance case](../tests/OceanBaseConnector.Acceptance/DatabaseCases.Oracle.cs) issues this DDL before encoding or sending a complex input value. Changing collection encoding cannot make this server accept the column. The subsequent error 942 / 42S02 comes from the cleanup attempt to DROP the table whose CREATE failed, not an unremoved object; independent inventory confirms absence. No driver workaround, exception suppression or altered acceptance assertion was introduced.
+| Case | Missing validation / implementation |
+| --- | --- |
+| `matrix.tls-authentication` | Trusted certificate chains, hostnames, plugin combinations and negative authentication profiles. TLS-disabled acceptance does not validate VerifyFull. |
+| `matrix.ob20-trace-negotiation` | Actual server OB20/full-link-trace negotiation and trace output. Ordinary SQL success does not prove either was negotiated. |
+| `matrix.topology-failover` | Controlled discovery, endpoint failures and routing on real deployments. |
+| `matrix.network-outcome-unknown` | Mid-request/response failures, cancellation ordering and interrupted commit/rollback on real deployments. |
+| `matrix.pool-reset` | Pooling and complete reset are unimplemented; `Pooling=true` is rejected. |
+| `matrix.xa-crash-recovery` | External coordinator recovery under client/server process failure. Basic XA phase tests do not cover this. |
 
-This limitation is specific to a nested-table-valued table column. It does not mean that collection types, PL/SQL collection parameters, anonymous collection outputs or array execution are unsupported. Java's [testNestedArray](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/test/java/com/oceanbase/jdbc/ComplexOracleTest.java#L411) uses a named collection as a procedure parameter and stores scalar members in ordinary NUMBER/INT columns; it does not create a nested-table-valued column. The .NET provider exposes its documented `CreateArrayType`/PrepareExecute contracts, and the real `oracle.array-binding` case passes. This comparison does not claim to have rerun Java's entire collection suite or proven every .NET collection input/output shape.
+Further skips depend on selected groups, compatibility mode, `slowQuery`, `alternateDatabase`, DDL permissions and Oracle extension options. If a connection prerequisite fails, dependent cases are skipped. See [AcceptanceSuite.SkipReason](../tests/OceanBaseConnector.Acceptance/AcceptanceSuite.cs); a zero exit code can still include skips.
 
-## Independent package versions
+## Explicitly unsupported APIs and shapes
 
-This project owns its release sequence. Root `Directory.Build.props` defines `Version=0.1.0` for both `OceanBaseConnector` and `OceanBaseConnector.DependencyInjection`. DI requires that core package version or newer (`[0.1.0,)`), without an exact-version constraint. Neither the official OceanBase .NET driver's `1.3.1` nor Connector/J's `2.4.14` is this project's version. Future version changes belong only in the root property, followed by building, packing and verifying both packages together.
+| Area | Unsupported behavior |
+| --- | --- |
+| Pooling | Physical connection reuse and complete session reset. |
+| Ambient transactions | `TransactionScope` / `EnlistTransaction`; explicit XA is a separate API. |
+| Standard assets | `DbDataSource`, `DbBatch`, savepoint APIs and GSSAPI authentication. |
+| Savepoints | Oracle release; quoted/Unicode names and leading underscores such as `__EFSavePoint`. |
+| Binary stream parameters | InputOutput, text streams, array-binding combinations and client-prepare fallback. |
+| Oracle outputs/cursors | Standalone Prepare or FetchSize on the PrepareExecute output path; REF CURSOR Input/InputOutput and ordinary cursor-valued result columns. |
+| Complex types | Text-protocol complex results, cyclic layouts and LOB/cursor/national-type members; undeclared or stale type identities. |
+| Array execution | SELECT, DDL and FetchSize; execution does not commit or roll back automatically. |
+| Discovery and recovery | Built-in OCP/TNS discovery, transparent migration of active sessions/transactions and automatic SQL replay. |
 
-Dependency minimums are separately centralized in root `Directory.Packages.props` with `ManagePackageVersionsCentrally=true` and transitive pinning. All project PackageReferences omit inline versions. Every central dependency uses an inclusive minimum with no upper bound. Microsoft minimums are uniformly 8.0.0 on Standard2.0/2.1/net8, 9.0.0 on net9 and 10.0.0 on net10; the SDK does not determine those minimums.
+For supported alternatives and binding rules, see the [API reference](obconnector-dotnet-architecture-design.md).
 
-BouncyCastle.Cryptography is a runtime dependency with `[2.7.0,)`; 2.7.0 remains the latest stable version found in the NuGet query. An exact `[2.7.0]` constraint would prohibit dependency unification with a consuming module requiring a newer version. The open range permits that resolution but does not promise compatibility with all future versions or automatically install the newest security patch. Test tooling is separately grouped: Microsoft.NET.Test.Sdk `[18.11.0,)`, xUnit `[2.9.3,)`, and VS Runner `[4.0.1,)`, the latest stable versions found in the same query. Test projects are non-packable, and the package verifier rejects these tool packages in product dependency groups. No project release-version change was made.
+## Runtime and integration coverage
 
-## Release boundaries
+Local fixture and package checks cover different baselines and do not replace database validation. Four separate integration gate tests were recorded as skipped, including direct/OBProxy mode checks, TLS-name rejection and unsupported-plugin rejection. They have not been established as passing by the acceptance counts above.
 
-The maintainer reports the previously discussed CI issue resolved. This review does not independently claim a remote CI result. Local candidate checks passed 3271 Unit, 2112 Consumer and 14 DI cases, a Release build with zero warnings/errors, and actual package consumers for all five assets. The four separate integration-gate tests were skipped without their configured environment; they are distinct from the real acceptance-console runs above. Final logs: `TestResults/release-parity/final-{restore,build,unit,consumer,di,integration,dependency-audit,pack,package-consumers}.log` and `final-tests/*.trx`. Higher-patch package consumption is retained under `TestResults/release-parity/higher-dependencies/`.
-
-The 0.1.0 scope covers the tested direct 4.4.2.2 profiles with explicit limitations. Pooling remains rejected because complete session reset is unimplemented. Trusted-TLS/plugin matrices, OBProxy, additional server versions, controlled topology/network faults, XA coordinator crash recovery and complete runtime/deployment matrices remain open. The Oracle report remains nonzero for the excluded server limitation; it must not be described as an all-green suite. Source-provenance and package-name/trademark review remain separate publication work. These checks do not establish general stable/RC readiness or authorize publication.
+Full non-Windows deployment, every runtime implementing .NET Standard, real Kerberos/KDC credentials and a complete TLS/plugin matrix remain unverified. Historical .NET Framework checks cover basic consumption through a net48 host running installed Framework 4.8.1, not formal original-4.8 or full SQL/TLS support. See [verification status and remaining work](obconnector-dotnet-progress.md).

@@ -23,8 +23,8 @@ Each fixture is a single JSON file in this directory tree with:
 
 Rules:
 
-- No real credentials, certificates, host names or captured SQL text in any
-  fixture. Hand-crafted payloads only.
+- No real credentials, certificates, host names, parameter values or captured
+  SQL text in any fixture.
 - Captured payloads are byte-identical to what the wire carried, with
   authentication data replaced by synthetic bytes of the same length; the
   `redaction` field must describe the replacement.
