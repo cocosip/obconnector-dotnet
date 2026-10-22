@@ -116,5 +116,24 @@ namespace OceanBaseConnector.UnitTests
             for (var i = 0; i < parameters.Length; i++) parameters[i] = new OceanBaseParameter { Value = text };
             Assert.Throws<ArgumentException>(() => Build("select " + string.Join(",", new string('?', parameters.Length).ToCharArray()), OceanBaseCompatibilityMode.MySql, parameters));
         }
+
+        [Fact]
+        public void IntegerLiteralsKeepWorkingAndCustomFormattablesAreNeverInlined()
+        {
+            Assert.Equal("select (7)", Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = 7L }));
+            Assert.Equal("select (42)", Build("select ?", OceanBaseCompatibilityMode.MySql, new OceanBaseParameter { Value = 42 }));
+            Assert.ThrowsAny<ArgumentException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle,
+                new OceanBaseParameter { ParameterName = "p", DbType = DbType.String, Value = new LiteralProbe("x') OR ('1'='1") }));
+            Assert.ThrowsAny<ArgumentException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle,
+                new OceanBaseParameter { ParameterName = "p", DbType = DbType.String, Value = 'x' }));
+            Assert.ThrowsAny<ArgumentException>(() => Build("select ?", OceanBaseCompatibilityMode.MySql,
+                new OceanBaseParameter { DbType = DbType.Int32, Value = new LiteralProbe("1; DROP TABLE t") }));
+        }
+
+        private sealed record LiteralProbe(string Text) : IFormattable
+        {
+            public override string ToString() => Text;
+            public string ToString(string? format, IFormatProvider? provider) => Text;
+        }
     }
 }

@@ -81,7 +81,11 @@ namespace OceanBaseConnector.Internal.Sql
                 return Floating(mode == OceanBaseCompatibilityMode.MySql ? ((double)f).ToString("R", CultureInfo.InvariantCulture)
                     : f.ToString("R", CultureInfo.InvariantCulture), mode, "f");
             }
-            return ((IFormattable)value).ToString(null, CultureInfo.InvariantCulture);
+            // Same exact CLR types as PreparedParameters.WriteValue; never inline a custom ToString.
+            if (value is sbyte || value is byte || value is short || value is ushort ||
+                value is int || value is uint || value is long || value is ulong)
+                return ((IFormattable)value).ToString(null, CultureInfo.InvariantCulture);
+            throw new ArgumentException("The client literal value does not match its declared DbType.");
         }
 
         private static string Floating(string value, OceanBaseCompatibilityMode mode, string suffix)
