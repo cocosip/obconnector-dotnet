@@ -28,12 +28,13 @@ namespace OceanBaseConnector.Internal.Protocol
             _ = FieldType;
         }
         private ResultColumn(string database, string table, string originalTable, string name, string originalName,
-            byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode, string? sessionTimeZone, NationalCharacterSet? nationalCharacterSet)
+            byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode, string? sessionTimeZone, NationalCharacterSet? nationalCharacterSet, bool treatTinyAsBoolean)
         {
             Database = database; Table = table; OriginalTable = originalTable; OriginalName = originalName; Length = length; Flags = flags;
             SessionTimeZone = sessionTimeZone;
             NationalCharacterSet = nationalCharacterSet;
             Name = name; TypeCode = type; Charset = charset; Unsigned = (flags & 32) != 0; Mode = mode;
+            IsTinyBoolean = treatTinyAsBoolean && mode == OceanBaseCompatibilityMode.MySql && type == 1 && !Unsigned && length == 1 && scale == 0;
             Scale = mode == OceanBaseCompatibilityMode.Oracle ? unchecked((sbyte)scale) : scale;
             Precision = mode == OceanBaseCompatibilityMode.Oracle ? precision : (long)length - (Unsigned ? 0 : 1) - (scale > 0 ? 1 : 0);
             if (mode == OceanBaseCompatibilityMode.Oracle && IsDecimal)
@@ -57,6 +58,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal byte TypeCode { get; }
         internal ushort Charset { get; }
         internal bool Unsigned { get; }
+        private bool IsTinyBoolean { get; }
         private bool HasUtf8Charset => Charset == 33 || Charset == 45 || Charset == 46 || Charset == 83 || Charset == 224 || Charset == 255;
         internal OceanBaseCompatibilityMode Mode { get; }
         internal long Precision { get; }
@@ -74,7 +76,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
         internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode, string? sessionTimeZone = null, NationalCharacterSet? nationalCharacterSet = null, OceanBaseConnector.Internal.Session.LobSession? lobs = null,
             IReadOnlyDictionary<(string, string), OceanBaseComplexType>? complexTypes = null,
-            IReadOnlyDictionary<(string, string, string, string), OceanBaseComplexType>? sourceComplexTypes = null)
+            IReadOnlyDictionary<(string, string, string, string), OceanBaseComplexType>? sourceComplexTypes = null, bool treatTinyAsBoolean = true)
         {
             var cursor = new ByteCursor(payload);
             cursor.ReadLengthEncodedBytes(); // Protocol catalog marker, not the database catalog name.
@@ -92,7 +94,7 @@ namespace OceanBaseConnector.Internal.Protocol
             var scale = cursor.ReadUInt8();
             var precision = cursor.ReadUInt8();
             cursor.ReadUInt8();
-            var result = new ResultColumn(database, table, originalTable, name, originalName, type, charset, flags, length, scale, precision, mode, sessionTimeZone, nationalCharacterSet) { Lobs = lobs };
+            var result = new ResultColumn(database, table, originalTable, name, originalName, type, charset, flags, length, scale, precision, mode, sessionTimeZone, nationalCharacterSet, treatTinyAsBoolean) { Lobs = lobs };
             if (type == 160)
             {
                 if (mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Complex columns require Oracle mode.");
@@ -166,7 +168,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 }
                 switch (TypeCode)
                 {
-                    case 1: return Unsigned ? typeof(byte) : typeof(sbyte);
+                    case 1: return IsTinyBoolean ? typeof(bool) : Unsigned ? typeof(byte) : typeof(sbyte);
                     case 2: return Unsigned ? typeof(ushort) : typeof(short);
                     case 3:
                     case 9: return Unsigned ? typeof(uint) : typeof(int);
@@ -249,7 +251,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (IsDecimal) return OceanBaseDbType.Decimal;
                 switch (TypeCode)
                 {
-                    case 1: return Unsigned ? OceanBaseDbType.Byte : OceanBaseDbType.SByte;
+                    case 1: return IsTinyBoolean ? OceanBaseDbType.Boolean : Unsigned ? OceanBaseDbType.Byte : OceanBaseDbType.SByte;
                     case 2: return Unsigned ? OceanBaseDbType.UInt16 : OceanBaseDbType.Int16;
                     case 3:
                     case 9: return Unsigned ? OceanBaseDbType.UInt32 : OceanBaseDbType.Int32;
@@ -313,7 +315,9 @@ namespace OceanBaseConnector.Internal.Protocol
             var text = TextEncoding.GetString(value);
             switch (TypeCode)
             {
-                case 1: return Unsigned ? (object)byte.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture) : sbyte.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                case 1:
+                    if (IsTinyBoolean) return sbyte.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture) != 0;
+                    return Unsigned ? (object)byte.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture) : sbyte.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture);
                 case 2: return Unsigned ? (object)ushort.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture) : short.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture);
                 case 3:
                 case 9: return Unsigned ? (object)uint.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture) : int.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture);
@@ -385,7 +389,9 @@ namespace OceanBaseConnector.Internal.Protocol
             var cursor = new ByteCursor(value);
             switch (TypeCode)
             {
-                case 1: return Unsigned ? (object)cursor.ReadUInt8() : unchecked((sbyte)cursor.ReadUInt8());
+                case 1:
+                    if (IsTinyBoolean) return cursor.ReadUInt8() != 0;
+                    return Unsigned ? (object)cursor.ReadUInt8() : unchecked((sbyte)cursor.ReadUInt8());
                 case 2: return Unsigned ? (object)cursor.ReadUInt16() : unchecked((short)cursor.ReadUInt16());
                 case 3:
                 case 9: return Unsigned ? (object)cursor.ReadUInt32() : unchecked((int)cursor.ReadUInt32());

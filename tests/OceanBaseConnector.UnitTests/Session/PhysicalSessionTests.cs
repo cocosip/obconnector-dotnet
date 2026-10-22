@@ -19,6 +19,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 await channel.ReadPacketAsync();
                 if (truncate) return;
                 await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });
+                await ServerIdentity.ReplyAsync(channel);
                 _ = await client.GetStream().ReadAsync(new byte[1]);
             });
         }
@@ -231,6 +232,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
                 await channel.ReadPacketAsync();
                 await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });
+                await ServerIdentity.ReplyAsync(channel);
                 channel.BeginCommand();
                 Assert.Equal(new byte[] { 0x0E }, await channel.ReadPacketAsync());
                 await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });

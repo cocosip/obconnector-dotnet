@@ -26,19 +26,17 @@ namespace OceanBaseConnector.ConsumerTests
             var serving = Task.Run(async () =>
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream(); var channel = new PacketChannel(stream);
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true);
+                await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, version: "4.2.0");
                 uint request = 0;
                 async Task<byte[]> Read()
-                { if (!ob20) channel.BeginCommand(); return await ReadRequest(stream, channel, ob20, request++, budget.Token); }
+                { if (!ob20) channel.BeginCommand(); return await ReadRequest(stream, channel, ob20, request++ + 1, budget.Token); }
                 async Task Reply(params byte[][] packets)
                 {
                     var frames = packets.SelectMany((p, i) => Frame((byte)(i + 1), p)).ToArray();
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, request - 1, 1, frames) : frames, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, request, 1, frames) : frames, budget.Token);
                 }
                 byte[] Column(byte type) => new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 112, 1, 112, 12, 45, 0, 20, 0, 0, 0, type, 0, 0, 0, 0, 0 };
                 var eof = Report(false, 0); eof[0] = 254;
-                Assert.Equal("select ob_version() from dual", Encoding.UTF8.GetString((await Read())[1..]));
-                await Reply(new byte[] { 1 }, Column(253), new byte[] { 5, 52, 46, 50, 46, 48 }, eof);
                 var prepare = await Read(); Assert.Equal(22, prepare[0]); Assert.Equal("BEGIN pkg.proc(?, ?); END;", Encoding.UTF8.GetString(prepare[1..]));
                 await Reply(new byte[] { 0, 60, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0 }, Column(254), Column(6));
                 Assert.Equal(new byte[] { 162, 60, 0, 0, 0, 0, 0, 3, 0, 6, 0, 0, 0, 0, 0, 0, 0, 48, 48, 65, 66, 70, 70 }, await Read());

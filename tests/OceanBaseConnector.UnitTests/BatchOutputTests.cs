@@ -19,7 +19,7 @@ namespace OceanBaseConnector.UnitTests
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.4.2.2");
+
                 for (var i = 0; i < 2; i++)
                 {
                     var sql = direction == ParameterDirection.ReturnValue ? "BEGIN ? := pkg.proc(?); END;" : "BEGIN pkg.proc(?, ?); END;";
@@ -33,7 +33,7 @@ namespace OceanBaseConnector.UnitTests
                     await channel.WritePacketAsync(Ok(2));
                     await StatementCommand(channel, 25);
                 }
-            });
+            }, serverVersion: "4.4.2.2");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
@@ -58,9 +58,9 @@ namespace OceanBaseConnector.UnitTests
             var server = Server(async channel =>
             {
                 await Query(channel, "prefix"); await channel.WritePacketAsync(Ok(1)); channel.BeginCommand();
-                await OracleVersionReply(channel, "4.4.2.2"); await StatementCommand(channel, 0xa1);
+                await StatementCommand(channel, 0xa1);
                 await OracleOutputReply(channel, false); await channel.WritePacketAsync(Ok(2)); await StatementCommand(channel, 25);
-            });
+            }, serverVersion: "4.4.2.2");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
@@ -86,7 +86,7 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.4.2.2");
+
                 for (var i = 0; i < 2; i++)
                 {
                     if (i != 0) await StatementCommand(channel, 25);
@@ -94,7 +94,7 @@ namespace OceanBaseConnector.UnitTests
                     await channel.WritePacketAsync(i == 0 ? Ok(2) : Error());
                 }
                 await StatementCommand(channel, 25); channel.BeginCommand(); await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));
-            });
+            }, serverVersion: "4.4.2.2");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
@@ -125,11 +125,11 @@ namespace OceanBaseConnector.UnitTests
             var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.4.2.2"); await StatementCommand(channel, 0xa1); await OracleOutputReply(channel, false);
+                await StatementCommand(channel, 0xa1); await OracleOutputReply(channel, false);
                 waiting.SetResult();
                 if (failure == "cancel") await AssertOracleExecuteTransportClosed(channel);
                 else if (failure == "invalid") await channel.WritePacketAsync(new byte[] { 0 });
-            });
+            }, serverVersion: "4.4.2.2");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
@@ -151,11 +151,11 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.4.2.2"); await StatementCommand(channel, 0xa1); await RefCursorOutput(channel);
+                await StatementCommand(channel, 0xa1); await RefCursorOutput(channel);
                 channel.BeginCommand(); await StatementCommand(channel, 28); await CursorMetadata(channel, 2);
                 await channel.WritePacketAsync(CursorRow(7)); await channel.WritePacketAsync(CursorTerminator(130, false));
                 for (var i = 0; i < 2; i++) { channel.BeginCommand(); await StatementCommand(channel, 25); }
-            });
+            }, serverVersion: "4.4.2.2");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {

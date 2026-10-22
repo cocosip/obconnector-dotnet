@@ -43,6 +43,7 @@ namespace OceanBaseConnector.ConsumerTests
                 await channel.WritePacketAsync(greeting, budget.Token);
                 await channel.ReadPacketAsync(budget.Token);
                 await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, budget.Token);
+                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, token: budget.Token);
                 channel.BeginCommand();
                 foreach (var sql in new[] { "SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE", "set autocommit = 0", "update sample", commit ? "COMMIT" : "ROLLBACK", "set autocommit = 1" })
                 {
@@ -141,6 +142,7 @@ namespace OceanBaseConnector.ConsumerTests
                 await channel.WritePacketAsync(greeting, budget.Token);
                 await channel.ReadPacketAsync(budget.Token);
                 await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, budget.Token);
+                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, token: budget.Token);
                 channel.BeginCommand();
                 foreach (var sql in new[] { "SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE", "set autocommit = 0", "update sample", "ROLLBACK", "set autocommit = 1" })
                 {

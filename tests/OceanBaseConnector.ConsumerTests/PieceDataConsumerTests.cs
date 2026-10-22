@@ -26,13 +26,13 @@ namespace OceanBaseConnector.ConsumerTests
             var serving = Task.Run(async () =>
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream(); var channel = new PacketChannel(stream);
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token);
+                await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token);
                 uint request = 0;
                 async Task<byte[]> Read()
-                { if (!ob20) channel.BeginCommand(); return await ReadRequest(stream, channel, ob20, request++, budget.Token); }
+                { if (!ob20) channel.BeginCommand(); return await ReadRequest(stream, channel, ob20, request++ + 1, budget.Token); }
                 async Task Reply(params byte[][] packets)
                 {
-                    if (ob20) await stream.WriteAsync(Ob20Packet.Build(1234, request - 1, 1, packets.SelectMany((p, i) => Frame((byte)(i + 1), p)).ToArray()), budget.Token);
+                    if (ob20) await stream.WriteAsync(Ob20Packet.Build(1234, request, 1, packets.SelectMany((p, i) => Frame((byte)(i + 1), p)).ToArray()), budget.Token);
                     else foreach (var packet in packets) await channel.WritePacketAsync(packet, budget.Token);
                 }
                 var column = new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 110, 1, 110, 12, 45, 0, 255, 0, 0, 0, 253, 0, 0, 0, 0, 0 };

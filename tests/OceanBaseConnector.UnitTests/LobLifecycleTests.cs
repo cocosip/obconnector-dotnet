@@ -17,10 +17,10 @@ namespace OceanBaseConnector.UnitTests
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var server = Server(async channel =>
             {
-                await LobQueryReply(channel, 211, ExternalLob(4)); await OracleVersionReply(channel, "4.3.5.0");
+                await LobQueryReply(channel, 211, ExternalLob(4));
                 await StatementCommand(channel, 0xa1); started.TrySetResult();
                 await Assert.ThrowsAsync<ProtocolException>(() => channel.ReadPacketAsync());
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
             try
             {
@@ -45,10 +45,10 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await LobQueryReply(channel, 210, ExternalLob(4)); await OracleVersionReply(channel, "4.3.5.0"); await StatementCommand(channel, 0xa1);
+                await LobQueryReply(channel, 210, ExternalLob(4)); await StatementCommand(channel, 0xa1);
                 await LobReadReply(channel, 4, new byte[] { 1, 2, 3, 4 }, false, amount, precision);
                 if (valid) { await StatementCommand(channel, 25); channel.BeginCommand(); }
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
             try
             {
@@ -67,9 +67,9 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await LobQueryReply(channel, 210, ExternalLob(4)); await OracleVersionReply(channel, "4.3.5.0"); await StatementCommand(channel, 0xa1);
+                await LobQueryReply(channel, 210, ExternalLob(4)); await StatementCommand(channel, 0xa1);
                 await Assert.ThrowsAsync<ProtocolException>(() => channel.ReadPacketAsync());
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
             try
             {
@@ -175,10 +175,10 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await LobQueryReply(channel, 210, ExternalLob(4)); await OracleVersionReply(channel, "4.3.5.0"); await StatementCommand(channel, 0xa1);
+                await LobQueryReply(channel, 210, ExternalLob(4)); await StatementCommand(channel, 0xa1);
                 await LobReadReply(channel, fault == "zero" ? 0 : fault == "wrong-amount" ? 2 : 4,
                     fault == "zero" ? Array.Empty<byte>() : fault == "oversize" ? new byte[5] : new byte[4], fault == "wrong-buffer");
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
             try
             {
@@ -198,10 +198,10 @@ namespace OceanBaseConnector.UnitTests
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var server = Server(async channel =>
             {
-                await LobQueryReply(channel, 210, ExternalLob(4)); await OracleVersionReply(channel, "4.3.5.0");
+                await LobQueryReply(channel, 210, ExternalLob(4));
                 await StatementCommand(channel, 0xa1); started.TrySetResult();
                 await Assert.ThrowsAsync<ProtocolException>(() => channel.ReadPacketAsync());
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
             try
             {

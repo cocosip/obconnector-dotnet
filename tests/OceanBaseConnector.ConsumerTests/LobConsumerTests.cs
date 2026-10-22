@@ -49,21 +49,18 @@ namespace OceanBaseConnector.ConsumerTests
                 using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
                 Stream stream = tls is null ? peer.GetStream() : tls;
                 var channel = new PacketChannel(peer.GetStream());
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, lobLocators: true, tls: tls, certificate: certificate);
+                await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, version: "4.3.5.0", lobLocators: true, tls: tls, certificate: certificate);
                 byte[] Column(byte code, bool binary = false) => new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 112, 1, 112, 12, binary ? (byte)63 : (byte)45, 0, 20, 0, 0, 0, code, 0, 0, 0, 0, 0 };
                 byte[] Bytes(byte[] value) => new[] { (byte)value.Length }.Concat(value).ToArray();
                 async Task Reply(uint id, byte[] bytes)
                 {
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, id, 1, bytes) : bytes, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, id + 1, 1, bytes) : bytes, budget.Token);
                     if (!ob20) channel.BeginCommand();
                 }
                 var eof = Report(false, 0); eof[0] = 254;
-                var query = await ReadRequest(stream, channel, ob20, 0, budget.Token);
+                var query = await ReadRequest(stream, channel, ob20, 1, budget.Token);
                 Assert.Equal("select lob_value", Encoding.UTF8.GetString(query, 1, query.Length - 1));
                 await Reply(0, Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(type))).Concat(Frame(3, Bytes(locator))).Concat(Frame(4, eof)).ToArray());
-                var version = await ReadRequest(stream, channel, ob20, 1, budget.Token);
-                Assert.Equal("select ob_version() from dual", Encoding.UTF8.GetString(version, 1, version.Length - 1));
-                await Reply(1, Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(253))).Concat(Frame(3, Bytes(Encoding.ASCII.GetBytes("4.3.5.0")))).Concat(Frame(4, eof)).ToArray());
                 var request = new ByteCursor(await ReadRequest(stream, channel, ob20, 2, budget.Token));
                 Assert.Equal(0xa1, request.ReadUInt8()); request.Skip(9);
                 Assert.Equal("BEGIN DBMS_LOB.READ(?, ?, ?, ?); END;", Encoding.UTF8.GetString(request.ReadLengthEncodedBytes()));
@@ -76,7 +73,7 @@ namespace OceanBaseConnector.ConsumerTests
                     .Concat(Frame(8, new byte[] { 0, 0 }.Concat(BitConverter.GetBytes(character ? 4L : data.Length)).Concat(Bytes(data)).ToArray()))
                     .Concat(Frame(9, eof)).Concat(Frame(10, Report(false, 0))).ToArray();
                 if (kind == "trailing") response = response.Concat(Frame(11, new byte[] { 0 })).ToArray();
-                await Reply(2, response);
+                await Reply(1, response);
                 if (kind != "trailing") Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 3, budget.Token));
                 await ObserveClose(stream, budget.Token);
             });

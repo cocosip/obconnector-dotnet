@@ -15,7 +15,7 @@ namespace OceanBaseConnector.UnitTests
     {
         private static string Configuration(int port) => $"Server=127.0.0.1;Port={port};User ID=u;Password=secret;TLS Mode=Disabled;Connection Timeout=5";
 
-        private static LoopbackServer Server(Func<PacketChannel, Task> exchange, bool deprecateEof = false, bool reportTimeZone = true, string nationalCharacterSet = "utf8mb4", bool lobLocators = false) => LoopbackServer.Start(async client =>
+        private static LoopbackServer Server(Func<PacketChannel, Task> exchange, bool deprecateEof = false, bool reportTimeZone = true, string nationalCharacterSet = "utf8mb4", bool lobLocators = false, string serverVersion = "4.4.2.2") => LoopbackServer.Start(async client =>
         {
             var channel = new PacketChannel(client.GetStream());
             var greeting = (byte[])ProtocolFixture.Load("initial-handshake-oceanbase").Payload.Clone();
@@ -25,7 +25,7 @@ namespace OceanBaseConnector.UnitTests
             var authentication = await channel.ReadPacketAsync();
             if (deprecateEof) Assert.Equal(1, authentication[3] & 1);
             await channel.WritePacketAsync(reportTimeZone ? SessionVariablesOk(new NationalCharacterSet(nationalCharacterSet, "utf8mb4", "utf8mb4").Variables("+00:00")) : Ok());
-            channel.BeginCommand();
+            await ServerIdentity.ReplyAsync(channel, version: serverVersion, deprecated: deprecateEof);
             await exchange(channel);
         });
 

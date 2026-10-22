@@ -87,7 +87,7 @@ namespace OceanBaseConnector.UnitTests
             var server = Server(async channel =>
             {
                 await LobQueryReply(channel, character ? (byte)211 : (byte)210, locator);
-                await OracleVersionReply(channel, "4.3.5.0");
+
                 long offset = 1; var sent = 0;
                 while (sent < data.Length)
                 {
@@ -113,7 +113,7 @@ namespace OceanBaseConnector.UnitTests
                     await StatementCommand(channel, 25); channel.BeginCommand();
                 }
                 await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
             try
             {

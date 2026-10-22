@@ -27,17 +27,17 @@ namespace OceanBaseConnector.ConsumerTests
             var serving = Task.Run(async () =>
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream(); var channel = new PacketChannel(stream);
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true);
+                await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, version: "4.3.5.0");
                 async Task Reply(uint id, params byte[][] packets)
                 {
                     var response = packets.SelectMany((p, i) => Frame((byte)(i + 1), p)).ToArray();
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, id, 1, response) : response, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, id + 1, 1, response) : response, budget.Token);
                     if (!ob20) channel.BeginCommand();
                 }
                 byte[] Status(byte affected, byte flags) { var packet = Report(ob20, affected); packet[3] = flags; return packet; }
                 async Task Sql(uint id, string sql, byte status)
                 {
-                    var request = await ReadRequest(stream, channel, ob20, id, budget.Token);
+                    var request = await ReadRequest(stream, channel, ob20, id + 1, budget.Token);
                     Assert.Equal(3, request[0]); Assert.Equal(sql, Encoding.UTF8.GetString(request, 1, request.Length - 1));
                     await Reply(id, Status(0, status));
                 }
@@ -56,10 +56,7 @@ namespace OceanBaseConnector.ConsumerTests
                     return row.ToArray();
                 }
                 await Sql(0, "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED", 6); await Sql(1, "set autocommit = 0", 4);
-                var version = await ReadRequest(stream, channel, ob20, 2, budget.Token); Assert.Equal(3, version[0]);
-                Assert.Equal("select ob_version() from dual", Encoding.UTF8.GetString(version, 1, version.Length - 1));
                 var eof = Status(0, 5); eof[0] = 254;
-                await Reply(2, new byte[] { 1 }, Column("v", 253), new byte[] { 5, 52, 46, 51, 46, 53 }, eof);
                 var execute = new ByteCursor(await ReadRequest(stream, channel, ob20, 3, budget.Token));
                 Assert.Equal(0xa1, execute.ReadUInt8()); Assert.Equal(0u, execute.ReadUInt32()); Assert.Equal(0, execute.ReadUInt8()); Assert.Equal(2u, execute.ReadUInt32());
                 Assert.Equal("update t set x=? returning x into ?", Encoding.UTF8.GetString(execute.ReadLengthEncodedBytes())); Assert.Equal(2u, execute.ReadUInt32());
@@ -72,12 +69,12 @@ namespace OceanBaseConnector.ConsumerTests
                     Row(0, 0, "42"), Row(0, 0, "43"), Row(1, 1, null), Row(2, 0, null), eof, Status(3, 5),
                 };
                 if (kind == "trailing") packets = packets.Concat(new[] { new byte[] { 0 } }).ToArray();
-                await Reply(3, packets);
+                await Reply(2, packets);
                 if (kind != "trailing")
                 {
                     Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 4, budget.Token));
                     if (!ob20) channel.BeginCommand();
-                    await Sql(5, "ROLLBACK", 4); await Sql(6, "set autocommit = 1", 6);
+                    await Sql(4, "ROLLBACK", 4); await Sql(5, "set autocommit = 1", 6);
                 }
                 await ObserveClose(stream, budget.Token);
             });

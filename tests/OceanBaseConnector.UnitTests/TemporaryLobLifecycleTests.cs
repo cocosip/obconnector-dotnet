@@ -12,23 +12,28 @@ namespace OceanBaseConnector.UnitTests
     {
         [Theory]
         [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
-        public async Task TemporaryLobVersionFailureBeforeCreationKeepsSessionUsable(bool async, bool rejected)
+        public async Task OpeningIdentityFailureClosesAndOldLobVersionKeepsSessionUsable(bool async, bool rejected)
         {
-            var server = Server(async channel =>
+            var server = rejected ? IdentityProbeServer(async channel =>
             {
-                if (rejected)
-                { await Query(channel, "select ob_version() from dual"); await channel.WritePacketAsync(Error()); channel.BeginCommand(); }
-                else await OracleVersionReply(channel, "2.2.75");
+                await channel.WritePacketAsync(Error()); await AssertOracleExecuteTransportClosed(channel);
+            }) : Server(async channel =>
+            {
                 await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "2.2.75");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
             try
             {
+                if (rejected)
+                {
+                    var opening = await Assert.ThrowsAsync<OceanBaseException>(async () => { if (async) await connection.OpenAsync(); else connection.Open(); });
+                    Assert.False(opening.IsExecutionOutcomeUnknown); Assert.Equal(ConnectionState.Closed, connection.State);
+                    return;
+                }
                 await connection.OpenAsync();
                 var error = await Record.ExceptionAsync(async () =>
                 { using var lob = async ? await connection.CreateTemporaryLobAsync(OceanBaseDbType.Blob) : connection.CreateTemporaryLob(OceanBaseDbType.Blob); });
-                if (rejected) Assert.False(Assert.IsType<OceanBaseException>(error).IsExecutionOutcomeUnknown);
-                else Assert.IsType<NotSupportedException>(error);
+                Assert.IsType<NotSupportedException>(error);
                 using var after = connection.CreateCommand(); after.CommandText = "after"; Assert.Equal(1, await after.ExecuteNonQueryAsync());
             }
             catch { if (server.Completion.IsFaulted) await server.Completion; throw; }
@@ -59,7 +64,7 @@ namespace OceanBaseConnector.UnitTests
             var locator = InlineLob(Array.Empty<byte>());
             var server = Server(async channel =>
             {
-                await TransactionBegin(channel); await OracleVersionReply(channel, "4.3.5.0"); await TemporaryLobCreateRequest(channel, character);
+                await TransactionBegin(channel); await TemporaryLobCreateRequest(channel, character);
                 await LobMutationReply(channel, character ? (byte)211 : (byte)210, locator, parameters: 1); await StatementCommand(channel, 25); channel.BeginCommand();
                 if (freeBeforeEnd)
                 {
@@ -67,7 +72,7 @@ namespace OceanBaseConnector.UnitTests
                     await StatementCommand(channel, 25); channel.BeginCommand();
                 }
                 await TransactionEnd(channel, false); channel.BeginCommand(); await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
             try
             {
@@ -90,9 +95,9 @@ namespace OceanBaseConnector.UnitTests
         {
             var first = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0"); await TemporaryLobCreateRequest(channel, character);
+                await TemporaryLobCreateRequest(channel, character);
                 await LobMutationReply(channel, character ? (byte)211 : (byte)210, InlineLob(Array.Empty<byte>()), parameters: 1); await StatementCommand(channel, 25);
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             var second = Server(async channel => { await Query(channel, "after"); await channel.WritePacketAsync(Ok(1)); }, lobLocators: true);
             using var connection = new OceanBaseConnection(LobConfiguration(first.Port));
             try
@@ -112,11 +117,11 @@ namespace OceanBaseConnector.UnitTests
         {
             var first = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0"); await TemporaryLobCreateRequest(channel, false);
+                await TemporaryLobCreateRequest(channel, false);
                 await LobMutationReply(channel, 210, InlineLob(Array.Empty<byte>()), parameters: 1);
                 if (!reopen) await StatementCommand(channel, 25);
                 await Assert.ThrowsAsync<OceanBaseConnector.Internal.Protocol.ProtocolException>(() => channel.ReadPacketAsync());
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             var second = reopen ? Server(async channel => { await Query(channel, "after"); await channel.WritePacketAsync(Ok(1)); }, lobLocators: true) : null;
             using var caller = new CancellationTokenSource(); OceanBaseConnection? connection = null; var notified = 0;
             var log = new RecordingLoggerFactory { OnLog = id =>

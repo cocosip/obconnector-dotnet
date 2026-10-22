@@ -18,7 +18,6 @@ namespace OceanBaseConnector.UnitTests
 
         private static async Task OracleXaInitialize(PacketChannel channel)
         {
-            await OracleVersionReply(channel, "4.3.5.0");
             await Query(channel, "set autocommit = 0");
             await channel.WritePacketAsync(Ok(status: 0));
         }
@@ -318,7 +317,7 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0"); await Query(channel, "set autocommit = 0");
+                await Query(channel, "set autocommit = 0");
                 var ok = Ok(status: 0);
                 if (kind == "affected") ok[1] = 1;
                 if (kind == "insert") ok[2] = 1;
@@ -328,7 +327,7 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(ok);
                 channel.BeginCommand();
                 Assert.Equal(0, await channelStreamRead(channel));
-            });
+            }, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
@@ -375,10 +374,16 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("unknown")]
         public async Task OracleXaVersionGateAndPreSendCancellationSendNoInitialization(string version)
         {
-            var server = Server(async channel => { await OracleVersionReply(channel, version); Assert.Equal(0, await channelStreamRead(channel)); });
+            var server = Server(async channel => { Assert.Equal(0, await channelStreamRead(channel)); }, serverVersion: version);
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
+                if (version == "unknown")
+                {
+                    var error = await Assert.ThrowsAsync<OceanBaseException>(() => connection.OpenAsync());
+                    Assert.False(error.IsExecutionOutcomeUnknown); Assert.Equal(ConnectionState.Closed, connection.State);
+                    return;
+                }
                 await connection.OpenAsync(); var resource = connection.GetXaResource();
                 using var canceled = new CancellationTokenSource(); canceled.Cancel();
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => resource.StartAsync(XaId, cancellationToken: canceled.Token));
@@ -396,7 +401,7 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0"); await Query(channel, "set autocommit = 0");
+                await Query(channel, "set autocommit = 0");
                 if (initialization)
                 {
                     await channel.WritePacketAsync(Error()); channel.BeginCommand(); await Query(channel, "set autocommit = 0");
@@ -405,7 +410,7 @@ namespace OceanBaseConnector.UnitTests
                 await OracleXaRequest(channel, "START", 0);
                 if (!initialization) { await channel.WritePacketAsync(Error()); await OracleXaRequest(channel, "START", 0); }
                 await OracleXaScalarReply(channel, 2);
-            });
+            }, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {

@@ -32,18 +32,18 @@ namespace OceanBaseConnector.ConsumerTests
             var serving = Task.Run(async () =>
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream(); var channel = new PacketChannel(stream);
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token);
-                var prepare = await ReadRequest(stream, channel, ob20, 0, budget.Token);
+                await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token);
+                var prepare = await ReadRequest(stream, channel, ob20, 1, budget.Token);
                 Assert.Equal(22, prepare[0]); Assert.Equal("update t set x=?", Encoding.UTF8.GetString(prepare, 1, prepare.Length - 1));
                 var response = Frame(1, new byte[] { 255, 15, 5, 35, 72, 89, 48, 48, 48, 115 });
                 if (kind == "trailing") response = response.Concat(Frame(2, new byte[] { 0 })).ToArray();
-                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 0, 1, response) : response, budget.Token);
+                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 1, 1, response) : response, budget.Token);
                 if (kind == "trailing") { await ObserveClose(stream, budget.Token); return; }
                 if (!ob20) channel.BeginCommand();
-                var query = await ReadRequest(stream, channel, ob20, 1, budget.Token);
+                var query = await ReadRequest(stream, channel, ob20, 2, budget.Token);
                 Assert.Equal(3, query[0]); Assert.Equal("update t set x=(CAST('a''\\中' AS VARCHAR2(4000)))", Encoding.UTF8.GetString(query, 1, query.Length - 1));
                 response = Frame(1, Report(false, 1));
-                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 1, 1, response) : response, budget.Token);
+                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 2, 1, response) : response, budget.Token);
             }, budget.Token);
             var context = new AssemblyLoadContext("client-prepare-" + target, isCollectible: true);
             try

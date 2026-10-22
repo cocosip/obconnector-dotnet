@@ -13,7 +13,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `Server` / `Port` | Required server / 2881 | Server addresses; omitted candidate ports inherit `Port`. |
 | `User ID` / `Password` | Empty | Database credentials. |
 | `Database` | Empty | Initial database. `ChangeDatabase` is available in MySQL mode only. |
-| `Connection Timeout` | 15 seconds | Total budget for address discovery, connection, TLS and authentication. |
+| `Connection Timeout` | 15 seconds | Total budget for address discovery, connection, TLS, authentication and identity confirmation. |
 | `Command Timeout` | 30 seconds | Command execution budget. |
 | `ExpectedMode` | Unset | Validates `MySql` or `Oracle` after detection. |
 | `TLS Mode` | `VerifyFull` | Validates certificate trust and hostname. `Required` encrypts without identity verification; `Disabled` uses plaintext transport. |
@@ -25,6 +25,25 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `Enable Full Link Trace` | false | Requests server tracing; requires `Use OB20=true`. |
 | `Use Oracle Prepare Execute` | false | Enables Oracle procedures and output bindings; requires server version discovery and OceanBase >=2.2.76. |
 | `Use Lob Locators` | false | Enables Oracle locator LOBs. External reads and mutations also require PrepareExecute. |
+| `Treat Tiny As Boolean` | true | MySQL signed `TINYINT(1)` with zero scale returns `bool`: zero is false, every nonzero value is true. Set false to read the full `sbyte` value. Unsigned TINYINT, other widths, Oracle types and BIT are unaffected. |
+| `Use Affected Rows` | false | MySQL UPDATE reports matched rows by default (`CLIENT_FOUND_ROWS`). Set true to request changed rows instead. Commands, readers and batches retain the counts returned by the server. |
+
+Every connection performs one read-only `select ob_version(), @@ob_compatibility_mode from dual`
+after authentication. The mode must match authentication and `ExpectedMode` when supplied.
+`ServerVersion` and schema product-version metadata report the actual `ob_version()` value;
+the original MySQL-compatible greeting is retained internally and does not select features.
+Malformed identity results and unknown version formats fail Open without publishing a session.
+Three- or four-component numeric versions, optional `v`, OceanBase-marked versions and printable
+build suffixes are recognized. An OceanBase marker selects the product version after the marker,
+never a preceding MySQL-compatible version. There is no exact-release allowlist or user version override.
+
+Protocol features use the effective client/server capability intersection. OB20, tracing and LOB
+locators additionally require their negotiated OceanBase support and explicit options. PrepareExecute
+and offset fetch use the cached actual version, with minimums 2.2.76 and 2.2.5 respectively.
+These feature minimums are not a tested-server support matrix; see [Compatibility](compatibility.md).
+`compatibleMysqlVersion` and `compatibleOjdbcVersion` are JDBC behavior profiles and are not accepted.
+YEAR stays numeric; Oracle DATE retains time of day; zero dates use the existing lossless provider
+types rather than automatic rounding or conversion to NULL. Result aliases and base names stay separate.
 
 Builder output and unopened direct connections can contain credentials. Use `ToSanitizedConnectionString(false)` for display; do not log raw connection strings.
 

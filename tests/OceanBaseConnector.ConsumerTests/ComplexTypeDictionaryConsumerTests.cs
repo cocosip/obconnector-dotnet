@@ -49,7 +49,7 @@ namespace OceanBaseConnector.ConsumerTests
                 using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
                 Stream stream = tls is null ? peer.GetStream() : tls;
                 var channel = new PacketChannel(peer.GetStream());
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, tls: tls, certificate: certificate);
+                await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, version: "4.3.5.0", tls: tls, certificate: certificate);
                 byte[] Column(string name)
                 {
                     var bytes = Encoding.UTF8.GetBytes(name);
@@ -76,7 +76,7 @@ namespace OceanBaseConnector.ConsumerTests
                 }
                 for (uint requestId = 0; requestId < 6; requestId++)
                 {
-                    var request = await ReadRequest(stream, channel, ob20, requestId, budget.Token);
+                    var request = await ReadRequest(stream, channel, ob20, requestId + 1, budget.Token);
                     var members = requestId >= 3; var id = members ? (byte)10 : (byte)9; byte[] response;
                     if (requestId % 3 == 0)
                     {
@@ -94,13 +94,13 @@ namespace OceanBaseConnector.ConsumerTests
                         response = Result(members);
                     }
                     else { Assert.Equal(new byte[] { 25, id, 0, 0, 0 }, request); if (!ob20) channel.BeginCommand(); continue; }
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId, 1, response) : response, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId + 1, 1, response) : response, budget.Token);
                     if (!ob20) channel.BeginCommand();
                 }
-                var prepared = await ReadRequest(stream, channel, ob20, 6, budget.Token); Assert.Equal(22, prepared[0]);
+                var prepared = await ReadRequest(stream, channel, ob20, 7, budget.Token); Assert.Equal(22, prepared[0]);
                 var preparedReply = Frame(1, new byte[] { 0, 19, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0 })
                     .Concat(Frame(2, Column("p"))).Concat(Frame(3, Column("p"))).Concat(Frame(4, Column("p"))).Concat(Frame(5, Column("p"))).ToArray();
-                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 6, 1, preparedReply) : preparedReply, budget.Token);
+                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 7, 1, preparedReply) : preparedReply, budget.Token);
                 if (!ob20) channel.BeginCommand();
                 var complexColumn = Column("complex"); complexColumn[complexColumn.Length - 6] = 160;
                 var complexName = Encoding.UTF8.GetBytes("Owner目标");
@@ -112,7 +112,7 @@ namespace OceanBaseConnector.ConsumerTests
                 for (uint requestId = 7; requestId < 9; requestId++)
                 {
                     if (requestId == 8) { complexColumn[complexColumn.Length - 1] = 251; anonymousColumn[anonymousColumn.Length - 2] = 251; }
-                    var request = await ReadRequest(stream, channel, ob20, requestId, budget.Token); Assert.Equal(23, request[0]); Assert.Equal(19, request[1]);
+                    var request = await ReadRequest(stream, channel, ob20, requestId + 1, budget.Token); Assert.Equal(23, request[0]); Assert.Equal(19, request[1]);
                     var typeHeader = new byte[] { 160, 0, (byte)complexName.Length }.Concat(complexName)
                         .Concat(new byte[] { 10 }).Concat(Encoding.UTF8.GetBytes("Mixed_Type")).Concat(new byte[] { 0 }).ToArray();
                     var anonymousHeader = new byte[] { 160, 0, 0, 0, 0, 203 };
@@ -122,18 +122,12 @@ namespace OceanBaseConnector.ConsumerTests
                     var packets = new[] { new byte[] { 4 }, complexColumn, trailing, complexColumn, anonymousColumn,
                         new byte[] { 0, 16, 0, 2, 51, 49, 2, 1, 2 }.Concat(BitConverter.GetBytes(42L)).Concat(new byte[] { 2, 0, 2, 8, 9, 0 }).ToArray(), eof };
                     var response = packets.SelectMany((p, i) => Frame((byte)(i + 1), p)).ToArray();
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId, 1, response) : response, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId + 1, 1, response) : response, budget.Token);
                     if (!ob20) channel.BeginCommand();
                 }
-                var close = await ReadRequest(stream, channel, ob20, 9, budget.Token); Assert.Equal(new byte[] { 25, 19, 0, 0, 0 }, close);
+                var close = await ReadRequest(stream, channel, ob20, 10, budget.Token); Assert.Equal(new byte[] { 25, 19, 0, 0, 0 }, close);
                 if (!ob20) channel.BeginCommand();
-                var version = await ReadRequest(stream, channel, ob20, 10, budget.Token);
-                Assert.Equal("select ob_version() from dual", Encoding.UTF8.GetString(version, 1, version.Length - 1));
-                var versionEof = Report(false, 0); versionEof[0] = 254;
-                var versionReply = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column("version")))
-                    .Concat(Frame(3, new byte[] { 5, 52, 46, 51, 46, 53 })).Concat(Frame(4, versionEof)).ToArray();
-                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 10, 1, versionReply) : versionReply, budget.Token);
-                if (!ob20) channel.BeginCommand();
+                var outputEof = Report(false, 0); outputEof[0] = 254;
                 var outputRequest = new ByteCursor(await ReadRequest(stream, channel, ob20, 11, budget.Token));
                 Assert.Equal(0xa1, outputRequest.ReadUInt8()); outputRequest.Skip(9);
                 Assert.Equal("BEGIN pkg.p(?, ?); END;", Encoding.UTF8.GetString(outputRequest.ReadLengthEncodedBytes())); Assert.Equal(2u, outputRequest.ReadUInt32());
@@ -143,7 +137,7 @@ namespace OceanBaseConnector.ConsumerTests
                 var outputReply = Frame(1, new byte[] { 0, 20, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0, 4, 0, 0, 0, 1 })
                     .Concat(Frame(2, complexColumn)).Concat(Frame(3, anonymousColumn)).Concat(Frame(4, complexColumn)).Concat(Frame(5, anonymousColumn))
                     .Concat(Frame(6, new byte[] { 0, 0, 0, 2, 51, 49, 2, 1, 2, 2, 8, 2, 8, 9 }))
-                    .Concat(Frame(7, versionEof)).Concat(Frame(8, Report(false, 2))).ToArray();
+                    .Concat(Frame(7, outputEof)).Concat(Frame(8, Report(false, 2))).ToArray();
                 await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 11, 1, outputReply) : outputReply, budget.Token);
                 if (!ob20) channel.BeginCommand();
                 Assert.Equal(new byte[] { 25, 20, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 12, budget.Token));

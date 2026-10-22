@@ -65,7 +65,8 @@ namespace OceanBaseConnector.ConsumerTests
                     response = cursor.ReadLengthEncodedBytes(); Assert.Equal("client_ed25519", cursor.ReadNullTerminatedAscii());
                 }
                 Assert.Equal(expected, response);
-                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token); channel.BeginCommand();
+                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token);
+                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, token: budget.Token); channel.BeginCommand();
                 var command = await SessionTimeZoneFixture.ReadCommand(channel, budget.Token, expectProbe: false);
                 Assert.Equal(3, command[0]); Assert.Equal("update t set x=1", Encoding.UTF8.GetString(command, 1, command.Length - 1));
                 await channel.WritePacketAsync(new byte[] { 0, 1, 0, 2, 0, 0, 0 }, budget.Token);

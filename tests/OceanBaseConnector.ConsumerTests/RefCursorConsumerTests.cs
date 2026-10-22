@@ -40,23 +40,19 @@ namespace OceanBaseConnector.ConsumerTests
                 using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
                 Stream stream = tls is null ? peer.GetStream() : tls;
                 var channel = new PacketChannel(peer.GetStream());
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, tls: tls, certificate: certificate);
+                await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, version: "4.2.0", tls: tls, certificate: certificate);
                 byte[] Column(byte type) => new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 112, 1, 112, 12, 45, 0, 20, 0, 0, 0, type, 0, 0, 0, 0, 0 };
                 async Task Reply(uint requestId, byte[] bytes)
                 {
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId, 1, bytes) : bytes, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId + 1, 1, bytes) : bytes, budget.Token);
                     if (!ob20) channel.BeginCommand();
                 }
                 var eof = Report(false, 0); eof[0] = 254;
-                var version = await ReadRequest(stream, channel, ob20, 0, budget.Token);
-                Assert.Equal("select ob_version() from dual", Encoding.UTF8.GetString(version, 1, version.Length - 1));
-                await Reply(0, Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(253)))
-                    .Concat(Frame(3, new byte[] { 5, 52, 46, 50, 46, 48 })).Concat(Frame(4, eof)).ToArray());
                 var execute = new ByteCursor(await ReadRequest(stream, channel, ob20, 1, budget.Token));
                 Assert.Equal(0xa1, execute.ReadUInt8()); Assert.Equal(0u, execute.ReadUInt32()); Assert.Equal(0, execute.ReadUInt8()); Assert.Equal(1u, execute.ReadUInt32());
                 Assert.Equal("BEGIN pkg.open_cursor(?); END;", Encoding.UTF8.GetString(execute.ReadLengthEncodedBytes()));
                 Assert.Equal(1u, execute.ReadUInt32()); Assert.Equal(new byte[] { 1, 1, 6, 0 }, execute.ReadBytes(4));
-                await Reply(1, Frame(1, new byte[] { 0, 91, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 1 })
+                await Reply(0, Frame(1, new byte[] { 0, 91, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 1 })
                     .Concat(Frame(2, Column(163))).Concat(Frame(3, Column(163))).Concat(Frame(4, new byte[] { 0, 0, 92, 0, 0, 0 }))
                     .Concat(Frame(5, eof)).Concat(Frame(6, Report(false, 0))).ToArray());
                 Assert.Equal(new byte[] { 28, 92, 0, 0, 0, 2, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 2, budget.Token));
@@ -64,7 +60,7 @@ namespace OceanBaseConnector.ConsumerTests
                 var response = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(8)))
                     .Concat(Frame(3, new byte[] { 0, 0, 42, 0, 0, 0, 0, 0, 0, 0 })).Concat(Frame(4, last)).ToArray();
                 if (kind == "trailing") response = response.Concat(Frame(5, new byte[] { 0 })).ToArray();
-                await Reply(2, response);
+                await Reply(1, response);
                 if (kind != "trailing")
                 {
                     Assert.Equal(new byte[] { 25, 92, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 3, budget.Token));

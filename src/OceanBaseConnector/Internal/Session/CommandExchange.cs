@@ -76,6 +76,7 @@ namespace OceanBaseConnector.Internal.Session
         internal string? SessionTimeZone { get; private set; }
         internal NationalCharacterSet? NationalCharacterSet { get; private set; }
         internal OceanBaseCompatibilityMode Mode => _session.Info!.Mode;
+        internal bool TreatTinyAsBoolean => _session.TreatTinyAsBoolean;
         internal LobSession? Lobs { get; set; }
         internal IReadOnlyDictionary<(string, string), OceanBaseComplexType>? ComplexTypes { get; set; }
         internal void EnsureReading()

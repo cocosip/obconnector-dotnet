@@ -91,7 +91,7 @@ namespace OceanBaseConnector.UnitTests
             {
                 var wire = client.GetStream(); var channel = new PacketChannel(wire);
                 await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
-                await channel.ReadPacketAsync(); await channel.WritePacketAsync(TimeZoneOk("+00:00")); channel.BeginCommand(); await Query(channel, "large");
+                await channel.ReadPacketAsync(); await channel.WritePacketAsync(TimeZoneOk("+00:00")); await ServerIdentity.ReplyAsync(channel); channel.BeginCommand(); await Query(channel, "large");
                 await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(Column("large", 252, 63)); await channel.WritePacketAsync(Eof());
                 await wire.WriteAsync(FrameHeader(PacketChannel.MaxFramePayload, 4));
                 var prefix = new byte[9]; prefix[0] = 254; BitConverter.GetBytes((long)length).CopyTo(prefix, 1); await wire.WriteAsync(prefix);

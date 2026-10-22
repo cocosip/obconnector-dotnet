@@ -39,7 +39,8 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var channel = new PacketChannel(peer.GetStream());
                 await channel.WritePacketAsync(greeting, budget.Token); await channel.ReadPacketAsync(budget.Token);
-                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token); channel.BeginCommand();
+                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token);
+                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, token: budget.Token); channel.BeginCommand();
                 Assert.Equal(new byte[] { 2 }.Concat(Encoding.UTF8.GetBytes("denied")).ToArray(), await channel.ReadPacketAsync(budget.Token));
                 await channel.WritePacketAsync(new byte[] { 255, 40, 4, 35, 52, 50, 48, 48, 48 }, budget.Token); channel.BeginCommand();
                 Assert.Equal(new byte[] { 2 }.Concat(Encoding.UTF8.GetBytes(database)).ToArray(), await channel.ReadPacketAsync(budget.Token));

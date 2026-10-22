@@ -20,13 +20,13 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0"); await TemporaryLobCreateRequest(channel, false);
+                await TemporaryLobCreateRequest(channel, false);
                 if (fault == "disconnect") return;
                 await LobMutationReply(channel, fault == "wrong-type" ? (byte)211 : (byte)210,
                     fault == "null" ? null : fault == "malformed" ? new byte[] { 1, 2, 3 } : InlineLob(Array.Empty<byte>()), fault == "error", parameters: 1,
                     rejectOutput: fault == "wrong-type" || fault == "malformed");
                 if (fault == "error" || fault == "null") await StatementCommand(channel, 25);
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
             try
             {
@@ -49,7 +49,7 @@ namespace OceanBaseConnector.UnitTests
             var locator = InlineLob(Array.Empty<byte>());
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0"); await TemporaryLobCreateRequest(channel, false);
+                await TemporaryLobCreateRequest(channel, false);
                 await LobMutationReply(channel, 210, locator, parameters: 1); await StatementCommand(channel, 25); channel.BeginCommand();
                 await TemporaryLobFreeRequest(channel, false, locator);
                 if (fault == "disconnect") return;
@@ -57,7 +57,7 @@ namespace OceanBaseConnector.UnitTests
                     fault == "null" ? null : fault == "lob" ? locator : Encoding.UTF8.GetBytes(fault == "marker" ? "0" : "1"), fault == "error", parameters: 2, rejectOutput: fault == "lob");
                 if (fault == "error")
                 { await StatementCommand(channel, 25); channel.BeginCommand(); await Query(channel, "after"); await channel.WritePacketAsync(Ok(1)); }
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
             try
             {
@@ -83,14 +83,14 @@ namespace OceanBaseConnector.UnitTests
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var locator = InlineLob(Array.Empty<byte>());
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0"); await TemporaryLobCreateRequest(channel, false);
+                await TemporaryLobCreateRequest(channel, false);
                 if (freeing)
                 {
                     await LobMutationReply(channel, 210, locator, parameters: 1); await StatementCommand(channel, 25); channel.BeginCommand();
                     await TemporaryLobFreeRequest(channel, false, locator);
                 }
                 started.TrySetResult(); await Assert.ThrowsAsync<ProtocolException>(() => channel.ReadPacketAsync());
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + (cause == "timeout" ? ";Command Timeout=1" : ""));
             OceanBaseLob? lob = null;
             try

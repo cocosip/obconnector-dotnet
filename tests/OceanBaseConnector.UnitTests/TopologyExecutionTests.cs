@@ -364,6 +364,7 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
                 await channel.ReadPacketAsync(); await channel.WritePacketAsync(failure == "auth" ? Error() : Ok());
                 if (failure != "transaction") return;
+                await ServerIdentity.ReplyAsync(channel);
                 channel.BeginCommand(); await Query(channel, "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED"); await channel.WritePacketAsync(Ok());
                 channel.BeginCommand(); await Query(channel, "set autocommit = 0"); await channel.WritePacketAsync(Ok(status: 4));
                 channel.BeginCommand(); await Query(channel, "must not replay");

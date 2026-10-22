@@ -43,7 +43,7 @@ namespace OceanBaseConnector.UnitTests
                 var greeting = (byte[])ProtocolFixture.Load("initial-handshake-oceanbase").Payload.Clone();
                 if (deprecated) greeting[Array.IndexOf(greeting, (byte)0, 1) + 20] |= 1;
                 await channel.WritePacketAsync(greeting); await channel.ReadPacketAsync();
-                await channel.WritePacketAsync(TimeZoneOk("+00:00")); channel.BeginCommand();
+                await channel.WritePacketAsync(TimeZoneOk("+00:00")); await ServerIdentity.ReplyAsync(channel, deprecated: deprecated); channel.BeginCommand();
                 await exchange(channel);
             });
 

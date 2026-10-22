@@ -35,13 +35,14 @@ namespace OceanBaseConnector.ConsumerTests
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             using var fixture = JsonDocument.Parse(File.ReadAllText(args[1]));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
-            var report = new byte[] { 0, 0, 0, 6, 64, 0, 0, 0, 19, 0, 17, 9, 116, 105, 109, 101, 95, 122, 111, 110, 101, 6, 43, 48, 48, 58, 48, 48 };
+            var report = SessionReport();
             var serving = Task.Run(async () =>
             {
                 for (var connectionIndex = 0; connectionIndex < 2; connectionIndex++)
                 {
                     using var peer = await listener.AcceptTcpClientAsync(token); var stream = peer.GetStream();
                     await Send(stream, greeting, 0, token); await Receive(stream, token); await Send(stream, report, 2, token);
+                    await ReplyIdentity(stream, token);
                     var count = connectionIndex == 0 ? 4 : 2;
                     for (var i = 0; i < count; i++)
                     {
@@ -84,6 +85,32 @@ namespace OceanBaseConnector.ConsumerTests
         private static DbBatchCommand Add(DbBatch batch, string sql)
         { var command = OceanBaseProviderFactory.Instance.CreateBatchCommand(); command.CommandText = sql; batch.BatchCommands.Add(command); return command; }
         private static void Check(bool value, string label) { if (!value) throw new InvalidOperationException(label); }
+        private static byte[] SessionReport()
+        {
+            using var state = new MemoryStream();
+            var names = new[] { "time_zone", "ncharacter_set_connection", "character_set_results", "character_set_connection" };
+            var values = new[] { "+00:00", "utf8mb4", "utf8mb4", "utf8mb4" };
+            for (var i = 0; i < names.Length; i++)
+            {
+                var name = Encoding.UTF8.GetBytes(names[i]); var value = Encoding.UTF8.GetBytes(values[i]);
+                state.WriteByte(0); state.WriteByte((byte)(2 + name.Length + value.Length));
+                state.WriteByte((byte)name.Length); state.Write(name); state.WriteByte((byte)value.Length); state.Write(value);
+            }
+            using var packet = new MemoryStream(); packet.Write(new byte[] { 0, 0, 0, 6, 64, 0, 0, 0 });
+            packet.WriteByte((byte)state.Length); packet.Write(state.ToArray()); return packet.ToArray();
+        }
+        private static async Task ReplyIdentity(Stream stream, CancellationToken token)
+        {
+            var query = await Receive(stream, token);
+            Check(query[0] == 3 && Encoding.UTF8.GetString(query, 1, query.Length - 1) == "select ob_version(), @@ob_compatibility_mode from dual", "Server identity query");
+            await Send(stream, new byte[] { 2 }, 1, token);
+            var column = new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 118, 1, 118, 12, 45, 0, 255, 0, 0, 0, 253, 0, 0, 0, 0, 0 };
+            await Send(stream, column, 2, token); await Send(stream, column, 3, token);
+            var eof = new byte[] { 254, 0, 0, 6, 0 };
+            await Send(stream, eof, 4, token);
+            await Send(stream, new byte[] { 7, 52, 46, 52, 46, 50, 46, 50, 6, 79, 82, 65, 67, 76, 69 }, 5, token);
+            await Send(stream, eof, 6, token);
+        }
         private static async Task Send(Stream stream, byte[] payload, byte sequence, CancellationToken token)
         { await stream.WriteAsync(new byte[] { (byte)payload.Length, 0, 0, sequence }, token); await stream.WriteAsync(payload, token); }
         private static async Task<byte[]> Receive(Stream stream, CancellationToken token)

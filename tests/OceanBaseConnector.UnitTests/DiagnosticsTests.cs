@@ -30,7 +30,7 @@ namespace OceanBaseConnector.UnitTests
         {
             var channel = new PacketChannel(peer.GetStream());
             await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
-            await channel.ReadPacketAsync(); await channel.WritePacketAsync(TimeZone()); channel.BeginCommand(); await action(channel);
+            await channel.ReadPacketAsync(); await channel.WritePacketAsync(TimeZone()); await ServerIdentity.ReplyAsync(channel); channel.BeginCommand(); await action(channel);
         });
         private static byte[] TimeZone() => TextCommandTests.TimeZoneOk("+00:00");
 

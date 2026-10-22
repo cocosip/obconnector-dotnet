@@ -42,7 +42,7 @@ namespace OceanBaseConnector.ConsumerTests
             var serving = Task.Run(async () =>
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream(); var channel = new PacketChannel(stream);
-                await Handshake(channel, "unrequested", budget.Token);
+                await Handshake(channel, stream, "unrequested", budget.Token);
                 var request = await channel.ReadPacketAsync(budget.Token); Assert.Equal(3, request[0]);
                 var sql = Encoding.UTF8.GetString(request, 1, request.Length - 1);
                 Assert.Contains(mysql ? parameters ? "INFORMATION_SCHEMA.PARAMETERS" : "INFORMATION_SCHEMA.ROUTINES" : parameters ? "ALL_ARGUMENTS" : "ALL_PROCEDURES", sql);

@@ -12,8 +12,8 @@ namespace OceanBaseConnector.Internal.Session
     /// capabilities, send the handshake response and process the server's
     /// answer including authentication switches. The compatibility mode is
     /// taken from the authenticated OK packet's OB_SERVER_USE_ORACLE_MODE
-    /// bit. Compatible greetings and MySQL mode require a read-only
-    /// OceanBase version confirmation before the session is usable.
+    /// bit and checked against the session's reported mode. Every connection
+    /// confirms OceanBase identity and version before the session is usable.
     /// SHA-2 fast authentication is supported; complete passwords are sent
     /// only over identity-verified TLS. Unknown plugins fail explicitly. The
     /// synchronous and asynchronous entries share parsing and decisions but
@@ -39,7 +39,7 @@ namespace OceanBaseConnector.Internal.Session
             channel.WritePacket(BuildHandshakeResponse(handshake, clientCapabilities, options, authentication));
             var result = ReadAuthenticationResult(channel, handshake, clientCapabilities, options, authentication, cancellationToken);
             EnableOb20(channel, result, options);
-            if (NeedsIdentityProbe(handshake, result)) ConfirmIdentity(channel, result, cancellationToken);
+            ConfirmIdentity(channel, result, cancellationToken);
             return result;
         }
 
@@ -60,7 +60,7 @@ namespace OceanBaseConnector.Internal.Session
             var result = await ReadAuthenticationResultAsync(channel, handshake, capabilities, options, authentication, cancellationToken)
                 .ConfigureAwait(false);
             EnableOb20(channel, result, options);
-            if (NeedsIdentityProbe(handshake, result)) await ConfirmIdentityAsync(channel, result, cancellationToken).ConfigureAwait(false);
+            await ConfirmIdentityAsync(channel, result, cancellationToken).ConfigureAwait(false);
             return result;
         }
 

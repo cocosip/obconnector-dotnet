@@ -27,7 +27,7 @@ namespace OceanBaseConnector.UnitTests
             var server = Server(async channel =>
             {
                 if (direction == ParameterDirection.InputOutput) await LobQueryReply(channel, type, locator);
-                await OracleVersionReply(channel, "4.3.5.0"); var request = new ByteCursor(await StatementCommand(channel, 0xa1)); request.Skip(10);
+                var request = new ByteCursor(await StatementCommand(channel, 0xa1)); request.Skip(10);
                 Assert.Equal(direction == ParameterDirection.ReturnValue ? "BEGIN ? := p(); END;" : "BEGIN p(?); END;", Encoding.UTF8.GetString(request.ReadLengthEncodedBytes()));
                 Assert.Equal(1u, request.ReadUInt32()); Assert.Equal(direction == ParameterDirection.InputOutput ? 0 : 1, request.ReadUInt8()); Assert.Equal(1, request.ReadUInt8());
                 Assert.Equal(direction == ParameterDirection.InputOutput ? (ushort)type : (ushort)6, request.ReadUInt16());
@@ -37,7 +37,7 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(kind == "null" ? new byte[] { 0, 4 } : new byte[] { 0, 0 }.Concat(WithLength(locator)).ToArray());
                 await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(kind == "error" ? Error() : Ok());
                 await StatementCommand(channel, 25); channel.BeginCommand(); await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));
-            }, lobLocators: true);
+            }, lobLocators: true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
             try
             {

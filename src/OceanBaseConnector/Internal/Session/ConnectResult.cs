@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using OceanBaseConnector.Internal.Protocol;
 
@@ -20,6 +21,7 @@ namespace OceanBaseConnector.Internal.Session
             OceanBaseCapabilityFlags obCapabilityFlag,
             IReadOnlyDictionary<string, string> sessionVariables)
         {
+            GreetingVersion = serverVersion;
             ServerVersion = serverVersion;
             ConnectionId = connectionId;
             Mode = mode;
@@ -29,7 +31,20 @@ namespace OceanBaseConnector.Internal.Session
             SessionVariables = sessionVariables;
         }
 
-        public string ServerVersion { get; }
+        internal string GreetingVersion { get; }
+        public string ServerVersion { get; private set; } = string.Empty;
+        internal Version? ProductVersion { get; private set; }
+
+        internal void ConfirmIdentity(string version, string mode)
+        {
+            var parsed = OceanBaseServerVersion.Parse(version);
+            if (parsed == null) throw new OceanBaseException("OceanBase identity requires a supported product version format.");
+            var expected = Mode == OceanBaseCompatibilityMode.Oracle ? "ORACLE" : "MYSQL";
+            if (!string.Equals(mode, expected, StringComparison.OrdinalIgnoreCase))
+                throw new OceanBaseException("OceanBase session compatibility mode does not match authentication.");
+            ServerVersion = version;
+            ProductVersion = parsed;
+        }
 
         public uint ConnectionId { get; }
 

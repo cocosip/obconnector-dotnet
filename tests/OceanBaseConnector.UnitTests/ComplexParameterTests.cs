@@ -65,7 +65,7 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await ComplexScalarType(channel, collection: collection); channel.BeginCommand(); await OracleVersionReply(channel, "4.3.5.0");
+                await ComplexScalarType(channel, collection: collection); channel.BeginCommand();
                 var request = await StatementCommand(channel, 0xa1);
                 var encoded = new byte[] { function ? (byte)1 : (byte)0, 1, 160, 0, 5, 79, 119, 110, 101, 114, 5, 84, 104, 105, 110, 103, 0 }
                     .Concat(function ? Array.Empty<byte>() : collection ? new byte[] { 1, 0, 1, 7 } : new byte[] { 0, 1, 7 }).ToArray();
@@ -74,7 +74,7 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof());
                 await channel.WritePacketAsync(new byte[] { 0, 0 }.Concat(collection ? new byte[] { 1, 0, 1, 42 } : new byte[] { 0, 1, 42 }).ToArray());
                 await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(Ok(2)); await StatementCommand(channel, 25);
-            });
+            }, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
@@ -97,11 +97,11 @@ namespace OceanBaseConnector.UnitTests
             var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var server = Server(async channel =>
             {
-                await ComplexScalarType(channel); channel.BeginCommand(); await OracleVersionReply(channel, "4.3.5.0"); await StatementCommand(channel, 0xa1);
+                await ComplexScalarType(channel); channel.BeginCommand(); await StatementCommand(channel, 0xa1);
                 await channel.WritePacketAsync(OracleExecuteHeader(1)); await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof());
                 await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(new byte[] { 0, 0, 1, 0, 1, 42 });
                 await channel.WritePacketAsync(Eof()); waiting.SetResult(); Assert.Equal(0, await channelStreamRead(channel));
-            });
+            }, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
@@ -127,7 +127,7 @@ namespace OceanBaseConnector.UnitTests
             var mismatch = result.StartsWith("wrong-", StringComparison.Ordinal);
             var server = Server(async channel =>
             {
-                await ComplexScalarType(channel, collection: collection); channel.BeginCommand(); await OracleVersionReply(channel, "4.3.5.0");
+                await ComplexScalarType(channel, collection: collection); channel.BeginCommand();
                 var request = await StatementCommand(channel, 0xa1);
                 var encoded = new byte[] { 3, 1, 6, 0, 160, 0, 5, 79, 119, 110, 101, 114, 5, 84, 104, 105, 110, 103, 0 };
                 Assert.Equal(OraclePrepareExecutePacket.Build(0, "BEGIN pkg.p(?, ?); END;", 2, encoded), request);
@@ -144,7 +144,7 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(result == "tail-error" ? new byte[] { 255, 82, 4, 35, 72, 89, 48, 48, 48, 98, 97, 100 } : Ok(2));
                 await StatementCommand(channel, 25); channel.BeginCommand();
                 await Query(channel, "after"); await channel.WritePacketAsync(Ok(7));
-            });
+            }, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
@@ -308,7 +308,7 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await ComplexScalarType(channel); channel.BeginCommand(); await OracleVersionReply(channel, "4.3.5.0"); await StatementCommand(channel, 0xa1);
+                await ComplexScalarType(channel); channel.BeginCommand(); await StatementCommand(channel, 0xa1);
                 await channel.WritePacketAsync(OracleExecuteHeader(1)); await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof());
                 await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(new byte[] { 0, 0, 1, 0, 1, 42 });
                 await channel.WritePacketAsync(Eof()); await channel.WritePacketAsync(Ok(status: 14));
@@ -320,7 +320,7 @@ namespace OceanBaseConnector.UnitTests
                     await channel.WritePacketAsync(new byte[] { 0, 0 }.Concat(BitConverter.GetBytes(55L)).ToArray()); await channel.WritePacketAsync(Eof());
                 }
                 await StatementCommand(channel, 25);
-            });
+            }, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {

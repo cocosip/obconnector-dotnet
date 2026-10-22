@@ -55,6 +55,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 for (var i = 0; i < password.Length; i++) password[i] ^= seed[i % seed.Length];
                 Assert.Equal(Encoding.UTF8.GetBytes("secretpw\0"), password);
                 await channel.WritePacketAsync(BuildAuthOk(oracleMode: true), budget.Token);
+                await ServerIdentity.ReplyAsync(channel);
             });
             try
             {
@@ -305,6 +306,7 @@ namespace OceanBaseConnector.UnitTests.Session
                     await channel.ReadPacketAsync());
                 if (accountPlugin == "caching_sha2_password") await channel.WritePacketAsync(new byte[] { 1, 3 });
                 await channel.WritePacketAsync(BuildAuthOk(oracleMode: true));
+                await ServerIdentity.ReplyAsync(channel);
             });
             using var session = RsaSession(server.Port);
             try
@@ -330,6 +332,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 var cursor = new ByteCursor(await channel.ReadPacketAsync()); cursor.Skip(32); cursor.ReadNullTerminatedAscii();
                 Assert.Equal(plugin == "sha256_password" ? new byte[] { 0 } : Array.Empty<byte>(), cursor.ReadLengthEncodedBytes());
                 await channel.WritePacketAsync(BuildAuthOk(oracleMode: true));
+                await ServerIdentity.ReplyAsync(channel);
             });
             var builder = new OceanBaseConnectionStringBuilder
             {

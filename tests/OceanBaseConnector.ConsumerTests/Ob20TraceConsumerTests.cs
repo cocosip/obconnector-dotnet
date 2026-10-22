@@ -61,10 +61,10 @@ namespace OceanBaseConnector.ConsumerTests
                 using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
                 Stream wire = tls is null ? peer.GetStream() : tls;
                 var channel = new PacketChannel(peer.GetStream());
-                await Handshake(channel, kind, budget.Token, tls, certificate);
+                await Handshake(channel, wire, kind, budget.Token, tls, certificate);
                 for (uint request = 0; request < 3; request++)
                 {
-                    var packet = await ReadFrame(wire, request, budget.Token);
+                    var packet = await ReadFrame(wire, request + 1, budget.Token);
                     Assert.Equal(3, packet.Payload.Array![packet.Payload.Offset + 4]);
                     Assert.Equal("update t set x='private_payload'", Encoding.UTF8.GetString(packet.Payload.Array!, packet.Payload.Offset + 5, packet.Payload.Count - 5));
                     if (active && request > 0)
@@ -89,7 +89,7 @@ namespace OceanBaseConnector.ConsumerTests
                     else Assert.Equal(0, packet.ExtraInfo.Count);
                     var response = Frame(1, Ob20ConsumerTests.Report(false, 1));
                     var extra = request == 0 ? Wrap(Control(), modern) : null;
-                    await wire.WriteAsync(Ob20Packet.Build(1234, request, 1, response, extra, flags: modern && active ? 10u : 2u), budget.Token);
+                    await wire.WriteAsync(Ob20Packet.Build(1234, request + 1, 1, response, extra, flags: modern && active ? 10u : 2u), budget.Token);
                 }
                 Assert.Equal(0, await wire.ReadAsync(new byte[1], budget.Token));
             });
@@ -153,11 +153,11 @@ namespace OceanBaseConnector.ConsumerTests
                 using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
                 Stream wire = tls is null ? peer.GetStream() : tls;
                 var channel = new PacketChannel(peer.GetStream());
-                await Handshake(channel, modern ? "modern" : "legacy", budget.Token, tls, certificate);
+                await Handshake(channel, wire, modern ? "modern" : "legacy", budget.Token, tls, certificate);
                 var spans = new HashSet<string>();
                 for (uint request = 0; request < 10; request++)
                 {
-                    var packet = await ReadFrame(wire, request, budget.Token); var command = packet.Payload.ToArray().AsSpan(4).ToArray();
+                    var packet = await ReadFrame(wire, request + 1, budget.Token); var command = packet.Payload.ToArray().AsSpan(4).ToArray();
                     if (request > 0)
                     {
                         var trace = Fields(Unwrap(packet.ExtraInfo.ToArray(), modern)); var span = Fields(trace[2004]);
@@ -196,7 +196,7 @@ namespace OceanBaseConnector.ConsumerTests
                         Assert.Equal(expected, Encoding.UTF8.GetString(command, 1, command.Length - 1));
                         var ok = Ob20ConsumerTests.Report(false, 0); if (request == 7 || request == 8) ok[3] = 4; data = Frame(1, ok);
                     }
-                    await wire.WriteAsync(Ob20Packet.Build(1234, request, 1, data, request == 0 ? Wrap(Control(), modern) : null, flags: modern ? 10u : 2u), budget.Token);
+                    await wire.WriteAsync(Ob20Packet.Build(1234, request + 1, 1, data, request == 0 ? Wrap(Control(), modern) : null, flags: modern ? 10u : 2u), budget.Token);
                 }
                 Assert.Equal(0, await wire.ReadAsync(new byte[1], budget.Token));
             });
@@ -256,9 +256,9 @@ namespace OceanBaseConnector.ConsumerTests
                 using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
                 Stream wire = tls is null ? peer.GetStream() : tls;
                 var channel = new PacketChannel(peer.GetStream());
-                await Handshake(channel, modern ? "modern" : "legacy", budget.Token, tls, certificate); Assert.Equal(0, (await ReadFrame(wire, 0, budget.Token)).ExtraInfo.Count);
+                await Handshake(channel, wire, modern ? "modern" : "legacy", budget.Token, tls, certificate); Assert.Equal(0, (await ReadFrame(wire, 1, budget.Token)).ExtraInfo.Count);
                 var extra = kind == "limit" ? new byte[65537] : Wrap(kind == "malformed" ? new byte[] { 211, 7, 255, 255, 255, 255 } : Control(), modern);
-                var bytes = Ob20Packet.Build(1234, 0, 1, Frame(1, Ob20ConsumerTests.Report(false, 1)), extra, flags: modern ? 10u : 2u);
+                var bytes = Ob20Packet.Build(1234, 1, 1, Frame(1, Ob20ConsumerTests.Report(false, 1)), extra, flags: modern ? 10u : 2u);
                 if (kind == "crc") bytes[bytes.Length - 1] ^= 1;
                 try { await wire.WriteAsync(bytes.AsMemory(0, kind == "partial-cancel" ? 31 + 4 + extra.Length + 2 : bytes.Length), budget.Token); }
                 catch (IOException) when (kind == "limit") { }
@@ -285,7 +285,7 @@ namespace OceanBaseConnector.ConsumerTests
             finally { budget.Cancel(); listener.Stop(); }
         }
 
-        private static async Task Handshake(PacketChannel channel, string kind, CancellationToken token, SslStream? tls = null, X509Certificate2? certificate = null)
+        private static async Task Handshake(PacketChannel channel, Stream stream, string kind, CancellationToken token, SslStream? tls = null, X509Certificate2? certificate = null)
         {
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
@@ -307,6 +307,7 @@ namespace OceanBaseConnector.ConsumerTests
             Assert.Equal(kind == "disabled" ? "256" : "311552", values["__proxy_capability_flag"]);
             var capability = kind == "no-trace" ? "256" : kind == "legacy" ? "278784" : "311552";
             await channel.WritePacketAsync(Ob20ConsumerTests.Report(true, 0, capability), token); channel.BeginCommand();
+            await Ob20ConsumerTests.ReplyIdentity(channel, stream, true, token);
         }
 
         private static async Task<Ob20Packet> ReadFrame(Stream stream, uint request, CancellationToken token)

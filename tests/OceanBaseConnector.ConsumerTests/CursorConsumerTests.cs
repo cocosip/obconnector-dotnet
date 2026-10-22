@@ -38,7 +38,8 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var channel = new PacketChannel(peer.GetStream());
                 await channel.WritePacketAsync(greeting, budget.Token); await channel.ReadPacketAsync(budget.Token);
-                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token); channel.BeginCommand();
+                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token);
+                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, deprecated: deprecated, token: budget.Token); channel.BeginCommand();
                 Assert.Equal(22, (await channel.ReadPacketAsync(budget.Token))[0]);
                 await channel.WritePacketAsync(new byte[] { 0, 80, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 }, budget.Token);
                 await channel.WritePacketAsync(column, budget.Token); if (!deprecated) await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);

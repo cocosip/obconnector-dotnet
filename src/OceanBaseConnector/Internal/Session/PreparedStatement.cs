@@ -45,7 +45,7 @@ namespace OceanBaseConnector.Internal.Session
                     var count = section == 0 ? statement.ParameterCount : columns;
                     for (var i = 0; i < count; i++)
                     {
-                        var column = Metadata(exchange.Receive(), exchange.Mode, ref bytes);
+                        var column = Metadata(exchange.Receive(), exchange.Mode, exchange.TreatTinyAsBoolean, ref bytes);
                         if (section == 1) statement.Columns[i] = column;
                     }
                     if (count > 0 && (exchange.Capabilities & CapabilityFlags.ClientDeprecateEof) == 0)
@@ -70,7 +70,7 @@ namespace OceanBaseConnector.Internal.Session
                     var count = section == 0 ? statement.ParameterCount : columns;
                     for (var i = 0; i < count; i++)
                     {
-                        var column = Metadata(await exchange.ReceiveAsync(token).ConfigureAwait(false), exchange.Mode, ref bytes);
+                        var column = Metadata(await exchange.ReceiveAsync(token).ConfigureAwait(false), exchange.Mode, exchange.TreatTinyAsBoolean, ref bytes);
                         if (section == 1) statement.Columns[i] = column;
                     }
                     if (count > 0 && (exchange.Capabilities & CapabilityFlags.ClientDeprecateEof) == 0)
@@ -82,11 +82,11 @@ namespace OceanBaseConnector.Internal.Session
             catch { statement.Release(); throw; }
         }
 
-        private static ResultColumn Metadata(byte[] packet, OceanBaseCompatibilityMode mode, ref int bytes)
+        private static ResultColumn Metadata(byte[] packet, OceanBaseCompatibilityMode mode, bool treatTinyAsBoolean, ref int bytes)
         {
             if (packet.Length > 4 * 1024 * 1024 - bytes) throw new ProtocolException("Prepared statement metadata size limit exceeded.");
             bytes += packet.Length;
-            return ResultColumn.Parse(packet, mode);
+            return ResultColumn.Parse(packet, mode, treatTinyAsBoolean: treatTinyAsBoolean);
         }
 
         internal void Release() => Session.QueueStatementClose(Id);

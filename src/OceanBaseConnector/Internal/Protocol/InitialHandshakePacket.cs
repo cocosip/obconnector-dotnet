@@ -59,8 +59,8 @@ namespace OceanBaseConnector.Internal.Protocol
 
         /// <summary>
         /// True when the server version string identifies an OceanBase
-        /// endpoint. Compatible version strings require a separate
-        /// read-only identity probe before the connection is usable.
+        /// endpoint. This is a greeting hint only; every connection performs
+        /// a separate read-only product identity and mode confirmation.
         /// </summary>
         public bool IsOceanBaseServer { get; }
 

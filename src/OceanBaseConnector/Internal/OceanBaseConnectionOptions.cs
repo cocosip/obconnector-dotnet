@@ -34,7 +34,9 @@ namespace OceanBaseConnector.Internal
             OceanBaseLoadBalance loadBalance,
             string sanitizedConnectionString,
             IReadOnlyDictionary<int, string>? additionalPasswords = null,
-            string servicePrincipalName = "")
+            string servicePrincipalName = "",
+            bool treatTinyAsBoolean = true,
+            bool useAffectedRows = false)
         {
             Server = server;
             Port = port;
@@ -42,6 +44,8 @@ namespace OceanBaseConnector.Internal
             UserId = userId;
             Password = password;
             ServicePrincipalName = servicePrincipalName;
+            TreatTinyAsBoolean = treatTinyAsBoolean;
+            UseAffectedRows = useAffectedRows;
             var passwords = new Dictionary<int, string>();
             if (additionalPasswords is not null)
                 foreach (var entry in additionalPasswords) passwords.Add(entry.Key, entry.Value);
@@ -72,7 +76,7 @@ namespace OceanBaseConnector.Internal
 
         internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
             endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName);
+            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows);
 
         public string UserId { get; }
 
@@ -97,6 +101,8 @@ namespace OceanBaseConnector.Internal
         public OceanBaseCompatibilityMode? ExpectedMode { get; }
 
         public bool Pooling { get; }
+        public bool TreatTinyAsBoolean { get; }
+        public bool UseAffectedRows { get; }
 
         public string ServerRsaPublicKey { get; }
 

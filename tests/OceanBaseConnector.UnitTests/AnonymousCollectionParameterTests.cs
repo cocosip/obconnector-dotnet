@@ -111,8 +111,7 @@ namespace OceanBaseConnector.UnitTests
             var server = Server(async channel =>
             {
                 if (named) { await ComplexScalarType(channel, collection: false); channel.BeginCommand(); }
-                if (extended) await OracleVersionReply(channel, "4.3.5.0");
-                else { await StatementCommand(channel, 22); await Prepared(channel, 203, 3); }
+                if (!extended) { await StatementCommand(channel, 22); await Prepared(channel, 203, 3); }
                 for (var iteration = 0; iteration < 2; iteration++)
                 {
                     var request = await StatementCommand(channel, extended ? (byte)0xa1 : (byte)23);
@@ -131,7 +130,7 @@ namespace OceanBaseConnector.UnitTests
                     if (extended) await StatementCommand(channel, 25);
                 }
                 if (!extended) await StatementCommand(channel, 25);
-            });
+            }, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + (extended ? ";Use Oracle Prepare Execute=true" : ""));
             try
             {

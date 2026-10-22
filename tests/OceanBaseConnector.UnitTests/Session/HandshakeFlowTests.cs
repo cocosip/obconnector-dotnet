@@ -220,7 +220,7 @@ namespace OceanBaseConnector.UnitTests.Session
         }
 
         [Fact]
-        public async Task MissingOracleBitWithoutVerifiedVersionCannotBeAssumedMysql()
+        public async Task MissingOracleBitAcceptsVerifiedMysqlModeOnAnOlderVersion()
         {
             var server = LoopbackServer.Start(async client =>
             {
@@ -233,9 +233,10 @@ namespace OceanBaseConnector.UnitTests.Session
             try
             {
                 using var transport = await TcpTransport.ConnectAsync("127.0.0.1", server.Port, TimeSpan.FromSeconds(10), default);
-                var error = await Assert.ThrowsAsync<OceanBaseException>(() => HandshakeFlow.AuthenticateAsync(
-                    transport, new PacketChannel(transport.Stream), BuildOptions(expectedMode: OceanBaseCompatibilityMode.MySql), default));
-                Assert.Contains("verified", error.Message);
+                var result = await HandshakeFlow.AuthenticateAsync(
+                    transport, new PacketChannel(transport.Stream), BuildOptions(expectedMode: OceanBaseCompatibilityMode.MySql), default);
+                Assert.Equal(OceanBaseCompatibilityMode.MySql, result.Mode);
+                Assert.Equal("4.4.2.1", result.ServerVersion);
             }
             finally { server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
@@ -254,6 +255,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 Assert.Equal("u@sys", cursor.ReadNullTerminatedAscii());
                 Assert.Equal(ComputeScramble("secretpw", SeedBytes(SeedHex)), cursor.ReadLengthEncodedBytes());
                 await channel.WritePacketAsync(BuildAuthOk(oracleMode: true));
+                await ServerIdentity.ReplyAsync(channel);
             });
             try
             {
@@ -284,6 +286,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 Assert.Equal(ssl[12], response[8]);
                 Assert.Equal(BitConverter.ToUInt32(ssl, 8), BitConverter.ToUInt32(response, 4));
                 await tls.WriteAsync(Frame(3, BuildAuthOk(oracleMode: true)));
+                await ServerIdentity.ReplyAsync(new PacketChannel(tls));
             });
             try
             {
@@ -337,6 +340,7 @@ namespace OceanBaseConnector.UnitTests.Session
 
                 var ok = Frame(2, BuildAuthOk(oracleMode: true, obCapabilityFlag: "1023"));
                 await stream.WriteAsync(ok, 0, ok.Length);
+                await ServerIdentity.ReplyAsync(new PacketChannel(stream));
                 await Task.Delay(50);
             });
 
@@ -368,7 +372,8 @@ namespace OceanBaseConnector.UnitTests.Session
             var token = cursor.ReadBytes((int)tokenLength);
             Assert.Equal(ComputeScramble("secretpw", SeedBytes(SeedHex)), token);
 
-            Assert.Equal("5.7.4-OceanBase 4.2.1", result.ServerVersion);
+            Assert.Equal("4.4.2.2", result.ServerVersion);
+            Assert.Equal("5.7.4-OceanBase 4.2.1", result.GreetingVersion);
             Assert.Equal(1234u, result.ConnectionId);
             Assert.Equal(OceanBaseCompatibilityMode.Oracle, result.Mode);
             Assert.True(result.ObCapabilityFlag.HasFlag(OceanBaseCapabilityFlags.ObCapObProtocolV2));
@@ -385,6 +390,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 await stream.WriteAsync(Frame(0, BuildInitialHandshake()));
                 ReadResponse(stream);
                 await stream.WriteAsync(Frame(2, BuildAuthOk(oracleMode: true)));
+                await ServerIdentity.ReplyAsync(new PacketChannel(stream));
             });
 
             ConnectResult result;
@@ -431,6 +437,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 Buffer.BlockCopy(switchPayload, 0, switchResponse, 4, switchPayload.Length);
 
                 await stream.WriteAsync(Frame(4, BuildAuthOk(oracleMode: true)));
+                await ServerIdentity.ReplyAsync(new PacketChannel(stream));
             });
 
             ConnectResult result;

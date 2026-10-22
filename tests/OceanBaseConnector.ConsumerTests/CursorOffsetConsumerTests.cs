@@ -35,16 +35,9 @@ namespace OceanBaseConnector.ConsumerTests
             var serving = Task.Run(async () =>
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream(); var channel = new PacketChannel(stream);
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true);
-                var version = await ReadRequest(stream, channel, ob20, 0, budget.Token);
-                Assert.Equal(3, version[0]); Assert.Equal("select ob_version() from dual", Encoding.UTF8.GetString(version, 1, version.Length - 1));
-                var versionEnd = Report(false, 0); versionEnd[0] = 254;
-                var response = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(253)))
-                    .Concat(Frame(3, new byte[] { 7, 50, 46, 50, 46, 53, 46, 48 })).Concat(Frame(4, versionEnd)).ToArray();
-                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 0, 1, response) : response, budget.Token);
-                if (!ob20) channel.BeginCommand();
+                await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, version: "2.2.5.0");
                 Assert.Equal(22, (await ReadRequest(stream, channel, ob20, 1, budget.Token))[0]);
-                response = Frame(1, new byte[] { 0, 80, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 }).Concat(Frame(2, Column(8))).ToArray();
+                var response = Frame(1, new byte[] { 0, 80, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 }).Concat(Frame(2, Column(8))).ToArray();
                 await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 1, 1, response) : response, budget.Token);
                 if (!ob20) channel.BeginCommand();
                 Assert.Equal(new byte[] { 23, 80, 0, 0, 0, 1, 1, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 2, budget.Token));

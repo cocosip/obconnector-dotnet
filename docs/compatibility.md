@@ -8,10 +8,21 @@ The tables distinguish recorded passes, failures, explicitly unsupported behavio
 | --- | --- | --- |
 | Direct OceanBase 4.4.2.2, MySQL mode | Partially verified | Recorded acceptance: 38 passed, 27 skipped; TLS disabled. |
 | Direct OceanBase 4.4.2.2, Oracle mode | Partially verified; suite fails | Recorded acceptance: 49 passed, 1 failed, 15 skipped, 1 cleanup failure; TLS disabled. |
-| Other versions through MySQL mode or an unidentified greeting | Rejected by identity confirmation | `ob_version()` must return exactly `4.4.2.2`. |
-| Other Oracle-mode server versions | Unverified | Feature minimums such as PrepareExecute >=2.2.76 and offset Fetch >=2.2.5 are runtime checks, not a supported-version matrix. Unidentified greetings also use the identity gate above. |
+| Other OceanBase versions, either mode | Unverified on real servers | No exact-release allowlist. Open requires a parseable actual OceanBase version, a session mode matching authentication, and the required base protocol/authentication capabilities. Function-specific version/capability checks still apply. |
 | OBProxy, either mode | Unverified | No verified proxy-version/routing/fault matrix. Direct-server results do not establish OBProxy compatibility. |
 | Native MySQL / native Oracle | Unsupported | This provider targets OceanBase; MySQL wire compatibility does not bypass OceanBase identity confirmation. |
+
+All successful opens confirm `ob_version()` and `@@ob_compatibility_mode` in one read-only query.
+The reported mode must agree with authentication; missing, unknown or conflicting identity data
+fails Open. Product versions are distinct from the MySQL-compatible greeting. A parseable new
+release is not rejected merely because it has no recorded acceptance run, but an untested
+release is not thereby supported or certified. No blanket minimum OceanBase release is claimed
+from the available evidence. PrepareExecute >=2.2.76 and offset fetch >=2.2.5 are feature gates only.
+
+Client behavior is independent of server version: `Treat Tiny As Boolean=true` maps signed MySQL
+TINYINT(1) to Boolean (nonzero=true), and `Use Affected Rows=false` requests matched UPDATE rows.
+Both can be changed explicitly; neither fabricates a server capability or selects a JDBC profile.
+See the [API reference](obconnector-dotnet-architecture-design.md) for value and option rules.
 
 ## Recorded database tests
 

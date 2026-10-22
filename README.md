@@ -38,6 +38,12 @@ var result = await command.ExecuteScalarAsync();
 
 `ExpectedMode` validates the detected mode; it does not change the server mode. TLS defaults to `VerifyFull`, validating certificate trust and hostnames.
 
+Every Open confirms the actual OceanBase version and tenant mode. Server features are selected
+from the actual version and negotiated capabilities, without a JDBC 5/8 compatibility profile.
+In MySQL mode, signed `TINYINT(1)` returns `bool` by default (nonzero is true);
+set `Treat Tiny As Boolean=false` to read integers. UPDATE reports matched rows by default;
+set `Use Affected Rows=true` to request changed rows. See the [configuration reference](docs/obconnector-dotnet-architecture-design.md).
+
 With the DI package:
 
 ```csharp
@@ -55,7 +61,7 @@ Each resolution creates a closed transient connection owned by its container sco
 - Oracle extensions include stored procedures, OUT parameters, REF CURSOR, LOB locators, complex types and array binding. Procedures and output parameters require `Use Oracle Prepare Execute=true`; locator LOBs also require `Use Lob Locators=true`.
 - Explicit XA, multiple server addresses, custom address resolution, logging, tracing and metrics.
 - Connection pooling and ambient `TransactionScope` are not supported. `Pooling=true` is rejected.
-- MySQL mode and greetings without OceanBase identity require `ob_version()` confirmation, which currently accepts only OceanBase 4.4.2.2. Other versions and OBProxy need separate validation.
+- Every connection confirms `ob_version()` and the tenant compatibility mode. Recognized version formats are accepted; versions beyond the recorded deployment and OBProxy still need real-server validation.
 
 The driver does not automatically replay SQL. If `OceanBaseException.IsExecutionOutcomeUnknown` is true, reconcile the operation before retrying a write or commit. Batches run sequentially and need an explicit transaction for atomicity. Dispose readers, commands and connections; closing an unread reader can destroy its session.
 

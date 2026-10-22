@@ -23,7 +23,7 @@ namespace OceanBaseConnector.UnitTests
             var source = new LongDataSource(size, asynchronous);
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0");
+
                 for (var run = 0; run < 2; run++)
                 {
                     var id = (byte)(60 + run);
@@ -52,7 +52,7 @@ namespace OceanBaseConnector.UnitTests
                     Assert.Equal(new byte[] { 25, id, 0, 0, 0 }, await StatementCommand(channel, 25));
                     if (changedId) Assert.Equal(new byte[] { 25, 42, 0, 0, 0 }, await StatementCommand(channel, 25));
                 }
-            });
+            }, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
@@ -118,7 +118,7 @@ namespace OceanBaseConnector.UnitTests
             source.BeforeRead = read => { if (fault == "source-before" || fault == "source-after" && read >= 8193) throw new IOException("Source failed."); };
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.2.0"); await StatementCommand(channel, 22);
+                await StatementCommand(channel, 22);
                 await Prepared(channel, 60, fault == "count" ? (ushort)1 : (ushort)2);
                 if (fault != "count" && fault != "source-before")
                 {
@@ -142,7 +142,7 @@ namespace OceanBaseConnector.UnitTests
                     channel.BeginCommand(); await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));
                 }
                 else Assert.Equal(0, await channelStreamRead(channel));
-            });
+            }, serverVersion: "4.2.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
@@ -175,7 +175,7 @@ namespace OceanBaseConnector.UnitTests
             var parent = changedId ? (byte)42 : (byte)60;
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.2.0");
+
                 for (var run = 0; run < 2; run++)
                 {
                     var id = (byte)(60 + run);
@@ -197,7 +197,7 @@ namespace OceanBaseConnector.UnitTests
                     Assert.Equal(new byte[] { 25, (byte)(parent + run), 0, 0, 0 }, await StatementCommand(channel, 25));
                 }
                 channel.BeginCommand(); await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));
-            });
+            }, serverVersion: "4.2.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             var source = new LongDataSource(3, true);
             try
@@ -230,14 +230,14 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await TransactionBegin(channel); await OracleVersionReply(channel, "4.2.0");
+                await TransactionBegin(channel);
                 await StatementCommand(channel, 22); await Prepared(channel, 60, 2);
                 AssertPiece(await StatementCommand(channel, 162), 60, 0, 3, 0, 3); await channel.WritePacketAsync(Ok(0, 5));
                 Assert.Equal(60, (await StatementCommand(channel, 0xa1))[1]); await OracleOutputReply(channel, false); await channel.WritePacketAsync(Ok(1, 5));
                 Assert.Equal(new byte[] { 25, 60, 0, 0, 0 }, await StatementCommand(channel, 25));
                 Assert.Equal(new byte[] { 25, 42, 0, 0, 0 }, await StatementCommand(channel, 25));
                 channel.BeginCommand(); await TransactionEnd(channel, false);
-            });
+            }, serverVersion: "4.2.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             var source = new LongDataSource(3, asynchronous);
             try
@@ -263,9 +263,9 @@ namespace OceanBaseConnector.UnitTests
             using var caller = new CancellationTokenSource();
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.2.0"); await StatementCommand(channel, 22); await Prepared(channel, 60, 2);
+                await StatementCommand(channel, 22); await Prepared(channel, 60, 2);
                 await StatementCommand(channel, 162); received.SetResult(); Assert.Equal(0, await channelStreamRead(channel));
-            });
+            }, serverVersion: "4.2.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             using var source = new MemoryStream(new byte[20000]);
             try
@@ -292,12 +292,12 @@ namespace OceanBaseConnector.UnitTests
             const int limit = (64 * 1024 * 1024 - 9058) / 2;
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.2.0"); await StatementCommand(channel, 22); await Prepared(channel, 60, 2);
+                await StatementCommand(channel, 22); await Prepared(channel, 60, 2);
                 var received = 0;
                 while (received < limit / 8192 * 8192)
                 { await StatementCommand(channel, 162); received += 8192; await channel.WritePacketAsync(Ok()); }
                 Assert.Equal(0, await channelStreamRead(channel));
-            });
+            }, serverVersion: "4.2.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             var source = new LongDataSource(limit + 1, true) { ChunkSize = 8192 };
             try

@@ -7,8 +7,7 @@ namespace OceanBaseConnector.Internal.Session
 {
     internal static partial class HandshakeFlow
     {
-        private static bool NeedsIdentityProbe(InitialHandshakePacket greeting, ConnectResult result) =>
-            !greeting.IsOceanBaseServer || result.Mode == OceanBaseCompatibilityMode.MySql;
+        private const string IdentitySql = "select ob_version(), @@ob_compatibility_mode from dual";
 
         private static void EnableOb20(PacketChannel channel, ConnectResult result, OceanBaseConnectionOptions options)
         {
@@ -23,29 +22,31 @@ namespace OceanBaseConnector.Internal.Session
         {
             token.ThrowIfCancellationRequested();
             channel.BeginCommand();
-            channel.WritePacket(OceanBaseCommand.SqlPacket("select ob_version() from dual", 3));
+            channel.WritePacket(OceanBaseCommand.SqlPacket(IdentitySql, 3));
             ValidateIdentityHeader(channel.ReadPacket());
             ValidateIdentityColumn(channel.ReadPacket(), result.Mode);
+            ValidateIdentityColumn(channel.ReadPacket(), result.Mode);
             if (!result.Capabilities.HasEffective(CapabilityFlags.ClientDeprecateEof)) ValidateIdentityEnd(channel.ReadPacket(), result, columns: true);
-            var version = IdentityVersion(channel.ReadPacket());
+            var identity = IdentityValues(channel.ReadPacket());
             ValidateIdentityEnd(channel.ReadPacket(), result);
             channel.CompleteResponse();
             token.ThrowIfCancellationRequested();
-            ValidateIdentityVersion(version);
+            result.ConfirmIdentity(identity.Version, identity.Mode);
         }
 
         private static async Task ConfirmIdentityAsync(PacketChannel channel, ConnectResult result, CancellationToken token)
         {
             channel.BeginCommand();
-            await channel.WritePacketAsync(OceanBaseCommand.SqlPacket("select ob_version() from dual", 3), token).ConfigureAwait(false);
+            await channel.WritePacketAsync(OceanBaseCommand.SqlPacket(IdentitySql, 3), token).ConfigureAwait(false);
             ValidateIdentityHeader(await channel.ReadPacketAsync(token).ConfigureAwait(false));
             ValidateIdentityColumn(await channel.ReadPacketAsync(token).ConfigureAwait(false), result.Mode);
+            ValidateIdentityColumn(await channel.ReadPacketAsync(token).ConfigureAwait(false), result.Mode);
             if (!result.Capabilities.HasEffective(CapabilityFlags.ClientDeprecateEof)) ValidateIdentityEnd(await channel.ReadPacketAsync(token).ConfigureAwait(false), result, columns: true);
-            var version = IdentityVersion(await channel.ReadPacketAsync(token).ConfigureAwait(false));
+            var identity = IdentityValues(await channel.ReadPacketAsync(token).ConfigureAwait(false));
             ValidateIdentityEnd(await channel.ReadPacketAsync(token).ConfigureAwait(false), result);
             channel.CompleteResponse();
             token.ThrowIfCancellationRequested();
-            ValidateIdentityVersion(version);
+            result.ConfirmIdentity(identity.Version, identity.Mode);
         }
 
         private static void CheckIdentityError(byte[] packet)
@@ -61,7 +62,7 @@ namespace OceanBaseConnector.Internal.Session
         private static void ValidateIdentityHeader(byte[] packet)
         {
             CheckIdentityError(packet);
-            if (packet.Length != 1 || packet[0] != 1) throw new ProtocolException("OceanBase identity requires one result column.");
+            if (packet.Length != 1 || packet[0] != 2) throw new ProtocolException("OceanBase identity requires two result columns.");
         }
 
         private static void ValidateIdentityColumn(byte[] packet, OceanBaseCompatibilityMode mode)
@@ -73,14 +74,17 @@ namespace OceanBaseConnector.Internal.Session
                 throw new ProtocolException("OceanBase identity requires an ordinary string column.");
         }
 
-        private static string? IdentityVersion(byte[] packet)
+        private static (string Version, string Mode) IdentityValues(byte[] packet)
         {
             CheckIdentityError(packet);
-            if (packet.Length > 129) throw new ProtocolException("Excessive OceanBase identity value.");
+            if (packet.Length > 144) throw new ProtocolException("Excessive OceanBase identity value.");
             var cursor = new ByteCursor(packet);
             var bytes = cursor.ReadNullableLengthEncodedBytes();
+            var mode = cursor.ReadNullableLengthEncodedBytes();
             if (cursor.HasRemaining) throw new ProtocolException("Trailing OceanBase identity row bytes.");
-            return bytes == null ? null : ResultColumn.Utf8.GetString(bytes);
+            if (bytes == null || bytes.Length == 0 || bytes.Length > 128 || mode == null || mode.Length > 6)
+                throw new OceanBaseException("OceanBase identity requires a version and compatibility mode.");
+            return (ResultColumn.Utf8.GetString(bytes), ResultColumn.Utf8.GetString(mode));
         }
 
         private static void ValidateIdentityEnd(byte[] packet, ConnectResult result, bool columns = false)
@@ -99,11 +103,5 @@ namespace OceanBaseConnector.Internal.Session
                 throw new ProtocolException("OceanBase identity returned multiple results.");
         }
 
-        private static void ValidateIdentityVersion(string? version)
-        {
-            // Only this real-server version has verified both authenticated mode states.
-            if (!string.Equals(version, "4.4.2.2", StringComparison.Ordinal))
-                throw new OceanBaseException("OceanBase identity and compatibility mode require a verified server version (currently 4.4.2.2).");
-        }
     }
 }

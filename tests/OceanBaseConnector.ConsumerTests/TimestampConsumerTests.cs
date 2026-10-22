@@ -64,6 +64,7 @@ namespace OceanBaseConnector.ConsumerTests
                 await channel.WritePacketAsync(greeting, budget.Token);
                 await channel.ReadPacketAsync(budget.Token);
                 await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token);
+                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, token: budget.Token);
                 channel.BeginCommand();
                 Assert.Equal(3, (await channel.ReadPacketAsync(budget.Token))[0]);
                 await channel.WritePacketAsync(new byte[] { 1 }, budget.Token);

@@ -14,7 +14,8 @@ namespace OceanBaseConnector
     /// <c>TLS Mode</c>, <c>TLS Server Name</c>, <c>Persist Security Info</c>,
     /// <c>ExpectedMode</c>, <c>Pooling</c>, <c>Server RSA Public Key</c> and
     /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
-    /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c>, <c>Load Balance</c> and <c>Service Principal Name</c>; the only synonyms are
+    /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c>, <c>Load Balance</c>, <c>Service Principal Name</c>,
+    /// <c>Treat Tiny As Boolean</c> and <c>Use Affected Rows</c>; the only synonyms are
     /// <c>Host</c>, <c>Uid</c> and <c>Pwd</c>. PAM accepts secret <c>PasswordN</c> keys for N >= 2.
     /// Unknown keys, synonym conflicts
     /// and malformed values are rejected instead of being silently accepted.
@@ -41,6 +42,8 @@ namespace OceanBaseConnector
         public const string UseLobLocatorsKey = "Use Lob Locators";
         public const string LoadBalanceKey = "Load Balance";
         public const string ServicePrincipalNameKey = "Service Principal Name";
+        public const string TreatTinyAsBooleanKey = "Treat Tiny As Boolean";
+        public const string UseAffectedRowsKey = "Use Affected Rows";
 
         public const int DefaultPort = 2881;
         public const int DefaultConnectionTimeoutSeconds = 15;
@@ -218,6 +221,20 @@ namespace OceanBaseConnector
             set => this[ServicePrincipalNameKey] = value;
         }
 
+        /// <summary>Map signed MySQL TINYINT(1) columns to Boolean; enabled by default.</summary>
+        public bool TreatTinyAsBoolean
+        {
+            get => GetBoolean(TreatTinyAsBooleanKey) ?? true;
+            set => this[TreatTinyAsBooleanKey] = value ? "true" : "false";
+        }
+
+        /// <summary>Request changed-row counts instead of matched-row counts; disabled by default.</summary>
+        public bool UseAffectedRows
+        {
+            get => GetBoolean(UseAffectedRowsKey) ?? false;
+            set => this[UseAffectedRowsKey] = value ? "true" : "false";
+        }
+
         public override object? this[string keyword]
         {
             get
@@ -320,7 +337,9 @@ namespace OceanBaseConnector
                 LoadBalance,
                 ToSanitizedConnectionString(includeSecrets: false),
                 additionalPasswords,
-                ServicePrincipalName);
+                ServicePrincipalName,
+                TreatTinyAsBoolean,
+                UseAffectedRows);
         }
 
         // Serialization order for fixed keys; additional PAM passwords are secrets.
@@ -346,6 +365,8 @@ namespace OceanBaseConnector
             UseLobLocatorsKey,
             LoadBalanceKey,
             ServicePrincipalNameKey,
+            TreatTinyAsBooleanKey,
+            UseAffectedRowsKey,
         };
 
         /// <summary>
@@ -455,6 +476,8 @@ namespace OceanBaseConnector
                 case EnableFullLinkTraceKey:
                 case UseOraclePrepareExecuteKey:
                 case UseLobLocatorsKey:
+                case TreatTinyAsBooleanKey:
+                case UseAffectedRowsKey:
                     ParseBooleanValue(canonicalKey, value);
                     return value;
 
@@ -545,6 +568,12 @@ namespace OceanBaseConnector
         {
             switch (keyword.Trim().ToUpperInvariant())
             {
+                case "TREAT TINY AS BOOLEAN":
+                    canonical = TreatTinyAsBooleanKey;
+                    return true;
+                case "USE AFFECTED ROWS":
+                    canonical = UseAffectedRowsKey;
+                    return true;
                 case "SERVER":
                     canonical = ServerKey;
                     return true;

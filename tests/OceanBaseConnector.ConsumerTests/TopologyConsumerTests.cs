@@ -34,12 +34,12 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token);
                 var stream = peer.GetStream(); var channel = new PacketChannel(stream);
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token);
-                var query = await ReadRequest(stream, channel, ob20, 0, budget.Token);
+                await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token);
+                var query = await ReadRequest(stream, channel, ob20, 1, budget.Token);
                 Assert.Equal(3, query[0]); Assert.Equal("selected", Encoding.UTF8.GetString(query, 1, query.Length - 1));
                 if (fail) return;
                 var response = Frame(1, Report(false, affected));
-                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 0, 1, response) : response, budget.Token);
+                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 1, 1, response) : response, budget.Token);
                 await ObserveClose(stream, budget.Token);
             }
             var serving = Task.WhenAll(Task.Run(() => Serve(first, 1, false)), Task.Run(() => Serve(second, 2, disconnect)));

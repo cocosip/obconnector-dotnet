@@ -40,11 +40,15 @@ The report path must be new. Omit `--report` to generate a unique path under `Te
 | `slowQuery` | Optional read-only SQL taking over two seconds, for cancellation and timeout tests. Omitted means those cases are skipped. |
 | `alternateDatabase` | Optional MySQL database for change-and-restore testing. Omitted means skipped. |
 
-Use positive connection and command timeouts. The console sets `ExpectedMode` from configuration and enforces the driver's version and pooling restrictions. Oracle extension cases are skipped when their options are disabled; errors after enabling them count as failures.
+Use positive connection and command timeouts. The console sets `ExpectedMode` from configuration and enforces the driver's identity and pooling restrictions. Every Open confirms the actual product version and session mode; it does not enforce an exact tested-release allowlist. Oracle extension cases are skipped when their options are disabled; errors after enabling them count as failures.
 
 ## Coverage and cleanup
 
 Tests cover connections, CRUD, types, transactions, readers, batches, schema metadata, binary streams, Oracle outputs/cursors/array binding/LOBs/complex types, XA and diagnostics. Availability depends on mode and configuration; `--list` shows individual cases.
+
+Connection cases compare `ServerVersion` and schema product-version metadata with `ob_version()`.
+`types.mysql-client-behavior` checks both TINYINT Boolean/integer mappings and both UPDATE
+row-count settings through real text/prepared sequential readers, including NULL and negative values.
 
 Six `matrix.*` entries are explicitly deferred and report skips: TLS/authentication, OB20/tracing negotiation, topology failover, interrupted network outcomes, pool reset and XA crash recovery. Mode/configuration skips are separate. See [Compatibility](../../docs/compatibility.md) for the failed Oracle case and server-version restrictions, and [verification status](../../docs/obconnector-dotnet-progress.md) for the four separate skipped integration gates.
 

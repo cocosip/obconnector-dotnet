@@ -60,20 +60,14 @@ namespace OceanBaseConnector.ConsumerTests
                 using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
                 Stream stream = tls is null ? peer.GetStream() : tls;
                 var channel = new PacketChannel(peer.GetStream());
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, tls: tls, certificate: certificate);
-                var version = await ReadRequest(stream, channel, ob20, 0, budget.Token);
-                Assert.Equal(3, version[0]); Assert.Equal("select ob_version() from dual", Encoding.UTF8.GetString(version, 1, version.Length - 1));
+                await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, version: "4.2.0", tls: tls, certificate: certificate);
                 byte[] Column(byte type) => new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 112, 1, 112, 12, 45, 0, 20, 0, 0, 0, type, 0, 0, 0, 0, 0 };
                 var eof = Report(false, 0); eof[0] = 254;
-                var response = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(253)))
-                    .Concat(Frame(3, new byte[] { 5, 52, 46, 50, 46, 48 })).Concat(Frame(4, eof)).ToArray();
-                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 0, 1, response) : response, budget.Token);
-                if (!ob20) channel.BeginCommand();
                 var execute = new ByteCursor(await ReadRequest(stream, channel, ob20, 1, budget.Token));
                 Assert.Equal(0xa1, execute.ReadUInt8()); Assert.Equal(0u, execute.ReadUInt32()); Assert.Equal(0, execute.ReadUInt8()); Assert.Equal(1u, execute.ReadUInt32());
                 Assert.Equal("BEGIN pkg.proc(?, ?); END;", Encoding.UTF8.GetString(execute.ReadLengthEncodedBytes())); Assert.Equal(2u, execute.ReadUInt32());
                 Assert.Equal(new byte[] { 2, 1, 8, 0, 6, 0, 7, 0, 0, 0, 0, 0, 0, 0 }, execute.ReadBytes(14));
-                response = Frame(1, new byte[] { 0, 91, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 4, 0, 0, 0, 1 })
+                var response = Frame(1, new byte[] { 0, 91, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 4, 0, 0, 0, 1 })
                     .Concat(Frame(2, Column(8))).Concat(Frame(3, Column(8))).Concat(Frame(4, Column(8)))
                     .Concat(Frame(5, new byte[] { 0, 0, 42, 0, 0, 0, 0, 0, 0, 0 })).Concat(Frame(6, eof)).Concat(Frame(7, Report(false, 2))).ToArray();
                 if (kind == "trailing") response = response.Concat(Frame(8, new byte[] { 0 })).ToArray();

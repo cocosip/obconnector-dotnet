@@ -38,7 +38,7 @@ namespace OceanBaseConnector.UnitTests
             using var command = new OceanBaseCommand(); EnableCursorOffset(command); command.FetchSize = 2; command.CommandText = "select n";
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "2.2.5", deprecated);
+
                 await StatementCommand(channel, 22, deprecated); await Prepared(channel, 80, 0, 1, deprecated);
                 for (var execution = 0; execution < 2; execution++)
                 {
@@ -55,7 +55,7 @@ namespace OceanBaseConnector.UnitTests
                     }
                 }
                 await StatementCommand(channel, 25, deprecated);
-            }, deprecated);
+            }, deprecated, serverVersion: "2.2.5");
             using var connection = new OceanBaseConnection(Configuration(server.Port));
             try
             {
@@ -79,17 +79,24 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("2.2.4")]
         [InlineData("2.2")]
         [InlineData("garbage")]
-        [InlineData("2.2.5-unknown")]
-        public async Task CursorOffsetRejectsUnprovenVersionsWithoutExecuting(string version)
+        [InlineData("2.2.bad")]
+        public async Task CursorOffsetRejectsOldVersionsAndOpeningRejectsMalformedVersions(string version)
         {
             using var command = new OceanBaseCommand(); EnableCursorOffset(command); command.FetchSize = 1; command.CommandText = "select n";
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, version); await Query(channel, "update allowed"); await channel.WritePacketAsync(Ok(1));
-            });
+                if (version != "2.2.4") return;
+                await Query(channel, "update allowed"); await channel.WritePacketAsync(Ok(1));
+            }, serverVersion: version);
             using var connection = new OceanBaseConnection(Configuration(server.Port));
             try
             {
+                if (version != "2.2.4")
+                {
+                    var error = await Assert.ThrowsAsync<OceanBaseException>(() => connection.OpenAsync());
+                    Assert.False(error.IsExecutionOutcomeUnknown); Assert.Equal(ConnectionState.Closed, connection.State);
+                    return;
+                }
                 await connection.OpenAsync(); command.Connection = connection;
                 for (var i = 0; i < 2; i++) await Assert.ThrowsAsync<NotSupportedException>(() => command.ExecuteReaderAsync());
                 using var allowed = connection.CreateCommand(); allowed.CommandText = "update allowed"; Assert.Equal(1, await allowed.ExecuteNonQueryAsync());
@@ -136,7 +143,7 @@ namespace OceanBaseConnector.UnitTests
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0"); await StatementCommand(channel, 22); await Prepared(channel, 80, 0, 1);
+                await StatementCommand(channel, 22); await Prepared(channel, 80, 0, 1);
                 await StatementCommand(channel, 23); await CursorMetadata(channel, 70);
                 await StatementCommand(channel, 28); await CursorMetadata(channel, 6);
                 await channel.WritePacketAsync(CursorRow(42)); await channel.WritePacketAsync(Eof(142)); terminated.SetResult();
@@ -146,7 +153,7 @@ namespace OceanBaseConnector.UnitTests
                     await StatementCommand(channel, 25);
                 }
                 else Assert.Equal(0, await channelStreamRead(channel).WaitAsync(TimeSpan.FromSeconds(10)));
-            });
+            }, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port));
             try
             {
@@ -200,7 +207,7 @@ namespace OceanBaseConnector.UnitTests
             using var command = new OceanBaseCommand(); EnableCursorOffset(command); command.FetchSize = 1; command.CommandText = "select n";
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0"); await StatementCommand(channel, 22); await Prepared(channel, 80, 0, 1);
+                await StatementCommand(channel, 22); await Prepared(channel, 80, 0, 1);
                 await StatementCommand(channel, 23); await CursorMetadata(channel, 70);
                 await StatementCommand(channel, 28); await CursorMetadata(channel, 6);
                 await channel.WritePacketAsync(CursorRow(42));
@@ -215,7 +222,7 @@ namespace OceanBaseConnector.UnitTests
                 if (fault == "output") tail[4] |= 16;
                 await channel.WritePacketAsync(tail);
                 Assert.Equal(0, await channelStreamRead(channel).WaitAsync(TimeSpan.FromSeconds(10)));
-            });
+            }, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port));
             try
             {
@@ -240,13 +247,13 @@ namespace OceanBaseConnector.UnitTests
             using var command = new OceanBaseCommand(); EnableCursorOffset(command); command.FetchSize = 1; command.CommandText = "select n";
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "2.2.75");
+
                 await StatementCommand(channel, 22); await Prepared(channel, 80, 0, 1);
                 await StatementCommand(channel, 23); await CursorMetadata(channel, 70);
                 await StatementCommand(channel, 28); await CursorMetadata(channel, 6);
                 await channel.WritePacketAsync(Eof(134)); await channel.WritePacketAsync(Ok());
                 await StatementCommand(channel, 25);
-            });
+            }, serverVersion: "2.2.75");
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
@@ -270,16 +277,16 @@ namespace OceanBaseConnector.UnitTests
             var first = Server(async channel =>
             {
                 await StatementCommand(channel, 22); await Prepared(channel, 80, 0, 1);
-                channel.BeginCommand(); await OracleVersionReply(channel, "2.2.5");
+                channel.BeginCommand();
                 await StatementCommand(channel, 23); await CursorMetadata(channel, 70);
                 await StatementCommand(channel, 28); await CursorMetadata(channel, 6);
                 await channel.WritePacketAsync(Eof(134)); await channel.WritePacketAsync(Ok());
                 Assert.Equal(0, await channelStreamRead(channel).WaitAsync(TimeSpan.FromSeconds(10)));
-            });
+            }, serverVersion: "2.2.5");
             var second = Server(async channel =>
             {
-                await OracleVersionReply(channel, "2.2.4"); await Query(channel, "update allowed"); await channel.WritePacketAsync(Ok(1));
-            });
+                await Query(channel, "update allowed"); await channel.WritePacketAsync(Ok(1));
+            }, serverVersion: "2.2.4");
             using var connection = new OceanBaseConnection(Configuration(first.Port));
             try
             {
@@ -306,7 +313,7 @@ namespace OceanBaseConnector.UnitTests
             using var command = new OceanBaseCommand(); EnableCursorOffset(command); command.FetchSize = 1; command.CommandText = "select n";
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0"); await StatementCommand(channel, 22); await Prepared(channel, 80, 0, 1);
+                await StatementCommand(channel, 22); await Prepared(channel, 80, 0, 1);
                 await StatementCommand(channel, 23); await CursorMetadata(channel, 70);
                 await StatementCommand(channel, 28); await CursorMetadata(channel, 6);
                 if (fault != "empty-progress") await channel.WritePacketAsync(CursorRow(42));
@@ -317,7 +324,7 @@ namespace OceanBaseConnector.UnitTests
                     await channel.WritePacketAsync(Ok(fault == "empty-progress" ? (byte)0 : (byte)1));
                 }
                 Assert.Equal(0, await channelStreamRead(channel).WaitAsync(TimeSpan.FromSeconds(10)));
-            });
+            }, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port));
             try
             {
@@ -342,7 +349,7 @@ namespace OceanBaseConnector.UnitTests
             using var command = new OceanBaseCommand(); EnableCursorOffset(command); command.FetchSize = 1; command.CommandText = "select n";
             var server = Server(async channel =>
             {
-                await OracleVersionReply(channel, "4.3.5.0", true); await StatementCommand(channel, 22, true); await Prepared(channel, 80, 0, 1, true);
+                await StatementCommand(channel, 22, true); await Prepared(channel, 80, 0, 1, true);
                 await StatementCommand(channel, 23, true); await CursorMetadata(channel, 70, true, true);
                 for (var page = 0; page < 2; page++)
                 {
@@ -351,7 +358,7 @@ namespace OceanBaseConnector.UnitTests
                     var tail = TimeZoneOk(page == 0 ? "Asia/Tokyo" : "Europe/Paris"); tail[1] = (byte)(page + 1); await channel.WritePacketAsync(tail);
                 }
                 await StatementCommand(channel, 25, true);
-            }, true);
+            }, true, serverVersion: "4.3.5.0");
             using var connection = new OceanBaseConnection(Configuration(server.Port));
             try
             {

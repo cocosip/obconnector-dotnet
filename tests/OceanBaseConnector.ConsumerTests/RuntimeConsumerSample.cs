@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,7 +33,8 @@ namespace OceanBaseConnector.ConsumerTests
                 var stream = peer.GetStream();
                 await Send(stream, greeting, 0, cancellation.Token);
                 await Receive(stream, cancellation.Token);
-                await Send(stream, new byte[] { 0, 0, 0, 6, 0, 0, 0 }, 2, cancellation.Token);
+                await Send(stream, SessionReport(), 2, cancellation.Token);
+                await ReplyIdentity(stream, cancellation.Token);
                 Check((await Receive(stream, cancellation.Token))[0] == 3, "Public query");
                 await Send(stream, new byte[] { 1 }, 1, cancellation.Token);
                 await Send(stream, new byte[] { 3, 100, 101, 102, 1, 116, 0, 0, 1, 110, 1, 110,
@@ -68,6 +70,32 @@ namespace OceanBaseConnector.ConsumerTests
         }
 
         private static void Check(bool condition, string name) { if (!condition) throw new InvalidOperationException(name); }
+        private static byte[] SessionReport()
+        {
+            using var state = new MemoryStream();
+            var names = new[] { "time_zone", "ncharacter_set_connection", "character_set_results", "character_set_connection" };
+            var values = new[] { "+00:00", "utf8mb4", "utf8mb4", "utf8mb4" };
+            for (var i = 0; i < names.Length; i++)
+            {
+                var name = Encoding.UTF8.GetBytes(names[i]); var value = Encoding.UTF8.GetBytes(values[i]);
+                state.WriteByte(0); state.WriteByte((byte)(2 + name.Length + value.Length));
+                state.WriteByte((byte)name.Length); state.Write(name); state.WriteByte((byte)value.Length); state.Write(value);
+            }
+            using var packet = new MemoryStream(); packet.Write(new byte[] { 0, 0, 0, 6, 64, 0, 0, 0 });
+            packet.WriteByte((byte)state.Length); packet.Write(state.ToArray()); return packet.ToArray();
+        }
+        private static async Task ReplyIdentity(Stream stream, CancellationToken token)
+        {
+            var query = await Receive(stream, token);
+            Check(query[0] == 3 && Encoding.UTF8.GetString(query, 1, query.Length - 1) == "select ob_version(), @@ob_compatibility_mode from dual", "Server identity query");
+            await Send(stream, new byte[] { 2 }, 1, token);
+            var column = new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 118, 1, 118, 12, 45, 0, 255, 0, 0, 0, 253, 0, 0, 0, 0, 0 };
+            await Send(stream, column, 2, token); await Send(stream, column, 3, token);
+            var eof = new byte[] { 254, 0, 0, 6, 0 };
+            await Send(stream, eof, 4, token);
+            await Send(stream, new byte[] { 7, 52, 46, 52, 46, 50, 46, 50, 6, 79, 82, 65, 67, 76, 69 }, 5, token);
+            await Send(stream, eof, 6, token);
+        }
         private static async Task Send(Stream stream, byte[] payload, byte sequence, CancellationToken token)
         {
             await stream.WriteAsync(new byte[] { (byte)payload.Length, 0, 0, sequence }, token);

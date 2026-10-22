@@ -24,8 +24,13 @@ namespace OceanBaseConnector.UnitTests
                 await channel.ReadPacketAsync();
                 authenticated?.TrySetResult();
                 if (beforeOk != null) await beforeOk;
-                try { await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }); }
+                try
+                {
+                    await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });
+                    await ServerIdentity.ReplyAsync(channel);
+                }
                 catch (System.IO.IOException) when (beforeOk != null) { return; }
+                catch (ProtocolException) when (beforeOk != null) { return; }
                 Assert.Equal(0, await client.GetStream().ReadUpToAsync(new byte[1], 1));
             });
         }
@@ -229,6 +234,7 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
                 await channel.ReadPacketAsync();
                 await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });
+                await ServerIdentity.ReplyAsync(channel);
                 Assert.Equal(0, await client.GetStream().ReadUpToAsync(new byte[1], 1));
             }
             var serverTasks = Task.WhenAll(ServeOne(), ServeOne());

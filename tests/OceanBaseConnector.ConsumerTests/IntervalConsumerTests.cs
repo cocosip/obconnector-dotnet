@@ -40,7 +40,8 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var channel = new PacketChannel(peer.GetStream());
                 await channel.WritePacketAsync(greeting, budget.Token); await channel.ReadPacketAsync(budget.Token);
-                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token); channel.BeginCommand();
+                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token);
+                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, token: budget.Token); channel.BeginCommand();
                 Task<byte[]> ReadCommand() => SessionTimeZoneFixture.ReadCommand(channel, budget.Token, expectProbe: false);
                 Assert.Equal(binary ? 22 : 3, (await ReadCommand())[0]);
                 if (binary)

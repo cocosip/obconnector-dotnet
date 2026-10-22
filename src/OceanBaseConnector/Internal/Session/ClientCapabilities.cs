@@ -4,8 +4,8 @@ namespace OceanBaseConnector.Internal.Session
 {
     /// <summary>
     /// Computes the client capability set for a connection. Base set mirrors
-    /// the Java baseline plus this driver's fixed decisions:
-    /// CLIENT_FOUND_ROWS is always on (no useAffectedRows option in .NET)
+    /// the Java baseline plus this driver's connection policy:
+    /// CLIENT_FOUND_ROWS follows the Use Affected Rows connection option,
     /// and CLIENT_SUPPORT_ORACLE / CLIENT_SESSION_TRACK are declared so the
     /// server may answer in either compatibility mode. CLIENT_SSL is added
     /// by the TLS flow only when TLS is actually negotiated.
@@ -24,8 +24,9 @@ namespace OceanBaseConnector.Internal.Session
                 | CapabilityFlags.ClientConnectAttrs
                 | CapabilityFlags.ClientPluginAuthLenencClientData
                 | CapabilityFlags.ClientSessionTrack
-                | CapabilityFlags.ClientSupportOracle
-                | CapabilityFlags.ClientFoundRows;
+                | CapabilityFlags.ClientSupportOracle;
+
+            if (!options.UseAffectedRows) capabilities |= CapabilityFlags.ClientFoundRows;
 
             if (options.Database.Length > 0)
             {

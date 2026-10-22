@@ -32,6 +32,7 @@ internal static partial class DatabaseCases
         cases.Add(new("connection.change-database", "connection", ChangeDatabase, Mode: "MySql", RequiresAlternateDatabase: true));
         cases.Add(new("batch.multiple-results", "batch", Batch));
         cases.Add(new("schema.collections", "schema", Schema));
+        cases.Add(new("types.mysql-client-behavior", "types", MySqlClientBehavior, Mode: "MySql", RequiresObjects: true));
         cases.Add(new("schema.created-table", "schema", SchemaTable, RequiresObjects: true));
         cases.Add(new("reader.close-connection", "reader", ReaderClosesConnection));
         cases.Add(new("diagnostics.activities-metrics", "diagnostics", Diagnostics));
@@ -58,6 +59,12 @@ internal static partial class DatabaseCases
         c.ObserveServer(connection);
         c.Check(connection.CompatibilityMode?.ToString() == c.Config.Mode, "Connected mode must match configuration.");
         c.Check(!string.IsNullOrWhiteSpace(connection.ServerVersion), "Server version must be available.");
+        var actualVersion = await c.ScalarAsync(connection, c.ScalarSql("ob_version()"), token);
+        c.Check(actualVersion is string version && version == connection.ServerVersion,
+            "ServerVersion must report the actual OceanBase product version.");
+        var source = connection.GetSchema("DataSourceInformation");
+        c.Check(Equals(source.Rows[0]["DataSourceProductVersion"], actualVersion),
+            "Schema must report the actual OceanBase product version.");
         await using (var command = c.Command(connection, c.SelectOne))
             c.EqualNumber(async ? await command.ExecuteScalarAsync(token) : command.ExecuteScalar(), 1, "Connection scalar must equal one.");
         if (async) await connection.CloseAsync(); else connection.Close();

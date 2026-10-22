@@ -62,7 +62,8 @@ namespace OceanBaseConnector.ConsumerTests
                 var seed = Convert.FromHexString("01020304050607081112131415161718191a1b1c");
                 for (var i = 0; i < decoded.Length; i++) decoded[i] ^= seed[i % seed.Length];
                 Assert.Equal(Encoding.UTF8.GetBytes("密码🔑\0"), decoded);
-                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token); channel.BeginCommand();
+                await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token);
+                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, token: budget.Token); channel.BeginCommand();
                 var command = await SessionTimeZoneFixture.ReadCommand(channel, budget.Token, expectProbe: false);
                 Assert.Equal(3, command[0]); Assert.Equal("update t set x=1", Encoding.UTF8.GetString(command, 1, command.Length - 1));
                 await channel.WritePacketAsync(new byte[] { 0, 1, 0, 2, 0, 0, 0 }, budget.Token);

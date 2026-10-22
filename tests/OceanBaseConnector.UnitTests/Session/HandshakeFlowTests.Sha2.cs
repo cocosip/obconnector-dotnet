@@ -45,6 +45,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 await channel.WritePacketAsync(new byte[] { 1, 3 }, budget.Token);
                 // A client packet here would break the shared packet sequence at final OK.
                 await channel.WritePacketAsync(BuildAuthOk(oracleMode: true), budget.Token);
+                await ServerIdentity.ReplyAsync(channel);
                 Assert.Equal(0, await client.GetStream().ReadUpToAsync(new byte[1], 1));
             });
             try
@@ -238,6 +239,7 @@ namespace OceanBaseConnector.UnitTests.Session
                     {
                         await channel.WritePacketAsync(new byte[] { 1, 3 });
                         await channel.WritePacketAsync(BuildAuthOk(oracleMode: true));
+                        await ServerIdentity.ReplyAsync(channel);
                     }
                     else await channel.WritePacketAsync(path == "switch" ? Sha2Switch("sha256_password") : new byte[] { 1, 4 });
                 }
@@ -348,9 +350,18 @@ namespace OceanBaseConnector.UnitTests.Session
             {
                 using var transport = await TcpTransport.ConnectAsync("127.0.0.1", server.Port, TimeSpan.FromSeconds(10), default);
                 var channel = new PacketChannel(transport.Stream); var options = BuildOptions(expectedMode: OceanBaseCompatibilityMode.MySql);
-                var error = asynchronous ? await Assert.ThrowsAsync<OceanBaseException>(() => HandshakeFlow.AuthenticateAsync(transport, channel, options, default))
-                    : Assert.Throws<OceanBaseException>(() => HandshakeFlow.Authenticate(transport, channel, options));
-                Assert.Contains(oracleBit ? "ExpectedMode" : "verified", error.Message);
+                if (oracleBit)
+                {
+                    var error = asynchronous ? await Assert.ThrowsAsync<OceanBaseException>(() => HandshakeFlow.AuthenticateAsync(transport, channel, options, default))
+                        : Assert.Throws<OceanBaseException>(() => HandshakeFlow.Authenticate(transport, channel, options));
+                    Assert.Contains("ExpectedMode", error.Message);
+                }
+                else
+                {
+                    var result = asynchronous ? await HandshakeFlow.AuthenticateAsync(transport, channel, options, default)
+                        : HandshakeFlow.Authenticate(transport, channel, options);
+                    Assert.Equal(OceanBaseCompatibilityMode.MySql, result.Mode); Assert.Equal("4.4.2.1", result.ServerVersion);
+                }
             }
             finally { server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));

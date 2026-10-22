@@ -210,7 +210,7 @@ namespace OceanBaseConnector.UnitTests.Protocol
         }
 
         [Fact]
-        public void ClientCapabilitiesAlwaysIncludeFoundRowsAndOracleSupport()
+        public void DefaultClientCapabilitiesIncludeFoundRowsAndOracleSupport()
         {
             var options = new OceanBaseConnectionStringBuilder { Server = "s", UserId = "u" }.Build();
             var capabilities = ClientCapabilities.Build(CapabilityFlags.None, options);

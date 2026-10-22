@@ -50,12 +50,12 @@ namespace OceanBaseConnector.ConsumerTests
                 using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
                 Stream stream = tls is null ? peer.GetStream() : tls;
                 var channel = new PacketChannel(peer.GetStream());
-                await Handshake(channel, ob20 ? "enabled" : "unrequested", budget.Token, tls: tls, certificate: certificate);
+                await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, tls: tls, certificate: certificate);
                 uint requestId = 0;
-                async Task<byte[]> Read() => await ReadRequest(stream, channel, ob20, requestId++, budget.Token);
+                async Task<byte[]> Read() => await ReadRequest(stream, channel, ob20, requestId++ + 1, budget.Token);
                 async Task Reply(byte[] response)
                 {
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId - 1, 1, response) : response, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId, 1, response) : response, budget.Token);
                     if (!ob20) channel.BeginCommand();
                 }
                 async Task Text(string sql)
@@ -84,10 +84,6 @@ namespace OceanBaseConnector.ConsumerTests
                     Assert.Equal(0u, cursor.ReadUInt32()); Assert.Equal(0u, cursor.ReadUInt32()); cursor.ReadUInt32(); Assert.Equal(0u, cursor.ReadUInt32());
                     Assert.False(cursor.HasRemaining);
                 }
-                await Text("select ob_version() from dual");
-                var eof = new byte[] { 254, 0, 0, 0, 0 };
-                await Reply(Frame(1, new byte[] { 1 }).Concat(Frame(2, OracleXaColumn(253))).Concat(Frame(3, eof))
-                    .Concat(Frame(4, new byte[] { 7, 52, 46, 51, 46, 53, 46, 48 })).Concat(Frame(5, eof)).ToArray());
                 await Text("set autocommit = 0"); await Reply(Frame(1, new byte[] { 0, 0, 0, 0, 0, 0, 0 }));
                 await Stage("START", 0, false); await Reply(OracleXaFrames(2, rowCompletion: asynchronous));
                 await Stage("END", 0x04000000); await Reply(OracleXaFrames(2, rowCompletion: asynchronous));

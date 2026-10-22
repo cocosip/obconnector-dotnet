@@ -91,6 +91,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 }
                 Assert.Equal(Convert.FromHexString(switchPlugin ? EdZeroSignature : EdSignature), response);
                 await channel.WritePacketAsync(BuildAuthOk(oracleMode: true), budget.Token);
+                await ServerIdentity.ReplyAsync(channel);
                 Assert.Equal(0, await stream.ReadUpToAsync(new byte[1], 1));
             });
             try

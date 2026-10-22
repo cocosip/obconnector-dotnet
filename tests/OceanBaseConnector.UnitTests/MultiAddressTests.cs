@@ -95,11 +95,12 @@ namespace OceanBaseConnector.UnitTests
                 if (failurePhase == 4)
                 {
                     channel.BeginCommand();
-                    await Query(channel, "select ob_version() from dual");
+                    await Query(channel, "select ob_version(), @@ob_compatibility_mode from dual");
                     await channel.WritePacketAsync(Error());
                 }
                 if (failurePhase == 3)
                 {
+                    await ServerIdentity.ReplyAsync(channel);
                     channel.BeginCommand();
                     await Query(channel, "must not replay");
                 }
@@ -203,6 +204,7 @@ namespace OceanBaseConnector.UnitTests
                     var channel = new PacketChannel(peer);
                     await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
                     await channel.ReadPacketAsync(); await channel.WritePacketAsync(Ok());
+                    await ServerIdentity.ReplyAsync(channel);
                     channel.BeginCommand(); await Query(channel, "reopen"); await channel.WritePacketAsync(Ok(7));
                 });
                 if (asynchronous) await connection.OpenAsync(); else connection.Open();
@@ -321,6 +323,7 @@ namespace OceanBaseConnector.UnitTests
                 var authentication = Encoding.UTF8.GetString(await channel.ReadPacketAsync());
                 Assert.Contains("_server_host\u0009localhost", authentication);
                 await channel.WritePacketAsync(Ok());
+                await ServerIdentity.ReplyAsync(channel);
                 Assert.Equal(0, await tls.ReadUpToAsync(new byte[1], 1));
             });
             var builder = new OceanBaseConnectionStringBuilder(Configuration(server.Port))
