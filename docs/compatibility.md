@@ -85,6 +85,6 @@ For supported alternatives and binding rules, see the [API reference](obconnecto
 
 ## Runtime and integration coverage
 
-Local fixture and package checks cover different baselines and do not replace database validation. Four separate integration gate tests were recorded as skipped, including direct/OBProxy mode checks, TLS-name rejection and unsupported-plugin rejection. They have not been established as passing by the acceptance counts above.
+Local fixture and package checks cover different baselines and do not replace database validation. The integration suite (connection and identity gates: direct/OBProxy mode checks, TLS-name rejection, unsupported-plugin and autocommit-disabled rejection, plus the full functional suites) has not been established as passing; it runs only against a configured external database and is skipped everywhere else.
 
 Full non-Windows deployment, every runtime implementing .NET Standard, real Kerberos/KDC credentials and a complete TLS/plugin matrix remain unverified. Historical .NET Framework checks cover basic consumption through a net48 host running installed Framework 4.8.1, not formal original-4.8 or full SQL/TLS support. See [verification status and remaining work](obconnector-dotnet-progress.md).

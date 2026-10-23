@@ -35,13 +35,13 @@ The earlier Ubuntu CI record had two piece-data budget tests timing out. The TCP
 - Verify large-value peak memory/throughput, cursor/LOB resource lifetime, complex-type DDL changes, catalog permissions and additional output shapes on each intended deployment profile. Selected basic round trips do not cover these combinations.
 - Complete intended non-Windows/runtime deployment coverage; make an explicit .NET Framework support decision. Finish source-provenance/package-name review before publication.
 
-## Integration gate configuration
+## Integration suite configuration
 
-[IntegrationTestEnvironment.cs](../tests/OceanBaseConnector.IntegrationTests/IntegrationTestEnvironment.cs) requires `OB_REQUIRE_INTEGRATION=1` to run the gates. Supply all four connection variables:
+The [integration suite](../tests/OceanBaseConnector.IntegrationTests/README.md) requires OB_REQUIRE_INTEGRATION=1 to run anything; CI and ordinary dotnet test runs always skip it. Configure target databases through a profiles file (OB_INTEGRATION_CONFIG), or fall back to the four legacy gate variables:
 
-- `OB_MYSQL_CONNECTION_STRING`
-- `OB_ORACLE_CONNECTION_STRING`
-- `OB_MYSQL_PROXY_CONNECTION_STRING`
-- `OB_ORACLE_PROXY_CONNECTION_STRING`
+- OB_MYSQL_CONNECTION_STRING
+- OB_ORACLE_CONNECTION_STRING
+- OB_MYSQL_PROXY_CONNECTION_STRING
+- OB_ORACLE_PROXY_CONNECTION_STRING
 
-The plugin rejection test additionally requires `OB_UNSUPPORTED_AUTH_CONNECTION_STRING`. When integration is required, missing configuration fails instead of passing silently. See the [acceptance guide](../tests/OceanBaseConnector.Acceptance/README.md) for the separate database console; it does not replace these gates.
+The legacy variables synthesize the four direct/proxy profiles for connection and identity suites; suites that create objects need a profiles file with capabilities.createObjects. Special endpoints (unsupported auth plugin, autocommit disabled) are declared as profile capabilities in the file. When integration is required, missing configuration fails instead of passing silently. See the [acceptance guide](../tests/OceanBaseConnector.Acceptance/README.md) for the separate database console; it does not replace these suites.

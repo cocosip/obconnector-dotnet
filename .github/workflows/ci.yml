@@ -68,11 +68,6 @@ jobs:
           dotnet test tests/OceanBaseConnector.DependencyInjection.Tests/OceanBaseConnector.DependencyInjection.Tests.csproj
           -c Release --no-restore --no-build
 
-      - name: Integration tests (skip without environment)
-        run: >-
-          dotnet test tests/OceanBaseConnector.IntegrationTests/OceanBaseConnector.IntegrationTests.csproj
-          -c Release --no-restore --no-build
-
       - name: Pack (master/main artifact)
         if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         run: dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/packages

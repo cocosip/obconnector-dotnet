@@ -356,3 +356,7 @@ ASALocalRun/
 docs/superpowers/
 .superpowers/
 
+
+# Local integration-test configuration (may contain endpoints; credentials stay in environment variables)
+tests/OceanBaseConnector.IntegrationTests/integration-tests.json
+.zcode/

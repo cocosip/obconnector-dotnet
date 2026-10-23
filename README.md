@@ -67,7 +67,7 @@ The driver does not automatically replay SQL. If `OceanBaseException.IsExecution
 
 ## Build and test
 
-Requires the .NET 10 SDK. Tests run on .NET 10; database tests require a configured environment.
+Requires the .NET 10 SDK. Tests run on .NET 10. Real-database integration tests never run in CI or a plain dotnet test; they need an explicit opt-in and a configured environment ([integration guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.IntegrationTests/README.md)).
 
 ```powershell
 dotnet restore OceanBaseConnector.slnx
@@ -82,6 +82,7 @@ To check package consumption, run `pwsh -File eng/Verify-Packages.ps1 -PackageDi
 
 - [Compatibility and known limitations](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/compatibility.md)
 - [Database acceptance guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.Acceptance/README.md)
+- [Integration test guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.IntegrationTests/README.md)
 - [API reference](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-architecture-design.md)
 - [Verification status and remaining work](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-progress.md)
 - [Connector/J architecture reference](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-j-architecture-outline.md)

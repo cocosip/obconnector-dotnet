@@ -1,0 +1,49 @@
+{
+  "profiles": [
+    {
+      "name": "mysql-direct",
+      "mode": "MySql",
+      "connectionStringEnvironment": "OB_MYSQL_CONNECTION_STRING",
+      "tags": ["direct"],
+      "options": {
+        "tlsMode": "Disabled"
+      },
+      "capabilities": {
+        "createObjects": true,
+        "slowQuery": "SELECT COUNT(*) FROM oceanbase.GV$OB_PROCESSLIST a, oceanbase.GV$OB_PROCESSLIST b, oceanbase.GV$OB_PROCESSLIST c",
+        "alternateDatabase": "test"
+      }
+    },
+    {
+      "name": "oracle-direct",
+      "mode": "Oracle",
+      "connectionStringEnvironment": "OB_ORACLE_CONNECTION_STRING",
+      "tags": ["direct"],
+      "options": {
+        "tlsMode": "Disabled",
+        "useOraclePrepareExecute": true,
+        "useLobLocators": true
+      },
+      "capabilities": {
+        "createObjects": true,
+        "slowQuery": "SELECT COUNT(*) FROM ALL_OBJECTS a, ALL_OBJECTS b, ALL_OBJECTS c"
+      }
+    },
+    {
+      "name": "mysql-proxy",
+      "mode": "MySql",
+      "connectionStringEnvironment": "OB_MYSQL_PROXY_CONNECTION_STRING",
+      "tags": ["proxy"]
+    },
+    {
+      "name": "mysql-ob20",
+      "mode": "MySql",
+      "connectionStringEnvironment": "OB_MYSQL_OB20_CONNECTION_STRING",
+      "tags": ["ob20"],
+      "options": {
+        "useOb20": true,
+        "enableFullLinkTrace": true
+      }
+    }
+  ]
+}
