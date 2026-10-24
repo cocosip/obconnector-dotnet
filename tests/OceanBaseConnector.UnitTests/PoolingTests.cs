@@ -16,7 +16,27 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData("SET SESSION time_zone = '+00:00'")]
         [InlineData("CREATE TEMPORARY TABLE pooled_state (id INT)")]
+        [InlineData("/* trace */ SET SESSION time_zone = '+00:00'")]
+        [InlineData("-- trace\nSET SESSION time_zone = '+00:00'")]
+        [InlineData("# trace\nSET SESSION time_zone = '+00:00'")]
+        [InlineData("SET/* trace */ SESSION time_zone = '+00:00'")]
+        [InlineData("CREATE /* trace */ TEMPORARY TABLE pooled_state (id INT)")]
+        [InlineData("CREATE\nTEMPORARY TABLE pooled_state (id INT)")]
+        [InlineData("/*! SET SESSION time_zone = '+00:00' */")]
+        [InlineData("CALL pooled_state()")]
         public async Task UserSessionStateChangeDoesNotReturnPhysicalSessionToPool(string commandText)
+            => await VerifyStatefulReturn(commandText, multiStatements: false, oracle: false, asynchronous: true);
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public async Task LaterTextStatementDiscardsSessionAfterAllResults(bool oracle, bool asynchronous)
+            => await VerifyStatefulReturn("SELECT 1; " + (oracle ? "ALTER\nSESSION SET TIME_ZONE = '+00:00'" : "SET SESSION time_zone = '+00:00'"),
+                multiStatements: true, oracle, asynchronous);
+
+        private static async Task VerifyStatefulReturn(string commandText, bool multiStatements, bool oracle, bool asynchronous)
         {
             using var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
@@ -30,26 +50,27 @@ namespace OceanBaseConnector.UnitTests
                 await Task.WhenAll(firstTask, Serve(second, expectUserCommand: false, commandText, stop.Token, secondReady));
             }, stop.Token);
 
-            var connectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;Password=p;TLS Mode=Disabled;Pooling=true";
+            var connectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;Password=p;TLS Mode=Disabled;Pooling=true;Max Pool Size=1;Allow Multi Statements={multiStatements}";
             using var connection = new OceanBaseConnection(connectionString);
             try
             {
-                await connection.OpenAsync(stop.Token);
+                if (asynchronous) await connection.OpenAsync(stop.Token); else connection.Open();
                 using (var command = connection.CreateCommand())
                 {
                     command.CommandText = commandText;
-                    Assert.Equal(0, await command.ExecuteNonQueryAsync(stop.Token));
+                    Assert.Equal(0, asynchronous ? await command.ExecuteNonQueryAsync(stop.Token) : command.ExecuteNonQuery());
                 }
                 Assert.True(connection.GetOpenSession().RequiresDiscardOnReturn);
-                await connection.CloseAsync();
-                await connection.OpenAsync(stop.Token);
+                if (asynchronous) await connection.CloseAsync(); else connection.Close();
+                if (asynchronous) await connection.OpenAsync(stop.Token); else connection.Open();
                 await secondReady.Task.WaitAsync(TimeSpan.FromSeconds(3));
-                await connection.CloseAsync();
+                if (asynchronous) await connection.CloseAsync(); else connection.Close();
                 await serving.WaitAsync(TimeSpan.FromSeconds(3));
             }
             finally
             {
                 connection.Close();
+                OceanBaseConnection.ClearPool(connection);
                 stop.Cancel();
                 listener.Stop();
             }
@@ -58,16 +79,19 @@ namespace OceanBaseConnector.UnitTests
                 using (client)
                 {
                     var channel = new PacketChannel(client.GetStream());
-                    await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload, token);
+                    var greeting = (byte[])ProtocolFixture.Load("initial-handshake-oceanbase").Payload.Clone();
+                    if (multiStatements) greeting[41] |= 1;
+                    await channel.WritePacketAsync(greeting, token);
                     await channel.ReadPacketAsync(token);
-                    await channel.WritePacketAsync(new byte[] { 0, 0, 0, 2, 0, 0, 0 }, token);
-                    await ServerIdentity.ReplyAsync(channel, oracle: false, token: token);
+                    await channel.WritePacketAsync(oracle ? TextCommandTests.TimeZoneOk("+00:00") : new byte[] { 0, 0, 0, 2, 0, 0, 0 }, token);
+                    await ServerIdentity.ReplyAsync(channel, oracle, token: token);
                     ready?.TrySetResult();
                     if (expectUserCommand)
                     {
                         var request = await channel.ReadPacketAsync(token);
                         Assert.Equal(3, request[0]);
                         Assert.Equal(expectedCommand, Encoding.UTF8.GetString(request, 1, request.Length - 1));
+                        if (multiStatements) await channel.WritePacketAsync(new byte[] { 0, 0, 0, 14, 0, 0, 0 }, token);
                         await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, token);
                         channel.BeginCommand();
                     }
@@ -78,17 +102,7 @@ namespace OceanBaseConnector.UnitTests
                     }
                     if (expectUserCommand)
                     {
-                        try
-                        {
-                            var packet = await channel.ReadPacketAsync(token);
-                            if (packet[0] == 0x1f)
-                                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, token);
-                            else if (packet[0] == 0x0e)
-                                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, token);
-                        }
-                        catch (EndOfStreamException) { }
-                        catch (ProtocolException) { }
-                        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+                        Assert.Equal(0, await client.GetStream().ReadUpToAsync(new byte[1], 1).WaitAsync(token));
                     }
                 }
             }

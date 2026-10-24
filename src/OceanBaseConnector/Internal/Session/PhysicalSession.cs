@@ -301,17 +301,7 @@ namespace OceanBaseConnector.Internal.Session
                 if (_liveLobCount != 0) _liveLobCount--;
             }
         }
-        internal void MarkSessionStateChanged(string commandText)
-        {
-            var text = commandText.TrimStart();
-            if (!StartsWithStatement(text, "SET") && !StartsWithStatement(text, "ALTER SESSION") &&
-                !StartsWithStatement(text, "CREATE TEMPORARY") && !StartsWithStatement(text, "CREATE GLOBAL TEMPORARY") &&
-                !StartsWithStatement(text, "DECLARE GLOBAL TEMPORARY")) return;
-            lock (_gate) _sessionStateChanged = true;
-        }
-        private static bool StartsWithStatement(string text, string keyword) =>
-            text.StartsWith(keyword, StringComparison.OrdinalIgnoreCase) &&
-            (text.Length == keyword.Length || char.IsWhiteSpace(text[keyword.Length]));
+        internal void MarkSessionStateChanged() { lock (_gate) _sessionStateChanged = true; }
         internal void Reserve(object owner)
         {
             lock (_gate)

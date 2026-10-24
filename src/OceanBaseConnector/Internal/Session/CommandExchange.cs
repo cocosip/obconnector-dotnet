@@ -81,6 +81,7 @@ namespace OceanBaseConnector.Internal.Session
         internal NationalCharacterSet? NationalCharacterSet { get; private set; }
         internal OceanBaseCompatibilityMode Mode => _session.Info!.Mode;
         internal bool TreatTinyAsBoolean => _session.TreatTinyAsBoolean;
+        internal bool DiscardSessionAfterExecution { get; set; }
         internal LobSession? Lobs { get; set; }
         internal IReadOnlyDictionary<(string, string), OceanBaseComplexType>? ComplexTypes { get; set; }
         internal void EnsureReading()
@@ -98,6 +99,7 @@ namespace OceanBaseConnector.Internal.Session
                 _budget.Token.ThrowIfCancellationRequested();
                 if (executesSql)
                 {
+                    if (DiscardSessionAfterExecution) _session.MarkSessionStateChanged();
                     SessionTimeZone = _session.TakeSessionTimeZone(_lease);
                     NationalCharacterSet = _session.TakeNationalCharacterSet(_lease);
                 }

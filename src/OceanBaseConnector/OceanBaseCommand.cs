@@ -251,7 +251,6 @@ namespace OceanBaseConnector
                     throw new NotSupportedException("Array binding requires Oracle mode, Use Oracle Prepare Execute=true and an explicit transaction.");
                 if (RequiredSession != null && !ReferenceEquals(session, RequiredSession))
                     throw new InvalidOperationException("The connection's physical session changed before the operation started.");
-                session.MarkSessionStateChanged(text);
                 var length = ResultColumn.Utf8.GetByteCount(text);
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
                 var oracle = session.UseOraclePrepareExecute && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle &&
@@ -318,6 +317,8 @@ namespace OceanBaseConnector
                 execution.BatchCommand = BatchCommand;
                 execution.BatchFailed = BatchFailed;
 #endif
+                execution.DiscardSessionAfterExecution = !prepareOnly && !schemaOnly &&
+                    (CommandType == CommandType.StoredProcedure || SessionStateSql.RequiresDiscard(text, session.Info!.Mode));
                 _execution = execution;
                 if (arrayCount != 0) ArrayBindingResult = null;
                 if (oracle != null)

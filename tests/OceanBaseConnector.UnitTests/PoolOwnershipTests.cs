@@ -101,7 +101,7 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync();
                 var session = connection.GetOpenSession();
-                session.MarkSessionStateChanged("SET SESSION user_state = 1");
+                session.MarkSessionStateChanged();
                 if (asynchronous) await connection.CloseAsync(); else connection.Close();
                 Assert.Equal(SessionState.Closed, session.State);
                 Assert.True(originalPool.IsEmpty);

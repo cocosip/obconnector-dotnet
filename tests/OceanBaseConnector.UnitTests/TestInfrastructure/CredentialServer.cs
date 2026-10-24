@@ -25,11 +25,12 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
         private readonly byte[] _greeting;
         private readonly bool _oracle;
         private readonly bool _pam;
+        private readonly byte[]? _sessionStateOk;
         private readonly X509Certificate2? _certificate;
         private int _accepted;
-        internal CredentialServer(byte[] greeting, bool oracle = true, bool pam = false)
+        internal CredentialServer(byte[] greeting, bool oracle = true, bool pam = false, byte[]? sessionStateOk = null)
         {
-            _greeting = greeting; _oracle = oracle; _pam = pam;
+            _greeting = greeting; _oracle = oracle; _pam = pam; _sessionStateOk = sessionStateOk;
             if (pam) _certificate = TestCertificateFactory.CreateSelfSigned();
             _listener.Start(); Port = ((IPEndPoint)_listener.LocalEndpoint).Port; _accepting = Accept();
         }
@@ -61,7 +62,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                 client.NoDelay = true;
                 var channel = new PacketChannel(client.GetStream());
                 using var tls = _certificate == null ? null : new SslStream(client.GetStream(), leaveInnerStreamOpen: true);
-                var ok = new byte[] { 0, 0, 0, (byte)(_oracle ? 6 : 2), 0, 0, 0 };
+                var ok = _sessionStateOk ?? new byte[] { 0, 0, 0, (byte)(_oracle ? 6 : 2), 0, 0, 0 };
                 try
                 {
                     if (BeforeGreeting != null) await BeforeGreeting().WaitAsync(_stop.Token);

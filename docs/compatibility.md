@@ -4,6 +4,8 @@ The tables distinguish recorded passes, failures, explicitly unsupported behavio
 
 Routine parameter derivation has a local implementation on all five assets: [API contract](obconnector-dotnet-architecture-design.md#routine-parameter-derivation) and [mapping limits](schema.md#parameter-derivation). It uses a unique visible routine identity, one reserved session/current transaction, per-query timeout, cancellation and atomic collection-membership publication. It does not execute the target or add MySQL StoredProcedure execution. Actual directory parsing, permissions, declarations, version and OBProxy acceptance remain unverified; local fixtures cannot establish them. The [development checkpoint](obconnector-dotnet-completeness.md#1517-2026-10-25-参数推导开发与完整文档检查点) retains earlier failures and is not the final delivery state.
 
+User-SQL pool state classification now has a shared mode-aware path and a target-send boundary: [contract](obconnector-dotnet-architecture-design.md#pooled-session-state-after-user-sql). Commented/later statements and opaque calls retire the session; preparation and local rejection do not mark it as executed. MySQL quoted backslash/SQL_MODE ambiguity is conservative and can reduce reuse. This does not close arbitrary function/trigger effects, resource/fault/concurrency matrices or real reset acceptance; see P0-02 in the completeness baseline.
+
 ## Server and topology matrix
 
 | Target | Status | Boundary |
