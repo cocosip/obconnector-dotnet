@@ -515,7 +515,7 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
-        internal static void ReleaseIfEmpty(string key, PhysicalSessionPool pool)
+        internal static bool ReleaseIfEmpty(string key, PhysicalSessionPool pool)
         {
             var removed = false;
             lock (Gate)
@@ -527,6 +527,7 @@ namespace OceanBaseConnector.Internal.Session
                 }
             }
             if (removed) pool.Dispose();
+            return removed;
         }
     }
 }

@@ -1,4 +1,9 @@
 using System;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.UnitTests.TestInfrastructure;
@@ -8,6 +13,87 @@ namespace OceanBaseConnector.UnitTests
 {
     public sealed class PoolingTests
     {
+        [Theory]
+        [InlineData("SET SESSION time_zone = '+00:00'")]
+        [InlineData("CREATE TEMPORARY TABLE pooled_state (id INT)")]
+        public async Task UserSessionStateChangeDoesNotReturnPhysicalSessionToPool(string commandText)
+        {
+            using var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var secondReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var serving = Task.Run(async () =>
+            {
+                var first = await listener.AcceptTcpClientAsync(stop.Token);
+                var firstTask = Serve(first, expectUserCommand: true, commandText, stop.Token);
+                var second = await listener.AcceptTcpClientAsync(stop.Token);
+                await Task.WhenAll(firstTask, Serve(second, expectUserCommand: false, commandText, stop.Token, secondReady));
+            }, stop.Token);
+
+            var connectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;Password=p;TLS Mode=Disabled;Pooling=true";
+            using var connection = new OceanBaseConnection(connectionString);
+            try
+            {
+                await connection.OpenAsync(stop.Token);
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = commandText;
+                    Assert.Equal(0, await command.ExecuteNonQueryAsync(stop.Token));
+                }
+                Assert.True(connection.GetOpenSession().RequiresDiscardOnReturn);
+                await connection.CloseAsync();
+                await connection.OpenAsync(stop.Token);
+                await secondReady.Task.WaitAsync(TimeSpan.FromSeconds(3));
+                await connection.CloseAsync();
+                await serving.WaitAsync(TimeSpan.FromSeconds(3));
+            }
+            finally
+            {
+                connection.Close();
+                stop.Cancel();
+                listener.Stop();
+            }
+            async Task Serve(TcpClient client, bool expectUserCommand, string expectedCommand, CancellationToken token, TaskCompletionSource? ready = null)
+            {
+                using (client)
+                {
+                    var channel = new PacketChannel(client.GetStream());
+                    await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload, token);
+                    await channel.ReadPacketAsync(token);
+                    await channel.WritePacketAsync(new byte[] { 0, 0, 0, 2, 0, 0, 0 }, token);
+                    await ServerIdentity.ReplyAsync(channel, oracle: false, token: token);
+                    ready?.TrySetResult();
+                    if (expectUserCommand)
+                    {
+                        var request = await channel.ReadPacketAsync(token);
+                        Assert.Equal(3, request[0]);
+                        Assert.Equal(expectedCommand, Encoding.UTF8.GetString(request, 1, request.Length - 1));
+                        await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, token);
+                        channel.BeginCommand();
+                    }
+                    else
+                    {
+                        Assert.Equal(new byte[] { 0x1f }, await channel.ReadPacketAsync(token));
+                        await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, token);
+                    }
+                    if (expectUserCommand)
+                    {
+                        try
+                        {
+                            var packet = await channel.ReadPacketAsync(token);
+                            if (packet[0] == 0x1f)
+                                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, token);
+                            else if (packet[0] == 0x0e)
+                                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, token);
+                        }
+                        catch (EndOfStreamException) { }
+                        catch (ProtocolException) { }
+                        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+                    }
+                }
+            }
+        }
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]

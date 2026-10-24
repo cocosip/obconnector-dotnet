@@ -459,6 +459,7 @@ namespace OceanBaseConnector.UnitTests.Session
         {
             var longs = new List<(string Name, long Value)>();
             var doubles = new List<(string Name, double Value)>();
+            var metricsGate = new object();
             using var listener = new MeterListener
             {
                 InstrumentPublished = (instrument, owner) =>
@@ -467,8 +468,8 @@ namespace OceanBaseConnector.UnitTests.Session
                 },
                 MeasurementsCompleted = (_, _) => { },
             };
-            listener.SetMeasurementEventCallback<long>((instrument, value, _, _) => longs.Add((instrument.Name, value)));
-            listener.SetMeasurementEventCallback<double>((instrument, value, _, _) => doubles.Add((instrument.Name, value)));
+            listener.SetMeasurementEventCallback<long>((instrument, value, _, _) => { lock (metricsGate) longs.Add((instrument.Name, value)); });
+            listener.SetMeasurementEventCallback<double>((instrument, value, _, _) => { lock (metricsGate) doubles.Add((instrument.Name, value)); });
             listener.Start();
             var options = new OceanBaseConnectionStringBuilder
             {
@@ -483,13 +484,16 @@ namespace OceanBaseConnector.UnitTests.Session
             var first = pool.Rent(options, null, new EndpointSelector(), out _);
             await Assert.ThrowsAsync<TimeoutException>(() => pool.RentAsync(options, null, new EndpointSelector()));
             pool.Discard(first);
-            Assert.Contains(longs, item => item == ("oceanbase.client.pool.borrowed", 1));
-            Assert.Contains(longs, item => item == ("oceanbase.client.pool.sessions", 1));
-            Assert.Contains(longs, item => item == ("oceanbase.client.pool.sessions", -1));
-            Assert.Contains(longs, item => item == ("oceanbase.client.pool.waiters", 1));
-            Assert.Contains(longs, item => item == ("oceanbase.client.pool.waiters", -1));
-            Assert.Contains(longs, item => item == ("oceanbase.client.pool.discarded", 1));
-            Assert.Contains(doubles, item => item.Name == "oceanbase.client.pool.wait.duration" && item.Value >= 0.5);
+            (string Name, long Value)[] longMeasurements;
+            (string Name, double Value)[] doubleMeasurements;
+            lock (metricsGate) { longMeasurements = longs.ToArray(); doubleMeasurements = doubles.ToArray(); }
+            Assert.Contains(longMeasurements, item => item == ("oceanbase.client.pool.borrowed", 1));
+            Assert.Contains(longMeasurements, item => item == ("oceanbase.client.pool.sessions", 1));
+            Assert.Contains(longMeasurements, item => item == ("oceanbase.client.pool.sessions", -1));
+            Assert.Contains(longMeasurements, item => item == ("oceanbase.client.pool.waiters", 1));
+            Assert.Contains(longMeasurements, item => item == ("oceanbase.client.pool.waiters", -1));
+            Assert.Contains(longMeasurements, item => item == ("oceanbase.client.pool.discarded", 1));
+            Assert.Contains(doubleMeasurements, item => item.Name == "oceanbase.client.pool.wait.duration" && item.Value >= 0.5);
         }
     }
 }

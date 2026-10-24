@@ -30,6 +30,7 @@ namespace OceanBaseConnector.Internal.Session
         private object? _reservation;
         private int _discardOnReturnCount;
         private int _liveLobCount;
+        private bool _sessionStateChanged;
         private ConnectResult? _info;
         private string? _sessionTimeZone;
         private NationalCharacterSet? _nationalCharacterSet;
@@ -269,7 +270,7 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         internal bool IsReservedForOther(object? owner) { lock (_gate) return _reservation != null && !ReferenceEquals(_reservation, owner); }
-        internal bool RequiresDiscardOnReturn { get { lock (_gate) return _discardOnReturnCount != 0 || _liveLobCount != 0; } }
+        internal bool RequiresDiscardOnReturn { get { lock (_gate) return _discardOnReturnCount != 0 || _liveLobCount != 0 || _sessionStateChanged; } }
         internal void MarkDiscardOnReturn() { lock (_gate) { _discardOnReturnCount++; } }
         internal void ReleaseDiscardOnReturn()
         {
@@ -286,6 +287,17 @@ namespace OceanBaseConnector.Internal.Session
                 if (_liveLobCount != 0) _liveLobCount--;
             }
         }
+        internal void MarkSessionStateChanged(string commandText)
+        {
+            var text = commandText.TrimStart();
+            if (!StartsWithStatement(text, "SET") && !StartsWithStatement(text, "ALTER SESSION") &&
+                !StartsWithStatement(text, "CREATE TEMPORARY") && !StartsWithStatement(text, "CREATE GLOBAL TEMPORARY") &&
+                !StartsWithStatement(text, "DECLARE GLOBAL TEMPORARY")) return;
+            lock (_gate) _sessionStateChanged = true;
+        }
+        private static bool StartsWithStatement(string text, string keyword) =>
+            text.StartsWith(keyword, StringComparison.OrdinalIgnoreCase) &&
+            (text.Length == keyword.Length || char.IsWhiteSpace(text[keyword.Length]));
         internal void Reserve(object owner)
         {
             lock (_gate)

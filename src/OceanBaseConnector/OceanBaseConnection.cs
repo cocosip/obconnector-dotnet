@@ -434,7 +434,13 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
             if (_source != null) return;
 #endif
-            PhysicalSessionPoolRegistry.ReleaseIfEmpty(_connectionString, pool);
+            if (PhysicalSessionPoolRegistry.ReleaseIfEmpty(_connectionString, pool))
+            {
+                lock (_gate)
+                {
+                    if (ReferenceEquals(_pool, pool)) _pool = null;
+                }
+            }
         }
     }
 }

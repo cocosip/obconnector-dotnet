@@ -20,7 +20,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `TLS Server Name` | Endpoint hostname | Overrides the TLS certificate name. |
 | `Persist Security Info` | false | Retains credentials in opened-connection and data-source connection strings when true. |
 | `Load Balance` | `Sequential` | `RoundRobin` rotates the first candidate on each Open. |
-| `Pooling` | false | Reuses physical sessions with protocol reset, capacity/wait controls, minimum-pool prewarming and idle/total lifetime reaping. |
+| `Pooling` | false | Reuses physical sessions with protocol reset, capacity/wait controls, minimum-pool prewarming and idle/total lifetime reaping; recognized user session-state or temporary-object statements discard the session on close. |
 | `Min Pool Size` | 0 | Ensures at least this many physical sessions before a borrow; a failed warmup rolls back sessions created by that attempt. |
 | `Max Pool Size` | 100 | Maximum physical sessions per matching pool; additional opens wait for a return. |
 | `Pool Wait Timeout` | `Connection Timeout` | Seconds to wait for a physical session; zero waits indefinitely. |
