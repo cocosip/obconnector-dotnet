@@ -21,6 +21,9 @@ namespace OceanBaseConnector
         private PhysicalSession? _session;
         private bool _hidePassword;
         private bool _disposed;
+        private bool _opening;
+        private long _openGeneration;
+        private CancellationTokenSource? _openingCancellation;
         private IOceanBaseAddressResolver? _addressResolver;
         private EndpointSelector _endpointSelector = new EndpointSelector();
         private PhysicalSessionPool? _pool;
@@ -66,7 +69,7 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
                     if (_source != null) throw new InvalidOperationException("A data-source connection has fixed configuration.");
 #endif
-                    if (_session != null) throw new InvalidOperationException("Close the connection before changing its configuration.");
+                    if (_session != null || _opening) throw new InvalidOperationException("Close the connection before changing its configuration.");
                     var builder = new OceanBaseConnectionStringBuilder(value ?? string.Empty);
                     _connectionString = builder.ConnectionString;
                     _builder = builder;
@@ -91,7 +94,7 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
                     if (_source != null) throw new InvalidOperationException("A data-source connection has fixed configuration.");
 #endif
-                    if (_session != null) throw new InvalidOperationException("Close the connection before changing its address resolver.");
+                    if (_session != null || _opening) throw new InvalidOperationException("Close the connection before changing its address resolver.");
                     _addressResolver = value;
                     _endpointSelector = new EndpointSelector();
                 }
@@ -118,7 +121,7 @@ namespace OceanBaseConnector
                         case SessionState.Open:
                         case SessionState.Busy: return ConnectionState.Open;
                         case SessionState.Broken: return ConnectionState.Broken;
-                        default: return _session == null ? ConnectionState.Closed : ConnectionState.Connecting;
+                        default: return _opening || _session != null ? ConnectionState.Connecting : ConnectionState.Closed;
                     }
                 }
             }
@@ -126,18 +129,28 @@ namespace OceanBaseConnector
 
         public override void Open()
         {
-            var session = StartOpen(CancellationToken.None, out var options);
+            var context = PrepareOpen(CancellationToken.None);
+            PhysicalSession? session = null;
             var timer = Stopwatch.StartNew();
             var diagnostics = DriverDiagnostics.Start("open");
-            _log.Opening(options.Endpoint);
             try
             {
+                session = RentSession(context);
+                _log.Opening(context.Options.Endpoint);
                 EnsureOpening(session);
                 if (session.State == SessionState.Closed) session.Open();
                 else if (session.State != SessionState.Open) throw new InvalidOperationException("The pooled physical session is not available.");
                 PublishOpen(session);
             }
-            catch (Exception error) { FailedOpen(session, timer.ElapsedMilliseconds, error); diagnostics?.Finish(null, error); throw; }
+            catch (Exception error)
+            {
+                var failure = NormalizeOpenError(context, error);
+                if (session != null) FailedOpen(context, session, timer.ElapsedMilliseconds, failure);
+                else ClearOpening(context);
+                diagnostics?.Finish(null, failure);
+                throw failure;
+            }
+            finally { context.Dispose(); }
             diagnostics?.Finish(session.Info!.Mode, null);
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
             _log.Opened(session.Endpoint, session.Info!.Mode, timer.ElapsedMilliseconds);
@@ -145,24 +158,34 @@ namespace OceanBaseConnector
 
         public override async Task OpenAsync(CancellationToken cancellationToken)
         {
-            var session = StartOpen(cancellationToken, out var options);
+            var context = PrepareOpen(cancellationToken);
+            PhysicalSession? session = null;
             var timer = Stopwatch.StartNew();
             var diagnostics = DriverDiagnostics.Start("open");
-            _log.Opening(options.Endpoint);
             try
             {
+                session = await RentSessionAsync(context, context.Token).ConfigureAwait(false);
+                _log.Opening(context.Options.Endpoint);
                 EnsureOpening(session);
-                if (session.State == SessionState.Closed) await session.OpenAsync(cancellationToken).ConfigureAwait(false);
+                if (session.State == SessionState.Closed) await session.OpenAsync(context.Token).ConfigureAwait(false);
                 else if (session.State != SessionState.Open) throw new InvalidOperationException("The pooled physical session is not available.");
                 PublishOpen(session);
             }
-            catch (Exception error) { FailedOpen(session, timer.ElapsedMilliseconds, error); diagnostics?.Finish(null, error); throw; }
+            catch (Exception error)
+            {
+                var failure = NormalizeOpenError(context, error);
+                if (session != null) FailedOpen(context, session, timer.ElapsedMilliseconds, failure);
+                else ClearOpening(context);
+                diagnostics?.Finish(null, failure);
+                throw failure;
+            }
+            finally { context.Dispose(); }
             diagnostics?.Finish(session.Info!.Mode, null);
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
             _log.Opened(session.Endpoint, session.Info!.Mode, timer.ElapsedMilliseconds);
         }
 
-        private PhysicalSession StartOpen(CancellationToken token, out OceanBaseConnectionOptions options)
+        private OpenContext PrepareOpen(CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
             RejectAmbientTransaction();
@@ -172,17 +195,88 @@ namespace OceanBaseConnector
             lock (_gate)
             {
                 ThrowIfDisposed();
-                if (_session != null) throw new InvalidOperationException("The connection is already open or opening; close it first.");
+                if (_session != null || _opening) throw new InvalidOperationException("The connection is already open or opening; close it first.");
                 _options ??= _builder.Build();
                 _hidePassword = true;
-                options = _options;
-                if (options.Pooling)
-                {
-                    _pool ??= PhysicalSessionPoolRegistry.Get(_connectionString);
-                    return _session = _pool.Rent(options, _addressResolver, _endpointSelector, out _);
-                }
-                return _session = new PhysicalSession(options, _addressResolver, _endpointSelector);
+                _opening = true;
+                var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+                _openingCancellation = cancellation;
+                var pool = _options.Pooling ? _pool ??= PhysicalSessionPoolRegistry.Get(_connectionString) : null;
+                return new OpenContext(_options, pool, _addressResolver, _endpointSelector, ++_openGeneration, cancellation, token);
             }
+        }
+
+        private PhysicalSession RentSession(OpenContext context)
+        {
+            PhysicalSession? session = null;
+            try
+            {
+                session = context.Pool == null
+                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector)
+                    : context.Pool.Rent(context.Options, context.Resolver, context.Selector, out _, context.Token);
+                lock (_gate)
+                {
+                    ThrowIfDisposed();
+                    if (!_opening || _session != null || context.Generation != _openGeneration) throw new OperationCanceledException("Connection opening was canceled.");
+                    _session = session;
+                    _opening = false;
+                }
+                return session;
+            }
+            catch
+            {
+                ClearOpening(context);
+                if (session != null)
+                {
+                    if (context.Pool != null) context.Pool.Discard(session); else session.Dispose();
+                }
+                throw;
+            }
+        }
+
+        private async Task<PhysicalSession> RentSessionAsync(OpenContext context, CancellationToken token)
+        {
+            PhysicalSession? session = null;
+            try
+            {
+                session = context.Pool == null
+                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector)
+                    : await context.Pool.RentAsync(context.Options, context.Resolver, context.Selector, token).ConfigureAwait(false);
+                lock (_gate)
+                {
+                    ThrowIfDisposed();
+                    if (!_opening || _session != null || context.Generation != _openGeneration) throw new OperationCanceledException("Connection opening was canceled.");
+                    _session = session;
+                    _opening = false;
+                }
+                return session;
+            }
+            catch
+            {
+                ClearOpening(context);
+                if (session != null)
+                {
+                    if (context.Pool != null) context.Pool.Discard(session); else session.Dispose();
+                }
+                throw;
+            }
+        }
+
+        private sealed class OpenContext
+        {
+            internal OpenContext(OceanBaseConnectionOptions options, PhysicalSessionPool? pool,
+                IOceanBaseAddressResolver? resolver, EndpointSelector selector, long generation,
+                CancellationTokenSource cancellation, CancellationToken callerToken)
+            { Options = options; Pool = pool; Resolver = resolver; Selector = selector; Generation = generation; Cancellation = cancellation; CallerToken = callerToken; }
+            internal OceanBaseConnectionOptions Options { get; }
+            internal PhysicalSessionPool? Pool { get; }
+            internal IOceanBaseAddressResolver? Resolver { get; }
+            internal EndpointSelector Selector { get; }
+            internal long Generation { get; }
+            internal CancellationTokenSource Cancellation { get; }
+            internal CancellationToken CallerToken { get; }
+            internal CancellationToken Token => Cancellation.Token;
+            internal void Dispose() => Cancellation.Dispose();
         }
 
         private void EnsureOpening(PhysicalSession session)
@@ -211,18 +305,37 @@ namespace OceanBaseConnector
             }
         }
 
-        private void FailedOpen(PhysicalSession session, long elapsed, Exception error)
+        private void FailedOpen(OpenContext context, PhysicalSession session, long elapsed, Exception error)
         {
-            session.Dispose();
+            if (context.Pool != null) context.Pool.Discard(session); else session.Dispose();
             lock (_gate) { if (ReferenceEquals(_session, session)) _session = null; }
+            ClearOpening(context);
             _log.Failed(session.Endpoint, elapsed, error);
         }
+
+        private void ClearOpening(OpenContext context)
+        {
+            lock (_gate)
+            {
+                if (context.Generation == _openGeneration && ReferenceEquals(_openingCancellation, context.Cancellation))
+                {
+                    _opening = false;
+                    _openingCancellation = null;
+                }
+            }
+        }
+
+        private static Exception NormalizeOpenError(OpenContext context, Exception error) =>
+            error is OperationCanceledException && context.CallerToken.IsCancellationRequested
+                ? new OperationCanceledException("Connection opening canceled.", error, context.CallerToken)
+                : error;
 
         public override void Close() => CloseCore(null);
         internal void CloseSession(PhysicalSession session) => CloseCore(session);
         private void CloseCore(PhysicalSession? requiredSession)
         {
             var closing = DetachForClose(requiredSession);
+            try { closing.OpenCancellation?.Cancel(); } catch (ObjectDisposedException) { }
             try
             {
                 if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
@@ -237,6 +350,7 @@ namespace OceanBaseConnector
         private async Task CloseCoreAsync(PhysicalSession? requiredSession)
         {
             var closing = DetachForClose(requiredSession);
+            try { closing.OpenCancellation?.Cancel(); } catch (ObjectDisposedException) { }
             try
             {
                 if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));

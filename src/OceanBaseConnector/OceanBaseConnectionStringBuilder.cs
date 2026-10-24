@@ -12,7 +12,8 @@ namespace OceanBaseConnector
     /// <c>Server</c>, <c>Port</c>, <c>User ID</c>, <c>Password</c>,
     /// <c>Database</c>, <c>Connection Timeout</c>, <c>Command Timeout</c>,
     /// <c>TLS Mode</c>, <c>TLS Server Name</c>, <c>Persist Security Info</c>,
-    /// <c>ExpectedMode</c>, <c>Pooling</c>, <c>Server RSA Public Key</c> and
+    /// <c>ExpectedMode</c>, <c>Pooling</c>, pool sizing/lifetime options,
+    /// <c>Server RSA Public Key</c> and
     /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
     /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c>, <c>Load Balance</c>, <c>Service Principal Name</c>,
     /// <c>Treat Tiny As Boolean</c> and <c>Use Affected Rows</c>; the only synonyms are
@@ -34,6 +35,11 @@ namespace OceanBaseConnector
         public const string PersistSecurityInfoKey = "Persist Security Info";
         public const string ExpectedModeKey = "ExpectedMode";
         public const string PoolingKey = "Pooling";
+        public const string MinPoolSizeKey = "Min Pool Size";
+        public const string MaxPoolSizeKey = "Max Pool Size";
+        public const string PoolWaitTimeoutKey = "Pool Wait Timeout";
+        public const string ConnectionIdleLifetimeKey = "Connection Idle Lifetime";
+        public const string ConnectionLifetimeKey = "Connection Lifetime";
         public const string ServerRsaPublicKeyKey = "Server RSA Public Key";
         public const string AllowPublicKeyRetrievalKey = "Allow Public Key Retrieval";
         public const string UseOb20Key = "Use OB20";
@@ -48,6 +54,7 @@ namespace OceanBaseConnector
         public const int DefaultPort = 2881;
         public const int DefaultConnectionTimeoutSeconds = 15;
         public const int DefaultCommandTimeoutSeconds = 30;
+        public const int DefaultMaxPoolSize = 100;
 
         private static readonly Dictionary<string, string> Synonyms =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -170,6 +177,36 @@ namespace OceanBaseConnector
         {
             get => GetBoolean(PoolingKey) ?? false;
             set => this[PoolingKey] = value ? "true" : "false";
+        }
+
+        public int MinPoolSize
+        {
+            get => GetInt32(MinPoolSizeKey) ?? 0;
+            set => this[MinPoolSizeKey] = value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        public int MaxPoolSize
+        {
+            get => GetInt32(MaxPoolSizeKey) ?? DefaultMaxPoolSize;
+            set => this[MaxPoolSizeKey] = value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        public int PoolWaitTimeout
+        {
+            get => GetInt32(PoolWaitTimeoutKey) ?? ConnectionTimeout;
+            set => this[PoolWaitTimeoutKey] = value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        public int ConnectionIdleLifetime
+        {
+            get => GetInt32(ConnectionIdleLifetimeKey) ?? 0;
+            set => this[ConnectionIdleLifetimeKey] = value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        public int ConnectionLifetime
+        {
+            get => GetInt32(ConnectionLifetimeKey) ?? 0;
+            set => this[ConnectionLifetimeKey] = value.ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>Trusted RSA SubjectPublicKeyInfo PEM for SHA-2 authentication without verified TLS.</summary>
@@ -311,6 +348,10 @@ namespace OceanBaseConnector
 
             if (EnableFullLinkTrace && !UseOb20) throw new ArgumentException("Full-link tracing requires Use OB20=true.");
             if (UseLobLocators && !UseOraclePrepareExecute) throw new ArgumentException("LOB locators require Use Oracle Prepare Execute=true.");
+            if (MaxPoolSize < 1)
+                throw new ArgumentException($"'{MaxPoolSizeKey}' must be at least 1.");
+            if (MinPoolSize > MaxPoolSize)
+                throw new ArgumentException($"'{MinPoolSizeKey}' cannot exceed '{MaxPoolSizeKey}'.");
             var additionalPasswords = new Dictionary<int, string>();
             foreach (string key in Keys)
                 if (TryGetPasswordNumber(key, out var number)) additionalPasswords.Add(number, GetString(key)!);
@@ -328,6 +369,11 @@ namespace OceanBaseConnector
                 PersistSecurityInfo,
                 ExpectedMode,
                 Pooling,
+                MinPoolSize,
+                MaxPoolSize,
+                PoolWaitTimeout,
+                ConnectionIdleLifetime,
+                ConnectionLifetime,
                 ServerRsaPublicKey,
                 AllowPublicKeyRetrieval,
                 UseOb20,
@@ -357,6 +403,11 @@ namespace OceanBaseConnector
             PersistSecurityInfoKey,
             ExpectedModeKey,
             PoolingKey,
+            MinPoolSizeKey,
+            MaxPoolSizeKey,
+            PoolWaitTimeoutKey,
+            ConnectionIdleLifetimeKey,
+            ConnectionLifetimeKey,
             ServerRsaPublicKeyKey,
             AllowPublicKeyRetrievalKey,
             UseOb20Key,
@@ -446,7 +497,14 @@ namespace OceanBaseConnector
 
                 case ConnectionTimeoutKey:
                 case CommandTimeoutKey:
-                    ParseNonNegativeInt32(canonicalKey, value);
+                case MinPoolSizeKey:
+                case MaxPoolSizeKey:
+                case PoolWaitTimeoutKey:
+                case ConnectionIdleLifetimeKey:
+                case ConnectionLifetimeKey:
+                    var poolValue = ParseNonNegativeInt32(canonicalKey, value);
+                    if (canonicalKey == MaxPoolSizeKey && poolValue < 1)
+                        throw CreateKeywordError($"'{canonicalKey}' must be at least 1.", canonicalKey, includeValue: true, value: value);
                     return value;
 
                 case TlsModeKey:
@@ -609,6 +667,21 @@ namespace OceanBaseConnector
                     return true;
                 case "POOLING":
                     canonical = PoolingKey;
+                    return true;
+                case "MIN POOL SIZE":
+                    canonical = MinPoolSizeKey;
+                    return true;
+                case "MAX POOL SIZE":
+                    canonical = MaxPoolSizeKey;
+                    return true;
+                case "POOL WAIT TIMEOUT":
+                    canonical = PoolWaitTimeoutKey;
+                    return true;
+                case "CONNECTION IDLE LIFETIME":
+                    canonical = ConnectionIdleLifetimeKey;
+                    return true;
+                case "CONNECTION LIFETIME":
+                    canonical = ConnectionLifetimeKey;
                     return true;
                 case "SERVER RSA PUBLIC KEY":
                     canonical = ServerRsaPublicKeyKey;

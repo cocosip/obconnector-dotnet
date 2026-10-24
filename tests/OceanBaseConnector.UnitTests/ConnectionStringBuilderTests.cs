@@ -26,6 +26,43 @@ namespace OceanBaseConnector.UnitTests
             Assert.False(options.Pooling);
             Assert.Null(options.ExpectedMode);
             Assert.Equal(string.Empty, options.TlsServerName);
+            Assert.Equal(0, options.MinPoolSize);
+            Assert.Equal(100, options.MaxPoolSize);
+            Assert.Equal(15, options.PoolWaitTimeoutSeconds);
+            Assert.Equal(0, options.ConnectionIdleLifetimeSeconds);
+            Assert.Equal(0, options.ConnectionLifetimeSeconds);
+        }
+
+        [Fact]
+        public void PoolCapacityAndLifetimeOptionsRoundTrip()
+        {
+            var options = new OceanBaseConnectionStringBuilder(
+                ValidMinimal + ";Pooling=true;Min Pool Size=1;Max Pool Size=3;" +
+                "Pool Wait Timeout=7;Connection Idle Lifetime=11;Connection Lifetime=13").Build();
+
+            Assert.Equal(1, options.MinPoolSize);
+            Assert.Equal(3, options.MaxPoolSize);
+            Assert.Equal(7, options.PoolWaitTimeoutSeconds);
+            Assert.Equal(11, options.ConnectionIdleLifetimeSeconds);
+            Assert.Equal(13, options.ConnectionLifetimeSeconds);
+        }
+
+        [Theory]
+        [InlineData("Min Pool Size=-1")]
+        [InlineData("Max Pool Size=0")]
+        [InlineData("Pool Wait Timeout=-1")]
+        [InlineData("Connection Idle Lifetime=-1")]
+        [InlineData("Connection Lifetime=-1")]
+        public void InvalidPoolOptionsAreRejected(string option)
+        {
+            Assert.Throws<ArgumentException>(() => new OceanBaseConnectionStringBuilder(ValidMinimal + ";" + option));
+        }
+
+        [Fact]
+        public void MinimumPoolSizeCannotExceedMaximumPoolSize()
+        {
+            Assert.Throws<ArgumentException>(() =>
+                new OceanBaseConnectionStringBuilder(ValidMinimal + ";Min Pool Size=2;Max Pool Size=1").Build());
         }
 
         [Fact]
@@ -107,7 +144,6 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("Server=ob1;User ID=u;Max Pool Size=10")]
         [InlineData("Server=ob1;User ID=u;useServerPrepStmts=true")]
         [InlineData("Server=ob1;User ID=u;CompatibleMode=oracle")]
         public void UnknownKeysAreRejected(string connectionString)

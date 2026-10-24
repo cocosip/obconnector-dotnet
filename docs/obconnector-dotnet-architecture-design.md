@@ -20,7 +20,12 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `TLS Server Name` | Endpoint hostname | Overrides the TLS certificate name. |
 | `Persist Security Info` | false | Retains credentials in opened-connection and data-source connection strings when true. |
 | `Load Balance` | `Sequential` | `RoundRobin` rotates the first candidate on each Open. |
-| `Pooling` | false | Reuses physical sessions with protocol reset; sizing and idle reaping are deferred. |
+| `Pooling` | false | Reuses physical sessions with protocol reset, capacity/wait controls and idle/total lifetime reaping; minimum-pool prewarming is deferred. |
+| `Min Pool Size` | 0 | Retains at least this many idle sessions during idle reaping; it does not prewarm sessions yet. |
+| `Max Pool Size` | 100 | Maximum physical sessions per matching pool; additional opens wait for a return. |
+| `Pool Wait Timeout` | `Connection Timeout` | Seconds to wait for a physical session; zero waits indefinitely. |
+| `Connection Idle Lifetime` | 0 | Seconds an idle session may remain before lazy reaping; zero disables the limit. |
+| `Connection Lifetime` | 0 | Maximum physical-session age in seconds; zero disables the limit. |
 | `Use OB20` | false | Requests OB20 framing when negotiated by the server. |
 | `Enable Full Link Trace` | false | Requests server tracing; requires `Use OB20=true`. |
 | `Use Oracle Prepare Execute` | false | Enables Oracle procedures and output bindings; requires server version discovery and OceanBase >=2.2.76. |

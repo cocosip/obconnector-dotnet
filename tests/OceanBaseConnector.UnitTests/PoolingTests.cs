@@ -21,6 +21,12 @@ namespace OceanBaseConnector.UnitTests
                 await ServerIdentity.ReplyAsync(channel);
                 for (var i = 0; i != 2; i++)
                 {
+                    if (i == 1)
+                    {
+                        Assert.Equal(new byte[] { 0x0e }, await channel.ReadPacketAsync());
+                        await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });
+                        channel.BeginCommand();
+                    }
                     var packet = await channel.ReadPacketAsync();
                     Assert.Equal(new byte[] { 0x1f }, packet);
                     resets++;

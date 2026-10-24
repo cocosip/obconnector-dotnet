@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,27 +11,119 @@ namespace OceanBaseConnector.Internal.Session
     {
         private readonly object _gate = new object();
         private readonly Stack<PhysicalSession> _idle = new Stack<PhysicalSession>();
+        private readonly HashSet<PhysicalSession> _sessions = new HashSet<PhysicalSession>();
+        private readonly SemaphoreSlim _available = new SemaphoreSlim(0);
+        private bool _configured;
         private bool _disposed;
+        private int _minPoolSize;
+        private int _maxPoolSize;
+        private int _idleLifetimeSeconds;
+        private int _lifetimeSeconds;
+        private int _opening;
+        private int _waiters;
+
+        private enum RentDecision { Create, Candidate, Wait }
 
         internal PhysicalSession Rent(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
-            EndpointSelector selector, out bool reused)
+            EndpointSelector selector, out bool reused, CancellationToken cancellationToken = default)
         {
-            lock (_gate)
+            var started = Stopwatch.StartNew();
+            while (true)
             {
-                if (_disposed) throw new ObjectDisposedException(nameof(PhysicalSessionPool));
-                while (_idle.Count != 0)
+                var decision = TakeCandidate(options, out var candidate, out var expired);
+                DisposeExpired(expired);
+                if (decision == RentDecision.Create)
                 {
-                    var session = _idle.Pop();
-                    if (session.State == SessionState.Open && !session.IsReservedForOther(null))
+                    reused = false;
+                    try
                     {
-                        reused = true;
+                        var session = new PhysicalSession(options, resolver, selector);
+                        RegisterCreated(session);
                         return session;
                     }
-                    session.Dispose();
+                    catch (ObjectDisposedException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        CompleteOpening();
+                        throw;
+                    }
                 }
 
-                reused = false;
-                return new PhysicalSession(options, resolver, selector);
+                if (decision == RentDecision.Candidate)
+                {
+                    try
+                    {
+                        candidate!.Probe(new ConnectionLog(null), options.CommandTimeoutSeconds);
+                        reused = true;
+                        return candidate;
+                    }
+                    catch
+                    {
+                        Destroy(candidate!);
+                        continue;
+                    }
+                }
+
+                if (!WaitForAvailability(started, options.PoolWaitTimeoutSeconds, cancellationToken))
+                    throw new TimeoutException("The connection pool wait timeout expired.");
+            }
+        }
+
+        internal async Task<PhysicalSession> RentAsync(OceanBaseConnectionOptions options,
+            IOceanBaseAddressResolver? resolver, EndpointSelector selector,
+            CancellationToken cancellationToken = default)
+        {
+            var started = Stopwatch.StartNew();
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var decision = TakeCandidate(options, out var candidate, out var expired);
+                DisposeExpired(expired);
+                if (decision == RentDecision.Create)
+                {
+                    try
+                    {
+                        var session = new PhysicalSession(options, resolver, selector);
+                        RegisterCreated(session);
+                        return session;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        CompleteOpening();
+                        throw;
+                    }
+                }
+
+                if (decision == RentDecision.Candidate)
+                {
+                    try
+                    {
+                        await candidate!.ProbeAsync(new ConnectionLog(null), options.CommandTimeoutSeconds, cancellationToken)
+                            .ConfigureAwait(false);
+                        return candidate;
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        Destroy(candidate!);
+                        throw;
+                    }
+                    catch
+                    {
+                        Destroy(candidate!);
+                        continue;
+                    }
+                }
+
+                var signaled = await WaitForAvailabilityAsync(started, options.PoolWaitTimeoutSeconds, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!signaled) throw new TimeoutException("The connection pool wait timeout expired.");
             }
         }
 
@@ -47,6 +140,7 @@ namespace OceanBaseConnector.Internal.Session
                         session = candidate;
                         return true;
                     }
+                    _sessions.Remove(candidate);
                     candidate.Dispose();
                 }
                 session = null;
@@ -56,54 +150,192 @@ namespace OceanBaseConnector.Internal.Session
 
         internal bool Return(PhysicalSession session, ConnectionLog log, int timeout = 0)
         {
-            if (session.State != SessionState.Open || session.IsReservedForOther(null) || session.IsDedicatedToXa)
+            if (!CanReturn(session) || session.IsLifetimeExpired(DateTime.UtcNow, _lifetimeSeconds))
             {
-                session.Dispose();
+                Destroy(session);
                 return false;
             }
 
             try { session.Reset(log, timeout); }
-            catch { session.Dispose(); return false; }
+            catch { Destroy(session); return false; }
 
+            session.MarkReturned();
             lock (_gate)
             {
-                if (_disposed) { session.Dispose(); return false; }
-                _idle.Push(session);
-                return true;
+                if (_disposed)
+                {
+                    _sessions.Remove(session);
+                }
+                else
+                {
+                    _idle.Push(session);
+                    ReleaseWaiterSignal();
+                    return true;
+                }
             }
+            session.Dispose();
+            return false;
         }
 
         internal async Task<bool> ReturnAsync(PhysicalSession session, ConnectionLog log, int timeout = 0,
             CancellationToken cancellationToken = default)
         {
-            if (session.State != SessionState.Open || session.IsReservedForOther(null) || session.IsDedicatedToXa)
+            if (!CanReturn(session) || session.IsLifetimeExpired(DateTime.UtcNow, _lifetimeSeconds))
             {
-                session.Dispose();
+                Destroy(session);
                 return false;
             }
 
             try { await session.ResetAsync(log, timeout, cancellationToken).ConfigureAwait(false); }
-            catch { session.Dispose(); return false; }
+            catch { Destroy(session); return false; }
 
+            session.MarkReturned();
             lock (_gate)
             {
-                if (_disposed) { session.Dispose(); return false; }
-                _idle.Push(session);
-                return true;
+                if (_disposed)
+                {
+                    _sessions.Remove(session);
+                }
+                else
+                {
+                    _idle.Push(session);
+                    ReleaseWaiterSignal();
+                    return true;
+                }
             }
+            session.Dispose();
+            return false;
+        }
+
+        internal void Discard(PhysicalSession session) => Destroy(session);
+
+        private bool CanReturn(PhysicalSession session) =>
+            session.State == SessionState.Open && !session.IsReservedForOther(null) && !session.IsDedicatedToXa;
+
+        private RentDecision TakeCandidate(OceanBaseConnectionOptions options, out PhysicalSession? candidate,
+            out List<PhysicalSession>? expired)
+        {
+            expired = null;
+            lock (_gate)
+            {
+                Configure(options);
+                if (_disposed) throw new ObjectDisposedException(nameof(PhysicalSessionPool));
+                while (_idle.Count != 0)
+                {
+                    var item = _idle.Pop();
+                    if (item.State == SessionState.Open && !item.IsReservedForOther(null) &&
+                        (!item.IsLifetimeExpired(DateTime.UtcNow, _lifetimeSeconds) &&
+                         (!item.IsIdleExpired(DateTime.UtcNow, _idleLifetimeSeconds) || _idle.Count + 1 <= _minPoolSize)))
+                    {
+                        candidate = item;
+                        return RentDecision.Candidate;
+                    }
+                    (expired ??= new List<PhysicalSession>()).Add(item);
+                    _sessions.Remove(item);
+                }
+
+                if (_sessions.Count + _opening < _maxPoolSize)
+                {
+                    _opening++;
+                    candidate = null;
+                    return RentDecision.Create;
+                }
+
+                _waiters++;
+                candidate = null;
+                return RentDecision.Wait;
+            }
+        }
+
+        private void Configure(OceanBaseConnectionOptions options)
+        {
+            if (_configured) return;
+            _configured = true;
+            _minPoolSize = options.MinPoolSize;
+            _maxPoolSize = options.MaxPoolSize;
+            _idleLifetimeSeconds = options.ConnectionIdleLifetimeSeconds;
+            _lifetimeSeconds = options.ConnectionLifetimeSeconds;
+        }
+
+        private void RegisterCreated(PhysicalSession session)
+        {
+            lock (_gate)
+            {
+                _opening--;
+                if (_disposed)
+                {
+                    session.Dispose();
+                    throw new ObjectDisposedException(nameof(PhysicalSessionPool));
+                }
+                _sessions.Add(session);
+            }
+        }
+
+        private void CompleteOpening()
+        {
+            lock (_gate) _opening--;
+        }
+
+        private bool WaitForAvailability(Stopwatch started, int timeoutSeconds, CancellationToken token)
+        {
+            var wait = Remaining(timeoutSeconds, started);
+            try { return wait == Timeout.InfiniteTimeSpan ? _available.Wait(Timeout.Infinite, token) : _available.Wait(wait, token); }
+            finally { DecrementWaiter(); }
+        }
+
+        private async Task<bool> WaitForAvailabilityAsync(Stopwatch started, int timeoutSeconds, CancellationToken token)
+        {
+            var wait = Remaining(timeoutSeconds, started);
+            try { return wait == Timeout.InfiniteTimeSpan ? await _available.WaitAsync(Timeout.Infinite, token).ConfigureAwait(false) : await _available.WaitAsync(wait, token).ConfigureAwait(false); }
+            finally { DecrementWaiter(); }
+        }
+
+        private static TimeSpan Remaining(int timeoutSeconds, Stopwatch started)
+        {
+            if (timeoutSeconds <= 0) return Timeout.InfiniteTimeSpan;
+            var remaining = TimeSpan.FromSeconds(timeoutSeconds) - started.Elapsed;
+            return remaining <= TimeSpan.Zero ? TimeSpan.Zero : remaining;
+        }
+
+        private void DecrementWaiter()
+        {
+            lock (_gate) { if (_waiters > 0) _waiters--; }
+        }
+
+        private void ReleaseWaiterSignal()
+        {
+            if (_waiters != 0) _available.Release();
+        }
+
+        private void Destroy(PhysicalSession session)
+        {
+            var owned = false;
+            lock (_gate) owned = _sessions.Remove(session);
+            if (owned) session.Dispose();
+        }
+
+        private static void DisposeExpired(List<PhysicalSession>? expired)
+        {
+            if (expired == null) return;
+            foreach (var session in expired) session.Dispose();
         }
 
         public void Dispose()
         {
             PhysicalSession[] sessions;
+            int waiters;
             lock (_gate)
             {
                 if (_disposed) return;
                 _disposed = true;
-                sessions = _idle.ToArray();
+                sessions = new PhysicalSession[_idle.Count];
+                _idle.CopyTo(sessions, 0);
                 _idle.Clear();
+                foreach (var session in sessions) _sessions.Remove(session);
+                waiters = _waiters;
             }
             foreach (var session in sessions) session.Dispose();
+            for (var i = 0; i < waiters; i++) _available.Release();
         }
     }
 

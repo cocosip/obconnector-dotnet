@@ -25,6 +25,11 @@ namespace OceanBaseConnector.Internal
             bool persistSecurityInfo,
             OceanBaseCompatibilityMode? expectedMode,
             bool pooling,
+            int minPoolSize,
+            int maxPoolSize,
+            int poolWaitTimeoutSeconds,
+            int connectionIdleLifetimeSeconds,
+            int connectionLifetimeSeconds,
             string serverRsaPublicKey,
             bool allowPublicKeyRetrieval,
             bool useOb20,
@@ -58,6 +63,11 @@ namespace OceanBaseConnector.Internal
             PersistSecurityInfo = persistSecurityInfo;
             ExpectedMode = expectedMode;
             Pooling = pooling;
+            MinPoolSize = minPoolSize;
+            MaxPoolSize = maxPoolSize;
+            PoolWaitTimeoutSeconds = poolWaitTimeoutSeconds;
+            ConnectionIdleLifetimeSeconds = connectionIdleLifetimeSeconds;
+            ConnectionLifetimeSeconds = connectionLifetimeSeconds;
             ServerRsaPublicKey = serverRsaPublicKey;
             AllowPublicKeyRetrieval = allowPublicKeyRetrieval;
             UseOb20 = useOb20;
@@ -76,7 +86,7 @@ namespace OceanBaseConnector.Internal
 
         internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
             endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows);
+            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows);
 
         public string UserId { get; }
 
@@ -101,6 +111,11 @@ namespace OceanBaseConnector.Internal
         public OceanBaseCompatibilityMode? ExpectedMode { get; }
 
         public bool Pooling { get; }
+        public int MinPoolSize { get; }
+        public int MaxPoolSize { get; }
+        public int PoolWaitTimeoutSeconds { get; }
+        public int ConnectionIdleLifetimeSeconds { get; }
+        public int ConnectionLifetimeSeconds { get; }
         public bool TreatTinyAsBoolean { get; }
         public bool UseAffectedRows { get; }
 

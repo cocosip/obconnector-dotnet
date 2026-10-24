@@ -33,6 +33,8 @@ namespace OceanBaseConnector.Internal.Session
         private NationalCharacterSet? _nationalCharacterSet;
         private readonly HashSet<uint> _statementCloses = new HashSet<uint>();
         private bool _xaDedicated;
+        private readonly DateTime _createdUtc = DateTime.UtcNow;
+        private DateTime _lastReturnedUtc;
         internal bool UseOraclePrepareExecute => _options.UseOraclePrepareExecute;
         internal bool TreatTinyAsBoolean => _options.TreatTinyAsBoolean;
         internal bool UseLobLocators => _options.UseLobLocators && Info?.Mode == OceanBaseCompatibilityMode.Oracle &&
@@ -41,6 +43,7 @@ namespace OceanBaseConnector.Internal.Session
         public PhysicalSession(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? addressResolver = null, EndpointSelector? endpointSelector = null)
         {
             _options = options; _endpoint = options.Endpoint; _database = _initialDatabase = options.Database;
+            _lastReturnedUtc = _createdUtc;
             _addressResolver = addressResolver; _endpointSelector = endpointSelector ?? new EndpointSelector();
         }
 
@@ -59,6 +62,34 @@ namespace OceanBaseConnector.Internal.Session
         internal string Endpoint { get { lock (_gate) return _endpoint; } }
         internal bool IsDedicatedToXa { get { lock (_gate) return _xaDedicated; } }
         internal void MarkDedicatedToXa() { lock (_gate) { _xaDedicated = true; } }
+        internal bool IsExpired(DateTime now, int idleLifetimeSeconds, int lifetimeSeconds)
+        {
+            lock (_gate)
+            {
+                return IsLifetimeExpiredCore(now, lifetimeSeconds) || IsIdleExpiredCore(now, idleLifetimeSeconds);
+            }
+        }
+
+        internal bool IsLifetimeExpired(DateTime now, int lifetimeSeconds)
+        {
+            lock (_gate) return IsLifetimeExpiredCore(now, lifetimeSeconds);
+        }
+
+        internal bool IsIdleExpired(DateTime now, int idleLifetimeSeconds)
+        {
+            lock (_gate) return IsIdleExpiredCore(now, idleLifetimeSeconds);
+        }
+
+        private bool IsLifetimeExpiredCore(DateTime now, int lifetimeSeconds) =>
+            lifetimeSeconds > 0 && now - _createdUtc >= TimeSpan.FromSeconds(lifetimeSeconds);
+
+        private bool IsIdleExpiredCore(DateTime now, int idleLifetimeSeconds) =>
+            idleLifetimeSeconds > 0 && now - _lastReturnedUtc >= TimeSpan.FromSeconds(idleLifetimeSeconds);
+
+        internal void MarkReturned()
+        {
+            lock (_gate) _lastReturnedUtc = DateTime.UtcNow;
+        }
 
         public void Open()
         {
@@ -326,6 +357,44 @@ namespace OceanBaseConnector.Internal.Session
 
         internal Task ResetAsync(ConnectionLog log, int timeout, CancellationToken cancellationToken = default) =>
             ResetCore(log, timeout, cancellationToken, asynchronous: true);
+
+        internal void Probe(ConnectionLog log, int timeout)
+        {
+            ProbeCore(log, timeout, CancellationToken.None, asynchronous: false).GetAwaiter().GetResult();
+        }
+
+        internal Task ProbeAsync(ConnectionLog log, int timeout, CancellationToken cancellationToken = default) =>
+            ProbeCore(log, timeout, cancellationToken, asynchronous: true);
+
+        private async Task ProbeCore(ConnectionLog log, int timeout, CancellationToken cancellationToken, bool asynchronous)
+        {
+            lock (_gate)
+            {
+                if (_state != SessionState.Open || _reservation != null || _lease != null || _xaDedicated)
+                    throw new InvalidOperationException("Only an idle non-XA session can be probed.");
+            }
+
+            try
+            {
+                using var exchange = new CommandExchange(this, log, timeout, cancellationToken, () => { }, logCommand: false);
+                var request = new byte[] { 0x0e }; // COM_PING
+                if (asynchronous) await exchange.SendAsync(request).ConfigureAwait(false); else exchange.Send(request);
+                var packet = asynchronous
+                    ? await exchange.ReceiveAsync(cancellationToken).ConfigureAwait(false)
+                    : exchange.Receive();
+                var ok = OkPacket.Parse(packet, exchange.Capabilities);
+                if (ok.AffectedRows != 0 || ok.LastInsertId != 0 ||
+                    (ok.StatusFlags & (ServerStatusFlags.MoreResultsExists | ServerStatusFlags.InTransaction)) != 0)
+                    throw new ProtocolException("The session probe response was invalid.");
+                exchange.ObserveSessionState(ok);
+                exchange.Complete();
+            }
+            catch
+            {
+                Break();
+                throw;
+            }
+        }
 
         private async Task ResetCore(ConnectionLog log, int timeout, CancellationToken cancellationToken, bool asynchronous)
         {

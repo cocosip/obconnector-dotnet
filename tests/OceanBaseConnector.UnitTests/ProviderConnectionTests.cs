@@ -116,6 +116,34 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
+        [Fact]
+        public async Task CloseCancelsOpenWhileWaitingForPooledSession()
+        {
+            var server = LoopbackServer.Start(async client =>
+            {
+                var channel = new PacketChannel(client.GetStream());
+                await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
+                await channel.ReadPacketAsync();
+                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });
+                await ServerIdentity.ReplyAsync(channel);
+                await client.GetStream().ReadUpToAsync(new byte[1], 1);
+            });
+            var configuration = Configuration(server.Port) + ";Pooling=true;Max Pool Size=1;Pool Wait Timeout=30";
+            using var first = new OceanBaseConnection(configuration);
+            using var second = new OceanBaseConnection(configuration);
+            try
+            {
+                await first.OpenAsync();
+                var opening = second.OpenAsync();
+                await Task.Delay(100);
+                second.Close();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => opening);
+                Assert.Equal(ConnectionState.Closed, second.State);
+            }
+            finally { second.Close(); first.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         [Theory]
         [InlineData(0)]
         [InlineData(1)]

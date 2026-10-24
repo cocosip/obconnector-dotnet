@@ -341,12 +341,15 @@ namespace OceanBaseConnector
             catch { DetachTransaction(transaction); transaction.Session.Break(); }
         }
 
-        private (PhysicalSession? Session, OceanBaseTransaction? Transaction, CommandExchange? Exchange, ConnectionState Previous, string? Endpoint) DetachForClose(PhysicalSession? requiredSession = null)
+        private (PhysicalSession? Session, OceanBaseTransaction? Transaction, CommandExchange? Exchange, ConnectionState Previous, string? Endpoint, CancellationTokenSource? OpenCancellation) DetachForClose(PhysicalSession? requiredSession = null)
         {
             lock (_gate)
             {
-                if (requiredSession != null && !ReferenceEquals(_session, requiredSession)) return (null, null, null, ConnectionState.Closed, null);
+                if (requiredSession != null && !ReferenceEquals(_session, requiredSession)) return (null, null, null, ConnectionState.Closed, null, null);
                 var previous = State;
+                _opening = false;
+                var openCancellation = _openingCancellation;
+                _openingCancellation = null;
                 var session = _session;
                 var transaction = _transaction;
                 _session = null;
@@ -358,7 +361,7 @@ namespace OceanBaseConnector
                     try { exchange = new CommandExchange(session, _log, transaction.Timeout, CancellationToken.None, () => { }, logCommand: false); }
                     catch { session.Break(); }
                 }
-                return (session, transaction, exchange, previous, session?.Endpoint);
+                return (session, transaction, exchange, previous, session?.Endpoint, openCancellation);
             }
         }
 
