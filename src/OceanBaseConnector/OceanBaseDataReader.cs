@@ -23,6 +23,7 @@ namespace OceanBaseConnector
         private readonly bool _sequential;
         private readonly bool _singleRow;
         private readonly bool _singleResult;
+        private readonly bool _schemaOnly;
         private bool _singleRowReturned;
         private bool _closed;
         internal OceanBaseDataReader(CommandExchange query, QueryResult result, OceanBaseConnection connection, PhysicalSession session, CommandBehavior behavior)
@@ -32,12 +33,13 @@ namespace OceanBaseConnector
             _sequential = (behavior & CommandBehavior.SequentialAccess) != 0;
             _singleRow = (behavior & CommandBehavior.SingleRow) != 0;
             _singleResult = (behavior & CommandBehavior.SingleResult) != 0;
+            _schemaOnly = (behavior & CommandBehavior.SchemaOnly) != 0;
         }
         public override object this[int ordinal] => GetValue(ordinal);
         public override object this[string name] => GetValue(GetOrdinal(name));
         public override int Depth => 0;
         public override int FieldCount { get { EnsureOpen(); return _result.Columns.Length; } }
-        public override bool HasRows { get { EnsureOpen(); return _result.HasRows; } }
+        public override bool HasRows { get { EnsureOpen(); return !_schemaOnly && _result.HasRows; } }
         public override bool IsClosed => _closed;
         public override int RecordsAffected => _result.RecordsAffected;
         public override string GetName(int ordinal) => Column(ordinal).Name;
@@ -251,6 +253,7 @@ namespace OceanBaseConnector
         public override bool Read()
         {
             EnsureOpen();
+            if (_schemaOnly) { DrainCurrentResult(); return false; }
             if (_singleRow && _singleRowReturned) { DrainCurrentResult(); return false; }
             var read = _result.Read();
             if (read && _singleRow) _singleRowReturned = true;
@@ -260,6 +263,7 @@ namespace OceanBaseConnector
         public override async Task<bool> ReadAsync(CancellationToken cancellationToken)
         {
             EnsureOpen();
+            if (_schemaOnly) { await DrainCurrentResultAsync(cancellationToken).ConfigureAwait(false); return false; }
             if (_singleRow && _singleRowReturned) { await DrainCurrentResultAsync(cancellationToken).ConfigureAwait(false); return false; }
             var read = await _result.ReadAsync(cancellationToken).ConfigureAwait(false);
             if (read && _singleRow) _singleRowReturned = true;

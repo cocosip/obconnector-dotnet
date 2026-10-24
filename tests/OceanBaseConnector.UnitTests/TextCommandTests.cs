@@ -593,6 +593,48 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task SchemaOnlyReturnsMetadataWithoutRowsAndKeepsConnectionUsable(bool asynchronous)
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "select schema_only");
+                await channel.WritePacketAsync(new byte[] { 1 });
+                await channel.WritePacketAsync(Column("id"));
+                await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 1, 49 });
+                await channel.WritePacketAsync(Eof());
+                channel.BeginCommand();
+                await Query(channel, "after schema_only");
+                await channel.WritePacketAsync(Ok(1));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                using var command = connection.CreateCommand();
+                command.CommandText = "select schema_only";
+                using (var reader = asynchronous
+                    ? await command.ExecuteReaderAsync(CommandBehavior.SchemaOnly)
+                    : command.ExecuteReader(CommandBehavior.SchemaOnly))
+                {
+                    Assert.Equal(1, reader.FieldCount);
+                    Assert.Equal("id", reader.GetName(0));
+                    Assert.Equal(typeof(int), reader.GetFieldType(0));
+                    Assert.False(reader.HasRows);
+                    Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+                    Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+                }
+                command.CommandText = "after schema_only";
+                Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+                Assert.Equal(ConnectionState.Open, connection.State);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         [Fact]
         public async Task ReaderErrorEndsThatReaderWithoutCorruptingTheNextCommand()
         {

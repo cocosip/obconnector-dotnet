@@ -55,7 +55,7 @@
 | 模块 | 当前状态 | 主要边界 |
 | --- | --- | --- |
 | 连接和配置 | 部分实现 | 连接字符串、模式确认、多地址、超时、TLS、地址解析和池容量/等待/生命周期选项已存在；静态池清理和最小池预热已实现，真实兼容性未闭合 |
-| ADO.NET 基础对象 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有；常用 `SingleRow`/`SingleResult` 已支持，`SchemaOnly`、`KeyInfo`、`DbDataAdapter` 和 `DbCommandBuilder` 仍缺失 |
+| ADO.NET 基础对象 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有；`SingleRow`/`SingleResult` 和只读文本查询的 `SchemaOnly` 已支持，`KeyInfo`、`DbDataAdapter` 和 `DbCommandBuilder` 仍缺失 |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 只在现代 TFM 可用 |
 | 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 有代码；真实插件和 KDC 矩阵未闭合 |
 | TLS | 部分实现 | `VerifyFull`、`Required`、`Disabled` 有代码；客户端证书、可配置信任和撤销策略缺失 |
@@ -128,6 +128,8 @@
 当前 `Pooling=true` 已由 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 管理物理会话；逻辑连接关闭时通过 `COM_RESET_CONNECTION` 清理服务端状态，并用 `COM_INIT_DB` 恢复初始 database。MySQL 模式的 reset 和借用探活都会要求服务端明确返回 `Autocommit` 状态位；缺失该状态时物理会话立即销毁。池已支持最大容量、等待超时、等待取消、最小池预热及失败回滚、借用前 `COM_PING` 存活探测、连接空闲/总生命周期回收、最小空闲保留规则、空池 registry 清理和池生命周期指标；每次 Open 使用独立的取消和 generation，过期的 Open 完成会被拒绝。可识别的用户 `SET`、`ALTER SESSION` 和临时对象语句会让物理会话归还时销毁，避免把无法由当前 reset 证据覆盖的状态交给下一借用者；旧池已 Dispose 时，同一逻辑连接会重新取得 registry 中的新池。Close 打断池等待和真正并发 Close/Open 的资源归属仍需专门回归。完整资源 reset 和真实 OceanBase/OBProxy reset 兼容性仍需验证。
 
 当前已接入的指标名称为 `oceanbase.client.pool.sessions`、`borrowed`、`waiters`、`discarded`、`reset.failures` 和 `wait.duration`，分别记录物理会话数、借用次数、等待者数、销毁次数、reset 失败次数和池等待耗时。它们证明本地生命周期可观测，不证明真实服务器兼容性。
+
+本轮只读走查还定位到四个需要单独修复的池生命周期问题：归还路径把 `Connection Idle Lifetime` 同时当成借出期间的生命周期判断，可能过早销毁长时间使用但并非空闲的会话；旧的 `Open` 完成后会用当前可变的连接配置清理 `_opening`/归还池，存在与关闭后重新打开互相覆盖的竞态；池等待期间 `Close` 没有取消同步或异步租约等待；静态池 registry 的注册对象和闲置池缺少统一的最终清理。它们目前记录为实现缺口，尚未宣称已修复。
 
 当前已补齐 prepared statement 的跨借用者边界：`COM_RESET_CONNECTION` 成功后递增物理会话 generation；命令缓存的 statement 只有在 session 和 generation 都一致时才复用。旧 generation 的 statement 不再发送 `COM_STMT_CLOSE`，因为服务端 reset 已经关闭它。同步和异步池复用回归均覆盖了“准备、执行、关闭、重新借用、重新准备、执行”路径。未消费的 Oracle REF CURSOR 和未释放的 LOB/temporary LOB 句柄会把物理会话标记为归还时销毁，释放最后一个资源后才允许池化 reset。
 
@@ -210,12 +212,12 @@ Java 参考实现有 `allowLocalInfile`、`allowLoadLocalInfile` 和输入流入
 
 ### 5.6 ADO.NET 公共契约
 
-当前 `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有基础实现。`SingleRow` 会只返回当前结果集的第一行并消费剩余行，`SingleResult` 会消费后续结果以保持连接可复用；`SchemaOnly`、`KeyInfo`、`DbDataAdapter` 和 `DbCommandBuilder` 仍未实现。
+当前 `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有基础实现。`SingleRow` 会只返回当前结果集的第一行并消费剩余行，`SingleResult` 会消费后续结果以保持连接可复用；`SchemaOnly` 支持带空白或注释前缀的 `SELECT`、`SHOW`、`DESCRIBE`、`DESC`、`EXPLAIN` 和 `VALUES` 文本查询，返回列元数据并消费服务端行，不执行写语句；`KeyInfo`、`DbDataAdapter` 和 `DbCommandBuilder` 仍未实现。
 
 目标要求：
 
 - 支持常用 `CommandBehavior`，或在文档中明确 provider 级别限制；当前 `CloseConnection`、`SequentialAccess`、`SingleRow` 和 `SingleResult` 已有本地回归；
-- 实现 `SchemaOnly` 时不能执行用户写操作；
+- `SchemaOnly` 只接受明确的只读文本前缀；存储过程、写语句和无法识别的前缀必须在发送前拒绝；
 - `SingleRow` 和 `SingleResult` 必须正确结束或取消服务端结果流；
 - 完善 `GetSchemaTable`、`GetColumnSchema`、prepared metadata 和参数 metadata；
 - 明确是否支持 `DbDataAdapter`、命令生成、更新回写和设计时工具；

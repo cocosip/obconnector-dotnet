@@ -215,10 +215,12 @@ namespace OceanBaseConnector
                 OceanBaseConnection.RejectAmbientTransaction();
                 if (CommandType != CommandType.Text && CommandType != CommandType.StoredProcedure)
                     throw new NotSupportedException("This CommandType is not supported.");
-                if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess | CommandBehavior.SingleRow | CommandBehavior.SingleResult)) != 0)
+                if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess | CommandBehavior.SingleRow | CommandBehavior.SingleResult | CommandBehavior.SchemaOnly)) != 0)
                     throw new NotSupportedException("This CommandBehavior is not supported yet.");
                 var text = CommandText;
                 if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("CommandText is required.");
+                if ((behavior & CommandBehavior.SchemaOnly) != 0 && (CommandType != CommandType.Text || !IsSchemaOnlyQuery(text)))
+                    throw new NotSupportedException("SchemaOnly requires a read-only text query.");
                 if (token.IsCancellationRequested) { CancellationOrigin?.Invoke().ThrowIfCancellationRequested(); token.ThrowIfCancellationRequested(); }
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
                 var session = connection.GetCommandSession(_transaction, SessionOwner);
@@ -374,6 +376,39 @@ namespace OceanBaseConnector
             Buffer.BlockCopy(bytes, 0, packet, 1, bytes.Length);
             return packet;
         }
+
+        private static bool IsSchemaOnlyQuery(string text)
+        {
+            var position = 0;
+            while (true)
+            {
+                while (position < text.Length && char.IsWhiteSpace(text[position])) position++;
+                if (position + 1 < text.Length && text[position] == '-' && text[position + 1] == '-')
+                {
+                    position += 2;
+                    while (position < text.Length && text[position] != '\r' && text[position] != '\n') position++;
+                    continue;
+                }
+                if (position + 1 < text.Length && text[position] == '/' && text[position + 1] == '*')
+                {
+                    var end = text.IndexOf("*/", position + 2, StringComparison.Ordinal);
+                    if (end < 0) return false;
+                    position = end + 2;
+                    continue;
+                }
+                break;
+            }
+            return StartsWithKeyword(text, position, "SELECT") || StartsWithKeyword(text, position, "SHOW") ||
+                StartsWithKeyword(text, position, "DESCRIBE") || StartsWithKeyword(text, position, "DESC") ||
+                StartsWithKeyword(text, position, "EXPLAIN") || StartsWithKeyword(text, position, "VALUES");
+        }
+
+        private static bool StartsWithKeyword(string text, int position, string keyword) =>
+            position + keyword.Length <= text.Length &&
+            string.Compare(text, position, keyword, 0, keyword.Length, StringComparison.OrdinalIgnoreCase) == 0 &&
+            (position + keyword.Length == text.Length || !IsIdentifierPart(text[position + keyword.Length]));
+
+        private static bool IsIdentifierPart(char value) => char.IsLetterOrDigit(value) || value == '_' || value == '$' || value == '#';
 
         private PreparedStatement? DetachStatement()
         {

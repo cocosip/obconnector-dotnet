@@ -36,7 +36,7 @@
 | 连接与配置 | 部分实现 | 连接字符串、超时、多地址、RoundRobin、模式确认、地址 resolver、空池 registry 清理 | OCP/TNS、健康发现、连接字符串归一化、完整版本/代理矩阵 |
 | 物理连接池 | 部分实现 | 物理会话复用、最大容量、等待超时/取消、最小池预热及失败回滚、带 MySQL autocommit 校验的 `COM_PING`/reset、idle/total lifetime、空池 registry 清理、池指标 | 完整资源 reset、真实 reset 兼容性 |
 | 会话隔离 | 部分实现 | `COM_RESET_CONNECTION`、MySQL `COM_INIT_DB`、reader 消耗后可复用、prepared statement generation 失效、未释放 REF CURSOR/LOB 归还时销毁、可识别的用户 session-state/temporary-object 语句归还时销毁 | 不可识别的 session-state、XA 和失败丢弃的完整矩阵 |
-| ADO.NET 核心 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、provider factory、`CloseConnection`、`SequentialAccess`、`SingleRow`、`SingleResult` | `SchemaOnly`、`KeyInfo`、完整 schema metadata、`DbDataAdapter`、`DbCommandBuilder` |
+| ADO.NET 核心 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、provider factory、`CloseConnection`、`SequentialAccess`、`SingleRow`、`SingleResult`、只读文本查询的 `SchemaOnly` | `KeyInfo`、完整 schema metadata、`DbDataAdapter`、`DbCommandBuilder` |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 代码路径 | 现代 TFM 与旧 TFM 的完整行为矩阵、标准 `DbBatch` 生态验收 |
 | 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 路径 | 真实插件成功/拒绝矩阵、KDC、凭据注入和轮换 |
 | TLS | 部分实现 | `VerifyFull`、`Required`、`Disabled`、主机名校验 | mTLS、企业 CA/自定义信任、撤销策略和真实证书矩阵 |
@@ -118,6 +118,13 @@ Connector/J 的池实现还包含池注册、最小/最大容量、生命周期�
 3. 建连、探活、协议 debug 和 slow-query profile 等诊断补充；
 4. Close/Open 并发、池等待取消、借出连接与 data source disposal 的资源归属验证；
 5. 真实 OceanBase 与 OBProxy 上的 reset、预热、超时和并发验证。
+
+本轮池走查还确认了以下代码级风险，后续修复应分别建立回归：
+
+- 归还时按 idle lifetime 检查会话，可能把“借出期间已使用很久”的会话误判为空闲过期；归还路径应只依据 total lifetime，idle lifetime 应留在候选回收路径。
+- 旧 `Open` 的晚到完成可能清掉同一逻辑连接的新 `_opening` 状态，或按当前 `_options`/池引用处理旧会话，造成并发重开和池计数归属错误。
+- `Close` 在池等待期间只改变标志，没有取消正在等待的租约，关闭动作可能要等到归还或超时才生效。
+- 静态 registry 的池对象和闲置会话缺少统一 dispose 入口；长时间运行进程需要验证是否会保留无引用池状态。
 
 ### 5.3 连接池验收矩阵
 
