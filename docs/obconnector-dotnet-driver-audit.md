@@ -124,9 +124,9 @@ Connector/J 的池实现还包含池注册、最小/最大容量、生命周期�
 | 检查项 | 当前状态 | 仍需补的证据 |
 | --- | --- | --- |
 | idle lifetime 与 total lifetime 混用 | 已修正；归还路径只检查 total lifetime，候选闲置会话才检查 idle lifetime，并保留 `Min Pool Size` | 长时间借用、并发借还和时钟边界压力回归 |
-| 旧 `Open` 完成覆盖新一轮打开 | 已有 per-open cancellation 和 generation；过期完成会被拒绝，清理只处理同一 generation | Close/Open 交错压力回归，以及 DataSource 场景的资源归属 |
+| 旧 `Open` 完成覆盖新一轮打开 | 已有 per-open cancellation 和 generation；过期完成会被拒绝，清理只处理同一 generation | Close/Open 交错压力回归 |
 | Close 不能打断池等待 | 已有 `OpenCancellation`，同步/异步池等待使用该 token | 等待、Close、重新 Open 的并发回归 |
-| 静态 registry 无清理 | 空池通过 `ReleaseIfEmpty` 移除并 Dispose；仍没有进程级统一 shutdown API | 非空池、`DbDataSource.Dispose` 和长时间运行进程的生命周期报告 |
+| 静态 registry 无清理 | 空池通过 `ReleaseIfEmpty` 移除并 Dispose；数据源 Dispose 后借出会话关闭时直接销毁，不发送 reset；仍没有进程级统一 shutdown API | 非空池和长时间运行进程的生命周期报告 |
 
 因此这些项目不再作为“已确认的当前 bug”报告；它们是已有保护但验证尚未闭合的池生命周期验收项。
 

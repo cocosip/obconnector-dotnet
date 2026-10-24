@@ -89,6 +89,58 @@ namespace OceanBaseConnector.UnitTests.Session
             Assert.False(pool.TryRent(out _));
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task DisposedPoolDiscardsBorrowedSessionWithoutReset(bool asynchronous)
+        {
+            var resetObserved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var server = LoopbackServer.Start(async client =>
+            {
+                using (client)
+                {
+                    var channel = new PacketChannel(client.GetStream());
+                    await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
+                    await channel.ReadPacketAsync();
+                    await channel.WritePacketAsync(new byte[] { 0, 0, 0, 2, 0, 0, 0 });
+                    await ServerIdentity.ReplyAsync(channel, oracle: false);
+                    try
+                    {
+                        var packet = await channel.ReadPacketAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                        resetObserved.TrySetResult(packet.Length != 0 && packet[0] == 0x1f);
+                    }
+                    catch (EndOfStreamException) { resetObserved.TrySetResult(false); }
+                    catch (IOException) { resetObserved.TrySetResult(false); }
+                    catch (ProtocolException) { resetObserved.TrySetResult(false); }
+                }
+            });
+            var options = new OceanBaseConnectionStringBuilder
+            {
+                Server = "127.0.0.1",
+                Port = server.Port,
+                UserId = "u",
+                Password = "p",
+                TlsMode = OceanBaseTlsMode.Disabled,
+                ConnectionTimeout = 5,
+                CommandTimeout = 1,
+                Pooling = true,
+            }.Build();
+            using var pool = new PhysicalSessionPool();
+            var session = pool.Rent(options, null, new EndpointSelector(), out _);
+            if (asynchronous) await session.OpenAsync(); else session.Open();
+
+            pool.Dispose();
+            var returned = asynchronous
+                ? await pool.ReturnAsync(session, new ConnectionLog(null), timeout: 1)
+                : pool.Return(session, new ConnectionLog(null), timeout: 1);
+
+            Assert.False(returned);
+            Assert.Equal(SessionState.Closed, session.State);
+            server.Stop();
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.False(await resetObserved.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+        }
+
         [Fact]
         public async Task PoolWaitsAndTimesOutWhenMaximumIsBorrowed()
         {

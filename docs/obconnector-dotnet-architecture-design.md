@@ -89,7 +89,7 @@ For RSA authentication, `Server RSA Public Key` accepts trusted SubjectPublicKey
 
 Registrations preserve an existing unkeyed `DbConnection`/`DbDataSource` registration from another provider. Inject concrete OceanBase types when providers coexist. Data-source registration does not register connections.
 
-The container disposes its registered services; callers dispose connections created from a data source. Dispose manually built data sources yourself. Source disposal does not forcibly close already-open connections. External `ILoggerFactory` and address resolvers remain caller-owned.
+The container disposes its registered services; callers dispose connections created from a data source. Dispose manually built data sources yourself. Source disposal does not forcibly close already-open connections; when those connections later close, their borrowed physical sessions are discarded without sending reset traffic to the disposed pool. External `ILoggerFactory` and address resolvers remain caller-owned.
 
 ## Commands and readers
 

@@ -181,6 +181,11 @@ namespace OceanBaseConnector.Internal.Session
 
         internal bool Return(PhysicalSession session, ConnectionLog log, int timeout = 0)
         {
+            if (IsDisposedPool)
+            {
+                Destroy(session);
+                return false;
+            }
             if (!CanReturn(session) || session.IsLifetimeExpired(DateTime.UtcNow, _lifetimeSeconds))
             {
                 Destroy(session);
@@ -217,6 +222,11 @@ namespace OceanBaseConnector.Internal.Session
         internal async Task<bool> ReturnAsync(PhysicalSession session, ConnectionLog log, int timeout = 0,
             CancellationToken cancellationToken = default)
         {
+            if (IsDisposedPool)
+            {
+                Destroy(session);
+                return false;
+            }
             if (!CanReturn(session) || session.IsLifetimeExpired(DateTime.UtcNow, _lifetimeSeconds))
             {
                 Destroy(session);
@@ -255,6 +265,11 @@ namespace OceanBaseConnector.Internal.Session
         private bool CanReturn(PhysicalSession session) =>
             session.State == SessionState.Open && !session.IsReservedForOther(null) &&
             !session.RequiresDiscardOnReturn && !session.IsDedicatedToXa;
+
+        private bool IsDisposedPool
+        {
+            get { lock (_gate) return _disposed; }
+        }
 
         private RentDecision TakeCandidate(OceanBaseConnectionOptions options, out PhysicalSession? candidate,
             out List<PhysicalSession>? expired)
