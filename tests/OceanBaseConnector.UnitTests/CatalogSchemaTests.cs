@@ -115,7 +115,7 @@ namespace OceanBaseConnector.UnitTests
                 await connection.OpenAsync(); if (mysql) UseInternalMySqlFixture(connection);
                 var transport = new ProtocolFaultStream(Array.Empty<byte>()); InstallFaultStream(connection, transport);
                 using var meta = connection.GetSchema(); using var restrictions = await connection.GetSchemaAsync("Restrictions");
-                Assert.Equal(mysql ? 17 : 19, meta.Rows.Count);
+                Assert.Equal(mysql ? 18 : 20, meta.Rows.Count);
                 foreach (DataRow collection in meta.Rows)
                 {
                     var name = (string)collection["CollectionName"];

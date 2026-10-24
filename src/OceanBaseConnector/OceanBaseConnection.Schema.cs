@@ -11,7 +11,7 @@ namespace OceanBaseConnector
 {
     public sealed partial class OceanBaseConnection
     {
-        private static readonly string[] SchemaCollections = { "MetaDataCollections", "DataSourceInformation", "Tables", "Columns", "Procedures", "ProcedureParameters", "Views", "Indexes", "IndexColumns", "Keys", "Constraints", "ConstraintColumns", "ForeignKeys", "ForeignKeyColumns", "Types", "Sequences", "Users", "Synonyms", "Restrictions" };
+        private static readonly string[] SchemaCollections = { "MetaDataCollections", "DataSourceInformation", "Tables", "Columns", "Procedures", "ProcedureParameters", "Views", "Indexes", "IndexColumns", "Keys", "Constraints", "ConstraintColumns", "ForeignKeys", "ForeignKeyColumns", "Types", "Sequences", "Users", "Synonyms", "Restrictions", "DataTypes" };
         private static readonly string[][] SchemaRestrictionNames =
         {
             Array.Empty<string>(), Array.Empty<string>(),
@@ -20,9 +20,9 @@ namespace OceanBaseConnector
             new[] { "Catalog", "Schema", "View" }, new[] { "Catalog", "Schema", "Table", "Index" }, new[] { "Catalog", "Schema", "Table", "Index", "Column" },
             new[] { "Catalog", "Schema", "Table", "Constraint", "ConstraintType" }, new[] { "Catalog", "Schema", "Table", "Constraint", "ConstraintType" },
             new[] { "Catalog", "Schema", "Table", "Constraint", "Column" }, new[] { "Catalog", "Schema", "Table", "Constraint" }, new[] { "Catalog", "Schema", "Table", "Constraint", "Column" },
-            new[] { "Catalog", "Schema", "Type", "TypeCode" }, new[] { "Catalog", "Schema", "Sequence" }, new[] { "User", "Host" }, new[] { "Catalog", "Schema", "Synonym" }, Array.Empty<string>()
+            new[] { "Catalog", "Schema", "Type", "TypeCode" }, new[] { "Catalog", "Schema", "Sequence" }, new[] { "User", "Host" }, new[] { "Catalog", "Schema", "Synonym" }, Array.Empty<string>(), Array.Empty<string>()
         };
-        private static readonly int[] SchemaIdentifierParts = { 0, 0, 3, 4, 4, 5, 3, 4, 5, 4, 4, 5, 4, 5, 3, 3, 2, 3, 0 };
+        private static readonly int[] SchemaIdentifierParts = { 0, 0, 3, 4, 4, 5, 3, 4, 5, 4, 4, 5, 4, 5, 3, 3, 2, 3, 0, 0 };
         private static readonly string[] SchemaTableColumns = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "TABLE_TYPE" };
         private static readonly string[] SchemaColumnColumns = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "COLUMN_NAME", "ORDINAL_POSITION", "COLUMN_DEFAULT", "IS_NULLABLE", "DATA_TYPE", "CHARACTER_MAXIMUM_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION" };
 
@@ -80,6 +80,7 @@ namespace OceanBaseConnector
                 if (index == 0) return (CreateSchemaCollections(mysql), null);
                 if (index == 1) return (CreateDataSourceInformation(mysql, session.Info.ServerVersion), null);
                 if (index == 18) return (CreateSchemaRestrictions(mysql), null);
+                if (index == 19) return (CreateDataTypes(mysql, session.TreatTinyAsBoolean), null);
                 var table = index < 4 ? CreateDirectoryTable(index == 3) : index < 6 ? CreateRoutineDirectoryTable(index == 5) : CreateCatalogDirectoryTable(SchemaCollections[index]);
                 // This mode has no such identifier part; a non-null exact restriction cannot match.
                 var absent = index == 16 ? mysql ? -1 : 1 : mysql ? 1 : 0;

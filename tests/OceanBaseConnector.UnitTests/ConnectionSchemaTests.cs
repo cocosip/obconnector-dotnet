@@ -50,10 +50,10 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync(); var transport = new ProtocolFaultStream(Array.Empty<byte>()); InstallFaultStream(connection, transport);
                 var collections = connection.GetSchema();
-                Assert.Equal("MetaDataCollections", collections.TableName); Assert.Equal(19, collections.Rows.Count);
+                Assert.Equal("MetaDataCollections", collections.TableName); Assert.Equal(20, collections.Rows.Count);
                 Assert.Equal(new[] { "CollectionName", "NumberOfRestrictions", "NumberOfIdentifierParts" }, collections.Columns.Cast<DataColumn>().Select(x => x.ColumnName));
-                Assert.Equal(new[] { 0, 0, 4, 4, 5, 5, 3, 4, 5, 5, 5, 5, 4, 5, 4, 3, 2, 3, 0 }, collections.Rows.Cast<DataRow>().Select(x => (int)x[1]));
-                collections.Rows.Clear(); Assert.Equal(19, (await connection.GetSchemaAsync()).Rows.Count);
+                Assert.Equal(new[] { 0, 0, 4, 4, 5, 5, 3, 4, 5, 5, 5, 5, 4, 5, 4, 3, 2, 3, 0, 0 }, collections.Rows.Cast<DataRow>().Select(x => (int)x[1]));
+                collections.Rows.Clear(); Assert.Equal(20, (await connection.GetSchemaAsync()).Rows.Count);
                 var information = await connection.GetSchemaAsync("datasourceinformation");
                 Assert.Equal(17, information.Columns.Count); var row = Assert.Single(information.Rows.Cast<DataRow>());
                 Assert.Equal("OceanBase", row["DataSourceProductName"]); Assert.Equal(connection.ServerVersion, row["DataSourceProductVersion"]);
@@ -158,7 +158,7 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync(); if (mysql) UseInternalMySqlFixture(connection);
                 var transport = new ProtocolFaultStream(Array.Empty<byte>()); InstallFaultStream(connection, transport);
-                foreach (var collection in new[] { "MetaDataCollections", "DataSourceInformation", "Tables", "Columns" })
+                foreach (var collection in new[] { "MetaDataCollections", "DataSourceInformation", "DataTypes", "Tables", "Columns" })
                 {
                     using (var scope = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
                     {

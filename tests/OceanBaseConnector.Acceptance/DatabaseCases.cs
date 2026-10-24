@@ -218,7 +218,7 @@ internal static partial class DatabaseCases
     {
         await using var connection = await c.OpenAsync(token);
         using var collections = connection.GetSchema();
-        c.Check(collections.Rows.Count == (c.Oracle ? 19 : 17), "All mode-supported schema collections must be advertised.");
+        c.Check(collections.Rows.Count == (c.Oracle ? 20 : 18), "All mode-supported schema collections must be advertised.");
         foreach (System.Data.DataRow collection in collections.Rows)
         {
             var name = (string)collection["CollectionName"];

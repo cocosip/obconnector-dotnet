@@ -79,7 +79,23 @@ namespace OceanBaseConnector.ConsumerTests
                     field.SetValue(session, Activator.CreateInstance(infoType, Fact("ServerVersion"), Fact("ConnectionId"), Enum.Parse(assembly.GetType("OceanBaseConnector.OceanBaseCompatibilityMode")!, "MySql"), Fact("Capabilities"), Fact("ServerStatus"), Fact("ObCapabilityFlag"), Fact("SessionVariables")));
                 }
                 using var meta = connection.GetSchema(); using var restrictions = connection.GetSchema("Restrictions");
-                Assert.Equal(mysql ? 17 : 19, meta.Rows.Count); Assert.True(restrictions.Rows.Count > 0);
+                Assert.Equal(mysql ? 18 : 20, meta.Rows.Count); Assert.True(restrictions.Rows.Count > 0);
+                using (var dataTypes = asynchronous ? await connection.GetSchemaAsync("DataTypes", budget.Token) : connection.GetSchema("DataTypes"))
+                {
+                    Assert.Equal(typeof(long), dataTypes.Columns["ColumnSize"]!.DataType);
+                    var number = Assert.Single(dataTypes.Rows.Cast<DataRow>(), row =>
+                        (string)row["TypeName"] == (mysql ? "DECIMAL" : "NUMBER") && (string)row["DataType"] == "System.Decimal");
+                    Assert.Equal(28L, number["ColumnSize"]);
+                    Assert.Equal("OceanBaseConnector.OceanBaseDecimal", number["ProviderSpecificDataType"]);
+                    using var command = connection.CreateCommand(); var parameter = command.CreateParameter();
+                    var providerType = assembly.GetType("OceanBaseConnector.OceanBaseDbType")!;
+                    parameter.GetType().GetProperty("OceanBaseDbType")!.SetValue(parameter, Enum.ToObject(providerType, number["ProviderDbType"]));
+                    Assert.Equal(DbType.Decimal, parameter.DbType);
+                    var names = dataTypes.Rows.Cast<DataRow>().Select(row => (string)row["TypeName"]);
+                    Assert.Contains(mysql ? "JSON" : "REF CURSOR", names);
+                    Assert.DoesNotContain(mysql ? "NUMBER" : "JSON", names);
+                    dataTypes.Rows.Clear(); using var fresh = connection.GetSchema("DataTypes"); Assert.NotEmpty(fresh.Rows.Cast<DataRow>());
+                }
                 foreach (var collection in collections)
                 {
                     using var table = asynchronous ? await connection.GetSchemaAsync(collection, budget.Token) : connection.GetSchema(collection);

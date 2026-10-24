@@ -4,13 +4,13 @@
 **仓库：** `D:\dotnet-code\obconnector-dotnet`  
 **初次源码基线：** .NET `06d58e1`；Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / 2.4.14。
 
-**当前源码：** 本次 P1-11 凭据提供/轮换模块（开发起点 `2dd1893`，此前产品代码至 `6fecad9`）；见[模块记录](obconnector-dotnet-progress.md#2026-10-25-p1-11-credential-provision-and-rotation)。Java 参考提交未变。
+**当前源码：** 本次 DataTypes 模块（开发起点 `f815c16`，此前凭据模块已交付）；Java 参考仍为 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。
 **目标：** 为 OceanBase MySQL 兼容模式和 Oracle 兼容模式定义一份可执行的完整驱动缺口清单。  
 **结论级别：** 这是源码、测试、打包记录和 Connector/J 静态结构对照形成的审计报告，不把本地 fixture 当作真实服务器兼容性证明。
 
-**最新模块状态：** P1-11 本地实现完成；完整单测 3764、受影响消费者 885、DI 14 通过，Integration 9 通过/72 跳过；构建 0 错误/0 警告，独立走查无剩余 Critical/Important。详见[模块记录](obconnector-dotnet-completeness.md#1512-2026-10-25-凭据提供与轮换本地交付)。
+**最新模块状态：** DataTypes 本地实现完成，最终完整单测 3792、受影响消费者 66（含 DataTypes 16 项）、DI 14 通过，Integration 9 通过/72 跳过，构建 0 警告/0 错误；独立复核无剩余 Critical/Important。见[本地交付记录](obconnector-dotnet-completeness.md#1514-2026-10-25-datatypes-本地交付)。
 
-**最近复核：** 2026-10-25；最新凭据模块执行结果以上述记录为准。前次文档整理重新读取 Schema 模块已有报告：完整单测 3693、受影响消费者 66、DI 14 通过，Integration 9 通过/72 跳过，原构建日志 0 错误/0 警告，详见[本次证据复核](obconnector-dotnet-completeness.md#1510-2026-10-25-当前源码与完整文档交付复核)。此前证书池化 `01a8082`、清池 `0e58d1f`、标准 MySQL 压缩 `8d8b799` 的执行结果分别保留于详细基线第 15.4/15.5/15.7 节；压缩报告缺失的历史快照见第 15.8 节。以上均不构成新增实库兼容性声明。
+**最近复核：** 2026-10-25；本次 DataTypes 开发修复、独立走查与最终执行结果见第 15.14 节；第 15.13 节的失败/筛选遗漏作为历史保留。前次文档整理重新读取 Schema 模块已有报告：完整单测 3693、受影响消费者 66、DI 14 通过，Integration 9 通过/72 跳过，原构建日志 0 错误/0 警告，详见[本次证据复核](obconnector-dotnet-completeness.md#1510-2026-10-25-当前源码与完整文档交付复核)。此前证书池化 `01a8082`、清池 `0e58d1f`、标准 MySQL 压缩 `8d8b799` 的执行结果分别保留于详细基线第 15.4/15.5/15.7 节；压缩报告缺失的历史快照见第 15.8 节。以上均不构成新增实库兼容性声明。
 
 源码提交是初次走查基线；其后 P0-06 的本地修复和 P1-04 的自定义服务器证书验证分别记在[池路由记录](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [TLS 验证记录](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)。本报告保留原缺口 ID 和未完成的真实验收要求。
 
@@ -64,14 +64,14 @@
 | 复杂类型 | 部分实现 | object/collection 标量及嵌套成员、类型缓存和数组绑定 | LOB/cursor/national 成员、循环结构、文本结果、外部 DDL 后的缓存失效 |
 | 类型与字符集 | 部分实现 | 常用数值、时间、YEAR、BIT、JSON、zero-date、Oracle 时间/interval | 扩展 type code、更多字符集/排序规则、精度边界 |
 | HA 与恢复 | 部分实现 | Open 阶段 TCP 候选地址重试、注入式 resolver | 活动连接迁移、透明重连、退避、reroute、安全重试 |
-| Schema 元数据 | 部分实现 | Oracle 19/MySQL 17 个集合；限制描述、视图、索引/列、键/约束、外键/列、序列和用户，Oracle 命名类型/同义词；异步 schema | 实库字典、权限/版本/代理矩阵；自动参数推导和 DataTypes 尚无公开实现 |
+| Schema 元数据 | 部分实现 | Oracle 20/MySQL 18 个集合；限制描述、关系/对象目录、异步 schema 及静态 DataTypes 类型映射有本地回归 | 自动参数推导；实库字典、权限/版本/代理和类型/DDL 矩阵 |
 | 批处理 | 部分实现 | `DbBatch` 顺序执行、Oracle array binding | rewrite、multi-send、bulk、跨命令 statement cache |
 | 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter`、脱敏日志、池会话/借用/等待/丢弃/reset 失败/等待耗时指标 | 建连与探活细分指标、协议 debug、slow-query profile |
 | 真实兼容性 | 部分验证 | 直连 4.4.2.2 的有限记录，包含 Oracle 失败 | OBProxy、TLS/plugin、版本、平台、网络故障和 XA 恢复矩阵 |
 
 ### 3.1 除连接池之外的待开发范围
 
-尚无公开实现的常见能力包括：`KeyInfo`、`DataTypes`、参数自动推导、DataAdapter/CommandBuilder 和跨命令 statement cache。协议侧缺 OB20 压缩/reroute，发现侧缺内置 OCP/TNS 或等价适配与健康/退避策略；Oracle 侧还有限定游标方向/结果形状、复杂成员和 DDL 缓存失效的缺口。
+尚无公开实现的常见能力包括：`KeyInfo`、参数自动推导、DataAdapter/CommandBuilder 和跨命令 statement cache。`DataTypes` 已完成本地实现及全量/五资产回归，真实服务器类型、DDL、编码和版本/代理范围仍须验收。协议侧缺 OB20 压缩/reroute，发现侧缺内置 OCP/TNS 或等价适配与健康/退避策略；Oracle 侧还有限定游标方向/结果形状、复杂成员和 DDL 缓存失效的缺口。
 
 凭据提供/轮换已有本地实现：每次 Open 的认证快照、版本退休、过期和取消规则已通过最终回归。真实短期凭据服务和认证插件轮换仍须验收。
 
@@ -105,7 +105,7 @@
 | P1-07 | 复杂类型 | 保留已有嵌套 object/collection，补齐 LOB/cursor/national 成员和外部 DDL 缓存失效 |
 | P1-08 | 类型/字符集 | 类型码清单、CLR/provider-specific 映射、字符集和精度契约 |
 | P1-09 | HA/发现 | OCP/TNS 或等价发现、健康状态、退避和 OBProxy 拓扑 |
-| P1-10 | Schema | 常用目录/限制参数已有本地实现，过程参数目录保留；DataTypes、自动参数推导尚缺，真实目录/权限/版本/代理矩阵待验收，见 [Schema 契约](schema.md) |
+| P1-10 | Schema | 常用目录/限制参数及 DataTypes 静态映射已有本地实现和最终回归；自动参数推导尚缺，真实目录/权限/版本/代理矩阵待验收，见 [Schema 契约](schema.md) |
 | P1-11 | 凭据提供/轮换 | 每次 Open 快照、全口令替换、版本退休、过期/取消及脱敏已有本地实现和最终回归；真实插件/凭据服务/KDC 验收仍缺 |
 
 ### P2：生态、性能和运营增强
@@ -229,12 +229,12 @@ Java 池证据位于参考仓库的 `src/main/java/com/oceanbase/jdbc/OceanBaseP
 
 | 用途 | 文件 |
 | --- | --- |
-| 本报告 | `docs/obconnector-dotnet-driver-audit.md` |
-| 详细能力基线与验收要求 | `docs/obconnector-dotnet-completeness.md` |
-| 公共 API 和配置契约 | `docs/obconnector-dotnet-architecture-design.md` |
-| 历史验证、失败和剩余工作 | `docs/obconnector-dotnet-progress.md` |
-| 真实兼容性和已知限制 | `docs/compatibility.md` |
-| Java Connector/J 模块对照 | `docs/obconnector-j-architecture-outline.md` |
+| 本报告 | [obconnector-dotnet-driver-audit.md](obconnector-dotnet-driver-audit.md) |
+| 详细能力基线与验收要求 | [obconnector-dotnet-completeness.md](obconnector-dotnet-completeness.md) |
+| 公共 API 和配置契约 | [obconnector-dotnet-architecture-design.md](obconnector-dotnet-architecture-design.md) |
+| 历史验证、失败和剩余工作 | [obconnector-dotnet-progress.md](obconnector-dotnet-progress.md) |
+| 真实兼容性和已知限制 | [compatibility.md](compatibility.md) |
+| Java Connector/J 模块对照 | [obconnector-j-architecture-outline.md](obconnector-j-architecture-outline.md) |
 | 每个缺口的场景、源码、测试入口与验收要求 | `docs/obconnector-dotnet-completeness.md` 第 14 节，共 23 个 ID |
 | TLS、客户端证书和撤销检查 | `src/OceanBaseConnector/Internal/Transport/TlsHandshakeFlow.cs`、`TlsUpgrade.cs`、`src/OceanBaseConnector/OceanBaseConnection.cs`、`tests/OceanBaseConnector.UnitTests/Transport/TlsComponentsTests.cs`、`ProviderConnectionTests.cs` |
 | 物理会话池 | `src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs` |
@@ -260,7 +260,7 @@ Java 池证据位于参考仓库的 `src/main/java/com/oceanbase/jdbc/OceanBaseP
 
 完整清单见[能力与缺口基线](obconnector-dotnet-completeness.md)第 4、5、14、15 节。后续每个 ID 关闭时须记录提交、回归、命令/退出码、运行时/服务端 profile、失败/跳过和报告位置；当前未分配负责人/日期。已有开发进度台账及历史任务编号保持原样。
 
-2026-10-25 已同步至 `6fecad9`，包含客户端证书池化隔离、source 证书快照、显式清池/退休、标准 MySQL 压缩和 Schema 常用目录扩展。连接池的容量、预热、清理和指标已具备；完整隔离、并发/长期运行及真实兼容性仍开放。23 个缺口继续逐项验收，局部模块交付不等于完整驱动验收。
+2026-10-25 已提交基线更新至 `f815c16`，包含客户端证书池化隔离、source 证书快照、显式清池/退休、标准 MySQL 压缩、Schema 常用目录和凭据提供/轮换。后续 DataTypes 的本地交付和新增集合数量见第 15.14 节。连接池的容量、预热、清理和指标已具备；完整隔离、并发/长期运行及真实兼容性仍开放。23 个缺口继续逐项验收，局部模块交付不等于完整驱动验收。
 
 后续执行按[剩余交付工作包](obconnector-dotnet-completeness.md#16-剩余交付工作包)分为八组，覆盖全部 23 项：每组列出尚需实现的内容、必须保留的行为及验收产物。负责人、日期和承诺支持范围仍待项目分配；本报告不把建议阶段写成已确认排期。上述文档整理只检查链接、编号和 diff；随后的标准 MySQL 压缩开发、测试和独立走查单列于[模块记录](obconnector-dotnet-completeness.md#157-2026-10-25-标准-mysql-压缩)。
 
@@ -270,3 +270,5 @@ Java 池证据位于参考仓库的 `src/main/java/com/oceanbase/jdbc/OceanBaseP
 2026-10-25 后续已扩展 Schema 常用目录，具体契约见 [schema.md](schema.md)，开发、测试与独立走查见[模块台账](obconnector-dotnet-progress.md#2026-10-25-p1-10-schema-catalog)。这不关闭真实字典兼容矩阵，也不将此前真实六集合结果扩展解释为新目录已验收。
 
 本次文档交付补全明确缺失/部分实现/欠验收的分类、凭据获取/过期/并发刷新/池退休/取消和脱敏清单，以及 DataTypes/参数自动推导/KeyInfo 的分别验收要求。已复核现存 Schema TRX，保留所有历史失败、跳过、缺失报告及 23 个 ID；未修改产品代码或关闭任何工作包。
+
+DataTypes 修复前的 3791 通过/1 失败及消费者筛选遗漏保留于[历史检查点](obconnector-dotnet-completeness.md#1513-2026-10-25-datatypes-未提交开发与文档交付检查点)，已由[第 15.14 节](obconnector-dotnet-completeness.md#1514-2026-10-25-datatypes-本地交付)的完整单测 3792、消费者 66（含实际 16 项）通过结果取代。23 个 ID、8 个工作包及历史实库失败/跳过均保留；自动参数推导和真实验收继续开放。

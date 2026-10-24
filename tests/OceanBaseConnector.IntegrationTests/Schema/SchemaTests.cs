@@ -18,7 +18,7 @@ public sealed class SchemaTests
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
         using var collections = connection.GetSchema();
-        Assert.Equal(db.Oracle ? 19 : 17, collections.Rows.Count);
+        Assert.Equal(db.Oracle ? 20 : 18, collections.Rows.Count);
         foreach (DataRow collection in collections.Rows)
         {
             var name = (string)collection["CollectionName"];
