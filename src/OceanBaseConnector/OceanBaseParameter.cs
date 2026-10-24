@@ -11,6 +11,7 @@ namespace OceanBaseConnector
         private OceanBaseDbType? _providerType;
         private OceanBaseComplexType? _complexType;
         private byte? _scale;
+        private int? _decimalScale;
         private ParameterDirection _direction = ParameterDirection.Input;
         private int _size;
         internal OceanBaseParameterCollection? Owner { get; set; }
@@ -57,8 +58,26 @@ namespace OceanBaseConnector
         public override DataRowVersion SourceVersion { get; set; } = DataRowVersion.Current;
         public override int Size { get => _size; set { if (value < -1) throw new ArgumentOutOfRangeException(nameof(value)); _size = value; } }
         public override byte Precision { get; set; }
-        public override byte Scale { get => _scale ?? 0; set => _scale = value; }
+        public override byte Scale
+        {
+            get => _decimalScale.HasValue && _decimalScale.Value >= 0 ? (byte)_decimalScale.Value : _scale ?? 0;
+            set { _scale = value; _decimalScale = null; }
+        }
+        /// <summary>An explicit decimal scale, including Oracle negative scales (-84 through 127).
+        /// MySQL allows 0 through 30. Setting Scale clears this override; Scale reads zero for a negative override.
+        /// Values requiring rounding are rejected. Null uses the ordinary Scale or value inference.</summary>
+        public int? DecimalScale
+        {
+            get => _decimalScale;
+            set
+            {
+                if (value.HasValue && (value.Value < -84 || value.Value > 127)) throw new ArgumentOutOfRangeException(nameof(value));
+                _decimalScale = value;
+                if (value.HasValue) _scale = null;
+            }
+        }
         internal byte? DeclaredScale => _scale;
+        internal int? DeclaredDecimalScale => _decimalScale ?? (int?)_scale;
         internal OceanBaseParameter Snapshot()
         {
             var copy = (OceanBaseParameter)MemberwiseClone();

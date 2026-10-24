@@ -2,6 +2,26 @@
 
 This page retains historical results and open work from the former progress ledger, alongside dated verification of later changes. Local regression results and real database acceptance are recorded separately.
 
+## 2026-10-25 P1-08 signed decimal parameter scale
+
+Implemented nullable OceanBaseParameter.DecimalScale from base `5146b62`, preserving Oracle NUMBER -84..127 declarations without changing byte Scale. Shared server/client prepare constraints validate decimal-only and typed NULL metadata, per-mode bounds and exact precision without rounding. Scale setter clears the override; a non-null override clears the previous Scale; clearing it does not restore that overwritten declaration. Snapshots retain it. See the [public contract](obconnector-dotnet-architecture-design.md#decimal-parameter-scale) and [module record](obconnector-dotnet-completeness.md#1516-2026-10-25-有符号-decimal-scale-本地交付).
+
+Fixed the local Oracle consumer fixture: raw OK omitted tracking variables, so ObserveSessionState invalidated cached timezone/charset and the next command correctly sent a SELECT probe. The fixture now uses existing Report(false,1), retaining exact EXECUTE/rejection/reuse assertions. Original consumer 10 passed/10 failed and API RED 6 failed reports remain. The first 86-pass consumer filter missed fallback/array methods in a shared class; final explicit method filters execute Scale20 + fallback30 + array30 + Batch50 + Catalog16 = 146 cases.
+
+Final Release build: 0 warnings/errors, exit0. Complete units3819, affected consumers146 and DI14 pass; Integration9 pass/72 individual NotExecuted. Format verify exits0 with a workspace-load warning. Independent review_decimal_scale re-review found no remaining Critical/Important. Final TRX: unit-verified, consumer-covered, di-verified, integration-verified under ignored TestResults/decimal-scale; logs TestResults-decimal-scale-*.log. Local pack exits0 and five asset DLL hashes, embedded README bytes and five dependency groups match; no publish.
+
+Consumers load five assets in the .NET10 host, not five independent runtimes. No full consumer suite, real-server declared NUMBER/DECIMAL/version/OBProxy, non-Windows, stress or independent nupkg-runtime evidence is added. P1-08 remains partial overall; P1-10 automatic derivation and real acceptance remain open. All23 gap IDs/eight packages and historical failures/skips remain; the complete-driver goal is not closed.
+
+## 2026-10-25 documentation delivery and signed decimal scale checkpoint
+
+Historical pre-fix checkpoint, superseded by the signed-scale delivery above; original failures remain recorded.
+
+Committed baseline: `5146b62` on master. The complete [audit](obconnector-dotnet-driver-audit.md) and [gap baseline](obconnector-dotnet-completeness.md) retain all 23 IDs, eight work packages, source/test entry points, acceptance requirements and historical failures/skips. Java HEAD and pool classes were rechecked. No product/test changes, new build/test run, commit or push were made during this documentation pass; results from two already-running processes were collected.
+
+Signed DecimalScale is uncommitted development under P1-08. Existing reports: API RED 6 failed; initial focused 6 passed; codec/fallback subset 89 passed; Release build 0 warnings/errors; complete units 3819 passed, exit 0; consumer-focused 10 passed/10 failed, all Oracle cases failed; format verify exit 0 with a workspace-load warning. The consumer fixture expected COM_STMT_EXECUTE but received COM_QUERY/SELECT and closed its stream after assertion failure. Session-state/probe handling needs diagnosis; this is neither a passing delivery nor real-server evidence. Independent static review found no remaining Critical/Important but did not run tests.
+
+See the [full checkpoint](obconnector-dotnet-completeness.md#1515-2026-10-25-完整文档复核与有符号-scale-开发检查点) for proposed API precedence/limits, exact report names, failure evidence and remaining gates. Automatic parameter derivation is absent. Procedure directories do not add MySQL CommandType.StoredProcedure execution; current stored-procedure execution requires Oracle PrepareExecute. No gap/work package or complete-driver objective is closed. No new real-server, platform, runtime, stress or package-consumer claim is made.
+
 ## 2026-10-25 P1-10 DataTypes metadata
 
 Implemented GetSchema("DataTypes") on top of `f815c16`: Oracle 20/MySQL 18 collections, fresh static invariant-culture tables, standard 23 + 9 extension columns, existing provider enum identities and conditional CLR/provider mappings. No directory request or new dependency; normal open/idle, ambient/XA and cancellation guards remain. See the [Schema contract](schema.md) and [full module record](obconnector-dotnet-completeness.md#1514-2026-10-25-datatypes-本地交付).

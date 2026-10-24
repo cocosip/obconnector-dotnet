@@ -131,6 +131,8 @@ namespace OceanBaseConnector.Internal.Protocol
 
         internal static OceanBaseComplexType? GetComplexType(OceanBaseParameter parameter)
         {
+            if (parameter.DecimalScale.HasValue && parameter.DbType != DbType.Decimal)
+                throw new ArgumentException("DecimalScale requires a decimal parameter.", nameof(OceanBaseParameter.DecimalScale));
             var provider = parameter.OceanBaseDbType;
             var value = parameter.Value as OceanBaseComplexValue;
             var type = parameter.ComplexType;
@@ -248,9 +250,10 @@ namespace OceanBaseConnector.Internal.Protocol
                     return 6;
                 }
             }
-            if (parameter.DbType == DbType.Decimal && (parameter.Precision > (mode == OceanBaseCompatibilityMode.Oracle ? 38 : 65) || parameter.Scale > (mode == OceanBaseCompatibilityMode.Oracle ? 127 : 30)))
+            var decimalScale = parameter.DeclaredDecimalScale.GetValueOrDefault();
+            if (parameter.DbType == DbType.Decimal && (parameter.Precision > (mode == OceanBaseCompatibilityMode.Oracle ? 38 : 65) || decimalScale < (mode == OceanBaseCompatibilityMode.Oracle ? -84 : 0) || decimalScale > (mode == OceanBaseCompatibilityMode.Oracle ? 127 : 30)))
                 throw new NotSupportedException("The decimal parameter metadata exceeds the supported mode limits.");
-            if (parameter.DbType == DbType.Decimal && mode == OceanBaseCompatibilityMode.MySql && parameter.Precision != 0 && parameter.Scale > parameter.Precision)
+            if (parameter.DbType == DbType.Decimal && mode == OceanBaseCompatibilityMode.MySql && parameter.Precision != 0 && decimalScale > parameter.Precision)
                 throw new ArgumentException("Decimal scale exceeds its declared precision.");
             var temporalScale = parameter.DbType == DbType.Time ? 6 : parameter.DbType == DbType.Date ? 0 : mode == OceanBaseCompatibilityMode.Oracle ? 9 : 6;
             if ((parameter.DbType == DbType.Date || parameter.DbType == DbType.DateTime || parameter.DbType == DbType.DateTime2 || parameter.DbType == DbType.Time || parameter.DbType == DbType.DateTimeOffset) && parameter.Scale > temporalScale)
@@ -324,11 +327,11 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var number = value is decimal exact ? new OceanBaseDecimal(exact) : value is OceanBaseDecimal provider ? provider
                 : throw new ArgumentException("The parameter value does not match its declared DbType.");
-            var scale = parameter.DeclaredScale ?? number.Scale;
+            var scale = parameter.DeclaredDecimalScale ?? number.Scale;
             if (mode == OceanBaseCompatibilityMode.MySql) scale = Math.Max(0, scale);
             if (mode == OceanBaseCompatibilityMode.MySql && parameter.Precision != 0 && scale > parameter.Precision)
                 throw new ArgumentException("Decimal scale exceeds its declared precision.");
-            if (parameter.Precision != 0 || parameter.DeclaredScale.HasValue)
+            if (parameter.Precision != 0 || parameter.DeclaredDecimalScale.HasValue)
                 number = DecimalCodec.Constrain(number, parameter.Precision, scale);
             DecimalCodec.Validate(number, mode);
             WriteBytes(writer, ResultColumn.Utf8.GetBytes(DecimalCodec.Format(number)));

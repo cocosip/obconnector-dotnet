@@ -136,6 +136,18 @@ The encoded execution request is limited to 64 MiB; Oracle upload bytes count af
 
 Conversions requiring rounding or loss of precision throw. Timezone-free values do not acquire the client's local timezone.
 
+### Decimal parameter scale
+
+`OceanBaseParameter.DecimalScale` is an optional signed `int?` declaration for decimal parameters, including Oracle NUMBER negative scale. The setter accepts -84..127; encoding validates Oracle precision <=38/scale -84..127 or MySQL precision <=65/scale 0..30, with scale <= nonzero Precision in MySQL mode. A declaration on a non-decimal parameter is rejected, including typed NULL, complex values and LOB/cursor parameters. SQL NULL retains metadata validation.
+
+| Assignment | Effective declaration |
+| --- | --- |
+| `parameter.Scale = value` | Sets the standard byte scale and clears DecimalScale. |
+| `parameter.DecimalScale = value` with a non-null value | Clears the old standard Scale and uses the signed declaration. Scale reads the nonnegative declaration, or zero for a negative one. Read DecimalScale for the actual signed value. |
+| `parameter.DecimalScale = null` | Removes the override. It does not restore a standard Scale overwritten by an earlier non-null assignment; with no declaration, scale is inferred from the value. |
+
+Precision/scale constraints are exact: values requiring rounding throw before execution. For example, `Value=12300m`, `Precision=3`, `DecimalScale=-2` is representable in Oracle mode; `12345m` with that declaration throws. A negative scale is not accepted in MySQL mode. Parameter snapshots and the supported client-prepare numeric fallback preserve the same declaration and constraints. Result decoding, temporal Scale and default value inference are unchanged. This API does not derive parameters from routine metadata; automatic derivation remains unimplemented. Local wire tests do not establish real-server NUMBER interoperability.
+
 ## Transactions, batches and failures
 
 Assign the active transaction to each business command. MySQL supports ReadUncommitted, ReadCommitted, RepeatableRead and Serializable; Oracle supports ReadCommitted and Serializable. Unspecified isolation uses MySQL RepeatableRead or Oracle ReadCommitted. Opening inside an ambient `TransactionScope` creates one local volatile enlistment and commands/Batch use that transaction; distributed promotion and conflicting ambient/local/XA combinations are rejected. MySQL-mode sessions with `@@autocommit` disabled are rejected at Open; see the identity rules above.

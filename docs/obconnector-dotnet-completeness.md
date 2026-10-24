@@ -2,13 +2,13 @@
 
 **审计日期：** 2026-10-24
 **初次源码基线：** .NET `06d58e1`；Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`（Connector/J 2.4.14）
-**当前源码：** 本次 P1-10 DataTypes 模块（开发起点 `f815c16`，此前已交付 P1-11 凭据提供/轮换）。Java 参考仍为 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。
-**最新模块状态：** DataTypes 本地实现及最终回归/独立走查完成：完整单测 3792、受影响消费者 66（含 DataTypes 16 项）、DI 14 通过，Integration 9 通过/72 跳过；构建 0 警告/0 错误。自动参数推导及真实目录/版本/权限/代理验收仍开放，见第 15.14 节。
+**本模块开发起点：** `5146b62`（P1-10 DataTypes）；此前凭据提供/轮换为 `f815c16`。Java 参考为 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。
+**最新模块状态：** P1-08 有符号 decimal scale 本地实现、回归及独立走查完成：完整单测 3819、受影响消费者 146（含 Scale 20、fallback 30、array 30）、DI 14 通过，Integration 9 通过/72 跳过；构建 0 警告/0 错误。自动参数推导与真实类型/目录/版本/权限/代理验收仍开放，见第 15.16 节。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`
 **参考实现：** 本仓库源码、测试和兼容性记录；本地 `D:\java-code\obconnector-j` 的 Connector/J 实现
 **文档性质：** 能力审计、目标契约和验收基线；不代表尚未完成的功能已经实现
 
-**最近复核：** 2026-10-25；DataTypes 修复、消费者覆盖、独立走查及最终执行结果见第 15.14 节；修复前失败和筛选遗漏保留于第 15.13 节，不作为当前状态。此前凭据实现、回归修复、独立走查和最终执行结果见第 15.12 节；修复前的文档检查点和失败报告保留于第 15.11 节。前次 Schema 报告复核见第 15.10 节。Schema 开发记录见第 15.9 节，标准 MySQL 压缩见第 15.7 节，客户端证书池化和显式清池见第 15.4/15.5 节。初次审计基线、历史失败和跳过均保留；尚未取得的真实验收继续开放。
+**最近复核：** 2026-10-25；有符号 decimal scale 本地交付见第 15.16 节；第 15.15 节保留修复前检查点及失败，不作为当前状态。DataTypes 修复、消费者覆盖、独立走查及最终执行结果见第 15.14 节；修复前失败和筛选遗漏保留于第 15.13 节，不作为当前状态。此前凭据实现、回归修复、独立走查和最终执行结果见第 15.12 节；修复前的文档检查点和失败报告保留于第 15.11 节。前次 Schema 报告复核见第 15.10 节。Schema 开发记录见第 15.9 节，标准 MySQL 压缩见第 15.7 节，客户端证书池化和显式清池见第 15.4/15.5 节。初次审计基线、历史失败和跳过均保留；尚未取得的真实验收继续开放。
 
 初次审计的 .NET 提交为 `06d58e1`。其后 P0-06 的本地修复及 P1-04 的自定义服务器证书验证分别见 [池路由记录](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [TLS 验证记录](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)。23 个缺口 ID 保持不变；本地实现不关闭尚未取得的真实服务器验收。
 
@@ -132,7 +132,7 @@
 | P1-05 | P1 | ADO.NET 命令行为 | 部分实现 | `SchemaOnly`、`SingleRow`、`SingleResult`、`KeyInfo` 等常用行为 |
 | P1-06 | P1 | Oracle 输出和游标 | 部分实现 | 完整参数方向、cursor 列和 PrepareExecute 形状 |
 | P1-07 | P1 | 复杂类型 | 部分实现 | 已有嵌套 object/collection；补齐 LOB/cursor/national 成员和外部 DDL 缓存失效 |
-| P1-08 | P1 | 类型和字符集 | 部分实现 | 扩展元数据、更多字符集和完整类型码 |
+| P1-08 | P1 | 类型和字符集 | 部分实现；有符号 decimal 参数 scale 本地完成 | DecimalScale 精确约束已有回归；扩展元数据、更多字符集和完整类型码及实库声明矩阵仍缺 |
 | P1-09 | P1 | HA/发现 | 部分实现 | OCP/TNS、健康状态、重试退避和 proxy 拓扑 |
 | P1-10 | P1 | Schema 元数据 | 部分实现；目录与 DataTypes 本地完成 | 常用目录、限制参数和静态 CLR/provider 类型映射有回归；自动参数推导和真实目录/权限/版本/代理验收仍缺 |
 | P1-11 | P1 | 凭据提供与轮换 | 本地实现；真实矩阵未验证 | 每次 Open 获取、全口令替换、版本排序、过期及旧会话退休已本地验证；真实凭据服务/plugin/KDC 验收仍开放 |
@@ -300,6 +300,8 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 - 明确是否支持 `DbDataAdapter`、命令生成、更新回写和设计时工具；
 - 每个目标 TFM 都要验证相同 API 的编译和运行时行为。
 
+当前过程调用另有限制：`CommandType.StoredProcedure` 仅在 Oracle 模式且启用 `Use Oracle Prepare Execute=true` 时进入过程执行路径；MySQL 模式当前只支持 `CommandType.Text` 的执行入口，不能把已有 `Procedures`/`ProcedureParameters` 目录解释成 MySQL StoredProcedure/OUT 参数执行已支持。参数自动推导仍未实现；后续推导需分别冻结目录读取与目标过程执行的支持范围。源码入口为 `OceanBaseCommand.Start` 和 `Internal/Sql/OracleCommandPlan.cs`，归入 P1-05/06/10，不新增 ID。
+
 ### 5.7 Oracle 扩展和复杂类型
 
 当前 Oracle 功能覆盖较多，但限制集中在输出形状、游标、复杂成员和缓存生命周期。
@@ -318,6 +320,8 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 ### 5.8 类型、字符集和元数据
 
 当前类型映射覆盖大量常用值，但遇到未识别 type code、扩展 metadata、非支持字符集或超出精度边界时会失败。
+
+Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持 byte 契约，现通过 `int? OceanBaseParameter.DecimalScale` 显式声明有符号 scale。Oracle -84..127、MySQL 0..30 及精度/无舍入约束已有本地回归，赋值优先级见[参数契约](obconnector-dotnet-architecture-design.md#decimal-parameter-scale)，交付记录见第 15.16 节。自动参数推导仍缺失，后续须保留该签名和精度约束，不能将负值截断或转为无符号值。
 
 目标要求：
 
@@ -807,6 +811,87 @@ dotnet run --project tests/OceanBaseConnector.Acceptance -c Release --no-restore
 
 P1-10 仍为“部分实现；常用目录及静态 DataTypes 本地完成”。自动参数推导、真实目录/权限/版本/代理和服务器类型/DDL 验收继续开放；P1-05 的 KeyInfo、P2-01 的 adapter、其他 23 项及完整驱动目标不因本模块交付关闭。
 
+### 15.15 2026-10-25 完整文档复核与有符号 Scale 开发检查点
+
+本节是修复前历史检查点；消费者失败和后续筛选遗漏已由第 15.16 节修复/补跑结果取代，原证据保留。
+
+本次按“根据走查问题给出完整文档”核对 `master`、Java 参考源码、工作区和既有日志/TRX；仅整理文档，不继续修改产品/测试代码、不启动新的构建/测试、不提交或推送。接收前一轮已经启动的完整单测和 format 进程结果，实际退出码均为 0。已提交基线为 `5146b62`；第 15.14 节 DataTypes 交付记录仍有效，但不能替代以下未提交变更的验证。
+
+**文档覆盖。** [走查报告](obconnector-dotnet-driver-audit.md)供评审阅读；本文第 4/14 节保留全部 23 个 ID（P0 六项、P1 十一项、P2 六项），第 5 节列模块契约，第 7/12 节列测试与发布门槛，第 16 节的八个工作包安排依赖与验收产物。[进度台账](obconnector-dotnet-progress.md)保留执行历史，[兼容性记录](compatibility.md)保留真实成功、失败和跳过。负责人、日期和首版承诺支持范围尚未分配，阶段不是排期承诺。
+
+**Java 与池结论。** 本次重新读取 `OceanBasePoolDataSource`、`OceanBasePooledConnection`、`internal/util/pool/Pool`/`Pools` 源码并核对 HEAD，确认 Java 有池入口与池实现。.NET 也已有基础物理会话池，默认 `Pooling=false`；剩余是完整状态隔离、资源生命周期、并发/长期运行和真实 reset 验收。没有运行 Java 负载测试，不据此认定两个驱动已同等完整。
+
+**P1-08 开发范围。** 未提交文件为 `OceanBaseParameter.cs`、`PreparedParameters.cs`、`ClientPreparedSql.cs`、`DecimalScaleTests.cs`、`DecimalScaleConsumerTests.cs`。工作区增加 decimal 专用的 nullable signed override `DecimalScale`：setter 接受 -84..127，MySQL 编码仍仅接受 0..30 且声明 precision 时 scale 不超过 precision；Oracle 接受 -84..127。普通 `Scale` 赋值清除 override，非空 override 清除旧 Scale；负 override 的 byte Scale getter 返回 0，实际声明读取 DecimalScale。清除 override 后按普通 Scale/值推断，不恢复被覆盖的旧声明。server prepare 与客户端 fallback 共用精度约束，拒绝需舍入的值；typed NULL、非 decimal 和 complex/LOB 快路径也不得静默忽略声明。该段是开发快照，尚未成为已交付契约。
+
+| 既有报告/日志 | 实际结果 | 判定 |
+| --- | --- | --- |
+| `api-red.trx` | 6 失败 | 初始缺少公开属性的 RED，保留 |
+| `focused-green.trx` | 6 通过 | 初始聚焦回归 |
+| `codec-green.trx` | 89 通过 | Scale/WideDecimal/ClientPrepareFallback 子集，不是全套消费者 |
+| `TestResults-decimal-scale-build.log` | Release 0 警告/0 错误，7.70 秒 | 编译证据 |
+| `unit-final.trx` | 3819 通过，0 失败/跳过；进程退出 0 | 当前未提交源码的完整单测 |
+| `consumer-focused.trx` | 10 通过、10 失败 | **交付阻塞**；MySQL 用例通过，全部 Oracle 用例失败 |
+| `TestResults-decimal-scale-format.log` | format verify 退出 0，有工作区加载警告 | 格式证据，不抵消消费者失败 |
+
+报告位于本地忽略目录 `TestResults/decimal-scale/`，日志为根目录 `TestResults-decimal-scale-*.log`，未随 Git 分发。消费者覆盖五个目标资产 × 同步/异步 × 两种模式，共 20 项；全部在 .NET 10 主机内加载，不代表五种独立运行时。
+
+**当前失败。** `DecimalScaleEveryAssetConstrainsWireAndPreservesTheSessionAfterRejection` 的 Oracle 本地服务端 fixture 在下一次有效执行时预期命令 23（COM_STMT_EXECUTE），实际收到命令 3 和 SELECT 前缀，断言终止服务端后客户端读取流关闭，报 `Command initialization failed before execution`。源码存在 Oracle 会话时区/字符集探测路径；还需核对 fixture 的会话状态 OK 与探测处理，才能确定并修复原因。本记录不把该失败认定为真实 Oracle NUMBER 编码失败，也不把它改写为通过；不能删除生产探测/校验来迎合 fixture。
+
+**后续交付条件。** 先定位并修复消费者失败，保留原报告并用新文件名重跑；确认 20 项实际进入断言。再完成受影响调用/Batch/array/fallback 回归、必要的 DI/Integration/包检查和公共 API 文档同步。独立 reviewer `review_decimal_scale` 静态复核无剩余 Critical/Important，但未执行构建/测试，静态结论不能代替失败回归。只有验证完成后才能提交模块并更新能力状态。
+
+参数自动推导仍明确缺失。后续必须处理 Oracle owner/package/overload、方向、负 scale、复杂类型及 MySQL unsigned/type attributes；失败/取消时保留原参数，使用相同会话/事务/超时且不能执行目标过程。目录存在不表示已支持推导或所有过程执行形状，见第 5.6 节。
+
+本次没有新增真实数据库/OBProxy/TLS/KDC、非 Windows、独立运行时、压力或新包消费证据；未关闭任何缺口/工作包，历史失败和跳过保留。文档完成不等于完整驱动完成。
+
+文档校验通过：9 份 Markdown、124 个本地链接/锚点、UTF-8 无 BOM/CRLF、代码围栏、三张 23-ID 表、八个工作包对全部 ID 的唯一覆盖、历史任务表行保持，以及 `git diff --check`。
+
+### 15.16 2026-10-25 有符号 decimal scale 本地交付
+
+以 `5146b62` 为开发起点，为 P1-08 增加 `OceanBaseParameter.DecimalScale`，解决 Oracle NUMBER 负 scale 无法通过 byte Scale 显式声明的问题，也是后续 P1-10 参数推导的表示前提。实现复用既有 DecimalCodec，不增加依赖，不更改结果解码或默认推断；P1-08 其余类型/字符集和 P1-10 自动参数推导继续开放。
+
+**公开契约。** nullable int 的 DecimalScale 只适用于 decimal 参数，setter 范围 -84..127；编码时按模式限制 Oracle precision <=38/scale -84..127、MySQL precision <=65/scale 0..30，MySQL 非零 precision 时 scale 不得超过 precision。typed NULL 也校验声明；非 decimal、complex、LOB/cursor 快路径不得忽略 override。非空 DecimalScale 清除旧 byte Scale；Scale setter 清除 override；负 override 的 Scale getter 为 0，实际值从 DecimalScale 读取；清 null 不恢复被覆盖的旧 Scale，而是按剩余声明/值推断。Snapshot、普通执行、Oracle PrepareExecute/Batch 及支持的客户端 fallback 共享精确约束，需舍入时拒绝。array 本身不因此获得新的元素类型支持。见[完整参数契约](obconnector-dotnet-architecture-design.md#decimal-parameter-scale)。
+
+**失败、修复与覆盖。**
+
+- 保留初始缺少属性的 6 项 RED；单元测试覆盖正/负值的实际编码、Oracle 两端非零值、typed NULL、setter 状态不变、精度溢出/拒绝舍入、Scale 优先级/清除、snapshot、MySQL 模式边界和 client fallback。
+- 旧消费者 `consumer-focused.trx` 的 10 通过/10 失败保留。raw OK 没有 tracking 变量，`ObserveSessionState` → `ApplySessionVariables` 清除时区/charset，下一 Oracle 命令合法发送 SELECT 探测；fixture 误预期 COM_STMT_EXECUTE 后断流。改用现有 `Report(false,1)` 返回完整会话状态；未修改生产探测或精度校验。修复后 20 项逐字断言第一次执行包、本地拒绝后的再次有效执行和连接复用。
+- 第一轮 `consumer-verified.trx` 86 项通过，但筛选 ClientPrepare/ArrayBinding 没命中共享 Ob20ConsumerTests 类中的实际方法。该报告只证明 Scale/Batch/Catalog；最终以实际方法名补跑为 `consumer-covered.trx`，TRX 核实 Scale20、fallback30、array30、Batch50、Catalog16，共146项。
+- 独立 reviewer `review_decimal_scale` 复核声明、typed NULL/快路径、snapshot/Oracle plan/array/Batch/fallback 和 fixture 根因，无剩余 Critical/Important。静态走查不替代执行或实库证据。
+
+| 最终证据 | 结果 | 范围与限制 |
+| --- | --- | --- |
+| `TestResults-decimal-scale-build-recheck.log` | Release 退出 0，0 警告/0 错误，4.03 秒 | 完整 solution；修复 fixture 后未在消费者运行中重建 DLL |
+| `codec-green.trx` | 89 通过 | Scale/WideDecimal/ClientPrepareFallback 聚焦单测；较早记录，最终完整回归见下行 |
+| `unit-verified.trx` | 3819 通过，0 失败/跳过，退出 0 | 最终构建的完整单测；此前 unit-final 同为3819通过 |
+| `consumer-recheck.trx` | 20 通过，退出 0 | 原来失败的 Scale 五资产 × 同步/异步 × 双模式 |
+| `consumer-covered.trx` | 146 通过，0 失败/跳过，退出 0 | 实际方法名补齐后的受影响子集，**不是完整消费者套件** |
+| `di-verified.trx` | 14 通过，退出 0 | DI 回归 |
+| `integration-verified.trx` | 9 通过、72 条 NotExecuted，退出 0 | 未配置真实 profile；跳过不是服务器通过 |
+| `TestResults-decimal-scale-format-verified.log` | format verify 退出 0，有工作区加载警告 | 修改/新增 C# 文件 |
+| `TestResults-decimal-scale-pack.log` | 本地 pack 退出 0 | 五资产 DLL SHA-256 与已验证 Release 输出相同、内嵌 README 字节及五依赖组匹配；未发布 |
+
+报告位于忽略目录 `TestResults/decimal-scale/`，根日志为 `TestResults-decimal-scale-*.log`，未随 Git 分发。五个资产消费者运行在 .NET 10 主机，不代表五种独立运行时；没有新增实库/OBProxy NUMBER 或 DECIMAL、非 Windows、压力、KDC、TLS 或独立 nupkg 运行时消费证据。没有新增依赖，未重跑在线漏洞源审计。
+
+主要最终执行命令如下；全部保留新报告名，未覆盖旧失败：
+
+```powershell
+dotnet build OceanBaseConnector.slnx -c Release --no-restore
+
+dotnet test tests/OceanBaseConnector.UnitTests -c Release --no-restore --no-build --logger 'trx;LogFileName=unit-verified.trx' --results-directory TestResults/decimal-scale
+
+dotnet test tests/OceanBaseConnector.ConsumerTests -c Release --no-restore --no-build --filter 'FullyQualifiedName~DecimalScale|FullyQualifiedName~EveryAssetFallsBackOnlyAfterCompleteUnsupportedPrepare|FullyQualifiedName~Batch|FullyQualifiedName~EveryAssetExecutesArrayReturningAndKeepsOutputsAtomicAcrossOb20|FullyQualifiedName~CatalogEveryAssetExposesModeAwareDirectories' --logger 'trx;LogFileName=consumer-covered.trx' --results-directory TestResults/decimal-scale
+
+dotnet test tests/OceanBaseConnector.DependencyInjection.Tests -c Release --no-restore --no-build --logger 'trx;LogFileName=di-verified.trx' --results-directory TestResults/decimal-scale
+
+dotnet test tests/OceanBaseConnector.IntegrationTests -c Release --no-restore --no-build --logger 'trx;LogFileName=integration-verified.trx' --results-directory TestResults/decimal-scale
+
+dotnet pack src/OceanBaseConnector/OceanBaseConnector.csproj -c Release --no-build --no-restore -o TestResults/decimal-scale/packages
+```
+
+最终文档检查通过：9 份 Markdown、131 个本地链接/锚点、UTF-8 无 BOM/CRLF、代码围栏、三张 23-ID 表、八个工作包的唯一覆盖和历史任务表行保持；`git diff --check` 通过。
+
+P1-08 仅此参数声明子模块本地完成；23 个缺口、八个工作包和完整驱动目标仍按各自验收要求继续推进。后续 P1-10 需要实现自动参数推导，保留重载/方向/有符号 scale、类型属性与失败原子性，且不能因此宣称所有模式的过程执行形状已支持。
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。
@@ -817,7 +902,7 @@ P1-10 仍为“部分实现；常用目录及静态 DataTypes 本地完成”。
 | W2 事务与失败恢复：P0-03、P0-04、P0-05 | 闭合 ambient 本地事务、未知执行结果、断线后的连接/事务状态与应用重建契约；分布式提升明确拒绝，透明恢复另定范围 | 发送前/后、响应中、commit/rollback 回包丢失、超时/in-doubt、提前关闭的故障矩阵；异常分类、会话销毁及业务核对示例；无未知写 replay | W1 租约与隔离规则 |
 | W3 协议选项：P1-01、P1-02、P1-03 | 标准 MySQL 压缩已本地实现；先确认客户端 OB20 压缩契约再补实现，并补 reroute；保留已实现的 opt-in 文本多语句和应用流 LOCAL INFILE，明确不支持的组合 | 客户端链路/版本/capability 依据；协商成功/拒绝、分片/序列/校验/解压限额；多结果中途错误；上传超限/取消/代理策略；真实 OceanBase/OBProxy 互操作 | G0 及第 16.3 节；reroute 依赖 W2/W4 |
 | W4 信任、发现与凭据：P1-04、P1-09、P1-11 | 凭据提供/轮换已有本地实现，补真实凭据服务与插件验收；补发现与健康/退避策略，明确 OCP/TNS 或等价发现范围。现有 TLS 回调、证书副本及池身份无需重做 | 企业 CA/mTLS、证书与凭据过期/刷新失败、撤销、KDC/plugin 成功及拒绝；地址更新/错误身份/节点与代理故障；Windows/Linux 报告 | W1 池身份、W2 重试边界 |
-| W5 命令、Oracle 与类型：P1-05、P1-06、P1-07、P1-08 | 补 KeyInfo；修正或明确 SchemaOnly 执行语义；补已承诺的 Oracle 输出方向/结果形状、复杂成员、DDL 缓存失效、类型码/字符集映射 | Command/Batch/REF CURSOR 行为表；NULL/方向/精度/溢出/编码/取消与资源释放矩阵；SchemaOnly 副作用/锁/大结果报告；服务端不支持形状单列 | G0；资源生命周期与 W1 联动 |
+| W5 命令、Oracle 与类型：P1-05、P1-06、P1-07、P1-08 | 补 KeyInfo；修正或明确 SchemaOnly 执行语义；补已承诺的 Oracle 输出方向/结果形状、复杂成员、DDL 缓存失效、类型码/字符集映射。有符号 DecimalScale 已本地完成，保留其精度和覆盖规则 | Command/Batch/REF CURSOR 行为表；NULL/方向/精度/溢出/编码/取消与资源释放矩阵；SchemaOnly 副作用/锁/大结果报告；服务端不支持形状单列 | G0；资源生命周期与 W1 联动 |
 | W6 目录与 ADO.NET 生态：P1-10、P2-01 | 常用目录/限制参数及 DataTypes 已本地实现并通过最终回归（第 15.14 节）；补实库/权限/版本/代理矩阵及自动参数推导；明确 DataAdapter/CommandBuilder 的实现或版本排除，不以 ADO.NET provider 代替 EF Core provider | 双模式目录/权限/大小写/空集合；类型映射与过程重载/参数方向；若纳入 adapter 则验证 CRUD、键与乐观并发；若排除则公开 API、异常及文档一致 | W5 键与结果元数据 |
 | W7 性能与可观测性：P2-02、P2-03、P2-04 | 实现有限 statement cache；选择并实现承诺的 rewrite/multi-send/bulk 优化；补建连/探活分段及慢查询/协议诊断。保留顺序 Batch 和 Oracle array binding | 缓存容量/失效/关闭、批量部分失败/事务/取消/包限额；吞吐、延迟、峰值内存与资源上限对照；诊断脱敏和监听开销 | W1 generation/reset、W5 绑定规则 |
 | W8 运行时与发布：P2-05、P2-06 | 明确版本、平台、TFM、Framework/ORM 的承诺范围；将六个 matrix.* 占位变成有环境和断言的案例；完成包名、来源/许可和发布审查 | 每个承诺 profile 的 nupkg consumer、实库/代理/TLS/认证/故障报告；保留 Oracle 失败及所有跳过原因；外部 coordinator crash recovery；可复现命令和清理结果 | 各包可并行积累证据，正式发布须满足第 7.3 节 |

@@ -65,9 +65,9 @@ namespace OceanBaseConnector.Internal.Sql
             if (type == DbType.Decimal)
             {
                 var number = value is OceanBaseDecimal exact ? exact : new OceanBaseDecimal((decimal)value);
-                var scale = parameter.DeclaredScale ?? number.Scale;
+                var scale = parameter.DeclaredDecimalScale ?? number.Scale;
                 if (mode == OceanBaseCompatibilityMode.MySql) scale = Math.Max(0, scale);
-                if (parameter.Precision != 0 || parameter.DeclaredScale.HasValue) number = DecimalCodec.Constrain(number, parameter.Precision, scale);
+                if (parameter.Precision != 0 || parameter.DeclaredDecimalScale.HasValue) number = DecimalCodec.Constrain(number, parameter.Precision, scale);
                 return DecimalCodec.Format(number);
             }
             if (value is double d)
