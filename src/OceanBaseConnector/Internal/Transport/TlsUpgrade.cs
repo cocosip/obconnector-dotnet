@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.Security;
 using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,15 +33,14 @@ namespace OceanBaseConnector.Internal.Transport
             return tlsServerName.Length > 0 ? tlsServerName : endpointHost;
         }
 
-        public static SslStream Upgrade(Stream innerStream, string targetHost, OceanBaseTlsMode tlsMode)
+        public static SslStream Upgrade(Stream innerStream, string targetHost, OceanBaseTlsMode tlsMode,
+            X509CertificateCollection? clientCertificates = null, bool checkCertificateRevocation = false)
         {
-            var sslStream = CreateSslStream(innerStream, tlsMode);
+            var sslStream = CreateSslStream(innerStream, tlsMode, clientCertificates);
             try
             {
-                // SslProtocols.None lets the OS pick (TLS 1.2+ on supported
-                // platforms). Revocation checking is off: private deployments
-                // commonly lack CRL/OCSP endpoints.
-                sslStream.AuthenticateAsClient(targetHost, null, SslProtocols.None, checkCertificateRevocation: false);
+                // SslProtocols.None lets the OS pick (TLS 1.2+ on supported platforms).
+                sslStream.AuthenticateAsClient(targetHost, clientCertificates, SslProtocols.None, checkCertificateRevocation);
                 return sslStream;
             }
             catch
@@ -54,6 +54,8 @@ namespace OceanBaseConnector.Internal.Transport
             Stream innerStream,
             string targetHost,
             OceanBaseTlsMode tlsMode,
+            X509CertificateCollection? clientCertificates,
+            bool checkCertificateRevocation,
             CancellationToken cancellationToken)
         {
             if (tlsMode == OceanBaseTlsMode.Disabled)
@@ -61,7 +63,7 @@ namespace OceanBaseConnector.Internal.Transport
                 throw new ArgumentException("TLS Mode Disabled must not reach the TLS upgrade.", nameof(tlsMode));
             }
 
-            var sslStream = CreateSslStream(innerStream, tlsMode);
+            var sslStream = CreateSslStream(innerStream, tlsMode, clientCertificates);
             try
             {
 #if !NETSTANDARD2_0
@@ -69,11 +71,12 @@ namespace OceanBaseConnector.Internal.Transport
                         new SslClientAuthenticationOptions
                         {
                             TargetHost = targetHost,
-                            // SslProtocols.None lets the OS pick (TLS 1.2+ on
-                            // supported platforms); revocation is off because
-                            // private deployments commonly lack CRL/OCSP.
+                            // SslProtocols.None lets the OS pick (TLS 1.2+ on supported platforms).
                             EnabledSslProtocols = SslProtocols.None,
-                            CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
+                            ClientCertificates = clientCertificates,
+                            CertificateRevocationCheckMode = checkCertificateRevocation
+                                ? X509RevocationMode.Online
+                                : X509RevocationMode.NoCheck,
                         },
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -81,7 +84,7 @@ namespace OceanBaseConnector.Internal.Transport
                 // netstandard2.0 has no cancellable handshake: the caller
                 // disposes the transport to interrupt a blocked wait.
                 await sslStream.AuthenticateAsClientAsync(
-                        targetHost, null, SslProtocols.None, checkCertificateRevocation: false)
+                        targetHost, clientCertificates, SslProtocols.None, checkCertificateRevocation)
                     .ConfigureAwait(false);
 #endif
                 return sslStream;
@@ -93,12 +96,24 @@ namespace OceanBaseConnector.Internal.Transport
             }
         }
 
-        private static SslStream CreateSslStream(Stream innerStream, OceanBaseTlsMode tlsMode)
+        private static SslStream CreateSslStream(Stream innerStream, OceanBaseTlsMode tlsMode, X509CertificateCollection? clientCertificates)
         {
             return tlsMode == OceanBaseTlsMode.Required
-                ? new SslStream(innerStream, leaveInnerStreamOpen: false, AcceptAnyServerCertificate)
-                : new SslStream(innerStream, leaveInnerStreamOpen: false);
+                ? new SslStream(innerStream, leaveInnerStreamOpen: false, AcceptAnyServerCertificate,
+                    clientCertificates == null ? null : new LocalCertificateSelectionCallback(SelectClientCertificate))
+                : new SslStream(innerStream, leaveInnerStreamOpen: false, null,
+                    clientCertificates == null ? null : new LocalCertificateSelectionCallback(SelectClientCertificate));
         }
+
+        internal static X509CertificateCollection? CreateClientCertificates(X509Certificate2? clientCertificate) =>
+            clientCertificate == null ? null : new X509CertificateCollection { clientCertificate };
+
+        private static X509Certificate SelectClientCertificate(
+            object sender, string? targetHost, X509CertificateCollection localCertificates,
+            X509Certificate? remoteCertificate, string[]? acceptableIssuers) =>
+            localCertificates.Count == 0
+                ? throw new InvalidOperationException("The TLS client certificate collection is empty.")
+                : localCertificates[0];
 
         private static bool AcceptAnyServerCertificate(
             object sender,

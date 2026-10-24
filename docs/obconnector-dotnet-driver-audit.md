@@ -39,7 +39,7 @@
 | ADO.NET 核心 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、provider factory、`CloseConnection`、`SequentialAccess`、`SingleRow`、`SingleResult`、只读文本查询的 `SchemaOnly` | `KeyInfo`、完整 schema metadata、`DbDataAdapter`、`DbCommandBuilder` |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 代码路径 | 现代 TFM 与旧 TFM 的完整行为矩阵、标准 `DbBatch` 生态验收 |
 | 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 路径 | 真实插件成功/拒绝矩阵、KDC、凭据注入和轮换 |
-| TLS | 部分实现 | `VerifyFull`、`Required`、`Disabled`、主机名校验 | mTLS、企业 CA/自定义信任、撤销策略和真实证书矩阵 |
+| TLS | 部分实现 | `VerifyFull`、`Required`、`Disabled`、主机名校验；直连非池化 `ClientCertificate`；可选撤销检查 | 企业 CA/自定义信任、跨平台撤销语义、池化证书身份策略和真实证书/mTLS 矩阵 |
 | 基础 SQL | 已实现 | 文本执行、server prepare、参数绑定、多结果、流式读取、取消、超时 | 真实版本/代理/大数据量边界仍需验收 |
 | 多语句 | 部分实现 | 显式 `Allow Multi Statements=true` 的文本多结果路径、默认关闭 | 参数/Prepare/cursor/Oracle 组合、压缩和真实服务器错误矩阵 |
 | 压缩与 OB20 | 部分实现 | 基础 OB20、校验和、extra info、trace 结构 | MySQL 压缩、OB20 压缩 frame、proxy reroute |
@@ -75,7 +75,7 @@
 | P1-01 | 多语句 | 默认安全关闭；显式开启后支持无参数文本多结果并保持连接可复用 | 参数/Prepare/cursor/Oracle 输出组合、真实服务器错误边界 |
 | P1-02 | 压缩/OB20 | MySQL 压缩、OB20 压缩 frame、reroute 的协商、编解码和拒绝路径 |
 | P1-03 | LOCAL INFILE | 只允许应用提供的流，禁止驱动读取任意本地路径 |
-| P1-04 | TLS/mTLS | 客户端证书、企业信任、撤销策略和真实证书矩阵 |
+| P1-04 | TLS/mTLS | 企业信任根/自定义验证、跨平台撤销语义和真实证书矩阵；客户端证书直连非池化路径已实现 |
 | P1-05 | ADO.NET 行为 | `SchemaOnly`、`KeyInfo`、schema/parameter metadata，以及明确的 adapter 策略 |
 | P1-06 | Oracle 输出/游标 | 完整参数方向、cursor-valued column、PrepareExecute 结果形状 |
 | P1-07 | 复杂类型 | 嵌套 object/collection、LOB/cursor/national 成员和缓存失效 |
@@ -201,6 +201,7 @@ Connector/J 的静态模块对照显示，Java 已把以下职责分开：连接
 | 历史验证、失败和剩余工作 | `docs/obconnector-dotnet-progress.md` |
 | 真实兼容性和已知限制 | `docs/compatibility.md` |
 | Java Connector/J 模块对照 | `docs/obconnector-j-architecture-outline.md` |
+| TLS、客户端证书和撤销检查 | `src/OceanBaseConnector/Internal/Transport/TlsHandshakeFlow.cs`、`TlsUpgrade.cs`、`src/OceanBaseConnector/OceanBaseConnection.cs`、`tests/OceanBaseConnector.UnitTests/Transport/TlsComponentsTests.cs`、`ProviderConnectionTests.cs` |
 | 物理会话池 | `src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs` |
 | 物理会话 reset/状态 | `src/OceanBaseConnector/Internal/Session/PhysicalSession.cs` |
 | 连接池回归 | `tests/OceanBaseConnector.UnitTests/PoolingTests.cs`、`tests/OceanBaseConnector.UnitTests/Session/PhysicalSessionPoolTests.cs` |

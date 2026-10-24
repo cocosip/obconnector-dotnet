@@ -18,6 +18,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `ExpectedMode` | Unset | Validates `MySql` or `Oracle` after detection. |
 | `TLS Mode` | `VerifyFull` | Validates certificate trust and hostname. `Required` encrypts without identity verification; `Disabled` uses plaintext transport. |
 | `TLS Server Name` | Endpoint hostname | Overrides the TLS certificate name. |
+| `Check Certificate Revocation` | false | Enables platform certificate revocation checks during TLS. |
 | `Persist Security Info` | false | Retains credentials in opened-connection and data-source connection strings when true. |
 | `Load Balance` | `Sequential` | `RoundRobin` rotates the first candidate on each Open. |
 | `Pooling` | false | Reuses physical sessions with protocol reset, capacity/wait controls, minimum-pool prewarming and idle/total lifetime reaping; recognized user session-state or temporary-object statements discard the session on close. |
@@ -58,6 +59,12 @@ YEAR stays numeric; Oracle DATE retains time of day; zero dates use the existing
 types rather than automatic rounding or conversion to NULL. Result aliases and base names stay separate.
 
 Builder output and unopened direct connections can contain credentials. Use `ToSanitizedConnectionString(false)` for display; do not log raw connection strings.
+
+For mutual TLS, assign an application-owned `X509Certificate2` to
+`OceanBaseConnection.ClientCertificate` before `Open`/`OpenAsync`. The certificate
+is passed to `SslStream` and is not disposed by the connection. Client certificates
+are deliberately rejected with `Pooling=true`; use a separate direct connection
+for each certificate identity until certificate-aware pool partitioning exists.
 
 ### Authentication
 

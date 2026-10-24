@@ -58,7 +58,7 @@
 | ADO.NET 基础对象 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有；`SingleRow`/`SingleResult` 和只读文本查询的 `SchemaOnly` 已支持，`KeyInfo`、`DbDataAdapter` 和 `DbCommandBuilder` 仍缺失 |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 只在现代 TFM 可用 |
 | 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 有代码；真实插件和 KDC 矩阵未闭合 |
-| TLS | 部分实现 | `VerifyFull`、`Required`、`Disabled` 有代码；客户端证书、可配置信任和撤销策略缺失 |
+| TLS | 部分实现 | `VerifyFull`、`Required`、`Disabled` 有代码；直连非池化连接可注入 `ClientCertificate`，`Check Certificate Revocation` 可配置；企业信任根、自定义验证和真实 mTLS 矩阵仍缺失 |
 | 基础 SQL | 已实现 | 文本执行、server prepare、多个结果、取消、超时和流式读取已有路径 |
 | 多语句和压缩 | 部分实现 | `Allow Multi Statements=true` 可协商并执行文本多语句；MySQL 压缩和 OB20 压缩 frame 仍未开放 |
 | LOCAL INFILE | 部分实现 | `Allow Local Infile=true` 才协商 `CLIENT_LOCAL_FILES`，应用流工厂负责提供输入；真实服务器、代理和长文件矩阵未验证 |
@@ -108,7 +108,7 @@
 | P1-01 | P1 | 多语句 | 部分实现 | 默认关闭；显式开启后支持文本多结果，并明确拒绝参数、Prepare、cursor 和 Oracle 输出组合 |
 | P1-02 | P1 | 压缩和 OB20 | 部分实现 | MySQL 压缩、OB20 压缩 frame 和 reroute |
 | P1-03 | P1 | LOCAL INFILE | 部分实现 | 完成真实服务器/代理互操作、取消和大文件矩阵；保持显式授权和路径安全 |
-| P1-04 | P1 | TLS/mTLS | 部分实现 | 客户端证书、信任配置和撤销策略 |
+| P1-04 | P1 | TLS/mTLS | 部分实现 | 企业信任根/自定义验证、跨平台撤销语义和真实 mTLS/证书矩阵；客户端证书的直连非池化路径已实现 |
 | P1-05 | P1 | ADO.NET 命令行为 | 部分实现 | `SchemaOnly`、`SingleRow`、`SingleResult`、`KeyInfo` 等常用行为 |
 | P1-06 | P1 | Oracle 输出和游标 | 部分实现 | 完整参数方向、cursor 列和 PrepareExecute 形状 |
 | P1-07 | P1 | 复杂类型 | 部分实现 | 嵌套成员、LOB/cursor/national 成员和缓存失效 |
@@ -205,13 +205,13 @@ reset 最低验收矩阵：
 
 ### 5.5 TLS、认证和凭据
 
-当前 TLS 使用 `SslStream`，默认 `VerifyFull`，但没有客户端证书、信任根、自定义验证和撤销策略配置；GSSAPI 仅有现代 TFM 代码，真实 KDC 尚未验证。
+当前 TLS 使用 `SslStream`，默认 `VerifyFull`。`OceanBaseConnection.ClientCertificate` 可在打开前注入客户端证书；为了避免证书身份跨池边界，设置客户端证书时 `Pooling=true` 会在打开前明确拒绝。`Check Certificate Revocation=true` 会把平台撤销检查传给 TLS 握手，默认关闭。`Required` 仍然只提供加密，不验证服务端身份；`VerifyFull` 使用平台信任库和主机名校验。GSSAPI 仅有现代 TFM 代码，真实 KDC 尚未验证。
 
 目标要求：
 
-- 支持客户端证书和私钥的安全加载；
+- 支持客户端证书和私钥的安全加载；当前由应用持有并注入 `X509Certificate2`，驱动不负责证书生命周期；
 - 支持企业 CA、系统证书库和可审计的自定义验证；
-- 撤销检查必须可配置，默认策略必须有明确文档；
+- 撤销检查已经有 `Check Certificate Revocation` 配置入口；仍需验证各目标平台的撤销语义和失败分类；
 - `Required` 模式必须继续明确表示“不验证身份”，不能被隐式使用；
 - native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 都要有成功和拒绝矩阵；
 - 凭据来源不能只依赖明文连接字符串，应允许应用注入安全凭据提供者。
@@ -359,7 +359,7 @@ reset 最低验收矩阵：
 | --- | --- | --- |
 | M01 Driver/DataSource/JDBC | `OceanBaseProviderFactory`、`OceanBaseConnection`、`OceanBaseDataSource` | 基础入口存在；`DbDataAdapter`、`DbCommandBuilder` 等生态仍缺失 |
 | M02 URL/options/address/discovery | `OceanBaseConnectionStringBuilder`、`EndpointSelector`、`IOceanBaseAddressResolver` | 多地址和注入 resolver 存在；OCP/TNS、缓存和健康发现缺失 |
-| M03 transport/TLS/auth/credential SPI | `HandshakeFlow`、`TlsHandshakeFlow`、认证实现 | 多种认证和 TLS 路径存在；mTLS、企业信任/撤销和真实 KDC 未闭合 |
+| M03 transport/TLS/auth/credential SPI | `HandshakeFlow`、`TlsHandshakeFlow`、认证实现 | 多种认证和 TLS 路径存在；直连非池化客户端证书和可选撤销检查已接入；企业信任、自定义验证和真实 KDC/mTLS 未闭合 |
 | M04 handshake/mode/capability | `HandshakeFlow`、`NegotiatedCapabilities` | 模式和部分能力协商存在；多语句和 LOCAL INFILE 已有 opt-in 路径，压缩等 capability 未开放 |
 | M05 session/transaction/cancel | `PhysicalSession`、`OceanBaseTransaction`、`AmbientEnlistment` | 本地事务、ambient enlistment、取消和 unknown outcome 有路径；活动连接迁移缺失 |
 | M06 query/prepare/cursor | `OceanBaseCommand`、`PreparedStatement`、`QueryResult` | 基础文本/server prepare 和 cursor 有路径；statement cache、完整 CommandBehavior 未闭合 |
@@ -386,6 +386,7 @@ reset 最低验收矩阵：
 | CommandBehavior 和不支持的命令形状 | `src/OceanBaseConnector/OceanBaseCommand.cs`、`src/OceanBaseConnector/OceanBaseBatch.cs` |
 | Schema collection 范围 | `src/OceanBaseConnector/OceanBaseConnection.Schema.cs`、`Schema.Routines.cs` |
 | capability 位和未开放协议能力 | `src/OceanBaseConnector/Internal/Protocol/CapabilityFlags.cs`、`OceanBaseCapabilityFlags.cs`、`src/OceanBaseConnector/Internal/Session/HandshakeFlow.cs` |
+| TLS、客户端证书和撤销检查 | `src/OceanBaseConnector/OceanBaseConnection.cs`、`src/OceanBaseConnector/Internal/Transport/TlsHandshakeFlow.cs`、`TlsUpgrade.cs`、`tests/OceanBaseConnector.UnitTests/Transport/TlsComponentsTests.cs`、`ProviderConnectionTests.cs` |
 | Oracle 输出、LOB、复杂类型和数组绑定 | `src/OceanBaseConnector/OceanBaseConnection.Xa.cs`、`OceanBaseLob*.cs`、`OceanBaseComplex*.cs`、`OceanBaseCommand.ArrayBinding.cs` |
 | 类型、精度、时间和字符集限制 | `src/OceanBaseConnector/Internal/Values/*.cs`、`tests/OceanBaseConnector.UnitTests/*Type*Tests.cs`、`ZeroDateTests.cs`、`WideDecimalTests.cs` |
 | 真实数据库和代理验收入口 | `tests/OceanBaseConnector.Acceptance/`、`tests/OceanBaseConnector.IntegrationTests/`、`docs/compatibility.md` |
@@ -397,7 +398,7 @@ reset 最低验收矩阵：
 1. 完成可观测指标；补齐所有会话资源的 reset/丢弃规则。
 2. 补齐 ambient transaction 的超时、提交/回滚响应丢失、连接关闭和真实故障测试；当前本地 enlistment 已实现，分布式提升仍明确不支持。
 3. 完成多语句和 LOCAL INFILE 的真实互操作验收，再实现 MySQL 压缩、OB20 压缩和 proxy reroute；未实现项必须保持显式拒绝。
-4. 完成 mTLS、企业信任/撤销、认证插件和 HA/发现的可配置契约及真实矩阵。
+4. 完成企业信任/自定义验证、认证插件、mTLS 池策略和 HA/发现的可配置契约及真实矩阵；撤销检查已有入口，仍需跨平台验收。
 5. 补齐 ADO.NET 命令行为、Oracle 输出/游标、复杂类型、字符集、Schema 和 statement cache 的公开契约。
 6. 为每个声明支持的 TFM、OceanBase 版本、直连/OBProxy、MySQL/Oracle 模式和 TLS profile 生成可复现报告。
 

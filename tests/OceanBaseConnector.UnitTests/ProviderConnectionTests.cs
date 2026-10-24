@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Transactions;
@@ -33,6 +35,20 @@ namespace OceanBaseConnector.UnitTests
                 catch (ProtocolException) when (beforeOk != null) { return; }
                 Assert.Equal(0, await client.GetStream().ReadUpToAsync(new byte[1], 1));
             });
+        }
+
+        [Fact]
+        public void PooledClientCertificateIsRejectedBeforeNetwork()
+        {
+            using var connection = new OceanBaseConnection(
+                "Server=127.0.0.1;Port=1;User ID=u;Password=p;TLS Mode=VerifyFull;Pooling=true");
+            using var rsa = RSA.Create(2048);
+            var request = new CertificateRequest("CN=client", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1));
+            connection.ClientCertificate = certificate;
+
+            var error = Assert.Throws<NotSupportedException>(() => connection.Open());
+            Assert.Contains("Pooling=false", error.Message);
         }
 
         [Theory]

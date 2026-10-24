@@ -3,6 +3,7 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Transactions;
@@ -29,6 +30,7 @@ namespace OceanBaseConnector
         private EndpointSelector _endpointSelector = new EndpointSelector();
         private PhysicalSessionPool? _pool;
         private Func<string, Stream?>? _localInfileStreamFactory;
+        private X509Certificate2? _clientCertificate;
         private Transaction? _ambientTransaction;
         private AmbientEnlistment? _ambientEnlistment;
 #if NET8_0_OR_GREATER
@@ -120,6 +122,24 @@ namespace OceanBaseConnector
                     ThrowIfDisposed();
                     if (_session != null || _opening) throw new InvalidOperationException("Close the connection before changing the LOCAL INFILE stream factory.");
                     _localInfileStreamFactory = value;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Supplies the client certificate for mutual TLS. Set this before opening a
+        /// direct, non-pooled connection; the connection does not dispose the certificate.
+        /// </summary>
+        public X509Certificate2? ClientCertificate
+        {
+            get { lock (_gate) return _clientCertificate; }
+            set
+            {
+                lock (_gate)
+                {
+                    ThrowIfDisposed();
+                    if (_session != null || _opening) throw new InvalidOperationException("Close the connection before changing the client certificate.");
+                    _clientCertificate = value;
                 }
             }
         }
@@ -221,12 +241,14 @@ namespace OceanBaseConnector
                 ThrowIfDisposed();
                 if (_session != null || _opening) throw new InvalidOperationException("The connection is already open or opening; close it first.");
                 _options ??= _builder.Build();
+                if (_options.Pooling && _clientCertificate != null)
+                    throw new NotSupportedException("Client certificates require Pooling=false so certificate identity cannot cross pool boundaries.");
                 _hidePassword = true;
                 _opening = true;
                 var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
                 _openingCancellation = cancellation;
                 var pool = _options.Pooling ? _pool ??= PhysicalSessionPoolRegistry.Get(_connectionString) : null;
-                return new OpenContext(_options, pool, _addressResolver, _endpointSelector, ++_openGeneration, cancellation, token, Transaction.Current);
+                return new OpenContext(_options, pool, _addressResolver, _endpointSelector, _clientCertificate, ++_openGeneration, cancellation, token, Transaction.Current);
             }
         }
 
@@ -236,7 +258,7 @@ namespace OceanBaseConnector
             try
             {
                 session = context.Pool == null
-                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector)
+                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector, context.ClientCertificate)
                     : context.Pool.Rent(context.Options, context.Resolver, context.Selector, out _, context.Token);
                 lock (_gate)
                 {
@@ -265,7 +287,7 @@ namespace OceanBaseConnector
             try
             {
                 session = context.Pool == null
-                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector)
+                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector, context.ClientCertificate)
                     : await context.Pool.RentAsync(context.Options, context.Resolver, context.Selector, token).ConfigureAwait(false);
                 lock (_gate)
                 {
@@ -291,13 +313,14 @@ namespace OceanBaseConnector
         private sealed class OpenContext
         {
             internal OpenContext(OceanBaseConnectionOptions options, PhysicalSessionPool? pool,
-                IOceanBaseAddressResolver? resolver, EndpointSelector selector, long generation,
+                IOceanBaseAddressResolver? resolver, EndpointSelector selector, X509Certificate2? clientCertificate, long generation,
                 CancellationTokenSource cancellation, CancellationToken callerToken, Transaction? ambientTransaction)
-            { Options = options; Pool = pool; Resolver = resolver; Selector = selector; Generation = generation; Cancellation = cancellation; CallerToken = callerToken; AmbientTransaction = ambientTransaction; }
+            { Options = options; Pool = pool; Resolver = resolver; Selector = selector; ClientCertificate = clientCertificate; Generation = generation; Cancellation = cancellation; CallerToken = callerToken; AmbientTransaction = ambientTransaction; }
             internal OceanBaseConnectionOptions Options { get; }
             internal PhysicalSessionPool? Pool { get; }
             internal IOceanBaseAddressResolver? Resolver { get; }
             internal EndpointSelector Selector { get; }
+            internal X509Certificate2? ClientCertificate { get; }
             internal long Generation { get; }
             internal CancellationTokenSource Cancellation { get; }
             internal CancellationToken CallerToken { get; }

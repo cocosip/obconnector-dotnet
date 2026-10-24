@@ -15,7 +15,7 @@ namespace OceanBaseConnector
     /// <c>ExpectedMode</c>, <c>Pooling</c>, pool sizing/lifetime options,
     /// <c>Server RSA Public Key</c> and
     /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
-    /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c>, <c>Allow Multi Statements</c>, <c>Allow Local Infile</c>, <c>Load Balance</c>, <c>Service Principal Name</c>,
+    /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c>, <c>Allow Multi Statements</c>, <c>Allow Local Infile</c>, <c>Check Certificate Revocation</c>, <c>Load Balance</c>, <c>Service Principal Name</c>,
     /// <c>Treat Tiny As Boolean</c> and <c>Use Affected Rows</c>; the only synonyms are
     /// <c>Host</c>, <c>Uid</c> and <c>Pwd</c>. PAM accepts secret <c>PasswordN</c> keys for N >= 2.
     /// Unknown keys, synonym conflicts
@@ -32,6 +32,7 @@ namespace OceanBaseConnector
         public const string CommandTimeoutKey = "Command Timeout";
         public const string TlsModeKey = "TLS Mode";
         public const string TlsServerNameKey = "TLS Server Name";
+        public const string CheckCertificateRevocationKey = "Check Certificate Revocation";
         public const string PersistSecurityInfoKey = "Persist Security Info";
         public const string ExpectedModeKey = "ExpectedMode";
         public const string PoolingKey = "Pooling";
@@ -147,6 +148,13 @@ namespace OceanBaseConnector
         {
             get => GetString(TlsServerNameKey) ?? string.Empty;
             set => this[TlsServerNameKey] = value;
+        }
+
+        /// <summary>Enable platform certificate revocation checks during verified TLS; disabled by default.</summary>
+        public bool CheckCertificateRevocation
+        {
+            get => GetBoolean(CheckCertificateRevocationKey) ?? false;
+            set => this[CheckCertificateRevocationKey] = value ? "true" : "false";
         }
 
         public bool PersistSecurityInfo
@@ -382,6 +390,7 @@ namespace OceanBaseConnector
                 CommandTimeout,
                 TlsMode,
                 TlsServerName,
+                CheckCertificateRevocation,
                 PersistSecurityInfo,
                 ExpectedMode,
                 Pooling,
@@ -418,6 +427,7 @@ namespace OceanBaseConnector
             CommandTimeoutKey,
             TlsModeKey,
             TlsServerNameKey,
+            CheckCertificateRevocationKey,
             PersistSecurityInfoKey,
             ExpectedModeKey,
             PoolingKey,
@@ -545,6 +555,10 @@ namespace OceanBaseConnector
                             value: null);
                     }
 
+                    return value;
+
+                case CheckCertificateRevocationKey:
+                    ParseBooleanValue(canonicalKey, value);
                     return value;
 
                 case PersistSecurityInfoKey:
@@ -686,6 +700,9 @@ namespace OceanBaseConnector
                     return true;
                 case "TLS SERVER NAME":
                     canonical = TlsServerNameKey;
+                    return true;
+                case "CHECK CERTIFICATE REVOCATION":
+                    canonical = CheckCertificateRevocationKey;
                     return true;
                 case "PERSIST SECURITY INFO":
                     canonical = PersistSecurityInfoKey;

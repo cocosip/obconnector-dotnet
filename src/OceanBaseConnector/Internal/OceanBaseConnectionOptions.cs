@@ -22,6 +22,7 @@ namespace OceanBaseConnector.Internal
             int commandTimeoutSeconds,
             OceanBaseTlsMode tlsMode,
             string tlsServerName,
+            bool checkCertificateRevocation,
             bool persistSecurityInfo,
             OceanBaseCompatibilityMode? expectedMode,
             bool pooling,
@@ -64,6 +65,7 @@ namespace OceanBaseConnector.Internal
             CommandTimeoutSeconds = commandTimeoutSeconds;
             TlsMode = tlsMode;
             TlsServerName = tlsServerName;
+            CheckCertificateRevocation = checkCertificateRevocation;
             PersistSecurityInfo = persistSecurityInfo;
             ExpectedMode = expectedMode;
             Pooling = pooling;
@@ -90,7 +92,7 @@ namespace OceanBaseConnector.Internal
 
         internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
             endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows);
+            TlsMode, TlsServerName, CheckCertificateRevocation, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows);
 
         public string UserId { get; }
 
@@ -109,6 +111,8 @@ namespace OceanBaseConnector.Internal
         public OceanBaseTlsMode TlsMode { get; }
 
         public string TlsServerName { get; }
+
+        public bool CheckCertificateRevocation { get; }
 
         public bool PersistSecurityInfo { get; }
 

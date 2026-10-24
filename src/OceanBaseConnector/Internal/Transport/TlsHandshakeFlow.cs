@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Security.Cryptography.X509Certificates;
 using OceanBaseConnector.Internal.Protocol;
 
 namespace OceanBaseConnector.Internal.Transport
@@ -23,7 +24,8 @@ namespace OceanBaseConnector.Internal.Transport
             PacketChannel channel,
             CapabilityFlags serverCapabilities,
             CapabilityFlags clientCapabilities,
-            OceanBaseConnectionOptions options)
+            OceanBaseConnectionOptions options,
+            X509Certificate2? clientCertificate = null)
         {
             if (options.TlsMode == OceanBaseTlsMode.Disabled)
             {
@@ -35,7 +37,9 @@ namespace OceanBaseConnector.Internal.Transport
             channel.WritePacket(SslRequestPacket.Build(clientCapabilities | CapabilityFlags.ClientSsl));
 
             var targetHost = TlsUpgrade.ResolveTargetHost(options.Server, options.TlsServerName);
-            var sslStream = TlsUpgrade.Upgrade(transport.Stream, targetHost, options.TlsMode);
+            var certificates = TlsUpgrade.CreateClientCertificates(clientCertificate);
+            var sslStream = TlsUpgrade.Upgrade(transport.Stream, targetHost, options.TlsMode,
+                certificates, options.CheckCertificateRevocation);
             channel.ReplaceUnderlyingStream(sslStream);
         }
 
@@ -45,7 +49,8 @@ namespace OceanBaseConnector.Internal.Transport
             CapabilityFlags serverCapabilities,
             CapabilityFlags clientCapabilities,
             OceanBaseConnectionOptions options,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            X509Certificate2? clientCertificate = null)
         {
             if (options.TlsMode == OceanBaseTlsMode.Disabled)
             {
@@ -59,7 +64,9 @@ namespace OceanBaseConnector.Internal.Transport
                 .ConfigureAwait(false);
 
             var targetHost = TlsUpgrade.ResolveTargetHost(options.Server, options.TlsServerName);
-            var sslStream = await TlsUpgrade.UpgradeAsync(transport.Stream, targetHost, options.TlsMode, cancellationToken)
+            var certificates = TlsUpgrade.CreateClientCertificates(clientCertificate);
+            var sslStream = await TlsUpgrade.UpgradeAsync(transport.Stream, targetHost, options.TlsMode,
+                certificates, options.CheckCertificateRevocation, cancellationToken)
                 .ConfigureAwait(false);
             channel.ReplaceUnderlyingStream(sslStream);
         }

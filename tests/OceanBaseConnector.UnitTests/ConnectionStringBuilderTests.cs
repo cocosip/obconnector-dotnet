@@ -253,6 +253,16 @@ namespace OceanBaseConnector.UnitTests
                 () => new OceanBaseConnectionStringBuilder(ValidMinimal + ";" + pair));
         }
 
+        [Fact]
+        public void CertificateRevocationSettingRoundTrips()
+        {
+            var builder = new OceanBaseConnectionStringBuilder(ValidMinimal + ";Check Certificate Revocation=true");
+            Assert.True(builder.CheckCertificateRevocation);
+            Assert.True(builder.Build().CheckCertificateRevocation);
+            builder.CheckCertificateRevocation = false;
+            Assert.False(builder.Build().CheckCertificateRevocation);
+        }
+
         [Theory]
         [InlineData("ExpectedMode=MySQL", OceanBaseCompatibilityMode.MySql)]
         [InlineData("ExpectedMode=Oracle", OceanBaseCompatibilityMode.Oracle)]
