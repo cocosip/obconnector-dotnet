@@ -3,7 +3,7 @@ name: ci-cd
 on:
   push:
     branches: [master, main]
-    tags: ['v*']
+    tags: ['*']
   pull_request:
     branches: [master, main]
 
@@ -21,6 +21,19 @@ jobs:
       CI: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check release notes generation
+        shell: pwsh
+        run: ./eng/Test-ReleaseNotes.ps1
+
+      - name: Validate release tag and generate version update notes
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: ./eng/New-ReleaseNotes.ps1 -Tag $env:RELEASE_TAG
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v4
@@ -37,18 +50,6 @@ jobs:
 
       - name: Restore
         run: dotnet restore OceanBaseConnector.slnx
-
-      - name: Extract and validate tag version
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        run: |
-          expected="${GITHUB_REF_NAME#v}"
-          actual="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' Directory.Build.props | head -n 1)"
-          if [ -z "$actual" ] || [ "$actual" != "$expected" ]; then
-            echo "::error::Tag version $expected does not match project version $actual"
-            exit 1
-          fi
-          echo "Validated release version $actual"
 
       - name: Build
         run: dotnet build OceanBaseConnector.slnx -c Release --no-restore
@@ -68,64 +69,91 @@ jobs:
           dotnet test tests/OceanBaseConnector.DependencyInjection.Tests/OceanBaseConnector.DependencyInjection.Tests.csproj
           -c Release --no-restore --no-build
 
-      - name: Pack (master/main artifact)
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
-        run: dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/packages
+      - name: Pack main/master or tag
+        if: runner.os == 'Windows' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $releaseNotes = @()
+          if ($env:GITHUB_REF.StartsWith('refs/tags/')) {
+            $releaseNotes = @("-p:PackageReleaseNotes=https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$env:RELEASE_TAG")
+          }
+          foreach ($project in @('OceanBaseConnector', 'OceanBaseConnector.DependencyInjection')) {
+            dotnet pack "src/$project/$project.csproj" -c Release --no-build --no-restore -o TestResults/packages @releaseNotes
+            if ($LASTEXITCODE -ne 0) { throw "Packing $project failed." }
+          }
 
       - name: Verify actual package consumers (Windows)
-        if: runner.os == 'Windows' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        if: runner.os == 'Windows' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
         shell: pwsh
         run: ./eng/Verify-Packages.ps1 -PackageDirectory TestResults/packages
 
+      - name: Upload verified packages and release notes
+        if: runner.os == 'Windows' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: TestResults/packages/
+          if-no-files-found: error
 
-  publish-nuget:
-    if: startsWith(github.ref, 'refs/tags/v')
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     needs: build-and-test
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore
-        run: dotnet restore OceanBaseConnector.slnx
-
-      - name: Validate tag version
-        shell: bash
-        run: |
-          expected="${GITHUB_REF_NAME#v}"
-          actual="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' Directory.Build.props | head -n 1)"
-          if [ -z "$actual" ] || [ "$actual" != "$expected" ]; then
-            echo "::error::Tag version $expected does not match project version $actual"
-            exit 1
-          fi
-
-      - name: Pack release tag
-        run: dotnet pack OceanBaseConnector.slnx -c Release --no-restore -o TestResults/packages
+      - name: Download verified packages and release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: TestResults/packages
 
       - name: Publish packages to NuGet
         shell: bash
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           if [ -z "$NUGET_API_KEY" ]; then
             echo "::error::NUGET_API_KEY is not configured"
             exit 1
           fi
-          shopt -s nullglob
-          packages=(TestResults/packages/*.nupkg)
-          if [ ${#packages[@]} -eq 0 ]; then
-            echo "::error::No NuGet packages were created"
-            exit 1
-          fi
+          version="${RELEASE_TAG#v}"
+          packages=(
+            "TestResults/packages/OceanBaseConnector.$version.nupkg"
+            "TestResults/packages/OceanBaseConnector.DependencyInjection.$version.nupkg"
+          )
+          test -s TestResults/packages/RELEASE_NOTES.md
+          for package in "${packages[@]}"; do
+            test -s "$package"
+          done
           for package in "${packages[@]}"; do
             dotnet nuget push "$package" \
               --api-key "$NUGET_API_KEY" \
               --source https://api.nuget.org/v3/index.json \
               --skip-duplicate
           done
+
+      - name: Create GitHub Release with version update notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          flags=()
+          if [[ "$version" == *-* ]]; then
+            flags+=(--prerelease --latest=false)
+          fi
+          gh release create "$RELEASE_TAG" --verify-tag \
+            --title "OceanBaseConnector $version" \
+            --notes-file TestResults/packages/RELEASE_NOTES.md \
+            "${flags[@]}" TestResults/packages/*.nupkg TestResults/packages/RELEASE_NOTES.md

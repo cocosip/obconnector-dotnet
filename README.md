@@ -78,6 +78,25 @@ dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestRe
 
 To check package consumption, run `pwsh -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/packages`. This requires PowerShell 7.1+ and .NET/ASP.NET Core 8/9/10 runtimes.
 
+## CI/CD and releases
+
+The [workflow](.github/workflows/ci.yml) builds and tests on Windows and Linux for pull requests targeting `main`/`master`, pushes to those branches, and tag pushes.
+
+| Event | Build and test | Pack and verify NuGet consumers | Publish to NuGet and GitHub Releases |
+| --- | --- | --- | --- |
+| Pull request to `main`/`master` | Yes | No | No |
+| Push to `main`/`master` | Yes | Yes | No |
+| Version tag push | Yes | Yes | Yes, after both operating systems pass |
+| Other branch push | No | No | No |
+
+Packages are built from the two projects under `src/`, verified on Windows, and retained as the `nuget-packages` workflow artifact. Tag publication downloads these same packages without rebuilding them. Real database credentials are not required by this workflow.
+
+To release, update the shared `Version` in `Directory.Build.props`, commit it, and push a matching tag such as `v0.1.0` (or `0.1.0`). A mismatched tag fails before building or publishing. Prerelease versions such as `v0.2.0-rc.1` create a GitHub prerelease. Configure the repository Actions secret `NUGET_API_KEY` with permission to publish both package IDs; the workflow uses `GITHUB_TOKEN` with `contents: write` to create the GitHub Release.
+
+Each release records the non-merge commits since the previous reachable version tag, a comparison link, and install commands for both packages. The first release includes the initial commit history. These notes and the verified `.nupkg` files are attached to the GitHub Release; each NuGet package's release notes link to it. Notes are generated from Git history, so use descriptive commit subjects. This does not replace the outstanding publication review in the [verification status](docs/obconnector-dotnet-progress.md).
+
+Check notes generation locally with `pwsh -File eng/Test-ReleaseNotes.ps1`. To preview an existing tag, check out that tag and run `pwsh -File eng/New-ReleaseNotes.ps1 -Tag v0.1.0`; the output defaults to `TestResults/packages/RELEASE_NOTES.md`.
+
 ## Documentation
 
 - [Compatibility and known limitations](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/compatibility.md)
