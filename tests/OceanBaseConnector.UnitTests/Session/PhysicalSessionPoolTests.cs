@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -208,6 +209,20 @@ namespace OceanBaseConnector.UnitTests.Session
         [Fact]
         public async Task ResetFailureDestroysSessionInsteadOfReturningIt()
         {
+            var resetFailures = 0;
+            using var listener = new MeterListener
+            {
+                InstrumentPublished = (instrument, owner) =>
+                {
+                    if (instrument.Meter.Name == "OceanBaseConnector") owner.EnableMeasurementEvents(instrument);
+                },
+                MeasurementsCompleted = (_, _) => { },
+            };
+            listener.SetMeasurementEventCallback<long>((instrument, value, _, _) =>
+            {
+                if (instrument.Name == "oceanbase.client.pool.reset.failures") Interlocked.Add(ref resetFailures, (int)value);
+            });
+            listener.Start();
             var server = LoopbackServer.Start(async client =>
             {
                 var channel = new PacketChannel(client.GetStream());
@@ -228,6 +243,7 @@ namespace OceanBaseConnector.UnitTests.Session
             await session.OpenAsync();
             Assert.False(await pool.ReturnAsync(session, new ConnectionLog(null)));
             Assert.False(pool.TryRent(out _));
+            Assert.Equal(1, Volatile.Read(ref resetFailures));
             server.Stop();
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
@@ -378,6 +394,44 @@ namespace OceanBaseConnector.UnitTests.Session
             await Assert.ThrowsAsync<OceanBaseConnector.OceanBaseException>(() => opening);
             Assert.False(pool.TryRent(out _));
             await serving.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task PoolMetricsReportSessionsBorrowsWaitersAndDiscards()
+        {
+            var longs = new List<(string Name, long Value)>();
+            var doubles = new List<(string Name, double Value)>();
+            using var listener = new MeterListener
+            {
+                InstrumentPublished = (instrument, owner) =>
+                {
+                    if (instrument.Meter.Name == "OceanBaseConnector") owner.EnableMeasurementEvents(instrument);
+                },
+                MeasurementsCompleted = (_, _) => { },
+            };
+            listener.SetMeasurementEventCallback<long>((instrument, value, _, _) => longs.Add((instrument.Name, value)));
+            listener.SetMeasurementEventCallback<double>((instrument, value, _, _) => doubles.Add((instrument.Name, value)));
+            listener.Start();
+            var options = new OceanBaseConnectionStringBuilder
+            {
+                Server = "127.0.0.1",
+                UserId = "u",
+                Password = "p",
+                Pooling = true,
+                MaxPoolSize = 1,
+                PoolWaitTimeout = 1,
+            }.Build();
+            using var pool = new PhysicalSessionPool();
+            var first = pool.Rent(options, null, new EndpointSelector(), out _);
+            await Assert.ThrowsAsync<TimeoutException>(() => pool.RentAsync(options, null, new EndpointSelector()));
+            pool.Discard(first);
+            Assert.Contains(longs, item => item == ("oceanbase.client.pool.borrowed", 1));
+            Assert.Contains(longs, item => item == ("oceanbase.client.pool.sessions", 1));
+            Assert.Contains(longs, item => item == ("oceanbase.client.pool.sessions", -1));
+            Assert.Contains(longs, item => item == ("oceanbase.client.pool.waiters", 1));
+            Assert.Contains(longs, item => item == ("oceanbase.client.pool.waiters", -1));
+            Assert.Contains(longs, item => item == ("oceanbase.client.pool.discarded", 1));
+            Assert.Contains(doubles, item => item.Name == "oceanbase.client.pool.wait.duration" && item.Value >= 0.5);
         }
     }
 }

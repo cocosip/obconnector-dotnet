@@ -12,6 +12,12 @@ namespace OceanBaseConnector.Internal
         private static readonly Meter? Meter = Create(() => new Meter("OceanBaseConnector", Version));
         private static readonly Counter<long>? Operations = Create(() => Meter?.CreateCounter<long>("oceanbase.client.operations", "{operation}"));
         private static readonly Histogram<double>? Duration = Create(() => Meter?.CreateHistogram<double>("oceanbase.client.operation.duration", "s"));
+        private static readonly UpDownCounter<long>? PoolSessions = Create(() => Meter?.CreateUpDownCounter<long>("oceanbase.client.pool.sessions", "{session}"));
+        private static readonly Counter<long>? PoolBorrows = Create(() => Meter?.CreateCounter<long>("oceanbase.client.pool.borrowed", "{borrow}"));
+        private static readonly UpDownCounter<long>? PoolWaiters = Create(() => Meter?.CreateUpDownCounter<long>("oceanbase.client.pool.waiters", "{waiter}"));
+        private static readonly Counter<long>? PoolDiscards = Create(() => Meter?.CreateCounter<long>("oceanbase.client.pool.discarded", "{session}"));
+        private static readonly Counter<long>? PoolResetFailures = Create(() => Meter?.CreateCounter<long>("oceanbase.client.pool.reset.failures", "{failure}"));
+        private static readonly Histogram<double>? PoolWait = Create(() => Meter?.CreateHistogram<double>("oceanbase.client.pool.wait.duration", "s"));
 
         private static T? Create<T>(Func<T?> create) where T : class
         {
@@ -25,6 +31,39 @@ namespace OceanBaseConnector.Internal
         {
             try { Activity.Current = previous; }
             catch { } // Activity.CurrentChanged is also application callback code.
+        }
+
+        internal static void PoolSessionAdded() => Add(PoolSessions, 1);
+        internal static void PoolSessionRemoved() => Add(PoolSessions, -1);
+        internal static void PoolBorrowed() => Add(PoolBorrows, 1);
+        internal static void PoolWaiterAdded() => Add(PoolWaiters, 1);
+        internal static void PoolWaiterRemoved() => Add(PoolWaiters, -1);
+        internal static void PoolDiscarded() => Add(PoolDiscards, 1);
+        internal static void PoolResetFailed() => Add(PoolResetFailures, 1);
+        internal static void PoolWaitDuration(double seconds) => Record(PoolWait, seconds);
+
+        private static void Add(Counter<long>? instrument, long value)
+        {
+            var previous = Activity.Current;
+            try { instrument?.Add(value); }
+            catch { }
+            finally { Restore(previous); }
+        }
+
+        private static void Add(UpDownCounter<long>? instrument, long value)
+        {
+            var previous = Activity.Current;
+            try { instrument?.Add(value); }
+            catch { }
+            finally { Restore(previous); }
+        }
+
+        private static void Record(Histogram<double>? instrument, double value)
+        {
+            var previous = Activity.Current;
+            try { instrument?.Record(value); }
+            catch { }
+            finally { Restore(previous); }
         }
 
         internal static Operation? Start(string operation)

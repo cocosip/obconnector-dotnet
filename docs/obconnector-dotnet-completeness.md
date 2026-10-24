@@ -30,7 +30,7 @@
 | --- | --- | --- |
 | Java 驱动有没有连接池？ | 有。 | Connector/J 源码包含 `OceanBasePoolDataSource`、`OceanBasePooledConnection`、`Pools`/`Pool`，职责包括借用、归还、最小/最大容量、空闲/生命周期清理和池事件。本仓库的 [obconnector-j-architecture-outline.md](obconnector-j-architecture-outline.md) 第 M13 节记录了该静态走查；没有把它当作 Java 运行时兼容性证明。 |
 | .NET 驱动以前有没有连接池？ | 在连接池提交之前没有。 | 原先每个 `OceanBaseConnection` 都直接持有一个物理会话，关闭即释放会话，缺少逻辑连接和物理会话的分层。 |
-| .NET 当前有没有连接池？ | 有基础池化，但不是完整连接池。 | `Pooling=true` 通过 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 复用已认证物理会话；归还时执行 `COM_RESET_CONNECTION`，MySQL 模式再执行 `COM_INIT_DB`。当前已支持最大容量、等待超时、最小池预热及失败回滚、空闲/总生命周期回收、借用前存活探测和空池 registry 清理；池指标和真实服务器 reset 兼容性仍未闭合。 |
+| .NET 当前有没有连接池？ | 有基础池化，但不是完整连接池。 | `Pooling=true` 通过 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 复用已认证物理会话；归还时执行 `COM_RESET_CONNECTION`，MySQL 模式再执行 `COM_INIT_DB`。当前已支持最大容量、等待超时、最小池预热及失败回滚、空闲/总生命周期回收、借用前存活探测、空池 registry 清理和池指标；完整 reset 与真实服务器 reset 兼容性仍未闭合。 |
 | 是否已经达到 Java/.NET 生产驱动水平？ | 没有。 | 还缺少会话变量/临时对象/LOB/cursor 的完整 reset、ambient transaction、活动连接恢复、协议可选能力、企业 TLS、完整 ADO.NET 行为和真实 OceanBase/OBProxy 验收。 |
 
 ### 1.2 审计范围和证据等级
@@ -64,7 +64,7 @@
 | OB20 | 部分实现 | 普通 OB20、校验和、trace 结构有代码；压缩 frame 和 proxy reroute 缺失 |
 | 本地事务 | 部分实现 | MySQL/Oracle 隔离级别和 savepoint 有限制；ambient transaction 不支持 |
 | XA | 部分实现 | 显式生命周期和 recover API 有代码；外部 coordinator crash recovery 未验证 |
-| 连接池 | 部分实现 | `Pooling=true` 可复用物理会话，支持最大容量、等待超时、最小池预热及失败回滚、借用前存活探测、惰性生命周期回收和空池 registry 清理；池指标、完整资源 reset 和真实服务器矩阵未闭合 |
+| 连接池 | 部分实现 | `Pooling=true` 可复用物理会话，支持最大容量、等待超时、最小池预热及失败回滚、借用前存活探测、惰性生命周期回收、空池 registry 清理和池指标；完整资源 reset 和真实服务器矩阵未闭合 |
 | HA 和恢复 | 部分实现 | Open 阶段 TCP 候选地址重试；活动连接没有透明迁移、重连或 replay |
 | MySQL 类型 | 部分实现 | 常用数值、时间、YEAR、BIT、JSON、零日期已有映射；字符集和扩展类型仍有限制 |
 | Oracle 类型 | 部分实现 | DATE、TIMESTAMP、TZ/LTZ、INTERVAL、NCHAR、RAW、LOB、复杂类型已有部分实现 |
@@ -72,7 +72,7 @@
 | 复杂类型 | 部分实现 | 标量 object/collection 有路径；LOB、cursor、national 成员、循环结构和文本结果不支持 |
 | Schema 元数据 | 部分实现 | 只有六类 `GetSchema` collection，未覆盖完整目录 |
 | 批处理 | 部分实现 | `DbBatch` 顺序执行；没有 rewrite、multi-send、bulk 或跨命令 statement cache |
-| 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter` 已有；池指标、协议 debug、slow-query profile 未完整提供 |
+| 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter` 和池生命周期指标已有；协议 debug、slow-query profile、建连/探活细分指标未完整提供 |
 | 真实兼容性 | 未验证 | 当前记录主要是 Windows/.NET 10、直连 OceanBase 4.4.2.2、TLS disabled |
 
 ## 3. 完整驱动的目标边界
@@ -99,7 +99,7 @@
 
 | ID | 优先级 | 模块 | 当前状态 | 目标 |
 | --- | --- | --- | --- | --- |
-| P0-01 | P0 | 连接池 | 部分实现 | 完成池指标、容量/等待/回收和真实行为验收 |
+| P0-01 | P0 | 连接池 | 部分实现 | 完成完整 reset、容量/等待/回收和真实行为验收 |
 | P0-02 | P0 | 会话隔离 | 部分实现 | 借用前校验、完整资源清理、失败丢弃和泄漏检测 |
 | P0-03 | P0 | Ambient transaction | 明确缺失 | `TransactionScope`/`EnlistTransaction` 支持或正式排除 |
 | P0-04 | P0 | Unknown outcome | 部分实现 | 连接断开、取消、提交失败后的可判定恢复边界 |
@@ -117,7 +117,7 @@
 | P2-01 | P2 | DataAdapter | 明确缺失 | `DbDataAdapter` 和 `DbCommandBuilder`，或正式声明不支持 |
 | P2-02 | P2 | Statement cache | 明确缺失 | 跨命令 prepared statement cache |
 | P2-03 | P2 | 批处理优化 | 部分实现 | rewrite、multi-send、bulk 和统一 partial-failure 结果 |
-| P2-04 | P2 | 诊断 | 部分实现 | 池指标、协议 debug、slow-query profile 和资源等待 |
+| P2-04 | P2 | 诊断 | 部分实现 | 协议 debug、slow-query profile、建连/探活和资源等待 |
 | P2-05 | P2 | TFM/生态 | 未验证 | 每个 TFM 的正式支持矩阵和 package consumer 验收 |
 | P2-06 | P2 | 真实兼容性 | 未验证 | 版本、OBProxy、TLS、认证、平台和故障矩阵 |
 
@@ -125,7 +125,9 @@
 
 ### 5.1 连接池和会话隔离
 
-当前 `Pooling=true` 已由 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 管理物理会话；逻辑连接关闭时通过 `COM_RESET_CONNECTION` 清理服务端状态，并用 `COM_INIT_DB` 恢复初始 database。池已支持最大容量、等待超时、等待取消、最小池预热及失败回滚、借用前 `COM_PING` 存活探测、连接空闲/总生命周期回收、最小空闲保留规则和空池 registry 清理；每次 Open 使用独立的取消和 generation，Close 能打断池等待并避免旧 Open 清理新状态。池指标、完整资源 reset 和真实 OceanBase/OBProxy reset 兼容性仍需验证。
+当前 `Pooling=true` 已由 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 管理物理会话；逻辑连接关闭时通过 `COM_RESET_CONNECTION` 清理服务端状态，并用 `COM_INIT_DB` 恢复初始 database。池已支持最大容量、等待超时、等待取消、最小池预热及失败回滚、借用前 `COM_PING` 存活探测、连接空闲/总生命周期回收、最小空闲保留规则、空池 registry 清理和池生命周期指标；每次 Open 使用独立的取消和 generation，Close 能打断池等待并避免旧 Open 清理新状态。完整资源 reset 和真实 OceanBase/OBProxy reset 兼容性仍需验证。
+
+当前已接入的指标名称为 `oceanbase.client.pool.sessions`、`borrowed`、`waiters`、`discarded`、`reset.failures` 和 `wait.duration`，分别记录物理会话数、借用次数、等待者数、销毁次数、reset 失败次数和池等待耗时。它们证明本地生命周期可观测，不证明真实服务器兼容性。
 
 目标设计必须将“逻辑 `OceanBaseConnection`”和“物理 `PhysicalSession`”分离：
 
@@ -257,7 +259,7 @@ Java 参考实现有 `allowLocalInfile`、`allowLoadLocalInfile` 和输入流入
 
 ### 5.10 Schema、批处理、缓存和诊断
 
-当前只提供六类 schema collection，batch 顺序执行，prepared statement 主要限于命令生命周期，诊断能力也没有覆盖池和协议层。
+当前只提供六类 schema collection，batch 顺序执行，prepared statement 主要限于命令生命周期，诊断能力已覆盖池生命周期，但还没有覆盖协议 debug 和 slow-query profile。
 
 目标要求：
 
@@ -357,9 +359,9 @@ Java 参考实现有 `allowLocalInfile`、`allowLoadLocalInfile` 和输入流入
 | M10 LOB/complex | `OceanBaseLob`、`OceanBaseComplexType` | 基础 LOB/复杂类型存在；嵌套 LOB/cursor/national 成员和缓存失效缺失 |
 | M11 metadata/catalog | `OceanBaseConnection.Schema`、reader schema | 仅六类 Schema collection；完整目录和参数元数据缺失 |
 | M12 HA/failover | `EndpointSelector`、地址 resolver | Open 阶段候选地址重试存在；黑名单、退避、活动连接恢复和 reroute 缺失 |
-| M13 pooling/reuse | `PhysicalSessionPool` | 复用、reset、容量、等待取消、生命周期、最小池预热及失败回滚和空池 registry 清理已实现；指标和真实 reset 兼容性缺失 |
+| M13 pooling/reuse | `PhysicalSessionPool` | 复用、reset、容量、等待取消、生命周期、最小池预热及失败回滚、空池 registry 清理和池指标已实现；完整资源 reset 和真实 reset 兼容性未闭合 |
 | M14 XA | `OceanBaseXaResource`、`OceanBaseXid` | 显式 XA 生命周期和 recover 有路径；外部 coordinator 崩溃恢复未验证 |
-| M15 logging/diagnostics/OB20 | `DriverDiagnostics`、OB20 protocol classes | 日志、Activity、Meter 和基础 OB20 存在；池指标、协议 debug、压缩/reroute 缺失 |
+| M15 logging/diagnostics/OB20 | `DriverDiagnostics`、OB20 protocol classes | 日志、Activity、Meter、池指标和基础 OB20 存在；协议 debug、压缩/reroute 缺失 |
 | M16 packaging/SPI/tests | 多 TFM csproj、消费者和集成套件 | 包和消费者验证存在；跨平台、真实版本/代理/认证矩阵未闭合 |
 
 ## 11. 源码证据索引

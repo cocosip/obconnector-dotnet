@@ -48,6 +48,7 @@ namespace OceanBaseConnector.Internal.Session
                     {
                         var session = new PhysicalSession(options, resolver, selector);
                         RegisterCreated(session);
+                        DriverDiagnostics.PoolBorrowed();
                         return session;
                     }
                     catch (ObjectDisposedException)
@@ -67,6 +68,7 @@ namespace OceanBaseConnector.Internal.Session
                     {
                         candidate!.Probe(new ConnectionLog(null), options.CommandTimeoutSeconds);
                         reused = true;
+                        DriverDiagnostics.PoolBorrowed();
                         return candidate;
                     }
                     catch
@@ -98,6 +100,7 @@ namespace OceanBaseConnector.Internal.Session
                     {
                         var session = new PhysicalSession(options, resolver, selector);
                         RegisterCreated(session);
+                        DriverDiagnostics.PoolBorrowed();
                         return session;
                     }
                     catch (ObjectDisposedException)
@@ -117,6 +120,7 @@ namespace OceanBaseConnector.Internal.Session
                     {
                         await candidate!.ProbeAsync(new ConnectionLog(null), options.CommandTimeoutSeconds, cancellationToken)
                             .ConfigureAwait(false);
+                        DriverDiagnostics.PoolBorrowed();
                         return candidate;
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -139,23 +143,39 @@ namespace OceanBaseConnector.Internal.Session
 
         internal bool TryRent(out PhysicalSession? session)
         {
+            session = null;
+            var removed = 0;
+            var disposed = new List<PhysicalSession>();
+            var borrowed = false;
             lock (_gate)
             {
-                if (_disposed) { session = null; return false; }
+                if (_disposed) return false;
                 while (_idle.Count != 0)
                 {
                     var candidate = _idle.Pop();
                     if (candidate.State == SessionState.Open && !candidate.IsReservedForOther(null))
                     {
                         session = candidate;
-                        return true;
+                        borrowed = true;
+                        break;
                     }
                     _sessions.Remove(candidate);
-                    candidate.Dispose();
+                    disposed.Add(candidate);
+                    removed++;
                 }
-                session = null;
-                return false;
             }
+            foreach (var candidate in disposed) candidate.Dispose();
+            if (borrowed)
+            {
+                DriverDiagnostics.PoolBorrowed();
+                return true;
+            }
+            for (var i = 0; i < removed; i++)
+            {
+                DriverDiagnostics.PoolSessionRemoved();
+                DriverDiagnostics.PoolDiscarded();
+            }
+            return false;
         }
 
         internal bool Return(PhysicalSession session, ConnectionLog log, int timeout = 0)
@@ -167,14 +187,15 @@ namespace OceanBaseConnector.Internal.Session
             }
 
             try { session.Reset(log, timeout); }
-            catch { Destroy(session); return false; }
+            catch { DriverDiagnostics.PoolResetFailed(); Destroy(session); return false; }
 
             session.MarkReturned();
+            var removed = false;
             lock (_gate)
             {
                 if (_disposed)
                 {
-                    _sessions.Remove(session);
+                    removed = _sessions.Remove(session);
                 }
                 else
                 {
@@ -183,7 +204,12 @@ namespace OceanBaseConnector.Internal.Session
                     return true;
                 }
             }
-            session.Dispose();
+            if (removed)
+            {
+                session.Dispose();
+                DriverDiagnostics.PoolSessionRemoved();
+                DriverDiagnostics.PoolDiscarded();
+            }
             return false;
         }
 
@@ -197,14 +223,15 @@ namespace OceanBaseConnector.Internal.Session
             }
 
             try { await session.ResetAsync(log, timeout, cancellationToken).ConfigureAwait(false); }
-            catch { Destroy(session); return false; }
+            catch { DriverDiagnostics.PoolResetFailed(); Destroy(session); return false; }
 
             session.MarkReturned();
+            var removed = false;
             lock (_gate)
             {
                 if (_disposed)
                 {
-                    _sessions.Remove(session);
+                    removed = _sessions.Remove(session);
                 }
                 else
                 {
@@ -213,7 +240,12 @@ namespace OceanBaseConnector.Internal.Session
                     return true;
                 }
             }
-            session.Dispose();
+            if (removed)
+            {
+                session.Dispose();
+                DriverDiagnostics.PoolSessionRemoved();
+                DriverDiagnostics.PoolDiscarded();
+            }
             return false;
         }
 
@@ -253,8 +285,9 @@ namespace OceanBaseConnector.Internal.Session
 
                 _waiters++;
                 candidate = null;
-                return RentDecision.Wait;
             }
+            DriverDiagnostics.PoolWaiterAdded();
+            return RentDecision.Wait;
         }
 
         private void WarmUp(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
@@ -362,6 +395,7 @@ namespace OceanBaseConnector.Internal.Session
                 _sessions.Add(session);
                 if (idle) _idle.Push(session);
             }
+            DriverDiagnostics.PoolSessionAdded();
         }
 
         private void CompleteOpening()
@@ -373,14 +407,22 @@ namespace OceanBaseConnector.Internal.Session
         {
             var wait = Remaining(timeoutSeconds, started);
             try { return wait == Timeout.InfiniteTimeSpan ? _available.Wait(Timeout.Infinite, token) : _available.Wait(wait, token); }
-            finally { DecrementWaiter(); }
+            finally
+            {
+                DecrementWaiter();
+                DriverDiagnostics.PoolWaitDuration(started.Elapsed.TotalSeconds);
+            }
         }
 
         private async Task<bool> WaitForAvailabilityAsync(Stopwatch started, int timeoutSeconds, CancellationToken token)
         {
             var wait = Remaining(timeoutSeconds, started);
             try { return wait == Timeout.InfiniteTimeSpan ? await _available.WaitAsync(Timeout.Infinite, token).ConfigureAwait(false) : await _available.WaitAsync(wait, token).ConfigureAwait(false); }
-            finally { DecrementWaiter(); }
+            finally
+            {
+                DecrementWaiter();
+                DriverDiagnostics.PoolWaitDuration(started.Elapsed.TotalSeconds);
+            }
         }
 
         private static TimeSpan Remaining(int timeoutSeconds, Stopwatch started)
@@ -392,7 +434,16 @@ namespace OceanBaseConnector.Internal.Session
 
         private void DecrementWaiter()
         {
-            lock (_gate) { if (_waiters > 0) _waiters--; }
+            var removed = false;
+            lock (_gate)
+            {
+                if (_waiters > 0)
+                {
+                    _waiters--;
+                    removed = true;
+                }
+            }
+            if (removed) DriverDiagnostics.PoolWaiterRemoved();
         }
 
         private void ReleaseWaiterSignal()
@@ -404,13 +455,23 @@ namespace OceanBaseConnector.Internal.Session
         {
             var owned = false;
             lock (_gate) owned = _sessions.Remove(session);
-            if (owned) session.Dispose();
+            if (owned)
+            {
+                session.Dispose();
+                DriverDiagnostics.PoolSessionRemoved();
+                DriverDiagnostics.PoolDiscarded();
+            }
         }
 
-        private static void DisposeExpired(List<PhysicalSession>? expired)
+        private void DisposeExpired(List<PhysicalSession>? expired)
         {
             if (expired == null) return;
-            foreach (var session in expired) session.Dispose();
+            foreach (var session in expired)
+            {
+                session.Dispose();
+                DriverDiagnostics.PoolSessionRemoved();
+                DriverDiagnostics.PoolDiscarded();
+            }
         }
 
         public void Dispose()
@@ -427,7 +488,12 @@ namespace OceanBaseConnector.Internal.Session
                 foreach (var session in sessions) _sessions.Remove(session);
                 waiters = _waiters;
             }
-            foreach (var session in sessions) session.Dispose();
+            foreach (var session in sessions)
+            {
+                session.Dispose();
+                DriverDiagnostics.PoolSessionRemoved();
+                DriverDiagnostics.PoolDiscarded();
+            }
             for (var i = 0; i < waiters; i++) _available.Release();
         }
     }

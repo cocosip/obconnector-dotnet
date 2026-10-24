@@ -13,7 +13,7 @@
 | --- | --- |
 | Java 驱动有没有连接池 | 有。Connector/J 有 `OceanBasePoolDataSource`、`OceanBasePooledConnection`、`Pools`/`Pool`，覆盖池注册、借用/归还、最小/最大容量、空闲和生命周期清理以及池事件。 |
 | .NET 当前有没有连接池 | 有基础物理会话池。`Pooling=true` 可复用已认证的 `PhysicalSession`，支持最大容量、等待超时/取消、借用前 `COM_PING`、空闲/总生命周期回收，归还时执行 reset。 |
-| .NET 连接池是否完整 | 不是。完整 session reset、池指标和真实 OceanBase/OBProxy reset 兼容性仍未闭合；最小池预热及失败回滚、空池 static registry 清理已实现。 |
+| .NET 连接池是否完整 | 不是。池指标已经接入并有本地回归，但完整 session reset 和真实 OceanBase/OBProxy reset 兼容性仍未闭合；最小池预热及失败回滚、空池 static registry 清理已实现。 |
 | 当前最大的生产风险 | 会话状态隔离、unknown outcome、ambient transaction、活动连接故障恢复和真实代理/TLS/跨平台矩阵仍不完整。 |
 | 是否已经达到 Java/.NET 成熟驱动水平 | 没有。现有实现可以继续开发和做受控试用，但 README 和包元数据应继续保持 experimental/未完成真实兼容性验证的表述。 |
 
@@ -34,7 +34,7 @@
 | 模块 | 状态 | 已有能力 | 主要缺口或边界 |
 | --- | --- | --- | --- |
 | 连接与配置 | 部分实现 | 连接字符串、超时、多地址、RoundRobin、模式确认、地址 resolver、空池 registry 清理 | OCP/TNS、健康发现、连接字符串归一化、完整版本/代理矩阵 |
-| 物理连接池 | 部分实现 | 物理会话复用、最大容量、等待超时/取消、最小池预热及失败回滚、`COM_PING`、idle/total lifetime、reset、空池 registry 清理 | 池指标、完整 reset、真实 reset 兼容性 |
+| 物理连接池 | 部分实现 | 物理会话复用、最大容量、等待超时/取消、最小池预热及失败回滚、`COM_PING`、idle/total lifetime、reset、空池 registry 清理、池指标 | 完整 reset、真实 reset 兼容性 |
 | 会话隔离 | 部分实现 | `COM_RESET_CONNECTION`、MySQL `COM_INIT_DB`、reader 消耗后可复用 | session variables、临时对象、statement、cursor、LOB、XA 和失败丢弃的完整矩阵 |
 | ADO.NET 核心 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、provider factory、`CloseConnection`、`SequentialAccess`、`SingleRow`、`SingleResult` | `SchemaOnly`、`KeyInfo`、完整 schema metadata、`DbDataAdapter`、`DbCommandBuilder` |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 代码路径 | 现代 TFM 与旧 TFM 的完整行为矩阵、标准 `DbBatch` 生态验收 |
@@ -53,7 +53,7 @@
 | HA 与恢复 | 部分实现 | Open 阶段 TCP 候选地址重试、注入式 resolver | 活动连接迁移、透明重连、退避、reroute、安全重试 |
 | Schema 元数据 | 部分实现 | 六类 `GetSchema` collection、异步 schema | Tables/Views/Indexes/Keys/Constraints/Types/Sequences 等扩展 |
 | 批处理 | 部分实现 | `DbBatch` 顺序执行、Oracle array binding | rewrite、multi-send、bulk、跨命令 statement cache |
-| 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter`、脱敏日志 | 池指标、协议 debug、等待/建连/丢弃/reset 失败指标 |
+| 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter`、脱敏日志、池会话/借用/等待/丢弃/reset 失败/等待耗时指标 | 建连与探活细分指标、协议 debug、slow-query profile |
 | 真实兼容性 | 未验证 | 直连 4.4.2.2 的有限记录 | OBProxy、TLS/plugin、版本、平台、网络故障和 XA 恢复矩阵 |
 
 ## 4. 缺口清单和交付优先级
@@ -62,7 +62,7 @@
 
 | ID | 缺口 | 当前问题 | 完成条件 |
 | --- | --- | --- | --- |
-| P0-01 | 连接池生命周期 | 没有池级指标；最小池预热、失败回滚和空池 registry 清理已实现 | 配置一致的池可创建/清理；总数、借出、等待、丢弃、reset 失败可观测 |
+| P0-01 | 连接池生命周期 | 指标已接入并有本地回归；完整 reset 和真实服务器行为仍未闭合 | 配置一致的池可创建/清理；总数、借出、等待、丢弃、reset 失败可观测，并通过真实服务器验收 |
 | P0-02 | 完整 session reset | 目前主要 reset 协议连接和 database，未覆盖所有借用者状态 | 事务、变量、临时对象、prepared statement、reader/cursor、LOB、XA 和 reset 失败丢弃均有 cross-borrower 测试 |
 | P0-03 | Ambient transaction | `TransactionScope`/`EnlistTransaction` 不支持 | 实现完整 enlist 状态机，或把不支持边界正式写入公共契约并保证一致拒绝 |
 | P0-04 | Unknown outcome | 发送后断开、取消、提交响应丢失时无法总是判定服务端结果 | 明确发送前/发送后/响应中/commit/rollback 状态；写操作不自动重放；异常给出恢复动作 |
@@ -111,7 +111,7 @@ Connector/J 的池实现还包含池注册、最小/最大容量、生命周期�
 
 1. 连接字符串归一化和进程退出行为；
 2. session variable、临时表/对象、statement、cursor、LOB、XA 的完整 reset；
-3. 池等待、借用、建连、探活、reset、销毁的指标和诊断事件；
+3. 建连、探活、协议 debug 和 slow-query profile 等诊断补充；
 4. 真实 OceanBase 与 OBProxy 上的 reset、预热、超时和并发验证。
 
 ### 5.3 连接池验收矩阵
@@ -146,7 +146,7 @@ Connector/J 的静态模块对照显示，Java 已把以下职责分开：连接
 | 阶段 | 内容 | 退出标准 |
 | --- | --- | --- |
 | G0 | 冻结公共 API、兼容矩阵、状态机和错误分类 | 每个缺口都有状态、测试入口和明确“不支持/未验证”边界 |
-| G1 | 完整 session reset、池指标 | cross-borrower、并发、取消、失败丢弃和 XA 隔离通过 |
+| G1 | 完整 session reset 和 XA 隔离 | cross-borrower、并发、取消、失败丢弃和 XA 隔离通过 |
 | G2 | ambient transaction、取消和 unknown outcome | `TransactionScope`、提交响应丢失、回滚响应丢失和真实故障矩阵通过 |
 | G3 | 多语句、压缩、LOCAL INFILE、OB20 reroute/压缩 | capability 协商、旧服务器拒绝和真实服务器通过 |
 | G4 | mTLS、信任/撤销、认证插件、HA/发现 | TLS/KDC/OBProxy/故障注入矩阵通过 |
