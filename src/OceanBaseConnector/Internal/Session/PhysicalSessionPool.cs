@@ -3,18 +3,29 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.Security;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using OceanBaseConnector.Internal.Transport;
 
 namespace OceanBaseConnector.Internal.Session
 {
     /// <summary>Owns reusable physical sessions for one immutable connection configuration.</summary>
     internal sealed class PhysicalSessionPool : IDisposable
     {
-        internal PhysicalSessionPool(IOceanBaseAddressResolver? resolver = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
-        { Resolver = resolver; RemoteCertificateValidationCallback = remoteCertificateValidationCallback; }
+        internal PhysicalSessionPool(IOceanBaseAddressResolver? resolver = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null,
+            X509Certificate2? clientCertificate = null)
+        {
+            Resolver = resolver; RemoteCertificateValidationCallback = remoteCertificateValidationCallback; ClientCertificate = clientCertificate;
+            TlsClientCertificate = clientCertificate == null ? null : new X509Certificate2(clientCertificate);
+            try { ClientCertificateFingerprint = TlsUpgrade.ClientCertificateFingerprint(TlsClientCertificate); }
+            catch { TlsClientCertificate?.Dispose(); throw; }
+        }
         internal IOceanBaseAddressResolver? Resolver { get; }
         internal RemoteCertificateValidationCallback? RemoteCertificateValidationCallback { get; }
+        internal X509Certificate2? ClientCertificate { get; }
+        internal X509Certificate2? TlsClientCertificate { get; }
+        internal string ClientCertificateFingerprint { get; }
         private readonly object _gate = new object();
         private readonly Stack<PhysicalSession> _idle = new Stack<PhysicalSession>();
         private readonly HashSet<PhysicalSession> _sessions = new HashSet<PhysicalSession>();
@@ -77,7 +88,7 @@ namespace OceanBaseConnector.Internal.Session
                     reused = false;
                     try
                     {
-                        var session = new PhysicalSession(options, resolver, selector, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
+                        var session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
                         RegisterCreated(session);
                         DriverDiagnostics.PoolBorrowed();
                         return session;
@@ -141,7 +152,7 @@ namespace OceanBaseConnector.Internal.Session
                 {
                     try
                     {
-                        var session = new PhysicalSession(options, resolver, selector, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
+                        var session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
                         RegisterCreated(session);
                         DriverDiagnostics.PoolBorrowed();
                         return session;
@@ -364,7 +375,7 @@ namespace OceanBaseConnector.Internal.Session
                     try
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        session = new PhysicalSession(options, resolver, selector, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
+                        session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
                         session.Open(cancellationToken);
                         registrationAttempted = true;
                         RegisterCreated(session, idle: true);
@@ -398,7 +409,7 @@ namespace OceanBaseConnector.Internal.Session
                     try
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        session = new PhysicalSession(options, resolver, selector, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
+                        session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
                         await session.OpenAsync(cancellationToken).ConfigureAwait(false);
                         registrationAttempted = true;
                         RegisterCreated(session, idle: true);
@@ -582,6 +593,7 @@ namespace OceanBaseConnector.Internal.Session
                 DriverDiagnostics.PoolDiscarded();
             }
             for (var i = 0; i < waiters; i++) _available.Release();
+            TlsClientCertificate?.Dispose();
         }
     }
 
@@ -590,21 +602,33 @@ namespace OceanBaseConnector.Internal.Session
         private static readonly object Gate = new object();
         private static readonly Dictionary<PoolKey, PhysicalSessionPool> Pools = new Dictionary<PoolKey, PhysicalSessionPool>();
 
-        internal static PhysicalSessionPool Get(string key, IOceanBaseAddressResolver? resolver = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
+        internal static PhysicalSessionPool Get(string key, IOceanBaseAddressResolver? resolver = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null,
+            X509Certificate2? clientCertificate = null)
         {
-            var identity = new PoolKey(key, resolver, remoteCertificateValidationCallback);
+            var fingerprint = TlsUpgrade.ClientCertificateFingerprint(clientCertificate);
+            var identity = new PoolKey(key, resolver, remoteCertificateValidationCallback, clientCertificate, fingerprint);
             lock (Gate)
             {
-                if (!Pools.TryGetValue(identity, out var pool)) Pools.Add(identity, pool = new PhysicalSessionPool(resolver, remoteCertificateValidationCallback));
+                if (!Pools.TryGetValue(identity, out var pool))
+                {
+                    pool = new PhysicalSessionPool(resolver, remoteCertificateValidationCallback, clientCertificate);
+                    if (!string.Equals(pool.ClientCertificateFingerprint, fingerprint, StringComparison.Ordinal))
+                    {
+                        pool.Dispose();
+                        throw new InvalidOperationException("The client certificate changed while configuring its pool.");
+                    }
+                    Pools.Add(identity, pool);
+                }
                 return pool;
             }
         }
 
-        internal static PhysicalSessionPool GetForRent(string key, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
+        internal static PhysicalSessionPool GetForRent(string key, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null,
+            X509Certificate2? clientCertificate = null)
         {
             lock (Gate)
             {
-                var pool = Get(key, resolver, remoteCertificateValidationCallback);
+                var pool = Get(key, resolver, remoteCertificateValidationCallback, clientCertificate);
                 pool.BeginRent();
                 return pool;
             }
@@ -613,7 +637,7 @@ namespace OceanBaseConnector.Internal.Session
         internal static bool ReleaseIfEmpty(string key, PhysicalSessionPool pool)
         {
             var removed = false;
-            var identity = new PoolKey(key, pool.Resolver, pool.RemoteCertificateValidationCallback);
+            var identity = new PoolKey(key, pool.Resolver, pool.RemoteCertificateValidationCallback, pool.ClientCertificate, pool.ClientCertificateFingerprint);
             lock (Gate)
             {
                 if (Pools.TryGetValue(identity, out var current) && ReferenceEquals(current, pool) && pool.IsEmpty)
@@ -631,10 +655,24 @@ namespace OceanBaseConnector.Internal.Session
             private readonly string _configuration;
             private readonly IOceanBaseAddressResolver? _resolver;
             private readonly RemoteCertificateValidationCallback? _validation;
-            internal PoolKey(string configuration, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? validation) { _configuration = configuration; _resolver = resolver; _validation = validation; }
-            public bool Equals(PoolKey other) => string.Equals(_configuration, other._configuration, StringComparison.Ordinal) && ReferenceEquals(_resolver, other._resolver) && ReferenceEquals(_validation, other._validation);
+            private readonly X509Certificate2? _certificate;
+            private readonly string _fingerprint;
+            internal PoolKey(string configuration, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? validation, X509Certificate2? certificate, string fingerprint)
+            { _configuration = configuration; _resolver = resolver; _validation = validation; _certificate = certificate; _fingerprint = fingerprint; }
+            public bool Equals(PoolKey other) => string.Equals(_configuration, other._configuration, StringComparison.Ordinal) && ReferenceEquals(_resolver, other._resolver) && ReferenceEquals(_validation, other._validation) &&
+                ReferenceEquals(_certificate, other._certificate) && string.Equals(_fingerprint, other._fingerprint, StringComparison.Ordinal);
             public override bool Equals(object? obj) => obj is PoolKey other && Equals(other);
-            public override int GetHashCode() => unchecked((StringComparer.Ordinal.GetHashCode(_configuration) * 397 ^ (_resolver == null ? 0 : RuntimeHelpers.GetHashCode(_resolver))) * 397 ^ (_validation == null ? 0 : RuntimeHelpers.GetHashCode(_validation)));
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    var hash = StringComparer.Ordinal.GetHashCode(_configuration);
+                    hash = hash * 397 ^ (_resolver == null ? 0 : RuntimeHelpers.GetHashCode(_resolver));
+                    hash = hash * 397 ^ (_validation == null ? 0 : RuntimeHelpers.GetHashCode(_validation));
+                    hash = hash * 397 ^ (_certificate == null ? 0 : RuntimeHelpers.GetHashCode(_certificate));
+                    return hash * 397 ^ StringComparer.Ordinal.GetHashCode(_fingerprint);
+                }
+            }
         }
     }
 }

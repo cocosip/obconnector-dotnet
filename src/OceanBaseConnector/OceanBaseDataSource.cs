@@ -2,6 +2,7 @@
 using System;
 using System.Data.Common;
 using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal;
 using OceanBaseConnector.Internal.Session;
@@ -18,17 +19,19 @@ namespace OceanBaseConnector
         private bool _disposed;
         internal IOceanBaseAddressResolver? AddressResolver { get; }
         internal RemoteCertificateValidationCallback? RemoteCertificateValidationCallback { get; }
+        internal X509Certificate2? ClientCertificate { get; }
         internal EndpointSelector EndpointSelector { get; } = new EndpointSelector();
 
         internal OceanBaseDataSource(OceanBaseConnectionOptions options, string connectionString, ConnectionLog log, IOceanBaseAddressResolver? addressResolver,
-            RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
+            RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null, X509Certificate2? clientCertificate = null)
         {
             _options = options;
             _connectionString = connectionString;
             _log = log;
             AddressResolver = addressResolver;
             RemoteCertificateValidationCallback = remoteCertificateValidationCallback;
-            Pool = new PhysicalSessionPool(addressResolver, remoteCertificateValidationCallback);
+            ClientCertificate = clientCertificate;
+            Pool = new PhysicalSessionPool(addressResolver, remoteCertificateValidationCallback, clientCertificate);
         }
 
         public override string ConnectionString => _options.PersistSecurityInfo ? _connectionString : _options.SanitizedConnectionString;

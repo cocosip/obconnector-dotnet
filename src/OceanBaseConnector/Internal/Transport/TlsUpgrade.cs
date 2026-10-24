@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.Security;
 using System.Security.Authentication;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -112,6 +113,14 @@ namespace OceanBaseConnector.Internal.Transport
 
         internal static X509CertificateCollection? CreateClientCertificates(X509Certificate2? clientCertificate) =>
             clientCertificate == null ? null : new X509CertificateCollection { clientCertificate };
+
+        internal static string ClientCertificateFingerprint(X509Certificate2? clientCertificate)
+        {
+            if (clientCertificate == null) return string.Empty;
+            if (!clientCertificate.HasPrivateKey) throw new ArgumentException("A TLS client certificate must have a private key.", nameof(clientCertificate));
+            using var sha256 = SHA256.Create();
+            return Convert.ToBase64String(sha256.ComputeHash(clientCertificate.RawData));
+        }
 
         private static X509Certificate SelectClientCertificate(
             object sender, string? targetHost, X509CertificateCollection localCertificates,

@@ -11,6 +11,7 @@ using System.Transactions;
 using Microsoft.Extensions.Logging;
 using OceanBaseConnector.Internal;
 using OceanBaseConnector.Internal.Session;
+using OceanBaseConnector.Internal.Transport;
 
 namespace OceanBaseConnector
 {
@@ -58,6 +59,7 @@ namespace OceanBaseConnector
             _log = log;
             _addressResolver = source.AddressResolver;
             _remoteCertificateValidationCallback = source.RemoteCertificateValidationCallback;
+            _clientCertificate = source.ClientCertificate;
             _endpointSelector = source.EndpointSelector;
             _pool = source.Pool;
         }
@@ -131,8 +133,10 @@ namespace OceanBaseConnector
         }
 
         /// <summary>
-        /// Supplies the client certificate for mutual TLS. Set this before opening a
-        /// direct, non-pooled connection; the connection does not dispose the certificate.
+        /// Supplies a caller-owned client certificate with a private key for TLS. Set before
+        /// opening; data-source connections inherit a fixed certificate from their builder.
+        /// Pools own a copy, and ordinary pools isolate certificate instances and fingerprints.
+        /// Do not mutate or dispose the supplied certificate during Open or Build.
         /// </summary>
         public X509Certificate2? ClientCertificate
         {
@@ -142,7 +146,11 @@ namespace OceanBaseConnector
                 lock (_gate)
                 {
                     ThrowIfDisposed();
+#if NET8_0_OR_GREATER
+                    if (_source != null) throw new InvalidOperationException("A data-source connection has fixed configuration.");
+#endif
                     if (_session != null || _opening) throw new InvalidOperationException("Close the connection before changing the client certificate.");
+                    _pool = null;
                     _clientCertificate = value;
                 }
             }
@@ -271,21 +279,26 @@ namespace OceanBaseConnector
                 ThrowIfDisposed();
                 if (_session != null || _opening) throw new InvalidOperationException("The connection is already open or opening; close it first.");
                 _options ??= _builder.Build();
-                if (_options.Pooling && _clientCertificate != null)
-                    throw new NotSupportedException("Client certificates require Pooling=false so certificate identity cannot cross pool boundaries.");
+                var clientCertificate = _clientCertificate;
+#if NET8_0_OR_GREATER
+                if (_source != null) clientCertificate = _source.Pool.TlsClientCertificate;
+#endif
+                if (clientCertificate != null && _options.TlsMode == OceanBaseTlsMode.Disabled)
+                    throw new NotSupportedException("A client certificate cannot be used with TLS Mode=Disabled.");
+                _ = TlsUpgrade.ClientCertificateFingerprint(clientCertificate);
                 if (_remoteCertificateValidationCallback != null && _options.TlsMode != OceanBaseTlsMode.VerifyFull)
                     throw new NotSupportedException("A custom TLS server validation policy requires TLS Mode=VerifyFull.");
                 _hidePassword = true;
-                _opening = true;
-                var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
-                _openingCancellation = cancellation;
                 var registryPool = _options.Pooling;
 #if NET8_0_OR_GREATER
                 registryPool &= _source == null;
 #endif
-                var pool = registryPool ? _pool = PhysicalSessionPoolRegistry.GetForRent(_connectionString, _addressResolver, _remoteCertificateValidationCallback)
+                var pool = registryPool ? _pool = PhysicalSessionPoolRegistry.GetForRent(_connectionString, _addressResolver, _remoteCertificateValidationCallback, clientCertificate)
                     : _options.Pooling ? _pool : null;
-                return new OpenContext(_options, pool, _connectionString, _addressResolver, _endpointSelector, _clientCertificate, _remoteCertificateValidationCallback, ++_openGeneration, cancellation, token, Transaction.Current, registryPool);
+                _opening = true;
+                var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+                _openingCancellation = cancellation;
+                return new OpenContext(_options, pool, _connectionString, _addressResolver, _endpointSelector, clientCertificate, _remoteCertificateValidationCallback, ++_openGeneration, cancellation, token, Transaction.Current, registryPool);
             }
         }
 

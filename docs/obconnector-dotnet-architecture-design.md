@@ -61,10 +61,11 @@ types rather than automatic rounding or conversion to NULL. Result aliases and b
 Builder output and unopened direct connections can contain credentials. Use `ToSanitizedConnectionString(false)` for display; do not log raw connection strings.
 
 For mutual TLS, assign an application-owned `X509Certificate2` to
-`OceanBaseConnection.ClientCertificate` before `Open`/`OpenAsync`. The certificate
-is passed to `SslStream` and is not disposed by the connection. Client certificates
-are deliberately rejected with `Pooling=true`; use a separate direct connection
-for each certificate identity until certificate-aware pool partitioning exists.
+`OceanBaseConnection.ClientCertificate` before `Open`/`OpenAsync`, or configure
+the modern builder's `UseClientCertificate(...)`. Both pooled and direct connections
+are supported. The driver never disposes the application's certificate; pools and
+data sources own internal copies. See [TLS client certificates](#tls-client-certificates)
+for pool identity, source snapshots and rotation.
 
 ### Authentication
 
@@ -190,7 +191,19 @@ Set `OceanBaseConnection.AddressResolver`, or `OceanBaseDataSourceBuilder.UseAdd
 
 Return trusted addresses for the same tenant in `Server` syntax. Failed, invalid or canceled discovery cannot fall back to an idle session or configured address. A pooled Open with a custom resolver applies `Connection Timeout` across resolution, waiting, prewarming, probe and handshake; zero removes this total timeout. Caller cancellation and Close interrupt discovery/waiting; late async resolver results cannot open a connection. Candidates are retried only after TCP connection failure. TLS/authentication failures do not switch endpoints.
 
-Ordinary pooled connections share only when the connection string, resolver reference identity and TLS validation callback reference identity all match; overridden value equality does not merge policies. Changing a closed connection's resolver or validation callback selects its matching pool on the next Open. Each data source retains its own private pool even if its resolver or callback is shared with another source. The resolver remains caller-owned and must be concurrency-safe. See P0-06 in the [completeness baseline](obconnector-dotnet-completeness.md).
+Ordinary pooled connections share only when the connection string, resolver reference identity, TLS validation callback reference identity, and client certificate reference identity plus SHA-256 DER fingerprint all match; overridden value equality does not merge policies. Changing a closed connection's resolver, validation callback or client certificate selects its matching pool on the next Open. Each data source retains its own private pool even if its resolver, callback or certificate is shared with another source. The resolver remains caller-owned and must be concurrency-safe. See P0-06 in the [completeness baseline](obconnector-dotnet-completeness.md).
+
+### TLS client certificates
+
+All five assets expose `OceanBaseConnection.ClientCertificate`; modern builders expose `UseClientCertificate(X509Certificate2?)`. Certificates must have a private-key association and be valid objects at Open/Build. Configuring a certificate with TLS Disabled or without a private key fails before network I/O. The driver does not load key files, install trust roots or change server-side mTLS policy. `Required` still encrypts without validating the server identity; use VerifyFull for mutual identity validation.
+
+Ordinary pooled connections retain the application's reference as identity, store a SHA-256 hash of the DER certificate and create one owned `X509Certificate2` copy per pool. Same-value certificates loaded into different objects use different pools; null has a separate identity. Reusing the same object and configuration reuses its pool. Each ordinary Open validates the original even when an idle physical session exists, so Reset/Dispose cannot borrow that old session. Keep the original valid through each ordinary Open, including non-pooled Opens; do not mutate or dispose it concurrently with Open/Build. Fingerprint mismatch while creating a pool fails closed. Reset/Dispose of the original does not prevent cleanup of the old pool, which uses cached identity.
+
+Build captures a private copy in the data source, including when Pooling=false. Builder changes and disposal of the original after successful Build do not change that source. Source-created connections reject certificate setters; their getter reports the configured original object, while the internal copy supplies TLS handshakes. The getter does not expose the internal copy and may report an original that the caller has already disposed. The pool/source disposes its copy, never the caller's object. Source disposal prevents new Opens/publication; already authenticated borrowed sessions can finish and are discarded when closed.
+
+Warmup and every new physical session use the pool's copy. Reusing an authenticated connection performs no handshake or certificate revalidation; changing certificate policy cannot revoke already borrowed sessions. For predictable rotation, build a new source, dispose the old source and close its borrowed connections. Ordinary pools currently have no public ClearPool/ClearAllPools API and reap lazily; switching certificate instances isolates new connections but does not promptly retire idle sessions of the old identity. Prefer source ownership for rotation until P0-01 adds explicit retirement.
+
+Local SslStream tests verify certificate presentation and pool/source ownership; they do not establish real OceanBase/OBProxy mTLS, Linux/private-key-provider behavior, revocation or corporate rotation acceptance. Successful in-place Import into an existing certificate object is unsupported by the current runtime and is not claimed tested.
 
 ### TLS server validation
 
@@ -198,7 +211,7 @@ All five assets expose `RemoteCertificateValidationCallback? OceanBaseConnection
 
 Null preserves SslStream's platform trust, hostname and optional revocation checks. A custom callback receives the platform certificate, chain and `SslPolicyErrors`, and replaces the final validation decision. Applications can implement private-CA chain validation or pinning; they must enforce their intended hostname, validity, trust and revocation rules, and must not retain or dispose the platform-owned certificate/chain. The driver does not install trust roots or treat all chain errors as acceptable. `TLS Server Name` continues to supply the expected identity/SNI. False or a thrown exception aborts Open before database authentication; there is no plaintext fallback or retry against another endpoint after a TLS failure.
 
-Callbacks run during TLS authentication on the handshake's execution thread. They must return promptly, support concurrent physical Opens and avoid reentering the connection; cancellation can close the transport but cannot interrupt application callback code. The callback may also run with `ClientCertificate` on a direct non-pooled connection. Delegate/certificate objects are caller-managed configuration and are never encoded into connection strings or diagnostic labels.
+Callbacks run during TLS authentication on the handshake's execution thread. They must return promptly, support concurrent physical Opens and avoid reentering the connection; cancellation can close the transport but cannot interrupt application callback code. The callback may also run with `ClientCertificate` on pooled or non-pooled connections. Delegate/certificate objects are never encoded into connection strings or diagnostic labels; client-certificate copy ownership is defined above.
 
 Pool keys compare callback objects by reference, even when two delegates have equal targets/methods. Reuse a stable callback instance or a long-lived data source for one policy; creating a delegate per connection creates separate ordinary pools. Prewarm and new-session Opens receive that pool's immutable callback. A reused authenticated session does not perform another TLS handshake or revalidate its certificate; mutating state captured by the same delegate does not invalidate existing sessions. Use a new callback instance for new ordinary connections, or build a new data source and close/dispose the old source and its borrowed connections when retiring a policy. Existing ordinary pools under the old callback remain separate; changing a callback does not revoke other users of that old identity.
 
