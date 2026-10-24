@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
+using System.Net.Security;
 using System.Text;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -18,6 +19,7 @@ namespace OceanBaseConnector.Internal.Session
         private readonly object _gate = new object();
         private readonly OceanBaseConnectionOptions _options;
         private readonly X509Certificate2? _clientCertificate;
+        private readonly RemoteCertificateValidationCallback? _remoteCertificateValidationCallback;
         private readonly IOceanBaseAddressResolver? _addressResolver;
         private readonly IReadOnlyList<OceanBaseEndpoint>? _resolvedEndpoints;
         private readonly EndpointSelector _endpointSelector;
@@ -48,11 +50,12 @@ namespace OceanBaseConnector.Internal.Session
             (Info.Capabilities.Effective & CapabilityFlags.ClientSupportLobLocator) != 0;
 
         public PhysicalSession(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? addressResolver = null, EndpointSelector? endpointSelector = null, X509Certificate2? clientCertificate = null,
-            IReadOnlyList<OceanBaseEndpoint>? resolvedEndpoints = null)
+            IReadOnlyList<OceanBaseEndpoint>? resolvedEndpoints = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
         {
             _options = options; _clientCertificate = clientCertificate; _endpoint = options.Endpoint; _database = _initialDatabase = options.Database;
             _lastReturnedUtc = _createdUtc;
             _addressResolver = addressResolver; _endpointSelector = endpointSelector ?? new EndpointSelector(); _resolvedEndpoints = resolvedEndpoints;
+            _remoteCertificateValidationCallback = remoteCertificateValidationCallback;
         }
 
         public SessionState State { get { lock (_gate) return _state; } }
@@ -121,7 +124,7 @@ namespace OceanBaseConnector.Internal.Session
                     catch (IOException error) when (CanTryNext(error, i, endpoints.Count, budget)) { continue; }
                     Attach(transport);
                     using var registration = budget.Token.Register(CancelOpeningTransport);
-                    FinishOpen(HandshakeFlow.Authenticate(transport, _channel!, options, budget.Token, _clientCertificate), budget.Token);
+                    FinishOpen(HandshakeFlow.Authenticate(transport, _channel!, options, budget.Token, _clientCertificate, _remoteCertificateValidationCallback), budget.Token);
                     return;
                 }
             }
@@ -156,7 +159,7 @@ namespace OceanBaseConnector.Internal.Session
                     Attach(transport);
                     // Closing the socket also interrupts netstandard2.0 TLS and reads.
                     using var registration = budget.Token.Register(CancelOpeningTransport);
-                    var info = await HandshakeFlow.AuthenticateAsync(transport, _channel!, options, budget.Token, _clientCertificate)
+                    var info = await HandshakeFlow.AuthenticateAsync(transport, _channel!, options, budget.Token, _clientCertificate, _remoteCertificateValidationCallback)
                         .ConfigureAwait(false);
                     FinishOpen(info, budget.Token);
                     return;

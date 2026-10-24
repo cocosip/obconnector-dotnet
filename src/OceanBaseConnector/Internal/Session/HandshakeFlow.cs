@@ -1,4 +1,5 @@
 using System;
+using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Cryptography.X509Certificates;
@@ -27,13 +28,13 @@ namespace OceanBaseConnector.Internal.Session
             PacketChannel channel,
             OceanBaseConnectionOptions options,
             CancellationToken cancellationToken = default,
-            X509Certificate2? clientCertificate = null)
+            X509Certificate2? clientCertificate = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var handshake = ParseInitialHandshake(channel.ReadPacket(), options);
             var clientCapabilities = ClientCapabilities.Build(handshake.Capabilities, options);
 
-            TlsHandshakeFlow.Apply(transport, channel, handshake.Capabilities, clientCapabilities, options, clientCertificate);
+            TlsHandshakeFlow.Apply(transport, channel, handshake.Capabilities, clientCapabilities, options, clientCertificate, remoteCertificateValidationCallback);
 
             cancellationToken.ThrowIfCancellationRequested();
             using var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
@@ -48,12 +49,12 @@ namespace OceanBaseConnector.Internal.Session
         public static async Task<ConnectResult> AuthenticateAsync(
             TcpTransport transport, PacketChannel channel, OceanBaseConnectionOptions options,
             CancellationToken cancellationToken,
-            X509Certificate2? clientCertificate = null)
+            X509Certificate2? clientCertificate = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
         {
             var handshake = ParseInitialHandshake(
                 await channel.ReadPacketAsync(cancellationToken).ConfigureAwait(false), options);
             var capabilities = ClientCapabilities.Build(handshake.Capabilities, options);
-            await TlsHandshakeFlow.ApplyAsync(transport, channel, handshake.Capabilities, capabilities, options, cancellationToken, clientCertificate)
+            await TlsHandshakeFlow.ApplyAsync(transport, channel, handshake.Capabilities, capabilities, options, cancellationToken, clientCertificate, remoteCertificateValidationCallback)
                 .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             using var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);

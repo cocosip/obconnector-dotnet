@@ -1,4 +1,5 @@
 using System;
+using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Cryptography.X509Certificates;
@@ -25,7 +26,7 @@ namespace OceanBaseConnector.Internal.Transport
             CapabilityFlags serverCapabilities,
             CapabilityFlags clientCapabilities,
             OceanBaseConnectionOptions options,
-            X509Certificate2? clientCertificate = null)
+            X509Certificate2? clientCertificate = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
         {
             if (options.TlsMode == OceanBaseTlsMode.Disabled)
             {
@@ -39,7 +40,7 @@ namespace OceanBaseConnector.Internal.Transport
             var targetHost = TlsUpgrade.ResolveTargetHost(options.Server, options.TlsServerName);
             var certificates = TlsUpgrade.CreateClientCertificates(clientCertificate);
             var sslStream = TlsUpgrade.Upgrade(transport.Stream, targetHost, options.TlsMode,
-                certificates, options.CheckCertificateRevocation);
+                certificates, options.CheckCertificateRevocation, remoteCertificateValidationCallback);
             channel.ReplaceUnderlyingStream(sslStream);
         }
 
@@ -50,7 +51,7 @@ namespace OceanBaseConnector.Internal.Transport
             CapabilityFlags clientCapabilities,
             OceanBaseConnectionOptions options,
             CancellationToken cancellationToken,
-            X509Certificate2? clientCertificate = null)
+            X509Certificate2? clientCertificate = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
         {
             if (options.TlsMode == OceanBaseTlsMode.Disabled)
             {
@@ -66,7 +67,7 @@ namespace OceanBaseConnector.Internal.Transport
             var targetHost = TlsUpgrade.ResolveTargetHost(options.Server, options.TlsServerName);
             var certificates = TlsUpgrade.CreateClientCertificates(clientCertificate);
             var sslStream = await TlsUpgrade.UpgradeAsync(transport.Stream, targetHost, options.TlsMode,
-                certificates, options.CheckCertificateRevocation, cancellationToken)
+                certificates, options.CheckCertificateRevocation, cancellationToken, remoteCertificateValidationCallback)
                 .ConfigureAwait(false);
             channel.ReplaceUnderlyingStream(sslStream);
         }

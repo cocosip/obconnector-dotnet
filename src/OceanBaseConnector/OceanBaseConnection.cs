@@ -3,6 +3,7 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,6 +32,7 @@ namespace OceanBaseConnector
         private PhysicalSessionPool? _pool;
         private Func<string, Stream?>? _localInfileStreamFactory;
         private X509Certificate2? _clientCertificate;
+        private RemoteCertificateValidationCallback? _remoteCertificateValidationCallback;
         private Transaction? _ambientTransaction;
         private AmbientEnlistment? _ambientEnlistment;
 #if NET8_0_OR_GREATER
@@ -55,6 +57,7 @@ namespace OceanBaseConnector
             _hidePassword = true;
             _log = log;
             _addressResolver = source.AddressResolver;
+            _remoteCertificateValidationCallback = source.RemoteCertificateValidationCallback;
             _endpointSelector = source.EndpointSelector;
             _pool = source.Pool;
         }
@@ -141,6 +144,30 @@ namespace OceanBaseConnector
                     ThrowIfDisposed();
                     if (_session != null || _opening) throw new InvalidOperationException("Close the connection before changing the client certificate.");
                     _clientCertificate = value;
+                }
+            }
+        }
+
+        /// <summary>Optional TLS server validation policy, used only with VerifyFull.
+        /// Null uses platform trust, name and revocation validation. A callback replaces that
+        /// decision and must validate the supplied certificate, chain and policy errors.
+        /// Set before opening; data-source connections inherit a fixed policy. The callback
+        /// must be concurrency-safe, return promptly and not reenter the connection.
+        /// Pooled sessions are validated at physical TLS establishment, not at each borrow.</summary>
+        public RemoteCertificateValidationCallback? RemoteCertificateValidationCallback
+        {
+            get { lock (_gate) return _remoteCertificateValidationCallback; }
+            set
+            {
+                lock (_gate)
+                {
+                    ThrowIfDisposed();
+#if NET8_0_OR_GREATER
+                    if (_source != null) throw new InvalidOperationException("A data-source connection has fixed configuration.");
+#endif
+                    if (_session != null || _opening) throw new InvalidOperationException("Close the connection before changing its TLS validation policy.");
+                    _pool = null;
+                    _remoteCertificateValidationCallback = value;
                 }
             }
         }
@@ -246,6 +273,8 @@ namespace OceanBaseConnector
                 _options ??= _builder.Build();
                 if (_options.Pooling && _clientCertificate != null)
                     throw new NotSupportedException("Client certificates require Pooling=false so certificate identity cannot cross pool boundaries.");
+                if (_remoteCertificateValidationCallback != null && _options.TlsMode != OceanBaseTlsMode.VerifyFull)
+                    throw new NotSupportedException("A custom TLS server validation policy requires TLS Mode=VerifyFull.");
                 _hidePassword = true;
                 _opening = true;
                 var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -254,9 +283,9 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
                 registryPool &= _source == null;
 #endif
-                var pool = registryPool ? _pool = PhysicalSessionPoolRegistry.GetForRent(_connectionString, _addressResolver)
+                var pool = registryPool ? _pool = PhysicalSessionPoolRegistry.GetForRent(_connectionString, _addressResolver, _remoteCertificateValidationCallback)
                     : _options.Pooling ? _pool : null;
-                return new OpenContext(_options, pool, _connectionString, _addressResolver, _endpointSelector, _clientCertificate, ++_openGeneration, cancellation, token, Transaction.Current, registryPool);
+                return new OpenContext(_options, pool, _connectionString, _addressResolver, _endpointSelector, _clientCertificate, _remoteCertificateValidationCallback, ++_openGeneration, cancellation, token, Transaction.Current, registryPool);
             }
         }
 
@@ -266,7 +295,7 @@ namespace OceanBaseConnector
             try
             {
                 session = context.Pool == null
-                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector, context.ClientCertificate)
+                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector, context.ClientCertificate, remoteCertificateValidationCallback: context.RemoteCertificateValidationCallback)
                     : context.Pool.Rent(context.Options, context.Resolver, context.Selector, out _, context.Token, context.PoolRentReserved);
                 lock (_gate)
                 {
@@ -295,7 +324,7 @@ namespace OceanBaseConnector
             try
             {
                 session = context.Pool == null
-                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector, context.ClientCertificate)
+                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector, context.ClientCertificate, remoteCertificateValidationCallback: context.RemoteCertificateValidationCallback)
                     : await context.Pool.RentAsync(context.Options, context.Resolver, context.Selector, token, context.PoolRentReserved).ConfigureAwait(false);
                 lock (_gate)
                 {
@@ -321,11 +350,12 @@ namespace OceanBaseConnector
         private sealed class OpenContext
         {
             internal OpenContext(OceanBaseConnectionOptions options, PhysicalSessionPool? pool, string poolKey,
-                IOceanBaseAddressResolver? resolver, EndpointSelector selector, X509Certificate2? clientCertificate, long generation,
+                IOceanBaseAddressResolver? resolver, EndpointSelector selector, X509Certificate2? clientCertificate, RemoteCertificateValidationCallback? remoteCertificateValidationCallback, long generation,
                 CancellationTokenSource cancellation, CancellationToken callerToken, Transaction? ambientTransaction, bool poolRentReserved)
             {
                 Options = options; Pool = pool; PoolKey = poolKey; Resolver = resolver; Selector = selector; ClientCertificate = clientCertificate; Generation = generation; Cancellation = cancellation; CallerToken = callerToken; AmbientTransaction = ambientTransaction;
                 PoolRentReserved = poolRentReserved;
+                RemoteCertificateValidationCallback = remoteCertificateValidationCallback;
                 if (pool != null && resolver != null)
                 {
                     RouteBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
@@ -339,6 +369,7 @@ namespace OceanBaseConnector
             internal IOceanBaseAddressResolver? Resolver { get; }
             internal EndpointSelector Selector { get; }
             internal X509Certificate2? ClientCertificate { get; }
+            internal RemoteCertificateValidationCallback? RemoteCertificateValidationCallback { get; }
             internal long Generation { get; }
             internal CancellationTokenSource Cancellation { get; }
             internal CancellationToken CallerToken { get; }

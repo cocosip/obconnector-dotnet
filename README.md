@@ -38,6 +38,8 @@ var result = await command.ExecuteScalarAsync();
 
 `ExpectedMode` validates the detected mode; it does not change the server mode. TLS defaults to `VerifyFull`, validating certificate trust and hostnames. Set `Check Certificate Revocation=true` to enable platform revocation checks. For mutual TLS, assign `OceanBaseConnection.ClientCertificate` before opening a direct non-pooled connection; `Pooling=true` rejects client certificates so certificate identity cannot cross pool boundaries.
 
+For enterprise trust or certificate pinning, set `OceanBaseConnection.RemoteCertificateValidationCallback` before Open, or use `OceanBaseDataSourceBuilder.UseRemoteCertificateValidationCallback(...)`. This requires `TLS Mode=VerifyFull`. A callback replaces the platform validation decision and must handle certificate, chain, hostname and revocation errors; null retains platform validation. Ordinary pools isolate callback instances by reference. Validation runs at physical TLS establishment, not at each pooled borrow; rebuild/dispose the data source when retiring a trust policy. See the [TLS API contract](docs/obconnector-dotnet-architecture-design.md#tls-server-validation).
+
 Every Open confirms the actual OceanBase version and tenant mode. Server features are selected
 from the actual version and negotiated capabilities, without a JDBC 5/8 compatibility profile.
 In MySQL mode, signed `TINYINT(1)` returns `bool` by default (nonzero is true);

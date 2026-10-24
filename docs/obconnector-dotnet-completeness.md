@@ -6,7 +6,7 @@
 **参考实现：** 本仓库源码、测试和兼容性记录；本地 `D:\java-code\obconnector-j` 的 Connector/J 实现
 **文档性质：** 能力审计、目标契约和验收基线；不代表尚未完成的功能已经实现
 
-上述提交是初次审计基线。本文同时记录其后 P0-06 的本地修复，实施与测试结果见 [进度台账](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)。23 个缺口 ID 保持不变；本地修复不关闭尚未取得的真实拓扑验收。
+上述提交是初次审计基线。本文同时记录其后 P0-06 的本地修复及 P1-04 的自定义服务器证书验证，实施与测试结果见 [池路由记录](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [TLS 验证记录](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)。23 个缺口 ID 保持不变；本地实现不关闭尚未取得的真实服务器验收。
 
 面向项目评审的单页结论和交付门槛见 [驱动完整性走查报告](obconnector-dotnet-driver-audit.md)；本文件保留逐模块的验收要求和源码索引。
 
@@ -61,7 +61,7 @@
 | ADO.NET 基础对象 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有；`SingleRow`/`SingleResult` 和按查询前缀过滤的 `SchemaOnly` 已支持，但 SchemaOnly 仍执行查询；`KeyInfo`、`DbDataAdapter` 和 `DbCommandBuilder` 仍缺失 |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 只在现代 TFM 可用 |
 | 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 有代码；真实插件和 KDC 矩阵未闭合 |
-| TLS | 部分实现 | `VerifyFull`、`Required`、`Disabled` 有代码；直连非池化连接可注入 `ClientCertificate`，`Check Certificate Revocation` 可配置；企业信任根、自定义验证和真实 mTLS 矩阵仍缺失 |
+| TLS | 部分实现 | 默认平台 `VerifyFull`；可选 `RemoteCertificateValidationCallback` 已接入并按引用隔离普通池；直连非池化 `ClientCertificate` 和撤销检查可配置。真实企业 CA/mTLS、轮换和跨平台撤销矩阵未闭合 |
 | 基础 SQL | 已实现 | 文本执行、server prepare、多个结果、取消、超时和流式读取已有路径 |
 | 多语句和压缩 | 部分实现 | `Allow Multi Statements=true` 可协商并执行文本多语句；MySQL 压缩和 OB20 压缩 frame 仍未开放 |
 | LOCAL INFILE | 部分实现 | `Allow Local Infile=true` 才协商 `CLIENT_LOCAL_FILES`，应用流工厂负责提供输入；真实服务器、代理和长文件矩阵未验证 |
@@ -112,7 +112,7 @@
 | P1-01 | P1 | 多语句 | 部分实现 | 默认关闭；显式开启后支持文本多结果，并明确拒绝参数、Prepare、cursor 和 Oracle 输出组合 |
 | P1-02 | P1 | 压缩和 OB20 | 部分实现 | MySQL 压缩、OB20 压缩 frame 和 reroute |
 | P1-03 | P1 | LOCAL INFILE | 部分实现 | 完成真实服务器/代理互操作、取消和大文件矩阵；保持显式授权和路径安全 |
-| P1-04 | P1 | TLS/mTLS | 部分实现 | 企业信任根/自定义验证、跨平台撤销语义和真实 mTLS/证书矩阵；客户端证书的直连非池化路径已实现 |
+| P1-04 | P1 | TLS/mTLS | 部分实现 | 自定义服务器证书回调及池身份隔离已有本地实现；补真实企业 CA/mTLS、轮换、跨平台撤销矩阵和池化客户端证书策略 |
 | P1-05 | P1 | ADO.NET 命令行为 | 部分实现 | `SchemaOnly`、`SingleRow`、`SingleResult`、`KeyInfo` 等常用行为 |
 | P1-06 | P1 | Oracle 输出和游标 | 部分实现 | 完整参数方向、cursor 列和 PrepareExecute 形状 |
 | P1-07 | P1 | 复杂类型 | 部分实现 | 已有嵌套 object/collection；补齐 LOB/cursor/national 成员和外部 DDL 缓存失效 |
@@ -219,6 +219,8 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 ### 5.5 TLS、认证和凭据
 
 当前 TLS 使用 `SslStream`，默认 `VerifyFull`。`OceanBaseConnection.ClientCertificate` 可在打开前注入客户端证书；为了避免证书身份跨池边界，设置客户端证书时 `Pooling=true` 会在打开前明确拒绝。`Check Certificate Revocation=true` 会把平台撤销检查传给 TLS 握手，默认关闭。`Required` 仍然只提供加密，不验证服务端身份；`VerifyFull` 使用平台信任库和主机名校验。GSSAPI 仅有现代 TFM 代码，真实 KDC 尚未验证。
+
+**自定义验证的当前契约：** 五个资产均可通过 `OceanBaseConnection.RemoteCertificateValidationCallback` 设置 BCL 回调；现代数据源通过 builder 的 `UseRemoteCertificateValidationCallback` 固定策略。null 保留平台校验，非 null 替代最终校验决策，可由应用实现私有 CA 验证或证书固定，必须处理证书链、主机名、有效期及撤销错误。回调只允许 `VerifyFull`，其他模式在联网前拒绝。普通池按回调引用身份隔离，预热和新物理会话沿用该策略，拒绝/抛异常均在数据库认证前终止且不换端点；复用会话不重复 TLS 验证。捕获状态变化不自动失效既有会话，策略退休需重建数据源并关闭/释放旧源及其借出连接。详见 [TLS API 契约](obconnector-dotnet-architecture-design.md#tls-server-validation)。这仍不构成真实企业 CA 或 mTLS 验收。
 
 目标要求：
 
@@ -377,7 +379,7 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 | --- | --- | --- |
 | M01 Driver/DataSource/JDBC | `OceanBaseProviderFactory`、`OceanBaseConnection`、`OceanBaseDataSource` | 基础入口存在；`DbDataAdapter`、`DbCommandBuilder` 等生态仍缺失 |
 | M02 URL/options/address/discovery | `OceanBaseConnectionStringBuilder`、`EndpointSelector`、`IOceanBaseAddressResolver` | 多地址和注入 resolver 存在；OCP/TNS、缓存和健康发现缺失 |
-| M03 transport/TLS/auth/credential SPI | `HandshakeFlow`、`TlsHandshakeFlow`、认证实现 | 多种认证和 TLS 路径存在；直连非池化客户端证书和可选撤销检查已接入；企业信任、自定义验证和真实 KDC/mTLS 未闭合 |
+| M03 transport/TLS/auth/credential SPI | `HandshakeFlow`、`TlsHandshakeFlow`、认证实现 | 多种认证、直连非池化客户端证书、撤销检查和自定义服务器验证回调已接入；真实企业 CA/KDC/mTLS、凭据轮换和池化客户端证书未闭合 |
 | M04 handshake/mode/capability | `HandshakeFlow`、`NegotiatedCapabilities` | 模式和部分能力协商存在；多语句和 LOCAL INFILE 已有 opt-in 路径，压缩等 capability 未开放 |
 | M05 session/transaction/cancel | `PhysicalSession`、`OceanBaseTransaction`、`AmbientEnlistment` | 本地事务、ambient enlistment、取消和 unknown outcome 有路径；活动连接迁移缺失 |
 | M06 query/prepare/cursor | `OceanBaseCommand`、`PreparedStatement`、`QueryResult` | 基础文本/server prepare 和 cursor 有路径；statement cache、完整 CommandBehavior 未闭合 |
@@ -416,7 +418,7 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 1. 保持池指标可观测；补齐并验证所有会话资源的 reset/丢弃规则。
 2. 补齐 ambient transaction 的超时、提交/回滚响应丢失、连接关闭和真实故障测试；当前本地 enlistment 已实现，分布式提升仍明确不支持。
 3. 完成多语句和 LOCAL INFILE 的真实互操作验收，再实现 MySQL 压缩、OB20 压缩和 proxy reroute；未实现项必须保持显式拒绝。
-4. 完成企业信任/自定义验证、认证插件、mTLS 池策略和 HA/发现的可配置契约及真实矩阵；撤销检查已有入口，仍需跨平台验收。
+4. 验收企业信任/自定义验证回调，补认证插件、mTLS 池策略和 HA/发现的真实矩阵；撤销检查已有入口，仍需跨平台验收。
 5. 补齐 ADO.NET 命令行为、Oracle 输出/游标、复杂类型、字符集、Schema 和 statement cache 的公开契约。
 6. 为每个声明支持的 TFM、OceanBase 版本、直连/OBProxy、MySQL/Oracle 模式和 TLS profile 生成可复现报告。
 
@@ -463,7 +465,7 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 | P1-01 | opt-in 多语句带参数、Prepare、cursor 或 Oracle 输出时拒绝；允许文本多语句后错误/多结果边界尚缺实库报告。 | `OceanBaseCommand.cs`；`Internal/Sql/SqlStatementBoundary.cs`；`TextCommandTests.cs`、`OracleStatementBoundaryTests.cs` | 成功/中间失败/取消后的结果消费与会话可复用性；不支持组合发送前拒绝；两个模式及 OBProxy 真实验证。Oracle 程序单元内部分号不是多语句缺口。 |
 | P1-02 | 服务端/代理要求压缩 frame 或 reroute，当前 capability 不开放或包被拒绝。 | `Internal/Session/HandshakeFlow.cs`；`Internal/Protocol/Ob20Packet.cs`、`Ob20Stream.cs`；`Protocol/Ob20PacketTests.cs`、`Protocol/Ob20StreamTests.cs` | 协商、混合压缩/未压缩、分片、序列、校验、解压大小上限和畸形包；reroute 校验目标且不重放 unknown-outcome 请求；真实代理报告。 |
 | P1-03 | LOCAL INFILE 本地路径已有，真实服务端请求、代理策略、64 MiB 上限及上传中断仍未验证。 | `Internal/Session/CommandExchange.cs`；`LocalInfileTests.cs` | 实库成功、关闭授权、工厂拒绝、边界/超限、服务器失败、上传取消；失败会话不回池且从不按服务器名称打开本地文件。 |
-| P1-04 | 私有 CA 未安装系统信任库时，无驱动自定义信任入口；客户端证书 + Pooling 被拒绝。安装到系统信任库的企业 CA 可沿用平台验证。 | `Internal/Transport/TlsUpgrade.cs`、`TlsHandshakeFlow.cs`；`OceanBaseConnection.cs`；`Transport/TlsComponentsTests.cs`、`ProviderConnectionTests.cs` | 自定义验证/信任 API、主机名和链错误负面用例、池策略隔离；真实 TLS/mTLS、证书过期/轮换、撤销和 Windows/Linux 报告。不得以 `Required` 绕过身份验证完成验收。 |
+| P1-04 | 自定义验证回调已提供并隔离池策略；真实企业信任、撤销/轮换未验收，客户端证书 + Pooling 仍拒绝。回调只在物理 TLS 建立时执行，不能用更改捕获状态撤销旧会话。 | `Internal/Transport/TlsUpgrade.cs`、`TlsHandshakeFlow.cs`；`OceanBaseConnection.cs`、`OceanBaseDataSourceBuilder.cs`；`TlsServerValidationTests.cs`、ConsumerTests 的 `TlsValidationConsumerTests.cs` | 保留接受/拒绝/抛异常、主机名和链错误、预热/复用、回调引用身份、取消及重入关闭回归；补真实 TLS/mTLS、过期/轮换、撤销和 Windows/Linux 报告及池化客户端证书策略。不得以 `Required` 绕过身份验证完成验收。 |
 | P1-05 | `KeyInfo` 拒绝；Batch 行为比 Command 更少；`SchemaOnly` 仍执行 SQL 并消费行，不能承诺无副作用/低成本元数据查询。 | `OceanBaseCommand.cs`；`OceanBaseDataReader.cs`；`OceanBaseBatch.cs`；`BehaviorOptionsTests.cs`、`ReaderSchemaTests.cs`、`BatchSurfaceTests.cs` | 命令/Batch/REF CURSOR 行为表、主键/唯一键元数据、SchemaOnly 副作用/锁/大结果用例；按实际实现公开限制，不把 SQL 前缀当成只读证明。 |
 | P1-06 | REF CURSOR 的 Input/InputOutput、普通 cursor-valued column 和 PrepareExecute 独立 Prepare/FetchSize 组合被拒绝。 | `Internal/Sql/OracleCommandPlan.cs`；`OceanBaseCommand.cs`；`RefCursorTests.cs`、`OraclePrepareExecuteResponseTests.cs` | 参数方向 × NULL × 输出行数 × 多结果 × 取消/关闭矩阵；输入/输出游标明确所有权；服务端不支持的形状单列，不伪造通过。 |
 | P1-07 | 嵌套 object/collection 已可编解码，但其中 LOB/cursor/national 成员或外部 DDL 改变描述时支持不足。 | `OceanBaseConnection.ComplexTypes.cs`；`Internal/Values/ComplexType.cs`、`ComplexValueCodec.cs`；`ComplexTypeDictionaryTests.cs`、`ComplexResultTests.cs` | 保留既有嵌套回归，扩展成员类型与 NULL；DDL 后旧描述失效、跨 session/transaction 不误用；深度/成员/字节限制和循环定义继续拒绝。 |

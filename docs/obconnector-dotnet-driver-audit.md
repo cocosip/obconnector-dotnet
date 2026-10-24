@@ -6,7 +6,7 @@
 **目标：** 为 OceanBase MySQL 兼容模式和 Oracle 兼容模式定义一份可执行的完整驱动缺口清单。  
 **结论级别：** 这是源码、测试、打包记录和 Connector/J 静态结构对照形成的审计报告，不把本地 fixture 当作真实服务器兼容性证明。
 
-源码提交是初次走查基线；其后 P0-06 的本地修复和验证单独记在[进度台账](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)。本报告保留原缺口 ID 和未完成的真实验收要求。
+源码提交是初次走查基线；其后 P0-06 的本地修复和 P1-04 的自定义服务器证书验证分别记在[池路由记录](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [TLS 验证记录](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)。本报告保留原缺口 ID 和未完成的真实验收要求。
 
 ## 1. 结论先行
 
@@ -46,7 +46,7 @@
 | ADO.NET 核心 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、provider factory、`CloseConnection`、`SequentialAccess`、`SingleRow`、`SingleResult`、按查询前缀过滤的 `SchemaOnly` | `KeyInfo`、完整 schema metadata、`DbDataAdapter`、`DbCommandBuilder`、SchemaOnly 执行副作用边界 |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 代码路径 | 现代 TFM 与旧 TFM 的完整行为矩阵、标准 `DbBatch` 生态验收 |
 | 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 路径 | 真实插件成功/拒绝矩阵、KDC、凭据注入和轮换 |
-| TLS | 部分实现 | `VerifyFull`、`Required`、`Disabled`、平台信任库和主机名校验；直连非池化 `ClientCertificate`；可选撤销检查 | 独立于系统信任库的企业 CA/自定义验证、跨平台撤销语义、池化证书身份策略和真实证书/mTLS 矩阵 |
+| TLS | 部分实现 | 默认平台信任库和主机名校验；可选服务器验证回调及按引用隔离的普通池；直连非池化 `ClientCertificate`；可选撤销检查 | 真实企业 CA/轮换/撤销和跨平台语义、池化客户端证书策略及真实 mTLS 矩阵 |
 | 基础 SQL | 已实现 | 文本执行、server prepare、参数绑定、多结果、流式读取、取消、超时 | 真实版本/代理/大数据量边界仍需验收 |
 | 多语句 | 部分实现 | 显式 `Allow Multi Statements=true` 的文本多结果路径、默认关闭；Oracle 匿名块和程序 DDL 的内部分号按单个程序单元处理 | 真正的多语句参数/Prepare/cursor/Oracle 输出组合、压缩和真实服务器错误矩阵；程序单元非法尾部由服务端解析 |
 | 压缩与 OB20 | 部分实现 | 基础 OB20、校验和、extra info、trace 结构 | MySQL 压缩、OB20 压缩 frame、proxy reroute |
@@ -83,7 +83,7 @@
 | P1-01 | 多语句 | 保留显式启用的无参数文本多结果；明确参数/Prepare/cursor/Oracle 输出组合的拒绝，并验证真实服务器错误边界 |
 | P1-02 | 压缩/OB20 | MySQL 压缩、OB20 压缩 frame、reroute 的协商、编解码和拒绝路径 |
 | P1-03 | LOCAL INFILE | 只允许应用提供的流，禁止驱动读取任意本地路径 |
-| P1-04 | TLS/mTLS | 企业信任根/自定义验证、跨平台撤销语义和真实证书矩阵；客户端证书直连非池化路径已实现 |
+| P1-04 | TLS/mTLS | 自定义服务器验证回调和池策略隔离已有本地实现；真实企业 CA/轮换/撤销/跨平台矩阵、池化客户端证书和真实 mTLS 仍待完成 |
 | P1-05 | ADO.NET 行为 | `KeyInfo`、schema/parameter metadata、Batch/游标行为表；修正或公开 `SchemaOnly` 仍执行查询的限制，以及明确的 adapter 策略 |
 | P1-06 | Oracle 输出/游标 | 完整参数方向、cursor-valued column、PrepareExecute 结果形状 |
 | P1-07 | 复杂类型 | 保留已有嵌套 object/collection，补齐 LOB/cursor/national 成员和外部 DDL 缓存失效 |
@@ -129,7 +129,7 @@ Connector/J 的池实现包含池注册、最小/最大容量、生命周期调�
 5. 真实 OceanBase 与 OBProxy 上的 reset、预热、超时和并发验证。
 6. 普通全局池的 resolver 路由身份隔离，以及路由更新后已有物理会话的失效规则（P0-06）。
 
-普通池已按区分大小写的原始连接字符串和 resolver 引用身份共同索引，不同 resolver 即使覆盖相同的值相等性也不会混池。等价但顺序、别名不同的字符串仍可能产生多个池，是后续容量/复用效率问题。数据源保留私有池。每次逻辑 Open 只解析一次地址快照，移除不再匹配的闲置端点后再预热/借用；发现失败不回退，已借出连接不迁移。并发发现使用各自快照，不承诺全局拓扑版本排序；真实拓扑仍须验收。
+普通池已按区分大小写的原始连接字符串、resolver 引用身份和 TLS 验证回调引用身份共同索引，覆盖相同的值相等性也不会混池。等价但顺序、别名不同的字符串仍可能产生多个池，是后续容量/复用效率问题。数据源保留私有池。每次逻辑 Open 只解析一次地址快照，移除不再匹配的闲置端点后再预热/借用；发现失败不回退，已借出连接不迁移。并发发现使用各自快照，不承诺全局拓扑版本排序；真实拓扑仍须验收。
 
 本轮池走查对上述生命周期风险做了代码复核，当前状态如下：
 

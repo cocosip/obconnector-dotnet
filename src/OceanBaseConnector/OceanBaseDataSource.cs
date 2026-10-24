@@ -1,6 +1,7 @@
 #if NET8_0_OR_GREATER
 using System;
 using System.Data.Common;
+using System.Net.Security;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal;
 using OceanBaseConnector.Internal.Session;
@@ -13,17 +14,21 @@ namespace OceanBaseConnector
         private readonly OceanBaseConnectionOptions _options;
         private readonly string _connectionString;
         private readonly ConnectionLog _log;
-        internal PhysicalSessionPool Pool { get; } = new PhysicalSessionPool();
+        internal PhysicalSessionPool Pool { get; }
         private bool _disposed;
         internal IOceanBaseAddressResolver? AddressResolver { get; }
+        internal RemoteCertificateValidationCallback? RemoteCertificateValidationCallback { get; }
         internal EndpointSelector EndpointSelector { get; } = new EndpointSelector();
 
-        internal OceanBaseDataSource(OceanBaseConnectionOptions options, string connectionString, ConnectionLog log, IOceanBaseAddressResolver? addressResolver)
+        internal OceanBaseDataSource(OceanBaseConnectionOptions options, string connectionString, ConnectionLog log, IOceanBaseAddressResolver? addressResolver,
+            RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
         {
             _options = options;
             _connectionString = connectionString;
             _log = log;
             AddressResolver = addressResolver;
+            RemoteCertificateValidationCallback = remoteCertificateValidationCallback;
+            Pool = new PhysicalSessionPool(addressResolver, remoteCertificateValidationCallback);
         }
 
         public override string ConnectionString => _options.PersistSecurityInfo ? _connectionString : _options.SanitizedConnectionString;

@@ -14,6 +14,7 @@ namespace OceanBaseConnector.Internal.Transport
     /// chain against the OS trust store plus host-name matching against the
     /// resolved target name. Required encrypts without identity verification
     /// and must be chosen explicitly. Disabled never reaches this class.
+    /// An optional VerifyFull callback replaces the final platform decision.
     /// A failed handshake is never downgraded to plaintext and never retried
     /// with looser settings; the caller must dispose the transport.
     /// </summary>
@@ -34,9 +35,10 @@ namespace OceanBaseConnector.Internal.Transport
         }
 
         public static SslStream Upgrade(Stream innerStream, string targetHost, OceanBaseTlsMode tlsMode,
-            X509CertificateCollection? clientCertificates = null, bool checkCertificateRevocation = false)
+            X509CertificateCollection? clientCertificates = null, bool checkCertificateRevocation = false,
+            RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
         {
-            var sslStream = CreateSslStream(innerStream, tlsMode, clientCertificates);
+            var sslStream = CreateSslStream(innerStream, tlsMode, clientCertificates, remoteCertificateValidationCallback);
             try
             {
                 // SslProtocols.None lets the OS pick (TLS 1.2+ on supported platforms).
@@ -56,14 +58,14 @@ namespace OceanBaseConnector.Internal.Transport
             OceanBaseTlsMode tlsMode,
             X509CertificateCollection? clientCertificates,
             bool checkCertificateRevocation,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
         {
             if (tlsMode == OceanBaseTlsMode.Disabled)
             {
                 throw new ArgumentException("TLS Mode Disabled must not reach the TLS upgrade.", nameof(tlsMode));
             }
 
-            var sslStream = CreateSslStream(innerStream, tlsMode, clientCertificates);
+            var sslStream = CreateSslStream(innerStream, tlsMode, clientCertificates, remoteCertificateValidationCallback);
             try
             {
 #if !NETSTANDARD2_0
@@ -96,12 +98,15 @@ namespace OceanBaseConnector.Internal.Transport
             }
         }
 
-        private static SslStream CreateSslStream(Stream innerStream, OceanBaseTlsMode tlsMode, X509CertificateCollection? clientCertificates)
+        private static SslStream CreateSslStream(Stream innerStream, OceanBaseTlsMode tlsMode, X509CertificateCollection? clientCertificates,
+            RemoteCertificateValidationCallback? remoteCertificateValidationCallback)
         {
+            if (remoteCertificateValidationCallback != null && tlsMode != OceanBaseTlsMode.VerifyFull)
+                throw new NotSupportedException("A custom TLS server validation policy requires TLS Mode=VerifyFull.");
             return tlsMode == OceanBaseTlsMode.Required
                 ? new SslStream(innerStream, leaveInnerStreamOpen: false, AcceptAnyServerCertificate,
                     clientCertificates == null ? null : new LocalCertificateSelectionCallback(SelectClientCertificate))
-                : new SslStream(innerStream, leaveInnerStreamOpen: false, null,
+                : new SslStream(innerStream, leaveInnerStreamOpen: false, remoteCertificateValidationCallback,
                     clientCertificates == null ? null : new LocalCertificateSelectionCallback(SelectClientCertificate));
         }
 
