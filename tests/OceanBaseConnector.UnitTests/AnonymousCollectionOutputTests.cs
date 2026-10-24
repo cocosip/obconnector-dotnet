@@ -82,8 +82,8 @@ namespace OceanBaseConnector.UnitTests
 
                 var request = await StatementCommand(channel, 0xa1);
                 var input = direction == ParameterDirection.InputOutput;
-                var encoded = new byte[] { input ? (byte)0 : (byte)1, 1, 160, 0, 0, 0, 0, code == 0 ? (byte)246 : code }
-                    .Concat(input ? new byte[] { 1, 0 }.Concat(body) : Array.Empty<byte>()).ToArray();
+                var encoded = input ? new byte[] { 0, 1, 160, 0, 0, 0, 0, code == 0 ? (byte)246 : code }
+                    .Concat(new byte[] { 1, 0 }).Concat(body).ToArray() : new byte[] { 1, 1, 6, 0 };
                 Assert.Equal(OraclePrepareExecutePacket.Build(0, direction == ParameterDirection.ReturnValue ? "BEGIN ? := pkg.p(); END;" : "BEGIN pkg.p(?); END;", 1, encoded), request);
                 await channel.WritePacketAsync(OracleExecuteHeader(1, 1, direction == ParameterDirection.ReturnValue ? 1u : input ? 4u : 3u));
                 await channel.WritePacketAsync(ComplexColumn("", "", element: code)); await channel.WritePacketAsync(Eof());
@@ -129,7 +129,7 @@ namespace OceanBaseConnector.UnitTests
             {
 
                 var request = await StatementCommand(channel, 0xa1);
-                Assert.Equal(OraclePrepareExecutePacket.Build(0, "BEGIN pkg.p(?, ?); END;", 2, new byte[] { 3, 1, 6, 0, 160, 0, 0, 0, 0, 203 }), request);
+                Assert.Equal(OraclePrepareExecutePacket.Build(0, "BEGIN pkg.p(?, ?); END;", 2, new byte[] { 3, 1, 6, 0, 6, 0 }), request);
                 await channel.WritePacketAsync(OracleExecuteHeader(2, 2));
                 await channel.WritePacketAsync(Column("n", 253)); await channel.WritePacketAsync(ComplexColumn("", "")); await channel.WritePacketAsync(Eof());
                 await channel.WritePacketAsync(Column("n", 8));

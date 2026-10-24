@@ -13,7 +13,7 @@ namespace OceanBaseConnector.IntegrationTests.Ob20;
 /// </summary>
 public sealed class Ob20Tests
 {
-    [IntegrationTheory]
+    [IntegrationTheory("ob20")]
     [MemberData(nameof(ProfileTheoryData.WithTag), new object[] { "ob20" }, MemberType = typeof(ProfileTheoryData))]
     public async Task TextAndPreparedSqlSucceedUnderOb20(string profileName)
     {
@@ -31,7 +31,7 @@ public sealed class Ob20Tests
             "Prepared SQL must succeed under OB20 framing.");
     }
 
-    [IntegrationTheory]
+    [IntegrationTheory("trace")]
     [MemberData(nameof(ProfileTheoryData.WithOb20Trace), MemberType = typeof(ProfileTheoryData))]
     public async Task FullLinkTraceKeepsSqlWorking(string profileName)
     {

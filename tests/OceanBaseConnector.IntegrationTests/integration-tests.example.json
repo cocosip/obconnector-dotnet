@@ -3,7 +3,7 @@
     {
       "name": "mysql-direct",
       "mode": "MySql",
-      "connectionStringEnvironment": "OB_MYSQL_CONNECTION_STRING",
+      "connectionStringSecret": "ConnectionStrings:MySql",
       "tags": ["direct"],
       "options": {
         "tlsMode": "Disabled"
@@ -17,7 +17,7 @@
     {
       "name": "oracle-direct",
       "mode": "Oracle",
-      "connectionStringEnvironment": "OB_ORACLE_CONNECTION_STRING",
+      "connectionStringSecret": "ConnectionStrings:Oracle",
       "tags": ["direct"],
       "options": {
         "tlsMode": "Disabled",
@@ -32,13 +32,13 @@
     {
       "name": "mysql-proxy",
       "mode": "MySql",
-      "connectionStringEnvironment": "OB_MYSQL_PROXY_CONNECTION_STRING",
+      "connectionStringSecret": "ConnectionStrings:MySqlProxy",
       "tags": ["proxy"]
     },
     {
       "name": "mysql-ob20",
       "mode": "MySql",
-      "connectionStringEnvironment": "OB_MYSQL_OB20_CONNECTION_STRING",
+      "connectionStringSecret": "ConnectionStrings:MySqlOb20",
       "tags": ["ob20"],
       "options": {
         "useOb20": true,

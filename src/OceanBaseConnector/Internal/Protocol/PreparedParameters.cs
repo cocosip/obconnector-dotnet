@@ -20,6 +20,9 @@ namespace OceanBaseConnector.Internal.Protocol
                 complexTypes[i] = GetComplexType(parameters[i]);
                 if (complexTypes[i] != null && mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Complex parameters require Oracle mode.");
                 types[i] = complexTypes[i] != null ? (ushort)160 : TypeCode(parameters[i], mode);
+                // Pure outputs send NULL; their descriptors still validate the session and returned metadata.
+                if (complexTypes[i] != null && (parameters[i].Direction == ParameterDirection.Output || parameters[i].Direction == ParameterDirection.ReturnValue))
+                    types[i] = 6;
                 if (parameters[i].Value == null || parameters[i].Value == DBNull.Value)
                 {
                     nulls[i / 8] |= (byte)(1 << (i % 8));
@@ -34,7 +37,7 @@ namespace OceanBaseConnector.Internal.Protocol
             {
                 writer.Write(types[i]);
                 var complex = complexTypes[i];
-                if (complex == null) continue;
+                if (complex == null || types[i] != 160) continue;
                 WriteComplexIdentity(writer, complex);
                 if (complex.IsAnonymous)
                 {

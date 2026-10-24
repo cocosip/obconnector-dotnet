@@ -62,7 +62,7 @@ public sealed class IdentityGateTests
         Assert.Throws<NotSupportedException>(() => connection.EnlistTransaction(null));
     }
 
-    [IntegrationTheory]
+    [IntegrationTheory("unsupportedAuth")]
     [MemberData(nameof(ProfileTheoryData.WithUnsupportedAuth), MemberType = typeof(ProfileTheoryData))]
     public async Task UnsupportedAuthenticationPluginIsRejected(string profileName)
     {
@@ -75,7 +75,7 @@ public sealed class IdentityGateTests
         Assert.Equal(ConnectionState.Closed, connection.State);
     }
 
-    [IntegrationTheory]
+    [IntegrationTheory("autocommitDisabled")]
     [MemberData(nameof(ProfileTheoryData.WithAutocommitDisabled), MemberType = typeof(ProfileTheoryData))]
     public async Task AutocommitDisabledSessionIsRejected(string profileName)
     {

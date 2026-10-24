@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 using Xunit.Abstractions;
 using Xunit.Sdk;
@@ -23,7 +24,7 @@ public sealed class IntegrationCategoryDiscoverer : TraitDiscoverer
 }
 
 [TraitDiscoverer("OceanBaseConnector.IntegrationTests.Infrastructure." + nameof(IntegrationCategoryDiscoverer), "OceanBaseConnector.IntegrationTests")]
-public class IntegrationFactAttribute : FactAttribute
+public class IntegrationFactAttribute : FactAttribute, ITraitAttribute
 {
     public IntegrationFactAttribute()
     {
@@ -33,11 +34,22 @@ public class IntegrationFactAttribute : FactAttribute
 }
 
 [TraitDiscoverer("OceanBaseConnector.IntegrationTests.Infrastructure." + nameof(IntegrationCategoryDiscoverer), "OceanBaseConnector.IntegrationTests")]
-public class IntegrationTheoryAttribute : TheoryAttribute
+public class IntegrationTheoryAttribute : TheoryAttribute, ITraitAttribute
 {
-    public IntegrationTheoryAttribute()
+    public IntegrationTheoryAttribute(string? capability = null)
     {
         if (!IntegrationEnvironment.Requested)
             Skip = $"Integration environment not requested; set {IntegrationEnvironment.RequireIntegrationVariable}=1 plus a profiles configuration to run.";
+        else if (capability is not null && !IntegrationEnvironment.Profiles.Any(profile => capability switch
+        {
+            "slowQuery" => profile.SlowQuery is not null,
+            "alternateDatabase" => profile.AlternateDatabase is not null,
+            "unsupportedAuth" => profile.UnsupportedAuthConnectionString is not null,
+            "autocommitDisabled" => profile.AutocommitDisabledConnectionString is not null,
+            "ob20" => profile.HasTag("ob20"),
+            "trace" => profile.CreateBuilder().EnableFullLinkTrace,
+            _ => throw new ArgumentException("Unknown integration capability.", nameof(capability)),
+        }))
+            Skip = $"No selected profile provides the '{capability}' capability.";
     }
 }

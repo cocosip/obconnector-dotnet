@@ -24,23 +24,23 @@ namespace OceanBaseConnector.UnitTests.Session
             return data.ToArray();
         }
 
-        private static byte[] AutocommitColumn()
+        private static byte[] AutocommitColumn(byte typeCode = 1)
         {
             using var data = new MemoryStream();
             foreach (var value in new[] { "def", "", "", "", "@@autocommit", "" })
             { data.WriteByte((byte)value.Length); data.Write(Encoding.ASCII.GetBytes(value)); }
-            data.Write(new byte[] { 12, 63, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0 });
+            data.Write(new byte[] { 12, 63, 0, 1, 0, 0, 0, typeCode, 1, 0, 0, 0, 0 });
             return data.ToArray();
         }
 
-        private static async Task IdentityResponse(PacketChannel channel, bool oracle, string? version = "4.4.2.2", bool extraRow = false, string? reportedMode = null, string? autocommit = "1")
+        private static async Task IdentityResponse(PacketChannel channel, bool oracle, string? version = "4.4.2.2", bool extraRow = false, string? reportedMode = null, string? autocommit = "1", byte autocommitType = 1)
         {
             channel.BeginCommand();
             Assert.Equal(oracle ? ServerIdentity.OracleQuery : ServerIdentity.MySqlQuery, Encoding.ASCII.GetString((await channel.ReadPacketAsync())[1..]));
             await channel.WritePacketAsync(new byte[] { (byte)(oracle ? 2 : 3) });
             await channel.WritePacketAsync(IdentityColumn());
             await channel.WritePacketAsync(IdentityColumn());
-            if (!oracle) await channel.WritePacketAsync(AutocommitColumn());
+            if (!oracle) await channel.WritePacketAsync(AutocommitColumn(autocommitType));
             var eof = new byte[] { 254, 0, 0, oracle ? (byte)0 : (byte)2, 0 };
             await channel.WritePacketAsync(eof);
             var mode = Encoding.ASCII.GetBytes(reportedMode ?? (oracle ? "ORACLE" : "MYSQL"));
@@ -114,6 +114,7 @@ namespace OceanBaseConnector.UnitTests.Session
                     : Record.Exception(() => { HandshakeFlow.Authenticate(transport, channel, BuildOptions()); });
                 Assert.NotNull(error);
                 Assert.DoesNotContain("private", error.Message);
+                await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
             }
             finally { server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
@@ -173,6 +174,43 @@ namespace OceanBaseConnector.UnitTests.Session
         }
 
         [Theory]
+        [InlineData(false, "1")]
+        [InlineData(true, "1")]
+        [InlineData(false, "0")]
+        [InlineData(true, "0")]
+        [InlineData(false, "2")]
+        [InlineData(true, "2")]
+        public async Task MySqlIdentityHandlesBigIntAutocommit(bool asynchronous, string autocommit)
+        {
+            var server = LoopbackServer.Start(async client =>
+            {
+                var channel = new PacketChannel(client.GetStream());
+                await channel.WritePacketAsync(BuildInitialHandshake(serverVersion: "5.7.25"));
+                await channel.ReadPacketAsync();
+                await channel.WritePacketAsync(BuildAuthOk(oracleMode: false));
+                await IdentityResponse(channel, oracle: false, autocommit: autocommit, autocommitType: 8);
+            });
+            try
+            {
+                using var transport = await TcpTransport.ConnectAsync("127.0.0.1", server.Port, TimeSpan.FromSeconds(10), default);
+                var channel = new PacketChannel(transport.Stream);
+                async Task<ConnectResult> Authenticate() => asynchronous
+                    ? await HandshakeFlow.AuthenticateAsync(transport, channel, BuildOptions(), default)
+                    : HandshakeFlow.Authenticate(transport, channel, BuildOptions());
+                if (autocommit == "1")
+                    Assert.Equal(OceanBaseCompatibilityMode.MySql, (await Authenticate()).Mode);
+                else
+                {
+                    var error = await Assert.ThrowsAsync<OceanBaseException>(Authenticate);
+                    Assert.Contains(autocommit == "0" ? "Enable autocommit" : "autocommit setting", error.Message);
+                }
+                await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            finally { server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData(false)]
         [InlineData(true)]
         public async Task MySqlIdentityRejectsDisabledAutocommit(bool asynchronous)
@@ -221,6 +259,7 @@ namespace OceanBaseConnector.UnitTests.Session
                     ? await Assert.ThrowsAsync<OceanBaseException>(() => HandshakeFlow.AuthenticateAsync(transport, channel, BuildOptions(), default))
                     : Assert.Throws<OceanBaseException>(() => HandshakeFlow.Authenticate(transport, channel, BuildOptions()));
                 Assert.Contains("autocommit setting", error.Message);
+                await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
             }
             finally { server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));

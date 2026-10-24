@@ -77,7 +77,7 @@ internal static class IntegrationProfileConfig
     public static IntegrationProfile Legacy(string name, string connectionString, string tag) => Build(new ConfigProfile
     {
         Name = name,
-        Mode = name.Contains("ORACLE", StringComparison.Ordinal) ? "Oracle" : "MySql",
+        Mode = name.StartsWith("oracle-", StringComparison.OrdinalIgnoreCase) ? "Oracle" : "MySql",
         ConnectionString = connectionString,
         Tags = new[] { tag },
     });
@@ -94,6 +94,8 @@ internal static class IntegrationProfileConfig
         var capabilities = item.Capabilities ?? new ConfigCapabilities();
 
         var builder = new OceanBaseConnectionStringBuilder(resolved);
+        if (builder.ExpectedMode.HasValue && builder.ExpectedMode != mode)
+            throw new InvalidOperationException($"Profile '{item.Name}': connection string ExpectedMode conflicts with the configured mode.");
         builder.ExpectedMode = mode;
         builder.UseOb20 = options.UseOb20 ?? builder.UseOb20;
         builder.EnableFullLinkTrace = options.EnableFullLinkTrace ?? builder.EnableFullLinkTrace;
@@ -136,13 +138,16 @@ internal static class IntegrationProfileConfig
     {
         var hasText = !string.IsNullOrWhiteSpace(item.ConnectionString);
         var hasEnvironment = !string.IsNullOrWhiteSpace(item.ConnectionStringEnvironment);
-        if (hasText == hasEnvironment)
-            throw new InvalidOperationException($"Profile '{item.Name}': set exactly one of 'connectionString' or 'connectionStringEnvironment'.");
-        var value = hasText ? item.ConnectionString : Environment.GetEnvironmentVariable(item.ConnectionStringEnvironment!);
+        var hasSecret = !string.IsNullOrWhiteSpace(item.ConnectionStringSecret);
+        if (Convert.ToInt32(hasText) + Convert.ToInt32(hasEnvironment) + Convert.ToInt32(hasSecret) != 1)
+            throw new InvalidOperationException($"Profile '{item.Name}': set exactly one of 'connectionString', 'connectionStringEnvironment' or 'connectionStringSecret'.");
+        var value = hasText ? item.ConnectionString : hasEnvironment
+            ? Environment.GetEnvironmentVariable(item.ConnectionStringEnvironment!)
+            : IntegrationEnvironment.GetSecret(item.ConnectionStringSecret!);
         if (string.IsNullOrWhiteSpace(value))
         {
             if (requireValue)
-                throw new InvalidOperationException($"Profile '{item.Name}': connection string environment variable '{item.ConnectionStringEnvironment}' is empty.");
+                throw new InvalidOperationException($"Profile '{item.Name}': configured connection string secret/environment is empty.");
             return "";
         }
         return value!;
@@ -159,8 +164,13 @@ internal static class IntegrationProfileConfig
 
     private static void RejectDuplicates(JsonElement element)
     {
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray()) RejectDuplicates(item);
+            return;
+        }
         if (element.ValueKind != JsonValueKind.Object) return;
-        var names = new HashSet<string>(StringComparer.Ordinal);
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var property in element.EnumerateObject())
         {
             if (!names.Add(property.Name))
@@ -187,6 +197,7 @@ internal static class IntegrationProfileConfig
         public string? Mode { get; set; }
         public string? ConnectionString { get; set; }
         public string? ConnectionStringEnvironment { get; set; }
+        public string? ConnectionStringSecret { get; set; }
         public string[]? Tags { get; set; }
         public ConfigOptions? Options { get; set; }
         public ConfigCapabilities? Capabilities { get; set; }

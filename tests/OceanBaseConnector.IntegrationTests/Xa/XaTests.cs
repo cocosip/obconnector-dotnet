@@ -87,11 +87,12 @@ public sealed class XaTests
         var xid = new OceanBaseXid(0x4F4249, Guid.NewGuid().ToByteArray(), new byte[] { 3 });
         await Assert.ThrowsAsync<InvalidOperationException>(() => resource.EndAsync(xid));
         await Assert.ThrowsAsync<InvalidOperationException>(() => resource.PrepareAsync(xid));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => resource.CommitAsync(xid));
         await resource.StartAsync(xid);
         await Assert.ThrowsAsync<InvalidOperationException>(() => resource.PrepareAsync(xid));
         await resource.EndAsync(xid);
         await resource.RollbackAsync(xid);
+        var missingBranch = await Assert.ThrowsAsync<OceanBaseException>(() => resource.CommitAsync(xid));
+        Assert.False(missingBranch.IsExecutionOutcomeUnknown);
     }
 
     private static async Task CleanupXa(Func<Task> end, Func<Task> close, Func<Task> rollback)

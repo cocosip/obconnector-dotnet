@@ -67,8 +67,9 @@ namespace OceanBaseConnector.UnitTests
             {
                 await ComplexScalarType(channel, collection: collection); channel.BeginCommand();
                 var request = await StatementCommand(channel, 0xa1);
-                var encoded = new byte[] { function ? (byte)1 : (byte)0, 1, 160, 0, 5, 79, 119, 110, 101, 114, 5, 84, 104, 105, 110, 103, 0 }
-                    .Concat(function ? Array.Empty<byte>() : collection ? new byte[] { 1, 0, 1, 7 } : new byte[] { 0, 1, 7 }).ToArray();
+                var encoded = function ? new byte[] { 1, 1, 6, 0 }
+                    : new byte[] { 0, 1, 160, 0, 5, 79, 119, 110, 101, 114, 5, 84, 104, 105, 110, 103, 0 }
+                        .Concat(collection ? new byte[] { 1, 0, 1, 7 } : new byte[] { 0, 1, 7 }).ToArray();
                 Assert.Equal(OraclePrepareExecutePacket.Build(0, function ? "BEGIN ? := pkg.p(); END;" : "BEGIN pkg.p(?); END;", 1, encoded), request);
                 await channel.WritePacketAsync(OracleExecuteHeader(1, 1, function ? 1u : 4u)); await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof());
                 await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof());
@@ -129,7 +130,7 @@ namespace OceanBaseConnector.UnitTests
             {
                 await ComplexScalarType(channel, collection: collection); channel.BeginCommand();
                 var request = await StatementCommand(channel, 0xa1);
-                var encoded = new byte[] { 3, 1, 6, 0, 160, 0, 5, 79, 119, 110, 101, 114, 5, 84, 104, 105, 110, 103, 0 };
+                var encoded = new byte[] { 3, 1, 6, 0, 6, 0 };
                 Assert.Equal(OraclePrepareExecutePacket.Build(0, "BEGIN pkg.p(?, ?); END;", 2, encoded), request);
                 await channel.WritePacketAsync(OracleExecuteHeader(2, 2));
                 await channel.WritePacketAsync(Column("p", 253)); await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof());
@@ -183,21 +184,25 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
-        public async Task ComplexParameterInvalidatedCacheIsRejectedBeforePreparingAndKeepsSessionUsable(bool async)
+        [InlineData(false, ParameterDirection.Input)] [InlineData(true, ParameterDirection.Input)]
+        [InlineData(false, ParameterDirection.Output)] [InlineData(true, ParameterDirection.Output)]
+        [InlineData(false, ParameterDirection.ReturnValue)] [InlineData(true, ParameterDirection.ReturnValue)]
+        public async Task ComplexParameterInvalidatedCacheIsRejectedBeforePreparingAndKeepsSessionUsable(bool async, ParameterDirection direction)
         {
             var server = Server(async channel =>
             {
                 await ComplexScalarType(channel); channel.BeginCommand();
                 await Query(channel, "after"); await channel.WritePacketAsync(Ok(7));
             });
-            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
                 await connection.OpenAsync(); var type = await connection.GetComplexTypeAsync("Owner", "Thing");
                 var value = type.CreateValue(new byte[] { 42 }); connection.ClearComplexTypeCache();
                 using var command = connection.CreateCommand(); command.CommandText = "insert into t values(:p)";
-                command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", Value = value });
+                if (direction != ParameterDirection.Input) { command.CommandText = "pkg.p"; command.CommandType = CommandType.StoredProcedure; }
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", Direction = direction,
+                    Value = direction == ParameterDirection.Input ? value : DBNull.Value, ComplexType = type });
                 await Assert.ThrowsAsync<InvalidOperationException>(() => async ? command.ExecuteNonQueryAsync() : Task.FromResult(command.ExecuteNonQuery()));
                 Assert.False(((OceanBaseCommand)command).HasSentSql); Assert.Equal(ConnectionState.Open, connection.State);
                 using var after = connection.CreateCommand(); after.CommandText = "after"; Assert.Equal(7, await after.ExecuteNonQueryAsync());

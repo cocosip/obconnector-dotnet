@@ -6,8 +6,8 @@ The tables distinguish recorded passes, failures, explicitly unsupported behavio
 
 | Target | Status | Boundary |
 | --- | --- | --- |
-| Direct OceanBase 4.4.2.2, MySQL mode | Partially verified | Recorded acceptance: 38 passed, 27 skipped; TLS disabled. |
-| Direct OceanBase 4.4.2.2, Oracle mode | Partially verified; suite fails | Recorded acceptance: 49 passed, 1 failed, 15 skipped, 1 cleanup failure; TLS disabled. |
+| Direct OceanBase 4.4.2.2, MySQL mode | Partially verified | 2026-10-24 integration: 60 passed; TLS disabled. |
+| Direct OceanBase 4.4.2.2, Oracle mode | Partially verified; suite fails | 2026-10-24 integration: 79 passed, 1 failed (nested-table column); TLS disabled. |
 | Other OceanBase versions, either mode | Unverified on real servers | No exact-release allowlist. Open requires a parseable actual OceanBase version, a session mode matching authentication, and the required base protocol/authentication capabilities. Function-specific version/capability checks still apply. |
 | OBProxy, either mode | Unverified | No verified proxy-version/routing/fault matrix. Direct-server results do not establish OBProxy compatibility. |
 | Native MySQL / native Oracle | Unsupported | This provider targets OceanBase; MySQL wire compatibility does not bypass OceanBase identity confirmation. |
@@ -26,6 +26,21 @@ Both can be changed explicitly; neither fabricates a server capability or select
 See the [API reference](obconnector-dotnet-architecture-design.md) for value and option rules.
 
 ## Recorded database tests
+
+### 2026-10-24 integration suites
+
+The current working tree was tested on Windows/.NET 10 against direct OceanBase 4.4.2.2 in both modes with TLS disabled, using .NET User Secrets. Oracle enabled PrepareExecute and LOB locators. Both modes supplied verified slow SQL for cancellation and command timeout.
+
+| Mode | Passed | Failed |
+| --- | ---: | ---: |
+| MySQL | 60 | 0 |
+| Oracle | 79 | 1 |
+
+Five additional environment-dependent tests were skipped: unsupported authentication, disabled-autocommit login, alternate database, OB20 and trace. Nine configuration regression tests passed separately from the database cases. The raw run is `TestResults/review-20261024/direct-final.trx` (ignored local evidence).
+
+Real testing identified two driver defects: MySQL identity confirmation rejected the BIGINT metadata returned for `@@autocommit`, and complex Oracle pure-output parameters sent a typed complex NULL instead of a protocol NULL placeholder. Both are fixed in this working tree. Collection procedure IN/OUT and IN/InputOutput round trips now pass; the input, response-type and session-generation checks remain enforced. The remaining nested-table-column failure is described below.
+
+### 2026-10-21 acceptance console (historical)
 
 The following results were recorded on 2026-10-21 for runtime-code baseline `304642e` with dependency updates, on Windows/.NET 10. Both profiles connected directly to OceanBase 4.4.2.2 with TLS disabled. Oracle enabled PrepareExecute and LOB locators; MySQL configured a slow query for cancellation and timeout tests.
 

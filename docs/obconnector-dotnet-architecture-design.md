@@ -146,6 +146,8 @@ Named results require preloading on the same connection/transaction and binary p
 
 Set `OceanBaseParameter.ComplexType` for NULL, Output and ReturnValue. Non-null Input/InputOutput can infer it from an `OceanBaseComplexValue`. `Size`, `Precision` and `Scale` must be zero.
 
+Pure Output/ReturnValue parameters send a protocol NULL placeholder. The declared complex descriptor remains required for session validation and decoding the returned value; InputOutput still sends its input value and type.
+
 `CreateArrayType` accepts NUMBER, VARCHAR2, CHAR, RAW, DATE or TIMESTAMP, or a preloaded named element type. Factory scalar arrays support input/output; ordinary complex-element arrays accept input only. Anonymous descriptions obtained from results are read-only.
 
 Descriptions and values are bound to their connection, session and transaction generation. Close/reopen, transaction changes and `ClearComplexTypeCache` invalidate reuse. After external type DDL, clear the cache and reload; changes are not detected automatically.

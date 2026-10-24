@@ -81,7 +81,12 @@ public sealed class DatabaseContext : IAsyncDisposable
     public async Task<string> TableAsync(OceanBaseConnection connection, string columns, CancellationToken token)
     {
         var name = NewObject("TABLE");
-        await ExecuteAsync(connection, "CREATE TABLE " + name + " (" + columns + ")", token);
+        try { await ExecuteAsync(connection, "CREATE TABLE " + name + " (" + columns + ")", token); }
+        catch (OceanBaseException error) when (error.ServerErrorCode != 0 && !error.IsExecutionOutcomeUnknown)
+        {
+            _owned.RemoveAll(item => item.Kind == "TABLE" && item.Name == name);
+            throw;
+        }
         return name;
     }
 

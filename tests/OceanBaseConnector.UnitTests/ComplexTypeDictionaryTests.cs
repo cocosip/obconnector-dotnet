@@ -32,7 +32,10 @@ namespace OceanBaseConnector.UnitTests
             await ComplexDictionaryRows(channel, header ? ComplexHeaderNames : ComplexMemberNames, rows);
         }
 
-        private static async Task ComplexDictionaryRows(PacketChannel channel, string[] names, params string?[][] rows)
+        private static Task ComplexDictionaryRows(PacketChannel channel, string[] names, params string?[][] rows)
+            => ComplexDictionaryRows(channel, names, rows, terminate: true);
+
+        private static async Task ComplexDictionaryRows(PacketChannel channel, string[] names, string?[][] rows, bool terminate)
         {
             await channel.WritePacketAsync(new[] { (byte)names.Length });
             foreach (var name in names) await channel.WritePacketAsync(Column(name, 253));
@@ -47,7 +50,7 @@ namespace OceanBaseConnector.UnitTests
                     if (value != null) { var bytes = Encoding.UTF8.GetBytes(value); Assert.True(bytes.Length < 251); stream.WriteByte((byte)bytes.Length); stream.Write(bytes); }
                 await channel.WritePacketAsync(stream.ToArray());
             }
-            await channel.WritePacketAsync(Eof());
+            if (terminate) await channel.WritePacketAsync(Eof());
         }
 
         [Theory]

@@ -74,7 +74,7 @@ namespace OceanBaseConnector.Internal.Session
             if (packet.Length > 4096) throw new ProtocolException("Excessive OceanBase identity metadata.");
             var column = ResultColumn.Parse(packet, mode);
             var ordinary = column.TypeCode == 15 || column.TypeCode == 253 || column.TypeCode == 254;
-            if (!ordinary && !(autocommit && column.TypeCode == 1))
+            if (!ordinary && !(autocommit && (column.TypeCode == 1 || column.TypeCode == 8)))
                 throw new ProtocolException("OceanBase identity requires an ordinary string column.");
         }
 

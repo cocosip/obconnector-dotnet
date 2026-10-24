@@ -97,7 +97,7 @@ public sealed class LobTests
     public async Task LobLocatorParameterRoundTrips(string profileName)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
-        var connection = await db.OpenAsync();
+        await using var connection = await db.OpenAsync();
         var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY, value BLOB", CancellationToken.None);
         var bytes = Enumerable.Range(0, 512).Select(i => (byte)(i * 7)).ToArray();
         await using var lob = await connection.CreateTemporaryLobAsync(OceanBaseDbType.Blob);
@@ -113,10 +113,11 @@ public sealed class LobTests
         Assert.IsType<OceanBaseLob>(reader.GetValue(0));
         using var stored = (OceanBaseLob)reader.GetValue(0);
         Assert.Equal((long)bytes.Length, stored.ByteLength);
+        Assert.False(await reader.ReadAsync());
+        Assert.False(await reader.NextResultAsync());
         using var source = stored.OpenRead();
         using var destination = new MemoryStream();
         await source.CopyToAsync(destination);
         Assert.True(destination.ToArray().AsSpan().SequenceEqual(bytes), "LOB locator parameter must round-trip the bytes.");
-        Assert.False(await reader.ReadAsync());
     }
 }

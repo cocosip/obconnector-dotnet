@@ -131,8 +131,7 @@ namespace OceanBaseConnector.ConsumerTests
                 var outputRequest = new ByteCursor(await ReadRequest(stream, channel, ob20, 11, budget.Token));
                 Assert.Equal(0xa1, outputRequest.ReadUInt8()); outputRequest.Skip(9);
                 Assert.Equal("BEGIN pkg.p(?, ?); END;", Encoding.UTF8.GetString(outputRequest.ReadLengthEncodedBytes())); Assert.Equal(2u, outputRequest.ReadUInt32());
-                var outputHeader = new byte[] { 3, 1, 160, 0, (byte)complexName.Length }.Concat(complexName)
-                    .Concat(new byte[] { 10 }).Concat(Encoding.UTF8.GetBytes("Mixed_Type")).Concat(new byte[] { 0, 160, 0, 0, 0, 0, 203 }).ToArray();
+                var outputHeader = new byte[] { 3, 1, 6, 0, 6, 0 };
                 Assert.Equal(outputHeader, outputRequest.ReadBytes(outputHeader.Length));
                 var outputReply = Frame(1, new byte[] { 0, 20, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0, 4, 0, 0, 0, 1 })
                     .Concat(Frame(2, complexColumn)).Concat(Frame(3, anonymousColumn)).Concat(Frame(4, complexColumn)).Concat(Frame(5, anonymousColumn))

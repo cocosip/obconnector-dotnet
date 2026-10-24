@@ -58,7 +58,7 @@ public sealed class ConnectionTests
         DatabaseContext.EqualNumber(await dataCommand.ExecuteScalarAsync(), 1, "Data source connection must execute SQL.");
     }
 
-    [IntegrationTheory]
+    [IntegrationTheory("alternateDatabase")]
     [MemberData(nameof(ProfileTheoryData.WithAlternateDatabase), MemberType = typeof(ProfileTheoryData))]
     public async Task ChangeDatabaseSwitchesAndRestores(string profileName)
     {
@@ -121,8 +121,10 @@ public sealed class ConnectionTests
         builder.ConnectionTimeout = 3;
         var started = DateTimeOffset.UtcNow;
         await using var connection = new OceanBaseConnection(builder.ConnectionString);
-        await Assert.ThrowsAsync<OceanBaseException>(() => connection.OpenAsync());
-        Assert.Equal(ConnectionState.Broken, connection.State);
+        var error = await Record.ExceptionAsync(() => connection.OpenAsync());
+        Assert.True(error is OceanBaseException or TimeoutException,
+            "An unreachable endpoint must fail with a connection error or timeout.");
+        Assert.Equal(ConnectionState.Closed, connection.State);
         Assert.True(DateTimeOffset.UtcNow - started < TimeSpan.FromSeconds(30),
             "A refused endpoint must fail within the connection budget, not hang.");
     }

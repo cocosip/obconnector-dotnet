@@ -34,7 +34,7 @@ namespace OceanBaseConnector.UnitTests
             await channel.WritePacketAsync(Eof());
         }
 
-        private static async Task SourceTypeLookup(PacketChannel channel, string table = "SourceTable", string column = "Value", params string?[][] rows)
+        private static async Task SourceTypeLookup(PacketChannel channel, string table = "SourceTable", string column = "Value", bool rejectedRow = false, params string?[][] rows)
         {
             var request = await StatementCommand(channel, 22);
             var sql = Encoding.UTF8.GetString(request, 1, request.Length - 1);
@@ -45,7 +45,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal(PreparedParameters.Execute(182, PreparedParameters.Encode(new[] {
                 new OceanBaseParameter { Value = "TableOwner" }, new OceanBaseParameter { Value = table }, new OceanBaseParameter { Value = column }
             }, OceanBaseCompatibilityMode.Oracle)), await StatementCommand(channel, 23));
-            await ComplexDictionaryRows(channel, new[] { "DATA_TYPE_OWNER", "DATA_TYPE" }, rows);
+            await ComplexDictionaryRows(channel, new[] { "DATA_TYPE_OWNER", "DATA_TYPE" }, rows, terminate: !rejectedRow);
         }
 
         [Theory]
@@ -116,7 +116,8 @@ namespace OceanBaseConnector.UnitTests
                     var rows = kind == "missing" ? Array.Empty<string?[]>() : kind == "duplicate"
                         ? new[] { new string?[] { "TypeOwner", "Thing" }, new string?[] { "OtherOwner", "Thing" } }
                         : new[] { new string?[] { kind == "unloaded-owner" ? "OtherOwner" : kind == "null-owner" ? null : kind == "nul-owner" ? "Type\0Owner" : "TypeOwner", kind == "wrong-name" ? "Different" : "Thing" } };
-                    await SourceTypeLookup(channel, rows: rows);
+                    // These rows break the session immediately; no terminal write may follow rejection.
+                    await SourceTypeLookup(channel, rejectedRow: kind is "duplicate" or "null-owner" or "nul-owner", rows: rows);
                     if (kind == "wrong-name" || kind == "unloaded-owner") await StatementCommand(channel, 25);
                 }
                 Assert.Equal(0, await channelStreamRead(channel));
@@ -128,7 +129,13 @@ namespace OceanBaseConnector.UnitTests
                 using var command = (OceanBaseCommand)connection.CreateCommand(); command.CommandText = "source"; await command.PrepareAsync();
                 var error = await Record.ExceptionAsync(async () => { using var reader = asynchronous ? await command.ExecuteReaderAsync() : command.ExecuteReader(); });
                 Assert.NotNull(error); Assert.False(command.HasSentSql);
-                if (error is OceanBaseException databaseError) Assert.False(databaseError.IsExecutionOutcomeUnknown);
+                if (error is OceanBaseException databaseError)
+                {
+                    Assert.False(databaseError.IsExecutionOutcomeUnknown);
+                    if (kind is "duplicate" or "null-owner" or "nul-owner")
+                        Assert.True(databaseError.InnerException is ProtocolException or NotSupportedException,
+                            "The malformed row must be rejected before waiting for a result terminator.");
+                }
                 else Assert.IsType<NotSupportedException>(error);
                 connection.Close();
             }

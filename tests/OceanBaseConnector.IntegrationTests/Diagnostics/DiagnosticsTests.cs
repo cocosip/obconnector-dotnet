@@ -58,7 +58,7 @@ public sealed class DiagnosticsTests
             await connection.CloseAsync();
         }
         Assert.True(factory.Records.Count > 0, "Connection lifetime must publish log events.");
-        Assert.Contains(factory.Records, record => record.Category == "OceanBaseConnector");
+        Assert.Contains(factory.Records, record => record.Category == "OceanBaseConnector.Connection");
     }
 
     private sealed class RecordingLoggerFactory : ILoggerFactory

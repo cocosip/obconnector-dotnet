@@ -187,7 +187,9 @@ namespace OceanBaseConnector.Internal.Sql
                 var complex = PreparedParameters.GetComplexType(copy);
                 if (complex != null) copy.ComplexType = complex;
                 if (parameter.Direction != ParameterDirection.Input) { outputs.Add(parameter); complexTypes.Add(complex); }
-                copy.Direction = ParameterDirection.Input;
+                copy.Direction = arrayCount == 0 && complex != null &&
+                    (parameter.Direction == ParameterDirection.Output || parameter.Direction == ParameterDirection.ReturnValue)
+                    ? parameter.Direction : ParameterDirection.Input;
             }
             var plan = new OracleCommandPlan(new ParameterBindingPlan(original.CommandText, inputs), outputs.ToArray(), complexTypes.ToArray());
             if (arrayCount != 0)

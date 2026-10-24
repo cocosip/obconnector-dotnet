@@ -26,7 +26,7 @@ public sealed class FaultTests
             "Connection must remain reusable after a known server error.");
     }
 
-    [IntegrationTheory]
+    [IntegrationTheory("slowQuery")]
     [MemberData(nameof(ProfileTheoryData.WithSlowQuery), MemberType = typeof(ProfileTheoryData))]
     public async Task CancellationInterruptsSlowQuery(string profileName)
     {
@@ -44,7 +44,7 @@ public sealed class FaultTests
         Assert.True(interrupted, "The configured slow query must be interrupted by caller cancellation.");
     }
 
-    [IntegrationTheory]
+    [IntegrationTheory("slowQuery")]
     [MemberData(nameof(ProfileTheoryData.WithSlowQuery), MemberType = typeof(ProfileTheoryData))]
     public async Task TimeoutInterruptsSlowQuery(string profileName)
     {

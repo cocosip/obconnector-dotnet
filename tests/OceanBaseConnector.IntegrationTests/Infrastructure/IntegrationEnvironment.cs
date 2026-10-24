@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.Extensions.Configuration;
 
 namespace OceanBaseConnector.IntegrationTests.Infrastructure;
 
@@ -31,6 +32,9 @@ public static class IntegrationEnvironment
     };
 
     private static readonly object Gate = new();
+    private static readonly IConfiguration Secrets = new ConfigurationBuilder()
+        .AddUserSecrets(typeof(IntegrationEnvironment).Assembly, optional: true)
+        .Build();
     private static IReadOnlyList<IntegrationProfile>? _profiles;
     private static Exception? _failure;
 
@@ -65,6 +69,8 @@ public static class IntegrationEnvironment
             throw new InvalidOperationException($"Profile '{name}' is not configured; it disappeared during this run.");
         return profile;
     }
+
+    internal static string? GetSecret(string key) => Secrets[key];
 
     private static IReadOnlyList<IntegrationProfile> Load()
     {

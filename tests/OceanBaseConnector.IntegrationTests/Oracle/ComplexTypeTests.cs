@@ -61,6 +61,46 @@ public sealed class ComplexTypeTests
         connection.ClearComplexTypeCache();
     }
 
+    public static TheoryData<string, bool> CollectionProcedureRows()
+    {
+        var data = new TheoryData<string, bool>();
+        foreach (var profile in ProfileTheoryData.OraclePrepareExecuteObjects())
+        {
+            data.Add(profile, false);
+            data.Add(profile, true);
+        }
+        return data;
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(CollectionProcedureRows))]
+    public async Task CollectionProcedureParametersRoundTrip(string profileName, bool inputOutput)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var name = db.NewObject("TYPE");
+        await db.ExecuteAsync(connection, "CREATE TYPE " + name + " AS TABLE OF NUMBER", CancellationToken.None);
+        var procedure = db.NewObject("PROCEDURE");
+        await db.ExecuteAsync(connection, "CREATE PROCEDURE " + procedure + " (p_input IN " + name +
+            ", p_output " + (inputOutput ? "IN OUT " : "OUT ") + name + ") AS BEGIN " +
+            (inputOutput ? "FOR i IN 1..p_input.COUNT LOOP p_output(i) := p_input(i) + p_output(i); END LOOP;" : "p_output := p_input;") +
+            " END;", CancellationToken.None);
+        var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
+        var type = await connection.GetComplexTypeAsync(owner, name);
+        Assert.True(type.IsCollection);
+        await using var command = db.Command(connection, procedure);
+        command.CommandType = CommandType.StoredProcedure;
+        DatabaseContext.Parameter(command, "p_input", type.CreateValue(1, 2, 3));
+        var output = DatabaseContext.Parameter(command, "p_output", inputOutput ? type.CreateValue(10, 20, 30) : DBNull.Value);
+        output.Direction = inputOutput ? ParameterDirection.InputOutput : ParameterDirection.Output;
+        output.ComplexType = type;
+        await command.ExecuteNonQueryAsync();
+        var actual = Assert.IsType<OceanBaseComplexValue>(output.Value).GetValues();
+        Assert.Equal(3, actual.Length);
+        for (var i = 0; i < actual.Length; i++)
+            DatabaseContext.EqualNumber(actual[i], (i + 1) * (inputOutput ? 11 : 1), "Collection procedure parameter mismatch.");
+    }
+
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.OracleWithCreateObjects), MemberType = typeof(ProfileTheoryData))]
     public async Task TypeCacheClearKeepsResolutionUsable(string profileName)

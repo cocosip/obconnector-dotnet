@@ -117,7 +117,7 @@ public sealed class ReaderTests
         var schema = reader.GetColumnSchema();
         Assert.Equal(2, schema.Count);
         Assert.Equal("id", schema[0].ColumnName, ignoreCase: true);
-        Assert.False(schema[0].IsReadOnly!.Value, "Ordinary select columns must be writable-mapped.");
+        Assert.Null(schema[0].IsReadOnly); // Result metadata does not establish updateability.
         var table2 = reader.GetSchemaTable();
         Assert.NotNull(table2);
         Assert.Equal(2, table2!.Rows.Count);

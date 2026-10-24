@@ -36,10 +36,13 @@ namespace OceanBaseConnector.UnitTests
                 : "select DBMS_XA.XA_" + operation + (flag.HasValue ? "(?, ?) from dual" : "(?) from dual"), sql);
             Assert.Equal(flag.HasValue ? 2u : 1u, cursor.ReadUInt32());
             Assert.Equal(operation == "RECOVER" ? 1 : 0, cursor.ReadUInt8()); Assert.Equal(1, cursor.ReadUInt8());
-            Assert.Equal(160, cursor.ReadUInt16());
-            Assert.Equal("SYS", Encoding.UTF8.GetString(XaBytes(cursor)));
-            Assert.Equal(operation == "RECOVER" ? "DBMS_XA_XID_ARRAY" : "DBMS_XA_XID", Encoding.UTF8.GetString(XaBytes(cursor)));
-            Assert.Equal(0, cursor.ReadUInt8());
+            Assert.Equal(operation == "RECOVER" ? 6 : 160, cursor.ReadUInt16());
+            if (operation != "RECOVER")
+            {
+                Assert.Equal("SYS", Encoding.UTF8.GetString(XaBytes(cursor)));
+                Assert.Equal("DBMS_XA_XID", Encoding.UTF8.GetString(XaBytes(cursor)));
+                Assert.Equal(0, cursor.ReadUInt8());
+            }
             if (flag.HasValue) Assert.Equal(operation == "COMMIT" ? 1 : 3, cursor.ReadUInt16());
             if (operation != "RECOVER")
             {
