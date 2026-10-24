@@ -249,6 +249,61 @@ namespace OceanBaseConnector.UnitTests.Session
         }
 
         [Fact]
+        public async Task ResetWithoutAutocommitStatusDestroysSessionInsteadOfReturningIt()
+        {
+            var server = LoopbackServer.Start(async client =>
+            {
+                var channel = new PacketChannel(client.GetStream());
+                await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
+                await channel.ReadPacketAsync();
+                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 2, 0, 0, 0 });
+                await ServerIdentity.ReplyAsync(channel, oracle: false);
+                Assert.Equal(new byte[] { 0x1f }, await channel.ReadPacketAsync());
+                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 0, 0, 0, 0 });
+            });
+            var options = new OceanBaseConnectionStringBuilder
+            {
+                Server = "127.0.0.1", Port = server.Port, UserId = "u", Password = "p",
+                TlsMode = OceanBaseTlsMode.Disabled, ConnectionTimeout = 5, Pooling = true,
+            }.Build();
+            using var pool = new PhysicalSessionPool();
+            var session = pool.Rent(options, null, new EndpointSelector(), out _);
+            await session.OpenAsync();
+            Assert.False(await pool.ReturnAsync(session, new ConnectionLog(null)));
+            Assert.False(pool.TryRent(out _));
+            server.Stop();
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task ProbeWithoutAutocommitStatusBreaksSession()
+        {
+            var server = LoopbackServer.Start(async client =>
+            {
+                var channel = new PacketChannel(client.GetStream());
+                await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
+                await channel.ReadPacketAsync();
+                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 2, 0, 0, 0 });
+                await ServerIdentity.ReplyAsync(channel, oracle: false);
+                Assert.Equal(new byte[] { 0x0e }, await channel.ReadPacketAsync());
+                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 0, 0, 0, 0 });
+            });
+            var options = new OceanBaseConnectionStringBuilder
+            {
+                Server = "127.0.0.1", Port = server.Port, UserId = "u", Password = "p",
+                TlsMode = OceanBaseTlsMode.Disabled, ConnectionTimeout = 5, Pooling = true,
+            }.Build();
+            using var pool = new PhysicalSessionPool();
+            var session = pool.Rent(options, null, new EndpointSelector(), out _);
+            await session.OpenAsync();
+            await Assert.ThrowsAsync<ProtocolException>(() => session.ProbeAsync(new ConnectionLog(null), 5));
+            Assert.Equal(SessionState.Broken, session.State);
+            session.Dispose();
+            server.Stop();
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
         public async Task FailedOpenRemovesEmptyRegistryPool()
         {
             var server = LoopbackServer.Start(async client =>

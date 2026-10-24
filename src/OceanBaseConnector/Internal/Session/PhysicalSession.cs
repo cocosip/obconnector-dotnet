@@ -384,7 +384,8 @@ namespace OceanBaseConnector.Internal.Session
                     : exchange.Receive();
                 var ok = OkPacket.Parse(packet, exchange.Capabilities);
                 if (ok.AffectedRows != 0 || ok.LastInsertId != 0 ||
-                    (ok.StatusFlags & (ServerStatusFlags.MoreResultsExists | ServerStatusFlags.InTransaction)) != 0)
+                    (ok.StatusFlags & (ServerStatusFlags.MoreResultsExists | ServerStatusFlags.InTransaction)) != 0 ||
+                    (Info?.Mode == OceanBaseCompatibilityMode.MySql && (ok.StatusFlags & ServerStatusFlags.Autocommit) == 0))
                     throw new ProtocolException("The session probe response was invalid.");
                 exchange.ObserveSessionState(ok);
                 exchange.Complete();
@@ -415,7 +416,8 @@ namespace OceanBaseConnector.Internal.Session
                         : exchange.Receive();
                     var ok = OkPacket.Parse(packet, exchange.Capabilities);
                     if (ok.AffectedRows != 0 || ok.LastInsertId != 0 ||
-                        (ok.StatusFlags & (ServerStatusFlags.MoreResultsExists | ServerStatusFlags.InTransaction)) != 0)
+                        (ok.StatusFlags & (ServerStatusFlags.MoreResultsExists | ServerStatusFlags.InTransaction)) != 0 ||
+                        (Info?.Mode == OceanBaseCompatibilityMode.MySql && (ok.StatusFlags & ServerStatusFlags.Autocommit) == 0))
                         throw new ProtocolException("The session reset response was invalid.");
                     exchange.ObserveSessionState(ok);
                     exchange.Complete();
