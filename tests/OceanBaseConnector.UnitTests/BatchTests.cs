@@ -77,7 +77,7 @@ namespace OceanBaseConnector.UnitTests
                 using var reader = asynchronous ? await batch.ExecuteReaderAsync() : batch.ExecuteReader();
                 Assert.Equal(0, reader.FieldCount); Assert.False(reader.Read()); Assert.False(reader.NextResult());
                 Assert.Throws<InvalidOperationException>(() => connection.GetSchema()); reader.Close();
-                Assert.Equal(6, connection.GetSchema().Rows.Count);
+                Assert.Equal(19, connection.GetSchema().Rows.Count);
             }
             finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));

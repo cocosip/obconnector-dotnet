@@ -80,7 +80,7 @@ namespace OceanBaseConnector.ConsumerTests
                     var info = field.GetValue(session)!; var infoType = info.GetType(); object Fact(string name) => infoType.GetProperty(name)!.GetValue(info)!;
                     field.SetValue(session, Activator.CreateInstance(infoType, Fact("ServerVersion"), Fact("ConnectionId"), Enum.Parse(assembly.GetType("OceanBaseConnector.OceanBaseCompatibilityMode")!, "MySql"), Fact("Capabilities"), Fact("ServerStatus"), Fact("ObCapabilityFlag"), Fact("SessionVariables")));
                 }
-                Assert.Equal(6, connection.GetSchema().Rows.Count);
+                Assert.Equal(mysql ? 17 : 19, connection.GetSchema().Rows.Count);
                 var collection = parameters ? "ProcedureParameters" : "Procedures";
                 using var table = asynchronous ? await connection.GetSchemaAsync(collection, budget.Token) : connection.GetSchema(collection);
                 Assert.Equal(names, table.Columns.Cast<DataColumn>().Select(x => x.ColumnName)); var row = Assert.Single(table.Rows.Cast<DataRow>());

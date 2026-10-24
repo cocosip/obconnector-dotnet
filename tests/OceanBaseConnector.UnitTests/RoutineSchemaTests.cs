@@ -162,9 +162,9 @@ namespace OceanBaseConnector.UnitTests
                 var values = new string?[5]; values[mysql ? 1 : 0] = "";
                 Assert.Empty(connection.GetSchema(collection, values).Rows.Cast<DataRow>());
                 if (mysql) { values = new string?[5]; values[4] = "Pkg"; Assert.Empty((await connection.GetSchemaAsync(collection, values)).Rows.Cast<DataRow>()); }
-                var metadata = connection.GetSchema(); Assert.Equal(6, metadata.Rows.Count);
-                Assert.Equal(new[] { 0, 0, 4, 4, 5, 5 }, metadata.Rows.Cast<DataRow>().Select(x => (int)x[1]));
-                Assert.Equal(new[] { 0, 0, 3, 4, 4, 5 }, metadata.Rows.Cast<DataRow>().Select(x => (int)x[2]));
+                var metadata = connection.GetSchema(); Assert.Equal(mysql ? 17 : 19, metadata.Rows.Count);
+                Assert.Equal(new[] { 0, 0, 4, 4, 5, 5 }, metadata.Rows.Cast<DataRow>().Take(6).Select(x => (int)x[1]));
+                Assert.Equal(new[] { 0, 0, 3, 4, 4, 5 }, metadata.Rows.Cast<DataRow>().Take(6).Select(x => (int)x[2]));
                 Assert.Throws<ArgumentException>(() => connection.GetSchema(collection, new string[6]));
                 using var canceled = new CancellationTokenSource(); canceled.Cancel();
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection.GetSchemaAsync(collection, canceled.Token));

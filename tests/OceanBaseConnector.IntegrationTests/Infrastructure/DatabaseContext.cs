@@ -65,7 +65,7 @@ public sealed class DatabaseContext : IAsyncDisposable
 
     public string NewObject(string kind)
     {
-        if (kind is not ("TABLE" or "TYPE" or "PROCEDURE")) throw new ArgumentException("Unsupported test object.");
+        if (kind is not ("TABLE" or "TYPE" or "PROCEDURE" or "VIEW" or "SEQUENCE" or "SYNONYM")) throw new ArgumentException("Unsupported test object.");
         var name = "OBI_" + Guid.NewGuid().ToString("N").Substring(0, 20).ToUpperInvariant();
         RegisterCleanup(kind, name, async () =>
         {

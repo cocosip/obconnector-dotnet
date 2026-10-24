@@ -105,6 +105,10 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 
 For supported alternatives and binding rules, see the [API reference](obconnector-dotnet-architecture-design.md).
 
+## Catalog metadata
+
+`GetSchema` has a local implementation for 19 Oracle / 17 MySQL collections; the full [Schema contract](schema.md) lists shapes, restrictions and permission requirements. Types/Synonyms are explicitly unsupported on MySQL. This is catalog discovery, not automatic parameter derivation, `DataTypes`, `KeyInfo` or a DataAdapter implementation. The added dictionary SQL is checked against pinned OceanBase source, with protocol fixtures and five-asset consumers; actual dictionary parsing, privileges, collation, older versions and OBProxy still require real-server reports. The historical 2026-10-24 database passes predate this extension and do not validate it.
+
 ## Runtime and integration coverage
 
 Local fixture and package checks cover different baselines and do not replace database validation. The integration suite (connection and identity gates: direct/OBProxy mode checks, TLS-name rejection, unsupported-plugin and autocommit-disabled rejection, plus the full functional suites) has not been established as passing; it runs only against a configured external database and is skipped everywhere else.

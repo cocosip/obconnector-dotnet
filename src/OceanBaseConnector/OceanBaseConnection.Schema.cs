@@ -11,7 +11,18 @@ namespace OceanBaseConnector
 {
     public sealed partial class OceanBaseConnection
     {
-        private static readonly string[] SchemaCollections = { "MetaDataCollections", "DataSourceInformation", "Tables", "Columns", "Procedures", "ProcedureParameters" };
+        private static readonly string[] SchemaCollections = { "MetaDataCollections", "DataSourceInformation", "Tables", "Columns", "Procedures", "ProcedureParameters", "Views", "Indexes", "IndexColumns", "Keys", "Constraints", "ConstraintColumns", "ForeignKeys", "ForeignKeyColumns", "Types", "Sequences", "Users", "Synonyms", "Restrictions" };
+        private static readonly string[][] SchemaRestrictionNames =
+        {
+            Array.Empty<string>(), Array.Empty<string>(),
+            new[] { "Catalog", "Schema", "Table", "TableType" }, new[] { "Catalog", "Schema", "Table", "Column" },
+            new[] { "Catalog", "Schema", "Routine", "RoutineType", "Package" }, new[] { "Catalog", "Schema", "Routine", "Parameter", "Package" },
+            new[] { "Catalog", "Schema", "View" }, new[] { "Catalog", "Schema", "Table", "Index" }, new[] { "Catalog", "Schema", "Table", "Index", "Column" },
+            new[] { "Catalog", "Schema", "Table", "Constraint", "ConstraintType" }, new[] { "Catalog", "Schema", "Table", "Constraint", "ConstraintType" },
+            new[] { "Catalog", "Schema", "Table", "Constraint", "Column" }, new[] { "Catalog", "Schema", "Table", "Constraint" }, new[] { "Catalog", "Schema", "Table", "Constraint", "Column" },
+            new[] { "Catalog", "Schema", "Type", "TypeCode" }, new[] { "Catalog", "Schema", "Sequence" }, new[] { "User", "Host" }, new[] { "Catalog", "Schema", "Synonym" }, Array.Empty<string>()
+        };
+        private static readonly int[] SchemaIdentifierParts = { 0, 0, 3, 4, 4, 5, 3, 4, 5, 4, 4, 5, 4, 5, 3, 3, 2, 3, 0 };
         private static readonly string[] SchemaTableColumns = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "TABLE_TYPE" };
         private static readonly string[] SchemaColumnColumns = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "COLUMN_NAME", "ORDINAL_POSITION", "COLUMN_DEFAULT", "IS_NULLABLE", "DATA_TYPE", "CHARACTER_MAXIMUM_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION" };
 
@@ -58,30 +69,47 @@ namespace OceanBaseConnector
             if (collectionName == null) throw new ArgumentNullException(nameof(collectionName));
             var index = Array.FindIndex(SchemaCollections, name => string.Equals(name, collectionName, StringComparison.OrdinalIgnoreCase));
             if (index < 0) throw new NotSupportedException("The requested schema collection is not supported.");
-            if (restrictions != null && restrictions.Length > (index < 2 ? 0 : index < 4 ? 4 : 5)) throw new ArgumentException("Too many restrictions for this schema collection.", nameof(restrictions));
+            if (restrictions != null && restrictions.Length > SchemaRestrictionNames[index].Length) throw new ArgumentException("Too many restrictions for this schema collection.", nameof(restrictions));
             var values = restrictions == null ? Array.Empty<string?>() : (string?[])restrictions.Clone();
             EnsureAmbientTransaction(); token.ThrowIfCancellationRequested();
             lock (_gate)
             {
                 var session = GetOpenSession();
                 var mysql = session.Info!.Mode == OceanBaseCompatibilityMode.MySql;
-                if (index == 0) return (CreateSchemaCollections(), null);
+                if (!SchemaCollectionAvailable(index, mysql)) throw new NotSupportedException("The requested schema collection is not supported in MySQL compatibility mode.");
+                if (index == 0) return (CreateSchemaCollections(mysql), null);
                 if (index == 1) return (CreateDataSourceInformation(mysql, session.Info.ServerVersion), null);
-                var table = index >= 4 ? CreateRoutineDirectoryTable(index == 5) : CreateDirectoryTable(index == 3);
+                if (index == 18) return (CreateSchemaRestrictions(mysql), null);
+                var table = index < 4 ? CreateDirectoryTable(index == 3) : index < 6 ? CreateRoutineDirectoryTable(index == 5) : CreateCatalogDirectoryTable(SchemaCollections[index]);
                 // This mode has no such identifier part; a non-null exact restriction cannot match.
-                var absent = mysql ? 1 : 0;
-                if (values.Length > absent && values[absent] != null || mysql && index >= 4 && values.Length > 4 && values[4] != null) return (table, null);
+                var absent = index == 16 ? mysql ? -1 : 1 : mysql ? 1 : 0;
+                if (absent >= 0 && values.Length > absent && values[absent] != null || mysql && (index == 4 || index == 5) && values.Length > 4 && values[4] != null) return (table, null);
                 var command = new OceanBaseCommand { Connection = this, Transaction = _transaction, CommandTimeout = _builder.CommandTimeout, RequiredSession = session };
-                try { command.CommandText = index >= 4 ? RoutineDirectorySql(index == 5, mysql, values, command) : DirectorySql(index == 3, mysql, values, command); return (table, command); }
+                try { command.CommandText = index < 4 ? DirectorySql(index == 3, mysql, values, command) : index < 6 ? RoutineDirectorySql(index == 5, mysql, values, command) : CatalogDirectorySql(SchemaCollections[index], mysql, values, command); return (table, command); }
                 catch { command.Dispose(); table.Dispose(); throw; }
             }
         }
 
-        private static DataTable CreateSchemaCollections()
+        private static bool SchemaCollectionAvailable(int index, bool mysql) => !mysql || index != 14 && index != 17;
+
+        private static DataTable CreateSchemaCollections(bool mysql)
         {
             var table = new DataTable("MetaDataCollections") { Locale = CultureInfo.InvariantCulture };
             table.Columns.Add("CollectionName", typeof(string)); table.Columns.Add("NumberOfRestrictions", typeof(int)); table.Columns.Add("NumberOfIdentifierParts", typeof(int));
-            for (var i = 0; i < SchemaCollections.Length; i++) table.Rows.Add(SchemaCollections[i], i < 2 ? 0 : i < 4 ? 4 : 5, i < 2 ? 0 : i == 2 ? 3 : i == 5 ? 5 : 4);
+            for (var i = 0; i < SchemaCollections.Length; i++)
+                if (SchemaCollectionAvailable(i, mysql)) table.Rows.Add(SchemaCollections[i], SchemaRestrictionNames[i].Length, SchemaIdentifierParts[i]);
+            return table;
+        }
+
+        private static DataTable CreateSchemaRestrictions(bool mysql)
+        {
+            var table = new DataTable("Restrictions") { Locale = CultureInfo.InvariantCulture };
+            foreach (var name in new[] { "CollectionName", "RestrictionName", "RestrictionDefault" }) table.Columns.Add(name, typeof(string));
+            table.Columns.Add("RestrictionNumber", typeof(int));
+            for (var i = 0; i < SchemaCollections.Length; i++)
+                if (SchemaCollectionAvailable(i, mysql))
+                    for (var j = 0; j < SchemaRestrictionNames[i].Length; j++)
+                        table.Rows.Add(SchemaCollections[i], SchemaRestrictionNames[i][j], DBNull.Value, j + 1);
             return table;
         }
 
@@ -170,6 +198,12 @@ namespace OceanBaseConnector
                 if (value == DBNull.Value) { values[i] = value; continue; }
                 var type = table.Columns[i].DataType;
                 if (type == typeof(string)) values[i] = value is string text ? text : throw new InvalidCastException("A directory text column returned a non-text value.");
+                else if (type == typeof(OceanBaseDecimal))
+                    values[i] = value is OceanBaseDecimal exact ? exact
+                        : value is string text ? DecimalCodec.Parse(text)
+                        : value is decimal || value is sbyte || value is byte || value is short || value is ushort || value is int || value is uint || value is long || value is ulong
+                            ? DecimalCodec.Parse(Convert.ToString(value, CultureInfo.InvariantCulture)!)
+                            : throw new InvalidCastException("A directory exact-number column returned an unsupported numeric representation.");
                 else
                 {
                     var number = value is OceanBaseDecimal exact ? exact.ToDecimal()

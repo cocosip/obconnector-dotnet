@@ -68,7 +68,7 @@ Without a configuration file, `OB_REQUIRE_INTEGRATION=1` plus the four documente
 | SequentialAccess streaming, cursor fetch paging (incl. Oracle offset), CloseConnection, column schema | `Readers` |
 | Commit/rollback/dispose semantics, savepoints + validation, isolation levels per mode, concurrent-tx gate | `Transactions` |
 | Multi-result batches, parameterized batch commands + Prepare, per-command RecordsAffected | `Batches` |
-| Six schema collections sync/async, restriction filtering | `Schema` |
+| Mode-advertised schema collections sync/async, restriction filtering, composite key/index/FK ordering, views, Oracle types/synonyms and sequence non-advancement | `Schema` |
 | XA lifecycle (prepare/recover/commit/rollback), one-phase, invalid phase transitions | `Xa` |
 | PL/SQL OUT/InputOutput, RETURNING INTO, stored procedures + schema, REF CURSOR, temporary LOBs + locator params, complex types (including collection IN/OUT/InputOutput procedure parameters), array binding | `Oracle` |
 | Large binary streaming (LONG DATA / LOB locator), Oracle piece-wise upload | `Streams` |

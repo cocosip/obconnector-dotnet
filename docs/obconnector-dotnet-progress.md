@@ -143,6 +143,32 @@ The first 17 regressions failed before implementation. Final added unit cases to
 
 TRX reports are in ignored `TestResults/mysql-compression/`; command logs are `TestResults-mysql-compression-*.log`. Local transport/codec/package evidence does not establish real OceanBase/OBProxy compression, enterprise compressed TLS, cross-platform or large application-load acceptance. P1-02 remains partial, with OB20 compression/reroute and real matrices open.
 
+## 2026-10-25 P1-10 Schema catalog
+
+Starting from `b38e4a8`, expanded the six existing Schema collections to 19 in Oracle mode and 17 in MySQL mode. New directories cover Views, Indexes/IndexColumns, Keys/Constraints/ConstraintColumns, ForeignKeys/ForeignKeyColumns, Types, Sequences, Users and Synonyms; Restrictions publishes ordered filter descriptions. Types and Synonyms are Oracle-only and not advertised on MySQL. See the [full Schema contract](schema.md) for all columns, CLR types, dictionary sources, identity conventions and permission requirements.
+
+The implementation reuses the existing command/session/transaction, timeout, cancellation, exact parameter binding and strict DataTable-shape paths. Composite Oracle foreign keys join parent/child owners, constraints, tables and column ordinal. Sequence numbers use OceanBaseDecimal after exact text transport, with no NEXTVAL/CURRVAL query or CLR decimal/Int64 truncation. MySQL Users and Sequences query mysql.user and oceanbase.DBA_SEQUENCES; privilege/missing-view errors remain visible, without privileged fallback or fabricated empty success. Metadata preserves server identifier spelling; views enumerate identity rather than SQL definitions. Types describes named Oracle object/collection types; DataTypes, automatic DeriveParameters and KeyInfo remain separate work.
+
+The plan is under ignored `docs/superpowers/plans/2026-10-25-schema-catalog.md`. The first 90 new cases all failed before implementation (`red.trx`), then passed (`green.trx`); nine additional fault/empty/permission/prefix-length cases make 99 new unit cases. SQL dictionary sources were checked against pinned OceanBase `5e8a63d29dae9fde5e962b8fcc7b167d438fc343` definitions, not executed on a real deployment. An independent reviewer found the Oracle INCREMENT alias was a reserved word: a new assertion produced two failing cases (`review-red.trx`, 42 passed/2 failed), then the Oracle alias was quoted. Review also found stale six-collection assertions, the integration object-kind whitelist, and MySQL table-name case assumptions; all were corrected and re-reviewed with no remaining confirmed Critical/Important finding.
+
+Affected-consumer filter used:
+
+```powershell
+dotnet test tests/OceanBaseConnector.ConsumerTests -c Release --no-restore --no-build --filter "FullyQualifiedName~Schema|FullyQualifiedName~CatalogEveryAsset" --logger "trx;LogFileName=consumer-final.trx" --results-directory TestResults/schema-catalog
+```
+
+| Gate | Command / evidence | Result and scope |
+| --- | --- | --- |
+| Release solution | `dotnet build OceanBaseConnector.slnx -c Release --no-restore`; `TestResults-schema-build.log` | Exit 0, 0 errors/0 warnings; all five product assets, consumer and integration entry points built. Existing restore assets/cache used; no new dependency or vulnerability-feed audit. |
+| Complete units | `dotnet test tests/OceanBaseConnector.UnitTests -c Release --no-restore --no-build --logger 'trx;LogFileName=unit-final.trx' --results-directory TestResults/schema-catalog` | Exit 0, 3693 passed/0 failed/skipped, normal Windows certificate permissions. The preceding complete run had 3687 passed/6 stale metadata-assertion failures (`unit-pre-review.trx`), then the complete suite was rebuilt and rerun. Final duration 2m36s. |
+| Affected consumers | `dotnet test tests/OceanBaseConnector.ConsumerTests -c Release --no-restore --no-build (filter below)`; `consumer-final.trx` | Exit 0, 66 passed/0 failed/skipped, including 16 new five-asset/mode/sync-async cases, each querying all supported new directories. This is the affected subset, not the complete consumer suite. The initial new consumer run had 8 Oracle fixture failures because result status invalidated session variables; reusing SessionTimeZoneFixture for the resulting probes corrected the fixture. |
+| DI | `dotnet test tests/OceanBaseConnector.DependencyInjection.Tests -c Release --no-restore --no-build`; `di-final.trx` | Exit 0, 14 passed/0 failed/skipped. |
+| Integration discovery | `dotnet test tests/OceanBaseConnector.IntegrationTests -c Release --no-restore --no-build`; `integration-final.trx` | Exit 0, 9 configuration cases passed/72 skipped. Added composite key/index/FK/view and Oracle type/sequence/synonym real-profile tests, plus all-advertised-collection discovery; real profiles were not configured. No real SQL/privilege/OBProxy pass inferred. |
+| Changed C# format | `dotnet format OceanBaseConnector.slnx --no-restore --verify-no-changes --include <13 changed C# files>`; `TestResults-schema-format.log` | Final exit 0, workspace-load warning. Two switch-arm whitespace findings in the shared test sample were corrected; no behavior change. |
+| Documentation | Local links/anchors, all 23 audit IDs, 8 work-package coverage, diff checks | Validated for the module documents; the previous gap IDs and release gates are preserved. |
+
+Reports are under ignored `TestResults/schema-catalog/`, logs use `TestResults-schema-*.log`. The final complete-unit count was read from the actual TRX; skipped integration cases are not passes. No full consumer rerun, new package/runtime consumer matrix, live dictionary/permission/collation/older-version/OBProxy run or cross-platform acceptance was performed for this module. P1-10 is locally implemented with real compatibility still open; W6 also retains DataAdapter/CommandBuilder and parameter-inference work. The full completeness goal remains active.
+
 ## Failures and skips still requiring attention
 
 | Item | Status / next verification |

@@ -217,12 +217,15 @@ internal static partial class DatabaseCases
     private static async Task Schema(CaseContext c, CancellationToken token)
     {
         await using var connection = await c.OpenAsync(token);
-        foreach (var name in new[] { "MetaDataCollections", "DataSourceInformation", "Tables", "Columns", "Procedures", "ProcedureParameters" })
+        using var collections = connection.GetSchema();
+        c.Check(collections.Rows.Count == (c.Oracle ? 19 : 17), "All mode-supported schema collections must be advertised.");
+        foreach (System.Data.DataRow collection in collections.Rows)
         {
+            var name = (string)collection["CollectionName"];
             using var sync = connection.GetSchema(name);
             using var async = await connection.GetSchemaAsync(name, token);
             c.Check(sync.Columns.Count > 0 && sync.Columns.Count == async.Columns.Count, "Sync/async schema collection shapes must match.");
-            if (name == "MetaDataCollections") c.Check(sync.Rows.Count == 6, "Six schema collections must be advertised.");
+            if (name == "MetaDataCollections") c.Check(sync.Rows.Count == collections.Rows.Count, "Schema collection discovery must be stable.");
         }
     }
 
