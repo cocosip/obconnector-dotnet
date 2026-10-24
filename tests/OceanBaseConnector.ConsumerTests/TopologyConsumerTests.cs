@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Runtime.Loader;
 using System.Text;
 using System.Threading;
@@ -15,6 +16,96 @@ namespace OceanBaseConnector.ConsumerTests
 {
     public sealed partial class Ob20ConsumerTests
     {
+        public static IEnumerable<object[]> PoolRoutingAssets()
+        {
+            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+                foreach (var asynchronous in new[] { false, true }) yield return new object[] { target, asynchronous };
+        }
+
+        [Theory]
+        [MemberData(nameof(PoolRoutingAssets))]
+        public async Task EveryAssetIsolatesPooledResolverRoutesAndRefreshesEndpointSnapshots(string target, bool asynchronous)
+        {
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var first = new TcpListener(IPAddress.Loopback, 0); first.Start();
+            using var second = new TcpListener(IPAddress.Loopback, 0); second.Start();
+            async Task Serve(TcpClient peer, byte affected)
+            {
+                using (peer)
+                {
+                    var stream = peer.GetStream();
+                    var channel = new PacketChannel(stream);
+                    await Handshake(channel, stream, "unrequested", budget.Token);
+                    var query = await ReadRequest(stream, channel, false, 0, budget.Token);
+                    Assert.Equal(3, query[0]);
+                    Assert.Equal("selected", Encoding.UTF8.GetString(query, 1, query.Length - 1));
+                    await channel.WritePacketAsync(Report(false, affected), budget.Token);
+                    channel.BeginCommand();
+                    Assert.Equal(new byte[] { 0x1f }, await ReadRequest(stream, channel, false, 0, budget.Token));
+                    await channel.WritePacketAsync(Report(false, 0), budget.Token);
+                    await ObserveClose(stream, budget.Token);
+                }
+            }
+            async Task ServeSecond()
+            {
+                var one = Serve(await second.AcceptTcpClientAsync(budget.Token), 2);
+                var two = Serve(await second.AcceptTcpClientAsync(budget.Token), 2);
+                await Task.WhenAll(one, two);
+            }
+            var serving = Task.WhenAll(Task.Run(async () => await Serve(await first.AcceptTcpClientAsync(budget.Token), 1)), ServeSecond());
+            var context = new AssemblyLoadContext("pool-routing-" + target, isCollectible: true);
+            DbConnection? a = null, b = null;
+            try
+            {
+                var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
+                var helpers = context.LoadFromAssemblyPath(typeof(NetStandard.TopologyAddressResolver).Assembly.Location);
+                var resolverType = helpers.GetType("OceanBaseConnector.ConsumerTests.NetStandard.TopologyAddressResolver")!;
+                var firstAddress = "127.0.0.1:" + ((IPEndPoint)first.LocalEndpoint).Port;
+                var secondAddress = "127.0.0.1:" + ((IPEndPoint)second.LocalEndpoint).Port;
+                var resolverA = Activator.CreateInstance(resolverType, firstAddress, asynchronous)!;
+                var resolverB = Activator.CreateInstance(resolverType, secondAddress, asynchronous)!;
+                var connectionType = assembly.GetType("OceanBaseConnector.OceanBaseConnection")!;
+                var configuration = new DbConnectionStringBuilder
+                {
+                    ["Server"] = firstAddress,
+                    ["User ID"] = "u",
+                    ["TLS Mode"] = "Disabled",
+                    ["Pooling"] = true,
+                    ["Max Pool Size"] = 1,
+                    ["Connection Timeout"] = 5,
+                }.ConnectionString;
+                a = (DbConnection)Activator.CreateInstance(connectionType)!;
+                b = (DbConnection)Activator.CreateInstance(connectionType)!;
+                a.ConnectionString = b.ConnectionString = configuration;
+                connectionType.GetProperty("AddressResolver")!.SetValue(a, resolverA);
+                connectionType.GetProperty("AddressResolver")!.SetValue(b, resolverB);
+                async Task Execute(DbConnection connection, int affected)
+                {
+                    if (asynchronous) await connection.OpenAsync(budget.Token); else connection.Open();
+                    using var command = connection.CreateCommand(); command.CommandText = "selected";
+                    Assert.Equal(affected, asynchronous ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
+                    if (asynchronous) await connection.CloseAsync(); else connection.Close();
+                }
+                await Execute(a, 1);
+                await Execute(b, 2);
+                resolverType.GetProperty("Addresses")!.SetValue(resolverA, secondAddress);
+                await Execute(a, 2);
+                Assert.Equal(2, resolverType.GetProperty("Calls")!.GetValue(resolverA));
+                Assert.Equal(1, resolverType.GetProperty("Calls")!.GetValue(resolverB));
+                DisposePool(a); DisposePool(b);
+                await serving.WaitAsync(budget.Token);
+            }
+            finally
+            {
+                a?.Close(); b?.Close();
+                if (a != null) DisposePool(a); if (b != null) DisposePool(b);
+                a?.Dispose(); b?.Dispose();
+                budget.Cancel(); first.Stop(); second.Stop(); context.Unload();
+            }
+            static void DisposePool(DbConnection connection) =>
+                (connection.GetType().GetField("_pool", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection) as IDisposable)?.Dispose();
+        }
+
         public static IEnumerable<object[]> TopologyAssets()
         {
             foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })

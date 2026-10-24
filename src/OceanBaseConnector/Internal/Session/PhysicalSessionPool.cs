@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -9,6 +10,8 @@ namespace OceanBaseConnector.Internal.Session
     /// <summary>Owns reusable physical sessions for one immutable connection configuration.</summary>
     internal sealed class PhysicalSessionPool : IDisposable
     {
+        internal PhysicalSessionPool(IOceanBaseAddressResolver? resolver = null) => Resolver = resolver;
+        internal IOceanBaseAddressResolver? Resolver { get; }
         private readonly object _gate = new object();
         private readonly Stack<PhysicalSession> _idle = new Stack<PhysicalSession>();
         private readonly HashSet<PhysicalSession> _sessions = new HashSet<PhysicalSession>();
@@ -21,32 +24,57 @@ namespace OceanBaseConnector.Internal.Session
         private int _lifetimeSeconds;
         private int _opening;
         private int _waiters;
+        private int _renters;
 
         internal bool IsEmpty
         {
             get
             {
-                lock (_gate) return _sessions.Count == 0 && _opening == 0 && _waiters == 0;
+                lock (_gate) return _sessions.Count == 0 && _opening == 0 && _waiters == 0 && _renters == 0;
             }
         }
 
         private enum RentDecision { Create, Candidate, Wait }
 
         internal PhysicalSession Rent(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
-            EndpointSelector selector, out bool reused, CancellationToken cancellationToken = default)
+            EndpointSelector selector, out bool reused, CancellationToken cancellationToken = default, bool reserved = false)
+        {
+            if (!reserved) BeginRent();
+            try { return RentCore(options, resolver, selector, out reused, cancellationToken); }
+            finally { EndRent(); }
+        }
+
+        internal void BeginRent()
+        {
+            lock (_gate)
+            {
+                if (_disposed) throw new ObjectDisposedException(nameof(PhysicalSessionPool));
+                _renters++;
+            }
+        }
+
+        private void EndRent() { lock (_gate) _renters--; }
+
+        private PhysicalSession RentCore(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
+            EndpointSelector selector, out bool reused, CancellationToken cancellationToken)
         {
             var started = Stopwatch.StartNew();
-            WarmUp(options, resolver, selector, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var endpoints = resolver == null ? null : PhysicalSession.ResolveEndpoints(options, resolver, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            PruneRoutes(endpoints);
+            WarmUp(options, resolver, selector, endpoints, cancellationToken);
             while (true)
             {
-                var decision = TakeCandidate(options, out var candidate, out var expired);
+                cancellationToken.ThrowIfCancellationRequested();
+                var decision = TakeCandidate(options, endpoints, out var candidate, out var expired);
                 DisposeExpired(expired);
                 if (decision == RentDecision.Create)
                 {
                     reused = false;
                     try
                     {
-                        var session = new PhysicalSession(options, resolver, selector);
+                        var session = new PhysicalSession(options, resolver, selector, resolvedEndpoints: endpoints);
                         RegisterCreated(session);
                         DriverDiagnostics.PoolBorrowed();
                         return session;
@@ -66,7 +94,7 @@ namespace OceanBaseConnector.Internal.Session
                 {
                     try
                     {
-                        candidate!.Probe(new ConnectionLog(null), options.CommandTimeoutSeconds);
+                        candidate!.Probe(new ConnectionLog(null), options.CommandTimeoutSeconds, cancellationToken);
                         reused = true;
                         DriverDiagnostics.PoolBorrowed();
                         return candidate;
@@ -85,20 +113,32 @@ namespace OceanBaseConnector.Internal.Session
 
         internal async Task<PhysicalSession> RentAsync(OceanBaseConnectionOptions options,
             IOceanBaseAddressResolver? resolver, EndpointSelector selector,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default, bool reserved = false)
+        {
+            if (!reserved) BeginRent();
+            try { return await RentAsyncCore(options, resolver, selector, cancellationToken).ConfigureAwait(false); }
+            finally { EndRent(); }
+        }
+
+        private async Task<PhysicalSession> RentAsyncCore(OceanBaseConnectionOptions options,
+            IOceanBaseAddressResolver? resolver, EndpointSelector selector, CancellationToken cancellationToken)
         {
             var started = Stopwatch.StartNew();
-            await WarmUpAsync(options, resolver, selector, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            var endpoints = resolver == null ? null : await PhysicalSession.ResolveEndpointsAsync(options, resolver, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            PruneRoutes(endpoints);
+            await WarmUpAsync(options, resolver, selector, endpoints, cancellationToken).ConfigureAwait(false);
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var decision = TakeCandidate(options, out var candidate, out var expired);
+                var decision = TakeCandidate(options, endpoints, out var candidate, out var expired);
                 DisposeExpired(expired);
                 if (decision == RentDecision.Create)
                 {
                     try
                     {
-                        var session = new PhysicalSession(options, resolver, selector);
+                        var session = new PhysicalSession(options, resolver, selector, resolvedEndpoints: endpoints);
                         RegisterCreated(session);
                         DriverDiagnostics.PoolBorrowed();
                         return session;
@@ -271,7 +311,7 @@ namespace OceanBaseConnector.Internal.Session
             get { lock (_gate) return _disposed; }
         }
 
-        private RentDecision TakeCandidate(OceanBaseConnectionOptions options, out PhysicalSession? candidate,
+        private RentDecision TakeCandidate(OceanBaseConnectionOptions options, IReadOnlyList<OceanBaseEndpoint>? endpoints, out PhysicalSession? candidate,
             out List<PhysicalSession>? expired)
         {
             expired = null;
@@ -283,7 +323,7 @@ namespace OceanBaseConnector.Internal.Session
                 {
                     var item = _idle.Pop();
                     if (item.State == SessionState.Open && !item.IsReservedForOther(null) &&
-                        !item.RequiresDiscardOnReturn &&
+                        !item.RequiresDiscardOnReturn && ContainsEndpoint(endpoints, item.Endpoint) &&
                         (!item.IsLifetimeExpired(DateTime.UtcNow, _lifetimeSeconds) &&
                          (!item.IsIdleExpired(DateTime.UtcNow, _idleLifetimeSeconds) || _idle.Count + 1 <= _minPoolSize)))
                     {
@@ -309,7 +349,7 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         private void WarmUp(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
-            EndpointSelector selector, CancellationToken cancellationToken)
+            EndpointSelector selector, IReadOnlyList<OceanBaseEndpoint>? endpoints, CancellationToken cancellationToken)
         {
             var warmed = new List<PhysicalSession>();
             try
@@ -321,8 +361,8 @@ namespace OceanBaseConnector.Internal.Session
                     try
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        session = new PhysicalSession(options, resolver, selector);
-                        session.Open();
+                        session = new PhysicalSession(options, resolver, selector, resolvedEndpoints: endpoints);
+                        session.Open(cancellationToken);
                         registrationAttempted = true;
                         RegisterCreated(session, idle: true);
                         warmed.Add(session);
@@ -343,7 +383,7 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         private async Task WarmUpAsync(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
-            EndpointSelector selector, CancellationToken cancellationToken)
+            EndpointSelector selector, IReadOnlyList<OceanBaseEndpoint>? endpoints, CancellationToken cancellationToken)
         {
             var warmed = new List<PhysicalSession>();
             try
@@ -355,7 +395,7 @@ namespace OceanBaseConnector.Internal.Session
                     try
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        session = new PhysicalSession(options, resolver, selector);
+                        session = new PhysicalSession(options, resolver, selector, resolvedEndpoints: endpoints);
                         await session.OpenAsync(cancellationToken).ConfigureAwait(false);
                         registrationAttempted = true;
                         RegisterCreated(session, idle: true);
@@ -387,6 +427,32 @@ namespace OceanBaseConnector.Internal.Session
                 _opening++;
                 return true;
             }
+        }
+
+        private static bool ContainsEndpoint(IReadOnlyList<OceanBaseEndpoint>? endpoints, string endpoint)
+        {
+            if (endpoints == null) return true;
+            foreach (var candidate in endpoints)
+                if (string.Equals(candidate.ToString(), endpoint, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        private void PruneRoutes(IReadOnlyList<OceanBaseEndpoint>? endpoints)
+        {
+            if (endpoints == null) return;
+            var removed = new List<PhysicalSession>();
+            lock (_gate)
+            {
+                var retained = _idle.ToArray();
+                _idle.Clear();
+                for (var i = retained.Length - 1; i >= 0; i--)
+                {
+                    var session = retained[i];
+                    if (ContainsEndpoint(endpoints, session.Endpoint)) _idle.Push(session);
+                    else { _sessions.Remove(session); removed.Add(session); ReleaseWaiterSignal(); }
+                }
+            }
+            DisposeExpired(removed);
         }
 
         private void Configure(OceanBaseConnectionOptions options)
@@ -519,13 +585,24 @@ namespace OceanBaseConnector.Internal.Session
     internal static class PhysicalSessionPoolRegistry
     {
         private static readonly object Gate = new object();
-        private static readonly Dictionary<string, PhysicalSessionPool> Pools = new Dictionary<string, PhysicalSessionPool>(StringComparer.Ordinal);
+        private static readonly Dictionary<PoolKey, PhysicalSessionPool> Pools = new Dictionary<PoolKey, PhysicalSessionPool>();
 
-        internal static PhysicalSessionPool Get(string key)
+        internal static PhysicalSessionPool Get(string key, IOceanBaseAddressResolver? resolver = null)
+        {
+            var identity = new PoolKey(key, resolver);
+            lock (Gate)
+            {
+                if (!Pools.TryGetValue(identity, out var pool)) Pools.Add(identity, pool = new PhysicalSessionPool(resolver));
+                return pool;
+            }
+        }
+
+        internal static PhysicalSessionPool GetForRent(string key, IOceanBaseAddressResolver? resolver)
         {
             lock (Gate)
             {
-                if (!Pools.TryGetValue(key, out var pool)) Pools.Add(key, pool = new PhysicalSessionPool());
+                var pool = Get(key, resolver);
+                pool.BeginRent();
                 return pool;
             }
         }
@@ -533,16 +610,27 @@ namespace OceanBaseConnector.Internal.Session
         internal static bool ReleaseIfEmpty(string key, PhysicalSessionPool pool)
         {
             var removed = false;
+            var identity = new PoolKey(key, pool.Resolver);
             lock (Gate)
             {
-                if (Pools.TryGetValue(key, out var current) && ReferenceEquals(current, pool) && pool.IsEmpty)
+                if (Pools.TryGetValue(identity, out var current) && ReferenceEquals(current, pool) && pool.IsEmpty)
                 {
-                    Pools.Remove(key);
+                    Pools.Remove(identity);
                     removed = true;
                 }
             }
             if (removed) pool.Dispose();
             return removed;
+        }
+
+        private readonly struct PoolKey : IEquatable<PoolKey>
+        {
+            private readonly string _configuration;
+            private readonly IOceanBaseAddressResolver? _resolver;
+            internal PoolKey(string configuration, IOceanBaseAddressResolver? resolver) { _configuration = configuration; _resolver = resolver; }
+            public bool Equals(PoolKey other) => string.Equals(_configuration, other._configuration, StringComparison.Ordinal) && ReferenceEquals(_resolver, other._resolver);
+            public override bool Equals(object? obj) => obj is PoolKey other && Equals(other);
+            public override int GetHashCode() => unchecked(StringComparer.Ordinal.GetHashCode(_configuration) * 397 ^ (_resolver == null ? 0 : RuntimeHelpers.GetHashCode(_resolver)));
         }
     }
 }

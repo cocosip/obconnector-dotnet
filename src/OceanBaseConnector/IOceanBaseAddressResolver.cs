@@ -3,8 +3,11 @@ using System.Threading.Tasks;
 
 namespace OceanBaseConnector
 {
-    /// <summary>Supplies trusted addresses for the same logical tenant before each Open.
+    /// <summary>Supplies trusted addresses for the same logical tenant before each logical Open, including pool reuse.
     /// Results use Server syntax and replace its list; omitted ports inherit Port.
+    /// An Open uses one snapshot for pool validation and any new physical sessions.
+    /// Ordinary connection pools are scoped to the resolver instance by reference identity.
+    /// Removed endpoints are retired before reuse; already borrowed sessions are not migrated.
     /// Implementations are caller-owned and must be safe for concurrent data-source opens.
     /// Cancellation callbacks must return promptly and must not throw.</summary>
     public interface IOceanBaseAddressResolver

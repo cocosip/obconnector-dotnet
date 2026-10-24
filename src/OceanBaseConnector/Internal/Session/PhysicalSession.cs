@@ -19,6 +19,7 @@ namespace OceanBaseConnector.Internal.Session
         private readonly OceanBaseConnectionOptions _options;
         private readonly X509Certificate2? _clientCertificate;
         private readonly IOceanBaseAddressResolver? _addressResolver;
+        private readonly IReadOnlyList<OceanBaseEndpoint>? _resolvedEndpoints;
         private readonly EndpointSelector _endpointSelector;
         private string _endpoint;
         private string _database;
@@ -46,11 +47,12 @@ namespace OceanBaseConnector.Internal.Session
         internal bool UseLobLocators => _options.UseLobLocators && Info?.Mode == OceanBaseCompatibilityMode.Oracle &&
             (Info.Capabilities.Effective & CapabilityFlags.ClientSupportLobLocator) != 0;
 
-        public PhysicalSession(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? addressResolver = null, EndpointSelector? endpointSelector = null, X509Certificate2? clientCertificate = null)
+        public PhysicalSession(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? addressResolver = null, EndpointSelector? endpointSelector = null, X509Certificate2? clientCertificate = null,
+            IReadOnlyList<OceanBaseEndpoint>? resolvedEndpoints = null)
         {
             _options = options; _clientCertificate = clientCertificate; _endpoint = options.Endpoint; _database = _initialDatabase = options.Database;
             _lastReturnedUtc = _createdUtc;
-            _addressResolver = addressResolver; _endpointSelector = endpointSelector ?? new EndpointSelector();
+            _addressResolver = addressResolver; _endpointSelector = endpointSelector ?? new EndpointSelector(); _resolvedEndpoints = resolvedEndpoints;
         }
 
         public SessionState State { get { lock (_gate) return _state; } }
@@ -98,14 +100,16 @@ namespace OceanBaseConnector.Internal.Session
             lock (_gate) _lastReturnedUtc = DateTime.UtcNow;
         }
 
-        public void Open()
+        public void Open() => Open(CancellationToken.None);
+
+        internal void Open(CancellationToken cancellationToken)
         {
             StartOpen();
-            using var budget = CreateBudget(CancellationToken.None);
+            using var budget = CreateBudget(cancellationToken);
             try
             {
                 budget.Token.ThrowIfCancellationRequested();
-                var endpoints = _addressResolver == null ? _options.Endpoints : ParseResolved(_addressResolver.Resolve(budget.Token));
+                var endpoints = _resolvedEndpoints ?? ResolveEndpoints(_options, _addressResolver, budget.Token);
                 budget.Token.ThrowIfCancellationRequested();
                 var start = _endpointSelector.SelectStart(endpoints.Count, _options.LoadBalance);
                 for (var i = 0; ; i++)
@@ -124,7 +128,7 @@ namespace OceanBaseConnector.Internal.Session
             catch (Exception exception)
             {
                 Break();
-                throw MapOpenError(exception, budget, CancellationToken.None);
+                throw MapOpenError(exception, budget, cancellationToken);
             }
         }
 
@@ -135,7 +139,7 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 budget.Token.ThrowIfCancellationRequested();
-                var endpoints = await ResolveEndpointsAsync(budget.Token).ConfigureAwait(false);
+                var endpoints = _resolvedEndpoints ?? await ResolveEndpointsAsync(_options, _addressResolver, budget.Token).ConfigureAwait(false);
                 budget.Token.ThrowIfCancellationRequested();
                 var start = _endpointSelector.SelectStart(endpoints.Count, _options.LoadBalance);
                 for (var i = 0; ; i++)
@@ -171,19 +175,22 @@ namespace OceanBaseConnector.Internal.Session
         private static bool CanTryNext(IOException error, int index, int count, CancellationTokenSource budget) =>
             error.InnerException is SocketException && index + 1 < count && !budget.IsCancellationRequested;
 
-        private IReadOnlyList<OceanBaseEndpoint> ParseResolved(string addresses)
+        private static IReadOnlyList<OceanBaseEndpoint> ParseResolved(string addresses, int port)
         {
             if (string.IsNullOrWhiteSpace(addresses) || addresses.Length > 65536)
                 throw new ArgumentException("Resolved addresses must contain between 1 and 65536 characters.");
             var count = 1;
             foreach (var c in addresses) if (c == ',' && ++count > 256) throw new ArgumentException("Resolved address count exceeds 256.");
-            return OceanBaseEndpoint.Parse(addresses, _options.Port);
+            return OceanBaseEndpoint.Parse(addresses, port);
         }
 
-        private async Task<IReadOnlyList<OceanBaseEndpoint>> ResolveEndpointsAsync(CancellationToken token)
+        internal static IReadOnlyList<OceanBaseEndpoint> ResolveEndpoints(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver, CancellationToken token) =>
+            resolver == null ? options.Endpoints : ParseResolved(resolver.Resolve(token), options.Port);
+
+        internal static async Task<IReadOnlyList<OceanBaseEndpoint>> ResolveEndpointsAsync(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver, CancellationToken token)
         {
-            if (_addressResolver == null) return _options.Endpoints;
-            var resolving = _addressResolver.ResolveAsync(token) ?? throw new InvalidOperationException("The address resolver returned no task.");
+            if (resolver == null) return options.Endpoints;
+            var resolving = resolver.ResolveAsync(token) ?? throw new InvalidOperationException("The address resolver returned no task.");
             var canceled = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             using (token.Register(() => canceled.TrySetCanceled()))
             {
@@ -194,7 +201,7 @@ namespace OceanBaseConnector.Internal.Session
                     _ = resolving.ContinueWith(task => { _ = task.Exception; }, CancellationToken.None,
                         TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                 }
-                return ParseResolved(await completed.ConfigureAwait(false));
+                return ParseResolved(await completed.ConfigureAwait(false), options.Port);
             }
         }
 
@@ -408,9 +415,9 @@ namespace OceanBaseConnector.Internal.Session
         internal Task ResetAsync(ConnectionLog log, int timeout, CancellationToken cancellationToken = default) =>
             ResetCore(log, timeout, cancellationToken, asynchronous: true);
 
-        internal void Probe(ConnectionLog log, int timeout)
+        internal void Probe(ConnectionLog log, int timeout, CancellationToken cancellationToken = default)
         {
-            ProbeCore(log, timeout, CancellationToken.None, asynchronous: false).GetAwaiter().GetResult();
+            ProbeCore(log, timeout, cancellationToken, asynchronous: false).GetAwaiter().GetResult();
         }
 
         internal Task ProbeAsync(ConnectionLog log, int timeout, CancellationToken cancellationToken = default) =>

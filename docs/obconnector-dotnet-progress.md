@@ -2,6 +2,31 @@
 
 This page retains historical results and open work from the former progress ledger, alongside dated verification of later changes. Local regression results and real database acceptance are recorded separately.
 
+## 2026-10-24 documentation audit refresh
+
+The [audit report](obconnector-dotnet-driver-audit.md) and [completeness baseline](obconnector-dotnet-completeness.md) now track 23 gaps (6 P0, 11 P1, 6 P2) against .NET `06d58e1` and Java `6adc311b`. Each gap has a trigger, source/test entry point and acceptance evidence requirement. Existing nested object/collection support, the six Schema collections and the close/reopen ownership repair are recorded as implemented rather than missing.
+
+At the initial documentation-only checkpoint, source review identified ordinary global pools sharing per-connection resolver routes (P0-06), and `SchemaOnly` executing SQL before hiding/draining rows (P1-05). That checkpoint did not fix either behavior. P0-06 was subsequently implemented and tested as recorded below; dedicated SchemaOnly side-effect/lock regressions remain open. Credential provision/rotation is tracked explicitly as P1-11. Architecture and compatibility limits have been synchronized; the task schedule and historical results are preserved.
+
+## 2026-10-24 P0-06 pooled resolver routing
+
+Ordinary registry pools now use the original connection string and resolver reference identity, including when resolvers override value equality. Data sources retain private pools. Each pooled Open resolves once; the same endpoint snapshot governs idle-session selection, minimum-pool warmup and new physical sessions. Removed idle endpoints are discarded before warmup, discovery failure cannot fall back to an idle session, and borrowed sessions finish normally. Host/port membership does not detect DNS IP changes behind an unchanged hostname; concurrent Opens use independent snapshots without global topology-version ordering.
+
+The reviewer identified a concurrent cleanup race while discovery was still in flight. A rent reservation now starts atomically with registry lookup and ends after Rent, so another failed Open cannot dispose that resolving borrow's pool. Added regressions reproduced the race before repair and cover resolver identity, route changes, warmup, removal of borrowed endpoints, discovery failure, Close/cancellation, total connection budget versus a longer pool-wait timeout, reentrant Closed callbacks, stale cached pools and preservation of the existing unsupported ambient-isolation exception contract. The last exception regression failed on both sync/async paths before its narrow normalization fix. Independent review also checked the absence of a global snapshot-order promise; that remains an explicit boundary.
+
+Verification was split deliberately so the pre-follow-up full run is not presented as final-asset coverage:
+
+| Scope | Command / evidence | Result and limits |
+| --- | --- | --- |
+| Full solution before the final exception-normalization follow-up | `dotnet test OceanBaseConnector.slnx -c Release --no-restore --no-build`, normal Windows permissions; `TestResults/pool-routing/pool-routing_*.trx` | Exit 0. UnitTests 3477, ConsumerTests 2112 and DI 14 passed, with no failures/skips in those suites. Integration 9 passed/70 skipped. These assets precede the last normalization edit and ten new consumer routing cases. |
+| Final Release assets | `dotnet build OceanBaseConnector.slnx -c Release --no-restore --verbosity quiet`; `TestResults-pool-routing-build.log` | Exit 0, 0 errors, 9 existing `NU1900` vulnerability-feed access warnings. |
+| Final full unit suite | `dotnet test tests/OceanBaseConnector.UnitTests -c Release --no-restore --no-build`, normal Windows permissions; `TestResults/pool-routing/unit-final.trx` | Exit 0, 3479 passed, 0 failed/skipped, including both formerly failing ambient-isolation exception regressions. |
+| Final affected consumers | `dotnet test tests/OceanBaseConnector.ConsumerTests -c Release --no-restore --no-build --filter 'FullyQualifiedName~EveryAssetIsolatesPooledResolverRoutesAndRefreshesEndpointSnapshots\|FullyQualifiedName~EveryAssetDiscoversAndRotatesWithoutReplayingSql\|FullyQualifiedName~TransactionConsumerTests'`, normal Windows permissions; `TestResults/pool-routing/consumer-final.trx` | Exit 0, 67 passed, 0 failed/skipped. The new routing cases cover sync/async paths on all five TFM assets loaded by the net10 consumer host; this is not a full test run on five different runtimes. |
+| Formatting and document structure | `dotnet format OceanBaseConnector.slnx --no-restore --verify-no-changes --include` all seven changed C# files; local-link/ID checks; `git diff --check` | Exit 0. All 36 local Markdown links exist; each of the 23 gap IDs occurs once in the summary and once in its traceability table. |
+| Requested Go lint | `golangci-lint run ./...` | Exit 1 at module discovery because this C# repository has no Go module. Inapplicable; this is not a lint pass. |
+
+All test reports and command logs above are ignored local artifacts. No real OceanBase/OBProxy routing, DNS rotation, production load or additional OS/runtime acceptance was run for this module. P0-06 therefore remains locally implemented with real topology acceptance open; the other 22 tracked gaps are not marked complete by this commit.
+
 ## Recorded local results
 
 | 2026-10-24, ambient transaction enlistment | Added local volatile `TransactionScope`/`EnlistTransaction` support. Opening inside a scope begins one local transaction; commands and `DbBatch` resolve the same transaction; scope completion commits and restores autocommit, and disposal rolls back. Focused transaction/provider regressions: 8 passed. | Loopback evidence only. Distributed promotion, timeout/in-doubt, commit/rollback response loss, close-before-callback/reopen (now rejected explicitly) and real OceanBase/OBProxy coordinator behavior remain unverified. |
