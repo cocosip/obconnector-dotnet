@@ -36,6 +36,7 @@ namespace OceanBaseConnector.Internal.Session
             EndpointSelector selector, out bool reused, CancellationToken cancellationToken = default)
         {
             var started = Stopwatch.StartNew();
+            WarmUp(options, resolver, selector, cancellationToken);
             while (true)
             {
                 var decision = TakeCandidate(options, out var candidate, out var expired);
@@ -85,6 +86,7 @@ namespace OceanBaseConnector.Internal.Session
             CancellationToken cancellationToken = default)
         {
             var started = Stopwatch.StartNew();
+            await WarmUpAsync(options, resolver, selector, cancellationToken).ConfigureAwait(false);
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -255,6 +257,87 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
+        private void WarmUp(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
+            EndpointSelector selector, CancellationToken cancellationToken)
+        {
+            var warmed = new List<PhysicalSession>();
+            try
+            {
+                while (ReserveWarmSlot(options))
+                {
+                    PhysicalSession? session = null;
+                    var registrationAttempted = false;
+                    try
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        session = new PhysicalSession(options, resolver, selector);
+                        session.Open();
+                        registrationAttempted = true;
+                        RegisterCreated(session, idle: true);
+                        warmed.Add(session);
+                    }
+                    catch
+                    {
+                        if (!registrationAttempted) CompleteOpening();
+                        session?.Dispose();
+                        throw;
+                    }
+                }
+            }
+            catch
+            {
+                foreach (var session in warmed) Destroy(session);
+                throw;
+            }
+        }
+
+        private async Task WarmUpAsync(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
+            EndpointSelector selector, CancellationToken cancellationToken)
+        {
+            var warmed = new List<PhysicalSession>();
+            try
+            {
+                while (ReserveWarmSlot(options))
+                {
+                    PhysicalSession? session = null;
+                    var registrationAttempted = false;
+                    try
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        session = new PhysicalSession(options, resolver, selector);
+                        await session.OpenAsync(cancellationToken).ConfigureAwait(false);
+                        registrationAttempted = true;
+                        RegisterCreated(session, idle: true);
+                        warmed.Add(session);
+                    }
+                    catch
+                    {
+                        if (!registrationAttempted) CompleteOpening();
+                        session?.Dispose();
+                        throw;
+                    }
+                }
+            }
+            catch
+            {
+                foreach (var session in warmed) Destroy(session);
+                throw;
+            }
+        }
+
+        private bool ReserveWarmSlot(OceanBaseConnectionOptions options)
+        {
+            lock (_gate)
+            {
+                Configure(options);
+                if (_disposed) throw new ObjectDisposedException(nameof(PhysicalSessionPool));
+                if (_sessions.Count + _opening >= _minPoolSize || _sessions.Count + _opening >= _maxPoolSize)
+                    return false;
+                _opening++;
+                return true;
+            }
+        }
+
         private void Configure(OceanBaseConnectionOptions options)
         {
             if (_configured) return;
@@ -265,8 +348,9 @@ namespace OceanBaseConnector.Internal.Session
             _lifetimeSeconds = options.ConnectionLifetimeSeconds;
         }
 
-        private void RegisterCreated(PhysicalSession session)
+        private void RegisterCreated(PhysicalSession session, bool idle = false)
         {
+            if (idle) session.MarkReturned();
             lock (_gate)
             {
                 _opening--;
@@ -276,6 +360,7 @@ namespace OceanBaseConnector.Internal.Session
                     throw new ObjectDisposedException(nameof(PhysicalSessionPool));
                 }
                 _sessions.Add(session);
+                if (idle) _idle.Push(session);
             }
         }
 

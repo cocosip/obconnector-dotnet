@@ -1,4 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal;
@@ -262,6 +266,118 @@ namespace OceanBaseConnector.UnitTests.Session
                 server.Stop();
             }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MinimumPoolSizePrewarmsPhysicalSessionsBeforeRent(bool asynchronous)
+        {
+            using var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            var opened = 0;
+            async Task Serve(TcpClient client)
+            {
+                using (client)
+                {
+                    var channel = new PacketChannel(client.GetStream());
+                    await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
+                    await channel.ReadPacketAsync();
+                    await channel.WritePacketAsync(new byte[] { 0, 0, 0, 2, 0, 0, 0 });
+                    await ServerIdentity.ReplyAsync(channel, oracle: false);
+                    Interlocked.Increment(ref opened);
+                    try
+                    {
+                        var packet = await channel.ReadPacketAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                        Assert.Equal((byte)0x0e, packet[0]);
+                        await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });
+                    }
+                    catch (EndOfStreamException) { }
+                    catch (IOException) { }
+                    catch (ProtocolException) { }
+                }
+            }
+            var serving = Task.Run(async () =>
+            {
+                var clients = new List<TcpClient>();
+                try
+                {
+                    var conversations = new List<Task>();
+                    for (var i = 0; i < 2; i++)
+                    {
+                        var client = await listener.AcceptTcpClientAsync();
+                        clients.Add(client);
+                        conversations.Add(Serve(client));
+                    }
+                    await Task.WhenAll(conversations);
+                }
+                finally
+                {
+                    foreach (var client in clients) client.Dispose();
+                }
+            });
+
+            var options = new OceanBaseConnectionStringBuilder
+            {
+                Server = "127.0.0.1",
+                Port = ((IPEndPoint)listener.LocalEndpoint).Port,
+                UserId = "u",
+                Password = "p",
+                TlsMode = OceanBaseTlsMode.Disabled,
+                ConnectionTimeout = 5,
+                Pooling = true,
+                MinPoolSize = 2,
+                MaxPoolSize = 2,
+            }.Build();
+            using var pool = new PhysicalSessionPool();
+            var borrowed = asynchronous
+                ? await pool.RentAsync(options, null, new EndpointSelector())
+                : pool.Rent(options, null, new EndpointSelector(), out _);
+            Assert.Equal(2, Volatile.Read(ref opened));
+            Assert.True(pool.TryRent(out var prewarmed));
+            Assert.NotSame(borrowed, prewarmed);
+            pool.Discard(borrowed);
+            pool.Discard(prewarmed!);
+            listener.Stop();
+            await serving.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task MinimumPoolWarmupFailureRollsBackSessionsCreatedByTheAttempt()
+        {
+            using var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            var authenticated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var serving = Task.Run(async () =>
+            {
+                using var client = await listener.AcceptTcpClientAsync();
+                var channel = new PacketChannel(client.GetStream());
+                await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
+                await channel.ReadPacketAsync();
+                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 2, 0, 0, 0 });
+                await ServerIdentity.ReplyAsync(channel, oracle: false);
+                authenticated.TrySetResult();
+                await client.GetStream().ReadUpToAsync(new byte[1], 1);
+            });
+            var options = new OceanBaseConnectionStringBuilder
+            {
+                Server = "127.0.0.1",
+                Port = ((IPEndPoint)listener.LocalEndpoint).Port,
+                UserId = "u",
+                Password = "p",
+                TlsMode = OceanBaseTlsMode.Disabled,
+                ConnectionTimeout = 1,
+                Pooling = true,
+                MinPoolSize = 2,
+                MaxPoolSize = 2,
+            }.Build();
+            using var pool = new PhysicalSessionPool();
+            var opening = pool.RentAsync(options, null, new EndpointSelector());
+            await authenticated.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            listener.Stop();
+            await Assert.ThrowsAsync<OceanBaseConnector.OceanBaseException>(() => opening);
+            Assert.False(pool.TryRent(out _));
+            await serving.WaitAsync(TimeSpan.FromSeconds(10));
         }
     }
 }
