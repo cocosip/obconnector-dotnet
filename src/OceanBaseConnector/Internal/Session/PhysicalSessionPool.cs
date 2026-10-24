@@ -153,7 +153,8 @@ namespace OceanBaseConnector.Internal.Session
                 while (_idle.Count != 0)
                 {
                     var candidate = _idle.Pop();
-                    if (candidate.State == SessionState.Open && !candidate.IsReservedForOther(null))
+                    if (candidate.State == SessionState.Open && !candidate.IsReservedForOther(null) &&
+                        !candidate.RequiresDiscardOnReturn)
                     {
                         session = candidate;
                         borrowed = true;
@@ -252,7 +253,8 @@ namespace OceanBaseConnector.Internal.Session
         internal void Discard(PhysicalSession session) => Destroy(session);
 
         private bool CanReturn(PhysicalSession session) =>
-            session.State == SessionState.Open && !session.IsReservedForOther(null) && !session.IsDedicatedToXa;
+            session.State == SessionState.Open && !session.IsReservedForOther(null) &&
+            !session.RequiresDiscardOnReturn && !session.IsDedicatedToXa;
 
         private RentDecision TakeCandidate(OceanBaseConnectionOptions options, out PhysicalSession? candidate,
             out List<PhysicalSession>? expired)
@@ -266,6 +268,7 @@ namespace OceanBaseConnector.Internal.Session
                 {
                     var item = _idle.Pop();
                     if (item.State == SessionState.Open && !item.IsReservedForOther(null) &&
+                        !item.RequiresDiscardOnReturn &&
                         (!item.IsLifetimeExpired(DateTime.UtcNow, _lifetimeSeconds) &&
                          (!item.IsIdleExpired(DateTime.UtcNow, _idleLifetimeSeconds) || _idle.Count + 1 <= _minPoolSize)))
                     {

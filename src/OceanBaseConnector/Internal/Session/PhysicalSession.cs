@@ -28,6 +28,7 @@ namespace OceanBaseConnector.Internal.Session
         private PacketChannel? _channel;
         private CommandLease? _lease;
         private object? _reservation;
+        private int _discardOnReturnCount;
         private ConnectResult? _info;
         private string? _sessionTimeZone;
         private NationalCharacterSet? _nationalCharacterSet;
@@ -267,16 +268,31 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         internal bool IsReservedForOther(object? owner) { lock (_gate) return _reservation != null && !ReferenceEquals(_reservation, owner); }
+        internal bool RequiresDiscardOnReturn { get { lock (_gate) return _discardOnReturnCount != 0; } }
+        internal void MarkDiscardOnReturn() { lock (_gate) { _discardOnReturnCount++; } }
+        internal void ReleaseDiscardOnReturn()
+        {
+            lock (_gate)
+            {
+                if (_discardOnReturnCount != 0) _discardOnReturnCount--;
+            }
+        }
         internal void Reserve(object owner)
         {
             lock (_gate)
             {
-                if (_state != SessionState.Open || _reservation != null) throw new InvalidOperationException("The session already has an active operation.");
+                if (_state != SessionState.Open || _reservation != null)
+                    throw new InvalidOperationException("The session already has an active operation.");
                 _reservation = owner;
             }
         }
         internal void ReleaseReservation(object owner)
-        { lock (_gate) { if (ReferenceEquals(_reservation, owner)) _reservation = null; } }
+        {
+            lock (_gate)
+            {
+                if (ReferenceEquals(_reservation, owner)) _reservation = null;
+            }
+        }
 
         public CommandLease Acquire(object? owner = null)
         {

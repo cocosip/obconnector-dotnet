@@ -12,6 +12,7 @@ namespace OceanBaseConnector.Internal.Session
         private int _remaining;
         private bool _published;
         private bool _complete;
+        private bool _discardOnReturn;
         internal OceanBaseConnection Connection { get; }
         internal PhysicalSession Session { get; }
         internal OceanBaseTransaction? Transaction { get; }
@@ -45,6 +46,11 @@ namespace OceanBaseConnector.Internal.Session
             {
                 _complete = true;
                 if (!_published) foreach (var cursor in _cursors) cursor.ReleaseResource();
+                if (_published && _remaining != 0 && !_discardOnReturn)
+                {
+                    Session.MarkDiscardOnReturn();
+                    _discardOnReturn = true;
+                }
                 CloseParent();
             }
         }
@@ -58,8 +64,9 @@ namespace OceanBaseConnector.Internal.Session
         }
         private void CloseParent()
         {
-            if (!_complete || _remaining != 0 || !_statement.HasValue) return;
-            Session.QueueStatementClose(_statement.Value); _statement = null;
+            if (!_complete || _remaining != 0) return;
+            if (_statement.HasValue) { Session.QueueStatementClose(_statement.Value); _statement = null; }
+            if (_discardOnReturn) { Session.ReleaseDiscardOnReturn(); _discardOnReturn = false; }
         }
     }
 }

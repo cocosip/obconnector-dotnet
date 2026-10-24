@@ -100,7 +100,7 @@
 | ID | 优先级 | 模块 | 当前状态 | 目标 |
 | --- | --- | --- | --- | --- |
 | P0-01 | P0 | 连接池 | 部分实现 | 完成完整 reset、容量/等待/回收和真实行为验收 |
-| P0-02 | P0 | 会话隔离 | 部分实现 | 借用/归还确认 autocommit 基线；prepared statement 已按物理会话 generation 失效，仍需完成变量、临时对象、reader/cursor、LOB、XA 和泄漏矩阵 |
+| P0-02 | P0 | 会话隔离 | 部分实现 | 借用/归还确认 autocommit 基线；prepared statement 已按物理会话 generation 失效，未消费 REF CURSOR 已标记为归还时销毁，仍需完成变量、临时对象、reader、LOB、XA 和泄漏矩阵 |
 | P0-03 | P0 | Ambient transaction | 明确缺失 | `TransactionScope`/`EnlistTransaction` 支持或正式排除 |
 | P0-04 | P0 | Unknown outcome | 部分实现 | 连接断开、取消、提交失败后的可判定恢复边界 |
 | P0-05 | P0 | 活动连接恢复 | 明确缺失 | 明确的重连、迁移和安全重试策略 |
@@ -129,7 +129,7 @@
 
 当前已接入的指标名称为 `oceanbase.client.pool.sessions`、`borrowed`、`waiters`、`discarded`、`reset.failures` 和 `wait.duration`，分别记录物理会话数、借用次数、等待者数、销毁次数、reset 失败次数和池等待耗时。它们证明本地生命周期可观测，不证明真实服务器兼容性。
 
-当前已补齐 prepared statement 的跨借用者边界：`COM_RESET_CONNECTION` 成功后递增物理会话 generation；命令缓存的 statement 只有在 session 和 generation 都一致时才复用。旧 generation 的 statement 不再发送 `COM_STMT_CLOSE`，因为服务端 reset 已经关闭它。同步和异步池复用回归均覆盖了“准备、执行、关闭、重新借用、重新准备、执行”路径。
+当前已补齐 prepared statement 的跨借用者边界：`COM_RESET_CONNECTION` 成功后递增物理会话 generation；命令缓存的 statement 只有在 session 和 generation 都一致时才复用。旧 generation 的 statement 不再发送 `COM_STMT_CLOSE`，因为服务端 reset 已经关闭它。同步和异步池复用回归均覆盖了“准备、执行、关闭、重新借用、重新准备、执行”路径。未消费的 Oracle REF CURSOR 会把物理会话标记为归还时销毁，释放最后一个 cursor 后才允许池化 reset。
 
 目标设计必须将“逻辑 `OceanBaseConnection`”和“物理 `PhysicalSession`”分离：
 
@@ -149,7 +149,7 @@ reset 最低验收矩阵：
 | session variables | 恢复 provider 修改过的变量 | 新借用者获得基线值 |
 | ChangeDatabase | 恢复初始 database/schema | 不泄漏上一个借用者的 database |
 | prepared statement | reset 后按 generation 失效并重新准备 | 不引用旧 session/database 或已关闭的 statement ID |
-| reader/cursor | 必须完整消费或丢弃连接 | 不把未读协议流交给下一借用者 |
+| reader/cursor | reader 未读时销毁连接；未释放 REF CURSOR 时归还销毁连接 | 不把未读协议流或活动 cursor 交给下一借用者 |
 | LOB | 关闭外部 stream 和 locator | 不存在活动 LOB 操作 |
 | XA | 禁止普通归还 | branch 状态不会进入普通池 |
 | reset 失败 | 记录原因并销毁连接 | 池永远不返回污染会话 |

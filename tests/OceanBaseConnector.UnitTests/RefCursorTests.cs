@@ -137,8 +137,9 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
-        [Fact]
-        public async Task RefCursorOldHandleAndCommandCannotUseOrCloseReopenedConnection()
+        [Theory]
+        [InlineData(false)] [InlineData(true)]
+        public async Task RefCursorOldHandleAndCommandCannotUseOrCloseReopenedConnection(bool asynchronous)
         {
             var oldServer = Server(async channel =>
             {
@@ -146,16 +147,19 @@ namespace OceanBaseConnector.UnitTests
                 await AssertOracleExecuteTransportClosed(channel);
             }, serverVersion: "4.2.0");
             var newServer = Server(async channel => { await Query(channel, "new"); await channel.WritePacketAsync(Ok(1)); });
-            using var connection = new OceanBaseConnection(Configuration(oldServer.Port) + ";Use Oracle Prepare Execute=true");
+            using var connection = new OceanBaseConnection(Configuration(oldServer.Port) + ";Use Oracle Prepare Execute=true;Pooling=true");
             try
             {
-                await connection.OpenAsync(); using var command = RefCursorCall(connection); await command.ExecuteNonQueryAsync();
+                if (asynchronous) await connection.OpenAsync(); else connection.Open();
+                using var command = RefCursorCall(connection);
+                if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
                 using var cursor = Assert.IsType<OceanBaseRefCursor>(command.Parameters[0].Value);
                 connection.Close(); await oldServer.Completion.WaitAsync(TimeSpan.FromSeconds(10));
-                connection.ConnectionString = Configuration(newServer.Port); await connection.OpenAsync();
+                connection.ConnectionString = Configuration(newServer.Port);
+                if (asynchronous) await connection.OpenAsync(); else connection.Open();
                 Assert.Throws<InvalidOperationException>(() => { cursor.GetDataReader(); }); cursor.Dispose(); command.Dispose();
                 Assert.Equal(ConnectionState.Open, connection.State); using var after = connection.CreateCommand(); after.CommandText = "new";
-                Assert.Equal(1, await after.ExecuteNonQueryAsync());
+                Assert.Equal(1, asynchronous ? await after.ExecuteNonQueryAsync() : after.ExecuteNonQuery());
             }
             finally { connection.Close(); oldServer.Stop(); newServer.Stop(); }
             await newServer.Completion.WaitAsync(TimeSpan.FromSeconds(10));
