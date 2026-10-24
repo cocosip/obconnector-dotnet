@@ -2,6 +2,12 @@
 
 This page retains historical results and open work from the former progress ledger, alongside dated verification of later changes. Local regression results and real database acceptance are recorded separately.
 
+## 2026-10-25 complete audit documentation handoff
+
+Updated the [audit report](obconnector-dotnet-driver-audit.md) and [detailed completeness baseline](obconnector-dotnet-completeness.md) to committed source `6fecad9`; Java remains `6adc311b`. The documents retain all 23 gap IDs and eight work packages, separate absent APIs from partial implementations and missing acceptance, and add explicit credential-provider/rotation acceptance requirements plus the DataTypes/automatic parameter derivation/KeyInfo boundaries. Those requirements are not implemented APIs or approved public signatures.
+
+This was documentation-only. Existing Schema-module reports were reread: complete units 3693 passed, affected consumers 66 passed, DI 14 passed; Integration has 9 passed and 72 individual NotExecuted results (its summary notExecuted counter is zero). No build/test, package, Java or real-server run was repeated. Historical failures, skips, missing-report limitations and release gates remain open; detailed evidence is recorded in completeness section 15.10.
+
 ## 2026-10-24 documentation audit refresh
 
 The [audit report](obconnector-dotnet-driver-audit.md) and [completeness baseline](obconnector-dotnet-completeness.md) now track 23 gaps (6 P0, 11 P1, 6 P2) against .NET `06d58e1` and Java `6adc311b`. Each gap has a trigger, source/test entry point and acceptance evidence requirement. Existing nested object/collection support, the six Schema collections and the close/reopen ownership repair are recorded as implemented rather than missing.
@@ -178,7 +184,7 @@ Reports are under ignored `TestResults/schema-catalog/`, logs use `TestResults-s
 | Four integration gates | Run with both direct and OBProxy tenants and a dedicated unsupported-plugin profile. Missing environments currently allow an ordinary test run to skip all four. |
 | Six deferred `matrix.*` cases | Currently report skips. Implement the controlled environments and assertions listed in Compatibility; invoking the console alone does not exercise these matrices. |
 
-The current implementation ledger is also summarized in [the complete capability baseline](obconnector-dotnet-completeness.md): pooling, session-state disposal, `SchemaOnly`, local ambient enlistment, the opt-in LOCAL INFILE protocol path, pooled/direct client certificates with source snapshots, configurable TLS revocation checks, the custom server validation callback and opt-in standard MySQL compression are implemented with local evidence; real enterprise CA/mTLS and revocation profiles, long-running pool concurrency acceptance, real MySQL compression acceptance, OB20 compression/reroute, full catalog metadata, DataAdapter/CommandBuilder, active-session recovery and the real compatibility matrix remain open or explicitly unsupported.
+The current implementation ledger is also summarized in [the complete capability baseline](obconnector-dotnet-completeness.md): pooling, session-state disposal, `SchemaOnly`, local ambient enlistment, the opt-in LOCAL INFILE protocol path, pooled/direct client certificates with source snapshots, configurable TLS revocation checks, the custom server validation callback, opt-in standard MySQL compression and common Schema catalogs are implemented with local evidence; real enterprise CA/mTLS and revocation profiles, long-running pool concurrency acceptance, real MySQL compression and catalog acceptance, OB20 compression/reroute, DataTypes, automatic parameter derivation, KeyInfo, credential provision/rotation, DataAdapter/CommandBuilder, active-session recovery and the real compatibility matrix remain open or explicitly unsupported.
 
 The earlier Ubuntu CI record had two piece-data budget tests timing out. The TCP small-write fix passed its four focused Windows regressions; the maintainer later reported the CI issue resolved. No remote run was independently checked in this documentation change, so no fresh Ubuntu pass is claimed. Earlier .NET 9 fixture failures had subsequent recorded passing reruns; they are not listed as current failures.
 
