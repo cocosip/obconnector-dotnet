@@ -39,8 +39,6 @@ public sealed class IntegrationProfile
         builder.ExpectedMode = Mode;
         if (builder.ConnectionTimeout <= 0 || builder.CommandTimeout <= 0)
             throw new InvalidOperationException($"Profile '{Name}': integration tests require positive connection and command timeouts.");
-        if (builder.Pooling)
-            throw new InvalidOperationException($"Profile '{Name}': pooling is not implemented; the integration suite does not bypass the product gate.");
         return builder;
     }
 

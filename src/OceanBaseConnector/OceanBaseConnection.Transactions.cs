@@ -362,10 +362,5 @@ namespace OceanBaseConnector
             }
         }
 
-        private void FinishClose(PhysicalSession? session, string? endpoint)
-        {
-            session?.Dispose();
-            if (session != null) _log.Closed(endpoint!);
-        }
     }
 }

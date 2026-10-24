@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
@@ -19,6 +20,7 @@ namespace OceanBaseConnector.Internal.Session
         private readonly EndpointSelector _endpointSelector;
         private string _endpoint;
         private string _database;
+        private readonly string _initialDatabase;
         private readonly CancellationTokenSource _closing = new CancellationTokenSource();
         private SessionState _state;
         private bool _started;
@@ -30,6 +32,7 @@ namespace OceanBaseConnector.Internal.Session
         private string? _sessionTimeZone;
         private NationalCharacterSet? _nationalCharacterSet;
         private readonly HashSet<uint> _statementCloses = new HashSet<uint>();
+        private bool _xaDedicated;
         internal bool UseOraclePrepareExecute => _options.UseOraclePrepareExecute;
         internal bool TreatTinyAsBoolean => _options.TreatTinyAsBoolean;
         internal bool UseLobLocators => _options.UseLobLocators && Info?.Mode == OceanBaseCompatibilityMode.Oracle &&
@@ -37,7 +40,7 @@ namespace OceanBaseConnector.Internal.Session
 
         public PhysicalSession(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? addressResolver = null, EndpointSelector? endpointSelector = null)
         {
-            _options = options; _endpoint = options.Endpoint; _database = options.Database;
+            _options = options; _endpoint = options.Endpoint; _database = _initialDatabase = options.Database;
             _addressResolver = addressResolver; _endpointSelector = endpointSelector ?? new EndpointSelector();
         }
 
@@ -54,6 +57,8 @@ namespace OceanBaseConnector.Internal.Session
         internal string? SessionTimeZone { get { lock (_gate) return _sessionTimeZone; } }
         internal NationalCharacterSet? NationalCharacterSet { get { lock (_gate) return _nationalCharacterSet; } }
         internal string Endpoint { get { lock (_gate) return _endpoint; } }
+        internal bool IsDedicatedToXa { get { lock (_gate) return _xaDedicated; } }
+        internal void MarkDedicatedToXa() { lock (_gate) { _xaDedicated = true; } }
 
         public void Open()
         {
@@ -185,7 +190,6 @@ namespace OceanBaseConnector.Internal.Session
             lock (_gate)
             {
                 if (_started) throw new InvalidOperationException("A physical session cannot be reopened.");
-                if (_options.Pooling) throw new NotSupportedException("Pooling requires a verified session reset implementation.");
                 _started = true;
                 _state = SessionState.Connecting;
             }
@@ -312,6 +316,73 @@ namespace OceanBaseConnector.Internal.Session
                 _statementCloses.CopyTo(ids);
                 _statementCloses.Clear();
                 return ids;
+            }
+        }
+
+        internal void Reset(ConnectionLog log, int timeout, CancellationToken cancellationToken = default)
+        {
+            ResetCore(log, timeout, cancellationToken, asynchronous: false).GetAwaiter().GetResult();
+        }
+
+        internal Task ResetAsync(ConnectionLog log, int timeout, CancellationToken cancellationToken = default) =>
+            ResetCore(log, timeout, cancellationToken, asynchronous: true);
+
+        private async Task ResetCore(ConnectionLog log, int timeout, CancellationToken cancellationToken, bool asynchronous)
+        {
+            lock (_gate)
+            {
+                if (_state != SessionState.Open || _reservation != null || _lease != null || _xaDedicated)
+                    throw new InvalidOperationException("Only an idle non-XA session can be reset.");
+            }
+
+            try
+            {
+                using (var exchange = new CommandExchange(this, log, timeout, cancellationToken, () => { }, logCommand: false))
+                {
+                    var request = new byte[] { 0x1f }; // COM_RESET_CONNECTION
+                    if (asynchronous) await exchange.SendAsync(request).ConfigureAwait(false); else exchange.Send(request);
+                    var packet = asynchronous
+                        ? await exchange.ReceiveAsync(cancellationToken).ConfigureAwait(false)
+                        : exchange.Receive();
+                    var ok = OkPacket.Parse(packet, exchange.Capabilities);
+                    if (ok.AffectedRows != 0 || ok.LastInsertId != 0 ||
+                        (ok.StatusFlags & (ServerStatusFlags.MoreResultsExists | ServerStatusFlags.InTransaction)) != 0)
+                        throw new ProtocolException("The session reset response was invalid.");
+                    exchange.ObserveSessionState(ok);
+                    exchange.Complete();
+                }
+
+                if (_initialDatabase.Length != 0 && Info?.Mode == OceanBaseCompatibilityMode.MySql)
+                {
+                    using var exchange = new CommandExchange(this, log, timeout, cancellationToken, () => { }, logCommand: false);
+                    var database = Encoding.UTF8.GetBytes(_initialDatabase);
+                    var request = new byte[database.Length + 1];
+                    request[0] = 2; // COM_INIT_DB
+                    Buffer.BlockCopy(database, 0, request, 1, database.Length);
+                    if (asynchronous) await exchange.SendAsync(request).ConfigureAwait(false); else exchange.Send(request);
+                    var packet = asynchronous
+                        ? await exchange.ReceiveAsync(cancellationToken).ConfigureAwait(false)
+                        : exchange.Receive();
+                    var ok = OkPacket.Parse(packet, exchange.Capabilities);
+                    if (ok.AffectedRows != 0 || ok.LastInsertId != 0 ||
+                        (ok.StatusFlags & (ServerStatusFlags.MoreResultsExists | ServerStatusFlags.InTransaction)) != 0)
+                        throw new ProtocolException("The session database reset response was invalid.");
+                    exchange.ObserveSessionState(ok);
+                    exchange.Complete();
+                }
+
+                lock (_gate)
+                {
+                    _database = _initialDatabase;
+                    _sessionTimeZone = null;
+                    _nationalCharacterSet = null;
+                    _statementCloses.Clear();
+                }
+            }
+            catch
+            {
+                Break();
+                throw;
             }
         }
 

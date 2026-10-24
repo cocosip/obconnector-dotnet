@@ -43,14 +43,18 @@ public sealed class IdentityGateTests
 
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.All), MemberType = typeof(ProfileTheoryData))]
-    public async Task PoolingIsRejectedAtOpen(string profileName)
+    public async Task PoolingRoundTripReusesPhysicalSession(string profileName)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         var builder = db.Profile.CreateBuilder();
         builder.Pooling = true;
         await using var connection = new OceanBaseConnection(builder.ConnectionString);
-        await Assert.ThrowsAsync<NotSupportedException>(connection.OpenAsync);
-        Assert.Equal(ConnectionState.Closed, connection.State);
+        await connection.OpenAsync();
+        var first = connection.GetOpenSession();
+        await connection.CloseAsync();
+        await connection.OpenAsync();
+        Assert.Same(first, connection.GetOpenSession());
+        await connection.CloseAsync();
     }
 
     [IntegrationTheory]

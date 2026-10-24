@@ -46,7 +46,7 @@ internal static partial class DatabaseCases
             ("matrix.ob20-trace-negotiation", "Public API does not expose negotiated OB20/trace capabilities; normal SQL success alone is insufficient."),
             ("matrix.topology-failover", "Requires controlled endpoint discovery and connection-failure injection."),
             ("matrix.network-outcome-unknown", "Requires controlled mid-request/response network fault injection."),
-            ("matrix.pool-reset", "Pooling and complete reset are not implemented; Pooling=true remains rejected."),
+            ("matrix.pool-reset", "Local pooling/reset fixtures pass; real OceanBase and OBProxy reset behavior still requires validation."),
             ("matrix.xa-crash-recovery", "Requires an external coordinator and process/server failure injection."),
         }) cases.Add(new(item.Item1, "faults", (_, _) => Task.CompletedTask, DeferredReason: item.Item2));
         return cases;

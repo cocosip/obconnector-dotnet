@@ -31,7 +31,7 @@ The earlier Ubuntu CI record had two piece-data budget tests timing out. The TCP
 
 - Establish the supported OceanBase/OBProxy version matrix. The exact 4.4.2.2 identity restriction has been replaced by actual product-version and session-mode confirmation in both modes. Other versions remain unverified on real servers; feature minimums do not establish general compatibility.
 - Complete trusted TLS/plugin success and rejection profiles, actual OB20/tracing negotiation, controlled topology/network failures and coordinator crash recovery.
-- Before enabling pooling, implement and verify complete reset of raw session changes, temporary objects, unfinished transactions, prepared statements and readers; cover reset failures and cross-borrower isolation.
+- Pooling baseline is now enabled with physical-session reuse, COM_RESET_CONNECTION/COM_INIT_DB reset, and loopback cross-borrower tests. Max/min sizing, idle reaping, full resource-reset coverage, and real OceanBase/OBProxy validation remain open.
 - Verify large-value peak memory/throughput, cursor/LOB resource lifetime, complex-type DDL changes, catalog permissions and additional output shapes on each intended deployment profile. Selected basic round trips do not cover these combinations.
 - Complete intended non-Windows/runtime deployment coverage; make an explicit .NET Framework support decision. Finish source-provenance/package-name review before publication.
 

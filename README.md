@@ -60,7 +60,7 @@ Each resolution creates a closed transient connection owned by its container sco
 - Local transactions; .NET 8/9/10 assets also expose savepoints and sequential batches.
 - Oracle extensions include stored procedures, OUT parameters, REF CURSOR, LOB locators, complex types and array binding. Procedures and output parameters require `Use Oracle Prepare Execute=true`; locator LOBs also require `Use Lob Locators=true`.
 - Explicit XA, multiple server addresses, custom address resolution, logging, tracing and metrics.
-- Connection pooling and ambient `TransactionScope` are not supported. `Pooling=true` is rejected.
+- `Pooling=true` reuses authenticated physical sessions and resets them before return; pool sizing and ambient `TransactionScope` remain unsupported.
 - Every connection confirms `ob_version()` and the tenant compatibility mode; MySQL-mode opens also require `@@autocommit` enabled, rejecting sessions whose implicit transactions this provider could not commit. Recognized version formats are accepted; versions beyond the recorded deployment and OBProxy still need real-server validation.
 
 The driver does not automatically replay SQL. If `OceanBaseException.IsExecutionOutcomeUnknown` is true, reconcile the operation before retrying a write or commit. Batches run sequentially and need an explicit transaction for atomicity. Dispose readers, commands and connections; closing an unread reader can destroy its session.
@@ -100,6 +100,7 @@ Check notes generation locally with `pwsh -File eng/Test-ReleaseNotes.ps1`. To p
 ## Documentation
 
 - [Compatibility and known limitations](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/compatibility.md)
+- [Complete driver capability baseline and gap plan](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-completeness.md)
 - [Database acceptance guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.Acceptance/README.md)
 - [Integration test guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.IntegrationTests/README.md)
 - [API reference](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-architecture-design.md)

@@ -25,6 +25,7 @@ namespace OceanBaseConnector
                     throw new NotSupportedException("Oracle DBMS_XA requires Use Oracle Prepare Execute=true.");
                 if (_xaResource == null)
                 {
+                    session.MarkDedicatedToXa();
                     _xaResource = new OceanBaseXaResource(this, session, _builder.CommandTimeout);
                     _transactionEpoch++;
                 }

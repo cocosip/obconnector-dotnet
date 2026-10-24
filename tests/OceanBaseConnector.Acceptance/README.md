@@ -40,7 +40,7 @@ The report path must be new. Omit `--report` to generate a unique path under `Te
 | `slowQuery` | Optional read-only SQL taking over two seconds, for cancellation and timeout tests. Omitted means those cases are skipped. |
 | `alternateDatabase` | Optional MySQL database for change-and-restore testing. Omitted means skipped. |
 
-Use positive connection and command timeouts. The console sets `ExpectedMode` from configuration and enforces the driver's identity and pooling restrictions. Every Open confirms the actual product version and session mode; it does not enforce an exact tested-release allowlist. Oracle extension cases are skipped when their options are disabled; errors after enabling them count as failures.
+Use positive connection and command timeouts. The console sets `ExpectedMode` from configuration and enforces the driver's identity contract. Every Open confirms the actual product version and session mode; it does not enforce an exact tested-release allowlist. Oracle extension cases are skipped when their options are disabled; errors after enabling them count as failures.
 
 ## Coverage and cleanup
 

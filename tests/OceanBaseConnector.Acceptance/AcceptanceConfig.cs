@@ -49,7 +49,6 @@ internal sealed class AcceptanceConfig
         builder.ExpectedMode = mode;
         if (builder.ConnectionTimeout <= 0 || builder.CommandTimeout <= 0)
             throw new ArgumentException("Acceptance requires finite positive connection and command timeouts.");
-        if (builder.Pooling) throw new ArgumentException("Pooling is not implemented; acceptance does not bypass the product gate.");
         // Build validates the immutable product options without opening a socket.
         using var source = new OceanBaseDataSourceBuilder(builder.ConnectionString).Build();
         return builder.ConnectionString;

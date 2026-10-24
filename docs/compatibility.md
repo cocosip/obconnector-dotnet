@@ -76,7 +76,7 @@ These six entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/D
 | `matrix.ob20-trace-negotiation` | Actual server OB20/full-link-trace negotiation and trace output. Ordinary SQL success does not prove either was negotiated. |
 | `matrix.topology-failover` | Controlled discovery, endpoint failures and routing on real deployments. |
 | `matrix.network-outcome-unknown` | Mid-request/response failures, cancellation ordering and interrupted commit/rollback on real deployments. |
-| `matrix.pool-reset` | Pooling and complete reset are unimplemented; `Pooling=true` is rejected. |
+| `matrix.pool-reset` | Local pooling/reset fixtures pass; real OceanBase/OBProxy reset behavior and cross-version validation remain open. |
 | `matrix.xa-crash-recovery` | External coordinator recovery under client/server process failure. Basic XA phase tests do not cover this. |
 
 Further skips depend on selected groups, compatibility mode, `slowQuery`, `alternateDatabase`, DDL permissions and Oracle extension options. If a connection prerequisite fails, dependent cases are skipped. See [AcceptanceSuite.SkipReason](../tests/OceanBaseConnector.Acceptance/AcceptanceSuite.cs); a zero exit code can still include skips.
@@ -85,7 +85,7 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 
 | Area | Unsupported behavior |
 | --- | --- |
-| Pooling | Physical connection reuse and complete session reset. |
+| Pooling | Max/min sizing, idle reaping, and server-specific reset interoperability are not yet supported or validated. |
 | Disabled autocommit | MySQL-mode sessions whose `@@autocommit` is 0; Open fails because the provider cannot commit implicit transactions. Connector/J forces `SET autocommit=1` instead; this driver sets no session variables. |
 | Ambient transactions | `TransactionScope` / `EnlistTransaction`; explicit XA is a separate API. |
 | Standard assets | `DbDataSource`, `DbBatch`, savepoint APIs and GSSAPI authentication. |

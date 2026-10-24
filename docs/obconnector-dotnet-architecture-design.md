@@ -20,7 +20,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `TLS Server Name` | Endpoint hostname | Overrides the TLS certificate name. |
 | `Persist Security Info` | false | Retains credentials in opened-connection and data-source connection strings when true. |
 | `Load Balance` | `Sequential` | `RoundRobin` rotates the first candidate on each Open. |
-| `Pooling` | false | Setting true is rejected; pooling is unimplemented. |
+| `Pooling` | false | Reuses physical sessions with protocol reset; sizing and idle reaping are deferred. |
 | `Use OB20` | false | Requests OB20 framing when negotiated by the server. |
 | `Enable Full Link Trace` | false | Requests server tracing; requires `Use OB20=true`. |
 | `Use Oracle Prepare Execute` | false | Enables Oracle procedures and output bindings; requires server version discovery and OceanBase >=2.2.76. |

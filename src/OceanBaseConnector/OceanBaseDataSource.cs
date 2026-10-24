@@ -3,6 +3,7 @@ using System;
 using System.Data.Common;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal;
+using OceanBaseConnector.Internal.Session;
 
 namespace OceanBaseConnector
 {
@@ -12,6 +13,7 @@ namespace OceanBaseConnector
         private readonly OceanBaseConnectionOptions _options;
         private readonly string _connectionString;
         private readonly ConnectionLog _log;
+        internal PhysicalSessionPool Pool { get; } = new PhysicalSessionPool();
         private bool _disposed;
         internal IOceanBaseAddressResolver? AddressResolver { get; }
         internal EndpointSelector EndpointSelector { get; } = new EndpointSelector();
@@ -35,7 +37,15 @@ namespace OceanBaseConnector
         }
         internal void EnsureAvailable() { lock (_gate) { if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseDataSource)); } }
         internal void PublishOpen(Action publish) { lock (_gate) { EnsureAvailable(); publish(); } }
-        protected override void Dispose(bool disposing) { if (disposing) { lock (_gate) _disposed = true; } base.Dispose(disposing); }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                lock (_gate) _disposed = true;
+                Pool.Dispose();
+            }
+            base.Dispose(disposing);
+        }
         protected override ValueTask DisposeAsyncCore() { Dispose(true); return default; }
     }
 }

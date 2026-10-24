@@ -23,6 +23,7 @@ namespace OceanBaseConnector
         private bool _disposed;
         private IOceanBaseAddressResolver? _addressResolver;
         private EndpointSelector _endpointSelector = new EndpointSelector();
+        private PhysicalSessionPool? _pool;
 #if NET8_0_OR_GREATER
         private readonly OceanBaseDataSource? _source;
 #endif
@@ -46,6 +47,7 @@ namespace OceanBaseConnector
             _log = log;
             _addressResolver = source.AddressResolver;
             _endpointSelector = source.EndpointSelector;
+            _pool = source.Pool;
         }
 #endif
 
@@ -69,6 +71,7 @@ namespace OceanBaseConnector
                     _connectionString = builder.ConnectionString;
                     _builder = builder;
                     _options = null;
+                    _pool = null;
                     _hidePassword = false;
                     _endpointSelector = new EndpointSelector();
                 }
@@ -130,7 +133,8 @@ namespace OceanBaseConnector
             try
             {
                 EnsureOpening(session);
-                session.Open();
+                if (session.State == SessionState.Closed) session.Open();
+                else if (session.State != SessionState.Open) throw new InvalidOperationException("The pooled physical session is not available.");
                 PublishOpen(session);
             }
             catch (Exception error) { FailedOpen(session, timer.ElapsedMilliseconds, error); diagnostics?.Finish(null, error); throw; }
@@ -148,7 +152,8 @@ namespace OceanBaseConnector
             try
             {
                 EnsureOpening(session);
-                await session.OpenAsync(cancellationToken).ConfigureAwait(false);
+                if (session.State == SessionState.Closed) await session.OpenAsync(cancellationToken).ConfigureAwait(false);
+                else if (session.State != SessionState.Open) throw new InvalidOperationException("The pooled physical session is not available.");
                 PublishOpen(session);
             }
             catch (Exception error) { FailedOpen(session, timer.ElapsedMilliseconds, error); diagnostics?.Finish(null, error); throw; }
@@ -169,9 +174,13 @@ namespace OceanBaseConnector
                 ThrowIfDisposed();
                 if (_session != null) throw new InvalidOperationException("The connection is already open or opening; close it first.");
                 _options ??= _builder.Build();
-                if (_options.Pooling) throw new NotSupportedException("Pooling requires a verified session reset implementation.");
                 _hidePassword = true;
                 options = _options;
+                if (options.Pooling)
+                {
+                    _pool ??= PhysicalSessionPoolRegistry.Get(_connectionString);
+                    return _session = _pool.Rent(options, _addressResolver, _endpointSelector, out _);
+                }
                 return _session = new PhysicalSession(options, _addressResolver, _endpointSelector);
             }
         }
@@ -233,7 +242,7 @@ namespace OceanBaseConnector
                 if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
                 if (closing.Exchange != null) await CleanupTransactionAsync(closing.Transaction!, closing.Exchange).ConfigureAwait(false);
             }
-            finally { closing.Exchange?.Dispose(); FinishClose(closing.Session, closing.Endpoint); }
+            finally { closing.Exchange?.Dispose(); await FinishCloseAsync(closing.Session, closing.Endpoint).ConfigureAwait(false); }
         }
         public override async ValueTask DisposeAsync()
         {
@@ -275,5 +284,27 @@ namespace OceanBaseConnector
             if (Transaction.Current != null) throw new NotSupportedException("Ambient transactions are not supported.");
         }
         private void ThrowIfDisposed() { if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseConnection)); }
+
+        private void FinishClose(PhysicalSession? session, string? endpoint)
+        {
+            if (session == null) return;
+            if (_options?.Pooling == true && _pool != null)
+            {
+                _pool.Return(session, _log, _builder.CommandTimeout);
+            }
+            else session.Dispose();
+            _log.Closed(endpoint!);
+        }
+
+        private async Task FinishCloseAsync(PhysicalSession? session, string? endpoint)
+        {
+            if (session == null) return;
+            if (_options?.Pooling == true && _pool != null)
+            {
+                await _pool.ReturnAsync(session, _log, _builder.CommandTimeout).ConfigureAwait(false);
+            }
+            else session.Dispose();
+            _log.Closed(endpoint!);
+        }
     }
 }

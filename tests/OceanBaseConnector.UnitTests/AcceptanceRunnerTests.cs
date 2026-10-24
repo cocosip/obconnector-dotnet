@@ -213,7 +213,6 @@ public sealed class AcceptanceRunnerTests
     [InlineData("User ID=u")]
     [InlineData("Server=unused;User ID=u;Use Lob Locators=true")]
     [InlineData("Server=unused;User ID=u;Enable Full Link Trace=true")]
-    [InlineData("Server=unused;User ID=u;Pooling=true")]
     public void ProductConfigurationErrorsAreRejectedBeforeAnyTest(string connectionString)
     {
         var config = Config(); config.ConnectionString = connectionString;
