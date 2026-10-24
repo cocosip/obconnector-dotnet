@@ -22,6 +22,14 @@ namespace OceanBaseConnector.Internal.Session
         private int _opening;
         private int _waiters;
 
+        internal bool IsEmpty
+        {
+            get
+            {
+                lock (_gate) return _sessions.Count == 0 && _opening == 0 && _waiters == 0;
+            }
+        }
+
         private enum RentDecision { Create, Candidate, Wait }
 
         internal PhysicalSession Rent(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
@@ -351,6 +359,20 @@ namespace OceanBaseConnector.Internal.Session
                 if (!Pools.TryGetValue(key, out var pool)) Pools.Add(key, pool = new PhysicalSessionPool());
                 return pool;
             }
+        }
+
+        internal static void ReleaseIfEmpty(string key, PhysicalSessionPool pool)
+        {
+            var removed = false;
+            lock (Gate)
+            {
+                if (Pools.TryGetValue(key, out var current) && ReferenceEquals(current, pool) && pool.IsEmpty)
+                {
+                    Pools.Remove(key);
+                    removed = true;
+                }
+            }
+            if (removed) pool.Dispose();
         }
     }
 }

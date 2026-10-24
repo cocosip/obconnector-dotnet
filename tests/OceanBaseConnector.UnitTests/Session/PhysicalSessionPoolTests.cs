@@ -227,5 +227,41 @@ namespace OceanBaseConnector.UnitTests.Session
             server.Stop();
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
+
+        [Fact]
+        public async Task FailedOpenRemovesEmptyRegistryPool()
+        {
+            var server = LoopbackServer.Start(async client =>
+            {
+                client.Dispose();
+                await Task.CompletedTask;
+            });
+            var connectionString = new OceanBaseConnectionStringBuilder
+            {
+                Server = "127.0.0.1",
+                Port = server.Port,
+                UserId = "registry-test-user",
+                Password = "p",
+                TlsMode = OceanBaseTlsMode.Disabled,
+                ConnectionTimeout = 1,
+                Pooling = true,
+            }.ConnectionString;
+            var original = PhysicalSessionPoolRegistry.Get(connectionString);
+            try
+            {
+                using var connection = new OceanBaseConnection(connectionString);
+                await Assert.ThrowsAsync<OceanBaseConnector.OceanBaseException>(() => connection.OpenAsync().WaitAsync(TimeSpan.FromSeconds(10)));
+
+                var replacement = PhysicalSessionPoolRegistry.Get(connectionString);
+                Assert.NotSame(original, replacement);
+                PhysicalSessionPoolRegistry.ReleaseIfEmpty(connectionString, replacement);
+            }
+            finally
+            {
+                PhysicalSessionPoolRegistry.ReleaseIfEmpty(connectionString, original);
+                server.Stop();
+            }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
     }
 }

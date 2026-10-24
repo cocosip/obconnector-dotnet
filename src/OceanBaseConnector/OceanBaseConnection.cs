@@ -230,6 +230,7 @@ namespace OceanBaseConnector
                 {
                     if (context.Pool != null) context.Pool.Discard(session); else session.Dispose();
                 }
+                ReleasePoolIfEmpty(context.Pool);
                 throw;
             }
         }
@@ -258,6 +259,7 @@ namespace OceanBaseConnector
                 {
                     if (context.Pool != null) context.Pool.Discard(session); else session.Dispose();
                 }
+                ReleasePoolIfEmpty(context.Pool);
                 throw;
             }
         }
@@ -308,6 +310,7 @@ namespace OceanBaseConnector
         private void FailedOpen(OpenContext context, PhysicalSession session, long elapsed, Exception error)
         {
             if (context.Pool != null) context.Pool.Discard(session); else session.Dispose();
+            ReleasePoolIfEmpty(context.Pool);
             lock (_gate) { if (ReferenceEquals(_session, session)) _session = null; }
             ClearOpening(context);
             _log.Failed(session.Endpoint, elapsed, error);
@@ -402,9 +405,11 @@ namespace OceanBaseConnector
         private void FinishClose(PhysicalSession? session, string? endpoint)
         {
             if (session == null) return;
-            if (_options?.Pooling == true && _pool != null)
+            var pool = _pool;
+            if (_options?.Pooling == true && pool != null)
             {
-                _pool.Return(session, _log, _builder.CommandTimeout);
+                try { pool.Return(session, _log, _builder.CommandTimeout); }
+                finally { ReleasePoolIfEmpty(pool); }
             }
             else session.Dispose();
             _log.Closed(endpoint!);
@@ -413,12 +418,23 @@ namespace OceanBaseConnector
         private async Task FinishCloseAsync(PhysicalSession? session, string? endpoint)
         {
             if (session == null) return;
-            if (_options?.Pooling == true && _pool != null)
+            var pool = _pool;
+            if (_options?.Pooling == true && pool != null)
             {
-                await _pool.ReturnAsync(session, _log, _builder.CommandTimeout).ConfigureAwait(false);
+                try { await pool.ReturnAsync(session, _log, _builder.CommandTimeout).ConfigureAwait(false); }
+                finally { ReleasePoolIfEmpty(pool); }
             }
             else session.Dispose();
             _log.Closed(endpoint!);
+        }
+
+        private void ReleasePoolIfEmpty(PhysicalSessionPool? pool)
+        {
+            if (pool == null) return;
+#if NET8_0_OR_GREATER
+            if (_source != null) return;
+#endif
+            PhysicalSessionPoolRegistry.ReleaseIfEmpty(_connectionString, pool);
         }
     }
 }

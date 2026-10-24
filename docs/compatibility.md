@@ -85,7 +85,7 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 
 | Area | Unsupported behavior |
 | --- | --- |
-| Pooling | Maximum capacity, wait timeout/cancellation, borrow validation and idle/total lifetime reaping are supported locally. Minimum-pool prewarming, static-registry cleanup and server-specific reset interoperability are not yet supported or validated. |
+| Pooling | Maximum capacity, wait timeout/cancellation, borrow validation, idle/total lifetime reaping and empty static-registry cleanup are supported locally. Minimum-pool prewarming, pool metrics and server-specific reset interoperability are not yet supported or validated. |
 | Disabled autocommit | MySQL-mode sessions whose `@@autocommit` is 0; Open fails because the provider cannot commit implicit transactions. Connector/J forces `SET autocommit=1` instead; this driver sets no session variables. |
 | Ambient transactions | `TransactionScope` / `EnlistTransaction`; explicit XA is a separate API. |
 | Standard assets | `DbDataSource`, `DbBatch`, savepoint APIs and GSSAPI authentication. |

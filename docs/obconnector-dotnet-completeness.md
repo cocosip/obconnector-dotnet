@@ -22,7 +22,7 @@
 | 明确缺失 | 源码或测试明确拒绝该能力，必须新增实现才能支持 |
 | 未验证 | 源码路径存在，但缺少真实 OceanBase、OBProxy、TLS、KDC 或目标运行时证据 |
 
-“已实现”不等于“服务器兼容已确认”。真实兼容性以 [compatibility.md](compatibility.md) 和本文件第 8 节为准。
+“已实现”不等于“服务器兼容已确认”。真实兼容性以 [compatibility.md](compatibility.md) 和本文件第 9 节为准。
 
 ### 1.1 对走查问题的直接结论
 
@@ -30,7 +30,7 @@
 | --- | --- | --- |
 | Java 驱动有没有连接池？ | 有。 | Connector/J 源码包含 `OceanBasePoolDataSource`、`OceanBasePooledConnection`、`Pools`/`Pool`，职责包括借用、归还、最小/最大容量、空闲/生命周期清理和池事件。本仓库的 [obconnector-j-architecture-outline.md](obconnector-j-architecture-outline.md) 第 M13 节记录了该静态走查；没有把它当作 Java 运行时兼容性证明。 |
 | .NET 驱动以前有没有连接池？ | 在连接池提交之前没有。 | 原先每个 `OceanBaseConnection` 都直接持有一个物理会话，关闭即释放会话，缺少逻辑连接和物理会话的分层。 |
-| .NET 当前有没有连接池？ | 有基础池化，但不是完整连接池。 | `Pooling=true` 通过 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 复用已认证物理会话；归还时执行 `COM_RESET_CONNECTION`，MySQL 模式再执行 `COM_INIT_DB`。当前已支持最大容量、等待超时、空闲/总生命周期回收和借用前存活探测；最小池预热、静态池清理和真实服务器 reset 兼容性仍未闭合。 |
+| .NET 当前有没有连接池？ | 有基础池化，但不是完整连接池。 | `Pooling=true` 通过 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 复用已认证物理会话；归还时执行 `COM_RESET_CONNECTION`，MySQL 模式再执行 `COM_INIT_DB`。当前已支持最大容量、等待超时、空闲/总生命周期回收、借用前存活探测和空池 registry 清理；最小池预热、池指标和真实服务器 reset 兼容性仍未闭合。 |
 | 是否已经达到 Java/.NET 生产驱动水平？ | 没有。 | 还缺少会话变量/临时对象/LOB/cursor 的完整 reset、ambient transaction、活动连接恢复、协议可选能力、企业 TLS、完整 ADO.NET 行为和真实 OceanBase/OBProxy 验收。 |
 
 ### 1.2 审计范围和证据等级
@@ -54,7 +54,7 @@
 
 | 模块 | 当前状态 | 主要边界 |
 | --- | --- | --- |
-| 连接和配置 | 部分实现 | 连接字符串、模式确认、多地址、超时、TLS、地址解析和池容量/等待/生命周期选项已存在；静态池清理和真实兼容性未闭合 |
+| 连接和配置 | 部分实现 | 连接字符串、模式确认、多地址、超时、TLS、地址解析和池容量/等待/生命周期选项已存在；静态池清理已实现，最小池预热和真实兼容性未闭合 |
 | ADO.NET 基础对象 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有；常用 `SingleRow`/`SingleResult` 已支持，`SchemaOnly`、`KeyInfo`、`DbDataAdapter` 和 `DbCommandBuilder` 仍缺失 |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 只在现代 TFM 可用 |
 | 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 有代码；真实插件和 KDC 矩阵未闭合 |
@@ -64,7 +64,7 @@
 | OB20 | 部分实现 | 普通 OB20、校验和、trace 结构有代码；压缩 frame 和 proxy reroute 缺失 |
 | 本地事务 | 部分实现 | MySQL/Oracle 隔离级别和 savepoint 有限制；ambient transaction 不支持 |
 | XA | 部分实现 | 显式生命周期和 recover API 有代码；外部 coordinator crash recovery 未验证 |
-| 连接池 | 部分实现 | `Pooling=true` 可复用物理会话，支持最大容量、等待超时、借用前存活探测和惰性生命周期回收；最小池预热、静态池清理、完整资源 reset 和真实服务器矩阵未闭合 |
+| 连接池 | 部分实现 | `Pooling=true` 可复用物理会话，支持最大容量、等待超时、借用前存活探测、惰性生命周期回收和空池 registry 清理；最小池预热、池指标、完整资源 reset 和真实服务器矩阵未闭合 |
 | HA 和恢复 | 部分实现 | Open 阶段 TCP 候选地址重试；活动连接没有透明迁移、重连或 replay |
 | MySQL 类型 | 部分实现 | 常用数值、时间、YEAR、BIT、JSON、零日期已有映射；字符集和扩展类型仍有限制 |
 | Oracle 类型 | 部分实现 | DATE、TIMESTAMP、TZ/LTZ、INTERVAL、NCHAR、RAW、LOB、复杂类型已有部分实现 |
@@ -99,7 +99,7 @@
 
 | ID | 优先级 | 模块 | 当前状态 | 目标 |
 | --- | --- | --- | --- | --- |
-| P0-01 | P0 | 连接池 | 部分实现 | 完成最小池预热、静态池清理、容量/等待/回收和池指标 |
+| P0-01 | P0 | 连接池 | 部分实现 | 完成最小池预热、池指标、容量/等待/回收和真实行为验收 |
 | P0-02 | P0 | 会话隔离 | 部分实现 | 借用前校验、完整资源清理、失败丢弃和泄漏检测 |
 | P0-03 | P0 | Ambient transaction | 明确缺失 | `TransactionScope`/`EnlistTransaction` 支持或正式排除 |
 | P0-04 | P0 | Unknown outcome | 部分实现 | 连接断开、取消、提交失败后的可判定恢复边界 |
@@ -125,7 +125,7 @@
 
 ### 5.1 连接池和会话隔离
 
-当前 `Pooling=true` 已由 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 管理物理会话；逻辑连接关闭时通过 `COM_RESET_CONNECTION` 清理服务端状态，并用 `COM_INIT_DB` 恢复初始 database。池已支持最大容量、等待超时、等待取消、借用前 `COM_PING` 存活探测、连接空闲/总生命周期回收和最小空闲保留规则；每次 Open 使用独立的取消和 generation，Close 能打断池等待并避免旧 Open 清理新状态。最小池预热、静态池清理、完整资源 reset 和真实 OceanBase/OBProxy reset 兼容性仍需验证。
+当前 `Pooling=true` 已由 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 管理物理会话；逻辑连接关闭时通过 `COM_RESET_CONNECTION` 清理服务端状态，并用 `COM_INIT_DB` 恢复初始 database。池已支持最大容量、等待超时、等待取消、借用前 `COM_PING` 存活探测、连接空闲/总生命周期回收、最小空闲保留规则和空池 registry 清理；每次 Open 使用独立的取消和 generation，Close 能打断池等待并避免旧 Open 清理新状态。最小池预热、池指标、完整资源 reset 和真实 OceanBase/OBProxy reset 兼容性仍需验证。
 
 目标设计必须将“逻辑 `OceanBaseConnection`”和“物理 `PhysicalSession`”分离：
 
@@ -357,7 +357,7 @@ Java 参考实现有 `allowLocalInfile`、`allowLoadLocalInfile` 和输入流入
 | M10 LOB/complex | `OceanBaseLob`、`OceanBaseComplexType` | 基础 LOB/复杂类型存在；嵌套 LOB/cursor/national 成员和缓存失效缺失 |
 | M11 metadata/catalog | `OceanBaseConnection.Schema`、reader schema | 仅六类 Schema collection；完整目录和参数元数据缺失 |
 | M12 HA/failover | `EndpointSelector`、地址 resolver | Open 阶段候选地址重试存在；黑名单、退避、活动连接恢复和 reroute 缺失 |
-| M13 pooling/reuse | `PhysicalSessionPool` | 复用、reset、容量、等待取消和生命周期已实现；预热、静态池清理、指标和真实 reset 兼容性缺失 |
+| M13 pooling/reuse | `PhysicalSessionPool` | 复用、reset、容量、等待取消、生命周期和空池 registry 清理已实现；预热、指标和真实 reset 兼容性缺失 |
 | M14 XA | `OceanBaseXaResource`、`OceanBaseXid` | 显式 XA 生命周期和 recover 有路径；外部 coordinator 崩溃恢复未验证 |
 | M15 logging/diagnostics/OB20 | `DriverDiagnostics`、OB20 protocol classes | 日志、Activity、Meter 和基础 OB20 存在；池指标、协议 debug、压缩/reroute 缺失 |
 | M16 packaging/SPI/tests | 多 TFM csproj、消费者和集成套件 | 包和消费者验证存在；跨平台、真实版本/代理/认证矩阵未闭合 |
@@ -382,7 +382,7 @@ Java 参考实现有 `allowLocalInfile`、`allowLoadLocalInfile` 和输入流入
 
 这份清单是“完整驱动”可以对外发布前的最低闭环，不是所有可能的增强功能：
 
-1. 完成最小池预热、静态池清理和可观测指标；补齐所有会话资源的 reset/丢弃规则。
+1. 完成最小池预热和可观测指标；补齐所有会话资源的 reset/丢弃规则。
 2. 完成 ambient transaction、取消、提交响应丢失和 unknown outcome 的状态机与真实故障测试。
 3. 决定并实现多语句、MySQL 压缩、LOCAL INFILE、OB20 压缩和 proxy reroute；未实现项必须保持显式拒绝。
 4. 完成 mTLS、企业信任/撤销、认证插件和 HA/发现的可配置契约及真实矩阵。
