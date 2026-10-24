@@ -25,11 +25,14 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
         private readonly byte[] _greeting;
         private readonly Func<PacketChannel, Task<byte[]>> _readCommand;
         private int _accepted;
+        private int _resets;
         public MutualTlsServer(byte[] greeting, Func<PacketChannel, Task<byte[]>> readCommand)
         { _greeting = greeting; _readCommand = readCommand; Certificate = TestCertificateFactory.CreateSelfSigned(); _listener.Start(); Port = ((IPEndPoint)_listener.LocalEndpoint).Port; _accepting = Accept(); }
         public X509Certificate2 Certificate { get; }
         public int Port { get; }
         public int Accepted => Volatile.Read(ref _accepted);
+        public int Resets => Volatile.Read(ref _resets);
+        public Func<byte, Task>? BeforeCommandReply { get; set; }
         public ConcurrentQueue<string> AuthenticatedCertificates { get; } = new ConcurrentQueue<string>();
         public Func<X509Certificate, bool>? AcceptClientCertificate { get; set; }
         private async Task Accept()
@@ -69,6 +72,8 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                     {
                         var request = await _readCommand(channel);
                         Assert.Contains(request[0], new byte[] { 3, 0x1f, 0x0e });
+                        if (request[0] == 0x1f) Interlocked.Increment(ref _resets);
+                        if (BeforeCommandReply != null) await BeforeCommandReply(request[0]);
                         await channel.WritePacketAsync(new byte[] { 0, request[0] == 3 ? (byte)1 : (byte)0, 0, 6, 0, 0, 0 }, _stop.Token);
                         channel.BeginCommand();
                     }

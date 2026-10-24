@@ -6,7 +6,7 @@
 **参考实现：** 本仓库源码、测试和兼容性记录；本地 `D:\java-code\obconnector-j` 的 Connector/J 实现
 **文档性质：** 能力审计、目标契约和验收基线；不代表尚未完成的功能已经实现
 
-**最近复核：** 2026-10-25；本次客户端证书池化开发以前置提交 `3f523d8` 为起点。本文已同步本次源码与本地验证结果（第 15.4 节）；初次审计基线和历史结果保留原日期，尚未取得的真实验收继续开放。
+**最近复核：** 2026-10-25；客户端证书池化已由 `01a8082` 交付，本次显式清池以此为起点。本文同步源码与本地验证记录；初次审计基线和历史结果保留原日期，尚未取得的真实验收继续开放。
 
 上述提交是初次审计基线。本文同时记录其后 P0-06 的本地修复及 P1-04 的自定义服务器证书验证，实施与测试结果见 [池路由记录](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [TLS 验证记录](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)。23 个缺口 ID 保持不变；本地实现不关闭尚未取得的真实服务器验收。
 
@@ -116,7 +116,7 @@
 
 | ID | 优先级 | 模块 | 当前状态 | 目标 |
 | --- | --- | --- | --- | --- |
-| P0-01 | P0 | 连接池 | 部分实现 | 容量/等待/预热/回收/指标已有本地实现；补并发交错、资源上限、长期运行及真实行为验收，完整 reset 与 P0-02 联合关闭 |
+| P0-01 | P0 | 连接池 | 部分实现 | 容量/等待/预热/回收/指标及显式清池已有本地实现；补并发交错、资源上限、长期运行及真实行为验收，完整 reset 与 P0-02 联合关闭 |
 | P0-02 | P0 | 会话隔离 | 部分实现 | 借用/归还确认 autocommit 基线；prepared statement 已按物理会话 generation 失效，未消费 REF CURSOR、活动 LOB 句柄以及可识别的用户 session-state/temporary-object 语句已标记为归还时销毁，仍需完成不可识别状态、reader、XA 和泄漏矩阵 |
 | P0-03 | P0 | Ambient transaction | 本地实现 | 打开连接自动 enlist、命令/Batch 绑定同一本地事务、提交/回滚/prepare/in-doubt 状态机和真实故障矩阵；分布式提升明确拒绝 |
 | P0-04 | P0 | Unknown outcome | 部分实现 | 连接断开、取消、提交失败后的可判定恢复边界 |
@@ -147,6 +147,8 @@
 当前 `Pooling=true` 已由 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 管理物理会话；逻辑连接关闭时通过 `COM_RESET_CONNECTION` 清理服务端状态，并用 `COM_INIT_DB` 恢复初始 database。MySQL 模式的 reset 和借用探活都会要求服务端明确返回 `Autocommit` 状态位；缺失该状态时物理会话立即销毁。池已支持最大容量、等待超时、等待取消、最小池预热及失败回滚、借用前 `COM_PING` 存活探测、连接空闲/总生命周期回收、最小空闲保留规则、空池 registry 清理和池生命周期指标；每次 Open 使用独立的取消和 generation，过期的 Open 完成会被拒绝。可识别的用户 `SET`、`ALTER SESSION` 和临时对象语句会让物理会话归还时销毁，避免把无法由当前 reset 证据覆盖的状态交给下一借用者；旧池已 Dispose 时，同一逻辑连接会重新取得 registry 中的新池。Closed 回调更换配置并重开的池归属已由 `06d58e1` 修复并有回归；真正多线程 Close/Open 和等待取消交错仍需压力验证。完整资源 reset 和真实 OceanBase/OBProxy reset 兼容性仍需验证。
 
 当前已接入的指标名称为 `oceanbase.client.pool.sessions`、`borrowed`、`waiters`、`discarded`、`reset.failures` 和 `wait.duration`，分别记录物理会话数、借用次数、等待者数、销毁次数、reset 失败次数和池等待耗时。它们证明本地生命周期可观测，不证明真实服务器兼容性。
+
+显式清理入口为所有资产的 `OceanBaseConnection.ClearPool(connection)` / `ClearAllPools()`，以及现代 `OceanBaseDataSource.Clear()`。清池关闭闲置会话，借出会话不被中断、归还时销毁；清理前在途建连/预热也不能把旧代次会话留作后续复用。ClearAllPools 只处理普通 registry 池，私有源需显式 Clear。详见 [清池 API 契约](obconnector-dotnet-architecture-design.md#explicit-pool-clearing)。
 
 此前走查提出的四个池生命周期风险已对当前代码复核：归还路径只按 total lifetime 判断，闲置候选才按 idle lifetime 判断；每次 `Open` 有独立 cancellation 和 generation，过期完成不会清理新一轮打开；`Close` 会取消同步/异步池等待；空池 registry 会被移除并 Dispose。数据源或池 Dispose 后，已经借出的会话在随后关闭时会直接销毁，不再发送 reset 网络请求；同步和异步回归已覆盖该资源归属。仍需补充 Close/Open 交错、长时间借用和非空池 shutdown 的压力回归与生命周期报告。
 
@@ -235,7 +237,7 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 
 **自定义验证的当前契约：** 五个资产均可通过 `OceanBaseConnection.RemoteCertificateValidationCallback` 设置 BCL 回调；现代数据源通过 builder 的 `UseRemoteCertificateValidationCallback` 固定策略。null 保留平台校验，非 null 替代最终校验决策，可由应用实现私有 CA 验证或证书固定，必须处理证书链、主机名、有效期及撤销错误。回调只允许 `VerifyFull`，其他模式在联网前拒绝。普通池按回调引用身份隔离，预热和新物理会话沿用该策略，拒绝/抛异常均在数据库认证前终止且不换端点；复用会话不重复 TLS 验证。捕获状态变化不自动失效既有会话，策略退休需重建数据源并关闭/释放旧源及其借出连接。详见 [TLS API 契约](obconnector-dotnet-architecture-design.md#tls-server-validation)。这仍不构成真实企业 CA 或 mTLS 验收。
 
-**证书所有权和轮换：** 调用方原证书始终由调用方管理，池和数据源只释放内部副本。source 连接的配置固定，getter 返回原配置引用，握手使用内部副本；Open/Build 时不得并发修改原对象。复用会话不重新验证证书。普通池尚无公开 ClearPool/ClearAllPools 且只惰性回收，换证书不等于立即销毁旧身份闲置会话；需要确定性轮换时使用新数据源，释放旧源并关闭其借出连接。公开清池与长期运行验收继续由 P0-01 跟踪。详见 [客户端证书契约](obconnector-dotnet-architecture-design.md#tls-client-certificates)。
+**证书所有权和轮换：** 调用方原证书始终由调用方管理，池和数据源只释放内部副本。source 连接的配置固定，getter 返回原配置引用，握手使用内部副本；Open/Build 时不得并发修改原对象。复用会话不重新验证证书。普通连接可用 ClearPool/ClearAllPools 清理旧身份；私有数据源用 Clear 或释放旧源。清池关闭闲置会话，借出会话完成当前工作后在归还时销毁；清池不替换配置，换证书仍需新身份/新源。生命周期自动回收仍是惰性的，长期运行和真实验收继续由 P0-01 跟踪。详见 [客户端证书契约](obconnector-dotnet-architecture-design.md#tls-client-certificates)。
 
 目标要求：
 
@@ -417,6 +419,7 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 | --- | --- |
 | 物理会话池、复用、reset 和 XA 隔离 | `src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs`、`PhysicalSession.cs`、`tests/OceanBaseConnector.UnitTests/Session/PhysicalSessionPoolTests.cs`、`tests/OceanBaseConnector.UnitTests/PoolingTests.cs` |
 | 连接关闭时归还或销毁会话 | `src/OceanBaseConnector/OceanBaseConnection.cs`、`src/OceanBaseConnector/OceanBaseDataSource.cs` |
+| 显式清池、旧代次销毁和容量唤醒 | `src/OceanBaseConnector/OceanBaseConnection.Pooling.cs`、`Internal/Session/PhysicalSessionPool.cs`、`OceanBaseDataSource.cs`；`tests/OceanBaseConnector.UnitTests/PoolClearingTests.cs`、`tests/OceanBaseConnector.ConsumerTests/PoolClearingConsumerTests.cs` |
 | ambient transaction 本地实现 | `src/OceanBaseConnector/OceanBaseConnection.cs`、`OceanBaseConnection.Transactions.cs`、`src/OceanBaseConnector/Internal/Session/AmbientEnlistment.cs`、`tests/OceanBaseConnector.UnitTests/TransactionTests.cs` |
 | CommandBehavior 和不支持的命令形状 | `src/OceanBaseConnector/OceanBaseCommand.cs`、`src/OceanBaseConnector/OceanBaseBatch.cs` |
 | Schema collection 范围 | `src/OceanBaseConnector/OceanBaseConnection.Schema.cs`、`OceanBaseConnection.Schema.Routines.cs` |
@@ -468,7 +471,7 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 
 | ID | 具体触发场景和影响 | 源码 / 现有回归入口 | 关闭缺口的最低证据 |
 | --- | --- | --- | --- |
-| P0-01 | 满池等待时 Close、重开、source Dispose 交错；可能影响资源归属、等待者退出和连接数上限。回调重开归属已修复，多线程压力仍缺。 | `OceanBaseConnection.cs`；`Internal/Session/PhysicalSessionPool.cs`；`PoolOwnershipTests.cs`、`Session/PhysicalSessionPoolTests.cs` | 同步/异步压力下无超额建连、双重归还或等待泄漏；公开清池/全池清理及换策略后旧池退休可操作；清理超时、Dispose/reset 交错、长借用和预热失败都有报告。 |
+| P0-01 | 满池等待时 Close、重开、source Dispose 交错；可能影响资源归属、等待者退出和连接数上限。回调重开归属已修复，多线程压力仍缺。 | `OceanBaseConnection.cs`；`Internal/Session/PhysicalSessionPool.cs`；`PoolOwnershipTests.cs`、`Session/PhysicalSessionPoolTests.cs` | 同步/异步压力下无超额建连、双重归还或等待泄漏；保留公开清池/全池清理、换策略旧池退休及容量等待回归；清理超时、Dispose/reset 交错、长借用和预热失败都有报告。 |
 | P0-02 | 存储过程或动态 SQL 改变 session 状态，未被 SQL 分类器识别，下一借用者可能继承状态。当前直接可识别语句会销毁会话。 | `Internal/Session/PhysicalSession.cs`；`PoolingTests.cs`、`TemporaryLobLifecycleTests.cs`、`RefCursorTests.cs` | 事务、变量、临时对象、reader、statement、LOB、cursor、XA 各有 A 污染/B 验证的真实双模式和代理测试；不能恢复的状态强制销毁。 |
 | P0-03 | `TransactionScope` 超时、连接提前关闭或 commit 回包丢失；本地 volatile enlistment 不能视为 durable XA 或跨资源原子提交。 | `Internal/Session/AmbientEnlistment.cs`；`OceanBaseConnection.Transactions.cs`；`TransactionTests.cs`、`TransactionFailureTests.cs` | commit/rollback/prepare/in-doubt 和 dispose 竞态有回归；多连接/多资源组合有明确拒绝或经验证的支持契约；提升仍不得被静默当成本地事务。 |
 | P0-04 | 业务写入或提交已发送，响应断开/取消；应用错误重试会重复写入。 | `OceanBaseException.cs`；`Internal/Session/CommandExchange.cs`；`CommandFaultTests.cs`、`TransactionFailureTests.cs` | 在发送前、发送后、响应中、commit/rollback 响应丢失注入故障；验证异常分类、会话销毁、禁止 replay 及应用核对操作结果的示例。 |
@@ -537,6 +540,10 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 | 真实互操作 | 未执行 OceanBase/OBProxy mTLS、企业 CA、轮换、撤销、Linux 或其他私钥提供者矩阵；本地 SslStream mTLS 只证明证书呈现、会话隔离和所有权。 |
 
 命令、退出码和本地报告路径见 [本模块验证台账](obconnector-dotnet-progress.md#2026-10-25-p1-04-pooled-client-certificates)。P1-04 继续为部分实现；23 个 ID 及原开发任务编号不因局部交付而改写。先前的纯文档复核已通过两份审计文档的 26 个本地链接/锚点和三表 23-ID 一致性检查，最终扩展文档检查另记在台账，不将旧检查冒充本次完整门槛。
+
+### 15.5 2026-10-25 显式清池与旧身份退休
+
+已增加全资产的 ClearPool/ClearAllPools 和现代源的 Clear，接口范围及源/普通池隔离见第 5.1 节。19 项初始回归全部 RED 后转为 GREEN；独立走查指出旧代次预热取消后的等待者唤醒和预热失败残留引用的指标重复扣减，已分别用同步/异步测试复现，再修复共享名额释放及 Destroy 路径。最终聚焦 23 项通过；最终完整单测 3556 通过，受影响消费者 180 通过，构建 0 错误/9 个 NU1900 警告，DI 14 通过，Integration 9 通过/70 跳过。C# 六个变更文件格式及 60 个本地链接/锚点校验通过；Go lint 因没有 Go module 退出 1，不适用。完整命令、报告及限制以[本模块进度记录](obconnector-dotnet-progress.md#2026-10-25-p0-01-explicit-pool-clearing)为准；P0-01 的长期运行、广泛并发及真实服务器验收继续开放。
 
 相关文档：
 

@@ -35,6 +35,9 @@ namespace OceanBaseConnector
         }
 
         public override string ConnectionString => _options.PersistSecurityInfo ? _connectionString : _options.SanitizedConnectionString;
+        /// <summary>Close idle pooled sessions and discard borrowed sessions on return.
+        /// The data source and its configuration remain available for new connections.</summary>
+        public void Clear() { EnsureAvailable(); Pool.Clear(); }
         protected override DbConnection CreateDbConnection()
         {
             lock (_gate)
