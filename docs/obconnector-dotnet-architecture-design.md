@@ -91,6 +91,8 @@ Registrations preserve an existing unkeyed `DbConnection`/`DbDataSource` registr
 
 The container disposes its registered services; callers dispose connections created from a data source. Dispose manually built data sources yourself. Source disposal does not forcibly close already-open connections; when those connections later close, their borrowed physical sessions are discarded without sending reset traffic to the disposed pool. External `ILoggerFactory` and address resolvers remain caller-owned.
 
+Closing detaches the session together with its original pool, registry key and cleanup timeout before raising the Closed state event. If that event changes configuration or reopens the logical connection, cleanup still uses the detached session's ownership snapshot. Failed opens also release registry entries using their original key.
+
 ## Commands and readers
 
 - Use Oracle `:name` or MySQL positional `?` bindings. Parameterized execution uses server prepare; `Prepare()` explicitly prepares a command.

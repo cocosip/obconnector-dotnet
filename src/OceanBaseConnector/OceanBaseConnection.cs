@@ -248,7 +248,7 @@ namespace OceanBaseConnector
                 var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
                 _openingCancellation = cancellation;
                 var pool = _options.Pooling ? _pool ??= PhysicalSessionPoolRegistry.Get(_connectionString) : null;
-                return new OpenContext(_options, pool, _addressResolver, _endpointSelector, _clientCertificate, ++_openGeneration, cancellation, token, Transaction.Current);
+                return new OpenContext(_options, pool, _connectionString, _addressResolver, _endpointSelector, _clientCertificate, ++_openGeneration, cancellation, token, Transaction.Current);
             }
         }
 
@@ -276,7 +276,7 @@ namespace OceanBaseConnector
                 {
                     if (context.Pool != null) context.Pool.Discard(session); else session.Dispose();
                 }
-                ReleasePoolIfEmpty(context.Pool);
+                ReleasePoolIfEmpty(context.Pool, context.PoolKey);
                 throw;
             }
         }
@@ -305,19 +305,20 @@ namespace OceanBaseConnector
                 {
                     if (context.Pool != null) context.Pool.Discard(session); else session.Dispose();
                 }
-                ReleasePoolIfEmpty(context.Pool);
+                ReleasePoolIfEmpty(context.Pool, context.PoolKey);
                 throw;
             }
         }
 
         private sealed class OpenContext
         {
-            internal OpenContext(OceanBaseConnectionOptions options, PhysicalSessionPool? pool,
+            internal OpenContext(OceanBaseConnectionOptions options, PhysicalSessionPool? pool, string poolKey,
                 IOceanBaseAddressResolver? resolver, EndpointSelector selector, X509Certificate2? clientCertificate, long generation,
                 CancellationTokenSource cancellation, CancellationToken callerToken, Transaction? ambientTransaction)
-            { Options = options; Pool = pool; Resolver = resolver; Selector = selector; ClientCertificate = clientCertificate; Generation = generation; Cancellation = cancellation; CallerToken = callerToken; AmbientTransaction = ambientTransaction; }
+            { Options = options; Pool = pool; PoolKey = poolKey; Resolver = resolver; Selector = selector; ClientCertificate = clientCertificate; Generation = generation; Cancellation = cancellation; CallerToken = callerToken; AmbientTransaction = ambientTransaction; }
             internal OceanBaseConnectionOptions Options { get; }
             internal PhysicalSessionPool? Pool { get; }
+            internal string PoolKey { get; }
             internal IOceanBaseAddressResolver? Resolver { get; }
             internal EndpointSelector Selector { get; }
             internal X509Certificate2? ClientCertificate { get; }
@@ -358,7 +359,7 @@ namespace OceanBaseConnector
         private void FailedOpen(OpenContext context, PhysicalSession session, long elapsed, Exception error)
         {
             if (context.Pool != null) context.Pool.Discard(session); else session.Dispose();
-            ReleasePoolIfEmpty(context.Pool);
+            ReleasePoolIfEmpty(context.Pool, context.PoolKey);
             lock (_gate) { if (ReferenceEquals(_session, session)) _session = null; }
             ClearOpening(context);
             _log.Failed(session.Endpoint, elapsed, error);
@@ -392,7 +393,7 @@ namespace OceanBaseConnector
                 if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
                 if (closing.Exchange != null) CleanupTransaction(closing.Transaction!, closing.Exchange);
             }
-            finally { closing.Exchange?.Dispose(); FinishClose(closing.Session, closing.Endpoint); }
+            finally { closing.Exchange?.Dispose(); FinishClose(closing.Session, closing.Endpoint, closing.Pool, closing.PoolKey, closing.Timeout); }
         }
 
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
@@ -407,7 +408,7 @@ namespace OceanBaseConnector
                 if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
                 if (closing.Exchange != null) await CleanupTransactionAsync(closing.Transaction!, closing.Exchange).ConfigureAwait(false);
             }
-            finally { closing.Exchange?.Dispose(); await FinishCloseAsync(closing.Session, closing.Endpoint).ConfigureAwait(false); }
+            finally { closing.Exchange?.Dispose(); await FinishCloseAsync(closing.Session, closing.Endpoint, closing.Pool, closing.PoolKey, closing.Timeout).ConfigureAwait(false); }
         }
         public override async ValueTask DisposeAsync()
         {
@@ -554,39 +555,37 @@ namespace OceanBaseConnector
         private static bool SameTransaction(Transaction? left, Transaction? right) =>
             left != null && right != null && left.Equals(right);
 
-        private void FinishClose(PhysicalSession? session, string? endpoint)
+        private void FinishClose(PhysicalSession? session, string? endpoint, PhysicalSessionPool? pool, string poolKey, int timeout)
         {
             if (session == null) return;
-            var pool = _pool;
-            if (_options?.Pooling == true && pool != null)
+            if (pool != null)
             {
-                try { pool.Return(session, _log, _builder.CommandTimeout); }
-                finally { ReleasePoolIfEmpty(pool); }
+                try { pool.Return(session, _log, timeout); }
+                finally { ReleasePoolIfEmpty(pool, poolKey); }
             }
             else session.Dispose();
             _log.Closed(endpoint!);
         }
 
-        private async Task FinishCloseAsync(PhysicalSession? session, string? endpoint)
+        private async Task FinishCloseAsync(PhysicalSession? session, string? endpoint, PhysicalSessionPool? pool, string poolKey, int timeout)
         {
             if (session == null) return;
-            var pool = _pool;
-            if (_options?.Pooling == true && pool != null)
+            if (pool != null)
             {
-                try { await pool.ReturnAsync(session, _log, _builder.CommandTimeout).ConfigureAwait(false); }
-                finally { ReleasePoolIfEmpty(pool); }
+                try { await pool.ReturnAsync(session, _log, timeout).ConfigureAwait(false); }
+                finally { ReleasePoolIfEmpty(pool, poolKey); }
             }
             else session.Dispose();
             _log.Closed(endpoint!);
         }
 
-        private void ReleasePoolIfEmpty(PhysicalSessionPool? pool)
+        private void ReleasePoolIfEmpty(PhysicalSessionPool? pool, string poolKey)
         {
             if (pool == null) return;
 #if NET8_0_OR_GREATER
             if (_source != null) return;
 #endif
-            if (PhysicalSessionPoolRegistry.ReleaseIfEmpty(_connectionString, pool))
+            if (PhysicalSessionPoolRegistry.ReleaseIfEmpty(poolKey, pool))
             {
                 lock (_gate)
                 {
