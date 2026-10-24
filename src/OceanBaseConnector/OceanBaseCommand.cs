@@ -212,7 +212,6 @@ namespace OceanBaseConnector
                 if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseCommand));
                 if (_execution != null) throw new InvalidOperationException("The command already has an active operation.");
                 HasSentSql = false;
-                OceanBaseConnection.RejectAmbientTransaction();
                 if (CommandType != CommandType.Text && CommandType != CommandType.StoredProcedure)
                     throw new NotSupportedException("This CommandType is not supported.");
                 if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess | CommandBehavior.SingleRow | CommandBehavior.SingleResult | CommandBehavior.SchemaOnly)) != 0)
@@ -223,11 +222,13 @@ namespace OceanBaseConnector
                     throw new NotSupportedException("SchemaOnly requires a read-only text query.");
                 if (token.IsCancellationRequested) { CancellationOrigin?.Invoke().ThrowIfCancellationRequested(); token.ThrowIfCancellationRequested(); }
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
-                var session = connection.GetCommandSession(_transaction, SessionOwner);
+                connection.EnsureAmbientTransaction();
+                var transaction = connection.ResolveCommandTransaction(_transaction);
+                var session = connection.GetCommandSession(transaction, SessionOwner);
                 var cursorOffset = !prepareOnly && UseCursorOffset;
                 if (cursorOffset && (_fetchSize == 0 || session.Info!.Mode != OceanBaseCompatibilityMode.Oracle))
                     throw new NotSupportedException("Offset fetch requires Oracle mode and a positive FetchSize.");
-                if (arrayCount != 0 && (!session.UseOraclePrepareExecute || session.Info!.Mode != OceanBaseCompatibilityMode.Oracle || _transaction == null))
+                if (arrayCount != 0 && (!session.UseOraclePrepareExecute || session.Info!.Mode != OceanBaseCompatibilityMode.Oracle || transaction == null))
                     throw new NotSupportedException("Array binding requires Oracle mode, Use Oracle Prepare Execute=true and an explicit transaction.");
                 if (RequiredSession != null && !ReferenceEquals(session, RequiredSession))
                     throw new InvalidOperationException("The connection's physical session changed before the operation started.");
@@ -236,12 +237,17 @@ namespace OceanBaseConnector
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
                 var oracle = session.UseOraclePrepareExecute && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle &&
                     (arrayCount != 0 || CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters, arrayCount) : null;
+                var multiStatement = HasMultipleStatements(text);
+                if (multiStatement && !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientMultiStatements))
+                    throw new NotSupportedException("Multi-statement execution requires Allow Multi Statements=true and server support.");
 #if NET8_0_OR_GREATER
                 if (oracle != null && BatchCommand is OceanBaseBatchCommand batch) batch.BindOutputs(oracle);
 #endif
                 if (oracle == null && CommandType != CommandType.Text) throw new NotSupportedException("Oracle stored procedures require Use Oracle Prepare Execute=true.");
                 if (oracle != null && (prepareOnly || _fetchSize > 0)) throw new NotSupportedException("PrepareExecute prepares during execution and does not support standalone Prepare or FetchSize.");
                 var bindings = oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
+                if (multiStatement && (bindings.Parameters.Length != 0 || prepareOnly || _fetchSize > 0 || oracle != null))
+                    throw new NotSupportedException("Multi-statement execution does not support parameters, Prepare or server cursors.");
                 var clientFallback = AllowClientSidePrepareFallback && !prepareOnly && !_explicitPreparation && _fetchSize == 0 && oracle == null;
                 // Stream identity must not depend on a user stream's equality implementation.
                 ConditionalWeakTable<Stream, OceanBaseParameter>? streamBindings = null;
@@ -273,7 +279,7 @@ namespace OceanBaseConnector
                 { _prepared.Release(); _prepared = null; }
                 if (_prepared != null && _prepared.ParameterCount != bindings.Parameters.Length) throw ParameterCountMismatch();
                 CommandExchange? execution = null;
-                execution = connection.StartCommand(session, _transaction, _timeout, token, () =>
+                execution = connection.StartCommand(session, transaction, _timeout, token, () =>
                 {
                     oracle?.Cursors?.EndExecution();
                     lock (_gate)
@@ -295,7 +301,7 @@ namespace OceanBaseConnector
                 if (arrayCount != 0) ArrayBindingResult = null;
                 if (oracle != null)
                 {
-                    oracle.Cursors = new OracleCursorOwner(connection, session, _transaction, _timeout);
+                    oracle.Cursors = new OracleCursorOwner(connection, session, transaction, _timeout);
                     oracle.StatementCreated = oracle.Cursors.SetStatement;
                     _oracleSession = session;
                 }
@@ -409,6 +415,72 @@ namespace OceanBaseConnector
             (position + keyword.Length == text.Length || !IsIdentifierPart(text[position + keyword.Length]));
 
         private static bool IsIdentifierPart(char value) => char.IsLetterOrDigit(value) || value == '_' || value == '$' || value == '#';
+
+        private static bool HasMultipleStatements(string text)
+        {
+            for (var position = 0; position < text.Length; position++)
+            {
+                var value = text[position];
+                if (value == '\'' || value == '"' || value == '`')
+                {
+                    var quote = value;
+                    for (position++; position < text.Length; position++)
+                    {
+                        if (text[position] == '\\') { position++; continue; }
+                        if (text[position] == quote)
+                        {
+                            if (position + 1 < text.Length && text[position + 1] == quote) { position++; continue; }
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                if (value == '#')
+                {
+                    while (position < text.Length && text[position] != '\r' && text[position] != '\n') position++;
+                    continue;
+                }
+                if (IsDashCommentStart(text, position))
+                {
+                    position += 2;
+                    while (position < text.Length && text[position] != '\r' && text[position] != '\n') position++;
+                    continue;
+                }
+                if (value == '/' && position + 1 < text.Length && text[position + 1] == '*')
+                {
+                    var end = text.IndexOf("*/", position + 2, StringComparison.Ordinal);
+                    if (end < 0) return false;
+                    position = end + 1;
+                    continue;
+                }
+                if (value != ';') continue;
+                for (var next = position + 1; next < text.Length; next++)
+                {
+                    if (char.IsWhiteSpace(text[next])) continue;
+                    if (text[next] == '#') { while (next < text.Length && text[next] != '\r' && text[next] != '\n') next++; continue; }
+                    if (IsDashCommentStart(text, next))
+                    {
+                        next += 2;
+                        while (next < text.Length && text[next] != '\r' && text[next] != '\n') next++;
+                        continue;
+                    }
+                    if (text[next] == '/' && next + 1 < text.Length && text[next + 1] == '*')
+                    {
+                        var end = text.IndexOf("*/", next + 2, StringComparison.Ordinal);
+                        if (end < 0) return false;
+                        next = end + 1;
+                        continue;
+                    }
+                    return true;
+                }
+                return false;
+            }
+            return false;
+        }
+
+        private static bool IsDashCommentStart(string text, int position) =>
+            position + 1 < text.Length && text[position] == '-' && text[position + 1] == '-' &&
+            (position + 2 == text.Length || char.IsWhiteSpace(text[position + 2]));
 
         private PreparedStatement? DetachStatement()
         {

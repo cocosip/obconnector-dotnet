@@ -16,7 +16,7 @@ namespace OceanBaseConnector
         private async Task<OceanBaseLob> CreateTemporaryLobCore(OceanBaseDbType lobType, OceanBaseTransaction? transaction, bool async, CancellationToken token)
         {
             if (lobType != OceanBaseDbType.Blob && lobType != OceanBaseDbType.Clob) throw new ArgumentOutOfRangeException(nameof(lobType));
-            RejectAmbientTransaction(); token.ThrowIfCancellationRequested();
+            EnsureAmbientTransaction(); token.ThrowIfCancellationRequested();
             OceanBaseCommand command;
             lock (_gate)
             {

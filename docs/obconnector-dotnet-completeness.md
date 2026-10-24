@@ -11,7 +11,7 @@
 
 本项目是一个面向 OceanBase MySQL 兼容模式和 Oracle 兼容模式的托管 ADO.NET provider。当前已经具备连接、认证、基础 SQL、参数绑定、结果读取、本地事务、XA、Oracle PrepareExecute、LOB、复杂类型、数组绑定、TLS、OB20 和诊断等基础模块。
 
-当前驱动仍不能称为完整的生产级 ADO.NET 驱动。连接池已具备基础容量、等待、存活探测和生命周期控制，但还需要补齐完整 reset、ambient transaction、协议可选能力、活动连接故障恢复、企业 TLS、ADO.NET 命令行为、Oracle 结果形状、目录元数据和真实兼容矩阵。
+当前驱动仍不能称为完整的生产级 ADO.NET 驱动。连接池已具备基础容量、等待、存活探测和生命周期控制，ambient transaction 已支持本地 volatile enlistment，但还需要补齐完整 reset、协议可选能力、活动连接故障恢复、企业 TLS、ADO.NET 命令行为、Oracle 结果形状、目录元数据和真实兼容矩阵。
 
 本文件统一区分四种状态：
 
@@ -31,7 +31,7 @@
 | Java 驱动有没有连接池？ | 有。 | Connector/J 源码包含 `OceanBasePoolDataSource`、`OceanBasePooledConnection`、`Pools`/`Pool`，职责包括借用、归还、最小/最大容量、空闲/生命周期清理和池事件。本仓库的 [obconnector-j-architecture-outline.md](obconnector-j-architecture-outline.md) 第 M13 节记录了该静态走查；没有把它当作 Java 运行时兼容性证明。 |
 | .NET 驱动以前有没有连接池？ | 在连接池提交之前没有。 | 原先每个 `OceanBaseConnection` 都直接持有一个物理会话，关闭即释放会话，缺少逻辑连接和物理会话的分层。 |
 | .NET 当前有没有连接池？ | 有基础池化，但不是完整连接池。 | `Pooling=true` 通过 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 复用已认证物理会话；归还时执行 `COM_RESET_CONNECTION`，MySQL 模式再执行 `COM_INIT_DB`。当前已支持最大容量、等待超时、最小池预热及失败回滚、空闲/总生命周期回收、借用前存活探测、空池 registry 清理和池指标；完整 reset 与真实服务器 reset 兼容性仍未闭合。 |
-| 是否已经达到 Java/.NET 生产驱动水平？ | 没有。 | 还缺少会话变量/临时对象的完整识别与 reset 矩阵、LOB/cursor 的完整 reset、ambient transaction、活动连接恢复、协议可选能力、企业 TLS、完整 ADO.NET 行为和真实 OceanBase/OBProxy 验收。 |
+| 是否已经达到 Java/.NET 生产驱动水平？ | 没有。 | 还缺少会话变量/临时对象的完整识别与 reset 矩阵、LOB/cursor 的完整 reset、ambient 的分布式提升和故障矩阵、活动连接恢复、协议可选能力、企业 TLS、完整 ADO.NET 行为和真实 OceanBase/OBProxy 验收。 |
 
 ### 1.2 审计范围和证据等级
 
@@ -60,9 +60,9 @@
 | 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 有代码；真实插件和 KDC 矩阵未闭合 |
 | TLS | 部分实现 | `VerifyFull`、`Required`、`Disabled` 有代码；客户端证书、可配置信任和撤销策略缺失 |
 | 基础 SQL | 已实现 | 文本执行、server prepare、多个结果、取消、超时和流式读取已有路径 |
-| 多语句和压缩 | 明确缺失 | 未协商 `CLIENT_MULTI_STATEMENTS`、MySQL 压缩和 `LOCAL INFILE` |
+| 多语句和压缩 | 部分实现 | `Allow Multi Statements=true` 可协商并执行文本多语句；MySQL 压缩和 `LOCAL INFILE` 仍未开放 |
 | OB20 | 部分实现 | 普通 OB20、校验和、trace 结构有代码；压缩 frame 和 proxy reroute 缺失 |
-| 本地事务 | 部分实现 | MySQL/Oracle 隔离级别和 savepoint 有限制；ambient transaction 不支持 |
+| 本地事务 | 部分实现 | MySQL/Oracle 隔离级别和 savepoint 有限制；ambient 支持本地 `TransactionScope` enlistment，分布式提升不支持 |
 | XA | 部分实现 | 显式生命周期和 recover API 有代码；外部 coordinator crash recovery 未验证 |
 | 连接池 | 部分实现 | `Pooling=true` 可复用物理会话，支持最大容量、等待超时、最小池预热及失败回滚、借用前存活探测、惰性生命周期回收、空池 registry 清理和池指标；完整资源 reset 和真实服务器矩阵未闭合 |
 | HA 和恢复 | 部分实现 | Open 阶段 TCP 候选地址重试；活动连接没有透明迁移、重连或 replay |
@@ -101,10 +101,10 @@
 | --- | --- | --- | --- | --- |
 | P0-01 | P0 | 连接池 | 部分实现 | 完成完整 reset、容量/等待/回收和真实行为验收 |
 | P0-02 | P0 | 会话隔离 | 部分实现 | 借用/归还确认 autocommit 基线；prepared statement 已按物理会话 generation 失效，未消费 REF CURSOR、活动 LOB 句柄以及可识别的用户 session-state/temporary-object 语句已标记为归还时销毁，仍需完成不可识别状态、reader、XA 和泄漏矩阵 |
-| P0-03 | P0 | Ambient transaction | 明确缺失 | `TransactionScope`/`EnlistTransaction` 支持或正式排除 |
+| P0-03 | P0 | Ambient transaction | 本地实现 | 打开连接自动 enlist、命令/Batch 绑定同一本地事务、提交/回滚/prepare/in-doubt 状态机和真实故障矩阵；分布式提升明确拒绝 |
 | P0-04 | P0 | Unknown outcome | 部分实现 | 连接断开、取消、提交失败后的可判定恢复边界 |
 | P0-05 | P0 | 活动连接恢复 | 明确缺失 | 明确的重连、迁移和安全重试策略 |
-| P1-01 | P1 | 多语句 | 明确缺失 | 可配置且默认安全的 multi-statement 能力 |
+| P1-01 | P1 | 多语句 | 部分实现 | 默认关闭；显式开启后支持文本多结果，并明确拒绝参数、Prepare、cursor 和 Oracle 输出组合 |
 | P1-02 | P1 | 压缩和 OB20 | 部分实现 | MySQL 压缩、OB20 压缩 frame 和 reroute |
 | P1-03 | P1 | LOCAL INFILE | 明确缺失 | 明确授权、流式上传和路径安全 |
 | P1-04 | P1 | TLS/mTLS | 部分实现 | 客户端证书、信任配置和撤销策略 |
@@ -129,7 +129,7 @@
 
 当前已接入的指标名称为 `oceanbase.client.pool.sessions`、`borrowed`、`waiters`、`discarded`、`reset.failures` 和 `wait.duration`，分别记录物理会话数、借用次数、等待者数、销毁次数、reset 失败次数和池等待耗时。它们证明本地生命周期可观测，不证明真实服务器兼容性。
 
-本轮只读走查还定位到四个需要单独修复的池生命周期问题：归还路径把 `Connection Idle Lifetime` 同时当成借出期间的生命周期判断，可能过早销毁长时间使用但并非空闲的会话；旧的 `Open` 完成后会用当前可变的连接配置清理 `_opening`/归还池，存在与关闭后重新打开互相覆盖的竞态；池等待期间 `Close` 没有取消同步或异步租约等待；静态池 registry 的注册对象和闲置池缺少统一的最终清理。它们目前记录为实现缺口，尚未宣称已修复。
+此前走查提出的四个池生命周期风险已对当前代码复核：归还路径只按 total lifetime 判断，闲置候选才按 idle lifetime 判断；每次 `Open` 有独立 cancellation 和 generation，过期完成不会清理新一轮打开；`Close` 会取消同步/异步池等待；空池 registry 会被移除并 Dispose。它们不再作为已确认的当前 bug，但仍需补充 Close/Open 交错、长时间借用、DataSource Dispose 和非空池 shutdown 的压力回归与生命周期报告。
 
 当前已补齐 prepared statement 的跨借用者边界：`COM_RESET_CONNECTION` 成功后递增物理会话 generation；命令缓存的 statement 只有在 session 和 generation 都一致时才复用。旧 generation 的 statement 不再发送 `COM_STMT_CLOSE`，因为服务端 reset 已经关闭它。同步和异步池复用回归均覆盖了“准备、执行、关闭、重新借用、重新准备、执行”路径。未消费的 Oracle REF CURSOR 和未释放的 LOB/temporary LOB 句柄会把物理会话标记为归还时销毁，释放最后一个资源后才允许池化 reset。
 
@@ -158,11 +158,11 @@ reset 最低验收矩阵：
 
 ### 5.2 事务、取消和 unknown outcome
 
-当前显式本地事务和 XA 有实现，但 ambient transaction 被拒绝，取消或连接断开时也不能证明服务端是否已经执行完成。
+当前显式本地事务和 XA 有实现；ambient transaction 会在打开连接时登记 volatile enlistment，并复用本地事务协议。取消或连接断开时也不能证明服务端是否已经执行完成，提交/回滚响应丢失仍按 unknown outcome 处理。
 
 目标要求：
 
-- 明确 local transaction、ambient transaction 和 XA 的互斥关系；
+- 明确 local transaction、ambient transaction 和 XA 的互斥关系；当前本地 ambient 与显式本地/XA 冲突会在发送前拒绝；
 - `TransactionScope` 提交、回滚、超时和连接关闭必须有状态机；
 - 发送 SQL 后发生取消时，异常必须带有可判定的 unknown-outcome 信息；
 - commit/rollback 的响应边界必须保留，不能因为 socket 关闭而错误报告相反结果；
@@ -173,11 +173,12 @@ reset 最低验收矩阵：
 
 ### 5.3 协议、压缩和 OB20
 
-当前能力集合没有启用 `CLIENT_MULTI_STATEMENTS`、`CLIENT_COMPRESS` 和 `CLIENT_LOCAL_FILES`。OB20 已支持部分校验和、extra info 和 trace 结构，但压缩 frame 和 proxy reroute 明确拒绝。
+当前只有显式 `Allow Multi Statements=true` 才会协商 `CLIENT_MULTI_STATEMENTS`；默认仍关闭。启用后仅允许纯文本、无参数、无 Prepare、无 server cursor、无 Oracle PrepareExecute 的命令，并要求服务端也声明该 capability；结果通过已有的 `NextResult` 路径消费。`CLIENT_COMPRESS` 和 `CLIENT_LOCAL_FILES` 仍未开放。OB20 已支持部分校验和、extra info 和 trace 结构，但压缩 frame 和 proxy reroute 明确拒绝。
 
 实现要求：
 
 - 多语句默认关闭，启用时必须在连接配置中明确声明；
+- 多语句只走文本协议；参数、显式 Prepare、FetchSize/server cursor、Oracle procedure/output 组合必须在发送前拒绝；
 - 多结果、错误边界和参数绑定必须能区分每条语句；
 - MySQL 压缩协议必须实现分片、压缩/未压缩混合包、序列号和最大包限制；
 - OB20 压缩必须实现 header、payload、校验和和 frame 边界；
@@ -282,7 +283,7 @@ Java 参考实现有 `allowLocalInfile`、`allowLoadLocalInfile` 和输入流入
 | --- | --- | --- | --- |
 | G0 | 冻结公共 API、状态机、错误分类和兼容矩阵 | 当前文档和架构设计评审 | 每个缺口有 owner、状态和验收案例 |
 | G1 | 物理会话租约、reset、池、XA 隔离 | G0 | 池借用/归还/失败丢弃/并发隔离测试通过 |
-| G2 | Ambient transaction、取消和 unknown outcome | G1 | TransactionScope、提交丢失和取消矩阵通过 |
+| G2 | Ambient transaction、取消和 unknown outcome | G1 | 本地 `TransactionScope` 提交/回滚 loopback 回归通过；提交丢失、取消和真实故障矩阵仍待完成 |
 | G3 | 多语句、压缩、LOCAL INFILE、OB20 reroute/压缩 | G0 | capability 协商、旧服务器拒绝和真实服务器通过 |
 | G4 | TLS/mTLS、认证插件、HA 和发现 | G0 | TLS/KDC/OBProxy/故障注入矩阵通过 |
 | G5 | ADO.NET 行为、Oracle 输出、复杂类型、类型字符集 | G0 | 公共 API 和模式差异测试通过 |
@@ -355,7 +356,7 @@ Java 参考实现有 `allowLocalInfile`、`allowLoadLocalInfile` 和输入流入
 | M02 URL/options/address/discovery | `OceanBaseConnectionStringBuilder`、`EndpointSelector`、`IOceanBaseAddressResolver` | 多地址和注入 resolver 存在；OCP/TNS、缓存和健康发现缺失 |
 | M03 transport/TLS/auth/credential SPI | `HandshakeFlow`、`TlsHandshakeFlow`、认证实现 | 多种认证和 TLS 路径存在；mTLS、企业信任/撤销和真实 KDC 未闭合 |
 | M04 handshake/mode/capability | `HandshakeFlow`、`NegotiatedCapabilities` | 模式和部分能力协商存在；多语句、压缩、LOCAL INFILE 等 capability 未开放 |
-| M05 session/transaction/cancel | `PhysicalSession`、`OceanBaseTransaction` | 本地事务、取消和 unknown outcome 有路径；ambient transaction、活动连接迁移缺失 |
+| M05 session/transaction/cancel | `PhysicalSession`、`OceanBaseTransaction`、`AmbientEnlistment` | 本地事务、ambient enlistment、取消和 unknown outcome 有路径；活动连接迁移缺失 |
 | M06 query/prepare/cursor | `OceanBaseCommand`、`PreparedStatement`、`QueryResult` | 基础文本/server prepare 和 cursor 有路径；statement cache、完整 CommandBehavior 未闭合 |
 | M07 binding/sql parser/batch | `ParameterBindingPlan`、`OracleArrayBindingPlan`、`OceanBaseBatch` | 参数和数组绑定有路径；rewrite、multi-send、bulk 优化缺失 |
 | M08 result/rows/multiple results | `OceanBaseDataReader`、`QueryResult` | 流式读取和多结果有路径；所有结果形状和资源边界仍需矩阵验证 |
@@ -376,7 +377,7 @@ Java 参考实现有 `allowLocalInfile`、`allowLoadLocalInfile` 和输入流入
 | --- | --- |
 | 物理会话池、复用、reset 和 XA 隔离 | `src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs`、`PhysicalSession.cs`、`tests/OceanBaseConnector.UnitTests/Session/PhysicalSessionPoolTests.cs`、`tests/OceanBaseConnector.UnitTests/PoolingTests.cs` |
 | 连接关闭时归还或销毁会话 | `src/OceanBaseConnector/OceanBaseConnection.cs`、`src/OceanBaseConnector/OceanBaseDataSource.cs` |
-| ambient transaction 当前拒绝 | `src/OceanBaseConnector/OceanBaseConnection.cs`、`OceanBaseConnection.Transactions.cs`、`tests/OceanBaseConnector.UnitTests/TransactionTests.cs` |
+| ambient transaction 本地实现 | `src/OceanBaseConnector/OceanBaseConnection.cs`、`OceanBaseConnection.Transactions.cs`、`src/OceanBaseConnector/Internal/Session/AmbientEnlistment.cs`、`tests/OceanBaseConnector.UnitTests/TransactionTests.cs` |
 | CommandBehavior 和不支持的命令形状 | `src/OceanBaseConnector/OceanBaseCommand.cs`、`src/OceanBaseConnector/OceanBaseBatch.cs` |
 | Schema collection 范围 | `src/OceanBaseConnector/OceanBaseConnection.Schema.cs`、`Schema.Routines.cs` |
 | capability 位和未开放协议能力 | `src/OceanBaseConnector/Internal/Protocol/CapabilityFlags.cs`、`OceanBaseCapabilityFlags.cs`、`src/OceanBaseConnector/Internal/Session/HandshakeFlow.cs` |
@@ -389,7 +390,7 @@ Java 参考实现有 `allowLocalInfile`、`allowLoadLocalInfile` 和输入流入
 这份清单是“完整驱动”可以对外发布前的最低闭环，不是所有可能的增强功能：
 
 1. 完成可观测指标；补齐所有会话资源的 reset/丢弃规则。
-2. 完成 ambient transaction、取消、提交响应丢失和 unknown outcome 的状态机与真实故障测试。
+2. 补齐 ambient transaction 的超时、提交/回滚响应丢失、连接关闭和真实故障测试；当前本地 enlistment 已实现，分布式提升仍明确不支持。
 3. 决定并实现多语句、MySQL 压缩、LOCAL INFILE、OB20 压缩和 proxy reroute；未实现项必须保持显式拒绝。
 4. 完成 mTLS、企业信任/撤销、认证插件和 HA/发现的可配置契约及真实矩阵。
 5. 补齐 ADO.NET 命令行为、Oracle 输出/游标、复杂类型、字符集、Schema 和 statement cache 的公开契约。

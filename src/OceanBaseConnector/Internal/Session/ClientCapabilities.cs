@@ -27,6 +27,7 @@ namespace OceanBaseConnector.Internal.Session
                 | CapabilityFlags.ClientSupportOracle;
 
             if (!options.UseAffectedRows) capabilities |= CapabilityFlags.ClientFoundRows;
+            if (options.AllowMultiStatements) capabilities |= CapabilityFlags.ClientMultiStatements;
 
             if (options.Database.Length > 0)
             {

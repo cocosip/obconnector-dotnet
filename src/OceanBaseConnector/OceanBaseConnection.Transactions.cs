@@ -4,6 +4,8 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using Transaction = System.Transactions.Transaction;
+using TransactionsIsolationLevel = System.Transactions.IsolationLevel;
 using OceanBaseConnector.Internal;
 using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.Internal.Session;
@@ -18,7 +20,7 @@ namespace OceanBaseConnector
 
         internal CommandExchange StartRefCursor(PhysicalSession session, OceanBaseTransaction? transaction, long epoch, int timeout, CancellationToken token, Action release)
         {
-            RejectAmbientTransaction();
+            EnsureAmbientTransaction();
             lock (_gate)
             {
                 if (epoch != _transactionEpoch) throw new InvalidOperationException("The REF CURSOR transaction context has changed.");
@@ -33,6 +35,14 @@ namespace OceanBaseConnector
                 var session = GetOpenSession(owner);
                 ValidateCommandTransaction(session, transaction);
                 return session;
+            }
+        }
+
+        internal OceanBaseTransaction? ResolveCommandTransaction(OceanBaseTransaction? requested)
+        {
+            lock (_gate)
+            {
+                return requested ?? (_ambientTransaction == null ? requested : _transaction);
             }
         }
 
@@ -72,7 +82,7 @@ namespace OceanBaseConnector
 
         internal void ValidateLobContext(LobSession context, object? owner = null, bool reserve = false)
         {
-            RejectAmbientTransaction();
+            EnsureAmbientTransaction();
             lock (_gate)
             {
                 if (context.Epoch != _transactionEpoch) throw new InvalidOperationException("The LOB transaction context has changed.");
@@ -104,9 +114,9 @@ namespace OceanBaseConnector
             return (level, "SET SESSION TRANSACTION ISOLATION LEVEL " + sql);
         }
 
-        private (OceanBaseTransaction Transaction, CommandExchange Exchange, string IsolationSql) StartTransaction(IsolationLevel level, CancellationToken token)
+        private (OceanBaseTransaction Transaction, CommandExchange Exchange, string IsolationSql) StartTransaction(IsolationLevel level, CancellationToken token, bool allowAmbient = false)
         {
-            RejectAmbientTransaction();
+            if (!allowAmbient) EnsureAmbientTransaction();
             token.ThrowIfCancellationRequested();
             lock (_gate)
             {
@@ -124,7 +134,12 @@ namespace OceanBaseConnector
 
         protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
         {
-            var operation = StartTransaction(isolationLevel, CancellationToken.None);
+            return BeginTransactionCore(isolationLevel, CancellationToken.None, allowAmbient: false);
+        }
+
+        private OceanBaseTransaction BeginTransactionCore(IsolationLevel isolationLevel, CancellationToken token, bool allowAmbient)
+        {
+            var operation = StartTransaction(isolationLevel, token, allowAmbient);
             var timer = Stopwatch.StartNew();
             var diagnostics = DriverDiagnostics.Start("transaction.begin");
             operation.Exchange.SetTraceContext(diagnostics?.Context ?? default);
@@ -140,10 +155,25 @@ namespace OceanBaseConnector
             catch (Exception error) { var mapped = BeginFailed(operation.Transaction, operation.Exchange, timer, error); diagnostics?.Finish(operation.Transaction.Session.Info!.Mode, mapped); throw mapped; }
         }
 
+        internal OceanBaseTransaction BeginAmbientTransaction(Transaction transaction) =>
+            BeginTransactionCore(AmbientIsolationLevel(transaction), CancellationToken.None, allowAmbient: true);
+
+        private static IsolationLevel AmbientIsolationLevel(Transaction transaction)
+        {
+            switch (transaction.IsolationLevel)
+            {
+                case TransactionsIsolationLevel.ReadUncommitted: return IsolationLevel.ReadUncommitted;
+                case TransactionsIsolationLevel.ReadCommitted: return IsolationLevel.ReadCommitted;
+                case TransactionsIsolationLevel.RepeatableRead: return IsolationLevel.RepeatableRead;
+                case TransactionsIsolationLevel.Serializable: return IsolationLevel.Serializable;
+                default: throw new NotSupportedException("The ambient transaction isolation level is not supported.");
+            }
+        }
+
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
         protected override async ValueTask<DbTransaction> BeginDbTransactionAsync(IsolationLevel isolationLevel, CancellationToken cancellationToken)
         {
-            var operation = StartTransaction(isolationLevel, cancellationToken);
+            var operation = StartTransaction(isolationLevel, cancellationToken, allowAmbient: false);
             var timer = Stopwatch.StartNew();
             var diagnostics = DriverDiagnostics.Start("transaction.begin");
             operation.Exchange.SetTraceContext(diagnostics?.Context ?? default);
@@ -181,9 +211,9 @@ namespace OceanBaseConnector
             return mapped;
         }
 
-        private CommandExchange StartTransactionEnd(OceanBaseTransaction transaction, CancellationToken token)
+        private CommandExchange StartTransactionEnd(OceanBaseTransaction transaction, CancellationToken token, bool allowAmbient = false)
         {
-            RejectAmbientTransaction();
+            if (!allowAmbient) EnsureAmbientTransaction();
             token.ThrowIfCancellationRequested();
             lock (_gate)
             {

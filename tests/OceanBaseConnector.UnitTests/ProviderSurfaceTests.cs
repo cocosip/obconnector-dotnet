@@ -29,7 +29,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Null(factory.CreateCommandBuilder());
             Assert.Throws<InvalidOperationException>(() => connection.BeginTransaction());
             Assert.Throws<InvalidOperationException>(() => connection.ChangeDatabase("other"));
-            Assert.Throws<NotSupportedException>(() => connection.EnlistTransaction(null));
+            Assert.Throws<ArgumentNullException>(() => connection.EnlistTransaction(null));
         }
 
         [Fact]

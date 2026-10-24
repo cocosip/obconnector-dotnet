@@ -60,7 +60,7 @@ namespace OceanBaseConnector
             if (index < 0) throw new NotSupportedException("The requested schema collection is not supported.");
             if (restrictions != null && restrictions.Length > (index < 2 ? 0 : index < 4 ? 4 : 5)) throw new ArgumentException("Too many restrictions for this schema collection.", nameof(restrictions));
             var values = restrictions == null ? Array.Empty<string?>() : (string?[])restrictions.Clone();
-            RejectAmbientTransaction(); token.ThrowIfCancellationRequested();
+            EnsureAmbientTransaction(); token.ThrowIfCancellationRequested();
             lock (_gate)
             {
                 var session = GetOpenSession();

@@ -36,6 +36,7 @@ namespace OceanBaseConnector.Internal
             bool enableFullLinkTrace,
             bool useOraclePrepareExecute,
             bool useLobLocators,
+            bool allowMultiStatements,
             OceanBaseLoadBalance loadBalance,
             string sanitizedConnectionString,
             IReadOnlyDictionary<int, string>? additionalPasswords = null,
@@ -51,6 +52,7 @@ namespace OceanBaseConnector.Internal
             ServicePrincipalName = servicePrincipalName;
             TreatTinyAsBoolean = treatTinyAsBoolean;
             UseAffectedRows = useAffectedRows;
+            AllowMultiStatements = allowMultiStatements;
             var passwords = new Dictionary<int, string>();
             if (additionalPasswords is not null)
                 foreach (var entry in additionalPasswords) passwords.Add(entry.Key, entry.Value);
@@ -86,7 +88,7 @@ namespace OceanBaseConnector.Internal
 
         internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
             endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows);
+            TlsMode, TlsServerName, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows);
 
         public string UserId { get; }
 
@@ -118,6 +120,7 @@ namespace OceanBaseConnector.Internal
         public int ConnectionLifetimeSeconds { get; }
         public bool TreatTinyAsBoolean { get; }
         public bool UseAffectedRows { get; }
+        public bool AllowMultiStatements { get; }
 
         public string ServerRsaPublicKey { get; }
 

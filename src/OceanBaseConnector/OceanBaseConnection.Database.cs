@@ -38,7 +38,7 @@ namespace OceanBaseConnector
 
         private (CommandExchange Exchange, byte[] Request) StartDatabaseChange(string database, CancellationToken token)
         {
-            RejectAmbientTransaction();
+            EnsureAmbientTransaction();
             token.ThrowIfCancellationRequested();
             if (database == null) throw new ArgumentNullException(nameof(database));
             if (database.Length == 0 || database.IndexOf('\0') >= 0) throw new ArgumentException("A nonempty database name without NUL is required.", nameof(database));

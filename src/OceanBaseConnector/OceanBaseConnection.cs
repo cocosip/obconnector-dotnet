@@ -27,6 +27,8 @@ namespace OceanBaseConnector
         private IOceanBaseAddressResolver? _addressResolver;
         private EndpointSelector _endpointSelector = new EndpointSelector();
         private PhysicalSessionPool? _pool;
+        private Transaction? _ambientTransaction;
+        private AmbientEnlistment? _ambientEnlistment;
 #if NET8_0_OR_GREATER
         private readonly OceanBaseDataSource? _source;
 #endif
@@ -141,6 +143,7 @@ namespace OceanBaseConnector
                 if (session.State == SessionState.Closed) session.Open();
                 else if (session.State != SessionState.Open) throw new InvalidOperationException("The pooled physical session is not available.");
                 PublishOpen(session);
+                if (context.AmbientTransaction != null) EnlistTransaction(context.AmbientTransaction);
             }
             catch (Exception error)
             {
@@ -170,6 +173,7 @@ namespace OceanBaseConnector
                 if (session.State == SessionState.Closed) await session.OpenAsync(context.Token).ConfigureAwait(false);
                 else if (session.State != SessionState.Open) throw new InvalidOperationException("The pooled physical session is not available.");
                 PublishOpen(session);
+                if (context.AmbientTransaction != null) EnlistTransaction(context.AmbientTransaction);
             }
             catch (Exception error)
             {
@@ -188,7 +192,6 @@ namespace OceanBaseConnector
         private OpenContext PrepareOpen(CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
-            RejectAmbientTransaction();
 #if NET8_0_OR_GREATER
             _source?.EnsureAvailable();
 #endif
@@ -202,7 +205,7 @@ namespace OceanBaseConnector
                 var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
                 _openingCancellation = cancellation;
                 var pool = _options.Pooling ? _pool ??= PhysicalSessionPoolRegistry.Get(_connectionString) : null;
-                return new OpenContext(_options, pool, _addressResolver, _endpointSelector, ++_openGeneration, cancellation, token);
+                return new OpenContext(_options, pool, _addressResolver, _endpointSelector, ++_openGeneration, cancellation, token, Transaction.Current);
             }
         }
 
@@ -268,8 +271,8 @@ namespace OceanBaseConnector
         {
             internal OpenContext(OceanBaseConnectionOptions options, PhysicalSessionPool? pool,
                 IOceanBaseAddressResolver? resolver, EndpointSelector selector, long generation,
-                CancellationTokenSource cancellation, CancellationToken callerToken)
-            { Options = options; Pool = pool; Resolver = resolver; Selector = selector; Generation = generation; Cancellation = cancellation; CallerToken = callerToken; }
+                CancellationTokenSource cancellation, CancellationToken callerToken, Transaction? ambientTransaction)
+            { Options = options; Pool = pool; Resolver = resolver; Selector = selector; Generation = generation; Cancellation = cancellation; CallerToken = callerToken; AmbientTransaction = ambientTransaction; }
             internal OceanBaseConnectionOptions Options { get; }
             internal PhysicalSessionPool? Pool { get; }
             internal IOceanBaseAddressResolver? Resolver { get; }
@@ -277,6 +280,7 @@ namespace OceanBaseConnector
             internal long Generation { get; }
             internal CancellationTokenSource Cancellation { get; }
             internal CancellationToken CallerToken { get; }
+            internal Transaction? AmbientTransaction { get; }
             internal CancellationToken Token => Cancellation.Token;
             internal void Dispose() => Cancellation.Dispose();
         }
@@ -379,7 +383,55 @@ namespace OceanBaseConnector
             base.Dispose(disposing);
         }
 
-        public override void EnlistTransaction(Transaction? transaction) => throw new NotSupportedException("Ambient and distributed transactions are not supported.");
+        public override void EnlistTransaction(Transaction? transaction)
+        {
+            if (transaction == null) throw new ArgumentNullException(nameof(transaction));
+            if (transaction.TransactionInformation.Status != TransactionStatus.Active)
+                throw new InvalidOperationException("The transaction is not active.");
+            if (transaction.TransactionInformation.DistributedIdentifier != Guid.Empty)
+                throw new NotSupportedException("Distributed transaction promotion is not supported.");
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                if (_session == null || _session.State != SessionState.Open)
+                    throw new InvalidOperationException("The connection must be open before enlisting a transaction.");
+                if (_ambientTransaction != null)
+                {
+                    if (SameTransaction(_ambientTransaction, transaction))
+                    {
+                        if (_transaction == null) throw new InvalidOperationException("The connection's ambient transaction has already ended on this connection.");
+                        return;
+                    }
+                    throw new InvalidOperationException("The connection is already enlisted in another transaction.");
+                }
+                if (_transaction != null) throw new InvalidOperationException("A local transaction is already active.");
+                _ambientTransaction = transaction;
+            }
+
+            var enlistment = new AmbientEnlistment(this, transaction);
+            OceanBaseTransaction? local = null;
+            try
+            {
+                local = BeginAmbientTransaction(transaction);
+                transaction.EnlistVolatile(enlistment, EnlistmentOptions.None);
+                lock (_gate) _ambientEnlistment = enlistment;
+            }
+            catch
+            {
+                enlistment.Deactivate();
+                if (local != null)
+                {
+                    try { DisposeTransaction(local); }
+                    catch { local.Session.Break(); }
+                }
+                lock (_gate)
+                {
+                    if (SameTransaction(_ambientTransaction, transaction)) _ambientTransaction = null;
+                    _ambientEnlistment = null;
+                }
+                throw;
+            }
+        }
         protected override DbCommand CreateDbCommand()
         {
             lock (_gate) { ThrowIfDisposed(); return new OceanBaseCommand { Connection = this, CommandTimeout = _builder.CommandTimeout }; }
@@ -396,11 +448,67 @@ namespace OceanBaseConnector
             }
         }
         internal ConnectionLog Log => _log;
-        internal static void RejectAmbientTransaction()
+        internal void EnsureAmbientTransaction()
         {
-            if (Transaction.Current != null) throw new NotSupportedException("Ambient transactions are not supported.");
+            var current = Transaction.Current;
+            if (current == null) return;
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                if (_ambientTransaction == null) throw new InvalidOperationException("The connection is not enlisted in the current transaction.");
+                if (!SameTransaction(_ambientTransaction, current)) throw new InvalidOperationException("The connection is enlisted in a different transaction.");
+                if (_transaction == null) throw new InvalidOperationException("The connection's ambient transaction has already ended on this connection.");
+            }
+        }
+
+        internal void EndAmbientTransaction(Transaction transaction, bool commit)
+        {
+            OceanBaseTransaction? local;
+            lock (_gate)
+            {
+                if (!SameTransaction(_ambientTransaction, transaction)) return;
+                local = _transaction;
+            }
+            try
+            {
+                if (local != null) FinishTransaction(local, StartTransactionEnd(local, CancellationToken.None, allowAmbient: true), commit);
+            }
+            finally
+            {
+                lock (_gate)
+                {
+                    if (SameTransaction(_ambientTransaction, transaction)) _ambientTransaction = null;
+                    _ambientEnlistment = null;
+                }
+            }
+        }
+
+        internal void PrepareAmbientTransaction(Transaction transaction)
+        {
+            lock (_gate)
+            {
+                if (!SameTransaction(_ambientTransaction, transaction) || _transaction == null ||
+                    _transaction.InProgress || !IsActiveTransaction(_transaction))
+                    throw new InvalidOperationException("The ambient transaction is no longer active on this connection.");
+            }
+        }
+
+        internal void EndAmbientInDoubt(Transaction transaction)
+        {
+            lock (_gate)
+            {
+                if (SameTransaction(_ambientTransaction, transaction))
+                {
+                    _ambientTransaction = null;
+                    _ambientEnlistment = null;
+                    _session?.Break();
+                }
+            }
         }
         private void ThrowIfDisposed() { if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseConnection)); }
+
+        private static bool SameTransaction(Transaction? left, Transaction? right) =>
+            left != null && right != null && left.Equals(right);
 
         private void FinishClose(PhysicalSession? session, string? endpoint)
         {

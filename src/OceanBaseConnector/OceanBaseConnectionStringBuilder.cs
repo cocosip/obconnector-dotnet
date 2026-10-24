@@ -15,7 +15,7 @@ namespace OceanBaseConnector
     /// <c>ExpectedMode</c>, <c>Pooling</c>, pool sizing/lifetime options,
     /// <c>Server RSA Public Key</c> and
     /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
-    /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c>, <c>Load Balance</c>, <c>Service Principal Name</c>,
+    /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c>, <c>Allow Multi Statements</c>, <c>Load Balance</c>, <c>Service Principal Name</c>,
     /// <c>Treat Tiny As Boolean</c> and <c>Use Affected Rows</c>; the only synonyms are
     /// <c>Host</c>, <c>Uid</c> and <c>Pwd</c>. PAM accepts secret <c>PasswordN</c> keys for N >= 2.
     /// Unknown keys, synonym conflicts
@@ -46,6 +46,7 @@ namespace OceanBaseConnector
         public const string EnableFullLinkTraceKey = "Enable Full Link Trace";
         public const string UseOraclePrepareExecuteKey = "Use Oracle Prepare Execute";
         public const string UseLobLocatorsKey = "Use Lob Locators";
+        public const string AllowMultiStatementsKey = "Allow Multi Statements";
         public const string LoadBalanceKey = "Load Balance";
         public const string ServicePrincipalNameKey = "Service Principal Name";
         public const string TreatTinyAsBooleanKey = "Treat Tiny As Boolean";
@@ -251,6 +252,13 @@ namespace OceanBaseConnector
             set => this[UseLobLocatorsKey] = value ? "true" : "false";
         }
 
+        /// <summary>Opt in to MySQL multi-statement text execution; disabled by default.</summary>
+        public bool AllowMultiStatements
+        {
+            get => GetBoolean(AllowMultiStatementsKey) ?? false;
+            set => this[AllowMultiStatementsKey] = value ? "true" : "false";
+        }
+
         /// <summary>Optional trusted Kerberos service principal overriding the server's GSSAPI challenge.</summary>
         public string ServicePrincipalName
         {
@@ -380,6 +388,7 @@ namespace OceanBaseConnector
                 EnableFullLinkTrace,
                 UseOraclePrepareExecute,
                 UseLobLocators,
+                AllowMultiStatements,
                 LoadBalance,
                 ToSanitizedConnectionString(includeSecrets: false),
                 additionalPasswords,
@@ -414,6 +423,7 @@ namespace OceanBaseConnector
             EnableFullLinkTraceKey,
             UseOraclePrepareExecuteKey,
             UseLobLocatorsKey,
+            AllowMultiStatementsKey,
             LoadBalanceKey,
             ServicePrincipalNameKey,
             TreatTinyAsBooleanKey,
@@ -534,6 +544,7 @@ namespace OceanBaseConnector
                 case EnableFullLinkTraceKey:
                 case UseOraclePrepareExecuteKey:
                 case UseLobLocatorsKey:
+                case AllowMultiStatementsKey:
                 case TreatTinyAsBooleanKey:
                 case UseAffectedRowsKey:
                     ParseBooleanValue(canonicalKey, value);
@@ -631,6 +642,9 @@ namespace OceanBaseConnector
                     return true;
                 case "USE AFFECTED ROWS":
                     canonical = UseAffectedRowsKey;
+                    return true;
+                case "ALLOW MULTI STATEMENTS":
+                    canonical = AllowMultiStatementsKey;
                     return true;
                 case "SERVER":
                     canonical = ServerKey;

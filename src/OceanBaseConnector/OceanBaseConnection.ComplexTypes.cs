@@ -41,7 +41,7 @@ namespace OceanBaseConnector
                 case "TIMESTAMP": code = 202; break;
                 default: throw new NotSupportedException("The anonymous array element type is not supported.");
             }
-            RejectAmbientTransaction();
+            EnsureAmbientTransaction();
             lock (_gate)
             {
                 var context = EnsureComplexTypeContext(RequireComplexSession(transaction), transaction);
@@ -55,7 +55,7 @@ namespace OceanBaseConnector
         {
             if (elementType == null) throw new ArgumentNullException(nameof(elementType));
             if (elementType.IsAnonymous) throw new NotSupportedException("An anonymous element has no named type identity.");
-            RejectAmbientTransaction();
+            EnsureAmbientTransaction();
             lock (_gate)
             {
                 var session = RequireComplexSession(transaction); ValidateComplexBinding(elementType, session, transaction);
@@ -68,7 +68,7 @@ namespace OceanBaseConnector
         /// <summary>Invalidates all cached types and their values. Call after external type DDL, then reload.</summary>
         public void ClearComplexTypeCache(OceanBaseTransaction? transaction = null)
         {
-            RejectAmbientTransaction();
+            EnsureAmbientTransaction();
             lock (_gate)
             {
                 RequireComplexSession(transaction); _complexTypes = new Dictionary<(string, string), OceanBaseComplexType>(); _complexTypeContext = null;
@@ -85,7 +85,7 @@ namespace OceanBaseConnector
 
         internal void ValidateComplexType(OceanBaseComplexType type)
         {
-            RejectAmbientTransaction();
+            EnsureAmbientTransaction();
             lock (_gate)
             {
                 var context = type.Context ?? throw new NotSupportedException("An anonymous result descriptor has no dictionary session.");
@@ -118,7 +118,7 @@ namespace OceanBaseConnector
         private async Task<OceanBaseComplexType> GetComplexTypeCore(string schemaName, string typeName, OceanBaseTransaction? transaction, bool async, CancellationToken token)
         {
             ValidateComplexName(schemaName, nameof(schemaName)); ValidateComplexName(typeName, nameof(typeName));
-            RejectAmbientTransaction(); token.ThrowIfCancellationRequested();
+            EnsureAmbientTransaction(); token.ThrowIfCancellationRequested();
             ComplexTypeContext context; var owner = new object(); int members, dictionaryBytes;
             lock (_gate)
             {

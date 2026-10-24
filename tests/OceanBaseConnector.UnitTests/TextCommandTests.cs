@@ -15,15 +15,18 @@ namespace OceanBaseConnector.UnitTests
     {
         private static string Configuration(int port) => $"Server=127.0.0.1;Port={port};User ID=u;Password=secret;TLS Mode=Disabled;Connection Timeout=5";
 
-        private static LoopbackServer Server(Func<PacketChannel, Task> exchange, bool deprecateEof = false, bool reportTimeZone = true, string nationalCharacterSet = "utf8mb4", bool lobLocators = false, string serverVersion = "4.4.2.2") => LoopbackServer.Start(async client =>
+        private static LoopbackServer Server(Func<PacketChannel, Task> exchange, bool deprecateEof = false, bool reportTimeZone = true, string nationalCharacterSet = "utf8mb4", bool lobLocators = false, string serverVersion = "4.4.2.2", bool multiStatements = false) => LoopbackServer.Start(async client =>
         {
             var channel = new PacketChannel(client.GetStream());
             var greeting = (byte[])ProtocolFixture.Load("initial-handshake-oceanbase").Payload.Clone();
             if (deprecateEof) greeting[Array.IndexOf(greeting, (byte)0, 1) + 20] |= 1;
             if (lobLocators) greeting[Array.IndexOf(greeting, (byte)0, 1) + 20] |= 32;
+            if (multiStatements) greeting[41] |= 1;
+            if (multiStatements) Assert.True(InitialHandshakePacket.Parse(greeting).Capabilities.HasFlag(CapabilityFlags.ClientMultiStatements));
             await channel.WritePacketAsync(greeting);
             var authentication = await channel.ReadPacketAsync();
             if (deprecateEof) Assert.Equal(1, authentication[3] & 1);
+            if (multiStatements) Assert.Equal(1, authentication[2] & 1);
             await channel.WritePacketAsync(reportTimeZone ? SessionVariablesOk(new NationalCharacterSet(nationalCharacterSet, "utf8mb4", "utf8mb4").Variables("+00:00")) : Ok());
             await ServerIdentity.ReplyAsync(channel, version: serverVersion, deprecated: deprecateEof);
             await exchange(channel);
@@ -586,7 +589,7 @@ namespace OceanBaseConnector.UnitTests
                 command.CommandType = CommandType.Text;
                 Assert.Throws<NotSupportedException>(() => command.ExecuteReader(CommandBehavior.SchemaOnly));
                 using (var scope = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
-                    await Assert.ThrowsAsync<NotSupportedException>(() => command.ExecuteNonQueryAsync());
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => command.ExecuteNonQueryAsync());
                 Assert.Equal(1, await command.ExecuteNonQueryAsync());
             }
             finally { connection.Close(); server.Stop(); }
@@ -630,6 +633,123 @@ namespace OceanBaseConnector.UnitTests
                 command.CommandText = "after schema_only";
                 Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
                 Assert.Equal(ConnectionState.Open, connection.State);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task ParameterizedMultiStatementsAreRejectedBeforeSend(bool asynchronous)
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "after multi statement rejection");
+                await channel.WritePacketAsync(Ok(1));
+            }, multiStatements: true);
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Multi Statements=true");
+            try
+            {
+                await connection.OpenAsync();
+                UseInternalMySqlFixture(connection);
+                using var command = connection.CreateCommand();
+                command.CommandText = "select ?; select 2";
+                command.Parameters.Add(new OceanBaseParameter { Value = 1 });
+                var execute = asynchronous
+                    ? new Func<Task>(() => command.ExecuteNonQueryAsync())
+                    : () => { command.ExecuteNonQuery(); return Task.CompletedTask; };
+                await Assert.ThrowsAsync<NotSupportedException>(execute);
+                command.Parameters.Clear();
+                command.CommandText = "after multi statement rejection";
+                Assert.Equal(1, await command.ExecuteNonQueryAsync());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task MultiStatementsRequireExplicitOptIn()
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "after multi statement opt in");
+                await channel.WritePacketAsync(Ok(1));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                using var command = connection.CreateCommand();
+                command.CommandText = "select 1; select 2";
+                Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery());
+                command.CommandText = "after multi statement opt in";
+                Assert.Equal(1, await command.ExecuteNonQueryAsync());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task QuotedSemicolonIsNotTreatedAsMultipleStatements()
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "select ';'");
+                await channel.WritePacketAsync(Ok(1));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                using var command = connection.CreateCommand();
+                command.CommandText = "select ';'";
+                Assert.Equal(1, await command.ExecuteNonQueryAsync());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task OptedInMultiStatementsExposeResultsAndKeepConnectionUsable(bool asynchronous)
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "select first; select second");
+                await channel.WritePacketAsync(new byte[] { 1 });
+                await channel.WritePacketAsync(Column("n"));
+                await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 1, 49 });
+                await channel.WritePacketAsync(Eof(14));
+                await channel.WritePacketAsync(new byte[] { 1 });
+                await channel.WritePacketAsync(Column("n"));
+                await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 1, 50 });
+                await channel.WritePacketAsync(Eof());
+                channel.BeginCommand();
+                await Query(channel, "after multi statement");
+                await channel.WritePacketAsync(Ok(1));
+            }, multiStatements: true);
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Multi Statements=true");
+            try
+            {
+                await connection.OpenAsync();
+                Assert.True(connection.GetOpenSession().Info!.Capabilities.HasEffective(CapabilityFlags.ClientMultiStatements));
+                using var command = connection.CreateCommand();
+                command.CommandText = "select first; select second";
+                using (var reader = asynchronous ? await command.ExecuteReaderAsync() : command.ExecuteReader())
+                {
+                    Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                    Assert.Equal(1, reader.GetInt32(0));
+                    Assert.True(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+                    Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                    Assert.Equal(2, reader.GetInt32(0));
+                    Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+                }
+                command.CommandText = "after multi statement";
+                Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
             }
             finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));

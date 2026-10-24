@@ -365,9 +365,9 @@ namespace OceanBaseConnector.UnitTests
                 SetXaMySql(connection); var resource = connection.GetXaResource();
                 using (var scope = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
                 {
-                    Assert.Throws<NotSupportedException>(() => connection.GetXaResource());
-                    Assert.Throws<NotSupportedException>(() => resource.Start(XaId));
-                    await Assert.ThrowsAsync<NotSupportedException>(() => resource.RecoverAsync());
+                    Assert.Throws<InvalidOperationException>(() => connection.GetXaResource());
+                    Assert.Throws<InvalidOperationException>(() => resource.Start(XaId));
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => resource.RecoverAsync());
                     connection.Close();
                 }
             }

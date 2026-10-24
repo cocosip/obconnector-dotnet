@@ -21,7 +21,7 @@ namespace OceanBaseConnector
                 if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (i > 0 && (c == '_' || (c >= '0' && c <= '9')))))
                     throw new ArgumentException("The savepoint name is not a supported SQL identifier.", nameof(name));
             }
-            RejectAmbientTransaction();
+            EnsureAmbientTransaction();
             lock (_gate)
             {
                 ThrowIfDisposed();

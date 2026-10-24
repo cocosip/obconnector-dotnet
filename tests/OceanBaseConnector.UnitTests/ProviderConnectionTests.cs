@@ -331,12 +331,12 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public async Task AmbientTransactionRejectedBeforeConnectionAttempt()
+        public async Task AmbientTransactionDoesNotRejectBeforeConnectionAttempt()
         {
             using var connection = new OceanBaseConnection("Server=unreachable.invalid;User ID=u");
             using var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
-            Assert.Throws<NotSupportedException>(() => connection.Open());
-            await Assert.ThrowsAsync<NotSupportedException>(() => connection.OpenAsync());
+            Assert.Throws<OceanBaseException>(() => connection.Open());
+            await Assert.ThrowsAsync<OceanBaseException>(() => connection.OpenAsync());
             Assert.Equal(ConnectionState.Closed, connection.State);
         }
     }

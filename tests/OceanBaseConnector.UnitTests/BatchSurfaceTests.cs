@@ -40,7 +40,7 @@ namespace OceanBaseConnector.UnitTests
                 using var canceled = new CancellationTokenSource(); canceled.Cancel();
                 var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => batch.ExecuteNonQueryAsync(canceled.Token)); Assert.Equal(canceled.Token, error.CancellationToken);
                 using (var ambient = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
-                    await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteNonQueryAsync());
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => batch.ExecuteNonQueryAsync());
                 Assert.Equal(ConnectionState.Open, connection.State); batch.Cancel();
             }
             finally { connection.Close(); server.Stop(); }

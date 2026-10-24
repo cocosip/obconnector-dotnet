@@ -41,6 +41,21 @@ namespace OceanBaseConnector.UnitTests
             Assert.True(ClientCapabilities.Build(0, builder.Build()).HasFlag(CapabilityFlags.ClientFoundRows));
         }
 
+        [Fact]
+        public void MultiStatementsAreOptInAndNegotiatedOnlyWhenEnabled()
+        {
+            var defaults = new OceanBaseConnectionStringBuilder("Server=one;User ID=u").Build();
+            Assert.False(defaults.AllowMultiStatements);
+            Assert.False(ClientCapabilities.Build(CapabilityFlags.ClientMultiStatements, defaults)
+                .HasFlag(CapabilityFlags.ClientMultiStatements));
+
+            var enabled = new OceanBaseConnectionStringBuilder(
+                "Server=one;User ID=u;Allow Multi Statements=true").Build();
+            Assert.True(enabled.AllowMultiStatements);
+            Assert.True(ClientCapabilities.Build(CapabilityFlags.ClientMultiStatements, enabled)
+                .HasFlag(CapabilityFlags.ClientMultiStatements));
+        }
+
         public static IEnumerable<object[]> TinyBooleanReaderCases()
         {
             foreach (var binary in new[] { false, true })
@@ -160,6 +175,7 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData("Treat Tiny As Boolean")]
         [InlineData("Use Affected Rows")]
+        [InlineData("Allow Multi Statements")]
         public void BehaviorOptionsRejectInvalidBooleans(string keyword)
         {
             var error = Assert.Throws<ArgumentException>(() => new OceanBaseConnectionStringBuilder($"{keyword}=private-value"));

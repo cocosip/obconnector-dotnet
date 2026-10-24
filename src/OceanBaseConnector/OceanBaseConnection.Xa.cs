@@ -16,7 +16,7 @@ namespace OceanBaseConnector
         /// Business commands require an active branch; local transactions are then rejected.</summary>
         public OceanBaseXaResource GetXaResource()
         {
-            RejectAmbientTransaction();
+            EnsureAmbientTransaction();
             lock (_gate)
             {
                 var session = GetOpenSession();
@@ -35,7 +35,7 @@ namespace OceanBaseConnector
 
         private CommandExchange StartXa(OceanBaseXaResource resource, XaOperation operation, OceanBaseXid? xid, int mode, CancellationToken token)
         {
-            RejectAmbientTransaction(); token.ThrowIfCancellationRequested();
+            EnsureAmbientTransaction(); token.ThrowIfCancellationRequested();
             if (operation != XaOperation.Recover && xid == null) throw new ArgumentNullException(nameof(xid));
             if (operation == XaOperation.Start && (uint)mode > (uint)OceanBaseXaStartMode.Resume ||
                 operation == XaOperation.End && (uint)mode > (uint)OceanBaseXaEndMode.Suspend)

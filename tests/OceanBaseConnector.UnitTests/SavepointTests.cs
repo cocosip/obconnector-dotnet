@@ -104,7 +104,7 @@ namespace OceanBaseConnector.UnitTests
                     }
                 }
                 using (var scope = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
-                    await Assert.ThrowsAsync<NotSupportedException>(() => Savepoint(transaction, "save", "point", asynchronous));
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => Savepoint(transaction, "save", "point", asynchronous));
                 await Savepoint(transaction, "save", new string('a', 30), asynchronous);
                 await transaction.RollbackAsync();
             }

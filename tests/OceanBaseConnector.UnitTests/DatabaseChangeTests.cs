@@ -103,7 +103,7 @@ namespace OceanBaseConnector.UnitTests
                 var oversized = new string('中', (int)(PacketChannel.DefaultMaxPacketSize / 3 + 1));
                 await Assert.ThrowsAsync<ArgumentException>(() => asynchronous ? connection.ChangeDatabaseAsync(oversized) : RunSync(() => connection.ChangeDatabase(oversized)));
                 using (var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
-                    await Assert.ThrowsAsync<NotSupportedException>(() => asynchronous ? connection.ChangeDatabaseAsync("other") : RunSync(() => connection.ChangeDatabase("other")));
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => asynchronous ? connection.ChangeDatabaseAsync("other") : RunSync(() => connection.ChangeDatabase("other")));
                 Assert.Equal(ConnectionState.Open, connection.State); Assert.Empty(transport.Written);
             }
             finally { connection.Close(); server.Stop(); }

@@ -86,8 +86,9 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 | Area | Unsupported behavior |
 | --- | --- |
 | Pooling | Maximum capacity, wait timeout/cancellation, minimum-pool prewarming with failed-warmup rollback, borrow validation including MySQL autocommit status, idle/total lifetime reaping, prepared statement generation invalidation, unconsumed REF CURSOR/live LOB disposal, recognized user session-state or temporary-object discard, empty static-registry cleanup and pool lifecycle metrics are supported locally. Full resource reset and server-specific reset interoperability are not yet validated. |
+| Multi-statements | Disabled by default. `Allow Multi Statements=true` enables negotiated text multi-statements when the server advertises `CLIENT_MULTI_STATEMENTS`; parameters, Prepare, server cursors and Oracle output paths are rejected. Real OceanBase/OBProxy error and cancellation matrices remain unverified. |
 | Disabled autocommit | MySQL-mode sessions whose `@@autocommit` is 0; Open fails because the provider cannot commit implicit transactions. Connector/J forces `SET autocommit=1` instead; this driver sets no session variables. |
-| Ambient transactions | `TransactionScope` / `EnlistTransaction`; explicit XA is a separate API. |
+| Ambient transactions | Local `TransactionScope`/`EnlistTransaction` enlistment is supported for one physical session and maps to local commit/rollback. Distributed promotion, conflicting ambient/local/XA combinations, reopening after close before the scope callback, and unknown-outcome recovery remain unsupported. Explicit XA is a separate API. |
 | Standard assets | `DbDataSource`, `DbBatch`, savepoint APIs and GSSAPI require modern TFMs; complete cross-TFM behavior and real GSSAPI/KDC validation remain unverified. |
 | Savepoints | Oracle release; quoted/Unicode names and leading underscores such as `__EFSavePoint`. |
 | Binary stream parameters | InputOutput, text streams, array-binding combinations and client-prepare fallback. |

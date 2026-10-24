@@ -87,20 +87,58 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync();
                 using var transaction = await connection.BeginTransactionAsync();
-                using (var scope = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
+                using (var scope = new System.Transactions.TransactionScope(
+                    System.Transactions.TransactionScopeOption.Required,
+                    new System.Transactions.TransactionOptions { IsolationLevel = System.Transactions.IsolationLevel.ReadCommitted },
+                    System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
                 {
-                    Assert.Throws<NotSupportedException>(() => transaction.Commit());
-                    await Assert.ThrowsAsync<NotSupportedException>(() => transaction.RollbackAsync());
-                    Assert.Throws<NotSupportedException>(() => connection.BeginTransaction());
+                    Assert.Throws<InvalidOperationException>(() => transaction.Commit());
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => transaction.RollbackAsync());
+                    Assert.Throws<InvalidOperationException>(() => connection.BeginTransaction());
                     using var command = connection.CreateCommand();
                     command.Transaction = transaction;
                     command.CommandText = "forbidden";
-                    await Assert.ThrowsAsync<NotSupportedException>(() => command.ExecuteNonQueryAsync());
-                    await Assert.ThrowsAsync<NotSupportedException>(() => command.PrepareAsync());
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => command.ExecuteNonQueryAsync());
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => command.PrepareAsync());
                     if (asynchronous) await connection.CloseAsync(); else connection.Close();
                 }
                 Assert.Null(transaction.Connection);
                 Assert.Equal(ConnectionState.Closed, connection.State);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public async Task AmbientTransactionScopeEnlistsAndEndsLocalTransaction(bool asynchronous, bool complete)
+        {
+            var server = Server(async channel =>
+            {
+                await TransactionBegin(channel);
+                await Query(channel, "update ambient");
+                await channel.WritePacketAsync(Ok(1));
+                channel.BeginCommand();
+                await TransactionEnd(channel, complete);
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                using (var scope = new System.Transactions.TransactionScope(
+                    System.Transactions.TransactionScopeOption.Required,
+                    new System.Transactions.TransactionOptions { IsolationLevel = System.Transactions.IsolationLevel.ReadCommitted },
+                    System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
+                {
+                    if (asynchronous) await connection.OpenAsync(); else connection.Open();
+                    using var command = connection.CreateCommand();
+                    command.CommandText = "update ambient";
+                    Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+                    if (complete) scope.Complete();
+                }
+                Assert.Equal(ConnectionState.Open, connection.State);
             }
             finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));

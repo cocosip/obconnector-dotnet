@@ -162,8 +162,8 @@ namespace OceanBaseConnector.UnitTests
                 {
                     using (var scope = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
                     {
-                        Assert.Throws<NotSupportedException>(() => connection.GetSchema(collection));
-                        await Assert.ThrowsAsync<NotSupportedException>(() => connection.GetSchemaAsync(collection));
+                        Assert.Throws<InvalidOperationException>(() => connection.GetSchema(collection));
+                        await Assert.ThrowsAsync<InvalidOperationException>(() => connection.GetSchemaAsync(collection));
                     }
                     using (var lease = connection.GetOpenSession().Acquire())
                     {

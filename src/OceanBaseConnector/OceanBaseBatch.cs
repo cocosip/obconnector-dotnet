@@ -44,18 +44,20 @@ namespace OceanBaseConnector
         {
             lock (Gate)
             {
-                CheckMutable(); OceanBaseConnection.RejectAmbientTransaction(); token.ThrowIfCancellationRequested();
+                CheckMutable(); token.ThrowIfCancellationRequested();
                 if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess)) != 0) throw new NotSupportedException("This CommandBehavior is not supported.");
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
+                connection.EnsureAmbientTransaction();
+                var transaction = connection.ResolveCommandTransaction(_transaction);
                 var operation = new Operation(this, connection, token, behavior);
                 try
                 {
-                    operation.Session = connection.ReserveBatch(_transaction, operation);
+                    operation.Session = connection.ReserveBatch(transaction, operation);
                     operation.Items = new OceanBaseBatchCommand[_commands.Count]; operation.Commands = new OceanBaseCommand[_commands.Count]; operation.Counts = new int[_commands.Count];
                     for (var i = 0; i < _commands.Count; i++)
                     {
                         var item = (OceanBaseBatchCommand)_commands[i]; item.Affected = -1; operation.Items[i] = item; operation.Counts[i] = -1;
-                        operation.Commands[i] = item.Snapshot(connection, _transaction, _timeout, operation, operation.Session);
+                        operation.Commands[i] = item.Snapshot(connection, transaction, _timeout, operation, operation.Session);
                     }
                     _operation = operation; return operation;
                 }
