@@ -44,8 +44,8 @@ namespace OceanBaseConnector.Internal.Protocol
             }
             if (mode == OceanBaseCompatibilityMode.Oracle && type == 3 && precision == 0 && scale == 0) Precision = 10;
         }
-        internal string? SessionTimeZone { get; }
-        private NationalCharacterSet? NationalCharacterSet { get; }
+        internal string? SessionTimeZone { get; private set; }
+        private NationalCharacterSet? NationalCharacterSet { get; set; }
         internal Encoding TextEncoding => TypeCode == 207 || TypeCode == 208
             ? (NationalCharacterSet ?? throw new NotSupportedException("The result has no trusted national character set.")).ResultEncoding(Charset) : Utf8;
         internal string Name { get; }
@@ -107,6 +107,28 @@ namespace OceanBaseConnector.Internal.Protocol
                     result.ComplexType = sourceDescription;
             }
             if (cursor.HasRemaining) throw new NotSupportedException("Extended column metadata is not supported yet.");
+            return result;
+        }
+
+        internal ResultColumn WithContext(OceanBaseConnector.Internal.Session.CommandExchange query)
+        {
+            var result = (ResultColumn)MemberwiseClone();
+            result.Lobs = query.Lobs;
+            result.SessionTimeZone = query.SessionTimeZone;
+            result.NationalCharacterSet = query.NationalCharacterSet;
+            var metadata = result.ComplexMetadata;
+            if (metadata != null && metadata.Name.Length != 0)
+            {
+                if (query.ComplexTypes != null && query.ComplexTypes.TryGetValue((metadata.Schema, metadata.Name), out var description))
+                    result.ComplexType = description;
+                else if (metadata.Schema.Length == 0 && query.SourceComplexTypes != null &&
+                    query.SourceComplexTypes.TryGetValue((Database, OriginalTable, OriginalName, metadata.Name), out var source))
+                    result.ComplexType = source;
+            }
+            else if (metadata != null && query.SourceComplexTypes != null)
+                foreach (var entry in query.SourceComplexTypes)
+                    if (entry.Key.Item1 == Database && entry.Key.Item2 == OriginalTable && entry.Key.Item3 == OriginalName)
+                    { result.ComplexType = entry.Value; break; }
             return result;
         }
 

@@ -6,6 +6,8 @@ The driver is experimental. Recorded database runs cover direct OceanBase 4.4.2.
 
 The [complete driver audit](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-driver-audit.md) tracks 23 gaps across eight work packages, with source evidence, priorities and acceptance criteria. Basic connection pooling is implemented and opt-in; complete session isolation and real deployment acceptance remain open. Commands can [derive parameters from a unique visible routine signature](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-architecture-design.md#routine-parameter-derivation) without executing the target; actual directory/permissions/version/OBProxy acceptance remains open.
 
+`CommandBehavior.SchemaOnly` reads server-prepared column metadata without executing the target or uploading parameter values. It requires a single accepted text query with input parameters and never falls back to text execution. See the [command contract](docs/obconnector-dotnet-architecture-design.md) for preparation errors, metadata limits and lifecycle behavior.
+
 ## Packages
 
 | Package | Purpose |

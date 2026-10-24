@@ -82,6 +82,12 @@ namespace OceanBaseConnector
             execution.StartDiagnostics("execute");
             try
             {
+                if ((behavior & CommandBehavior.SchemaOnly) != 0)
+                {
+                    var metadata = EnsurePrepared(operation)!;
+                    execution.ResolveComplexColumns(metadata);
+                    return new OceanBaseDataReader(execution, QueryResult.FromPrepared(execution, metadata), operation.Connection, operation.Session, behavior);
+                }
                 if (operation.Oracle != null) execution.EnsureOraclePrepareExecute();
                 if (operation.CursorOffset) execution.EnsureCursorOffset();
                 var zone = execution.EnsureSessionTimeZone();
@@ -150,6 +156,12 @@ namespace OceanBaseConnector
             execution.StartDiagnostics("execute");
             try
             {
+                if ((behavior & CommandBehavior.SchemaOnly) != 0)
+                {
+                    var metadata = (await EnsurePreparedAsync(operation, cancellationToken).ConfigureAwait(false))!;
+                    await execution.ResolveComplexColumnsAsync(metadata, cancellationToken).ConfigureAwait(false);
+                    return new OceanBaseDataReader(execution, QueryResult.FromPrepared(execution, metadata), operation.Connection, operation.Session, behavior);
+                }
                 if (operation.Oracle != null) await execution.EnsureOraclePrepareExecuteAsync(cancellationToken).ConfigureAwait(false);
                 if (operation.CursorOffset) await execution.EnsureCursorOffsetAsync(cancellationToken).ConfigureAwait(false);
                 var zone = await execution.EnsureSessionTimeZoneAsync(cancellationToken).ConfigureAwait(false);
@@ -219,14 +231,15 @@ namespace OceanBaseConnector
                     throw new NotSupportedException("This CommandBehavior is not supported yet.");
                 var text = CommandText;
                 if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("CommandText is required.");
-                if ((behavior & CommandBehavior.SchemaOnly) != 0 && (CommandType != CommandType.Text || !IsSchemaOnlyQuery(text)))
-                    throw new NotSupportedException("SchemaOnly requires a read-only text query.");
+                var schemaOnly = (behavior & CommandBehavior.SchemaOnly) != 0;
+                if (schemaOnly && (CommandType != CommandType.Text || !IsSchemaOnlyQuery(text) || HasOutputParameters()))
+                    throw new NotSupportedException("SchemaOnly requires a text query with input parameters only.");
                 if (token.IsCancellationRequested) { CancellationOrigin?.Invoke().ThrowIfCancellationRequested(); token.ThrowIfCancellationRequested(); }
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
                 connection.EnsureAmbientTransaction();
                 var transaction = connection.ResolveCommandTransaction(_transaction);
                 var session = connection.GetCommandSession(transaction, SessionOwner);
-                var cursorOffset = !prepareOnly && UseCursorOffset;
+                var cursorOffset = !prepareOnly && !schemaOnly && UseCursorOffset;
                 if (cursorOffset && (_fetchSize == 0 || session.Info!.Mode != OceanBaseCompatibilityMode.Oracle))
                     throw new NotSupportedException("Offset fetch requires Oracle mode and a positive FetchSize.");
                 if (arrayCount != 0 && (!session.UseOraclePrepareExecute || session.Info!.Mode != OceanBaseCompatibilityMode.Oracle || transaction == null))
@@ -239,6 +252,7 @@ namespace OceanBaseConnector
                 var oracle = session.UseOraclePrepareExecute && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle &&
                     (arrayCount != 0 || CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters, arrayCount) : null;
                 var multiStatement = SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
+                if (schemaOnly && multiStatement) throw new NotSupportedException("SchemaOnly requires a single statement.");
                 if (multiStatement && !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientMultiStatements))
                     throw new NotSupportedException("Multi-statement execution requires Allow Multi Statements=true and server support.");
 #if NET8_0_OR_GREATER
@@ -249,12 +263,12 @@ namespace OceanBaseConnector
                 var bindings = oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
                 if (multiStatement && (bindings.Parameters.Length != 0 || prepareOnly || _fetchSize > 0 || oracle != null))
                     throw new NotSupportedException("Multi-statement execution does not support parameters, Prepare or server cursors.");
-                var clientFallback = AllowClientSidePrepareFallback && !prepareOnly && !_explicitPreparation && _fetchSize == 0 && oracle == null;
+                var clientFallback = AllowClientSidePrepareFallback && !prepareOnly && !schemaOnly && !_explicitPreparation && _fetchSize == 0 && oracle == null;
                 // Stream identity must not depend on a user stream's equality implementation.
                 ConditionalWeakTable<Stream, OceanBaseParameter>? streamBindings = null;
                 foreach (var parameter in bindings.Parameters)
                 {
-                    if (!(parameter.Value is Stream source)) continue;
+                    if (schemaOnly || !(parameter.Value is Stream source)) continue;
                     streamBindings ??= new ConditionalWeakTable<Stream, OceanBaseParameter>();
                     if (streamBindings.TryGetValue(source, out _)) throw new NotSupportedException("A Stream cannot be bound to multiple parameter positions.");
                     streamBindings.Add(source, parameter);
@@ -268,12 +282,12 @@ namespace OceanBaseConnector
                     bindings = new ParameterBindingPlan(bindings.CommandText, snapshots, bindings.BindingPositions);
                 }
                 foreach (var parameter in bindings.Parameters)
-                    if ((parameter.OceanBaseDbType == OceanBaseDbType.Blob || parameter.OceanBaseDbType == OceanBaseDbType.Clob || parameter.Value is OceanBaseLob) && !session.UseLobLocators)
+                    if (!schemaOnly && (parameter.OceanBaseDbType == OceanBaseDbType.Blob || parameter.OceanBaseDbType == OceanBaseDbType.Clob || parameter.Value is OceanBaseLob) && !session.UseLobLocators)
                         throw new NotSupportedException("LOB parameters require negotiated Use Lob Locators=true.");
-                var fetchSize = prepareOnly ? 0 : _fetchSize;
+                var fetchSize = prepareOnly || schemaOnly ? 0 : _fetchSize;
                 if (prepareOnly) _explicitPreparation = true;
-                var binary = oracle != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
-                var parameters = binary && !prepareOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true) : Array.Empty<byte>();
+                var binary = schemaOnly || oracle != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
+                var parameters = binary && !prepareOnly && !schemaOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true) : Array.Empty<byte>();
                 if (arrayCount != 0) _ = OraclePrepareExecutePacket.BuildArray(0, bindings.CommandText, bindings.Parameters);
                 if (_prepared != null && (oracle != null || !binary || !ReferenceEquals(_prepared.Session, session) ||
                     _prepared.Generation != session.Generation || _prepared.CommandText != bindings.CommandText))
@@ -293,7 +307,7 @@ namespace OceanBaseConnector
                             _execution = null;
                         }
                     }
-                }, SessionOwner, CancellationOrigin, RequiredTransactionEpoch, bindings.Parameters, validateComplexTypes: !prepareOnly);
+                }, SessionOwner, CancellationOrigin, RequiredTransactionEpoch, schemaOnly ? null : bindings.Parameters, validateComplexTypes: !prepareOnly && !schemaOnly);
 #if NET8_0_OR_GREATER
                 execution.BatchCommand = BatchCommand;
                 execution.BatchFailed = BatchFailed;

@@ -603,12 +603,12 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await Query(channel, "select schema_only");
-                await channel.WritePacketAsync(new byte[] { 1 });
+                var prepare = await StatementCommand(channel, 22);
+                Assert.Equal("select schema_only", Encoding.UTF8.GetString(prepare, 1, prepare.Length - 1));
+                await channel.WritePacketAsync(new byte[] { 0, 42, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 });
                 await channel.WritePacketAsync(Column("id"));
                 await channel.WritePacketAsync(Eof());
-                await channel.WritePacketAsync(new byte[] { 1, 49 });
-                await channel.WritePacketAsync(Eof());
+                Assert.Equal(new byte[] { 25, 42, 0, 0, 0 }, await StatementCommand(channel, 25));
                 channel.BeginCommand();
                 await Query(channel, "after schema_only");
                 await channel.WritePacketAsync(Ok(1));

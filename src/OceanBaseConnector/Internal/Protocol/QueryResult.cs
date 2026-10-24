@@ -27,6 +27,19 @@ namespace OceanBaseConnector.Internal.Protocol
             if (cursorId.HasValue) query.OwnCursor(refCursor);
         }
         internal bool IsBinary { get; }
+        internal static QueryResult FromPrepared(CommandExchange query, PreparedStatement statement)
+        {
+            query.EnsureReading();
+            var result = new QueryResult(query, binary: true) { _ended = true, Columns = new ResultColumn[statement.Columns.Length] };
+            for (var i = 0; i < result.Columns.Length; i++)
+            {
+                var column = statement.Columns[i].WithContext(query);
+                column.RequireComplexResult(binary: true);
+                result.Columns[i] = column;
+            }
+            query.Complete();
+            return result;
+        }
         internal string? SessionTimeZone { get; private set; }
         private NationalCharacterSet? NationalCharacterSet { get; set; }
         internal ResultColumn[] Columns { get; private set; } = Array.Empty<ResultColumn>();
