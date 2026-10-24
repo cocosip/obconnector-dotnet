@@ -135,6 +135,43 @@ namespace OceanBaseConnector.UnitTests
             finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
+
+        [Theory]
+        [InlineData(false)] [InlineData(true)]
+        public async Task UnreleasedLobDiscardsPooledSession(bool async)
+        {
+            var oldServer = Server(async channel =>
+            {
+                await LobQueryReply(channel, 210, InlineLob(new byte[] { 1, 2, 3 }));
+                Assert.Equal(0, await channelStreamRead(channel));
+            }, lobLocators: true);
+            var newServer = Server(async channel => { await Query(channel, "after"); await channel.WritePacketAsync(Ok(1)); }, lobLocators: true);
+            using var connection = new OceanBaseConnection(LobConfiguration(oldServer.Port) + ";Pooling=true");
+            OceanBaseLob? lob = null;
+            try
+            {
+                if (async) await connection.OpenAsync(); else connection.Open();
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "select lob_value";
+                    lob = (OceanBaseLob)(async ? await command.ExecuteScalarAsync() : command.ExecuteScalar())!;
+                }
+
+                connection.Close();
+                await oldServer.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+                connection.ConnectionString = LobConfiguration(newServer.Port) + ";Pooling=true";
+                if (async) await connection.OpenAsync(); else connection.Open();
+                Assert.Throws<InvalidOperationException>(() => lob!.OpenRead());
+                using var after = connection.CreateCommand(); after.CommandText = "after";
+                Assert.Equal(1, async ? await after.ExecuteNonQueryAsync() : after.ExecuteNonQuery());
+            }
+            finally
+            {
+                lob?.Dispose(); connection.Close(); oldServer.Stop(); newServer.Stop();
+            }
+            await newServer.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         private static async Task LobReadReply(PacketChannel channel, int amount, byte[] chunk, bool character, string? number = null, byte precision = 38)
         {
             await channel.WritePacketAsync(OracleExecuteHeader(4, 2, 4));

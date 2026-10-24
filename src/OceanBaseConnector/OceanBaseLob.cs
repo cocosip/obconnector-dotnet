@@ -25,7 +25,10 @@ namespace OceanBaseConnector
         /// <summary>Byte length reported by the locator; CLOB character counts may differ.</summary>
         public long ByteLength => Locator.ByteLength;
         internal OceanBaseLob(LobSession context, byte[] bytes, bool character, bool ownsTemporary = false)
-        { Context = context; _bytes = bytes; IsCharacter = character; _ownsTemporary = ownsTemporary; Locator = LobLocator.Parse(bytes); }
+        {
+            Context = context; _bytes = bytes; IsCharacter = character; _ownsTemporary = ownsTemporary; Locator = LobLocator.Parse(bytes);
+            Context.Session.MarkLobHandle();
+        }
 
         /// <summary>Opens a BLOB once, after its originating reader is consumed. Dispose the stream to release the session.</summary>
         public Stream OpenRead()
@@ -65,16 +68,26 @@ namespace OceanBaseConnector
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
-            { Volatile.Read(ref _mutation)?.Cancel(); Interlocked.Exchange(ref _stream, null)?.Dispose(); }
+            {
+                try
+                {
+                    Volatile.Read(ref _mutation)?.Cancel(); Interlocked.Exchange(ref _stream, null)?.Dispose();
+                }
+                finally { Context.Session.ReleaseLobHandle(); }
+            }
         }
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
         /// <summary>Cancels pending operations and asynchronously releases any open stream.</summary>
         public async System.Threading.Tasks.ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            Volatile.Read(ref _mutation)?.Cancel();
-            var stream = Interlocked.Exchange(ref _stream, null);
-            if (stream != null) await stream.CloseAsync().ConfigureAwait(false);
+            try
+            {
+                Volatile.Read(ref _mutation)?.Cancel();
+                var stream = Interlocked.Exchange(ref _stream, null);
+                if (stream != null) await stream.CloseAsync().ConfigureAwait(false);
+            }
+            finally { Context.Session.ReleaseLobHandle(); }
         }
 #endif
     }

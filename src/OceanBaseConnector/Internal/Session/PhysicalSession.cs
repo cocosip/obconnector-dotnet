@@ -29,6 +29,7 @@ namespace OceanBaseConnector.Internal.Session
         private CommandLease? _lease;
         private object? _reservation;
         private int _discardOnReturnCount;
+        private int _liveLobCount;
         private ConnectResult? _info;
         private string? _sessionTimeZone;
         private NationalCharacterSet? _nationalCharacterSet;
@@ -268,13 +269,21 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         internal bool IsReservedForOther(object? owner) { lock (_gate) return _reservation != null && !ReferenceEquals(_reservation, owner); }
-        internal bool RequiresDiscardOnReturn { get { lock (_gate) return _discardOnReturnCount != 0; } }
+        internal bool RequiresDiscardOnReturn { get { lock (_gate) return _discardOnReturnCount != 0 || _liveLobCount != 0; } }
         internal void MarkDiscardOnReturn() { lock (_gate) { _discardOnReturnCount++; } }
         internal void ReleaseDiscardOnReturn()
         {
             lock (_gate)
             {
                 if (_discardOnReturnCount != 0) _discardOnReturnCount--;
+            }
+        }
+        internal void MarkLobHandle() { lock (_gate) { _liveLobCount++; } }
+        internal void ReleaseLobHandle()
+        {
+            lock (_gate)
+            {
+                if (_liveLobCount != 0) _liveLobCount--;
             }
         }
         internal void Reserve(object owner)

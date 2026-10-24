@@ -85,10 +85,10 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 
 | Area | Unsupported behavior |
 | --- | --- |
-| Pooling | Maximum capacity, wait timeout/cancellation, minimum-pool prewarming with failed-warmup rollback, borrow validation including MySQL autocommit status, idle/total lifetime reaping, prepared statement generation invalidation, unconsumed REF CURSOR return-time disposal, empty static-registry cleanup and pool lifecycle metrics are supported locally. Full resource reset and server-specific reset interoperability are not yet validated. |
+| Pooling | Maximum capacity, wait timeout/cancellation, minimum-pool prewarming with failed-warmup rollback, borrow validation including MySQL autocommit status, idle/total lifetime reaping, prepared statement generation invalidation, unconsumed REF CURSOR and live LOB handle return-time disposal, empty static-registry cleanup and pool lifecycle metrics are supported locally. Full resource reset and server-specific reset interoperability are not yet validated. |
 | Disabled autocommit | MySQL-mode sessions whose `@@autocommit` is 0; Open fails because the provider cannot commit implicit transactions. Connector/J forces `SET autocommit=1` instead; this driver sets no session variables. |
 | Ambient transactions | `TransactionScope` / `EnlistTransaction`; explicit XA is a separate API. |
-| Standard assets | `DbDataSource`, `DbBatch`, savepoint APIs and GSSAPI authentication. |
+| Standard assets | `DbDataSource`, `DbBatch`, savepoint APIs and GSSAPI require modern TFMs; complete cross-TFM behavior and real GSSAPI/KDC validation remain unverified. |
 | Savepoints | Oracle release; quoted/Unicode names and leading underscores such as `__EFSavePoint`. |
 | Binary stream parameters | InputOutput, text streams, array-binding combinations and client-prepare fallback. |
 | Oracle outputs/cursors | Standalone Prepare or FetchSize on the PrepareExecute output path; REF CURSOR Input/InputOutput and ordinary cursor-valued result columns. |

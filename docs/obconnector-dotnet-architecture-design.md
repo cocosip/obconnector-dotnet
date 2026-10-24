@@ -139,9 +139,9 @@ For cursor outputs, set `OceanBaseDbType.RefCursor` with Output or ReturnValue. 
 
 ### LOBs
 
-Enable `Use Lob Locators=true` and PrepareExecute. `OceanBaseLob.OpenRead()` reads BLOB bytes; `OpenTextReader()` reads character LOBs. Consume the originating reader first; each handle opens one stream. Handles become invalid after their session or transaction ends.
+Enable `Use Lob Locators=true` and PrepareExecute. `OceanBaseLob.OpenRead()` reads BLOB bytes; `OpenTextReader()` reads character LOBs. Consume the originating reader first; each handle opens one stream. Handles become invalid after their session or transaction ends. A live LOB handle causes its pooled physical session to be discarded when the logical connection closes; dispose the handle before expecting reuse.
 
-Use `WriteBytes`, `WriteText` and `Truncate` for mutation, with zero-based byte offsets for BLOB and Unicode-scalar offsets for CLOB. Mutations do not commit. `CreateTemporaryLob` creates a session-duration BLOB/CLOB; call `FreeTemporary` on its owning handle before changing its transaction context. Dispose alone does not free the server temporary LOB. Async counterparts are available.
+Use `WriteBytes`, `WriteText` and `Truncate` for mutation, with zero-based byte offsets for BLOB and Unicode-scalar offsets for CLOB. Mutations do not commit. `CreateTemporaryLob` creates a session-duration BLOB/CLOB; call `FreeTemporary` on its owning handle before changing its transaction context. Dispose alone does not free the server temporary LOB, so an unfreed temporary handle also prevents that physical session from returning to the pool. Async counterparts are available.
 
 ### Complex types
 

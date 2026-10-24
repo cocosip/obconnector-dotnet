@@ -108,5 +108,38 @@ namespace OceanBaseConnector.UnitTests
             finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
+
+        [Theory]
+        [InlineData(false)] [InlineData(true)]
+        public async Task UnfreedTemporaryLobDiscardsPooledSession(bool async)
+        {
+            var oldServer = Server(async channel =>
+            {
+                await TemporaryLobCreateRequest(channel, false);
+                await LobMutationReply(channel, 210, InlineLob(Array.Empty<byte>()), parameters: 1);
+                await StatementCommand(channel, 25);
+                Assert.Equal(0, await channelStreamRead(channel));
+            }, lobLocators: true, serverVersion: "4.3.5.0");
+            var newServer = Server(async channel => { await Query(channel, "after"); await channel.WritePacketAsync(Ok(1)); }, lobLocators: true);
+            using var connection = new OceanBaseConnection(LobConfiguration(oldServer.Port) + ";Pooling=true");
+            OceanBaseLob? lob = null;
+            try
+            {
+                if (async) await connection.OpenAsync(); else connection.Open();
+                lob = async ? await connection.CreateTemporaryLobAsync(OceanBaseDbType.Blob) : connection.CreateTemporaryLob(OceanBaseDbType.Blob);
+                connection.Close();
+                await oldServer.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+                connection.ConnectionString = LobConfiguration(newServer.Port) + ";Pooling=true";
+                if (async) await connection.OpenAsync(); else connection.Open();
+                Assert.Throws<InvalidOperationException>(() => lob!.FreeTemporary());
+                using var after = connection.CreateCommand(); after.CommandText = "after";
+                Assert.Equal(1, async ? await after.ExecuteNonQueryAsync() : after.ExecuteNonQuery());
+            }
+            finally
+            {
+                lob?.Dispose(); connection.Close(); oldServer.Stop(); newServer.Stop();
+            }
+            await newServer.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
     }
 }
