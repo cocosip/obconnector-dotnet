@@ -161,9 +161,9 @@ namespace OceanBaseConnector.UnitTests
                 var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection.GetComplexTypeAsync("O", "T", cancellationToken: canceled.Token)); Assert.Equal(canceled.Token, error.CancellationToken);
                 if (mysql)
                 {
-                    Assert.Throws<InvalidOperationException>(() => connection.CreateArrayType("RAW"));
-                    Assert.Throws<InvalidOperationException>(() => connection.CreateArrayType(ComplexResultType(false)));
-                    Assert.Throws<InvalidOperationException>(() => connection.GetComplexType("O", "T"));
+                    Assert.Throws<NotSupportedException>(() => connection.CreateArrayType("RAW"));
+                    Assert.Throws<NotSupportedException>(() => connection.CreateArrayType(ComplexResultType(false)));
+                    Assert.Throws<NotSupportedException>(() => connection.GetComplexType("O", "T"));
                     await Assert.ThrowsAsync<NotSupportedException>(() => connection.GetComplexTypeAsync("O", "T"));
                 }
                 else

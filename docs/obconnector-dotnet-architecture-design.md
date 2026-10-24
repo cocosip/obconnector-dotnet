@@ -94,6 +94,7 @@ The container disposes its registered services; callers dispose connections crea
 ## Commands and readers
 
 - Use Oracle `:name` or MySQL positional `?` bindings. Parameterized execution uses server prepare; `Prepare()` explicitly prepares a command.
+- Oracle anonymous blocks and stored-program DDL are sent as single program units; internal semicolons do not require `Allow Multi Statements`. The server validates the complete program syntax, including any invalid trailing SQL. Ordinary SQL boundary checks use the active compatibility mode's quoting and comment rules.
 - For `LOAD DATA LOCAL INFILE`, opt in with `Allow Local Infile=true` and set `LocalInfileStreamFactory` before opening. The factory receives the server-supplied filename as opaque text and must return a readable stream; the driver uploads it in chunks, sends the terminating empty packet, reads the final response, and disposes the stream. Missing factories, read failures, cancellation, the 64 MiB default upload limit, or a lost final response break the physical session and report an unknown outcome.
 - Set `DbType` or `OceanBaseDbType` when inference from `Value` is insufficient. Use `DBNull.Value` for SQL NULL. `ResetDbType()` restores inference.
 - Read all results with `Read` and `NextResult` to establish completion. Closing an unread reader destroys its unfinished session; disposing a field stream does not finish its parent reader.

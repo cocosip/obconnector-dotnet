@@ -96,7 +96,7 @@ namespace OceanBaseConnector.Internal.Sql
             return start == 0 ? name : name.Substring(1);
         }
 
-        private static int SkipQuote(string sql, int position, char quote)
+        internal static int SkipQuote(string sql, int position, char quote)
         {
             for (var i = position + 1; i < sql.Length; i++)
             {
@@ -107,7 +107,7 @@ namespace OceanBaseConnector.Internal.Sql
             throw Unterminated();
         }
 
-        private static int SkipAlternativeQuote(string sql, int position)
+        internal static int SkipAlternativeQuote(string sql, int position)
         {
             if (position + 2 >= sql.Length) throw Unterminated();
             var delimiter = sql[position + 2];

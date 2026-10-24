@@ -237,7 +237,7 @@ namespace OceanBaseConnector
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
                 var oracle = session.UseOraclePrepareExecute && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle &&
                     (arrayCount != 0 || CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters, arrayCount) : null;
-                var multiStatement = HasMultipleStatements(text);
+                var multiStatement = SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
                 if (multiStatement && !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientMultiStatements))
                     throw new NotSupportedException("Multi-statement execution requires Allow Multi Statements=true and server support.");
 #if NET8_0_OR_GREATER
@@ -415,68 +415,6 @@ namespace OceanBaseConnector
             (position + keyword.Length == text.Length || !IsIdentifierPart(text[position + keyword.Length]));
 
         private static bool IsIdentifierPart(char value) => char.IsLetterOrDigit(value) || value == '_' || value == '$' || value == '#';
-
-        private static bool HasMultipleStatements(string text)
-        {
-            for (var position = 0; position < text.Length; position++)
-            {
-                var value = text[position];
-                if (value == '\'' || value == '"' || value == '`')
-                {
-                    var quote = value;
-                    for (position++; position < text.Length; position++)
-                    {
-                        if (text[position] == '\\') { position++; continue; }
-                        if (text[position] == quote)
-                        {
-                            if (position + 1 < text.Length && text[position + 1] == quote) { position++; continue; }
-                            break;
-                        }
-                    }
-                    continue;
-                }
-                if (value == '#')
-                {
-                    while (position < text.Length && text[position] != '\r' && text[position] != '\n') position++;
-                    continue;
-                }
-                if (IsDashCommentStart(text, position))
-                {
-                    position += 2;
-                    while (position < text.Length && text[position] != '\r' && text[position] != '\n') position++;
-                    continue;
-                }
-                if (value == '/' && position + 1 < text.Length && text[position + 1] == '*')
-                {
-                    var end = text.IndexOf("*/", position + 2, StringComparison.Ordinal);
-                    if (end < 0) return false;
-                    position = end + 1;
-                    continue;
-                }
-                if (value != ';') continue;
-                for (var next = position + 1; next < text.Length; next++)
-                {
-                    if (char.IsWhiteSpace(text[next])) continue;
-                    if (text[next] == '#') { while (next < text.Length && text[next] != '\r' && text[next] != '\n') next++; continue; }
-                    if (IsDashCommentStart(text, next))
-                    {
-                        next += 2;
-                        while (next < text.Length && text[next] != '\r' && text[next] != '\n') next++;
-                        continue;
-                    }
-                    if (text[next] == '/' && next + 1 < text.Length && text[next + 1] == '*')
-                    {
-                        var end = text.IndexOf("*/", next + 2, StringComparison.Ordinal);
-                        if (end < 0) return false;
-                        next = end + 1;
-                        continue;
-                    }
-                    return true;
-                }
-                return false;
-            }
-            return false;
-        }
 
         private static bool IsDashCommentStart(string text, int position) =>
             position + 1 < text.Length && text[position] == '-' && text[position + 1] == '-' &&
