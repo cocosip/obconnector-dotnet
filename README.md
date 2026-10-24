@@ -100,6 +100,7 @@ Check notes generation locally with `pwsh -File eng/Test-ReleaseNotes.ps1`. To p
 ## Documentation
 
 - [Compatibility and known limitations](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/compatibility.md)
+- [Complete driver audit report](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-driver-audit.md)
 - [Complete driver capability baseline and gap plan](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-completeness.md)
 - [Database acceptance guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.Acceptance/README.md)
 - [Integration test guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.IntegrationTests/README.md)
