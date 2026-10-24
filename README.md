@@ -6,11 +6,13 @@ The driver is experimental. Recorded database runs cover direct OceanBase 4.4.2.
 
 The [complete driver audit](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-driver-audit.md) tracks 23 gaps across eight work packages, with source evidence, priorities and acceptance criteria. Basic connection pooling is implemented and opt-in; complete session isolation and real deployment acceptance remain open. Commands can [derive parameters from a unique visible routine signature](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-architecture-design.md#routine-parameter-derivation) without executing the target; actual directory/permissions/version/OBProxy acceptance remains open.
 
-For the current source baseline, remaining implementation work and verification limits, see the [current audit handoff](docs/obconnector-dotnet-driver-audit.md#15-keyinfo-模块2026-10-25) and [module acceptance criteria and work packages](docs/obconnector-dotnet-completeness.md).
+For the current source baseline, remaining implementation work and verification limits, see the [current audit handoff](docs/obconnector-dotnet-driver-audit.md#16-dataadapter--commandbuilder-模块2026-10-25) and [module acceptance criteria and work packages](docs/obconnector-dotnet-completeness.md).
 
 `CommandBehavior.SchemaOnly` reads server-prepared column metadata without executing the target or uploading parameter values. It requires a single accepted text query with input parameters and never falls back to text execution. See the [command contract](docs/obconnector-dotnet-architecture-design.md) for preparation errors, metadata limits and lifecycle behavior.
 
 `CommandBehavior.KeyInfo` reads keys on the same session before execution and appends missing hidden key columns for proven single-table queries. Complex queries retain their shape and unknown key properties. See the [key metadata contract](docs/obconnector-dotnet-architecture-design.md#key-information-and-hidden-columns) for nullable unique keys, composite keys and validation limits.
+
+`OceanBaseDataAdapter` fills DataTables/DataSets and applies row changes; `OceanBaseCommandBuilder` generates parameterized single-table CRUD with original-value concurrency checks. Automatic updates/deletes require a complete visible row key. See the [adapter and generation contract](docs/obconnector-dotnet-architecture-design.md#data-adapters-and-command-generation) for mappings, transactions, ownership and limits.
 
 ## Packages
 

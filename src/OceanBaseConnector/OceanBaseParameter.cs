@@ -78,6 +78,7 @@ namespace OceanBaseConnector
         }
         internal byte? DeclaredScale => _scale;
         internal int? DeclaredDecimalScale => _decimalScale ?? (int?)_scale;
+        internal void ClearScaleDeclaration() { _scale = null; _decimalScale = null; }
         internal OceanBaseParameter Snapshot()
         {
             var copy = (OceanBaseParameter)MemberwiseClone();
