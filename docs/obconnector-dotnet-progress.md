@@ -2,6 +2,28 @@
 
 This page retains historical results and open work from the former progress ledger, alongside dated verification of later changes. Local regression results and real database acceptance are recorded separately.
 
+## 2026-10-25 P1-10 routine parameter derivation
+
+Implemented from base `2bbecac`: OceanBaseCommand.DeriveParameters and two async overloads on all five assets, with unique routine/owner/package/overload resolution, complete argument attributes, signed DecimalScale, existing complex descriptors, one reserved session/current transaction epoch, per-query timeout/cancellation and atomic collection-membership publication. It does not execute the target or add MySQL StoredProcedure execution. See the [API contract](obconnector-dotnet-architecture-design.md#routine-parameter-derivation), [mapping limits](schema.md#parameter-derivation) and [module record](obconnector-dotnet-completeness.md#1518-2026-10-25-自动参数推导修复与验证).
+
+Final full units3900 and full consumers2328 pass, including all20 new derivation consumers; DI14 pass; Integration9 pass/72 individual NotExecuted. Release build has0 warnings/errors. Independent review_derive_design found no remaining Critical/Important after metadata identity, FLOAT/YEAR declaration and earlier mapping/cancellation/publication fixes. Public-contract review corrected the1024-row limit to routine/argument tables. Format verify exits0 with a workspace-load warning; initial58 whitespace diagnostics and fix are recorded. Local pack exits0 and five DLL hashes, embedded README bytes and five dependency groups match; no publish.
+
+All reports are under ignored TestResults/derive-parameters; root logs TestResults-derive-parameters-*.log. identity-red retains6 passed/2 failed; declaration-red retains6 failed; consumer-first retains20 failed due to a valid final COM_STMT_CLOSE73 that the fixture omitted. Fixture correction preserves exact wire assertions; consumer-green20 and final complete consumers pass. boundary-green149 and declaration-green159 preserve the related subset runs. The earlier development checkpoint below and completeness15.17 retain their original failures/warnings and pending gates as history, not final status.
+
+This adds81 unit cases and20 consumers. Five assets loaded in the .NET10 host are not five independent runtimes. No real catalog/privileges/declarations/version/OBProxy, cross-platform, long-running stress or independent nupkg-runtime acceptance is added. P1-10 remains partial overall; all23 gaps/eight packages and the complete-driver objective remain open.
+
+## 2026-10-25 documentation delivery and parameter derivation checkpoint
+
+Historical development snapshot; superseded by the delivery above, with original failures/warnings preserved.
+
+Committed baseline: `2bbecac` on master; Java HEAD rechecked as `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`. The [audit report](obconnector-dotnet-driver-audit.md) and [complete baseline](obconnector-dotnet-completeness.md) retain all 23 gap IDs, eight work packages, source/test entry points, acceptance criteria and historical failures/skips. Both Java and .NET pool implementations exist; full isolation, concurrency/fault and real topology acceptance remain open.
+
+Parameter derivation is uncommitted development under P1-10. The workspace adds synchronous/asynchronous OceanBaseCommand APIs, unique routine identity selection, exact type attributes, a reserved session/transaction epoch, cancellation and atomic collection-membership publication. It reads metadata without executing the target or adding MySQL StoredProcedure execution support. CommandTimeout applies per metadata query; arbitrary concurrent edits of parameter properties are outside the membership-version guarantee.
+
+Existing TRX reread: API3 and related behavior132 pass; initial RED/failing metadata, cancellation and complex-type reports remain in the [full checkpoint](obconnector-dotnet-completeness.md#1517-2026-10-25-参数推导开发与完整文档检查点). Collected the already-running Release build: exit0, 0 errors, 1 xUnit2013 warning. The new 20-case five-asset consumer compiles but has no execution TRX at this checkpoint. Prior module units3819/consumers146/DI14/Integration9+72 skips do not validate the new workspace changes.
+
+Still required: positive package/overload and function-return cases, transaction/no-commit and permission-error behavior, collection publication interleavings, incomplete type identities, warning cleanup, full unit/affected-consumer/DI/Integration/format gates and final independent review. Real catalog/permissions/version/OBProxy acceptance remains separate. This pass edits documentation only and checks its structure/links; no new test run, product change, commit, push or complete-driver closure is claimed. Earlier dated records below describe their own snapshots.
+
 ## 2026-10-25 P1-08 signed decimal parameter scale
 
 Implemented nullable OceanBaseParameter.DecimalScale from base `5146b62`, preserving Oracle NUMBER -84..127 declarations without changing byte Scale. Shared server/client prepare constraints validate decimal-only and typed NULL metadata, per-mode bounds and exact precision without rounding. Scale setter clears the override; a non-null override clears the previous Scale; clearing it does not restore that overwritten declaration. Snapshots retain it. See the [public contract](obconnector-dotnet-architecture-design.md#decimal-parameter-scale) and [module record](obconnector-dotnet-completeness.md#1516-2026-10-25-有符号-decimal-scale-本地交付).

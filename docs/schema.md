@@ -29,7 +29,26 @@ Oracle mode advertises 20 collections; MySQL mode advertises 18, excluding Types
 | Users | User, Host | USER_NAME, HOST; Host identifies MySQL accounts and is DBNull for Oracle |
 | Synonyms | Catalog, Schema, Synonym | Oracle only: SYNONYM_CATALOG, SYNONYM_SCHEMA, SYNONYM_NAME, OBJECT_CATALOG, OBJECT_SCHEMA, OBJECT_NAME, DB_LINK |
 
-Types describes server named object/collection types; DataTypes separately describes built-in CLR/provider mappings and supported complex shapes. Routine metadata does not implement DeriveParameters or automatic command parameter inference.
+Types describes server named object/collection types; DataTypes separately describes built-in CLR/provider mappings and supported complex shapes. Use the separate command parameter-derivation API below to build command parameters from routine metadata.
+
+## Parameter derivation
+
+OceanBaseCommand.DeriveParameters(string? overload = null), DeriveParametersAsync(CancellationToken cancellationToken = default), and DeriveParametersAsync(string? overload, CancellationToken cancellationToken = default) are available on all five assets. See the [API contract](obconnector-dotnet-architecture-design.md#routine-parameter-derivation) for qualified names, Oracle overload selection, cancellation and publication rules.
+
+Derivation requires CommandType.StoredProcedure and an open idle connection, resolves a unique visible routine signature and reads its arguments without executing the target. It uses the current transaction, one reserved session and the parent command's per-query timeout and cancellation. Success replaces existing parameters with fresh DBNull-valued parameters; failure does not publish a partial signature. Collection membership changes are checked atomically; arbitrary concurrent edits of parameter properties are not covered. Public GetSchema result shapes are unchanged. This does not add MySQL StoredProcedure execution or remove existing Oracle PrepareExecute/type restrictions.
+
+| Metadata | Derived representation and limits |
+| --- | --- |
+| Direction/order/names | IN/OUT/INOUT and function RETURN map to ParameterDirection; contiguous ordinals are required. Return name is RETURN_VALUE. Oracle names must fit current ASCII/unquoted binding rules; case-insensitive duplicates and return-name conflicts fail. MySQL names retain Unicode. |
+| MySQL integers | Signed/unsigned provider types follow DTD_IDENTIFIER; ZEROFILL implies unsigned. TINYINT(1) follows the session TreatTinyAsBoolean policy. Fractional dimensions, inconsistent or unknown declarations fail. |
+| MySQL DECIMAL/NUMERIC | Precision <=65 and scale 0..30, consistent with DTD and precision. Unsigned decimal has no supported declaration representation and fails. |
+| MySQL FLOAT/DOUBLE/REAL, YEAR, BIT | Plain floating types map to Single/Double; unsigned and dimensioned floating declarations fail because the current API/codec cannot preserve their constraints. YEAR accepts the ordinary declaration or (4); other dimensions/attributes fail. BIT(1..64) retains its width in Size. |
+| MySQL strings/binary/temporal | Character lengths use character count; binary lengths use octets and must fit Size. JSON, DATE, DATETIME/TIMESTAMP and TIME use existing provider types; fractional seconds are limited to 6. |
+| Oracle numeric/temporal | NUMBER/DECIMAL/NUMERIC/INTEGER use Decimal and nullable precision/DecimalScale; NUMBER retains scale -84..127. BINARY_FLOAT/DOUBLE, PLS_INTEGER/BINARY_INTEGER, DATE, TIMESTAMP/TZ/LTZ and intervals use existing mappings and precision limits. Unsupported variants fail. |
+| Oracle text/binary/LOB/cursor | VARCHAR2/VARCHAR/CHAR, NCHAR/NVARCHAR2, RAW, BLOB/CLOB and output/return REF CURSOR map to existing provider types. Character length and binary octet length remain distinct. Input/InputOutput cursor remains unsupported. |
+| Oracle named types | OBJECT/TABLE/VARRAY load the existing descriptor on the same reserved session/transaction. Incomplete TYPE_OWNER/TYPE_NAME pairs, package-local types and existing unsupported complex members fail. |
+
+NULL DATA_TYPE rows are retained for validation; they cannot silently become an empty signature. Missing or duplicate argument positions, inconsistent identity and unsupported attributes fail with original parameters retained. Permission errors propagate with their server code/SQL state. This uses INFORMATION_SCHEMA.ROUTINES/PARAMETERS or ALL_PROCEDURES/ALL_ARGUMENTS plus existing named-type queries. Local protocol and consumer evidence does not establish actual directory privileges, server parsing, version differences or OBProxy compatibility.
 
 ## DataTypes and CLR mappings
 
@@ -59,7 +78,7 @@ REF CURSOR is Output/ReturnValue only with Use Oracle Prepare Execute and IsSupp
 
 Creation and literal columns are hints for SQL declarations, not an identifier/value escaping API. Use parameters for values, validate precision/length arguments, and apply server-specific restrictions; unknown length limits are not unlimited sizes. This static table does not certify successful DDL, server versions, collation policy or direct/OBProxy interoperability. Named Types, routine parameter derivation and CommandBehavior.KeyInfo remain separate capabilities.
 
-The negative Oracle metadata scale range above describes result metadata. To explicitly declare signed decimal parameter scale, use OceanBaseParameter.DecimalScale; standard DbParameter.Scale remains a byte. See the [parameter contract](obconnector-dotnet-architecture-design.md#decimal-parameter-scale) for mode limits, exact constraints and assignment precedence, and the [module record](obconnector-dotnet-completeness.md#1516-2026-10-25-有符号-decimal-scale-本地交付) for local validation. Automatic parameter derivation is still absent. Procedures/ProcedureParameters expose directory data; they do not imply MySQL CommandType.StoredProcedure execution support. Current stored-procedure execution requires Oracle mode and Use Oracle Prepare Execute=true.
+The negative Oracle metadata scale range above describes result metadata. To explicitly declare signed decimal parameter scale, use OceanBaseParameter.DecimalScale; standard DbParameter.Scale remains a byte. See the [parameter contract](obconnector-dotnet-architecture-design.md#decimal-parameter-scale) for mode limits, exact constraints and assignment precedence, and the [module record](obconnector-dotnet-completeness.md#1516-2026-10-25-有符号-decimal-scale-本地交付) for local validation. Parameter derivation reuses this signed representation. Procedures/ProcedureParameters expose directory data; they do not imply MySQL CommandType.StoredProcedure execution support. Current stored-procedure execution requires Oracle mode and Use Oracle Prepare Execute=true.
 
 ## Value and identity rules
 

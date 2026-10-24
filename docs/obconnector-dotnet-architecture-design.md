@@ -146,7 +146,27 @@ Conversions requiring rounding or loss of precision throw. Timezone-free values 
 | `parameter.DecimalScale = value` with a non-null value | Clears the old standard Scale and uses the signed declaration. Scale reads the nonnegative declaration, or zero for a negative one. Read DecimalScale for the actual signed value. |
 | `parameter.DecimalScale = null` | Removes the override. It does not restore a standard Scale overwritten by an earlier non-null assignment; with no declaration, scale is inferred from the value. |
 
-Precision/scale constraints are exact: values requiring rounding throw before execution. For example, `Value=12300m`, `Precision=3`, `DecimalScale=-2` is representable in Oracle mode; `12345m` with that declaration throws. A negative scale is not accepted in MySQL mode. Parameter snapshots and the supported client-prepare numeric fallback preserve the same declaration and constraints. Result decoding, temporal Scale and default value inference are unchanged. This API does not derive parameters from routine metadata; automatic derivation remains unimplemented. Local wire tests do not establish real-server NUMBER interoperability.
+Precision/scale constraints are exact: values requiring rounding throw before execution. For example, `Value=12300m`, `Precision=3`, `DecimalScale=-2` is representable in Oracle mode; `12345m` with that declaration throws. A negative scale is not accepted in MySQL mode. Parameter snapshots and the supported client-prepare numeric fallback preserve the same declaration and constraints. Result decoding, temporal Scale and default value inference are unchanged. Routine parameter derivation below reuses this declaration. Local wire tests do not establish real-server NUMBER interoperability.
+
+### Routine parameter derivation
+
+All five assets expose these OceanBaseCommand methods:
+
+```csharp
+void DeriveParameters(string? overload = null);
+Task DeriveParametersAsync(CancellationToken cancellationToken = default);
+Task DeriveParametersAsync(string? overload, CancellationToken cancellationToken = default);
+```
+
+They require CommandType.StoredProcedure and an open idle connection. Bind the command to the current local transaction when one exists. They read the visible routine directory and its complete top-level signature without executing the target. MySQL StoredProcedure execution remains unsupported; Oracle execution still requires Use Oracle Prepare Execute=true and its existing type/direction rules.
+
+MySQL accepts routine or database.routine, with optional backticks; an unqualified name uses DATABASE(). Oracle accepts routine, owner.routine or package.routine, and owner.package.routine, with double-quoted identifiers retaining case and unquoted identifiers converted to uppercase. Unqualified Oracle names use CURRENT_SCHEMA. Two-part Oracle names check both interpretations and reject ambiguity. The optional overload is an exact Oracle directory selector, not argument-based overload inference; MySQL rejects it. No matching visible routine, ambiguous signatures, incomplete metadata, unsupported type declarations or unavailable named descriptors fail explicitly. Synonym resolution is not promised.
+
+Success replaces the parameter collection with fresh DBNull-valued parameters ordered by ordinal position; a function return is first and named RETURN_VALUE. Existing parameter objects are detached and their values are not copied. Failure/cancellation leaves the original collection unpublished; concurrent member changes are detected atomically and retained. Avoid changing individual parameter properties concurrently: that is outside the membership-version guarantee. The command/session/transaction context is checked before publication, and Execute/Prepare/another derivation cannot overlap. Valid complex descriptors loaded before a later failure may remain cached.
+
+The operation reserves one physical session across routine, argument and named-type queries. It uses CommandTimeout for each query, with no total-duration guarantee. CancellationToken, Cancel and Dispose cover the operation and query gaps; a canceled in-flight request follows the existing connection-break/unknown-outcome rules. Directory permission errors retain the server error code and SQL state. Each routine/argument directory table is bounded to 1024 rows and 4 MiB of UTF-8 string content; named descriptors retain the existing complex-type member/depth/cache bounds.
+
+Supported mappings and rejection boundaries are listed in the [Schema contract](schema.md#parameter-derivation). Directory, privilege, server-version and OBProxy interoperability require separate real-server validation.
 
 ## Transactions, batches and failures
 

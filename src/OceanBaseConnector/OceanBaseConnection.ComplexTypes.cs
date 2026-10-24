@@ -76,9 +76,9 @@ namespace OceanBaseConnector
             }
         }
 
-        private PhysicalSession RequireComplexSession(OceanBaseTransaction? transaction)
+        private PhysicalSession RequireComplexSession(OceanBaseTransaction? transaction, object? owner = null)
         {
-            var session = GetCommandSession(transaction);
+            var session = GetCommandSession(transaction, owner);
             if (session.Info!.Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Complex types require Oracle mode.");
             return session;
         }
@@ -115,21 +115,35 @@ namespace OceanBaseConnector
             return _complexTypeContext;
         }
 
-        private async Task<OceanBaseComplexType> GetComplexTypeCore(string schemaName, string typeName, OceanBaseTransaction? transaction, bool async, CancellationToken token)
+        internal Task<OceanBaseComplexType> GetDerivedComplexType(string schemaName, string typeName, OceanBaseCommand command, bool asynchronous, CancellationToken token)
+            => GetComplexTypeCore(schemaName, typeName, (OceanBaseTransaction?)command.Transaction, asynchronous, token,
+                command.SessionOwner, command.RequiredSession, command.RequiredTransactionEpoch, command.CommandTimeout, command.CancellationOrigin);
+
+        private async Task<OceanBaseComplexType> GetComplexTypeCore(string schemaName, string typeName, OceanBaseTransaction? transaction, bool async, CancellationToken token, object? reservationOwner = null, PhysicalSession? requiredSession = null, long? requiredEpoch = null, int? timeout = null, Func<CancellationToken>? cancellationOrigin = null)
         {
             ValidateComplexName(schemaName, nameof(schemaName)); ValidateComplexName(typeName, nameof(typeName));
             EnsureAmbientTransaction(); token.ThrowIfCancellationRequested();
-            ComplexTypeContext context; var owner = new object(); int members, dictionaryBytes;
+            ComplexTypeContext context; var owner = reservationOwner ?? new object(); int members, dictionaryBytes;
             lock (_gate)
             {
-                var session = RequireComplexSession(transaction);
+                var session = RequireComplexSession(transaction, reservationOwner);
+                if (requiredSession != null && !ReferenceEquals(session, requiredSession) || requiredEpoch.HasValue && requiredEpoch != _transactionEpoch)
+                    throw new InvalidOperationException("The type loading session or transaction changed.");
                 context = EnsureComplexTypeContext(session, transaction);
                 if (_complexTypes.TryGetValue((schemaName, typeName), out var cached)) return cached;
                 members = _complexTypeMembers; dictionaryBytes = _complexTypeDictionaryBytes;
-                session.Reserve(owner);
+                if (reservationOwner == null) session.Reserve(owner);
             }
-            var command = new OceanBaseCommand { Connection = this, Transaction = transaction, CommandTimeout = context.Timeout,
-                RequiredSession = context.Session, RequiredTransactionEpoch = context.Epoch, SessionOwner = owner };
+            var command = new OceanBaseCommand
+            {
+                Connection = this,
+                Transaction = transaction,
+                CommandTimeout = timeout ?? context.Timeout,
+                RequiredSession = context.Session,
+                RequiredTransactionEpoch = context.Epoch,
+                SessionOwner = owner,
+                CancellationOrigin = cancellationOrigin
+            };
             try
             {
                 var loader = new ComplexTypeLoader(this, context, command, async, token, members, dictionaryBytes);
@@ -150,7 +164,7 @@ namespace OceanBaseConnector
             }
             finally
             {
-                context.Session.ReleaseReservation(owner);
+                if (reservationOwner == null) context.Session.ReleaseReservation(owner);
                 if (async) await command.DisposeCoreAsync().ConfigureAwait(false); else command.Dispose();
             }
         }

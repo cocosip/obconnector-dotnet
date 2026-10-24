@@ -4,6 +4,8 @@ A managed ADO.NET provider for OceanBase MySQL and Oracle compatibility modes.
 
 The driver is experimental. Recorded database runs cover direct OceanBase 4.4.2.2 with TLS disabled; the Oracle suite still has a failed case and cleanup failure. OBProxy and other deployment profiles remain unverified. See [failed tests, unsupported behavior and compatibility gaps](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/compatibility.md).
 
+The [complete driver audit](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-driver-audit.md) tracks 23 gaps across eight work packages, with source evidence, priorities and acceptance criteria. Basic connection pooling is implemented and opt-in; complete session isolation and real deployment acceptance remain open. Commands can [derive parameters from a unique visible routine signature](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-architecture-design.md#routine-parameter-derivation) without executing the target; actual directory/permissions/version/OBProxy acceptance remains open.
+
 ## Packages
 
 | Package | Purpose |

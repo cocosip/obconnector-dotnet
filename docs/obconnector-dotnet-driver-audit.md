@@ -4,13 +4,13 @@
 **仓库：** `D:\dotnet-code\obconnector-dotnet`  
 **初次源码基线：** .NET `06d58e1`；Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / 2.4.14。
 
-**本模块开发起点：** `5146b62`（DataTypes）；Java 参考为 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。
+**本模块开发起点：** `2bbecac`（有符号 decimal scale）；本次增加自动参数推导。Java 参考为 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。
 **目标：** 为 OceanBase MySQL 兼容模式和 Oracle 兼容模式定义一份可执行的完整驱动缺口清单。  
 **结论级别：** 这是源码、测试、打包记录和 Connector/J 静态结构对照形成的审计报告，不把本地 fixture 当作真实服务器兼容性证明。
 
-**最新模块状态：** 有符号 decimal scale 本地实现完成，最终完整单测 3819、受影响消费者 146（Scale 20、fallback 30、array 30、Batch 50、Catalog 16）、DI 14 通过，Integration 9 通过/72 跳过；构建 0 警告/0错误，独立走查无剩余 Critical/Important。见[本地交付记录](obconnector-dotnet-completeness.md#1516-2026-10-25-有符号-decimal-scale-本地交付)。
+**最新状态：** P1-10 自动参数推导本地实现及独立走查完成：完整单测 3900、完整消费者 2328（含新增 20 项）、DI 14 通过，Integration 9 通过/72 跳过；Release 构建 0 警告/0 错误。见[修复和验证记录](obconnector-dotnet-completeness.md#1518-2026-10-25-自动参数推导修复与验证)。修复前失败及未执行项见第 15.17 节，不作为当前状态；真实目录/权限/版本/代理验收继续开放。
 
-**最近复核：** 2026-10-25；有符号 Scale 交付见第 15.16 节，第 15.15 节失败作为历史保留。此前 DataTypes 开发修复、独立走查与最终执行结果见第 15.14 节；第 15.13 节的失败/筛选遗漏作为历史保留。前次文档整理重新读取 Schema 模块已有报告：完整单测 3693、受影响消费者 66、DI 14 通过，Integration 9 通过/72 跳过，原构建日志 0 错误/0 警告，详见[本次证据复核](obconnector-dotnet-completeness.md#1510-2026-10-25-当前源码与完整文档交付复核)。此前证书池化 `01a8082`、清池 `0e58d1f`、标准 MySQL 压缩 `8d8b799` 的执行结果分别保留于详细基线第 15.4/15.5/15.7 节；压缩报告缺失的历史快照见第 15.8 节。以上均不构成新增实库兼容性声明。
+**最近复核：** 2026-10-25；自动参数推导见第 15.18 节，第 15.17 节保留修复前快照。有符号 Scale 交付见第 15.16 节，第 15.15 节失败作为历史保留。此前 DataTypes 开发修复、独立走查与最终执行结果见第 15.14 节；第 15.13 节的失败/筛选遗漏作为历史保留。前次文档整理重新读取 Schema 模块已有报告：完整单测 3693、受影响消费者 66、DI 14 通过，Integration 9 通过/72 跳过，原构建日志 0 错误/0 警告，详见[本次证据复核](obconnector-dotnet-completeness.md#1510-2026-10-25-当前源码与完整文档交付复核)。此前证书池化 `01a8082`、清池 `0e58d1f`、标准 MySQL 压缩 `8d8b799` 的执行结果分别保留于详细基线第 15.4/15.5/15.7 节；压缩报告缺失的历史快照见第 15.8 节。以上均不构成新增实库兼容性声明。
 
 源码提交是初次走查基线；其后 P0-06 的本地修复和 P1-04 的自定义服务器证书验证分别记在[池路由记录](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [TLS 验证记录](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)。本报告保留原缺口 ID 和未完成的真实验收要求。
 
@@ -64,14 +64,14 @@
 | 复杂类型 | 部分实现 | object/collection 标量及嵌套成员、类型缓存和数组绑定 | LOB/cursor/national 成员、循环结构、文本结果、外部 DDL 后的缓存失效 |
 | 类型与字符集 | 部分实现 | 常用数值、时间、YEAR、BIT、JSON、zero-date、Oracle 时间/interval | 扩展 type code、更多字符集/排序规则、精度边界 |
 | HA 与恢复 | 部分实现 | Open 阶段 TCP 候选地址重试、注入式 resolver | 活动连接迁移、透明重连、退避、reroute、安全重试 |
-| Schema 元数据 | 部分实现 | Oracle 20/MySQL 18 个集合；限制描述、关系/对象目录、异步 schema 及静态 DataTypes 类型映射有本地回归 | 自动参数推导；实库字典、权限/版本/代理和类型/DDL 矩阵 |
+| Schema 元数据 | 部分实现 | Oracle 20/MySQL 18 个集合、静态 DataTypes 及自动参数推导有本地回归 | 实库字典、权限/版本/代理和类型/DDL 矩阵；推导不扩大过程执行支持 |
 | 批处理 | 部分实现 | `DbBatch` 顺序执行、Oracle array binding | rewrite、multi-send、bulk、跨命令 statement cache |
 | 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter`、脱敏日志、池会话/借用/等待/丢弃/reset 失败/等待耗时指标 | 建连与探活细分指标、协议 debug、slow-query profile |
 | 真实兼容性 | 部分验证 | 直连 4.4.2.2 的有限记录，包含 Oracle 失败 | OBProxy、TLS/plugin、版本、平台、网络故障和 XA 恢复矩阵 |
 
 ### 3.1 除连接池之外的待开发范围
 
-尚无公开实现的常见能力包括：`KeyInfo`、参数自动推导、DataAdapter/CommandBuilder 和跨命令 statement cache。`DataTypes` 已完成本地实现及全量/五资产回归，真实服务器类型、DDL、编码和版本/代理范围仍须验收。协议侧缺 OB20 压缩/reroute，发现侧缺内置 OCP/TNS 或等价适配与健康/退避策略；Oracle 侧还有限定游标方向/结果形状、复杂成员和 DDL 缓存失效的缺口。
+尚无公开实现的常见能力包括：`KeyInfo`、DataAdapter/CommandBuilder 和跨命令 statement cache。自动参数推导已通过完整本地回归和独立走查，真实目录互操作继续开放。`DataTypes` 已完成本地实现及全量/五资产回归，真实服务器类型、DDL、编码和版本/代理范围仍须验收。协议侧缺 OB20 压缩/reroute，发现侧缺内置 OCP/TNS 或等价适配与健康/退避策略；Oracle 侧还有限定游标方向/结果形状、复杂成员和 DDL 缓存失效的缺口。
 
 凭据提供/轮换已有本地实现：每次 Open 的认证快照、版本退休、过期和取消规则已通过最终回归。真实短期凭据服务和认证插件轮换仍须验收。
 
@@ -105,7 +105,7 @@
 | P1-07 | 复杂类型 | 保留已有嵌套 object/collection，补齐 LOB/cursor/national 成员和外部 DDL 缓存失效 |
 | P1-08 | 类型/字符集 | 类型码清单、CLR/provider-specific 映射、字符集和精度契约 |
 | P1-09 | HA/发现 | OCP/TNS 或等价发现、健康状态、退避和 OBProxy 拓扑 |
-| P1-10 | Schema | 常用目录/限制参数及 DataTypes 静态映射已有本地实现和最终回归；自动参数推导尚缺，真实目录/权限/版本/代理矩阵待验收，见 [Schema 契约](schema.md) |
+| P1-10 | Schema | 常用目录/限制参数及 DataTypes 静态映射已有本地实现和最终回归；自动参数推导已有本地交付，真实目录/权限/版本/代理矩阵待验收，见 [Schema 契约](schema.md) |
 | P1-11 | 凭据提供/轮换 | 每次 Open 快照、全口令替换、版本退休、过期/取消及脱敏已有本地实现和最终回归；真实插件/凭据服务/KDC 验收仍缺 |
 
 ### P2：生态、性能和运营增强
@@ -145,7 +145,7 @@ Connector/J 的池实现包含池注册、最小/最大容量、生命周期调�
 5. 真实 OceanBase 与 OBProxy 上的 reset、预热、超时和并发验证。
 6. 普通全局池的 resolver 路由身份隔离，以及路由更新后已有物理会话的失效规则（P0-06）。
 
-普通池已按区分大小写的原始连接字符串、resolver 引用身份、TLS 验证回调引用身份，以及客户端证书引用和 SHA-256 DER 指纹共同索引；resolver、回调和证书的引用身份不会因对象自定义值相等而合并。等价但顺序、别名不同的字符串仍可能产生多个池，是后续容量/复用效率问题。数据源保留私有池及 Build 时捕获的证书副本。每次逻辑 Open 只解析一次地址快照，移除不再匹配的闲置端点后再预热/借用；发现失败不回退，已借出连接不迁移。并发发现使用各自快照，不承诺全局拓扑版本排序；真实拓扑仍须验收。
+普通池已按区分大小写的原始连接字符串、resolver 和凭据提供者的引用身份、TLS 验证回调引用身份，以及客户端证书引用和 SHA-256 DER 指纹共同索引；resolver、回调和证书的引用身份不会因对象自定义值相等而合并。等价但顺序、别名不同的字符串仍可能产生多个池，是后续容量/复用效率问题。数据源保留私有池及 Build 时捕获的证书副本。每次逻辑 Open 只解析一次地址快照，移除不再匹配的闲置端点后再预热/借用；发现失败不回退，已借出连接不迁移。并发发现使用各自快照，不承诺全局拓扑版本排序；真实拓扑仍须验收。
 
 显式清池关闭闲置会话，使借出会话和清池前的在途会话归还后销毁；借出会话继续计入容量，活动命令不会被中断。`ClearAllPools()` 只清理普通 registry 池的快照，私有源使用 `source.Clear()` 或针对源连接的 `ClearPool`，清理后仍允许重新 Open。P1-11 把凭据提供者引用加入普通池身份和清池匹配，返回的秘密及版本不进入可观测池标识。
 
@@ -273,6 +273,10 @@ Java 池证据位于参考仓库的 `src/main/java/com/oceanbase/jdbc/OceanBaseP
 
 DataTypes 修复前的 3791 通过/1 失败及消费者筛选遗漏保留于[历史检查点](obconnector-dotnet-completeness.md#1513-2026-10-25-datatypes-未提交开发与文档交付检查点)，已由[第 15.14 节](obconnector-dotnet-completeness.md#1514-2026-10-25-datatypes-本地交付)的完整单测 3792、消费者 66（含实际 16 项）通过结果取代。23 个 ID、8 个工作包及历史实库失败/跳过均保留；自动参数推导和真实验收继续开放。
 
-本次完整文档复核另明确两项容易混淆的边界：Oracle NUMBER 结果 metadata 可表示负 scale，开发基线 `5146b62` 的 byte Scale 参数 API 却不能显式声明负 scale；新增 DecimalScale 已完成本地回归和独立走查，原消费者失败及筛选遗漏保留在历史记录中；真实声明矩阵仍待验收。过程目录与过程执行也不同：当前 CommandType.StoredProcedure 只走 Oracle PrepareExecute，MySQL 不具备该执行入口，自动推导仍未实现。均沿用现有 ID 追踪，不改变 23 项缺口和八个工作包。
+此前完整文档复核另明确两项容易混淆的边界：Oracle NUMBER 结果 metadata 可表示负 scale，开发基线 `5146b62` 的 byte Scale 参数 API 却不能显式声明负 scale；新增 DecimalScale 已完成本地回归和独立走查，原消费者失败及筛选遗漏保留在历史记录中；真实声明矩阵仍待验收。过程目录与过程执行也不同：当前 CommandType.StoredProcedure 只走 Oracle PrepareExecute，MySQL 不具备该执行入口。自动推导在已提交基线尚缺，工作区进展以以下检查点为准。均沿用现有 ID 追踪，不改变 23 项缺口和八个工作包。
 
-有符号 DecimalScale 模块交付、消费者 fixture 根因、最终146项实际覆盖和历史报告见[第15.16节](obconnector-dotnet-completeness.md#1516-2026-10-25-有符号-decimal-scale-本地交付)；自动参数推导仍未实现。
+有符号 DecimalScale 模块交付、消费者 fixture 根因、最终146项实际覆盖和历史报告见[第15.16节](obconnector-dotnet-completeness.md#1516-2026-10-25-有符号-decimal-scale-本地交付)。
+
+此前文档检查点（历史快照）以 `2bbecac` 及其未提交工作区为准：自动参数推导已有三种同步/异步签名、唯一目录签名定位、类型属性映射、同会话/事务预留、取消及集合成员原子发布；相关子集 132 项通过，新增五资产消费者仅编译，Release 构建仍有 1 个 xUnit2013 警告。报告逐项保留此前 RED/失败，不把上一模块全量结果沿用为本模块结果。最终 package/overload、事务/权限、并发和不完整类型身份等边界，以及完整回归、消费者和最终独立走查仍待完成，详见[第15.17节](obconnector-dotnet-completeness.md#1517-2026-10-25-参数推导开发与完整文档检查点)。该次只修改文档；真实矩阵及全部 23 项/八个工作包继续开放。
+
+后续自动参数推导已完成本地交付：新增 81 项单测和 20 项五资产消费者；完整单测 3900、完整消费者 2328、DI 14 通过，Integration 9 通过/72 跳过。修复类型身份配对、浮点/YEAR 声明丢失及 fixture 清理问题，完整回归、独立源码/契约走查和格式检查通过。详情及全部历史报告见[第15.18节](obconnector-dotnet-completeness.md#1518-2026-10-25-自动参数推导修复与验证)。真实目录/权限/声明/版本/OBProxy 验收仍缺，不关闭整个 P1-10、任何工作包或完整驱动目标。

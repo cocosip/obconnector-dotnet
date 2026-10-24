@@ -19,6 +19,7 @@ namespace OceanBaseConnector
         private int _timeout = OceanBaseConnectionStringBuilder.DefaultCommandTimeoutSeconds;
         private readonly object _gate = new object();
         private CommandExchange? _execution;
+        private CancellationTokenSource? _derivation;
         private PreparedStatement? _prepared;
         private PhysicalSession? _oracleSession;
         private bool _explicitPreparation;
@@ -123,7 +124,7 @@ namespace OceanBaseConnector
             try { EnsurePrepared(operation); operation.Exchange.Complete(); }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }
-        public override void Cancel() { lock (_gate) _execution?.Cancel(); }
+        public override void Cancel() { lock (_gate) { _execution?.Cancel(); _derivation?.Cancel(); } }
         public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
         {
             using var reader = await ExecuteDbDataReaderAsync(CommandBehavior.Default, cancellationToken).ConfigureAwait(false);
@@ -210,7 +211,7 @@ namespace OceanBaseConnector
             lock (_gate)
             {
                 if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseCommand));
-                if (_execution != null) throw new InvalidOperationException("The command already has an active operation.");
+                if (_execution != null || _derivation != null) throw new InvalidOperationException("The command already has an active operation.");
                 HasSentSql = false;
                 if (CommandType != CommandType.Text && CommandType != CommandType.StoredProcedure)
                     throw new NotSupportedException("This CommandType is not supported.");
@@ -426,6 +427,7 @@ namespace OceanBaseConnector
             {
                 _disposed = true;
                 _execution?.Cancel();
+                _derivation?.Cancel();
                 var statement = _prepared;
                 _prepared = null;
                 statement?.Release();
