@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Transactions;
@@ -27,6 +28,7 @@ namespace OceanBaseConnector
         private IOceanBaseAddressResolver? _addressResolver;
         private EndpointSelector _endpointSelector = new EndpointSelector();
         private PhysicalSessionPool? _pool;
+        private Func<string, Stream?>? _localInfileStreamFactory;
         private Transaction? _ambientTransaction;
         private AmbientEnlistment? _ambientEnlistment;
 #if NET8_0_OR_GREATER
@@ -99,6 +101,25 @@ namespace OceanBaseConnector
                     if (_session != null || _opening) throw new InvalidOperationException("Close the connection before changing its address resolver.");
                     _addressResolver = value;
                     _endpointSelector = new EndpointSelector();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Supplies a readable stream for a server-requested LOCAL INFILE filename.
+        /// The filename is an opaque server value; the driver never opens it as a local path.
+        /// Set this before opening the connection when <c>Allow Local Infile=true</c>.
+        /// </summary>
+        public Func<string, Stream?>? LocalInfileStreamFactory
+        {
+            get { lock (_gate) return _localInfileStreamFactory; }
+            set
+            {
+                lock (_gate)
+                {
+                    ThrowIfDisposed();
+                    if (_session != null || _opening) throw new InvalidOperationException("Close the connection before changing the LOCAL INFILE stream factory.");
+                    _localInfileStreamFactory = value;
                 }
             }
         }

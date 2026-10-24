@@ -58,6 +58,7 @@ Each resolution creates a closed transient connection owned by its container sco
 
 - Synchronous and asynchronous SQL, server-prepared parameters, multiple results, streaming reads and binary uploads.
 - Text multi-statements are opt-in with `Allow Multi Statements=true`; parameterized, prepared and cursor multi-statements remain unsupported.
+- Server-initiated `LOCAL INFILE` is opt-in with `Allow Local Infile=true` and an application-provided `LocalInfileStreamFactory`; the driver never opens the server filename as a local path. Real OceanBase/OBProxy interoperability remains unverified.
 - Local transactions; .NET 8/9/10 assets also expose savepoints and sequential batches.
 - Oracle extensions include stored procedures, OUT parameters, REF CURSOR, LOB locators, complex types and array binding. Procedures and output parameters require `Use Oracle Prepare Execute=true`; locator LOBs also require `Use Lob Locators=true`.
 - Explicit XA, multiple server addresses, custom address resolution, logging, tracing and metrics.

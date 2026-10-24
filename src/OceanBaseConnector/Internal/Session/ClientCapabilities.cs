@@ -28,6 +28,7 @@ namespace OceanBaseConnector.Internal.Session
 
             if (!options.UseAffectedRows) capabilities |= CapabilityFlags.ClientFoundRows;
             if (options.AllowMultiStatements) capabilities |= CapabilityFlags.ClientMultiStatements;
+            if (options.AllowLocalInfile) capabilities |= CapabilityFlags.ClientLocalFiles;
 
             if (options.Database.Length > 0)
             {

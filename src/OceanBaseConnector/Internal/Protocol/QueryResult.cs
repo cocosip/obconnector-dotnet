@@ -63,7 +63,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 SessionTimeZone = _query.CaptureResultTimeZone();
                 NationalCharacterSet = _query.CaptureResultNationalCharacterSet();
                 if (_oracleHeaderPending) { if (!await StartOracleMetadataAsync(token).ConfigureAwait(false)) return; }
-                else if (!Header(await _query.ReceiveAsync(token).ConfigureAwait(false))) return;
+                else if (!await HeaderAsync(await _query.ReceiveAsync(token).ConfigureAwait(false), token).ConfigureAwait(false)) return;
                 for (var i = 0; i < Columns.Length; i++) Columns[i] = ParseColumn(await _query.ReceiveAsync(token).ConfigureAwait(false), ordinal: i);
                 if (_refCursorInitial) { if (!DeprecatedEof) EndColumns(await _query.ReceiveAsync(token).ConfigureAwait(false)); BeginRefCursorRows(); }
                 else if (CursorMetadataOmitsEof) BeginCursorWithoutEof();
@@ -93,12 +93,43 @@ namespace OceanBaseConnector.Internal.Protocol
                 End(ok.StatusFlags, ok);
                 return false;
             }
-            if (packet[0] == 251) throw new ProtocolException("LOCAL INFILE is not permitted.");
+            if (packet[0] == 251)
+            {
+                packet = _query.ReceiveLocalInfile(packet);
+                if (OkPacket.IsOk(packet))
+                {
+                    Columns = Array.Empty<ResultColumn>();
+                    var ok = OkPacket.Parse(packet, _query.Capabilities);
+                    _affected = checked(Math.Max(0, _affected) + ok.AffectedRows);
+                    End(ok.StatusFlags, ok);
+                    return false;
+                }
+                throw new ProtocolException("LOCAL INFILE must end with an OK packet.");
+            }
             var cursor = new ByteCursor(packet);
             var count = cursor.ReadLengthEncodedInteger();
             if (cursor.HasRemaining || count < 1 || count > 4096) throw new ProtocolException("Invalid or excessive result column count.");
             Columns = new ResultColumn[(int)count];
             return true;
+        }
+
+        private async Task<bool> HeaderAsync(byte[] packet, CancellationToken token)
+        {
+            if (packet.Length > 0 && packet[0] == 251)
+            {
+                packet = await _query.ReceiveLocalInfileAsync(packet, token).ConfigureAwait(false);
+                if (OkPacket.IsOk(packet))
+                {
+                    Columns = Array.Empty<ResultColumn>();
+                    var ok = OkPacket.Parse(packet, _query.Capabilities);
+                    _affected = checked(Math.Max(0, _affected) + ok.AffectedRows);
+                    End(ok.StatusFlags, ok);
+                    return false;
+                }
+                throw new ProtocolException("LOCAL INFILE must end with an OK packet.");
+            }
+
+            return Header(packet);
         }
 
         internal static ServerStatusFlags ReadEof(byte[] packet)

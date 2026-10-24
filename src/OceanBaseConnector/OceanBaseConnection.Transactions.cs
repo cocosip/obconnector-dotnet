@@ -71,7 +71,8 @@ namespace OceanBaseConnector
                         if (type != null) ValidateComplexBinding(type, session, transaction);
                     }
                 }
-                var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin) { IsXa = _xaResource != null };
+                var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin, localInfileStreamFactory: _localInfileStreamFactory)
+                { IsXa = _xaResource != null };
                 if (_complexTypeContext != null && ReferenceEquals(_complexTypeContext.Session, session) &&
                     ReferenceEquals(_complexTypeContext.Transaction, transaction) && _complexTypeContext.Epoch == _transactionEpoch)
                     exchange.ComplexTypes = _complexTypes;

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
@@ -18,6 +20,7 @@ namespace OceanBaseConnector.Internal.Session
         private readonly CancellationToken _caller;
         private readonly CancellationToken _operationToken;
         private readonly Func<CancellationToken>? _cancellationOrigin;
+        private readonly Func<string, Stream?>? _localInfileStreamFactory;
         private readonly CancellationTokenSource _cancel = new CancellationTokenSource();
         private readonly CancellationTokenSource _budget;
         private readonly CancellationTokenRegistration _registration;
@@ -41,13 +44,14 @@ namespace OceanBaseConnector.Internal.Session
         internal void StartDiagnostics(string operation)
         { _diagnostics = DriverDiagnostics.Start(operation); _traceContext = _diagnostics?.Context ?? default; }
 
-        internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release, bool logCommand = true, object? owner = null, Func<CancellationToken>? cancellationOrigin = null)
+        internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release, bool logCommand = true, object? owner = null, Func<CancellationToken>? cancellationOrigin = null, Func<string, Stream?>? localInfileStreamFactory = null)
         {
             _session = session;
             _log = log;
             _release = release;
             _caller = caller;
             _cancellationOrigin = cancellationOrigin;
+            _localInfileStreamFactory = localInfileStreamFactory;
             _operationToken = caller;
             _logCommand = logCommand;
             _budget = CancellationTokenSource.CreateLinkedTokenSource(caller, _cancel.Token);
@@ -196,6 +200,85 @@ namespace OceanBaseConnector.Internal.Session
                 throw Fail(!_terminal && cancellationToken.IsCancellationRequested
                     ? new OperationCanceledException("Reader operation canceled.", error, cancellationToken) : error);
             }
+        }
+
+        internal byte[] ReceiveLocalInfile(byte[] request)
+        {
+            try
+            {
+                UploadLocalInfile(request);
+                return Receive();
+            }
+            catch (Exception error) { throw Fail(error); }
+        }
+
+        internal async Task<byte[]> ReceiveLocalInfileAsync(byte[] request, CancellationToken readerToken)
+        {
+            using var registration = readerToken.Register(Cancel);
+            try
+            {
+                await UploadLocalInfileAsync(request, readerToken).ConfigureAwait(false);
+                return await ReceiveAsync(readerToken).ConfigureAwait(false);
+            }
+            catch (Exception error)
+            {
+                throw Fail(ReaderCanceled(error, readerToken));
+            }
+        }
+
+        private void UploadLocalInfile(byte[] request)
+        {
+            var filename = ParseLocalInfileFilename(request);
+            using var stream = OpenLocalInfileStream(filename);
+            var buffer = new byte[64 * 1024];
+            long total = 0;
+            while (true)
+            {
+                _budget.Token.ThrowIfCancellationRequested();
+                var read = stream.Read(buffer, 0, buffer.Length);
+                if (read == 0) break;
+                total = checked(total + read);
+                if (total > _channel.MaxPacketSize) throw new ProtocolException("LOCAL INFILE payload exceeds the maximum packet size.");
+                _channel.WritePacket(buffer, 0, read);
+            }
+            _channel.WritePacket(Array.Empty<byte>());
+        }
+
+        private async Task UploadLocalInfileAsync(byte[] request, CancellationToken readerToken)
+        {
+            var filename = ParseLocalInfileFilename(request);
+            using var stream = OpenLocalInfileStream(filename);
+            var buffer = new byte[64 * 1024];
+            long total = 0;
+            while (true)
+            {
+                readerToken.ThrowIfCancellationRequested();
+                var read = await stream.ReadAsync(buffer, 0, buffer.Length, _budget.Token).ConfigureAwait(false);
+                if (read == 0) break;
+                total = checked(total + read);
+                if (total > _channel.MaxPacketSize) throw new ProtocolException("LOCAL INFILE payload exceeds the maximum packet size.");
+                await _channel.WritePacketAsync(buffer, 0, read, _budget.Token).ConfigureAwait(false);
+            }
+            await _channel.WritePacketAsync(Array.Empty<byte>(), _budget.Token).ConfigureAwait(false);
+        }
+
+        private Stream OpenLocalInfileStream(string filename)
+        {
+            if ((Capabilities & CapabilityFlags.ClientLocalFiles) == 0)
+                throw new NotSupportedException("LOCAL INFILE is not enabled for this connection.");
+            if (_localInfileStreamFactory == null)
+                throw new NotSupportedException("LOCAL INFILE stream factory is not configured.");
+            var stream = _localInfileStreamFactory(filename);
+            if (stream == null)
+                throw new NotSupportedException("LOCAL INFILE stream factory returned null.");
+            if (!stream.CanRead) throw new NotSupportedException("LOCAL INFILE stream factory must return a readable stream.");
+            return stream;
+        }
+
+        private static string ParseLocalInfileFilename(byte[] request)
+        {
+            if (request.Length <= 1) throw new ProtocolException("LOCAL INFILE request has no filename.");
+            return Encoding.UTF8.GetString(request, 1, request.Length - 1);
         }
 
         private void CountPacket()
