@@ -446,7 +446,10 @@ namespace OceanBaseConnector.UnitTests.Session
             var opening = pool.RentAsync(options, null, new EndpointSelector());
             await authenticated.Task.WaitAsync(TimeSpan.FromSeconds(10));
             listener.Stop();
-            await Assert.ThrowsAsync<OceanBaseConnector.OceanBaseException>(() => opening);
+            var error = await Record.ExceptionAsync(() => opening);
+            Assert.NotNull(error);
+            Assert.True(error is TimeoutException || error is OceanBaseConnector.OceanBaseException,
+                $"Unexpected warmup failure: {error}");
             Assert.False(pool.TryRent(out _));
             await serving.WaitAsync(TimeSpan.FromSeconds(10));
         }

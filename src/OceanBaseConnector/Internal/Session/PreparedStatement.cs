@@ -20,11 +20,13 @@ namespace OceanBaseConnector.Internal.Session
             if (cursor.HasRemaining || columns > 4096) throw new ProtocolException("Invalid prepared statement metadata counts.");
             Columns = new ResultColumn[columns];
             Session = session;
+            Generation = session.Generation;
             CommandText = sql;
             Database = session.Database;
         }
 
         internal PhysicalSession Session { get; }
+        internal long Generation { get; }
         internal string CommandText { get; }
         internal string Database { get; }
         internal uint Id { get; }
@@ -89,7 +91,11 @@ namespace OceanBaseConnector.Internal.Session
             return ResultColumn.Parse(packet, mode, treatTinyAsBoolean: treatTinyAsBoolean);
         }
 
-        internal void Release() => Session.QueueStatementClose(Id);
+        internal void Release()
+        {
+            // COM_RESET_CONNECTION already closed statements from older session generations.
+            Session.QueueStatementClose(Id, Generation);
+        }
         internal static byte[] ClosePacket(uint id) => new byte[] { 25, (byte)id, (byte)(id >> 8), (byte)(id >> 16), (byte)(id >> 24) };
 
         // A busy session flushes queued closes before its next command, never into another reader's response.

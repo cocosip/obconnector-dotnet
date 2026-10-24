@@ -33,6 +33,7 @@ namespace OceanBaseConnector.Internal.Session
         private NationalCharacterSet? _nationalCharacterSet;
         private readonly HashSet<uint> _statementCloses = new HashSet<uint>();
         private bool _xaDedicated;
+        private long _generation;
         private readonly DateTime _createdUtc = DateTime.UtcNow;
         private DateTime _lastReturnedUtc;
         internal bool UseOraclePrepareExecute => _options.UseOraclePrepareExecute;
@@ -48,6 +49,7 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         public SessionState State { get { lock (_gate) return _state; } }
+        internal long Generation { get { lock (_gate) return _generation; } }
         public ConnectResult? Info { get { lock (_gate) return _info; } }
         internal string Database { get { lock (_gate) return _database; } }
         internal void SetDatabase(CommandLease lease, string database)
@@ -339,6 +341,15 @@ namespace OceanBaseConnector.Internal.Session
         internal void QueueStatementClose(uint id)
         { lock (_gate) { if (_state == SessionState.Open || _state == SessionState.Busy) _statementCloses.Add(id); } }
 
+        internal void QueueStatementClose(uint id, long generation)
+        {
+            lock (_gate)
+            {
+                if (_generation == generation && (_state == SessionState.Open || _state == SessionState.Busy))
+                    _statementCloses.Add(id);
+            }
+        }
+
         internal uint[] TakeStatementCloses()
         {
             lock (_gate)
@@ -448,6 +459,7 @@ namespace OceanBaseConnector.Internal.Session
                     _sessionTimeZone = null;
                     _nationalCharacterSet = null;
                     _statementCloses.Clear();
+                    _generation++;
                 }
             }
             catch

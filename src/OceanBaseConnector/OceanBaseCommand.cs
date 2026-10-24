@@ -265,7 +265,8 @@ namespace OceanBaseConnector
                 var binary = oracle != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
                 var parameters = binary && !prepareOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true) : Array.Empty<byte>();
                 if (arrayCount != 0) _ = OraclePrepareExecutePacket.BuildArray(0, bindings.CommandText, bindings.Parameters);
-                if (_prepared != null && (oracle != null || !binary || !ReferenceEquals(_prepared.Session, session) || _prepared.CommandText != bindings.CommandText))
+                if (_prepared != null && (oracle != null || !binary || !ReferenceEquals(_prepared.Session, session) ||
+                    _prepared.Generation != session.Generation || _prepared.CommandText != bindings.CommandText))
                 { _prepared.Release(); _prepared = null; }
                 if (_prepared != null && _prepared.ParameterCount != bindings.Parameters.Length) throw ParameterCountMismatch();
                 CommandExchange? execution = null;

@@ -35,7 +35,7 @@
 | --- | --- | --- | --- |
 | 连接与配置 | 部分实现 | 连接字符串、超时、多地址、RoundRobin、模式确认、地址 resolver、空池 registry 清理 | OCP/TNS、健康发现、连接字符串归一化、完整版本/代理矩阵 |
 | 物理连接池 | 部分实现 | 物理会话复用、最大容量、等待超时/取消、最小池预热及失败回滚、带 MySQL autocommit 校验的 `COM_PING`/reset、idle/total lifetime、空池 registry 清理、池指标 | 完整资源 reset、真实 reset 兼容性 |
-| 会话隔离 | 部分实现 | `COM_RESET_CONNECTION`、MySQL `COM_INIT_DB`、reader 消耗后可复用 | session variables、临时对象、statement、cursor、LOB、XA 和失败丢弃的完整矩阵 |
+| 会话隔离 | 部分实现 | `COM_RESET_CONNECTION`、MySQL `COM_INIT_DB`、reader 消耗后可复用、prepared statement generation 失效 | session variables、临时对象、cursor、LOB、XA 和失败丢弃的完整矩阵 |
 | ADO.NET 核心 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、provider factory、`CloseConnection`、`SequentialAccess`、`SingleRow`、`SingleResult` | `SchemaOnly`、`KeyInfo`、完整 schema metadata、`DbDataAdapter`、`DbCommandBuilder` |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 代码路径 | 现代 TFM 与旧 TFM 的完整行为矩阵、标准 `DbBatch` 生态验收 |
 | 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 路径 | 真实插件成功/拒绝矩阵、KDC、凭据注入和轮换 |
@@ -63,7 +63,7 @@
 | ID | 缺口 | 当前问题 | 完成条件 |
 | --- | --- | --- | --- |
 | P0-01 | 连接池生命周期 | 指标已接入并有本地回归；完整 reset 和真实服务器行为仍未闭合 | 配置一致的池可创建/清理；总数、借出、等待、丢弃、reset 失败可观测，并通过真实服务器验收 |
-| P0-02 | 完整 session reset | 目前主要 reset 协议连接和 database，未覆盖所有借用者状态 | 事务、变量、临时对象、prepared statement、reader/cursor、LOB、XA 和 reset 失败丢弃均有 cross-borrower 测试 |
+| P0-02 | 完整 session reset | prepared statement 已按物理会话 generation 失效；仍未覆盖所有借用者状态 | 事务、变量、临时对象、prepared statement、reader/cursor、LOB、XA 和 reset 失败丢弃均有 cross-borrower 测试 |
 | P0-03 | Ambient transaction | `TransactionScope`/`EnlistTransaction` 不支持 | 实现完整 enlist 状态机，或把不支持边界正式写入公共契约并保证一致拒绝 |
 | P0-04 | Unknown outcome | 发送后断开、取消、提交响应丢失时无法总是判定服务端结果 | 明确发送前/发送后/响应中/commit/rollback 状态；写操作不自动重放；异常给出恢复动作 |
 | P0-05 | 活动连接恢复 | 连接建立后不透明迁移、不自动重连 | 定义只读安全重试、幂等写和非幂等写边界；活动事务不被静默迁移 |
@@ -104,6 +104,7 @@
 - 达到最大容量时，后续 Open 等待归还；等待支持超时和取消。
 - 空闲 lifetime、总 lifetime 和 `Min Pool Size` 的保留规则已存在；首次或后续租借前会补足 `Min Pool Size`，预热失败会回滚本次新建会话。
 - reader 未完成、LOB/cursor 活跃、XA 专用、reset 失败或生命周期过期的会话必须销毁，不得回池。
+- reset 成功后必须递增物理会话 generation；旧 prepared statement 只能被本地丢弃，不能再次发送关闭或执行请求。
 
 ### 5.2 与成熟 Java 池的差距
 
