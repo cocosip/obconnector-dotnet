@@ -2,12 +2,13 @@
 
 **审计日期：** 2026-10-24
 **初次源码基线：** .NET `06d58e1`；Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`（Connector/J 2.4.14）
-**当前源码基线：** .NET `6fecad9`（2026-10-25，已包含 P1-10 目录扩展）；Java 参考提交未变。
+**当前源码：** 本次 P1-11 凭据提供与轮换模块（开发起点 `2dd1893`，此前产品代码至 `6fecad9`）；Java 参考提交未变。
+**最新模块状态：** P1-11 本地实现和最终回归/独立走查完成；真实凭据服务/plugin/KDC 验收仍开放，见第 15.12 节。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`
 **参考实现：** 本仓库源码、测试和兼容性记录；本地 `D:\java-code\obconnector-j` 的 Connector/J 实现
 **文档性质：** 能力审计、目标契约和验收基线；不代表尚未完成的功能已经实现
 
-**最近复核：** 2026-10-25；本次只更新文档，按已提交源码核实功能边界，并重新读取 Schema 模块的已有报告，见第 15.10 节。Schema 开发记录见第 15.9 节，标准 MySQL 压缩见第 15.7 节，客户端证书池化和显式清池见第 15.4/15.5 节。初次审计基线、历史失败和跳过均保留；尚未取得的真实验收继续开放。
+**最近复核：** 2026-10-25；本次凭据实现、回归修复、独立走查和最终执行结果见第 15.12 节；修复前的文档检查点和失败报告保留于第 15.11 节。前次 Schema 报告复核见第 15.10 节。Schema 开发记录见第 15.9 节，标准 MySQL 压缩见第 15.7 节，客户端证书池化和显式清池见第 15.4/15.5 节。初次审计基线、历史失败和跳过均保留；尚未取得的真实验收继续开放。
 
 初次审计的 .NET 提交为 `06d58e1`。其后 P0-06 的本地修复及 P1-04 的自定义服务器证书验证分别见 [池路由记录](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [TLS 验证记录](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)。23 个缺口 ID 保持不变；本地实现不关闭尚未取得的真实服务器验收。
 
@@ -19,7 +20,7 @@
 
 当前驱动仍不能称为完整的生产级 ADO.NET 驱动。连接池已具备基础容量、等待、存活探测和生命周期控制，ambient transaction 已支持本地 volatile enlistment，但还需要补齐完整 reset、协议可选能力、活动连接故障恢复、企业 TLS、ADO.NET 命令行为、Oracle 结果形状、目录元数据和真实兼容矩阵。
 
-本文件统一区分四种状态：
+本文件统一区分以下状态：
 
 | 状态 | 含义 |
 | --- | --- |
@@ -27,6 +28,7 @@
 | 部分实现 | 只支持部分模式、类型、参数组合或目标框架 |
 | 明确缺失 | 源码或测试明确拒绝该能力，必须新增实现才能支持 |
 | 未验证 | 源码路径存在，但缺少真实 OceanBase、OBProxy、TLS、KDC 或目标运行时证据 |
+| 开发中 | 工作区已有未提交实现，但回归或交付门槛未通过，不计为已交付能力 |
 
 “已实现”不等于“服务器兼容已确认”。真实兼容性以 [compatibility.md](compatibility.md) 和本文件第 9 节为准。
 
@@ -74,7 +76,7 @@
 | 连接和配置 | 部分实现 | 连接字符串、模式确认、多地址、超时、TLS、地址解析和池容量/等待/生命周期选项已存在；静态池清理和最小池预热已实现，真实兼容性未闭合 |
 | ADO.NET 基础对象 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有；`SingleRow`/`SingleResult` 和按查询前缀过滤的 `SchemaOnly` 已支持，但 SchemaOnly 仍执行查询；`KeyInfo`、`DbDataAdapter` 和 `DbCommandBuilder` 仍缺失 |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 只在现代 TFM 可用 |
-| 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 有代码；真实插件和 KDC 矩阵未闭合 |
+| 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 及每次 Open 凭据提供/版本轮换有代码与本地回归；真实凭据服务、插件和 KDC 矩阵未闭合 |
 | TLS | 部分实现 | 默认平台 `VerifyFull`；可选 `RemoteCertificateValidationCallback` 已接入并按引用隔离普通池；`ClientCertificate` 支持普通池化/直连及数据源快照，证书按引用和指纹隔离；撤销检查可配置。真实企业 CA/mTLS、轮换和跨平台撤销矩阵未闭合 |
 | 基础 SQL | 已实现 | 文本执行、server prepare、多个结果、取消、超时和流式读取已有路径 |
 | 多语句和压缩 | 部分实现 | `Allow Multi Statements=true` 可协商并执行文本多语句；标准 MySQL 压缩已有显式 Use Compression 路径；OB20 压缩 frame 仍未开放 |
@@ -133,7 +135,7 @@
 | P1-08 | P1 | 类型和字符集 | 部分实现 | 扩展元数据、更多字符集和完整类型码 |
 | P1-09 | P1 | HA/发现 | 部分实现 | OCP/TNS、健康状态、重试退避和 proxy 拓扑 |
 | P1-10 | P1 | Schema 元数据 | 部分实现；常用目录本地完成 | 常用目录集合和限制参数已扩展，过程参数目录保留；补真实目录/权限/版本/代理验收，自动推导与 DataTypes 分别跟踪 |
-| P1-11 | P1 | 凭据提供与轮换 | 明确缺失 | 建连时获取凭据、刷新失败和旧池身份失效的公开契约 |
+| P1-11 | P1 | 凭据提供与轮换 | 本地实现；真实矩阵未验证 | 每次 Open 获取、全口令替换、版本排序、过期及旧会话退休已本地验证；真实凭据服务/plugin/KDC 验收仍开放 |
 | P2-01 | P2 | DataAdapter | 明确缺失 | `DbDataAdapter` 和 `DbCommandBuilder`，或正式声明不支持 |
 | P2-02 | P2 | Statement cache | 明确缺失 | 跨命令 prepared statement cache |
 | P2-03 | P2 | 批处理优化 | 部分实现 | rewrite、multi-send、bulk 和统一 partial-failure 结果 |
@@ -147,7 +149,8 @@
 
 | 类别 | 尚需完成的内容 | 归属 ID |
 | --- | --- | --- |
-| 尚无公开实现 | 建连凭据提供者和轮换；`KeyInfo`；`DataTypes` 集合；参数自动推导；`DbDataAdapter`/`DbCommandBuilder`；跨命令 statement cache | P1-11、P1-05、P1-10、P2-01、P2-02 |
+| 尚无已提交公开实现 | `KeyInfo`；`DataTypes` 集合；参数自动推导；`DbDataAdapter`/`DbCommandBuilder`；跨命令 statement cache | P1-05、P1-10、P2-01、P2-02 |
+| 新增实现仍待真实验收 | 凭据提供/轮换 API、每次 Open 获取、版本退休、过期、取消和脱敏已有本地回归；真实短期凭据服务/plugin/KDC 未验收 | P1-11 |
 | 协议扩展缺失 | OB20 压缩与 proxy reroute；先确认目标链路、版本和协商契约，不能根据服务器内部路径猜测客户端支持 | P1-02 |
 | 发现与恢复不足 | 内置 OCP/TNS 或等价适配、健康缓存和退避；活动连接故障后的状态/重建契约；无透明迁移和自动重连 | P1-09、P0-05 |
 | Oracle 形状不足 | REF CURSOR Input/InputOutput、cursor-valued column、PrepareExecute 与独立 Prepare/FetchSize 的组合；复杂类型的 LOB/cursor/national 成员及外部 DDL 缓存失效 | P1-06、P1-07 |
@@ -266,16 +269,16 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 - native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 都要有成功和拒绝矩阵；
 - 凭据来源不能只依赖明文连接字符串，应允许应用注入安全凭据提供者。
 
-**P1-11 凭据轮换：** 应用目前可以自行读取密钥服务后构建连接字符串；这不等于驱动已经提供建连时凭据回调。后续须定义凭据在新物理连接/池复用时的获取时点、过期和刷新失败、日志脱敏及旧身份会话的失效规则。不要把 token 本身放入可观测池标识；分期实施时需明确要求应用重建数据源的替代流程。
+**P1-11 凭据轮换：** 已新增 `IOceanBaseCredentialProvider`、`OceanBaseCredential`、连接 `CredentialProvider` 及现代 builder `UseCredentialProvider`，并通过最终本地回归。[凭据契约](credentials.md)列出具体 API、所有权和行为；第 15.12 节记录交付证据，第 15.11 节保留修复前失败。
 
-以下是该缺项必须闭合的契约和验收清单，**不是现有 API 或已批准的签名设计**：
+以下是该缺项必须闭合的契约和验收清单。当前实现为每次逻辑 Open 获取一次快照、替换全部口令、提供者引用隔离及递增 Version 退休规则；本地实现不替代真实插件验收：
 
 | 契约 | 必须明确的行为与最低用例 |
 | --- | --- |
 | 获取时点 | 区分逻辑 Open、闲置池复用、新物理连接、最小池预热和端点重试；不能出现某条路径悄悄使用旧静态密码。用真实握手字节验证用户名、主口令及多步认证口令来源。 |
 | 静态配置优先级 | 明确提供者与连接字符串口令的替换或互斥关系；获取失败不得静默回退。无提供者时保留现有行为。 |
 | 过期 | 区分登录凭据过期与已认证会话有效期；覆盖获取时已过期、排队/握手中到期、归还时到期，不得无界循环建连。是否允许活动命令继续须公开说明。 |
-| 并发刷新 | 明确刷新由驱动还是调用方合并，以及新旧结果的排序依据；验证旧结果晚到不能把已退休身份重新放回池，不要求用某个尚未确定的版本字段实现。 |
+| 并发刷新 | 明确刷新由驱动还是调用方合并，以及新旧结果的排序依据；验证旧结果晚到不能把已退休身份重新放回池；当前实现采用非负递增 Version，同版本认证材料变化会拒绝。 |
 | 池身份与退休 | 不同提供者/身份不得误共池；轮换后闲置、借出、预热和在途建连各有退休规则；保留容量、清池和等待者退出保证。 |
 | 取消和总预算 | 获取与发现、排队、预热、握手共同遵守连接超时；取消后的晚到结果不得重新打开连接，失败和取消不得泄漏租约/池名额。同步回调的阻塞约束须单列。 |
 | 所有权与配置 | 区分普通连接可配置时点和 data source 的固定策略；说明提供者的线程安全、生命周期、缓存与刷新职责，不能由驱动擅自释放调用方对象。 |
@@ -539,7 +542,7 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 | P1-08 | 扩展列 metadata/未知类型码被拒绝；national 字符集限于已支持编码；MySQL 客户端 prepare fallback 的字符串因无可信 session collation 被拒绝。 | `Internal/Protocol/ResultColumn.cs`、`NationalCharacterSet.cs`；`Internal/Sql/ClientPreparedSql.cs`；`NationalCharacterTests.cs`、`ClientPrepareFallbackTests.cs`、`WideDecimalTests.cs` | 每种类型的参数/结果/NULL/精度/溢出表；编码不可表示时不静默替换；可信 collation 与 SQL mode 后才扩展字符串 fallback；不把禁止降级误称 server prepare 缺失。 |
 | P1-09 | OCP/TNS 等发现、健康缓存/退避和代理拓扑没有内置实现；只注入 resolver 不能证明 HA。 | `IOceanBaseAddressResolver.cs`；`Internal/EndpointSelector.cs`；`MultiAddressTests.cs`、`TopologyExecutionTests.cs` | 地址更新、旧会话失效、错误身份/TLS 不重试、预算/退避、代理 reroute 和节点故障报告；与 P0-06 共同冻结池路由契约。 |
 | P1-10 | 常用目录已本地实现；Types/Synonyms 为 Oracle-only，Users/Sequences 可能需要额外权限；真实字典/版本/代理矩阵未验证。DataTypes 与参数自动推导尚无公开实现。 | `OceanBaseConnection.Schema.cs`、`OceanBaseConnection.Schema.Routines.cs`、`OceanBaseConnection.Schema.Catalog.cs`；`CatalogSchemaTests.cs`、`ConnectionSchemaTests.cs`、`RoutineSchemaTests.cs`；消费者及实库 SchemaTests | 保留完整形状、限制参数、精度、空目录、权限错误、五资产回归；完成集合/大小写/权限 × 双模式实库和代理矩阵；DataTypes 与参数自动推导按第 5.10.1 节逐项实现或明确版本排除。 |
-| P1-11 | 应用需要短期口令/token 或密钥轮换；目前只能自行取密钥并构造连接配置，无建连时凭据提供者。 | `OceanBaseConnectionStringBuilder.cs`；`OceanBaseDataSourceBuilder.cs`；`Internal/Session/HandshakeFlow.cs`；`ProviderConnectionTests.cs` | API 获取时点、取消、过期/刷新失败、并发刷新和旧会话失效测试；日志/trace/指标不包含凭据；本地插件测试外还需真实 plugin/KDC 成功及拒绝矩阵。 |
+| P1-11 | 应用需要短期口令/token 或密钥轮换；本地实现已完成，真实过期/拒绝/轮换服务与插件矩阵仍未验证。 | `IOceanBaseCredentialProvider.cs`；`OceanBaseConnection.Credentials.cs`；`Internal/CredentialAcquisition.cs`；`Internal/Session/PhysicalSessionPool.Credentials.cs`；`CredentialProviderTests.cs`、`CredentialProviderLifecycleTests.cs`、`CredentialProviderDiagnosticsTests.cs`；消费者 `CredentialProviderConsumerTests.cs` | API 获取时点、取消、过期/刷新失败、并发刷新和旧会话失效测试；日志/trace/指标不包含凭据；本地插件测试外还需真实 plugin/KDC 成功及拒绝矩阵。 |
 
 ### 14.3 生态、性能、诊断和验证
 
@@ -643,6 +646,84 @@ P1-10 的常用目录部分为“本地实现；实库未验证”；整个元�
 
 本次补齐缺项分类、P1-11 契约验收清单及 DataTypes/自动参数推导/KeyInfo 的独立边界；同步报告和进度文档。只进行文档结构、链接/锚点、23-ID/8-工作包覆盖和 diff 检查；不修改产品代码，不重跑构建/测试/包验证，不连接真实数据库，不关闭任何缺口。
 
+### 15.11 2026-10-25 未提交凭据模块的文档检查点
+
+本节为修复前历史检查点，已由第 15.12 节的最终结果取代；失败与跳过记录保留，不代表当前回归状态。
+
+本次交付以 `2dd1893` 为已提交基线，另行核对已有工作区开发，不修改产品或测试代码，不新启动测试，也不把开发过程中的通过结果替代全量门槛。本地报告位于忽略目录 `TestResults/credential-rotation/`，未随 Git 分发；下表为读取原始报告的结果。
+
+| 证据 | 当前读取结果 | 判定与限制 |
+| --- | --- | --- |
+| `TestResults-credential-build-final.log` | Release 构建 0 警告、0 错误，11.18 秒 | 已有执行日志；编译成功不表示回归通过 |
+| `focused-final.trx` | 71 通过，0 失败/跳过 | 凭据聚焦用例；不能替代全量单测 |
+| `unit-final.trx` | 3764 总数，3762 通过、2 失败，进程退出 1 | **模块交付阻塞**；两项均为证书预热回滚测试的同步/异步分支 |
+| `di-final.trx` | 14 通过 | 本地 DI 用例 |
+| `integration-final.trx` | 9 通过、72 条结果为 NotExecuted | 未配置实库 profile；原 summary 的 notExecuted=0，须读取逐条结果，不能写成 81 个实库通过 |
+| `consumer-final.trx` | 885 总数，853 通过、32 失败，进程退出 1 | **模块交付阻塞**；受影响消费者子集，非完整消费者套件，32 项新增凭据用例均未进入握手验证 |
+
+两项失败位于 `PooledClientCertificateTests.FailedCertificateWarmupRollsBackAndRemovesItsPool`：第 181 行反射断言 registry `Get` 参数个数为 4，当前工作区因新增可选 credential provider 参数变为 5。该证据确定测试接线尚未同步；断言失败使后面的重建池断言未执行，不能据此宣称完整清理已通过，也不能仅凭此认定产品发生泄漏。后续必须更新调用/回归并重新验证，保留本次失败报告。
+
+32 项消费者失败均位于 `CredentialProviderConsumerTests.EveryAssetAuthenticatesReusesRotatesAndFailsClosed` 第 41 行：`Activator.CreateInstance(providerType, asynchronous)` 绑定了 `(Type, bool nonPublic)` 重载，尝试调用不存在的无参构造函数，而 helper 实际只有 `(bool asynchronous)` 构造函数，因此抛出 MissingMethodException。后续需显式传构造参数数组并重跑；当前失败发生在初始化测试提供者时，不能记为五资产凭据握手/轮换已通过。以上两类测试接线问题均归入 P1-11 的交付阻塞，不新增或替换 23 个能力 ID。
+
+工作区源码已有每次逻辑 Open 的同步/异步凭据快照、全部口令替换、提供者引用隔离、Version 排序、旧代次退休、过期/取消与统一建连预算、错误脱敏。预热失败回滚改为只销毁仍闲置的本次会话，以保护已被其他 Open 借出的会话；该并发路径和证书预热的回归须共同验收。具体契约见 [credentials.md](credentials.md)，是开发快照，尚非已提交/已发布 API。
+
+P1-11 保持开发中；P0-01/02、P1-04 及其他 ID 的真实服务器、长期并发和资源隔离验收不因这批聚焦测试而关闭。消费者初始化和证书反射接线修复、全量回归、必要的独立复核、格式/包检查及模块提交仍须完成。当前没有真实凭据服务、认证插件轮换、KDC、OBProxy 或跨平台新增报告。
+
+本次文档校验通过：9 份 Markdown 的 97 个本地链接/锚点、代码围栏，三张 23-ID 表、8 个工作包的唯一归属，以及变更文档的 UTF-8/CRLF 和 `git diff --check`。未修改已有产品/测试代码，也未提交工作区开发内容。
+
+已有执行命令对应以下结果；本次仅核对日志/TRX，未再次运行。修复后应在同一 Release 构建上重新取得结果，并使用新的报告名保留失败证据：
+
+```powershell
+dotnet build OceanBaseConnector.slnx -c Release --no-restore
+dotnet test tests/OceanBaseConnector.UnitTests -c Release --no-restore --no-build --logger 'trx;LogFileName=unit-final.trx' --results-directory TestResults/credential-rotation
+dotnet test tests/OceanBaseConnector.ConsumerTests -c Release --no-restore --no-build --filter 'FullyQualifiedName~Credential|FullyQualifiedName~Pool|FullyQualifiedName~Topology|FullyQualifiedName~Tls|FullyQualifiedName~DataSource|FullyQualifiedName~Transaction' --logger 'trx;LogFileName=consumer-final.trx' --results-directory TestResults/credential-rotation
+dotnet test tests/OceanBaseConnector.DependencyInjection.Tests -c Release --no-restore --no-build --logger 'trx;LogFileName=di-final.trx' --results-directory TestResults/credential-rotation
+dotnet test tests/OceanBaseConnector.IntegrationTests -c Release --no-restore --no-build --logger 'trx;LogFileName=integration-final.trx' --results-directory TestResults/credential-rotation
+```
+
+### 15.12 2026-10-25 凭据提供与轮换本地交付
+
+以 `2dd1893` 为开发起点完成 P1-11。五资产新增 `IOceanBaseCredentialProvider`、不可变 context/credential 和连接 `CredentialProvider`；现代 builder 新增 `UseCredentialProvider`，data source 固定捕获调用方提供者引用，不接管其生命周期。每次逻辑 Open 获取一次快照，包含闲置复用；替换用户、主口令及全部附加口令，同一快照用于预热和端点重试。提供者负责线程安全、缓存及刷新合并。
+
+普通池增加提供者引用身份隔离；递增 Version 原子退休旧代次，低版本或同版本不同认证材料拒绝。闲置会话关闭；借出/在途会话不被中断，继续占用容量且归还销毁，旧快照不得继续预热或选取新租约。过期在获取、认证写入、握手完成、最终逻辑 Open 发布、闲置复用及归还/reset 后校验；同版本延长过期不延长已认证物理会话原有期限。活动命令不会仅因登录凭据过期而中断。同步取消需提供者合作，异步取消忽略迟到结果并观察迟到 fault；获取、发现、排队、预热、探活和握手共享连接预算。错误脱敏不保留可能带秘密的提供者异常。完整契约见 [credentials.md](credentials.md)。
+
+独立走查发现并已复现/修复：闲置 COM_PING 期间逻辑快照过期；预热回滚错误销毁已被其他请求借出的会话；无限池等待未受凭据过期限制；Opening 日志回调延迟后发布过期逻辑快照。预热回滚现在只在池锁内销毁仍闲置的会话。RED 报告 `review-expiry-red.trx`、`review-warmup-red.trx` 和 `review-publication-red.trx` 保留；最终复核未发现剩余 Critical/Important。第 15.11 节的单测/消费者失败也保留：registry 清理测试改直接调用并保留实际 `NotSame` 验证；消费者显式传构造参数数组，消除错误 Activator 重载，32 项现在进入真实本地握手/轮换断言。
+
+| 最终证据 | 结果 | 范围 |
+| --- | --- | --- |
+| `TestResults-credential-build-recheck.log` | Release 构建退出 0，0 警告/0 错误 | 全 solution，五资产编译 |
+| `focused-recheck.trx` | 97 通过，0 失败/跳过 | 凭据 + 客户端证书池化聚焦回归 |
+| `consumer-credential-recheck.trx` | 32 通过，0 失败/跳过 | 五资产普通连接、三现代资产私有源，双模式 × 同步/异步 |
+| `unit-recheck.trx` | 3764 通过，0 失败/跳过，退出 0 | 完整单测 |
+| `consumer-recheck.trx` | 885 通过，0 失败/跳过，退出 0 | 受影响消费者子集，**不是完整消费者套件** |
+| `di-recheck.trx` | 14 通过，退出 0 | DI |
+| `integration-recheck.trx` | 9 通过、72 条 NotExecuted，退出 0 | 未配置真实 profile；summary 的 notExecuted=0，不能作为实库完成依据 |
+| `TestResults-credential-format-recheck.log` | 变更及新增 C# 的 format verify 退出 0 | 有工作区加载警告，未隐藏为无警告检查 |
+| `TestResults-credential-pack.log` | 本地 pack 退出 0 | nupkg 的五资产 DLL SHA-256 与已验证 Release 输出一致，五依赖组和当前 README 已检查；未发布 |
+
+所有报告位于本地忽略目录 `TestResults/credential-rotation/`，日志位于仓库根 `TestResults-credential-*.log`，未随 Git 分发。最终构建后未在消费者执行中重建 DLL。五资产消费者运行在 .NET 10 主机，不代表五种独立运行时；本次仅生成/核对包内容，没有新增独立 nupkg 运行时消费报告。未新增依赖，未重跑在线漏洞源审计。
+
+最终重跑命令如下（结果目录同上）：
+
+```powershell
+dotnet build OceanBaseConnector.slnx -c Release --no-restore
+dotnet test tests/OceanBaseConnector.UnitTests -c Release --no-restore --no-build --filter 'FullyQualifiedName~CredentialProvider|FullyQualifiedName~PooledClientCertificate' --logger 'trx;LogFileName=focused-recheck.trx' --results-directory TestResults/credential-rotation
+dotnet test tests/OceanBaseConnector.ConsumerTests -c Release --no-restore --no-build --filter 'FullyQualifiedName~CredentialProvider' --logger 'trx;LogFileName=consumer-credential-recheck.trx' --results-directory TestResults/credential-rotation
+dotnet test tests/OceanBaseConnector.UnitTests -c Release --no-restore --no-build --logger 'trx;LogFileName=unit-recheck.trx' --results-directory TestResults/credential-rotation
+dotnet test tests/OceanBaseConnector.ConsumerTests -c Release --no-restore --no-build --filter 'FullyQualifiedName~Credential|FullyQualifiedName~Pool|FullyQualifiedName~Topology|FullyQualifiedName~Tls|FullyQualifiedName~DataSource|FullyQualifiedName~Transaction' --logger 'trx;LogFileName=consumer-recheck.trx' --results-directory TestResults/credential-rotation
+dotnet test tests/OceanBaseConnector.DependencyInjection.Tests -c Release --no-restore --no-build --logger 'trx;LogFileName=di-recheck.trx' --results-directory TestResults/credential-rotation
+dotnet test tests/OceanBaseConnector.IntegrationTests -c Release --no-restore --no-build --logger 'trx;LogFileName=integration-recheck.trx' --results-directory TestResults/credential-rotation
+$credentialChanged = @(git diff --name-only -- '*.cs')
+$credentialAdded = @(git ls-files --others --exclude-standard -- '*.cs')
+$credentialFiles = @($credentialChanged + $credentialAdded | Sort-Object -Unique)
+dotnet format OceanBaseConnector.slnx --no-restore --verify-no-changes --include $credentialFiles
+dotnet pack src/OceanBaseConnector/OceanBaseConnector.csproj -c Release --no-build --no-restore -o TestResults/credential-rotation/packages
+```
+
+最终文档检查通过：9 份 Markdown、100 个本地链接/锚点、代码围栏、三张 23-ID 表、8 个工作包对全部 ID 的唯一覆盖，以及变更文档 UTF-8/CRLF 和 `git diff --check`。
+
+P1-11 更新为“本地实现；真实凭据服务/plugin/KDC 矩阵未验证”。短期凭据服务、真实多步认证/轮换、OBProxy 和跨平台仍须验收；P0-01/02、P1-04 及其他能力 ID 不因本次交付关闭，完整驱动目标继续开放。第 15.11 节是修复前历史检查点，不代表本节重跑后的当前状态。
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。
@@ -652,7 +733,7 @@ P1-10 的常用目录部分为“本地实现；实库未验证”；整个元�
 | W1 池与会话隔离：P0-01、P0-02、P0-06 | 补不可识别 session-state、动态 SQL/过程、reader/cursor/LOB/XA 的恢复或销毁规则；定义连接字符串归一化和是否需要统一 shutdown。已有容量、探活、预热、路由隔离、证书隔离、清池/退休及指标保留 | 双借用者污染/隔离报告；满池、清池、取消、预热、Dispose/reset、Close/Open 并发及长期运行资源曲线；双模式、直连/OBProxy reset 报告 | G0 契约；与 W2/W4 联合验收 |
 | W2 事务与失败恢复：P0-03、P0-04、P0-05 | 闭合 ambient 本地事务、未知执行结果、断线后的连接/事务状态与应用重建契约；分布式提升明确拒绝，透明恢复另定范围 | 发送前/后、响应中、commit/rollback 回包丢失、超时/in-doubt、提前关闭的故障矩阵；异常分类、会话销毁及业务核对示例；无未知写 replay | W1 租约与隔离规则 |
 | W3 协议选项：P1-01、P1-02、P1-03 | 标准 MySQL 压缩已本地实现；先确认客户端 OB20 压缩契约再补实现，并补 reroute；保留已实现的 opt-in 文本多语句和应用流 LOCAL INFILE，明确不支持的组合 | 客户端链路/版本/capability 依据；协商成功/拒绝、分片/序列/校验/解压限额；多结果中途错误；上传超限/取消/代理策略；真实 OceanBase/OBProxy 互操作 | G0 及第 16.3 节；reroute 依赖 W2/W4 |
-| W4 信任、发现与凭据：P1-04、P1-09、P1-11 | 补建连凭据提供/轮换 API、发现与健康/退避策略；明确 OCP/TNS 或等价发现范围。现有 TLS 回调、证书副本及池身份无需重做 | 企业 CA/mTLS、证书与凭据过期/刷新失败、撤销、KDC/plugin 成功及拒绝；地址更新/错误身份/节点与代理故障；Windows/Linux 报告 | W1 池身份、W2 重试边界 |
+| W4 信任、发现与凭据：P1-04、P1-09、P1-11 | 凭据提供/轮换已有本地实现，补真实凭据服务与插件验收；补发现与健康/退避策略，明确 OCP/TNS 或等价发现范围。现有 TLS 回调、证书副本及池身份无需重做 | 企业 CA/mTLS、证书与凭据过期/刷新失败、撤销、KDC/plugin 成功及拒绝；地址更新/错误身份/节点与代理故障；Windows/Linux 报告 | W1 池身份、W2 重试边界 |
 | W5 命令、Oracle 与类型：P1-05、P1-06、P1-07、P1-08 | 补 KeyInfo；修正或明确 SchemaOnly 执行语义；补已承诺的 Oracle 输出方向/结果形状、复杂成员、DDL 缓存失效、类型码/字符集映射 | Command/Batch/REF CURSOR 行为表；NULL/方向/精度/溢出/编码/取消与资源释放矩阵；SchemaOnly 副作用/锁/大结果报告；服务端不支持形状单列 | G0；资源生命周期与 W1 联动 |
 | W6 目录与 ADO.NET 生态：P1-10、P2-01 | 常用目录/限制参数已有本地实现；补实库/权限/版本/代理矩阵，按第 5.10.1 节闭合 DataTypes 和自动参数推导；明确 DataAdapter/CommandBuilder 的实现或版本排除，不以 ADO.NET provider 代替 EF Core provider | 双模式目录/权限/大小写/空集合；类型映射与过程重载/参数方向；若纳入 adapter 则验证 CRUD、键与乐观并发；若排除则公开 API、异常及文档一致 | W5 键与结果元数据 |
 | W7 性能与可观测性：P2-02、P2-03、P2-04 | 实现有限 statement cache；选择并实现承诺的 rewrite/multi-send/bulk 优化；补建连/探活分段及慢查询/协议诊断。保留顺序 Batch 和 Oracle array binding | 缓存容量/失效/关闭、批量部分失败/事务/取消/包限额；吞吐、延迟、峰值内存与资源上限对照；诊断脱敏和监听开销 | W1 generation/reset、W5 绑定规则 |

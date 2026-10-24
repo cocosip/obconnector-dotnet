@@ -15,6 +15,7 @@ namespace OceanBaseConnector
             if (connection == null) throw new ArgumentNullException(nameof(connection));
             string configuration;
             IOceanBaseAddressResolver? resolver;
+            IOceanBaseCredentialProvider? credentialProvider;
             RemoteCertificateValidationCallback? validation;
             X509Certificate2? certificate;
 #if NET8_0_OR_GREATER
@@ -26,6 +27,7 @@ namespace OceanBaseConnector
                 if (!connection._builder.Pooling) return;
                 configuration = connection._connectionString;
                 resolver = connection._addressResolver;
+                credentialProvider = connection._credentialProvider;
                 validation = connection._remoteCertificateValidationCallback;
                 certificate = connection._clientCertificate;
 #if NET8_0_OR_GREATER
@@ -35,7 +37,7 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
             if (source != null) { source.Clear(); return; }
 #endif
-            PhysicalSessionPoolRegistry.Clear(configuration, resolver, validation, certificate);
+            PhysicalSessionPoolRegistry.Clear(configuration, resolver, validation, certificate, credentialProvider);
         }
 
         /// <summary>Clear a snapshot of ordinary registry pools. Private data sources must

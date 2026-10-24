@@ -46,6 +46,7 @@ namespace OceanBaseConnector.Internal.Session
         private DateTime _lastReturnedUtc;
         internal bool UseOraclePrepareExecute => _options.UseOraclePrepareExecute;
         internal bool TreatTinyAsBoolean => _options.TreatTinyAsBoolean;
+        internal bool IsCredentialExpired => _options.Credential?.IsExpired == true;
         internal bool UseLobLocators => _options.UseLobLocators && Info?.Mode == OceanBaseCompatibilityMode.Oracle &&
             (Info.Capabilities.Effective & CapabilityFlags.ClientSupportLobLocator) != 0;
 
@@ -262,6 +263,7 @@ namespace OceanBaseConnector.Internal.Session
             lock (_gate)
             {
                 token.ThrowIfCancellationRequested();
+                _options.Credential?.EnsureValid();
                 if (_state != SessionState.Connecting) throw new OperationCanceledException(_closing.Token);
                 _info = info;
                 _sessionTimeZone = ReportedTimeZone(info.SessionVariables);

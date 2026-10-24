@@ -45,7 +45,8 @@ namespace OceanBaseConnector.Internal
             string servicePrincipalName = "",
             bool treatTinyAsBoolean = true,
             bool useAffectedRows = false,
-            bool useCompression = false)
+            bool useCompression = false,
+            OceanBaseCredential? credential = null)
         {
             Server = server;
             Port = port;
@@ -56,6 +57,7 @@ namespace OceanBaseConnector.Internal
             TreatTinyAsBoolean = treatTinyAsBoolean;
             UseAffectedRows = useAffectedRows;
             UseCompression = useCompression;
+            Credential = credential;
             AllowMultiStatements = allowMultiStatements;
             AllowLocalInfile = allowLocalInfile;
             var passwords = new Dictionary<int, string>();
@@ -92,9 +94,13 @@ namespace OceanBaseConnector.Internal
 
         internal IReadOnlyList<OceanBaseEndpoint> Endpoints { get; }
 
-        internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
-            endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, CheckCertificateRevocation, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows, UseCompression);
+        internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => Copy(endpoint.Host, endpoint.Port, Credential);
+        internal OceanBaseConnectionOptions WithCredential(OceanBaseCredential credential) => Copy(Server, Port, credential);
+        private OceanBaseConnectionOptions Copy(string server, int port, OceanBaseCredential? credential) => new OceanBaseConnectionOptions(
+            server, port, credential?.UserId ?? UserId, credential?.Password ?? Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
+            TlsMode, TlsServerName, CheckCertificateRevocation, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, credential?.AdditionalPasswords ?? AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows, UseCompression, credential);
+
+        internal OceanBaseCredential? Credential { get; }
 
         public string UserId { get; }
 

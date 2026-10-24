@@ -18,20 +18,22 @@ namespace OceanBaseConnector
         internal PhysicalSessionPool Pool { get; }
         private bool _disposed;
         internal IOceanBaseAddressResolver? AddressResolver { get; }
+        internal IOceanBaseCredentialProvider? CredentialProvider { get; }
         internal RemoteCertificateValidationCallback? RemoteCertificateValidationCallback { get; }
         internal X509Certificate2? ClientCertificate { get; }
         internal EndpointSelector EndpointSelector { get; } = new EndpointSelector();
 
         internal OceanBaseDataSource(OceanBaseConnectionOptions options, string connectionString, ConnectionLog log, IOceanBaseAddressResolver? addressResolver,
-            RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null, X509Certificate2? clientCertificate = null)
+            RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null, X509Certificate2? clientCertificate = null, IOceanBaseCredentialProvider? credentialProvider = null)
         {
             _options = options;
             _connectionString = connectionString;
             _log = log;
             AddressResolver = addressResolver;
+            CredentialProvider = credentialProvider;
             RemoteCertificateValidationCallback = remoteCertificateValidationCallback;
             ClientCertificate = clientCertificate;
-            Pool = new PhysicalSessionPool(addressResolver, remoteCertificateValidationCallback, clientCertificate);
+            Pool = new PhysicalSessionPool(addressResolver, remoteCertificateValidationCallback, clientCertificate, credentialProvider);
         }
 
         public override string ConnectionString => _options.PersistSecurityInfo ? _connectionString : _options.SanitizedConnectionString;

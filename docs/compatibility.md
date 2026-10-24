@@ -105,6 +105,12 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 
 For supported alternatives and binding rules, see the [API reference](obconnector-dotnet-architecture-design.md).
 
+## Credential provision and rotation
+
+Per-logical-Open sync/async acquisition, full password replacement, provider-reference pool isolation, version ordering, expiry and old-session retirement have local implementations; see the [credential contract](credentials.md). The [verification ledger](obconnector-dotnet-progress.md) records final module gates and earlier test-wiring failures. This is local protocol evidence, not a real credential-service or plugin compatibility claim.
+
+Live-source version history survives Clear; empty ordinary registry eviction resets pool-local history. Providers own caching/refresh and are never disposed by the driver. Existing borrowers are not interrupted by rotation or login-credential expiry. Real credential services, token/plugin rotation, KDC, OBProxy and cross-platform behavior remain unverified; local native/PAM fixtures do not close that matrix.
+
 ## Catalog metadata
 
 `GetSchema` has a local implementation for 19 Oracle / 17 MySQL collections; the full [Schema contract](schema.md) lists shapes, restrictions and permission requirements. Types/Synonyms are explicitly unsupported on MySQL. This is catalog discovery, not automatic parameter derivation, `DataTypes`, `KeyInfo` or a DataAdapter implementation. The added dictionary SQL is checked against pinned OceanBase source, with protocol fixtures and five-asset consumers; actual dictionary parsing, privileges, collation, older versions and OBProxy still require real-server reports. The historical 2026-10-24 database passes predate this extension and do not validate it.

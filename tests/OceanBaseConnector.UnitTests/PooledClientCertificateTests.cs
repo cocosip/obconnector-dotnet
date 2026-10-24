@@ -177,9 +177,7 @@ namespace OceanBaseConnector.UnitTests
                 await Assert.ThrowsAsync<OceanBaseException>(() => Open(connection, asynchronous));
                 Assert.True(pool.IsEmpty);
                 Assert.Single(server.AuthenticatedCertificates);
-                var get = typeof(PhysicalSessionPoolRegistry).GetMethod("Get", BindingFlags.NonPublic | BindingFlags.Static)!;
-                Assert.Equal(4, get.GetParameters().Length);
-                next = (PhysicalSessionPool)get.Invoke(null, new object?[] { configuration, null, ValidateServer, certificate })!;
+                next = PhysicalSessionPoolRegistry.Get(configuration, null, ValidateServer, certificate);
                 Assert.NotSame(pool, next);
             }
             finally { connection.Close(); Clear(configuration, pool); Clear(configuration, next); }

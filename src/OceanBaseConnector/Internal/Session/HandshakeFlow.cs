@@ -72,6 +72,7 @@ namespace OceanBaseConnector.Internal.Session
             InitialHandshakePacket handshake, CapabilityFlags capabilities, OceanBaseConnectionOptions options,
             AuthenticationConversation authentication)
         {
+            options.Credential?.EnsureValid();
             return HandshakeResponsePacket.Build(options.UserId,
                 authentication.InitialResponse,
                 options.Database, capabilities, handshake.Capabilities, SslRequestPacket.DefaultCharsetId,
@@ -107,7 +108,7 @@ namespace OceanBaseConnector.Internal.Session
                     return result!;
                 }
 
-                if (authenticationData is not null) channel.WritePacket(authenticationData);
+                if (authenticationData is not null) { options.Credential?.EnsureValid(); channel.WritePacket(authenticationData); }
             }
         }
 
@@ -131,7 +132,10 @@ namespace OceanBaseConnector.Internal.Session
                 }
 
                 if (authenticationData is not null)
+                {
+                    options.Credential?.EnsureValid();
                     await channel.WritePacketAsync(authenticationData, cancellationToken).ConfigureAwait(false);
+                }
             }
         }
 

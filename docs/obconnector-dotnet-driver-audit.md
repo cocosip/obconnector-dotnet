@@ -4,11 +4,13 @@
 **仓库：** `D:\dotnet-code\obconnector-dotnet`  
 **初次源码基线：** .NET `06d58e1`；Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / 2.4.14。
 
-**当前源码基线：** .NET `6fecad9`（2026-10-25，含 P1-10 目录扩展）；见[模块记录](obconnector-dotnet-progress.md#2026-10-25-p1-10-schema-catalog)。Java 参考提交未变。
+**当前源码：** 本次 P1-11 凭据提供/轮换模块（开发起点 `2dd1893`，此前产品代码至 `6fecad9`）；见[模块记录](obconnector-dotnet-progress.md#2026-10-25-p1-11-credential-provision-and-rotation)。Java 参考提交未变。
 **目标：** 为 OceanBase MySQL 兼容模式和 Oracle 兼容模式定义一份可执行的完整驱动缺口清单。  
 **结论级别：** 这是源码、测试、打包记录和 Connector/J 静态结构对照形成的审计报告，不把本地 fixture 当作真实服务器兼容性证明。
 
-**最近复核：** 2026-10-25；本次只更新文档，没有重跑测试。重新读取 Schema 模块已有报告：完整单测 3693、受影响消费者 66、DI 14 通过，Integration 9 通过/72 跳过，原构建日志 0 错误/0 警告，详见[本次证据复核](obconnector-dotnet-completeness.md#1510-2026-10-25-当前源码与完整文档交付复核)。此前证书池化 `01a8082`、清池 `0e58d1f`、标准 MySQL 压缩 `8d8b799` 的执行结果分别保留于详细基线第 15.4/15.5/15.7 节；压缩报告缺失的历史快照见第 15.8 节。以上均不构成新增实库兼容性声明。
+**最新模块状态：** P1-11 本地实现完成；完整单测 3764、受影响消费者 885、DI 14 通过，Integration 9 通过/72 跳过；构建 0 错误/0 警告，独立走查无剩余 Critical/Important。详见[模块记录](obconnector-dotnet-completeness.md#1512-2026-10-25-凭据提供与轮换本地交付)。
+
+**最近复核：** 2026-10-25；最新凭据模块执行结果以上述记录为准。前次文档整理重新读取 Schema 模块已有报告：完整单测 3693、受影响消费者 66、DI 14 通过，Integration 9 通过/72 跳过，原构建日志 0 错误/0 警告，详见[本次证据复核](obconnector-dotnet-completeness.md#1510-2026-10-25-当前源码与完整文档交付复核)。此前证书池化 `01a8082`、清池 `0e58d1f`、标准 MySQL 压缩 `8d8b799` 的执行结果分别保留于详细基线第 15.4/15.5/15.7 节；压缩报告缺失的历史快照见第 15.8 节。以上均不构成新增实库兼容性声明。
 
 源码提交是初次走查基线；其后 P0-06 的本地修复和 P1-04 的自定义服务器证书验证分别记在[池路由记录](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [TLS 验证记录](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)。本报告保留原缺口 ID 和未完成的真实验收要求。
 
@@ -49,7 +51,7 @@
 | 会话隔离 | 部分实现 | `COM_RESET_CONNECTION`、MySQL `COM_INIT_DB`、reader 消耗后可复用、prepared statement generation 失效、未释放 REF CURSOR/LOB 归还时销毁、可识别的用户 session-state/temporary-object 语句归还时销毁 | 不可识别的 session-state、XA 和失败丢弃的完整矩阵 |
 | ADO.NET 核心 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、provider factory、`CloseConnection`、`SequentialAccess`、`SingleRow`、`SingleResult`、按查询前缀过滤的 `SchemaOnly` | `KeyInfo`、完整 schema metadata、`DbDataAdapter`、`DbCommandBuilder`、SchemaOnly 执行副作用边界 |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 代码路径 | 现代 TFM 与旧 TFM 的完整行为矩阵、标准 `DbBatch` 生态验收 |
-| 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 路径 | 真实插件成功/拒绝矩阵、KDC、凭据注入和轮换 |
+| 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 路径 | 真实插件成功/拒绝矩阵、KDC、短期凭据服务及轮换实库验收 |
 | TLS | 部分实现 | 默认平台信任库和主机名校验；可选服务器验证回调及按引用隔离的普通池；池化/直连 `ClientCertificate` 和 source 证书快照；可选撤销检查 | 真实企业 CA/轮换/撤销和跨平台语义、真实 mTLS 矩阵 |
 | 基础 SQL | 已实现 | 文本执行、server prepare、参数绑定、多结果、流式读取、取消、超时 | 真实版本/代理/大数据量边界仍需验收 |
 | 多语句 | 部分实现 | 显式 `Allow Multi Statements=true` 的文本多结果路径、默认关闭；Oracle 匿名块和程序 DDL 的内部分号按单个程序单元处理 | 真正的多语句参数/Prepare/cursor/Oracle 输出组合和真实服务器错误矩阵；程序单元非法尾部由服务端解析 |
@@ -69,7 +71,9 @@
 
 ### 3.1 除连接池之外的待开发范围
 
-尚无公开实现的常见能力包括：凭据提供/轮换、`KeyInfo`、`DataTypes`、参数自动推导、DataAdapter/CommandBuilder 和跨命令 statement cache。协议侧缺 OB20 压缩/reroute，发现侧缺内置 OCP/TNS 或等价适配与健康/退避策略；Oracle 侧还有限定游标方向/结果形状、复杂成员和 DDL 缓存失效的缺口。
+尚无公开实现的常见能力包括：`KeyInfo`、`DataTypes`、参数自动推导、DataAdapter/CommandBuilder 和跨命令 statement cache。协议侧缺 OB20 压缩/reroute，发现侧缺内置 OCP/TNS 或等价适配与健康/退避策略；Oracle 侧还有限定游标方向/结果形状、复杂成员和 DDL 缓存失效的缺口。
+
+凭据提供/轮换已有本地实现：每次 Open 的认证快照、版本退休、过期和取消规则已通过最终回归。真实短期凭据服务和认证插件轮换仍须验收。
 
 已有实现但尚未闭合的是：会话隔离、事务/unknown outcome 的故障矩阵，SchemaOnly 的执行语义，扩展类型/字符集，批量性能与诊断，以及真实版本/代理/TLS/认证/平台验收。常用 Schema 目录、标准 MySQL 压缩、客户端证书池化、清池和池指标均已有本地实现，不应重新列为完全缺失。
 
@@ -102,7 +106,7 @@
 | P1-08 | 类型/字符集 | 类型码清单、CLR/provider-specific 映射、字符集和精度契约 |
 | P1-09 | HA/发现 | OCP/TNS 或等价发现、健康状态、退避和 OBProxy 拓扑 |
 | P1-10 | Schema | 常用目录/限制参数已有本地实现，过程参数目录保留；DataTypes、自动参数推导尚缺，真实目录/权限/版本/代理矩阵待验收，见 [Schema 契约](schema.md) |
-| P1-11 | 凭据提供/轮换 | 建连时凭据回调、刷新/过期与旧池失效规则；现有应用自行读取密钥后构造配置不等于驱动提供者 |
+| P1-11 | 凭据提供/轮换 | 每次 Open 快照、全口令替换、版本退休、过期/取消及脱敏已有本地实现和最终回归；真实插件/凭据服务/KDC 验收仍缺 |
 
 ### P2：生态、性能和运营增强
 
@@ -123,7 +127,7 @@
 - 新建会话完成 TCP、TLS、认证和 OceanBase 身份确认；池内复用会话先执行 `COM_PING`。
 - 逻辑连接关闭时，健康且非 XA 的物理会话执行 reset；MySQL 模式随后恢复初始 database。
 - 达到最大容量时，后续 Open 等待归还；等待支持超时和取消。
-- 空闲 lifetime、总 lifetime 和 `Min Pool Size` 的保留规则已存在；首次或后续租借前会补足 `Min Pool Size`，预热失败会回滚本次新建会话。
+- 空闲 lifetime、总 lifetime 和 `Min Pool Size` 的保留规则已存在；首次或后续租借前会补足 `Min Pool Size`，预热失败仅回滚本次新建且仍闲置的会话，不能销毁已被其他 Open 借出的会话。
 - reader 未完成、LOB/cursor 活跃、XA 专用、reset 失败或生命周期过期的会话必须销毁，不得回池。
 - 未释放的 Oracle REF CURSOR 会设置归还销毁标记；最后一个 cursor 释放后才清除该标记。
 - 未释放的 LOB 或 temporary LOB 句柄会设置归还销毁标记；句柄释放后才允许池化 reset。
@@ -143,7 +147,9 @@ Connector/J 的池实现包含池注册、最小/最大容量、生命周期调�
 
 普通池已按区分大小写的原始连接字符串、resolver 引用身份、TLS 验证回调引用身份，以及客户端证书引用和 SHA-256 DER 指纹共同索引；resolver、回调和证书的引用身份不会因对象自定义值相等而合并。等价但顺序、别名不同的字符串仍可能产生多个池，是后续容量/复用效率问题。数据源保留私有池及 Build 时捕获的证书副本。每次逻辑 Open 只解析一次地址快照，移除不再匹配的闲置端点后再预热/借用；发现失败不回退，已借出连接不迁移。并发发现使用各自快照，不承诺全局拓扑版本排序；真实拓扑仍须验收。
 
-显式清池关闭闲置会话，使借出会话和清池前的在途会话归还后销毁；借出会话继续计入容量，活动命令不会被中断。`ClearAllPools()` 只清理普通 registry 池的快照，私有源使用 `source.Clear()` 或针对源连接的 `ClearPool`，清理后仍允许重新 Open。`ClearPool` 按原配置及对象引用匹配，不读取证书内容，可清理同一证书对象的旧指纹池。清池不是强制终止所有活动连接的进程 shutdown；具体契约见[架构设计](obconnector-dotnet-architecture-design.md#explicit-pool-clearing)。
+显式清池关闭闲置会话，使借出会话和清池前的在途会话归还后销毁；借出会话继续计入容量，活动命令不会被中断。`ClearAllPools()` 只清理普通 registry 池的快照，私有源使用 `source.Clear()` 或针对源连接的 `ClearPool`，清理后仍允许重新 Open。P1-11 把凭据提供者引用加入普通池身份和清池匹配，返回的秘密及版本不进入可观测池标识。
+
+`ClearPool` 按原配置及对象引用匹配，不读取证书内容，可清理同一证书对象的旧指纹池。清池不是强制终止所有活动连接的进程 shutdown；具体契约见[架构设计](obconnector-dotnet-architecture-design.md#explicit-pool-clearing)。
 
 本轮池走查对上述生命周期风险做了代码复核，当前状态如下：
 

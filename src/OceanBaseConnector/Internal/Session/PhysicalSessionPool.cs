@@ -11,12 +11,13 @@ using OceanBaseConnector.Internal.Transport;
 namespace OceanBaseConnector.Internal.Session
 {
     /// <summary>Owns reusable physical sessions for one immutable connection configuration.</summary>
-    internal sealed class PhysicalSessionPool : IDisposable
+    internal sealed partial class PhysicalSessionPool : IDisposable
     {
         internal PhysicalSessionPool(IOceanBaseAddressResolver? resolver = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null,
-            X509Certificate2? clientCertificate = null)
+            X509Certificate2? clientCertificate = null, IOceanBaseCredentialProvider? credentialProvider = null)
         {
             Resolver = resolver; RemoteCertificateValidationCallback = remoteCertificateValidationCallback; ClientCertificate = clientCertificate;
+            CredentialProvider = credentialProvider;
             TlsClientCertificate = clientCertificate == null ? null : new X509Certificate2(clientCertificate);
             try { ClientCertificateFingerprint = TlsUpgrade.ClientCertificateFingerprint(TlsClientCertificate); }
             catch { TlsClientCertificate?.Dispose(); throw; }
@@ -53,10 +54,11 @@ namespace OceanBaseConnector.Internal.Session
         private enum RentDecision { Create, Candidate, Wait }
 
         internal PhysicalSession Rent(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
-            EndpointSelector selector, out bool reused, CancellationToken cancellationToken = default, bool reserved = false)
+            EndpointSelector selector, out bool reused, CancellationToken cancellationToken = default, bool reserved = false,
+            Action<OceanBaseCredential?>? credentialResolved = null)
         {
             if (!reserved) BeginRent();
-            try { return RentCore(options, resolver, selector, out reused, cancellationToken); }
+            try { return RentCore(options, resolver, selector, out reused, cancellationToken, credentialResolved); }
             finally { EndRent(); }
         }
 
@@ -72,10 +74,13 @@ namespace OceanBaseConnector.Internal.Session
         private void EndRent() { lock (_gate) _renters--; }
 
         private PhysicalSession RentCore(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
-            EndpointSelector selector, out bool reused, CancellationToken cancellationToken)
+            EndpointSelector selector, out bool reused, CancellationToken cancellationToken, Action<OceanBaseCredential?>? credentialResolved)
         {
             var started = Stopwatch.StartNew();
             cancellationToken.ThrowIfCancellationRequested();
+            options = CredentialAcquisition.Resolve(options, CredentialProvider, cancellationToken);
+            credentialResolved?.Invoke(options.Credential);
+            AcceptCredential(options);
             var endpoints = resolver == null ? null : PhysicalSession.ResolveEndpoints(options, resolver, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             PruneRoutes(endpoints);
@@ -111,6 +116,7 @@ namespace OceanBaseConnector.Internal.Session
                     try
                     {
                         candidate!.Probe(new ConnectionLog(null), options.CommandTimeoutSeconds, cancellationToken);
+                        options.Credential?.EnsureValid();
                         reused = true;
                         DriverDiagnostics.PoolBorrowed();
                         return candidate;
@@ -122,25 +128,32 @@ namespace OceanBaseConnector.Internal.Session
                     }
                 }
 
-                if (!WaitForAvailability(started, options.PoolWaitTimeoutSeconds, cancellationToken))
-                    throw new TimeoutException("The connection pool wait timeout expired.");
+                if (!WaitForAvailability(started, options, cancellationToken))
+                {
+                    options.Credential?.EnsureValid();
+                    if (Remaining(options.PoolWaitTimeoutSeconds, started) == TimeSpan.Zero)
+                        throw new TimeoutException("The connection pool wait timeout expired.");
+                }
             }
         }
 
         internal async Task<PhysicalSession> RentAsync(OceanBaseConnectionOptions options,
             IOceanBaseAddressResolver? resolver, EndpointSelector selector,
-            CancellationToken cancellationToken = default, bool reserved = false)
+            CancellationToken cancellationToken = default, bool reserved = false, Action<OceanBaseCredential?>? credentialResolved = null)
         {
             if (!reserved) BeginRent();
-            try { return await RentAsyncCore(options, resolver, selector, cancellationToken).ConfigureAwait(false); }
+            try { return await RentAsyncCore(options, resolver, selector, cancellationToken, credentialResolved).ConfigureAwait(false); }
             finally { EndRent(); }
         }
 
         private async Task<PhysicalSession> RentAsyncCore(OceanBaseConnectionOptions options,
-            IOceanBaseAddressResolver? resolver, EndpointSelector selector, CancellationToken cancellationToken)
+            IOceanBaseAddressResolver? resolver, EndpointSelector selector, CancellationToken cancellationToken, Action<OceanBaseCredential?>? credentialResolved)
         {
             var started = Stopwatch.StartNew();
             cancellationToken.ThrowIfCancellationRequested();
+            options = await CredentialAcquisition.ResolveAsync(options, CredentialProvider, cancellationToken).ConfigureAwait(false);
+            credentialResolved?.Invoke(options.Credential);
+            AcceptCredential(options);
             var endpoints = resolver == null ? null : await PhysicalSession.ResolveEndpointsAsync(options, resolver, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             PruneRoutes(endpoints);
@@ -176,6 +189,7 @@ namespace OceanBaseConnector.Internal.Session
                     {
                         await candidate!.ProbeAsync(new ConnectionLog(null), options.CommandTimeoutSeconds, cancellationToken)
                             .ConfigureAwait(false);
+                        options.Credential?.EnsureValid();
                         DriverDiagnostics.PoolBorrowed();
                         return candidate;
                     }
@@ -191,9 +205,14 @@ namespace OceanBaseConnector.Internal.Session
                     }
                 }
 
-                var signaled = await WaitForAvailabilityAsync(started, options.PoolWaitTimeoutSeconds, cancellationToken)
+                var signaled = await WaitForAvailabilityAsync(started, options, cancellationToken)
                     .ConfigureAwait(false);
-                if (!signaled) throw new TimeoutException("The connection pool wait timeout expired.");
+                if (!signaled)
+                {
+                    options.Credential?.EnsureValid();
+                    if (Remaining(options.PoolWaitTimeoutSeconds, started) == TimeSpan.Zero)
+                        throw new TimeoutException("The connection pool wait timeout expired.");
+                }
             }
         }
 
@@ -255,7 +274,7 @@ namespace OceanBaseConnector.Internal.Session
             var removed = false;
             lock (_gate)
             {
-                if (_disposed || _retiredSessions.Contains(session))
+                if (_disposed || _retiredSessions.Contains(session) || session.IsCredentialExpired)
                 {
                     removed = _sessions.Remove(session);
                     _retiredSessions.Remove(session);
@@ -298,7 +317,7 @@ namespace OceanBaseConnector.Internal.Session
             var removed = false;
             lock (_gate)
             {
-                if (_disposed || _retiredSessions.Contains(session))
+                if (_disposed || _retiredSessions.Contains(session) || session.IsCredentialExpired)
                 {
                     removed = _sessions.Remove(session);
                     _retiredSessions.Remove(session);
@@ -328,7 +347,7 @@ namespace OceanBaseConnector.Internal.Session
 
         private bool CannotReturn(PhysicalSession session)
         {
-            lock (_gate) return _disposed || _retiredSessions.Contains(session);
+            lock (_gate) return _disposed || _retiredSessions.Contains(session) || session.IsCredentialExpired;
         }
 
         private RentDecision TakeCandidate(OceanBaseConnectionOptions options, IReadOnlyList<OceanBaseEndpoint>? endpoints, out PhysicalSession? candidate,
@@ -340,11 +359,12 @@ namespace OceanBaseConnector.Internal.Session
                 generation = _clearGeneration;
                 Configure(options);
                 if (_disposed) throw new ObjectDisposedException(nameof(PhysicalSessionPool));
+                EnsureCurrentCredential(options);
                 while (_idle.Count != 0)
                 {
                     var item = _idle.Pop();
                     if (item.State == SessionState.Open && !item.IsReservedForOther(null) &&
-                        !item.RequiresDiscardOnReturn && ContainsEndpoint(endpoints, item.Endpoint) &&
+                        !item.RequiresDiscardOnReturn && !item.IsCredentialExpired && ContainsEndpoint(endpoints, item.Endpoint) &&
                         (!item.IsLifetimeExpired(DateTime.UtcNow, _lifetimeSeconds) &&
                          (!item.IsIdleExpired(DateTime.UtcNow, _idleLifetimeSeconds) || _idle.Count + 1 <= _minPoolSize)))
                     {
@@ -398,7 +418,7 @@ namespace OceanBaseConnector.Internal.Session
             }
             catch
             {
-                foreach (var session in warmed) Destroy(session);
+                foreach (var session in warmed) Destroy(session, idleOnly: true);
                 throw;
             }
         }
@@ -432,7 +452,7 @@ namespace OceanBaseConnector.Internal.Session
             }
             catch
             {
-                foreach (var session in warmed) Destroy(session);
+                foreach (var session in warmed) Destroy(session, idleOnly: true);
                 throw;
             }
         }
@@ -444,6 +464,7 @@ namespace OceanBaseConnector.Internal.Session
                 generation = _clearGeneration;
                 Configure(options);
                 if (_disposed) throw new ObjectDisposedException(nameof(PhysicalSessionPool));
+                EnsureCurrentCredential(options);
                 if (_sessions.Count + _opening >= _minPoolSize || _sessions.Count + _opening >= _maxPoolSize)
                     return false;
                 _opening++;
@@ -499,7 +520,7 @@ namespace OceanBaseConnector.Internal.Session
                     session.Dispose();
                     throw new ObjectDisposedException(nameof(PhysicalSessionPool));
                 }
-                discard = idle && generation != _clearGeneration;
+                discard = idle && (generation != _clearGeneration || session.IsCredentialExpired);
                 if (!discard)
                 {
                     _sessions.Add(session);
@@ -517,9 +538,9 @@ namespace OceanBaseConnector.Internal.Session
             lock (_gate) { _opening--; ReleaseWaiterSignal(); }
         }
 
-        private bool WaitForAvailability(Stopwatch started, int timeoutSeconds, CancellationToken token)
+        private bool WaitForAvailability(Stopwatch started, OceanBaseConnectionOptions options, CancellationToken token)
         {
-            var wait = Remaining(timeoutSeconds, started);
+            var wait = WaitDuration(started, options);
             try { return wait == Timeout.InfiniteTimeSpan ? _available.Wait(Timeout.Infinite, token) : _available.Wait(wait, token); }
             finally
             {
@@ -528,9 +549,9 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
-        private async Task<bool> WaitForAvailabilityAsync(Stopwatch started, int timeoutSeconds, CancellationToken token)
+        private async Task<bool> WaitForAvailabilityAsync(Stopwatch started, OceanBaseConnectionOptions options, CancellationToken token)
         {
-            var wait = Remaining(timeoutSeconds, started);
+            var wait = WaitDuration(started, options);
             try { return wait == Timeout.InfiniteTimeSpan ? await _available.WaitAsync(Timeout.Infinite, token).ConfigureAwait(false) : await _available.WaitAsync(wait, token).ConfigureAwait(false); }
             finally
             {
@@ -544,6 +565,19 @@ namespace OceanBaseConnector.Internal.Session
             if (timeoutSeconds <= 0) return Timeout.InfiniteTimeSpan;
             var remaining = TimeSpan.FromSeconds(timeoutSeconds) - started.Elapsed;
             return remaining <= TimeSpan.Zero ? TimeSpan.Zero : remaining;
+        }
+
+        private static TimeSpan WaitDuration(Stopwatch started, OceanBaseConnectionOptions options)
+        {
+            var wait = Remaining(options.PoolWaitTimeoutSeconds, started);
+            if (options.Credential?.ExpiresAt is DateTimeOffset expiry)
+            {
+                var lifetime = expiry - DateTimeOffset.UtcNow;
+                if (lifetime < TimeSpan.Zero) lifetime = TimeSpan.Zero;
+                if (wait == Timeout.InfiniteTimeSpan || lifetime < wait) wait = lifetime;
+            }
+            var maximum = TimeSpan.FromMilliseconds(int.MaxValue);
+            return wait > maximum ? maximum : wait;
         }
 
         private void DecrementWaiter()
@@ -565,11 +599,12 @@ namespace OceanBaseConnector.Internal.Session
             if (_waiters != 0) _available.Release();
         }
 
-        private void Destroy(PhysicalSession session)
+        private void Destroy(PhysicalSession session, bool idleOnly = false)
         {
             var owned = false;
             lock (_gate)
             {
+                if (idleOnly && !_idle.Contains(session)) return;
                 owned = _sessions.Remove(session);
                 _retiredSessions.Remove(session);
                 if (owned)
@@ -610,12 +645,7 @@ namespace OceanBaseConnector.Internal.Session
             lock (_gate)
             {
                 if (_disposed) return;
-                _clearGeneration++;
-                _retiredSessions.UnionWith(_sessions);
-                idle = new List<PhysicalSession>(_idle);
-                _idle.Clear();
-                foreach (var session in idle) { _sessions.Remove(session); _retiredSessions.Remove(session); }
-                for (var i = 0; i < _waiters; i++) _available.Release();
+                idle = RetireSessions();
             }
             DisposeExpired(idle);
         }
@@ -651,15 +681,15 @@ namespace OceanBaseConnector.Internal.Session
         private static readonly Dictionary<PoolKey, PhysicalSessionPool> Pools = new Dictionary<PoolKey, PhysicalSessionPool>();
 
         internal static PhysicalSessionPool Get(string key, IOceanBaseAddressResolver? resolver = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null,
-            X509Certificate2? clientCertificate = null)
+            X509Certificate2? clientCertificate = null, IOceanBaseCredentialProvider? credentialProvider = null)
         {
             var fingerprint = TlsUpgrade.ClientCertificateFingerprint(clientCertificate);
-            var identity = new PoolKey(key, resolver, remoteCertificateValidationCallback, clientCertificate, fingerprint);
+            var identity = new PoolKey(key, resolver, remoteCertificateValidationCallback, clientCertificate, fingerprint, credentialProvider);
             lock (Gate)
             {
                 if (!Pools.TryGetValue(identity, out var pool))
                 {
-                    pool = new PhysicalSessionPool(resolver, remoteCertificateValidationCallback, clientCertificate);
+                    pool = new PhysicalSessionPool(resolver, remoteCertificateValidationCallback, clientCertificate, credentialProvider);
                     if (!string.Equals(pool.ClientCertificateFingerprint, fingerprint, StringComparison.Ordinal))
                     {
                         pool.Dispose();
@@ -672,11 +702,11 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         internal static PhysicalSessionPool GetForRent(string key, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null,
-            X509Certificate2? clientCertificate = null)
+            X509Certificate2? clientCertificate = null, IOceanBaseCredentialProvider? credentialProvider = null)
         {
             lock (Gate)
             {
-                var pool = Get(key, resolver, remoteCertificateValidationCallback, clientCertificate);
+                var pool = Get(key, resolver, remoteCertificateValidationCallback, clientCertificate, credentialProvider);
                 pool.BeginRent();
                 return pool;
             }
@@ -685,7 +715,7 @@ namespace OceanBaseConnector.Internal.Session
         internal static bool ReleaseIfEmpty(string key, PhysicalSessionPool pool)
         {
             var removed = false;
-            var identity = new PoolKey(key, pool.Resolver, pool.RemoteCertificateValidationCallback, pool.ClientCertificate, pool.ClientCertificateFingerprint);
+            var identity = new PoolKey(key, pool.Resolver, pool.RemoteCertificateValidationCallback, pool.ClientCertificate, pool.ClientCertificateFingerprint, pool.CredentialProvider);
             lock (Gate)
             {
                 if (Pools.TryGetValue(identity, out var current) && ReferenceEquals(current, pool) && pool.IsEmpty)
@@ -699,13 +729,13 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         internal static void Clear(string configuration, IOceanBaseAddressResolver? resolver,
-            RemoteCertificateValidationCallback? validation, X509Certificate2? certificate)
+            RemoteCertificateValidationCallback? validation, X509Certificate2? certificate, IOceanBaseCredentialProvider? credentialProvider = null)
         {
             var matches = new List<PhysicalSessionPool>();
             lock (Gate)
             {
                 foreach (var pair in Pools)
-                    if (pair.Key.Matches(configuration, resolver, validation, certificate)) matches.Add(pair.Value);
+                    if (pair.Key.Matches(configuration, resolver, validation, certificate, credentialProvider)) matches.Add(pair.Value);
             }
             foreach (var pool in matches) { pool.Clear(); ReleaseIfEmpty(configuration, pool); }
         }
@@ -724,12 +754,13 @@ namespace OceanBaseConnector.Internal.Session
             private readonly RemoteCertificateValidationCallback? _validation;
             private readonly X509Certificate2? _certificate;
             private readonly string _fingerprint;
+            private readonly IOceanBaseCredentialProvider? _credentialProvider;
             internal string Configuration => _configuration;
-            internal PoolKey(string configuration, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? validation, X509Certificate2? certificate, string fingerprint)
-            { _configuration = configuration; _resolver = resolver; _validation = validation; _certificate = certificate; _fingerprint = fingerprint; }
-            internal bool Matches(string configuration, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? validation, X509Certificate2? certificate) =>
-                string.Equals(_configuration, configuration, StringComparison.Ordinal) && ReferenceEquals(_resolver, resolver) && ReferenceEquals(_validation, validation) && ReferenceEquals(_certificate, certificate);
-            public bool Equals(PoolKey other) => Matches(other._configuration, other._resolver, other._validation, other._certificate) && string.Equals(_fingerprint, other._fingerprint, StringComparison.Ordinal);
+            internal PoolKey(string configuration, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? validation, X509Certificate2? certificate, string fingerprint, IOceanBaseCredentialProvider? credentialProvider)
+            { _configuration = configuration; _resolver = resolver; _validation = validation; _certificate = certificate; _fingerprint = fingerprint; _credentialProvider = credentialProvider; }
+            internal bool Matches(string configuration, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? validation, X509Certificate2? certificate, IOceanBaseCredentialProvider? credentialProvider) =>
+                string.Equals(_configuration, configuration, StringComparison.Ordinal) && ReferenceEquals(_resolver, resolver) && ReferenceEquals(_validation, validation) && ReferenceEquals(_certificate, certificate) && ReferenceEquals(_credentialProvider, credentialProvider);
+            public bool Equals(PoolKey other) => Matches(other._configuration, other._resolver, other._validation, other._certificate, other._credentialProvider) && string.Equals(_fingerprint, other._fingerprint, StringComparison.Ordinal);
             public override bool Equals(object? obj) => obj is PoolKey other && Equals(other);
             public override int GetHashCode()
             {
@@ -739,6 +770,7 @@ namespace OceanBaseConnector.Internal.Session
                     hash = hash * 397 ^ (_resolver == null ? 0 : RuntimeHelpers.GetHashCode(_resolver));
                     hash = hash * 397 ^ (_validation == null ? 0 : RuntimeHelpers.GetHashCode(_validation));
                     hash = hash * 397 ^ (_certificate == null ? 0 : RuntimeHelpers.GetHashCode(_certificate));
+                    hash = hash * 397 ^ (_credentialProvider == null ? 0 : RuntimeHelpers.GetHashCode(_credentialProvider));
                     return hash * 397 ^ StringComparer.Ordinal.GetHashCode(_fingerprint);
                 }
             }

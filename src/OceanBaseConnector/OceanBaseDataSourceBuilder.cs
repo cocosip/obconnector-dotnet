@@ -11,6 +11,7 @@ namespace OceanBaseConnector
     {
         private ILoggerFactory? _loggerFactory;
         private IOceanBaseAddressResolver? _addressResolver;
+        private IOceanBaseCredentialProvider? _credentialProvider;
         private RemoteCertificateValidationCallback? _remoteCertificateValidationCallback;
         private X509Certificate2? _clientCertificate;
         public OceanBaseDataSourceBuilder(string connectionString = "") => ConnectionStringBuilder = new OceanBaseConnectionStringBuilder(connectionString);
@@ -18,6 +19,9 @@ namespace OceanBaseConnector
         public OceanBaseDataSourceBuilder UseLoggerFactory(ILoggerFactory? loggerFactory) { _loggerFactory = loggerFactory; return this; }
         /// <summary>Use a caller-owned, concurrency-safe address source for each connection Open.</summary>
         public OceanBaseDataSourceBuilder UseAddressResolver(IOceanBaseAddressResolver? resolver) { _addressResolver = resolver; return this; }
+        /// <summary>Use a caller-owned, concurrency-safe credential source for each logical Open.
+        /// Existing data sources retain the provider reference captured at Build.</summary>
+        public OceanBaseDataSourceBuilder UseCredentialProvider(IOceanBaseCredentialProvider? provider) { _credentialProvider = provider; return this; }
         /// <summary>Set a concurrency-safe server validation policy for VerifyFull TLS.
         /// Null retains platform validation; a callback takes responsibility for certificate,
         /// chain, name and revocation errors. Existing data sources keep their policy.</summary>
@@ -33,7 +37,7 @@ namespace OceanBaseConnector
                 throw new NotSupportedException("A custom TLS server validation policy requires TLS Mode=VerifyFull.");
             if (_clientCertificate != null && options.TlsMode == OceanBaseTlsMode.Disabled)
                 throw new NotSupportedException("A client certificate cannot be used with TLS Mode=Disabled.");
-            return new OceanBaseDataSource(options, ConnectionStringBuilder.ConnectionString, new ConnectionLog(_loggerFactory), _addressResolver, _remoteCertificateValidationCallback, _clientCertificate);
+            return new OceanBaseDataSource(options, ConnectionStringBuilder.ConnectionString, new ConnectionLog(_loggerFactory), _addressResolver, _remoteCertificateValidationCallback, _clientCertificate, _credentialProvider);
         }
     }
 }

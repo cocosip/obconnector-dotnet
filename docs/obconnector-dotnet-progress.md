@@ -2,6 +2,40 @@
 
 This page retains historical results and open work from the former progress ledger, alongside dated verification of later changes. Local regression results and real database acceptance are recorded separately.
 
+## 2026-10-25 P1-11 credential provision and rotation
+
+Implemented on top of `2dd1893`: all five assets expose a caller-owned credential provider, immutable context/snapshot and connection configuration; modern builders capture the provider reference. Each logical Open resolves once, including idle reuse, and replaces all configured authentication fields without fallback. Versions retire old pool generations without interrupting borrowers; expiry gates acquisition/authentication/publication/reuse/return, including infinite pool waits. Provider caching/refresh coalescing remains caller-owned. See the [credential contract](credentials.md) and [complete module record](obconnector-dotnet-completeness.md#1512-2026-10-25-凭据提供与轮换本地交付).
+
+Independent review findings were reproduced and fixed: logical snapshot expiry during probe and diagnostic callbacks, failed warmup destroying a concurrent borrower, and unbounded waiting beyond credential expiry. The final reviewer found no remaining Critical/Important issues. The two stale certificate-reflection tests now call registry Get directly and retain the real new-pool assertion; consumer construction now passes an explicit bool argument array. Original RED and failed final reports remain under `TestResults/credential-rotation/`; the historical checkpoint below is superseded by these reruns.
+
+| Final evidence | Result |
+| --- | --- |
+| Release solution build | Exit 0; zero warnings/errors (`TestResults-credential-build-recheck.log`) |
+| Focused credentials + pooled certificates | 97 passed (`focused-recheck.trx`) |
+| Credential consumers | 32 passed (`consumer-credential-recheck.trx`) |
+| Complete units | 3764 passed, zero failed/skipped, exit 0 (`unit-recheck.trx`) |
+| Affected consumers | 885 passed, zero failed/skipped, exit 0 (`consumer-recheck.trx`); filtered subset, not full suite |
+| DI | 14 passed, exit 0 (`di-recheck.trx`) |
+| Integration discovery | 9 passed / 72 individual NotExecuted, exit 0 (`integration-recheck.trx`); no real profiles configured |
+| Changed/new C# format verify | Exit 0 with workspace-load warning (`TestResults-credential-format-recheck.log`) |
+| Local NuGet package | Pack exit 0; five asset DLL hashes match the verified Release outputs, five dependency groups and current README checked |
+
+Commands and ownership/expiry/version limits are in completeness section 15.12. No product DLL was rebuilt during consumers. Five assets were loaded on a .NET 10 host, not five independent runtimes. No new package runtime consumer, live credential-service/plugin/KDC, OBProxy, cross-platform or online vulnerability-source verification is claimed. P1-11 is locally implemented; real acceptance and the overall driver goal remain open.
+
+## 2026-10-25 uncommitted credential module documentation checkpoint
+
+Historical pre-fix checkpoint, superseded by the P1-11 final verification above. Original failures and skips are retained.
+
+The committed baseline is `2dd1893` (product code through `6fecad9`). Credential provision/rotation is present in the working tree, but remains **in development, uncommitted and blocked by full-unit failures**. This documentation handoff does not modify product/tests or start new test runs. The detailed [checkpoint](obconnector-dotnet-completeness.md#1511-2026-10-25-未提交凭据模块的文档检查点) and [working-tree credential contract](credentials.md) distinguish implementation from delivery.
+
+Existing reports under `TestResults/credential-rotation/` were read directly: focused 71 passed; complete units 3762 passed / 2 failed out of 3764, exit 1; DI 14 passed; Integration 9 passed / 72 individual NotExecuted results. The Release build log records zero warnings/errors. The existing affected-consumer run has now completed: `consumer-final.trx` records 885 total, 853 passed / 32 failed, exit 1. This is a filtered subset, not the full consumer suite. These reports are local ignored artifacts, not distributed with Git.
+
+Both failures are sync/async `PooledClientCertificateTests.FailedCertificateWarmupRollsBackAndRemovesItsPool`: line 181 expects four registry Get parameters, while the working-tree signature has five after adding the optional provider. This proves stale reflection wiring; the later new-pool assertion did not run. It neither proves a product leak nor establishes passing cleanup. Update the wiring, rerun required gates, review any resulting product fixes and commit the module before changing its delivery status. Earlier red/green evidence remains in place.
+
+All 32 consumer failures occur at `CredentialProviderConsumerTests.cs:41`: `Activator.CreateInstance(providerType, asynchronous)` selects the `(Type, bool nonPublic)` overload, so it requests a missing parameterless constructor instead of the helper's `(bool asynchronous)` constructor. Pass an explicit constructor-argument array and rerun; no credential handshake/rotation consumer case reached its assertions. Both categories are test-wiring defects and remain module delivery blockers; no production-code defect is inferred solely from these results.
+
+All 23 gap IDs, historical task IDs, database failures/skips and eight work packages are preserved. No real credential-service/plugin/KDC, OBProxy, cross-platform or long-running concurrency acceptance was added.
+
 ## 2026-10-25 complete audit documentation handoff
 
 Updated the [audit report](obconnector-dotnet-driver-audit.md) and [detailed completeness baseline](obconnector-dotnet-completeness.md) to committed source `6fecad9`; Java remains `6adc311b`. The documents retain all 23 gap IDs and eight work packages, separate absent APIs from partial implementations and missing acceptance, and add explicit credential-provider/rotation acceptance requirements plus the DataTypes/automatic parameter derivation/KeyInfo boundaries. Those requirements are not implemented APIs or approved public signatures.

@@ -29,6 +29,7 @@ namespace OceanBaseConnector
         private long _openGeneration;
         private CancellationTokenSource? _openingCancellation;
         private IOceanBaseAddressResolver? _addressResolver;
+        private IOceanBaseCredentialProvider? _credentialProvider;
         private EndpointSelector _endpointSelector = new EndpointSelector();
         private PhysicalSessionPool? _pool;
         private Func<string, Stream?>? _localInfileStreamFactory;
@@ -58,6 +59,7 @@ namespace OceanBaseConnector
             _hidePassword = true;
             _log = log;
             _addressResolver = source.AddressResolver;
+            _credentialProvider = source.CredentialProvider;
             _remoteCertificateValidationCallback = source.RemoteCertificateValidationCallback;
             _clientCertificate = source.ClientCertificate;
             _endpointSelector = source.EndpointSelector;
@@ -220,7 +222,7 @@ namespace OceanBaseConnector
                 if (session.State == SessionState.Closed) session.Open(context.Token);
                 else if (session.State != SessionState.Open) throw new InvalidOperationException("The pooled physical session is not available.");
                 context.Token.ThrowIfCancellationRequested();
-                PublishOpen(session);
+                PublishOpen(session, context);
                 if (context.AmbientTransaction != null) EnlistTransaction(context.AmbientTransaction);
             }
             catch (Exception error)
@@ -251,7 +253,7 @@ namespace OceanBaseConnector
                 if (session.State == SessionState.Closed) await session.OpenAsync(context.Token).ConfigureAwait(false);
                 else if (session.State != SessionState.Open) throw new InvalidOperationException("The pooled physical session is not available.");
                 context.Token.ThrowIfCancellationRequested();
-                PublishOpen(session);
+                PublishOpen(session, context);
                 if (context.AmbientTransaction != null) EnlistTransaction(context.AmbientTransaction);
             }
             catch (Exception error)
@@ -293,12 +295,12 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
                 registryPool &= _source == null;
 #endif
-                var pool = registryPool ? _pool = PhysicalSessionPoolRegistry.GetForRent(_connectionString, _addressResolver, _remoteCertificateValidationCallback, clientCertificate)
+                var pool = registryPool ? _pool = PhysicalSessionPoolRegistry.GetForRent(_connectionString, _addressResolver, _remoteCertificateValidationCallback, clientCertificate, _credentialProvider)
                     : _options.Pooling ? _pool : null;
                 _opening = true;
                 var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
                 _openingCancellation = cancellation;
-                return new OpenContext(_options, pool, _connectionString, _addressResolver, _endpointSelector, clientCertificate, _remoteCertificateValidationCallback, ++_openGeneration, cancellation, token, Transaction.Current, registryPool);
+                return new OpenContext(_options, pool, _connectionString, _addressResolver, _endpointSelector, clientCertificate, _remoteCertificateValidationCallback, ++_openGeneration, cancellation, token, Transaction.Current, registryPool, _credentialProvider);
             }
         }
 
@@ -307,9 +309,13 @@ namespace OceanBaseConnector
             PhysicalSession? session = null;
             try
             {
-                session = context.Pool == null
-                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector, context.ClientCertificate, remoteCertificateValidationCallback: context.RemoteCertificateValidationCallback)
-                    : context.Pool.Rent(context.Options, context.Resolver, context.Selector, out _, context.Token, context.PoolRentReserved);
+                if (context.Pool == null)
+                {
+                    var options = CredentialAcquisition.Resolve(context.Options, context.CredentialProvider, context.Token);
+                    context.Credential = options.Credential;
+                    session = new PhysicalSession(options, context.Resolver, context.Selector, context.ClientCertificate, remoteCertificateValidationCallback: context.RemoteCertificateValidationCallback);
+                }
+                else session = context.Pool.Rent(context.Options, context.Resolver, context.Selector, out _, context.Token, context.PoolRentReserved, credential => context.Credential = credential);
                 lock (_gate)
                 {
                     ThrowIfDisposed();
@@ -336,9 +342,13 @@ namespace OceanBaseConnector
             PhysicalSession? session = null;
             try
             {
-                session = context.Pool == null
-                    ? new PhysicalSession(context.Options, context.Resolver, context.Selector, context.ClientCertificate, remoteCertificateValidationCallback: context.RemoteCertificateValidationCallback)
-                    : await context.Pool.RentAsync(context.Options, context.Resolver, context.Selector, token, context.PoolRentReserved).ConfigureAwait(false);
+                if (context.Pool == null)
+                {
+                    var options = await CredentialAcquisition.ResolveAsync(context.Options, context.CredentialProvider, token).ConfigureAwait(false);
+                    context.Credential = options.Credential;
+                    session = new PhysicalSession(options, context.Resolver, context.Selector, context.ClientCertificate, remoteCertificateValidationCallback: context.RemoteCertificateValidationCallback);
+                }
+                else session = await context.Pool.RentAsync(context.Options, context.Resolver, context.Selector, token, context.PoolRentReserved, credential => context.Credential = credential).ConfigureAwait(false);
                 lock (_gate)
                 {
                     ThrowIfDisposed();
@@ -364,12 +374,13 @@ namespace OceanBaseConnector
         {
             internal OpenContext(OceanBaseConnectionOptions options, PhysicalSessionPool? pool, string poolKey,
                 IOceanBaseAddressResolver? resolver, EndpointSelector selector, X509Certificate2? clientCertificate, RemoteCertificateValidationCallback? remoteCertificateValidationCallback, long generation,
-                CancellationTokenSource cancellation, CancellationToken callerToken, Transaction? ambientTransaction, bool poolRentReserved)
+                CancellationTokenSource cancellation, CancellationToken callerToken, Transaction? ambientTransaction, bool poolRentReserved, IOceanBaseCredentialProvider? credentialProvider)
             {
                 Options = options; Pool = pool; PoolKey = poolKey; Resolver = resolver; Selector = selector; ClientCertificate = clientCertificate; Generation = generation; Cancellation = cancellation; CallerToken = callerToken; AmbientTransaction = ambientTransaction;
                 PoolRentReserved = poolRentReserved;
+                CredentialProvider = credentialProvider;
                 RemoteCertificateValidationCallback = remoteCertificateValidationCallback;
-                if (pool != null && resolver != null)
+                if (credentialProvider != null || pool != null && resolver != null)
                 {
                     RouteBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
                     if (options.ConnectionTimeoutSeconds > 0) RouteBudget.CancelAfter(TimeSpan.FromSeconds(options.ConnectionTimeoutSeconds));
@@ -380,6 +391,8 @@ namespace OceanBaseConnector
             internal bool PoolRentReserved { get; }
             internal string PoolKey { get; }
             internal IOceanBaseAddressResolver? Resolver { get; }
+            internal IOceanBaseCredentialProvider? CredentialProvider { get; }
+            internal OceanBaseCredential? Credential { get; set; }
             internal EndpointSelector Selector { get; }
             internal X509Certificate2? ClientCertificate { get; }
             internal RemoteCertificateValidationCallback? RemoteCertificateValidationCallback { get; }
@@ -400,19 +413,21 @@ namespace OceanBaseConnector
             }
         }
 
-        private void PublishOpen(PhysicalSession session)
+        private void PublishOpen(PhysicalSession session, OpenContext context)
         {
 #if NET8_0_OR_GREATER
-            if (_source != null) { _source.PublishOpen(() => FinishOpen(session)); return; }
+            if (_source != null) { _source.PublishOpen(() => FinishOpen(session, context)); return; }
 #endif
-            FinishOpen(session);
+            FinishOpen(session, context);
         }
 
-        private void FinishOpen(PhysicalSession session)
+        private void FinishOpen(PhysicalSession session, OpenContext context)
         {
             lock (_gate)
             {
                 ThrowIfDisposed();
+                context.Credential?.EnsureValid();
+                if (session.IsCredentialExpired) throw new OceanBaseException("The supplied credential has expired.");
                 if (!ReferenceEquals(_session, session) || session.State != SessionState.Open)
                     throw new OperationCanceledException("Connection was closed during opening.");
             }
