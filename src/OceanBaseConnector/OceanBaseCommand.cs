@@ -215,7 +215,7 @@ namespace OceanBaseConnector
                 OceanBaseConnection.RejectAmbientTransaction();
                 if (CommandType != CommandType.Text && CommandType != CommandType.StoredProcedure)
                     throw new NotSupportedException("This CommandType is not supported.");
-                if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess)) != 0)
+                if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess | CommandBehavior.SingleRow | CommandBehavior.SingleResult)) != 0)
                     throw new NotSupportedException("This CommandBehavior is not supported yet.");
                 var text = CommandText;
                 if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("CommandText is required.");

@@ -53,7 +53,7 @@
 | 模块 | 当前状态 | 主要边界 |
 | --- | --- | --- |
 | 连接和配置 | 部分实现 | 连接字符串、模式确认、多地址、超时、TLS、地址解析和池容量/等待/生命周期选项已存在；静态池清理和真实兼容性未闭合 |
-| ADO.NET 基础对象 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有；`DbDataAdapter` 和 `DbCommandBuilder` 明确缺失 |
+| ADO.NET 基础对象 | 部分实现 | `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有；常用 `SingleRow`/`SingleResult` 已支持，`SchemaOnly`、`KeyInfo`、`DbDataAdapter` 和 `DbCommandBuilder` 仍缺失 |
 | .NET 8+ 资产 | 部分实现 | `DbDataSource`、`DbBatch`、savepoint、异步事务、GSSAPI 只在现代 TFM 可用 |
 | 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 有代码；真实插件和 KDC 矩阵未闭合 |
 | TLS | 部分实现 | `VerifyFull`、`Required`、`Disabled` 有代码；客户端证书、可配置信任和撤销策略缺失 |
@@ -204,11 +204,11 @@ Java 参考实现有 `allowLocalInfile`、`allowLoadLocalInfile` 和输入流入
 
 ### 5.6 ADO.NET 公共契约
 
-当前 `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有基础实现，但命令行为受到严格限制，`DbDataAdapter` 和 `DbCommandBuilder` 明确为空。
+当前 `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有基础实现。`SingleRow` 会只返回当前结果集的第一行并消费剩余行，`SingleResult` 会消费后续结果以保持连接可复用；`SchemaOnly`、`KeyInfo`、`DbDataAdapter` 和 `DbCommandBuilder` 仍未实现。
 
 目标要求：
 
-- 支持常用 `CommandBehavior`，或在文档中明确 provider 级别限制；
+- 支持常用 `CommandBehavior`，或在文档中明确 provider 级别限制；当前 `CloseConnection`、`SequentialAccess`、`SingleRow` 和 `SingleResult` 已有本地回归；
 - 实现 `SchemaOnly` 时不能执行用户写操作；
 - `SingleRow` 和 `SingleResult` 必须正确结束或取消服务端结果流；
 - 完善 `GetSchemaTable`、`GetColumnSchema`、prepared metadata 和参数 metadata；

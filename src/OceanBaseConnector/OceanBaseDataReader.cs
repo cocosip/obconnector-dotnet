@@ -21,9 +21,18 @@ namespace OceanBaseConnector
         private readonly PhysicalSession _session;
         private readonly bool _closeConnection;
         private readonly bool _sequential;
+        private readonly bool _singleRow;
+        private readonly bool _singleResult;
+        private bool _singleRowReturned;
         private bool _closed;
         internal OceanBaseDataReader(CommandExchange query, QueryResult result, OceanBaseConnection connection, PhysicalSession session, CommandBehavior behavior)
-        { _query = query; _result = result; _connection = connection; _session = session; _closeConnection = (behavior & CommandBehavior.CloseConnection) != 0; _sequential = (behavior & CommandBehavior.SequentialAccess) != 0; }
+        {
+            _query = query; _result = result; _connection = connection; _session = session;
+            _closeConnection = (behavior & CommandBehavior.CloseConnection) != 0;
+            _sequential = (behavior & CommandBehavior.SequentialAccess) != 0;
+            _singleRow = (behavior & CommandBehavior.SingleRow) != 0;
+            _singleResult = (behavior & CommandBehavior.SingleResult) != 0;
+        }
         public override object this[int ordinal] => GetValue(ordinal);
         public override object this[string name] => GetValue(GetOrdinal(name));
         public override int Depth => 0;
@@ -230,13 +239,64 @@ namespace OceanBaseConnector
             Array.Copy(value, (int)offset, buffer, bufferOffset, count);
             return count;
         }
-        public override bool NextResult() { EnsureOpen(); return _result.NextResult(); }
-        public override bool Read() { EnsureOpen(); return _result.Read(); }
+        public override bool NextResult()
+        {
+            EnsureOpen();
+            if (_singleResult) { DrainAllResults(); return false; }
+            if (_singleRow && _singleRowReturned) DrainCurrentResult();
+            var next = _result.NextResult();
+            _singleRowReturned = false;
+            return next;
+        }
+        public override bool Read()
+        {
+            EnsureOpen();
+            if (_singleRow && _singleRowReturned) { DrainCurrentResult(); return false; }
+            var read = _result.Read();
+            if (read && _singleRow) _singleRowReturned = true;
+            return read;
+        }
         public override IEnumerator GetEnumerator() => new DbEnumerator(this, false);
-        public override Task<bool> ReadAsync(CancellationToken cancellationToken)
-        { EnsureOpen(); return _result.ReadAsync(cancellationToken); }
-        public override Task<bool> NextResultAsync(CancellationToken cancellationToken)
-        { EnsureOpen(); return _result.NextResultAsync(cancellationToken); }
+        public override async Task<bool> ReadAsync(CancellationToken cancellationToken)
+        {
+            EnsureOpen();
+            if (_singleRow && _singleRowReturned) { await DrainCurrentResultAsync(cancellationToken).ConfigureAwait(false); return false; }
+            var read = await _result.ReadAsync(cancellationToken).ConfigureAwait(false);
+            if (read && _singleRow) _singleRowReturned = true;
+            return read;
+        }
+        public override async Task<bool> NextResultAsync(CancellationToken cancellationToken)
+        {
+            EnsureOpen();
+            if (_singleResult) { await DrainAllResultsAsync(cancellationToken).ConfigureAwait(false); return false; }
+            if (_singleRow && _singleRowReturned) await DrainCurrentResultAsync(cancellationToken).ConfigureAwait(false);
+            var next = await _result.NextResultAsync(cancellationToken).ConfigureAwait(false);
+            _singleRowReturned = false;
+            return next;
+        }
+
+        private void DrainCurrentResult()
+        {
+            while (_result.Read()) { }
+        }
+
+        private async Task DrainCurrentResultAsync(CancellationToken cancellationToken)
+        {
+            while (await _result.ReadAsync(cancellationToken).ConfigureAwait(false)) { }
+        }
+
+        private void DrainAllResults()
+        {
+            DrainCurrentResult();
+            while (_result.NextResult()) DrainCurrentResult();
+        }
+
+        private async Task DrainAllResultsAsync(CancellationToken cancellationToken)
+        {
+            await DrainCurrentResultAsync(cancellationToken).ConfigureAwait(false);
+            while (await _result.NextResultAsync(cancellationToken).ConfigureAwait(false))
+                await DrainCurrentResultAsync(cancellationToken).ConfigureAwait(false);
+        }
         public override void Close()
         {
             if (_closed) return;

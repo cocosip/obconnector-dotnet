@@ -251,6 +251,72 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
+        public async Task SingleRowReturnsOnlyTheFirstRowAndLeavesSessionUsable()
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "single row");
+                await channel.WritePacketAsync(new byte[] { 1 });
+                await channel.WritePacketAsync(Column("n"));
+                await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 1, 49 });
+                await channel.WritePacketAsync(new byte[] { 1, 50 });
+                await channel.WritePacketAsync(Eof());
+                channel.BeginCommand();
+                await Query(channel, "after single row");
+                await channel.WritePacketAsync(Ok(1));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                using var command = connection.CreateCommand();
+                command.CommandText = "single row";
+                using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow);
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal(1, reader.GetInt32(0));
+                Assert.False(await reader.ReadAsync());
+                command.CommandText = "after single row";
+                Assert.Equal(1, await command.ExecuteNonQueryAsync());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task SingleResultDrainsAdditionalResultsAndLeavesSessionUsable()
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "single result");
+                await channel.WritePacketAsync(Ok(2, 14));
+                await channel.WritePacketAsync(new byte[] { 1 });
+                await channel.WritePacketAsync(Column("n"));
+                await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 1, 49 });
+                await channel.WritePacketAsync(Eof());
+                channel.BeginCommand();
+                await Query(channel, "after single result");
+                await channel.WritePacketAsync(Ok(1));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                using var command = connection.CreateCommand();
+                command.CommandText = "single result";
+                using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
+                Assert.Equal(0, reader.FieldCount);
+                Assert.Equal(2, reader.RecordsAffected);
+                Assert.False(await reader.NextResultAsync());
+                command.CommandText = "after single result";
+                Assert.Equal(1, await command.ExecuteNonQueryAsync());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
         public async Task ServerErrorIsTerminalAndDoesNotLeakSqlIntoLogs()
         {
             var log = new RecordingLoggerFactory();
