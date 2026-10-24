@@ -8,6 +8,7 @@ The NuGet packages declare their runtime dependencies rather than embedding thos
 
 | Dependency | Version / target | License / source |
 | --- | --- | --- |
+| SharpZipLib | >=1.4.2 for all core assets, no upper bound | MIT, https://github.com/icsharpcode/SharpZipLib; public zlib Deflater/Inflater APIs for bounded compression and strict end/checksum validation |
 | BouncyCastle.Cryptography | >=2.7.0 for all core assets, no upper bound | MIT, https://github.com/bcgit/bc-csharp; used through its public expanded-key Ed25519 API |
 | Microsoft.Extensions.Logging.Abstractions | Minimum 8.0.0 for both Standard assets and net8; 9.0.0 for net9; 10.0.0 for net10; no upper bounds | MIT, https://github.com/dotnet/runtime |
 | Microsoft.Extensions.DependencyInjection.Abstractions | Minimum 8.0.0 for Standard / net8; 9.0.0 for net9; 10.0.0 for net10; no upper bounds. The core package promotes the logging dependency through central transitive pinning; the DI package also references it directly. | MIT, https://github.com/dotnet/runtime |
@@ -21,6 +22,7 @@ Inclusive minimums without upper bounds are centrally managed in the repository'
 
 - OceanBase Connector/J (`obconnector-j`), version 2.4.14, commit `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`: https://github.com/oceanbase/obconnector-j. The repository declares LGPL-2.1. It is used as a behavioral and protocol reference; its license is not a license declaration for this .NET project. Any source port requires a separate provenance and license review.
 - The official OceanBase .NET repository was consulted only for limited .NET hosting, logging and DI usage. Its split MySQL/Oracle provider structure is not this project's architecture. Source provenance and attribution must be reviewed before release.
+- MySqlConnector compressed-protocol sequence handling and its MySQL server reference were consulted for wire behavior; no source was ported and no MySqlConnector runtime dependency is included. MIT, https://github.com/mysql-net/MySqlConnector
 - Npgsql was consulted for .NET data-source and host-lifecycle API design; no Npgsql runtime package is referenced by these packages. https://github.com/npgsql/npgsql
 
 The existing package IDs are retained; package-name availability and trademark review still require release-owner confirmation. This document does not imply OceanBase endorsement or production certification. Source provenance must be reviewed before publication, independently of the project's MIT license.

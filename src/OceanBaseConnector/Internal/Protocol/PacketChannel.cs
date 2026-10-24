@@ -29,6 +29,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private Stream _stream;
         private int _sequence;
         private Ob20Stream? _ob20;
+        private MySqlCompressionStream? _compression;
         private ActivityContext _traceContext;
 
         public PacketChannel(Stream stream, long maxPacketSize = DefaultMaxPacketSize)
@@ -51,10 +52,17 @@ namespace OceanBaseConnector.Internal.Protocol
 
         public void Close() { _closed = true; _stream.Dispose(); }
 
+        internal void EnableCompression()
+        {
+            EnsureIdle();
+            if (_compression != null || _ob20 != null) throw new InvalidOperationException("A framed transport is already enabled.");
+            _stream = _compression = new MySqlCompressionStream(_stream);
+        }
+
         internal void EnableOb20(uint connectionId, bool fullLinkTrace = false, bool modernExtra = false)
         {
             EnsureIdle();
-            if (_ob20 != null) throw new InvalidOperationException("OB20 is already enabled.");
+            if (_ob20 != null || _compression != null) throw new InvalidOperationException("A framed transport is already enabled.");
             _stream = _ob20 = new Ob20Stream(_stream, connectionId, fullLinkTrace ? new Ob20TraceContext(modernExtra) : null);
         }
 
@@ -64,7 +72,7 @@ namespace OceanBaseConnector.Internal.Protocol
         { _ob20?.BeginRequest(_traceContext); _traceContext = default; }
 
         internal void CompleteResponse(bool expectsResponse = true)
-        { EnsureIdle(); _ob20?.CompleteResponse(expectsResponse); }
+        { EnsureIdle(); _ob20?.CompleteResponse(expectsResponse); _compression?.CompleteResponse(); }
 
         /// <summary>
         /// Swaps the underlying stream after a TLS upgrade. Sequence counters
@@ -74,7 +82,7 @@ namespace OceanBaseConnector.Internal.Protocol
         public void ReplaceUnderlyingStream(Stream stream)
         {
             EnsureIdle();
-            if (_ob20 != null) throw new InvalidOperationException("The transport cannot change after OB20 negotiation.");
+            if (_ob20 != null || _compression != null) throw new InvalidOperationException("The transport cannot change after framing negotiation.");
             if (stream is null)
             {
                 throw new ArgumentNullException(nameof(stream));
@@ -90,6 +98,7 @@ namespace OceanBaseConnector.Internal.Protocol
         public void BeginCommand()
         {
             EnsureIdle();
+            _compression?.BeginCommand();
             _sequence = 0;
         }
 
@@ -134,6 +143,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (chunk < MaxFramePayload)
                 {
                     _ob20?.FinishRequest();
+                    _compression?.Flush();
                     return;
                 }
 
@@ -142,6 +152,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     // Exact multiple of the frame maximum: empty terminator frame.
                     WriteFrame(payload, position, 0);
                     _ob20?.FinishRequest();
+                    _compression?.Flush();
                     return;
                 }
             }
@@ -176,6 +187,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (chunk < MaxFramePayload)
                 {
                     if (_ob20 != null) await _ob20.FinishRequestAsync(cancellationToken).ConfigureAwait(false);
+                    if (_compression != null) await _compression.FlushAsync(cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -184,6 +196,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     // Exact multiple of the frame maximum: empty terminator frame.
                     await WriteFrameAsync(payload, position, 0, cancellationToken).ConfigureAwait(false);
                     if (_ob20 != null) await _ob20.FinishRequestAsync(cancellationToken).ConfigureAwait(false);
+                    if (_compression != null) await _compression.FlushAsync(cancellationToken).ConfigureAwait(false);
                     return;
                 }
             }
@@ -201,13 +214,14 @@ namespace OceanBaseConnector.Internal.Protocol
                 ((uint)_headerBuffer[2] << 16));
             var sequenceId = _headerBuffer[3];
 
-            if (sequenceId != (byte)_sequence)
+            // MySQL may renumber inner packets when compressed buffers flush; the outer stream validates ordering.
+            if (_compression == null && sequenceId != (byte)_sequence)
             {
                 throw new ProtocolException(
                     $"Packet sequence mismatch: expected {(byte)_sequence}, received {sequenceId}.");
             }
 
-            _sequence = (_sequence + 1) & 0xFF;
+            _sequence = (sequenceId + 1) & 0xFF;
             isContinuation = frameLength == MaxFramePayload;
         }
 

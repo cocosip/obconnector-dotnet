@@ -31,6 +31,7 @@
 
   <ItemGroup>
     <PackageVersion Include="BouncyCastle.Cryptography" Version="[2.7.0,)" />
+    <PackageVersion Include="SharpZipLib" Version="[1.4.2,)" />
   </ItemGroup>
 
   <!-- Test tooling is not a dependency of either published product package. -->

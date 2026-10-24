@@ -41,7 +41,7 @@ namespace OceanBaseConnector.Internal.Session
             cancellationToken.ThrowIfCancellationRequested();
             channel.WritePacket(BuildHandshakeResponse(handshake, clientCapabilities, options, authentication));
             var result = ReadAuthenticationResult(channel, handshake, clientCapabilities, options, authentication, cancellationToken);
-            EnableOb20(channel, result, options);
+            EnableFraming(channel, result, options);
             ConfirmIdentity(channel, result, cancellationToken);
             return result;
         }
@@ -63,7 +63,7 @@ namespace OceanBaseConnector.Internal.Session
                 .ConfigureAwait(false);
             var result = await ReadAuthenticationResultAsync(channel, handshake, capabilities, options, authentication, cancellationToken)
                 .ConfigureAwait(false);
-            EnableOb20(channel, result, options);
+            EnableFraming(channel, result, options);
             await ConfirmIdentityAsync(channel, result, cancellationToken).ConfigureAwait(false);
             return result;
         }

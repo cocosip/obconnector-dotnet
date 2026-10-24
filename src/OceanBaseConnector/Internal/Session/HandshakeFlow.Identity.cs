@@ -10,9 +10,10 @@ namespace OceanBaseConnector.Internal.Session
         private const string OracleIdentitySql = "select ob_version(), @@ob_compatibility_mode from dual";
         private const string MySqlIdentitySql = "select ob_version(), @@ob_compatibility_mode, @@autocommit from dual";
 
-        private static void EnableOb20(PacketChannel channel, ConnectResult result, OceanBaseConnectionOptions options)
+        private static void EnableFraming(PacketChannel channel, ConnectResult result, OceanBaseConnectionOptions options)
         {
-            if (options.UseOb20 && result.Capabilities.HasEffective(CapabilityFlags.ClientConnectAttrs) &&
+            if (options.UseCompression) channel.EnableCompression();
+            else if (options.UseOb20 && result.Capabilities.HasEffective(CapabilityFlags.ClientConnectAttrs) &&
                 (result.ObCapabilityFlag & OceanBaseCapabilityFlags.ObCapObProtocolV2) != 0)
                 channel.EnableOb20(result.ConnectionId,
                     options.EnableFullLinkTrace && (result.ObCapabilityFlag & OceanBaseCapabilityFlags.ObCapFullLinkTrace) != 0,

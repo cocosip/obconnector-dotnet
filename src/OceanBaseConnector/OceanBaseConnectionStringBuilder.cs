@@ -44,6 +44,7 @@ namespace OceanBaseConnector
         public const string ServerRsaPublicKeyKey = "Server RSA Public Key";
         public const string AllowPublicKeyRetrievalKey = "Allow Public Key Retrieval";
         public const string UseOb20Key = "Use OB20";
+        public const string UseCompressionKey = "Use Compression";
         public const string EnableFullLinkTraceKey = "Enable Full Link Trace";
         public const string UseOraclePrepareExecuteKey = "Use Oracle Prepare Execute";
         public const string UseLobLocatorsKey = "Use Lob Locators";
@@ -233,6 +234,13 @@ namespace OceanBaseConnector
             set => this[AllowPublicKeyRetrievalKey] = value ? "true" : "false";
         }
 
+        /// <summary>Require the standard MySQL zlib compression protocol. Default false.</summary>
+        public bool UseCompression
+        {
+            get => GetBoolean(UseCompressionKey) ?? false;
+            set => this[UseCompressionKey] = value ? "true" : "false";
+        }
+
         /// <summary>Request OB20 framing when confirmed by server negotiation; disabled by default.</summary>
         public bool UseOb20
         {
@@ -370,6 +378,7 @@ namespace OceanBaseConnector
                 throw CreateKeywordError($"'{UserIdKey}' is required.", UserIdKey, includeValue: false, value: null);
             }
 
+            if (UseCompression && UseOb20) throw new ArgumentException("Use Compression and Use OB20 cannot be combined; compressed OB20 is not supported yet.");
             if (EnableFullLinkTrace && !UseOb20) throw new ArgumentException("Full-link tracing requires Use OB20=true.");
             if (UseLobLocators && !UseOraclePrepareExecute) throw new ArgumentException("LOB locators require Use Oracle Prepare Execute=true.");
             if (MaxPoolSize < 1)
@@ -412,7 +421,8 @@ namespace OceanBaseConnector
                 additionalPasswords,
                 ServicePrincipalName,
                 TreatTinyAsBoolean,
-                UseAffectedRows);
+                UseAffectedRows,
+                UseCompression);
         }
 
         // Serialization order for fixed keys; additional PAM passwords are secrets.
@@ -439,6 +449,7 @@ namespace OceanBaseConnector
             ServerRsaPublicKeyKey,
             AllowPublicKeyRetrievalKey,
             UseOb20Key,
+            UseCompressionKey,
             EnableFullLinkTraceKey,
             UseOraclePrepareExecuteKey,
             UseLobLocatorsKey,
@@ -564,6 +575,7 @@ namespace OceanBaseConnector
                 case PersistSecurityInfoKey:
                 case PoolingKey:
                 case AllowPublicKeyRetrievalKey:
+                case UseCompressionKey:
                 case UseOb20Key:
                 case EnableFullLinkTraceKey:
                 case UseOraclePrepareExecuteKey:
@@ -733,6 +745,9 @@ namespace OceanBaseConnector
                     return true;
                 case "ALLOW PUBLIC KEY RETRIEVAL":
                     canonical = AllowPublicKeyRetrievalKey;
+                    return true;
+                case "USE COMPRESSION":
+                    canonical = UseCompressionKey;
                     return true;
                 case "USE OB20":
                     canonical = UseOb20Key;

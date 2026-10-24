@@ -44,7 +44,8 @@ namespace OceanBaseConnector.Internal
             IReadOnlyDictionary<int, string>? additionalPasswords = null,
             string servicePrincipalName = "",
             bool treatTinyAsBoolean = true,
-            bool useAffectedRows = false)
+            bool useAffectedRows = false,
+            bool useCompression = false)
         {
             Server = server;
             Port = port;
@@ -54,6 +55,7 @@ namespace OceanBaseConnector.Internal
             ServicePrincipalName = servicePrincipalName;
             TreatTinyAsBoolean = treatTinyAsBoolean;
             UseAffectedRows = useAffectedRows;
+            UseCompression = useCompression;
             AllowMultiStatements = allowMultiStatements;
             AllowLocalInfile = allowLocalInfile;
             var passwords = new Dictionary<int, string>();
@@ -92,7 +94,7 @@ namespace OceanBaseConnector.Internal
 
         internal OceanBaseConnectionOptions ForEndpoint(OceanBaseEndpoint endpoint) => new OceanBaseConnectionOptions(
             endpoint.Host, endpoint.Port, UserId, Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, CheckCertificateRevocation, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows);
+            TlsMode, TlsServerName, CheckCertificateRevocation, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows, UseCompression);
 
         public string UserId { get; }
 
@@ -133,6 +135,7 @@ namespace OceanBaseConnector.Internal
 
         public bool AllowPublicKeyRetrieval { get; }
 
+        public bool UseCompression { get; }
         public bool UseOb20 { get; }
         public bool EnableFullLinkTrace { get; }
         public bool UseOraclePrepareExecute { get; }

@@ -14,6 +14,7 @@ $feed = (Resolve-Path -LiteralPath $PackageDirectory).Path
 $version = [string]$rootProperties.Project.PropertyGroup.Version
 [xml]$packageVersions = Get-Content -LiteralPath (Join-Path $repository 'Directory.Packages.props') -Raw
 $cryptoMinimum = ([string]($packageVersions.SelectSingleNode('//PackageVersion[@Include="BouncyCastle.Cryptography"]')).Version) -replace '^\[|,\)$', ''
+$compressionMinimum = ([string]($packageVersions.SelectSingleNode('//PackageVersion[@Include="SharpZipLib"]')).Version) -replace '^\[|,\)$', ''
 $targets = @('netstandard2.0', 'netstandard2.1', 'net8.0', 'net9.0', 'net10.0')
 $packages = @('OceanBaseConnector', 'OceanBaseConnector.DependencyInjection')
 $hashes = @{}
@@ -74,6 +75,8 @@ foreach ($id in $packages) {
                 $core = @($dependencies | Where-Object id -eq $packages[0])
                 Assert-Package ($core.Count -eq 1 -and (Test-MinimumVersion $core[0].version $version)) 'DI must allow the current core version or newer without an upper bound.'
             } else {
+                $compression = @($dependencies | Where-Object id -eq 'SharpZipLib')
+                Assert-Package ($compression.Count -eq 1 -and (Test-MinimumVersion $compression[0].version $compressionMinimum)) "$target must declare the centrally managed compression dependency."
                 $cryptography = @($dependencies | Where-Object id -eq 'BouncyCastle.Cryptography')
                 Assert-Package ($cryptography.Count -eq 1 -and (Test-MinimumVersion $cryptography[0].version $cryptoMinimum)) "$target must declare the centrally managed cryptography dependency."
                 $diagnostics = @($dependencies | Where-Object id -eq 'System.Diagnostics.DiagnosticSource')

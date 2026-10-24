@@ -71,6 +71,8 @@ Each resolution creates a closed transient connection owned by its container sco
 - `OceanBaseConnection.ClearPool(connection)` closes idle sessions for that identity and discards borrowed sessions when returned. `ClearAllPools()` clears ordinary registry pools; private data sources use `source.Clear()` or `ClearPool` with one of their connections. Active commands continue, and new Opens remain available. See the [pool clearing contract](docs/obconnector-dotnet-architecture-design.md#explicit-pool-clearing).
 - Every connection confirms `ob_version()` and the tenant compatibility mode; MySQL-mode opens also require `@@autocommit` enabled, rejecting sessions whose implicit transactions this provider could not commit. Recognized version formats are accepted; versions beyond the recorded deployment and OBProxy still need real-server validation.
 
+`Use Compression=true` enables standard MySQL zlib compression in either compatibility mode, including over TLS and pooled sessions. It requires server support and is off by default; combining it with `Use OB20=true` is currently rejected. OB20 compression, reroute and real-server compression validation remain open.
+
 The driver does not automatically replay SQL. If `OceanBaseException.IsExecutionOutcomeUnknown` is true, reconcile the operation before retrying a write or commit. Batches run sequentially and need an explicit transaction for atomicity. Dispose readers, commands and connections; closing an unread reader can destroy its session.
 
 ## Build and test

@@ -26,6 +26,12 @@ namespace OceanBaseConnector.Internal.Session
                 | CapabilityFlags.ClientSessionTrack
                 | CapabilityFlags.ClientSupportOracle;
 
+            if (options.UseCompression)
+            {
+                if ((serverCapabilities & CapabilityFlags.ClientCompress) == 0)
+                    throw new ProtocolException("The server does not support requested MySQL compression.");
+                capabilities |= CapabilityFlags.ClientCompress;
+            }
             if (!options.UseAffectedRows) capabilities |= CapabilityFlags.ClientFoundRows;
             if (options.AllowMultiStatements) capabilities |= CapabilityFlags.ClientMultiStatements;
             if (options.AllowLocalInfile) capabilities |= CapabilityFlags.ClientLocalFiles;

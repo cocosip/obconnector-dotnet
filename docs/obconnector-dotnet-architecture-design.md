@@ -27,6 +27,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `Pool Wait Timeout` | `Connection Timeout` | Seconds to wait for a physical session; zero removes this wait limit. With a custom resolver, the total logical Open connection budget also bounds pool waiting. |
 | `Connection Idle Lifetime` | 0 | Seconds an idle session may remain before lazy reaping; zero disables the limit. |
 | `Connection Lifetime` | 0 | Maximum physical-session age in seconds; zero disables the limit. |
+| `Use Compression` | false | Requires standard MySQL zlib compression. Unsupported servers fail before credentials; cannot currently combine with Use OB20. |
 | `Use OB20` | false | Requests OB20 framing when negotiated by the server. |
 | `Enable Full Link Trace` | false | Requests server tracing; requires `Use OB20=true`. |
 | `Use Oracle Prepare Execute` | false | Enables Oracle procedures and output bindings; requires server version discovery and OceanBase >=2.2.76. |
@@ -226,3 +227,13 @@ Pool keys compare callback objects by reference, even when two delegates have eq
 Use builder `UseLoggerFactory(...)` or the connection's `ILoggerFactory` constructor overload. Log categories are `OceanBaseConnector.Connection`, `.Command` and `.Transaction`. Logs omit SQL, parameter values and credentials.
 
 `ActivitySource` and `Meter` are named `OceanBaseConnector`. Metrics are `oceanbase.client.operations` and `oceanbase.client.operation.duration` (seconds). Tags identify operation, mode, outcome and unknown outcome; readers complete their execution span when consumption finishes or fails. Local diagnostics do not require server full-link tracing.
+
+## MySQL compression
+
+`OceanBaseConnectionStringBuilder.UseCompression` / `Use Compression=true` requests CLIENT_COMPRESS. The default remains false, even when the server advertises compression. A requested capability missing from the greeting fails before the TLS/authentication response; authentication switches and the final authentication OK remain uncompressed. Compression starts after that OK and before OceanBase identity queries, above TLS when TLS is enabled. Both compatibility modes and all five target assets use the same implementation. The option is preserved when selecting an endpoint and is part of the connection configuration used for pool identity.
+
+The seven-byte outer header wraps an ordinary MySQL framed byte stream. A block can hold several packets or part of a header/payload; original and zlib blocks may mix. Outer sequence numbers increment across reads and writes, wrap at 256, and reset for each new command. MySQL can renumber inner sequences when flushing compressed buffers, so compression validates the outer sequence rather than applying the ordinary inner counter. Multi-packet uploads preserve both protocol counters across direction changes. Complete writes flush compression, including no-response statement commands and LOCAL INFILE terminators.
+
+Writes use a 64 KiB buffer and send original bytes if compression would not shrink a block. Receive input/output buffers are limited by the protocol's 24-bit lengths (at most 0xffffff per block); the ordinary 64 MiB logical-packet cap still applies. SharpZipLib's public zlib APIs validate checksum, finished stream, exact output length and absence of trailing input; dictionaries, malformed/truncated streams and unread buffered tails at exchange boundaries fail closed. Async operations use async transport I/O; codec work itself is synchronous CPU work. No SQL is replayed.
+
+`Use Compression=true;Use OB20=true` currently fails validation before networking: compressed OB20 and proxy reroute are separate, unfinished capabilities. Local framework-zlib peers verify the standard compression path, including TLS and pooling/reset; real OceanBase/OBProxy and cross-platform compression acceptance remain open.
