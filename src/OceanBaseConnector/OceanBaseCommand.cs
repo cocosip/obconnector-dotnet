@@ -77,6 +77,7 @@ namespace OceanBaseConnector
             => ExecuteReaderCore(behavior, CancellationToken.None);
         internal DbDataReader ExecuteReaderCore(CommandBehavior behavior, CancellationToken token, int arrayCount = 0)
         {
+            if ((behavior & CommandBehavior.KeyInfo) != 0) return ExecuteKeyInfoAsync(behavior, false, token, arrayCount).GetAwaiter().GetResult();
             var operation = Start(behavior, token, false, arrayCount);
             var execution = operation.Exchange;
             execution.StartDiagnostics("execute");
@@ -151,6 +152,7 @@ namespace OceanBaseConnector
             => ExecuteReaderCoreAsync(behavior, cancellationToken);
         private async Task<DbDataReader> ExecuteReaderCoreAsync(CommandBehavior behavior, CancellationToken cancellationToken, int arrayCount = 0)
         {
+            if ((behavior & CommandBehavior.KeyInfo) != 0) return await ExecuteKeyInfoAsync(behavior, true, cancellationToken, arrayCount).ConfigureAwait(false);
             var operation = Start(behavior, cancellationToken, false, arrayCount);
             var execution = operation.Exchange;
             execution.StartDiagnostics("execute");
@@ -227,11 +229,14 @@ namespace OceanBaseConnector
                 HasSentSql = false;
                 if (CommandType != CommandType.Text && CommandType != CommandType.StoredProcedure)
                     throw new NotSupportedException("This CommandType is not supported.");
-                if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess | CommandBehavior.SingleRow | CommandBehavior.SingleResult | CommandBehavior.SchemaOnly)) != 0)
+                if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess | CommandBehavior.SingleRow | CommandBehavior.SingleResult | CommandBehavior.SchemaOnly | CommandBehavior.KeyInfo)) != 0)
                     throw new NotSupportedException("This CommandBehavior is not supported yet.");
                 var text = CommandText;
                 if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("CommandText is required.");
                 var schemaOnly = (behavior & CommandBehavior.SchemaOnly) != 0;
+                var keyInfo = (behavior & CommandBehavior.KeyInfo) != 0;
+                if (keyInfo && (CommandType != CommandType.Text || HasOutputParameters() || arrayCount != 0))
+                    throw new NotSupportedException("KeyInfo requires text execution with input parameters only.");
                 if (schemaOnly && (CommandType != CommandType.Text || !IsSchemaOnlyQuery(text) || HasOutputParameters()))
                     throw new NotSupportedException("SchemaOnly requires a text query with input parameters only.");
                 if (token.IsCancellationRequested) { CancellationOrigin?.Invoke().ThrowIfCancellationRequested(); token.ThrowIfCancellationRequested(); }
@@ -253,6 +258,7 @@ namespace OceanBaseConnector
                     (arrayCount != 0 || CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters, arrayCount) : null;
                 var multiStatement = SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
                 if (schemaOnly && multiStatement) throw new NotSupportedException("SchemaOnly requires a single statement.");
+                if (keyInfo && multiStatement) throw new NotSupportedException("KeyInfo requires a single statement.");
                 if (multiStatement && !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientMultiStatements))
                     throw new NotSupportedException("Multi-statement execution requires Allow Multi Statements=true and server support.");
 #if NET8_0_OR_GREATER
@@ -263,7 +269,7 @@ namespace OceanBaseConnector
                 var bindings = oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
                 if (multiStatement && (bindings.Parameters.Length != 0 || prepareOnly || _fetchSize > 0 || oracle != null))
                     throw new NotSupportedException("Multi-statement execution does not support parameters, Prepare or server cursors.");
-                var clientFallback = AllowClientSidePrepareFallback && !prepareOnly && !schemaOnly && !_explicitPreparation && _fetchSize == 0 && oracle == null;
+                var clientFallback = AllowClientSidePrepareFallback && !prepareOnly && !schemaOnly && !keyInfo && !_explicitPreparation && _fetchSize == 0 && oracle == null;
                 // Stream identity must not depend on a user stream's equality implementation.
                 ConditionalWeakTable<Stream, OceanBaseParameter>? streamBindings = null;
                 foreach (var parameter in bindings.Parameters)
@@ -286,7 +292,7 @@ namespace OceanBaseConnector
                         throw new NotSupportedException("LOB parameters require negotiated Use Lob Locators=true.");
                 var fetchSize = prepareOnly || schemaOnly ? 0 : _fetchSize;
                 if (prepareOnly) _explicitPreparation = true;
-                var binary = schemaOnly || oracle != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
+                var binary = keyInfo || schemaOnly || oracle != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
                 var parameters = binary && !prepareOnly && !schemaOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true) : Array.Empty<byte>();
                 if (arrayCount != 0) _ = OraclePrepareExecutePacket.BuildArray(0, bindings.CommandText, bindings.Parameters);
                 if (_prepared != null && (oracle != null || !binary || !ReferenceEquals(_prepared.Session, session) ||

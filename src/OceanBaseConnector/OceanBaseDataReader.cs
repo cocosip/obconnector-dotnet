@@ -26,9 +26,11 @@ namespace OceanBaseConnector
         private readonly bool _schemaOnly;
         private bool _singleRowReturned;
         private bool _closed;
-        internal OceanBaseDataReader(CommandExchange query, QueryResult result, OceanBaseConnection connection, PhysicalSession session, CommandBehavior behavior)
+        private KeyInfoMetadata? _keyInfo;
+        internal OceanBaseDataReader(CommandExchange query, QueryResult result, OceanBaseConnection connection, PhysicalSession session, CommandBehavior behavior, KeyInfoMetadata? keyInfo = null)
         {
             _query = query; _result = result; _connection = connection; _session = session;
+            _keyInfo = keyInfo;
             _closeConnection = (behavior & CommandBehavior.CloseConnection) != 0;
             _sequential = (behavior & CommandBehavior.SequentialAccess) != 0;
             _singleRow = (behavior & CommandBehavior.SingleRow) != 0;
@@ -39,6 +41,7 @@ namespace OceanBaseConnector
         public override object this[string name] => GetValue(GetOrdinal(name));
         public override int Depth => 0;
         public override int FieldCount { get { EnsureOpen(); return _result.Columns.Length; } }
+        public override int VisibleFieldCount { get { EnsureOpen(); return _keyInfo?.VisibleCount ?? _result.Columns.Length; } }
         public override bool HasRows { get { EnsureOpen(); return !_schemaOnly && _result.HasRows; } }
         public override bool IsClosed => _closed;
         public override int RecordsAffected => _result.RecordsAffected;
@@ -50,7 +53,7 @@ namespace OceanBaseConnector
         {
             EnsureOpen();
             var columns = new DbColumn[_result.Columns.Length];
-            for (var i = 0; i < columns.Length; i++) columns[i] = new ResultDbColumn(_result.Columns[i], i);
+            for (var i = 0; i < columns.Length; i++) columns[i] = new ResultDbColumn(_result.Columns[i], i, _keyInfo?.Columns[i]);
             return Array.AsReadOnly(columns);
         }
 
@@ -244,6 +247,7 @@ namespace OceanBaseConnector
         public override bool NextResult()
         {
             EnsureOpen();
+            _keyInfo = null;
             if (_singleResult) { DrainAllResults(); return false; }
             if (_singleRow && _singleRowReturned) DrainCurrentResult();
             var next = _result.NextResult();
@@ -272,6 +276,7 @@ namespace OceanBaseConnector
         public override async Task<bool> NextResultAsync(CancellationToken cancellationToken)
         {
             EnsureOpen();
+            _keyInfo = null;
             if (_singleResult) { await DrainAllResultsAsync(cancellationToken).ConfigureAwait(false); return false; }
             if (_singleRow && _singleRowReturned) await DrainCurrentResultAsync(cancellationToken).ConfigureAwait(false);
             var next = await _result.NextResultAsync(cancellationToken).ConfigureAwait(false);

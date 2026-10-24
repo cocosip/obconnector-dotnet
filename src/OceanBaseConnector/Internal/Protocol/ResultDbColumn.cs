@@ -5,7 +5,7 @@ namespace OceanBaseConnector.Internal.Protocol
 {
     internal sealed class ResultDbColumn : DbColumn
     {
-        internal ResultDbColumn(ResultColumn column, int ordinal)
+        internal ResultDbColumn(ResultColumn column, int ordinal, KeyInfoMetadata.ColumnInfo? keyInfo = null)
         {
             ColumnName = column.Name;
             ColumnOrdinal = ordinal;
@@ -20,7 +20,9 @@ namespace OceanBaseConnector.Internal.Protocol
             IsAliased = BaseColumnName == null ? (bool?)null : column.Name != BaseColumnName;
             AllowDBNull = (column.Flags & 1) == 0;
             IsAutoIncrement = (column.Flags & 512) != 0;
-            IsHidden = false;
+            IsHidden = keyInfo?.IsHidden ?? false;
+            IsKey = keyInfo?.IsKey;
+            IsUnique = keyInfo?.IsUnique;
             IsLong = column.TypeCode == 252 || column.TypeCode == 245 || column.TypeCode == 210 || column.TypeCode == 211;
             var size = column.Length;
             if (column.Mode == OceanBaseCompatibilityMode.MySql && DataType == typeof(string))
