@@ -443,7 +443,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 number = new OceanBaseDecimal(Unsigned ? (decimal)integer : unchecked((int)integer));
             }
             else number = DecimalCodec.Parse(Utf8.GetString(value));
-            if (constrain && (Precision > 0 || Scale != 0))
+            // Oracle can report the same unknown precision/scale for binds and declared NUMBER(*,s).
+            if (constrain && (Precision > 0 || Mode != OceanBaseCompatibilityMode.Oracle && Scale != 0))
                 number = DecimalCodec.Constrain(number, Precision > 0 ? (int)Precision : Mode == OceanBaseCompatibilityMode.Oracle ? 38 : 65, Scale, Unsigned);
             DecimalCodec.Validate(number, Mode, Unsigned);
             return number;

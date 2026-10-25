@@ -1,17 +1,17 @@
 # OceanBaseConnector .NET 完整驱动能力与缺口基线
 
-**最近复核：** 2026-10-25；本模块开发基线 `master` / `b2fce9d`。
-**当前模块：** P2-04 / W7 慢命令诊断；[公共契约](obconnector-dotnet-architecture-design.md#slow-query-diagnostics)，当前验证见第 15.36 节和走查报告第 31 节。建连阶段诊断已提交 `b2fce9d`，原始记录保留。
+**最近复核：** 2026-10-25；本模块开发基线 `master` / `5ea71b2`。
+**当前模块：** P1-08 / W5 Oracle 未知精度 NUMBER 结果读取；[公共契约](obconnector-dotnet-architecture-design.md#oracle-number-results-with-unknown-precision)，当前验证见能力基线第 15.37 节及走查报告第 32 节。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
-**上一模块：** 建连阶段诊断从 `d6a9169` 开发，提交为 `b2fce9d`，见第 15.35 节；Oracle Prepare、字符集、池配置、过程及此前记录完整保留。
+**上一模块：** 慢命令诊断从 `b2fce9d` 开发并提交 `5ea71b2`，见能力基线第 15.36 节及走查报告第 31 节；此前实现、失败和跳过完整保留。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
 **文档性质：** 能力审计、公共目标契约与验收基线；已实现、部分实现、明确缺失、未验证和开发检查点分开记录。23 项及八工作包尚未整体完成。
 
-**最新实现：** 默认关闭的毫秒慢命令阈值已接入 execute/REF CURSOR reader 生命周期，提供脱敏 Warning、固定标签计数与现有 span 标记。协议 debug、其他资源等待、性能 SLA 和完整部署验收仍开放；完整驱动尚未完成。
+**最新实现：** Oracle precision 未知的 NUMBER 结果保留服务端精确值及范围校验；已知精度结果及参数约束保留。W1 实库还复现了 Oracle 新连接/池 reset 后隐式写不可见，自动提交初始化为下一项待修工作；完整驱动尚未完成。
 
-**阅读入口：** 第 4 节列全部 23 项缺口；第 5 节定义契约；第 14 节逐项列触发场景、源码/测试入口及关闭证据；第 16 节拆为八工作包。[完整走查报告](obconnector-dotnet-driver-audit.md)第 1.1/1.2 节汇总欠项，第 31 节记录当前模块；第 30/29 节保留阶段诊断与 Oracle Prepare 交付；第 28 节保留开发前文档检查点，第 8 节是发布门槛。
+**阅读入口：** 第 4 节列全部 23 项缺口；第 5 节定义契约；第 14 节逐项列触发场景、源码/测试入口及关闭证据；第 16 节拆为八工作包。[完整走查报告](obconnector-dotnet-driver-audit.md)第 1.1/1.2 节汇总欠项，第 32 节记录当前模块，第 31 节保留慢命令诊断；第 30/29 节保留阶段诊断与 Oracle Prepare 交付；第 28 节保留开发前文档检查点，第 8 节是发布门槛。
 
-**历史边界：** 第 5.1.3 节及走查报告第 25 节保留归一化修复前发现；第 5.1.1/15.19/15.21 节及报告第 17 节保留早期会话识别状态，后续识别契约见第 5.1.2/15.24 节。第 15.1—15.35 节保留此前实现、开发检查点、原始失败与跳过；它们不覆盖当前状态，源码存在、本地通过与真实验收分别判断。
+**历史边界：** 第 5.1.3 节及走查报告第 25 节保留归一化修复前发现；第 5.1.1/15.19/15.21 节及报告第 17 节保留早期会话识别状态，后续识别契约见第 5.1.2/15.24 节。第 15.1—15.36 节保留此前实现、开发检查点、原始失败与跳过；它们不覆盖当前状态，源码存在、本地通过与真实验收分别判断。
 
 此前 [P0-06 池路由](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [P1-04 TLS 回调](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)的本地交付保留。本文不删除缺口 ID、不以当前摘要抹去 Oracle 失败，也不将单一 .NET10 host 的五资产消费记为五种独立运行时。
 
@@ -134,7 +134,7 @@
 | P1-05 | P1 | ADO.NET 命令行为 | 部分实现 | MySQL StoredProcedure 已有集合顺序参数/输出/多结果本地实现（第 15.30 节），保留方向、capability 和提前关闭限制；补真实 TLS/代理/版本矩阵；`SchemaOnly` Prepare-only、`SingleRow`/`SingleResult` 已有本地实现；`KeyInfo` 已有有界键元数据/隐藏列实现；完整 Command/Batch/游标行为矩阵及真实目录/准备/锁/结果形状验收仍缺 |
 | P1-06 | P1 | Oracle 输出和游标 | 部分实现；独立 Prepare 子模块已有实现 | 保留 OUT/RETURNING/过程/函数独立准备与所有权转移；补输出 FetchSize、完整参数方向、cursor 列及其余 PrepareExecute 形状与实库矩阵 |
 | P1-07 | P1 | 复杂类型 | 部分实现 | 已有嵌套 object/collection、显式清理及可观察 DDL 自动失效本地实现；补齐 LOB/cursor/national 成员和真实 DDL/资源验收，外部或不透明 DDL 需显式清理 |
-| P1-08 | P1 | 类型和字符集 | 部分实现；DecimalScale 与普通结果字符集子模块已有实现 | 有符号 scale、严格结果解码/宽度已有回归；客户端/national 编码、其他字符集、扩展元数据/类型码及完整实库矩阵仍缺 |
+| P1-08 | P1 | 类型和字符集 | 部分实现；DecimalScale 与普通结果字符集子模块已有实现 | 有符号 scale、严格结果解码/宽度及 Oracle 未知精度 NUMBER 保真已有回归；客户端/national 编码、其他字符集、扩展元数据/类型码及完整实库矩阵仍缺 |
 | P1-09 | P1 | HA/发现 | 部分实现 | OCP/TNS、健康状态、重试退避和 proxy 拓扑 |
 | P1-10 | P1 | Schema 元数据 | 部分实现；参数推导已有本地实现 | 常用目录、DataTypes 及自动参数推导有本地实现；真实目录/权限/版本/代理验收仍缺 |
 | P1-11 | P1 | 凭据提供与轮换 | 本地实现；真实矩阵未验证 | 每次 Open 获取、全口令替换、版本排序、过期及旧会话退休已本地验证；真实凭据服务/plugin/KDC 验收仍开放 |
@@ -209,6 +209,8 @@ reset 最低验收矩阵：
 | LOB/临时对象 | 关闭外部 stream、locator 和 temporary LOB；活动句柄或可识别的临时对象语句销毁连接 | 不把活动 LOB 句柄、临时对象或未知 session 状态交给下一借用者 |
 | XA | 禁止普通归还 | branch 状态不会进入普通池 |
 | reset 失败 | 记录原因并销毁连接 | 池永远不返回污染会话 |
+
+**2026-10-25 新实库发现，待修：** P0-02/W1 验收在 Oracle 4.4.2.2 直连/TLS disabled/Windows/.NET10 复现：新连接及池 reset 后，显式事务之外的 INSERT 对另一连接不可见。显式事务 Close 回滚断言已通过，但不能据此推定后续隐式写会提交。当前 Oracle 建连和 reset 未显式初始化 autocommit，下一模块须在 identity 后及 reset 后设置并确认自动提交；失败不得复用会话。原始失败、NUMBER 前置修复及待完成池测试见第 15.37 节。此项沿用 P0-02，不新增或关闭任何缺口 ID。
 
 ### 5.1.1 当前会话状态识别的具体缺口
 
@@ -1603,6 +1605,22 @@ array-red 4 失败确认已有 BuildArray 忽略 retained ID，已传入；conte
 **最终执行证据。** complete-focused184、consumer-focused25、real-focused12 均通过。完整单测 unit-final5049（217.0 秒）、完整消费者 consumer-final2873（762.0 秒）通过，0 失败/跳过；DI14 通过，无 opt-in Integration9 通过/84NotExecuted，不能把未执行项算实库通过。Release solution build --no-restore 退出0、0警告/错误；本模块文件 dotnet format whitespace --verify-no-changes 退出0，既有 workspace-load warning 保留。实库12例为当前四组诊断的双模式直连用例，新增慢 reader 为同步/异步各一；4.4.2.2、TLSdisabled、Windows/.NET10、SELECT only，不创建对象。
 
 相对 b2fce9d，单测新增44（43慢诊断+1池配置）、消费者新增10，按名称/ID多重集核对均无移除；三份原始失败TRX所有失败项均映射同名最终通过，两个测试编译错误独立保留。11个消费者启动前冻结DLL哈希/纳秒时间戳不变并早于启动；测试期间未重建这些输出。两个 no-build/no-restore 本地包各5DLL及README/LICENSE/NOTICE匹配工作区，依赖组与上一模块一致。未新缓存restore、独立nupkg消费者、在线NuGet漏洞审计或发布；五资产仅同一.NET10 host消费，非五独立运行时。六公共文档保留三表23-ID、八工作包和第15.1—15.35/走查12—30原文，通过379本地链接/锚点、UTF8无BOM/CRLF及diff检查。日志/TRX 位于忽略目录 `TestResults/slow-query/` 与 `TestResults-slow-query-*.log`，交接须另行归档。原失败与历史记录不删除；本模块不关闭 P2-04、全部 23 项或八工作包。
+
+### 15.37 2026-10-25 Oracle 未知精度 NUMBER 结果读取
+
+**归属与根因。** 从 master/5ea71b2 开发，P1-08/W5，是 W1 实库隔离验收发现的前置缺陷。Oracle4.4.2.2 的 prepared SELECT :value FROM DUAL 返回 type246/precision0/scale255(-1)，读取整数7时被旧解码当作负scale声明而抛出需要舍入。真实 NUMBER(*,-1) 表及 CAST 也返回 precision0/scale-1，不能凭此组合发明未知scale标记。固定Java源码保留元数据但直接解析实际BigDecimal载荷；本次未运行Java。
+
+**实现与公共行为。** Oracle precision未知的结果不再施加元数据scale约束，保留服务端返回的精确系数/值scale及38位有效数字/指数范围检查；已知precision、MySQL及参数声明保持严格校验。Schema保留原始precision/scale，不将值scale写成列定义。返回文本40的表示改为系数40/值scale0，原来人为重缩放为4/-1；数值不变。公共契约见[未知精度结果](obconnector-dotnet-architecture-design.md#oracle-number-results-with-unknown-precision)。
+
+**RED与修正。** 新数值单测number-red为6失败/3通过；number-focused84通过。既有两个unknown-precision拒绝用例改为已知precision5的真实约束保护，一个wide40用例的系数/scale期望按返回载荷修正；不是将合法负scale全部忽略。相对上一单测报告按名称新增12/移除3、净增9：新增数值用例9，两个用例改名和一组期望数据变更；原始6RED均映射最终同名通过。
+
+**最终门禁。** Release solution build及消费者--no-dependencies编译均退出0、0警告/错误。首次完整单测5057通过/1失败：既有PoolRoutingTests.IdleSessionsCannotBypassDiscoveryCancellationOrBudget同步timeout例在第一次Open的1秒TCP建连超时，尚未进入目标发现取消场景；未修改其实现/测试/预算。独立路由专项5通过后，完整单测number-unit-repeat5058通过、0失败/跳过；原报告保留，不把未复现原因写成已证实环境结论。受影响消费者number-consumer-complete40通过（含新增五资产未知精度读取5例及原始读者schema/Decimal/Precision回归），不是完整消费者套件；先前25通过保留。DI14通过，无opt-in Integration9通过/86NotExecuted。Oracle直连数值专项number-real-final4通过：同步/异步prepared整数/小数绑定及真实表/CAST负scale舍入，随机OBI表按LIFO清理；4.4.2.2、TLSdisabled、Windows/.NET10。五资产在同一.NET10 host运行，不是五个独立运行时。数值验证器核对五资产DLL时间早于消费者启动，三测试host的产品副本与当前net10输出相同。未打包、独立nupkg消费、在线审计或发布。首次格式检查因既有相邻InlineData空白失败，修正后限定format退出0，workspace-load warning保留。
+
+**独立走查。** 早期reviewer核对真实元数据歧义及Java解码/初始化对照；最终独立reviewer检查结果/typed/provider/schema、参数和PL输出路径及回归，无确认新增可操作缺陷或延后Minor；新增五资产消费者作增量复核同样无发现。reviewer未运行门禁、未核验凭据或独立实库，也未宣称完整池隔离或部署验收。系数/scale表示变化已公开。
+
+**仍开放的W1实库发现。** 初始池套件real-first12通过/3失败/1跳过，其中两例Oracle NUMBER失败及一例未知createObjects标签装配错误；此前另有两处CS1503事务转换编译错误。装配修正后real-second14通过/4失败/1跳过：Oracle NUMBER2失败以及事务Close后的隐式写不可见2失败。oracle-probe4失败还确认全新非池连接的隐式写也对观察连接不可见；declared-metadata2通过确认真实负scale形状。两个临时raw metadata诊断探针各2失败，探针代码已移除，非正常门禁。Oracle建连及pool reset后的autocommit初始化尚未实现，归P0-02/W1并与W2联动；不能将本次数值4通过记为它已修复。原池验收草稿保存在忽略目录，下一模块恢复并补初始化失败/取消/帧/会话销毁回归。alternateDatabase未配置的跳过保留；OBProxy、TLS、跨平台、长期资源、完整reader/cursor/LOB/XA隔离仍开放。
+
+原始报告、计划和草稿位于忽略目录TestResults/pool-isolation/及TestResults-pool-isolation-*.log，交接需另行归档。第15.1—15.36及走查12—31原文保留；全部23项、八工作包和完整驱动目标不关闭。
 
 ## 16. 剩余交付工作包
 

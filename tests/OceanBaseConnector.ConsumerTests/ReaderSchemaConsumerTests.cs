@@ -28,12 +28,24 @@ namespace OceanBaseConnector.ConsumerTests
         [InlineData("net8.0", true)]
         [InlineData("net9.0", true)]
         [InlineData("net10.0", true)]
-        public async Task EachAssetExposesReaderSchemaThroughStandardAdoNet(string target, bool wide)
+        public Task EachAssetExposesReaderSchemaThroughStandardAdoNet(string target, bool wide)
+            => ReadSchema(target, wide, unknownPrecision: false);
+
+        [Theory]
+        [InlineData("netstandard2.0")]
+        [InlineData("netstandard2.1")]
+        [InlineData("net8.0")]
+        [InlineData("net9.0")]
+        [InlineData("net10.0")]
+        public Task EachAssetReadsUnknownPrecisionOracleNumbers(string target)
+            => ReadSchema(target, wide: false, unknownPrecision: true);
+
+        private static async Task ReadSchema(string target, bool wide, bool unknownPrecision)
         {
             const string large = "123456789012345678901234567890123456.12";
-            var precision = wide ? (byte)38 : (byte)6;
+            var precision = unknownPrecision ? (byte)0 : wide ? (byte)38 : (byte)6;
             var metadata = new byte[] { 3, 100, 101, 102, 1, 116, 0, 0, 1, 110, 1, 110,
-                12, 45, 0, (byte)(precision + 2), 0, 0, 0, 246, 0, 0, 2, precision, 0 };
+                12, 45, 0, (byte)(precision + 2), 0, 0, 0, 246, 0, 0, unknownPrecision ? (byte)255 : (byte)2, precision, 0 };
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             using var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
@@ -87,10 +99,10 @@ namespace OceanBaseConnector.ConsumerTests
                 {
                     Assert.IsAssignableFrom<IDbColumnSchemaGenerator>(reader);
                     var column = Assert.Single(reader.GetColumnSchema());
-                    Assert.Equal(wide ? decimalType : typeof(decimal), column.DataType);
+                    Assert.Equal(wide || unknownPrecision ? decimalType : typeof(decimal), column.DataType);
                     Assert.Equal("NUMBER", column.DataTypeName);
-                    Assert.Equal((int)precision, column.NumericPrecision);
-                    Assert.Equal(2, column.NumericScale);
+                    Assert.Equal(unknownPrecision ? (int?)null : precision, column.NumericPrecision);
+                    Assert.Equal(unknownPrecision ? -1 : 2, column.NumericScale);
                     Assert.Equal("t", column.BaseSchemaName);
                     var providerType = Assert.IsAssignableFrom<Type>(column["ProviderSpecificDataType"]);
                     Assert.Equal(assembly, providerType.Assembly);
@@ -113,6 +125,11 @@ namespace OceanBaseConnector.ConsumerTests
                     Assert.Equal(12.34m, reader.GetDecimal(0));
                     Assert.Equal(12.34m, reader.GetFieldValue<decimal>(0));
                     Assert.Equal(providerType, reader.GetProviderSpecificValue(0).GetType());
+                    if (unknownPrecision)
+                    {
+                        Assert.Equal(decimalType, reader.GetValue(0).GetType());
+                        Assert.Equal("12.34", reader.GetValue(0).ToString());
+                    }
                     Assert.False(await reader.NextResultAsync(budget.Token));
                     Assert.Null(reader.GetSchemaTable());
                 }

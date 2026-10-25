@@ -196,6 +196,14 @@ The encoded execution request is limited to 64 MiB; Oracle upload bytes count af
 
 Conversions requiring rounding or loss of precision throw. Timezone-free values do not acquire the client's local timezone.
 
+### Oracle NUMBER results with unknown precision
+
+Oracle may report precision zero and scale -1 for both a bound expression and a declared `NUMBER(*,-1)` column or CAST. This metadata cannot establish an exact client-side result constraint. When Oracle result precision is unknown, text and binary readers preserve the exact returned value, including its coefficient and value scale, and still enforce Oracle NUMBER significant-digit and exponent limits. Known positive precision retains exact declared precision/scale checks; MySQL result behavior and parameter declaration validation retain their existing rules.
+
+Schema reports the server metadata (`NumericPrecision=null` when unknown and the advertised `NumericScale`); it does not substitute the value's scale into the column definition. Unknown-precision results remain `OceanBaseDecimal`, and typed `decimal` conversions remain exact. The value representation can change: returned text `"40"` now has coefficient 40 and value scale 0 rather than being rescaled to coefficient 4/scale -1. `GetProviderSpecificValue`, `GetValue` and typed reads agree numerically. This does not undo server-side rounding of a declared column: a server-rounded value of 40 stays 40.
+
+Direct Oracle 4.4.2.2/Windows/.NET10/TLS-disabled evidence covers prepared integer/fractional bindings and declared/cast negative scales. It does not establish other versions, OBProxy, TLS or independent-runtime compatibility. See the [module record](obconnector-dotnet-completeness.md#1537-2026-10-25-oracle-未知精度-number-结果读取).
+
 ### Result character sets
 
 Ordinary string result columns select a strict decoder from their reported collation ID. The same decoder serves text/binary results, buffered/sequential reads, `GetString`, `GetChars` and `GetTextReader`; SQL NULL remains DBNull and binary collation 63 remains bytes. Metadata names and client SQL/string parameters retain their existing UTF-8 encoding. This adds result decoding, not a connection-string charset option or a general client-encoding negotiation API.
@@ -227,7 +235,7 @@ Real evidence is limited to direct OceanBase 4.4.2.2 MySQL mode, Windows/.NET10 
 | `parameter.DecimalScale = value` with a non-null value | Clears the old standard Scale and uses the signed declaration. Scale reads the nonnegative declaration, or zero for a negative one. Read DecimalScale for the actual signed value. |
 | `parameter.DecimalScale = null` | Removes the override. It does not restore a standard Scale overwritten by an earlier non-null assignment; with no declaration, scale is inferred from the value. |
 
-Precision/scale constraints are exact: values requiring rounding throw before execution. For example, `Value=12300m`, `Precision=3`, `DecimalScale=-2` is representable in Oracle mode; `12345m` with that declaration throws. A negative scale is not accepted in MySQL mode. Parameter snapshots and the supported client-prepare numeric fallback preserve the same declaration and constraints. Result decoding, temporal Scale and default value inference are unchanged. Routine parameter derivation below reuses this declaration. Local wire tests do not establish real-server NUMBER interoperability.
+Precision/scale constraints are exact: values requiring rounding throw before execution. For example, `Value=12300m`, `Precision=3`, `DecimalScale=-2` is representable in Oracle mode; `12345m` with that declaration throws. A negative scale is not accepted in MySQL mode. Parameter snapshots and the supported client-prepare numeric fallback preserve the same declaration and constraints. These parameter declarations do not determine result metadata; see [unknown-precision Oracle results](#oracle-number-results-with-unknown-precision). Temporal Scale and default parameter value inference are unchanged. Routine parameter derivation below reuses this declaration. Local wire tests do not establish real-server NUMBER interoperability.
 
 ### Routine parameter derivation
 

@@ -1,5 +1,11 @@
 # Compatibility and known gaps
 
+## Oracle unknown-precision NUMBER results
+
+The [result contract](obconnector-dotnet-architecture-design.md#oracle-number-results-with-unknown-precision) preserves exact Oracle values when precision is unknown; advertised schema metadata remains unchanged. Known-precision and parameter constraints remain strict. The coefficient/value-scale representation can change to reflect the returned text. Four new direct Oracle4.4.2.2/Windows/.NET10/TLS-disabled tests cover bindings and real table/CAST rounding; this is a scoped result-reading regression, not full Oracle acceptance.
+
+**Open pool/transaction finding:** real W1 tests also reproduced invisible implicit Oracle writes on fresh connections and after pool reset. Explicit Oracle autocommit initialization remains to be implemented and verified; do not infer implicit-write safety from the number tests. Original failures and next work are recorded in completeness section15.37.
+
 ## Slow client operation diagnostics
 
 [Slow Query Threshold](obconnector-dotnet-architecture-design.md#slow-query-diagnostics) is an opt-in millisecond client-lifetime threshold, default zero. It covers named execute/cursor.fetch exchanges through reader completion, includes consumption time, preserves errors/unknown outcomes and emits no SQL/values. It provides independent Warning/counter/existing-span channels. Server-only profiling, protocol diagnostics, load limits and the complete deployment/runtime matrix are not implied.

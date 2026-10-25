@@ -3,6 +3,12 @@
 This page retains historical results and open work from the former progress ledger, alongside dated verification of later changes. Local regression results and real database acceptance are recorded separately.
 
 
+## 2026-10-25 P1-08 unknown-precision Oracle NUMBER results
+
+Developed from master/5ea71b2. [Contract](obconnector-dotnet-architecture-design.md#oracle-number-results-with-unknown-precision), [retained failures and next W1 work](obconnector-dotnet-completeness.md#1537-2026-10-25-oracle-未知精度-number-结果读取), [audit](obconnector-dotnet-driver-audit.md#32-oracle-未知精度-number-结果与-w1-新发现2026-10-25). Unknown-precision Oracle results preserve exact server values and NUMBER range checks; known precision, MySQL and parameters retain strict constraints. Schema stays descriptive; coefficient/value-scale representation can change (40 becomes40/0 instead4/-1).
+
+New numeric RED6fail/3pass, focused84pass; first full unit5057pass/1initialTCPtimeout preserved. Routing recheck5 and full repeat5058 pass without budget or product transport changes. Affected consumers40pass (new five-asset result cases5; not full suite), DI14pass, no-opt-in Integration9pass/86NotExecuted; real Oracle4pass direct4.4.2.2/TLSdisabled/Windows/.NET10 with owned-table cleanup. Build0warnings/errors; scoped format passed after fixing existing InlineData whitespace, workspace warning retained. Independent review and consumer follow-up found no actionable defect. No packages, publication, OBProxy, TLS or independent-runtime acceptance added. Oracle fresh/reset implicit-write failure remains open P0-02/W1, with original pool reports and draft saved; next work is autocommit initialization and full borrower isolation. All23IDs/eight packages and the full driver goal remain open.
+
 ## 2026-10-25 P2-04 slow command diagnostics
 
 Developed from master/b2fce9d. [Contract](obconnector-dotnet-architecture-design.md#slow-query-diagnostics), [original failures and evidence](obconnector-dotnet-completeness.md#1536-2026-10-25-慢命令诊断), [audit](obconnector-dotnet-driver-audit.md#31-慢命令诊断2026-10-25). Slow Query Threshold (milliseconds, default0) covers completed execute/cursor.fetch lifetimes including reader consumption; independent Warning1102, four-tag counter and existing-span mark contain no SQL/values/credentials/error text. Exchange timing ends before cleanup/callback work; legacy operation telemetry remains unchanged.

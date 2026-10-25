@@ -64,7 +64,7 @@ Without a configuration file, `OB_REQUIRE_INTEGRATION=1` plus the four documente
 | Open/close/reopen, identity vs `ob_version()`, factory/data source, ChangeDatabase, password hiding, address resolver, unreachable endpoint | `Connections/ConnectionTests` |
 | ExpectedMode mismatch, TLS name, pooling, EnlistTransaction, unsupported auth plugin, autocommit-disabled rejection | `Connections/IdentityGateTests` |
 | Text vs prepared CRUD, MySQL client-side interpolation, command type/behavior gates, idle Cancel | `Commands` |
-| Full provider type round-trips (text + prepared) per mode, TINYINT/affected-rows option matrix | `Types` |
+| Full provider type round-trips (text + prepared) per mode, TINYINT/affected-rows option matrix; Oracle unknown-precision prepared bindings and real negative-scale table/CAST results | `Types` |
 | SequentialAccess streaming, cursor fetch paging (incl. Oracle offset), CloseConnection, column schema | `Readers` |
 | Commit/rollback/dispose semantics, savepoints + validation, isolation levels per mode, concurrent-tx gate | `Transactions` |
 | Multi-result batches, parameterized batch commands + Prepare, per-command RecordsAffected | `Batches` |
