@@ -57,6 +57,12 @@ receiving that event, following DiagnosticListener behavior. If listener creatio
 an AllListeners observer throws, protocol operations continue with this assembly's protocol diagnostics
 disabled. No recovery promise is made for arbitrary observer side effects or blocked callbacks.
 
+Reentry protection uses ThreadLocal<bool>, whose framework type argument avoids collectible provider
+ThreadStatic slot reuse. An independent-process consumer regression verifies old-context collection and
+that an old diagnostic thread exiting cannot corrupt a newly loaded context's static objects. First use
+on a thread can allocate a ThreadLocal slot; disabled frames still allocate no per-event dictionary.
+See the [unloading evidence and runtime limits](obconnector-dotnet-completeness.md#1559-2026-10-26-可卸载诊断线程状态损坏与默认回归恢复).
+
 Local stream/loopback tests and five assets on one .NET10 host verify this diagnostic contract; they do
 not establish real OceanBase/OBProxy/TLS interoperability, independent runtime compatibility, or a
 production throughput/latency budget. Other resource-wait diagnostics and deployment performance

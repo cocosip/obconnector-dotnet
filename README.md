@@ -22,6 +22,10 @@ A managed ADO.NET provider for OceanBase MySQL and Oracle compatibility modes.
 
 The driver is experimental. Recorded database runs cover direct OceanBase 4.4.2.2 with TLS disabled; the Oracle suite still has a failed case and cleanup failure. OBProxy and other deployment profiles remain unverified. See [failed tests, unsupported behavior and compatibility gaps](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/compatibility.md).
 
+The affected Windows/.NET10.0.12 consumer matrix now passes642 cases with default runtime settings after
+[a diagnostic unloading fix](docs/compatibility.md#2026-10-26-collectible-diagnostic-unloading-repair).
+Historical crashes and remaining independent-runtime/release acceptance are retained in that record.
+
 The [complete driver audit](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-driver-audit.md) tracks 23 gaps across eight work packages, with source evidence, priorities and acceptance criteria. Basic connection pooling is implemented and opt-in; complete session isolation and real deployment acceptance remain open. Commands can [derive parameters from a unique visible routine signature](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-architecture-design.md#routine-parameter-derivation) without executing the target; actual directory/permissions/version/OBProxy acceptance remains open.
 
 Connection-level server errors now retire the physical session. Explicit Close/Open obtains a fresh lease; sent operations may have unknown outcomes and are never replayed automatically. See the [failure contract](docs/obconnector-dotnet-architecture-design.md#connection-level-server-errors) and [local verification limits](docs/obconnector-dotnet-completeness.md#1549-2026-10-25-连接级服务器错误与显式连接重建).

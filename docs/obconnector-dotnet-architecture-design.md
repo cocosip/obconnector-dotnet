@@ -4,6 +4,15 @@ For a basic query, see the [README](../README.md). For tested server profiles, s
 
 The [Connector/J architecture outline](obconnector-j-architecture-outline.md) is retained as the protocol and behavior reference. Its Java feature inventory does not establish .NET support; unverified and unsupported combinations are listed in Compatibility.
 
+## Protocol diagnostic unloading
+
+Protocol event recursion is suppressed per physical thread with ThreadLocal<bool>; it does not flow into
+another execution context. The guard does not declare a ThreadStatic field in a collectible provider type.
+An independent-process consumer checks old-context collection and the integrity of new-context static
+objects after the old thread exits. This addresses the reproduced diagnostic state corruption while
+preserving synchronous observer exception isolation, Activity restoration and metadata-only events.
+See the [protocol contract](protocol-diagnostics.md) and [local verification limits](obconnector-dotnet-completeness.md#1559-2026-10-26-可卸载诊断线程状态损坏与默认回归恢复).
+
 ## Connection-level server errors
 
 A trusted server ERR with ordinal SQLSTATE prefix `08`, or exactly error `1927` and SQLSTATE `70100`, retires the physical session. The connection reports `Broken`; its local transaction becomes unusable. Server code and SQLSTATE are retained with a generic message that omits server details. Ordinary errors, including `1317/70100`, `1927/HY000` and syntax errors, retain their existing session semantics.
@@ -146,6 +155,21 @@ PAM PasswordN factors are ordered numerically; a present empty factor differs fr
 Pools also retain resolver, credential-provider, validation-delegate and certificate reference identity, plus the certificate fingerprint. Equal delegates or objects are not interchangeable policy instances. Data sources keep separate private pools. ClearAll and empty-pool removal reuse the same canonical identity without merging private sources or reinterpreting credentials.
 
 Closed state notification starts before transaction/return cleanup. Pooled opens within that callback can complete the captured cleanup before borrowing, as described below. Complete reset, concurrency and long-running resource acceptance remain open; see [the remaining pool work](obconnector-dotnet-completeness.md#51-连接池和会话隔离).
+
+<a id="pool-wait-handoff"></a>
+### Pool wait notification handoff
+
+A notification tells a waiting Open to retry the pool decision; it does not reserve a session
+or guarantee FIFO service. If a notified renter exits before claiming the idle session or free
+creation slot, the rent exit checks availability under the pool gate and notifies another waiter.
+The same path serves synchronous and asynchronous opens, ordinary pools and private data sources.
+All session selection and creation reservations still obey Max Pool Size under that gate.
+
+Canceling an Open, including Close during a synchronous Open, must not strand another waiter
+while an eligible session or creation capacity is available. Existing pool/connection deadlines,
+probe/reset validation, credential/route identity, Clear retirement and Dispose rules still apply.
+Deterministic local regressions exercise cancellation immediately after a notification and a
+failed reset; they do not establish scheduling latency or long-running load guarantees.
 
 <a id="pooled-close-callbacks"></a>
 ### Closed callbacks and pooled opens

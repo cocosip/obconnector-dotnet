@@ -10,7 +10,8 @@ namespace OceanBaseConnector.Internal.Protocol
     internal sealed class ProtocolDiagnostics
     {
         private static long _nextId;
-        [ThreadStatic] private static bool _emitting;
+        // Avoid collectible ThreadStatic slots being reused while an old thread is still alive.
+        private static readonly ThreadLocal<bool> Emitting = new ThreadLocal<bool>();
         private static readonly DiagnosticListener? Source = Create();
         private readonly long _id = Interlocked.Increment(ref _nextId);
 
@@ -43,9 +44,9 @@ namespace OceanBaseConnector.Internal.Protocol
         private void Emit(string kind, string layer, string direction, long length = 0, int sequence = 0, int expected = 0,
             int originalLength = 0, long requestId = -1, uint flags = 0, string? failure = null, string? stage = null)
         {
-            if (_emitting || Source == null) return;
+            if (Emitting.Value || Source == null) return;
             var previous = Activity.Current;
-            _emitting = true;
+            Emitting.Value = true;
             try
             {
                 var name = kind == "Frame" ? "OceanBaseConnector.Protocol.Frame"
@@ -67,7 +68,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 Source.Write(name, new ReadOnlyDictionary<string, object?>(values));
             }
             catch { } // Diagnostic observers are application code, never part of the wire protocol.
-            finally { Restore(previous); _emitting = false; }
+            finally { Restore(previous); Emitting.Value = false; }
         }
 
         private static void Restore(Activity? previous)

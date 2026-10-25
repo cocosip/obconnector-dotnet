@@ -6,6 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/PoolWaitHandoffCapture.cs" Link="TestInfrastructure/PoolWaitHandoffCapture.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/PoolWaitHandoffFixture.cs" Link="TestInfrastructure/PoolWaitHandoffFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/DiscoveryBlacklistFixture.cs" Link="TestInfrastructure/DiscoveryBlacklistFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/DiscoveryPolicyFixture.cs" Link="TestInfrastructure/DiscoveryPolicyFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/OcpHttpFixture.cs" Link="TestInfrastructure/OcpHttpFixture.cs" />
@@ -38,6 +40,7 @@
     -->
     <ProjectReference Include="..\..\src\OceanBaseConnector\OceanBaseConnector.csproj" />
     <ProjectReference Include="..\OceanBaseConnector.ConsumerTests.NetStandard\OceanBaseConnector.ConsumerTests.NetStandard.csproj" />
+    <ProjectReference Include="..\OceanBaseConnector.CollectibleProbe\OceanBaseConnector.CollectibleProbe.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

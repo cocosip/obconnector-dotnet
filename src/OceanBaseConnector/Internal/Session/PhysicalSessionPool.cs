@@ -76,7 +76,15 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
-        private void EndRent() { lock (_gate) _renters--; }
+        private void EndRent()
+        {
+            lock (_gate)
+            {
+                _renters--;
+                // A notified renter may exit before claiming the available session or slot.
+                if (_idle.Count != 0 || _sessions.Count + _opening < _maxPoolSize) ReleaseWaiterSignal();
+            }
+        }
 
         private PhysicalSession RentCore(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
             EndpointSelector selector, out bool reused, CancellationToken cancellationToken, Action<OceanBaseCredential?>? credentialResolved)

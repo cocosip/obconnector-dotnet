@@ -9,6 +9,7 @@
     <Project Path="src/OceanBaseConnector/OceanBaseConnector.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/OceanBaseConnector.CollectibleProbe/OceanBaseConnector.CollectibleProbe.csproj" />
     <Project Path="tests/OceanBaseConnector.Acceptance/OceanBaseConnector.Acceptance.csproj" />
     <Project Path="tests/OceanBaseConnector.DependencyInjection.Tests/OceanBaseConnector.DependencyInjection.Tests.csproj" />
     <Project Path="tests/OceanBaseConnector.ConsumerTests.NetStandard/OceanBaseConnector.ConsumerTests.NetStandard.csproj" />

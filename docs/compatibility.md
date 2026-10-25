@@ -1,5 +1,29 @@
 # Compatibility and known gaps
 
+## 2026-10-26 collectible diagnostic unloading repair
+
+Protocol diagnostics used a collectible ThreadStatic guard that reproducibly corrupted another ALC's
+static objects after thread exit. Five real-asset control cases passed and five exit cases failed;
+ThreadLocal<bool> preserves synchronous thread reentry protection and makes the same10 pass.
+The independent process probe checks old-context collection and static integrity without risking the test host.
+
+The original632 affected consumers plus new10 pass642 under default Windows/.NET10.0.12 settings,
+without disabling tiering/PGO/OSR. Full units:6147 passed,0failed/skipped,8m11. This advances the earlier failure
+checkpoint below; historical native faults are not individually attributed. Five assets on one host do
+not prove independent runtimes/platforms, real servers/OBProxy/TLS, or release acceptance. See the
+[full record](obconnector-dotnet-completeness.md#1559-2026-10-26-可卸载诊断线程状态损坏与默认回归恢复).
+
+## 2026-10-26 combined consumer host crash remains open
+
+Historical checkpoint, superseded by the diagnostic unloading repair above.
+
+On Windows/.NET10.0.12, combined collectible-assembly consumer tests crashed with internal
+CLR errors/access violations. Default full units6147 and isolated new pool-handoff consumers64 pass;
+the full632 consumer selection passes only when tiered compilation is disabled in the diagnostic
+test child process. This is a conditional result, not a product workaround or default-runtime acceptance.
+The root cause is unknown; P2-05/W8 and release gates remain open. See the
+[original failures, dump and controlled comparisons](obconnector-dotnet-completeness.md#1558-2026-10-26-连接池通知后的取消交接).
+
 ## 2026-10-26 P2-04 protocol frame diagnostics
 
 Developed from master/e0d1d30. DiagnosticListener OceanBaseConnector.Protocol reports metadata-only

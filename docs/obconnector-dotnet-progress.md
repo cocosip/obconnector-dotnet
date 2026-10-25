@@ -1,5 +1,53 @@
 # Verification status and remaining work
 
+## 2026-10-26 collectible protocol diagnostic state repair
+
+The pool-handoff default gate led to a separate confirmed diagnostic unloading defect. Serial test
+collections still aborted after160 cases. A standalone source repro then demonstrated another ALC's
+static objects being corrupted after an old diagnostic thread exited. Real five-asset child-process
+regressions yielded5controlPASS/5thread-exitRED; replacing collectible ThreadStatic with ThreadLocal<bool>
+made the same10GREEN while retaining physical-thread synchronous reentry suppression and old-ALC collection.
+The isolated probe is built with the solution and invoked by normal consumer tests, without new packages.
+
+The original632 selection plus new10 passes642 in default.NET10.0.12 settings,0fail/skip,2m37.
+No tiering/PGO/OSR disabling or test exclusion. Full units:6147 passed,0failed/skipped,8m11.
+Final Release solution0warnings/errors3.33s;8C# scoped format verification exits0 with existing workspace
+warning. Ordinary-user restore corrected the diagnostic mixed-cache analyzer failure; earlier NuGet
+audit/network and build failures are retained. Final DLL/source-project hashes are frozen.
+Final read-only review independently checked reports, retained names and frozen hashes; no code, fixture,
+contract or evidence blocker remains. The reviewer did not execute builds or tests.
+See [complete evidence](obconnector-dotnet-completeness.md#1559-2026-10-26-可卸载诊断线程状态损坏与默认回归恢复).
+
+The following pool-handoff section preserves the pre-diagnostic-repair failure checkpoint. The confirmed
+TLS-slot corruption and restored default matrix do not identify every historical native fault or prove
+independent runtime/server/platform acceptance. All23IDs/eight packages remain open; no push/publication.
+
+## 2026-10-26 P0-01 pool notification cancellation handoff
+
+Developed from master/ffceec8. A notified renter canceled before the next pool decision used to
+strand another waiter despite an idle session or free creation slot. EndRent now checks availability
+under the existing gate and notifies the next waiter. Selection/reservation still enforces capacity;
+no FIFO promise or new option. Ordinary/private pools and mixed sync/async callers share the fix.
+See the [contract](obconnector-dotnet-architecture-design.md#pool-wait-handoff) and
+[complete evidence and open runtime issue](obconnector-dotnet-completeness.md#1558-2026-10-26-连接池通知后的取消交接).
+
+Default full units:6147 passed (24 new); default handoff consumers:64 passed; related units:982 passed.
+Release solution:0 warnings/errors (11.67s); scoped5C# format verify exits0 with existing workspace warning.
+Independent review found a fixture cleanup short circuit, repaired using concurrent drains and finally
+cleanup. The prior4+8RED and same12GREEN remain; original-pool full-selection comparison yields
+568pass/64expected handoff failures.76DLL/522source-project hashes match final tested artifacts after
+restoring the temporary original-pool comparison. No product runtime setting or dependency added.
+
+The combined632 default consumers remain failing: three CLR aborts after263/256/225 passes; crash
+collection aborts after261 with an access violation/dump; disabling only TieredPGO still aborts after374.
+No new handoff cases ran in those five aborted runs. Isolated route10 and combined reader/route/config110
+pass. The same632 pass only in the diagnostic child process with DOTNET_TieredCompilation=0; this does
+not repair or waive the default-runtime gate. Dump evidence includes ExecutionEngineException and a
+JIT-related thread, without an exception stream proving that thread caused the fault. Root remains
+unknown under P2-05/W8. Local preservation of this independently tested pool fix is not release approval.
+All five assets run on one.NET10.0.12host; no new database/OBProxy/enterpriseTLS/platform/load acceptance.
+All23IDs/eight packages remain open. Logs/TRX/dump in ignored TestResults/pool-wakeup-handoff need archiving.
+
 ## 2026-10-26 P2-04 protocol frame diagnostics
 
 Developed from master/e0d1d30. DiagnosticListener OceanBaseConnector.Protocol reports metadata-only
