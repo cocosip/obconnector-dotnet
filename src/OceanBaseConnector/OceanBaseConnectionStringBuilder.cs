@@ -41,6 +41,7 @@ namespace OceanBaseConnector
         public const string PoolWaitTimeoutKey = "Pool Wait Timeout";
         public const string ConnectionIdleLifetimeKey = "Connection Idle Lifetime";
         public const string ConnectionLifetimeKey = "Connection Lifetime";
+        public const string StatementCacheSizeKey = "Statement Cache Size";
         public const string ServerRsaPublicKeyKey = "Server RSA Public Key";
         public const string AllowPublicKeyRetrievalKey = "Allow Public Key Retrieval";
         public const string UseOb20Key = "Use OB20";
@@ -218,6 +219,13 @@ namespace OceanBaseConnector
         {
             get => GetInt32(ConnectionLifetimeKey) ?? 0;
             set => this[ConnectionLifetimeKey] = value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>Maximum idle prepared statements retained per physical session; 0 disables caching.</summary>
+        public int StatementCacheSize
+        {
+            get => GetInt32(StatementCacheSizeKey) ?? 0;
+            set => this[StatementCacheSizeKey] = value.ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>Trusted RSA SubjectPublicKeyInfo PEM for SHA-2 authentication without verified TLS.</summary>
@@ -422,7 +430,8 @@ namespace OceanBaseConnector
                 ServicePrincipalName,
                 TreatTinyAsBoolean,
                 UseAffectedRows,
-                UseCompression);
+                UseCompression,
+                statementCacheSize: StatementCacheSize);
         }
 
         // Serialization order for fixed keys; additional PAM passwords are secrets.
@@ -446,6 +455,7 @@ namespace OceanBaseConnector
             PoolWaitTimeoutKey,
             ConnectionIdleLifetimeKey,
             ConnectionLifetimeKey,
+            StatementCacheSizeKey,
             ServerRsaPublicKeyKey,
             AllowPublicKeyRetrievalKey,
             UseOb20Key,
@@ -534,6 +544,11 @@ namespace OceanBaseConnector
                         throw CreateKeywordError($"'{canonicalKey}' must be between 1 and 65535.", canonicalKey, includeValue: true, value: value);
                     }
 
+                    return value;
+
+                case StatementCacheSizeKey:
+                    if (ParseNonNegativeInt32(canonicalKey, value) > 1024)
+                        throw CreateKeywordError($"'{canonicalKey}' cannot exceed 1024.", canonicalKey, includeValue: true, value: value);
                     return value;
 
                 case ConnectionTimeoutKey:
@@ -739,6 +754,9 @@ namespace OceanBaseConnector
                     return true;
                 case "CONNECTION LIFETIME":
                     canonical = ConnectionLifetimeKey;
+                    return true;
+                case "STATEMENT CACHE SIZE":
+                    canonical = StatementCacheSizeKey;
                     return true;
                 case "SERVER RSA PUBLIC KEY":
                     canonical = ServerRsaPublicKeyKey;

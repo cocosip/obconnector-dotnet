@@ -85,7 +85,7 @@ namespace OceanBaseConnector
             {
                 if ((behavior & CommandBehavior.SchemaOnly) != 0)
                 {
-                    var metadata = EnsurePrepared(operation)!;
+                    var metadata = EnsurePrepared(operation, useCache: false)!;
                     execution.ResolveComplexColumns(metadata);
                     return new OceanBaseDataReader(execution, QueryResult.FromPrepared(execution, metadata), operation.Connection, operation.Session, behavior);
                 }
@@ -160,7 +160,7 @@ namespace OceanBaseConnector
             {
                 if ((behavior & CommandBehavior.SchemaOnly) != 0)
                 {
-                    var metadata = (await EnsurePreparedAsync(operation, cancellationToken).ConfigureAwait(false))!;
+                    var metadata = (await EnsurePreparedAsync(operation, cancellationToken, useCache: false).ConfigureAwait(false))!;
                     await execution.ResolveComplexColumnsAsync(metadata, cancellationToken).ConfigureAwait(false);
                     return new OceanBaseDataReader(execution, QueryResult.FromPrepared(execution, metadata), operation.Connection, operation.Session, behavior);
                 }
@@ -295,8 +295,8 @@ namespace OceanBaseConnector
                 var parameters = binary && !prepareOnly && !schemaOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true) : Array.Empty<byte>();
                 if (arrayCount != 0) _ = OraclePrepareExecutePacket.BuildArray(0, bindings.CommandText, bindings.Parameters);
                 if (_prepared != null && (oracle != null || !binary || !ReferenceEquals(_prepared.Session, session) ||
-                    _prepared.Generation != session.Generation || _prepared.CommandText != bindings.CommandText))
-                { _prepared.Release(); _prepared = null; }
+                    _prepared.Generation != session.Generation || _prepared.CacheEpoch != session.StatementCacheEpoch || _prepared.CommandText != bindings.CommandText))
+                { _prepared.Session.ReturnPreparedStatement(_prepared); _prepared = null; }
                 if (_prepared != null && _prepared.ParameterCount != bindings.Parameters.Length) throw ParameterCountMismatch();
                 CommandExchange? execution = null;
                 execution = connection.StartCommand(session, transaction, _timeout, token, () =>
@@ -307,6 +307,7 @@ namespace OceanBaseConnector
                         if (ReferenceEquals(_execution, execution))
                         {
                             HasSentSql = execution!.HasSentSql;
+                            if (!execution.Succeeded && _prepared != null) _prepared.Cacheable = false;
                             if (oracle?.ArrayBinding != null) ArrayBindingResult = oracle.ArrayBinding.Published ? oracle.ArrayBinding.Completed
                                 : execution.HasSentSql ? oracle.ArrayBinding.Snapshot() : null;
                             _execution = null;
@@ -319,6 +320,8 @@ namespace OceanBaseConnector
 #endif
                 execution.DiscardSessionAfterExecution = !prepareOnly && !schemaOnly &&
                     (CommandType == CommandType.StoredProcedure || SessionStateSql.RequiresDiscard(text, session.Info!.Mode));
+                execution.InvalidatePreparedStatements = session.StatementCachingEnabled && !prepareOnly && !schemaOnly &&
+                    (CommandType != CommandType.Text || !SqlStatementBoundary.CanCacheStatement(text, session.Info!.Mode));
                 _execution = execution;
                 if (arrayCount != 0) ArrayBindingResult = null;
                 if (oracle != null)
@@ -350,21 +353,31 @@ namespace OceanBaseConnector
             return false;
         }
 
-        private PreparedStatement? EnsurePrepared((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset) operation, bool allowFallback = false)
+        private PreparedStatement? EnsurePrepared((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset) operation, bool allowFallback = false, bool useCache = true)
         {
-            InvalidatePreparedDatabase(operation.Session);
+            InvalidatePreparedContext(operation.Session);
             if (_prepared != null) return _prepared;
+            useCache = useCache && operation.Session.StatementCachingEnabled && operation.Oracle == null &&
+                SqlStatementBoundary.CanCacheStatement(operation.Bindings.CommandText, operation.Exchange.Mode);
+            var cached = useCache ? operation.Session.TakePreparedStatement(operation.Bindings.CommandText) : null;
+            if (cached != null) return PublishPrepared(cached, operation.Bindings.Parameters.Length);
             operation.Exchange.Send(SqlPacket(operation.Bindings.CommandText, 22), executesSql: false);
             var statement = PreparedStatement.Read(operation.Exchange, operation.Session, operation.Bindings.CommandText, allowFallback);
+            if (statement != null) statement.Cacheable = useCache;
             return statement == null ? null : PublishPrepared(statement, operation.Bindings.Parameters.Length, operation.Oracle?.Cursors);
         }
 
-        private async Task<PreparedStatement?> EnsurePreparedAsync((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset) operation, CancellationToken token, bool allowFallback = false)
+        private async Task<PreparedStatement?> EnsurePreparedAsync((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset) operation, CancellationToken token, bool allowFallback = false, bool useCache = true)
         {
-            InvalidatePreparedDatabase(operation.Session);
+            InvalidatePreparedContext(operation.Session);
             if (_prepared != null) return _prepared;
+            useCache = useCache && operation.Session.StatementCachingEnabled && operation.Oracle == null &&
+                SqlStatementBoundary.CanCacheStatement(operation.Bindings.CommandText, operation.Exchange.Mode);
+            var cached = useCache ? operation.Session.TakePreparedStatement(operation.Bindings.CommandText) : null;
+            if (cached != null) return PublishPrepared(cached, operation.Bindings.Parameters.Length);
             await operation.Exchange.SendAsync(SqlPacket(operation.Bindings.CommandText, 22), executesSql: false).ConfigureAwait(false);
             var statement = await PreparedStatement.ReadAsync(operation.Exchange, operation.Session, operation.Bindings.CommandText, token, allowFallback).ConfigureAwait(false);
+            if (statement != null) statement.Cacheable = useCache;
             return statement == null ? null : PublishPrepared(statement, operation.Bindings.Parameters.Length, operation.Oracle?.Cursors);
         }
 
@@ -384,9 +397,10 @@ namespace OceanBaseConnector
             }
         }
 
-        private void InvalidatePreparedDatabase(PhysicalSession session)
+        private void InvalidatePreparedContext(PhysicalSession session)
         {
-            if (_prepared == null || _prepared.Database == session.Database) return;
+            if (_prepared == null || _prepared.Database == session.Database &&
+                _prepared.Generation == session.Generation && _prepared.CacheEpoch == session.StatementCacheEpoch) return;
             _prepared.Release(); _prepared = null;
         }
 
@@ -451,7 +465,11 @@ namespace OceanBaseConnector
                 _derivation?.Cancel();
                 var statement = _prepared;
                 _prepared = null;
-                statement?.Release();
+                if (statement != null)
+                {
+                    if (_execution != null) statement.Cacheable = false;
+                    statement.Session.ReturnPreparedStatement(statement);
+                }
                 return statement;
             }
         }

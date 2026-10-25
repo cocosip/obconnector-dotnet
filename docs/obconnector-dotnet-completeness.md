@@ -2,21 +2,21 @@
 
 **审计日期：** 2026-10-24
 **初次源码基线：** .NET `06d58e1`；Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`（Connector/J 2.4.14）
-**本模块开发起点：** .NET `4dd20a7`（DataAdapter/CommandBuilder 已提交）；Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。本次开发 P0-02 会话状态识别与目标发送边界，保留此前完整文档及模块交付记录。
-**最新状态：** P0-02 会话识别子模块已实现并完成专项回归和独立源码走查，完整验证通过，见第 15.24 节；DataAdapter 原交付见第 15.23 节。整个会话 reset、真实隔离/资源/并发及代理/运行时矩阵继续开放。
+**本模块开发起点：** .NET `6d399fd`（会话识别已提交）；Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。本次开发 P2-02 有限跨命令 statement cache；此前交付和文档快照保留。
+**最新状态：** P2-02 缓存已有本地实现；提交前另复现并修复了取得租约前后的上下文检查竞争，同步/异步回归、独立复核及最终完整验证均通过，见第 15.25 节。会话识别见第 15.24 节；真实 DDL/资源/负载、代理/运行时及完整会话隔离继续开放。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`
 **参考实现：** 本仓库源码、测试和兼容性记录；本地 `D:\java-code\obconnector-j` 的 Connector/J 实现
 **文档性质：** 能力审计、目标契约和验收基线；不代表尚未完成的功能已经实现
 
-**最近复核：** 2026-10-25；当前模块见第 15.24 节及走查报告第 18 节。第 15.1—15.23 节保留此前实现、文档快照、原始失败与跳过，不以早期未实现状态覆盖后续本地交付；真实验收仍未闭合。
+**最近复核：** 2026-10-25；当前模块见第 15.25 节及走查报告第 19 节。第 15.1—15.24 节保留此前实现、文档快照、原始失败与跳过，不以早期未实现状态覆盖后续本地交付；真实验收仍未闭合。
 
 初次审计的 .NET 提交为 `06d58e1`。其后 P0-06 的本地修复及 P1-04 的自定义服务器证书验证分别见 [池路由记录](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [TLS 验证记录](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)。23 个缺口 ID 保持不变；本地实现不关闭尚未取得的真实服务器验收。
 
-面向项目评审的汇总和交付门槛见 [驱动完整性走查报告](obconnector-dotnet-driver-audit.md)，当前模块见该报告[第 18 节](obconnector-dotnet-driver-audit.md#18-会话状态识别与发送边界模块2026-10-25)；本文件保留逐模块验收和源码索引。
+面向项目评审的汇总和交付门槛见 [驱动完整性走查报告](obconnector-dotnet-driver-audit.md)，当前模块见该报告[第 19 节](obconnector-dotnet-driver-audit.md#19-跨命令-statement-cache-模块2026-10-25)；本文件保留逐模块验收和源码索引。
 
-**阅读入口：** 第 4 节列出全部 23 项缺口，第 5 节定义功能契约，第 14 节逐项关联触发场景、源码/测试入口及关闭标准，第 16 节给出八个工作包。第 15 节保留历史开发/验证；当前识别契约见第 5.1.2 节，最新模块证据见第 15.24 节。源码存在、本地通过与真实模块验收是不同状态。
+**阅读入口：** 第 4 节列出全部 23 项缺口，第 5 节定义功能契约，第 14 节逐项关联触发场景、源码/测试入口及关闭标准，第 16 节给出八个工作包。第 15 节保留历史开发/验证；当前识别契约见第 5.1.2 节，最新模块证据见第 15.25 节。源码存在、本地通过与真实模块验收是不同状态。
 
-**本次完整文档入口（2026-10-25）：** [评审摘要与剩余交付清单](obconnector-dotnet-driver-audit.md#11-本次评审摘要与剩余交付清单)汇总八工作包的当前欠项、实际影响、验收产物及待确定支持范围。本次复核按提交前工作区记录：当时已提交 HEAD 为 `4dd20a7`，第 15.24 节模块已经暂存、尚未提交，不应归入该 HEAD。此次仅复核源码和已有报告、完善文档，没有重跑构建/测试或继续新模块开发。
+**完整文档入口（2026-10-25）：** [评审摘要与剩余交付清单](obconnector-dotnet-driver-audit.md#11-本次评审摘要与剩余交付清单)汇总八工作包的当前欠项、实际影响、验收产物及待确定支持范围。本次交付以 `master` / `6d399fd` 为开发基线，缓存模块及最终回归单列于第 15.25 节。早期 `4dd20a7` 文档快照保留在第 15.19/15.21 节及走查报告第 17 节，不能作为当前状态。
 
 **前次完整文档快照：** [走查报告第 17 节](obconnector-dotnet-driver-audit.md#17-完整文档交付与当前待办2026-10-25)和第 5.1.1 节保留本次修复前的具体发现；最新实现见第 5.1.2/15.24 节。本次不关闭任何完整缺口。
 
@@ -97,7 +97,7 @@
 | Oracle 输出 | 部分实现 | 过程、OUT、RETURNING、REF CURSOR 和数组绑定有路径；若干参数方向和结果形状不支持 |
 | 复杂类型 | 部分实现 | 标量及嵌套 object/collection 有路径；LOB、cursor、national 成员、循环结构和文本结果不支持 |
 | Schema 元数据 | 部分实现 | Oracle 20/MySQL 18 个集合、静态 DataTypes 及自动参数推导已有本地实现；后者只读目录，不扩大过程执行范围。真实目录/权限矩阵仍缺，见 [Schema 契约](schema.md)及第 15.18 节 |
-| 批处理 | 部分实现 | `DbBatch` 顺序执行；没有 rewrite、multi-send、bulk 或跨命令 statement cache |
+| 批处理和准备缓存 | 部分实现 | `DbBatch` 顺序执行；已有 opt-in 有限物理会话缓存，未交付 rewrite、multi-send、bulk；真实缓存/负载验收仍缺 |
 | 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter` 和池生命周期指标已有；协议 debug、slow-query profile、建连/探活细分指标未完整提供 |
 | 真实兼容性 | 部分验证 | 当前记录主要是 Windows/.NET 10、直连 OceanBase 4.4.2.2、TLS disabled；Oracle 失败及未覆盖矩阵仍须闭合 |
 
@@ -143,7 +143,7 @@
 | P1-10 | P1 | Schema 元数据 | 部分实现；参数推导已有本地实现 | 常用目录、DataTypes 及自动参数推导有本地实现；真实目录/权限/版本/代理验收仍缺 |
 | P1-11 | P1 | 凭据提供与轮换 | 本地实现；真实矩阵未验证 | 每次 Open 获取、全口令替换、版本排序、过期及旧会话退休已本地验证；真实凭据服务/plugin/KDC 验收仍开放 |
 | P2-01 | P2 | DataAdapter | 部分实现；本地模块 | 同步填充、映射/事件、显式或自动参数化 CRUD；保留可见行键、生成值回填、复杂形状限制，补真实 CRUD/并发/运行时验收 |
-| P2-02 | P2 | Statement cache | 明确缺失 | 跨命令 prepared statement cache |
+| P2-02 | P2 | Statement cache | 部分实现 | 有限 idle LRU、上下文/reset 失效和关闭已有本地实现；真实 DDL/reprepare、资源/负载/代理与运行时验收仍缺 |
 | P2-03 | P2 | 批处理优化 | 部分实现 | rewrite、multi-send、bulk 和统一 partial-failure 结果 |
 | P2-04 | P2 | 诊断 | 部分实现 | 协议 debug、slow-query profile、建连/探活和资源等待 |
 | P2-05 | P2 | TFM/生态 | 未验证 | 每个 TFM 的正式支持矩阵和 package consumer 验收 |
@@ -155,7 +155,7 @@
 
 | 类别 | 尚需完成的内容 | 归属 ID |
 | --- | --- | --- |
-| 尚无公开实现 | 跨命令 statement cache | P2-02 |
+| 已有本地实现、欠真实验收 | opt-in 跨命令 idle statement cache，保留命令独占和失效规则 | P2-02 |
 | DataAdapter 本地实现，真实验收开放 | 填充/映射/事件、原始值/NULL 与参数化 CRUD 已有本地回归；自动更新需完整可见行键，实际目录/SQL/锁及运行时仍需验收 | P2-01 |
 | KeyInfo 本地实现，真实验收开放 | 单基表查询的主键/唯一键及隐藏列；复杂/不确定形状保留原 SQL 和 unknown 元数据；目录/权限/DDL/版本/代理仍需验收 | P1-05 |
 | 新增本地实现，真实验收开放 | 自动参数推导已有 API、完整签名映射、会话/事务预留和失败原子性；实际目录/权限/版本/代理互操作仍需报告，见第 15.18 节 | P1-10 |
@@ -386,13 +386,13 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 
 ### 5.10 Schema、批处理、缓存和诊断
 
-当前 schema 为 Oracle 20/MySQL 18 个集合，包含 Restrictions、常用关系/对象目录及静态 DataTypes，已有最终本地回归（第 15.14 节），详见 [Schema 契约](schema.md)。双模式实库/权限/版本/OBProxy 验收仍开放。batch 顺序执行，prepared statement 主要限于命令生命周期，诊断能力已覆盖池生命周期，但还没有覆盖协议 debug 和 slow-query profile。
+当前 schema 为 Oracle 20/MySQL 18 个集合，包含 Restrictions、常用关系/对象目录及静态 DataTypes，已有最终本地回归（第 15.14 节），详见 [Schema 契约](schema.md)。双模式实库/权限/版本/OBProxy 验收仍开放。batch 仍顺序执行；prepared statement 已有 opt-in 有限跨命令 idle cache，命令持有和缓存失效规则见第 15.25 节，真实 DDL/reprepare 和负载验收未闭合。诊断能力已覆盖池生命周期，但还没有覆盖协议 debug 和 slow-query profile。
 
 目标要求：
 
 - 保留已有 `MetaDataCollections`、`DataSourceInformation`、`Tables`、`Columns`、`Procedures` 和 `ProcedureParameters` 六个集合；独立的 Views、Indexes、Keys、Constraints、Types、Sequences、Users 和 Synonyms 等目录已有本地实现，仍需真实验收；Types/Synonyms 仅 Oracle，模式/权限边界见 Schema 契约；
 - 过程元数据能够安全映射到参数描述，但不能把不完整目录信息误当成完整签名；
-- 实现有上限和淘汰策略的跨命令 statement cache；
+- 保留已有有限跨命令 idle LRU、独占和租约内上下文检查回归，补真实 DDL/reprepare、资源和负载验收；
 - 为 batch 提供 rewrite、multi-send、bulk 或 array binding 的模式化选择；
 - 暴露连接池总数、借出数、等待数、丢弃数、reset 失败数和连接建立耗时；
 - 诊断 SQL 必须脱敏，能够区分等待、网络、服务器错误和 unknown outcome。
@@ -595,7 +595,7 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 | ID | 具体触发场景和影响 | 源码 / 现有验证入口 | 关闭缺口的最低证据 |
 | --- | --- | --- | --- |
 | P2-01 | Factory 已创建 adapter/builder，本地支持填充、映射/事件、显式及有界自动 CRUD。隐藏/缺失行键、未知查询形状和需绑定上下文的列不能自动生成更新。 | `OceanBaseDataAdapter.cs`、`OceanBaseCommandBuilder.cs`；`DataAdapter*Tests.cs`、`DataAdapterConsumerTests.cs` | 保留 CRUD/原始值/NULL/并发冲突/事务/资源回归，补双模式真实目录、生成 SQL、锁和独立运行时消费；公开生成值回填及显式命令限制。ADO.NET provider 不等于 EF Core provider。 |
-| P2-02 | 多次创建新 Command 会重复 server prepare；没有跨命令、有限容量的缓存。 | `OceanBaseCommand.cs`；`Internal/Session/PreparedStatement.cs`；`PreparedCommandTests.cs`、`PoolingTests.cs` | 容量、淘汰、statement close、reset generation、DDL/schema 切换及并发上限；实测 prepare 次数和延迟收益，不以缓存引入会话泄漏。 |
+| P2-02 | opt-in idle LRU 已避免跨命令重复 prepare；默认关闭，命令仍独占其 ID。真实 DDL/reprepare、资源及负载效益仍待验收。 | `OceanBaseCommand.cs`；`Internal/Session/PhysicalSession.PreparedStatements.cs`、`PreparedStatement.cs`；`StatementCache*Tests.cs`、五资产消费者 | 容量、淘汰、statement close、reset generation、DDL/schema epoch 及并发上限；保留报文计数和合成延迟对照，补真实 prepare 次数/延迟、资源与代理报告。 |
 | P2-03 | DbBatch 逐条执行，有网络往返成本；Oracle array binding 已有，不能记为“没有批量”。 | `OceanBaseBatch.cs`；`OceanBaseCommand.ArrayBinding.cs`；`BatchFaultTests.cs`、`OracleArrayBindingExecutionTests.cs` | 对已承诺的 rewrite/multi-send/bulk 路径提供行数/OUT、部分失败、取消、包上限和事务边界；与现有顺序模式作吞吐/内存对照。 |
 | P2-04 | 现有日志/Activity/Meter 和池指标存在，建连/探活分段、协议 debug 和慢查询 profile 不完整。 | `Internal/DriverDiagnostics.cs`；`DiagnosticsTests.cs`、`CommandLogCategoryTests.cs` | 指标单位和聚合语义、异常分类、监听开关开销、SQL/凭据脱敏；明确 `borrowed` 是借用次数，不能据此报告当前借出连接数。 |
 | P2-05 | 两个包均产出五个 TFM，但现代 API 条件编译；Framework/ORM 消费与非 Windows 部署不能由一次 net10 单测推定。 | 两个 src 项目 `.csproj`；`.github/workflows/ci.yml`；`eng/Verify-Packages.ps1`；ConsumerTests、DI tests | 对每个承诺运行时运行实际 nupkg consumer；Windows/Linux、标准/现代 API 差异和 Framework 支持决定有报告。savepoint 的当前标识符规则不接受 `__EFSavePoint`，ORM 集成需单独验收。 |
@@ -1262,6 +1262,34 @@ dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-change
 
 文档检查：9 份 Markdown、232 个相对链接/锚点、围栏、三张 23-ID 表及八工作包唯一覆盖通过；15.1—15.23、audit 13—16 和此前 dated progress 保留。六份修改文档为 UTF-8 无 BOM/CRLF；diff 检查通过，Git 对三个测试文件的 LF→CRLF 提示保留。
 
+### 15.25 2026-10-25 跨命令 statement cache
+
+开发起点 `6d399fd`。新增所有五资产的 `Statement Cache Size`（0..1024，默认 0），并保持 options 的端点/凭据副本、配置序列化和池身份传播。每个物理会话有可按精确绑定后 SQL 借出的 idle LRU；命令持有期间不进入淘汰集合，归还才进入缓存，重复键和超容量走原关闭队列。实现范围及资源上限见 [API 契约](obconnector-dotnet-architecture-design.md#prepared-statement-cache)。
+
+独立缓存 epoch 与服务器 reset generation 分离：本地 DDL/会话/不透明目标发送、成功 ChangeDatabase 使 idle 及尚被命令持有的旧上下文失效；发送前取消、Prepare 和元数据不提前清缓存。reset/断线忘记旧 ID，避免向 reset 后的复用会话发送 stale close。SchemaOnly/KeyInfo 的新准备、辅助目录及 Oracle PrepareExecute owner 保留原生命周期；未读响应销毁会话、执行错误不进入 idle cache，且没有执行 replay。
+
+过程证据保留于忽略目录 `TestResults/statement-cache/` 和根目录 `TestResults-statement-cache-*.log`：initial-red 实际 9 失败（配置未知）；接通配置、修正测试构造后 behavior-red 9 失败/1 通过（旧关闭/重复准备路径）；initial-green 8 通过/2 失败来自 MySQL fixture 使用了 Oracle 命名参数，修正为位置参数后 behavior-green 10 通过；lifecycle-first 21、ownership-first 29 通过。首次完整构建有一处 DbCommand.FetchSize 测试静态类型编译错误，修正为现有 SetFetchSize 后第二次构建 0 警告/错误。boundary-first 41 通过/2 超时来自未读响应 fixture 未提供首行，补首行后 boundary-green 43 通过；保持真实未读终止响应与 socket 销毁断言。五资产专项消费者 20 通过，涵盖两模式/同步异步、复用及 DDL 失效。
+
+以下完整结果为发现租约窗口前的历史验证，不验证后续修复；原报告已另存为 before-epoch-race-*。独立 review_statement_cache 已完成源码/设计及测试/契约走查，无 Critical/Important；一项 Minor 文档措辞已修正为“本地发送前拒绝不使缓存失效”，明确服务端拒绝已发送 DDL 仍保守失效。审阅者未运行构建或测试。最终 Release 构建 0 警告/错误，14 文件格式验证退出 0（保留 workspace-load warning），完整单测 before-epoch-race-unit-verified.trx 实际 4235 通过、0 失败/跳过、退出 0；相对上一模块实际新增 47 项且无旧用例移除。DI 14 通过；Integration 9 通过/72 个单独 NotExecuted，均退出 0。完整消费者 before-epoch-race-consumer-verified.trx 实际 2428 通过、0 失败/跳过，退出 0，耗时 10 分 12 秒；相对上一模块实际新增 20 项且无旧用例移除。全部五资产均在同一 .NET10 host 加载，不是五种独立运行时；期间未重建产品/消费者 DLL。此段记录竞争修复前的阶段证据。合成对照每轮 8 个新命令，每次 prepare 人为延迟 15 ms：两模式均断言 prepare 从 8 次降为 1 次；最终 TRX 的整个测试时长为 MySQL 141.84→26.81 ms、Oracle 158.71→20.00 ms。修复前原始明细在 before-epoch-race-synthetic-delay-comparison.json；包含握手/fixture 开销，不能写成真实 SQL 延迟收益。当时本地 pack --no-build --no-restore 退出 0，before-epoch-race-package-validation.json 核对两个包各五资产 DLL 哈希和当时 README 匹配；未发布。before-epoch-race-red-green-validation.json 已将四份原始 RED/fixture 报告的失败用例对应到最终单测通过，原报告保留。
+
+提交前新增的真实线程交错回归先暂停命令 A 的参数验证，使其随后等待连接锁；命令 B 在该锁内重入并实际发送 DDL，再允许 A 获取会话。epoch-race-red.trx 同步/异步实际 2 失败：应发送 PREPARE(22)，却继续发送旧 ID 的 LONG_DATA(24)。根因是 Start 的 epoch 检查早于独占租约，租约内原 helper 只复核数据库名。统一改为 InvalidatePreparedContext，在 EnsurePrepared/Async 已持有租约时复核 Database、Generation、CacheEpoch，不匹配则关闭旧 ID 并重新准备；不重放执行。epoch-race-green.trx 实际 49 项缓存专项通过。独立 reviewer 再次核对产品、关闭/reset 和交错可信性，无剩余可操作 Critical/Important/Minor，未运行测试。
+
+修复后最终完整单测 unit-verified.trx 实际 4237 通过、0 失败/跳过，退出 0；相对上一模块实际新增 49 项、无旧例移除。完整消费者 consumer-verified.trx 实际 2428 通过、0 失败/跳过，退出 0；新增 20 项、无旧例移除，含全部五资产缓存消费者。DI 14 通过；Integration 9 通过/72 个单独 NotExecuted，退出 0，未启用真实数据库。最终 Release 构建 0 警告/0 错误；原先 4235/2428 的报告保留为 before-epoch-race-*，不冒充修复后报告。期间未重建消费者加载的程序集；五资产仍只在 .NET10 host 运行。最终本地 pack 退出 0，package-validation.json 核对两个包各五个 DLL 哈希及嵌入 README 与最终构建/工作区匹配；未发布。red-green-validation.json 重新核对五份原始失败报告（含竞争 RED）的失败用例均在最终完整单测通过，原报告保留。首次新增 15 文件格式检查退出 2，有一处新测试空白诊断，修正后退出 0，workspace-load warning 保留。合成时长只描述修复前原始阶段，不能替代真实数据库测量。
+
+本次命令从仓库根目录执行；测试均使用 `-c Release --no-build --no-restore`，TRX 使用 `--logger 'trx;LogFileName=<报告名>' --results-directory TestResults/statement-cache`。报告不是新的真实服务器 profile。
+
+| 命令/检查 | 退出码与产物 |
+| --- | --- |
+| `dotnet build OceanBaseConnector.slnx -c Release --no-restore` | 0；`TestResults-statement-cache-build-final.log` |
+| `dotnet test tests/OceanBaseConnector.UnitTests`，附上述公共参数 | 0；`unit-verified.trx`，4237 通过、0 失败/跳过 |
+| `dotnet test tests/OceanBaseConnector.ConsumerTests`，附上述公共参数 | 0；`consumer-verified.trx`，2428 通过、0 失败/跳过 |
+| `dotnet test tests/OceanBaseConnector.DependencyInjection.Tests`，附上述公共参数 | 0；`di.trx` |
+| `dotnet test tests/OceanBaseConnector.IntegrationTests`，附上述公共参数 | 0；`integration.trx`，72 项未执行，未 opt-in 实库 |
+| `dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-changes --include <本模块15个C#文件>` | 0；`TestResults-statement-cache-format-final.log`，workspace-load warning 保留 |
+| `dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/statement-cache/packages` | 0；`TestResults-statement-cache-pack-final.log`、`package-validation.json` |
+
+本模块的本地结果不关闭真实 DDL/reprepare、外部副作用、资源/负载、OBProxy、跨平台或独立运行时；23 个 ID、八工作包及历史实库失败和跳过保持开放。
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。
@@ -1274,7 +1302,7 @@ dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-change
 | W4 信任、发现与凭据：P1-04、P1-09、P1-11 | 凭据提供/轮换已有本地实现，补真实凭据服务与插件验收；补发现与健康/退避策略，明确 OCP/TNS 或等价发现范围。现有 TLS 回调、证书副本及池身份无需重做 | 企业 CA/mTLS、证书与凭据过期/刷新失败、撤销、KDC/plugin 成功及拒绝；地址更新/错误身份/节点与代理故障；Windows/Linux 报告 | W1 池身份、W2 重试边界 |
 | W5 命令、Oracle 与类型：P1-05、P1-06、P1-07、P1-08 | 保留 KeyInfo 键/隐藏列和复杂查询 unknown 契约及回归，补真实目录验收；保留 SchemaOnly Prepare-only 本地回归并补真实准备行为验收；补已承诺的 Oracle 输出方向/结果形状、复杂成员、DDL 缓存失效、类型码/字符集映射。有符号 DecimalScale 已本地完成，保留其精度和覆盖规则 | Command/Batch/REF CURSOR 行为表；NULL/方向/精度/溢出/编码/取消与资源释放矩阵；SchemaOnly 副作用/锁/大结果报告；服务端不支持形状单列 | G0；资源生命周期与 W1 联动 |
 | W6 目录与 ADO.NET 生态：P1-10、P2-01 | 常用目录/限制参数及 DataTypes 已本地完成；自动参数推导已通过本地回归和独立走查（第 15.18 节）；补实库/权限/版本/代理矩阵；DataAdapter/CommandBuilder 已有本地填充、映射/事件和有界 CRUD，补真实验收，不以 ADO.NET provider 代替 EF Core provider | 双模式目录/权限/大小写/空集合；类型映射与过程重载/参数方向；保留 adapter CRUD、键、原始值/NULL 和乐观并发本地回归；补实际 SQL/锁及独立运行时报告 | W5 键与结果元数据 |
-| W7 性能与可观测性：P2-02、P2-03、P2-04 | 实现有限 statement cache；选择并实现承诺的 rewrite/multi-send/bulk 优化；补建连/探活分段及慢查询/协议诊断。保留顺序 Batch 和 Oracle array binding | 缓存容量/失效/关闭、批量部分失败/事务/取消/包限额；吞吐、延迟、峰值内存与资源上限对照；诊断脱敏和监听开销 | W1 generation/reset、W5 绑定规则 |
+| W7 性能与可观测性：P2-02、P2-03、P2-04 | 保留已有 opt-in idle statement cache，补真实 DDL/reprepare/资源/负载验收；选择并实现承诺的 rewrite/multi-send/bulk 优化；补建连/探活分段及慢查询/协议诊断。保留顺序 Batch 和 Oracle array binding | 缓存容量/失效/关闭、批量部分失败/事务/取消/包限额；吞吐、延迟、峰值内存与资源上限对照；诊断脱敏和监听开销 | W1 generation/reset、W5 绑定规则 |
 | W8 运行时与发布：P2-05、P2-06 | 明确版本、平台、TFM、Framework/ORM 的承诺范围；将六个 matrix.* 占位变成有环境和断言的案例；完成包名、来源/许可和发布审查 | 每个承诺 profile 的 nupkg consumer、实库/代理/TLS/认证/故障报告；保留 Oracle 失败及所有跳过原因；外部 coordinator crash recovery；可复现命令和清理结果 | 各包可并行积累证据，正式发布须满足第 7.3 节 |
 
 ### 16.1 压缩与 reroute 的独立交付边界

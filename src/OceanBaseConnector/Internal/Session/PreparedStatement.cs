@@ -21,12 +21,15 @@ namespace OceanBaseConnector.Internal.Session
             Columns = new ResultColumn[columns];
             Session = session;
             Generation = session.Generation;
+            CacheEpoch = session.StatementCacheEpoch;
             CommandText = sql;
             Database = session.Database;
         }
 
         internal PhysicalSession Session { get; }
         internal long Generation { get; }
+        internal long CacheEpoch { get; }
+        internal bool Cacheable { get; set; }
         internal string CommandText { get; }
         internal string Database { get; }
         internal uint Id { get; }

@@ -14,7 +14,7 @@ namespace OceanBaseConnector.Internal.Session
 {
     internal enum SessionState { Closed, Connecting, Open, Busy, Broken }
 
-    internal sealed class PhysicalSession : IDisposable
+    internal sealed partial class PhysicalSession : IDisposable
     {
         private readonly object _gate = new object();
         private readonly OceanBaseConnectionOptions _options;
@@ -67,7 +67,11 @@ namespace OceanBaseConnector.Internal.Session
         {
             lock (_gate)
             {
-                if (_state == SessionState.Busy && ReferenceEquals(_lease, lease)) _database = database;
+                if (_state == SessionState.Busy && ReferenceEquals(_lease, lease))
+                {
+                    _database = database;
+                    InvalidatePreparedStatements();
+                }
             }
         }
         internal string? SessionTimeZone { get { lock (_gate) return _sessionTimeZone; } }
@@ -500,6 +504,7 @@ namespace OceanBaseConnector.Internal.Session
                     _sessionTimeZone = null;
                     _nationalCharacterSet = null;
                     _statementCloses.Clear();
+                    ClearPreparedStatementCache(closeStatements: false);
                     _generation++;
                 }
             }
@@ -539,6 +544,7 @@ namespace OceanBaseConnector.Internal.Session
 
         private void ReleaseTransport()
         {
+            ClearPreparedStatementCache(closeStatements: false);
             _statementCloses.Clear();
             _sessionTimeZone = null;
             _nationalCharacterSet = null;

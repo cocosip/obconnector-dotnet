@@ -4,6 +4,18 @@ namespace OceanBaseConnector.Internal.Sql
 {
     internal static class SqlStatementBoundary
     {
+        internal static bool CanCacheStatement(string text, OceanBaseCompatibilityMode mode)
+        {
+            var position = 0;
+            SkipTrivia(text, ref position, mode == OceanBaseCompatibilityMode.Oracle);
+            var start = position;
+            while (position < text.Length && (char.IsLetterOrDigit(text[position]) || text[position] == '_' || text[position] == '$' || text[position] == '#')) position++;
+            var keyword = text.Substring(start, position - start).ToUpperInvariant();
+            return (keyword == "SELECT" || keyword == "WITH" || keyword == "INSERT" || keyword == "UPDATE" ||
+                keyword == "DELETE" || keyword == "REPLACE" || keyword == "MERGE") &&
+                !HasMultipleStatements(text, mode) && !SessionStateSql.RequiresDiscard(text, mode);
+        }
+
         internal static bool HasMultipleStatements(string text, OceanBaseCompatibilityMode mode)
         {
             var oracle = mode == OceanBaseCompatibilityMode.Oracle;

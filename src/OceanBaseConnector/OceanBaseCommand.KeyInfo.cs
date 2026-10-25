@@ -15,7 +15,7 @@ namespace OceanBaseConnector
             execution.StartDiagnostics("execute");
             try
             {
-                var original = (asynchronous ? await EnsurePreparedAsync(operation, token).ConfigureAwait(false) : EnsurePrepared(operation))!;
+                var original = (asynchronous ? await EnsurePreparedAsync(operation, token, useCache: false).ConfigureAwait(false) : EnsurePrepared(operation, useCache: false))!;
                 var resolved = await execution.ResolveKeyInfoAsync(original, asynchronous, token).ConfigureAwait(false);
                 var statement = resolved.Statement;
                 if (asynchronous) await execution.ResolveComplexColumnsAsync(statement, token).ConfigureAwait(false);

@@ -82,6 +82,8 @@ namespace OceanBaseConnector.Internal.Session
         internal OceanBaseCompatibilityMode Mode => _session.Info!.Mode;
         internal bool TreatTinyAsBoolean => _session.TreatTinyAsBoolean;
         internal bool DiscardSessionAfterExecution { get; set; }
+        internal bool InvalidatePreparedStatements { get; set; }
+        internal bool Succeeded { get; private set; }
         internal LobSession? Lobs { get; set; }
         internal IReadOnlyDictionary<(string, string), OceanBaseComplexType>? ComplexTypes { get; set; }
         internal void EnsureReading()
@@ -99,6 +101,7 @@ namespace OceanBaseConnector.Internal.Session
                 _budget.Token.ThrowIfCancellationRequested();
                 if (executesSql)
                 {
+                    if (InvalidatePreparedStatements) _session.InvalidatePreparedStatements();
                     if (DiscardSessionAfterExecution) _session.MarkSessionStateChanged();
                     SessionTimeZone = _session.TakeSessionTimeZone(_lease);
                     NationalCharacterSet = _session.TakeNationalCharacterSet(_lease);
@@ -375,6 +378,7 @@ namespace OceanBaseConnector.Internal.Session
             _registration.Dispose();
             _budget.Dispose();
             _cancel.Dispose();
+            Succeeded = error == null;
             _release();
 #if NET8_0_OR_GREATER
             if (error != null) BatchFailed?.Invoke();

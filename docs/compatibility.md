@@ -6,6 +6,8 @@ Routine parameter derivation has a local implementation on all five assets: [API
 
 User-SQL pool state classification now has a shared mode-aware path and a target-send boundary: [contract](obconnector-dotnet-architecture-design.md#pooled-session-state-after-user-sql). Commented/later statements and opaque calls retire the session; preparation and local rejection do not mark it as executed. MySQL quoted backslash/SQL_MODE ambiguity is conservative and can reduce reuse. This does not close arbitrary function/trigger effects, resource/fault/concurrency matrices or real reset acceptance; see P0-02 in the completeness baseline.
 
+Opt-in [prepared statement caching](obconnector-dotnet-architecture-design.md#prepared-statement-cache) has a local implementation on all five assets. The idle LRU is per physical session; reset, observed DDL/session context and successful ChangeDatabase invalidate entries. Held statements are revalidated after acquiring the exclusive session lease. Active ownership and deferred closes remain exclusive; metadata probes and Oracle PrepareExecute keep their existing owners. External DDL/reprepare, server resources, OBProxy, load and independent runtimes remain unverified; synthetic prepare delays and packet counts are not real database performance evidence.
+
 ## Server and topology matrix
 
 | Target | Status | Boundary |
