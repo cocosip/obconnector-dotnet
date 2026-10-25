@@ -124,13 +124,22 @@ namespace OceanBaseConnector.Internal.Session
                 var endpoints = _resolvedEndpoints ?? ResolveEndpoints(_options, _addressResolver, budget.Token);
                 budget.Token.ThrowIfCancellationRequested();
                 var start = _endpointSelector.SelectStart(endpoints.Count, _options.LoadBalance);
+                var attempts = endpoints.Count * (_options.ConnectRetryCount + 1);
                 for (var i = 0; ; i++)
                 {
                     budget.Token.ThrowIfCancellationRequested();
                     var options = SelectEndpoint(endpoints[(start + i) % endpoints.Count]);
                     TcpTransport transport;
                     try { transport = DriverDiagnostics.MeasureConnectionPhase("tcp", () => TcpTransport.Connect(options.Server, options.Port, ConnectionTimeout, budget.Token)); }
-                    catch (IOException error) when (CanTryNext(error, i, endpoints.Count, budget)) { continue; }
+                    catch (IOException error) when (CanTryNext(error, i, attempts, budget))
+                    {
+                        if ((i + 1) % endpoints.Count == 0)
+                        {
+                            budget.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(_options.ConnectRetryIntervalSeconds));
+                            budget.Token.ThrowIfCancellationRequested();
+                        }
+                        continue;
+                    }
                     Attach(transport);
                     using var registration = budget.Token.Register(CancelOpeningTransport);
                     FinishOpen(HandshakeFlow.Authenticate(transport, _channel!, options, budget.Token, _clientCertificate, _remoteCertificateValidationCallback), budget.Token);
@@ -154,6 +163,7 @@ namespace OceanBaseConnector.Internal.Session
                 var endpoints = _resolvedEndpoints ?? await ResolveEndpointsAsync(_options, _addressResolver, budget.Token).ConfigureAwait(false);
                 budget.Token.ThrowIfCancellationRequested();
                 var start = _endpointSelector.SelectStart(endpoints.Count, _options.LoadBalance);
+                var attempts = endpoints.Count * (_options.ConnectRetryCount + 1);
                 for (var i = 0; ; i++)
                 {
                     budget.Token.ThrowIfCancellationRequested();
@@ -164,7 +174,12 @@ namespace OceanBaseConnector.Internal.Session
                         transport = await DriverDiagnostics.MeasureConnectionPhaseAsync("tcp", () => TcpTransport.ConnectAsync(options.Server, options.Port, ConnectionTimeout, budget.Token))
                             .ConfigureAwait(false);
                     }
-                    catch (IOException error) when (CanTryNext(error, i, endpoints.Count, budget)) { continue; }
+                    catch (IOException error) when (CanTryNext(error, i, attempts, budget))
+                    {
+                        if ((i + 1) % endpoints.Count == 0)
+                            await Task.Delay(TimeSpan.FromSeconds(_options.ConnectRetryIntervalSeconds), budget.Token).ConfigureAwait(false);
+                        continue;
+                    }
                     Attach(transport);
                     // Closing the socket also interrupts netstandard2.0 TLS and reads.
                     using var registration = budget.Token.Register(CancelOpeningTransport);

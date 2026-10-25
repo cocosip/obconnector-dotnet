@@ -11,7 +11,7 @@ namespace OceanBaseConnector
     /// <summary>
     /// Parses and serializes OceanBase connection strings. Canonical keys are
     /// <c>Server</c>, <c>Port</c>, <c>User ID</c>, <c>Password</c>,
-    /// <c>Database</c>, <c>Connection Timeout</c>, <c>Command Timeout</c>, <c>Slow Query Threshold</c>,
+    /// <c>Database</c>, <c>Connection Timeout</c>, <c>Connect Retry Count</c>, <c>Connect Retry Interval</c>, <c>Command Timeout</c>, <c>Slow Query Threshold</c>,
     /// <c>TLS Mode</c>, <c>TLS Server Name</c>, <c>Persist Security Info</c>,
     /// <c>ExpectedMode</c>, <c>Pooling</c>, pool sizing/lifetime options,
     /// <c>Server RSA Public Key</c> and
@@ -30,6 +30,8 @@ namespace OceanBaseConnector
         public const string PasswordKey = "Password";
         public const string DatabaseKey = "Database";
         public const string ConnectionTimeoutKey = "Connection Timeout";
+        public const string ConnectRetryCountKey = "Connect Retry Count";
+        public const string ConnectRetryIntervalKey = "Connect Retry Interval";
         public const string CommandTimeoutKey = "Command Timeout";
         public const string SlowQueryThresholdKey = "Slow Query Threshold";
         public const string TlsModeKey = "TLS Mode";
@@ -130,6 +132,20 @@ namespace OceanBaseConnector
         {
             get => GetInt32(ConnectionTimeoutKey) ?? DefaultConnectionTimeoutSeconds;
             set => this[ConnectionTimeoutKey] = value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>Additional complete TCP candidate rounds, from 0 to 10; defaults to zero.</summary>
+        public int ConnectRetryCount
+        {
+            get => GetInt32(ConnectRetryCountKey) ?? 0;
+            set => this[ConnectRetryCountKey] = value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>Seconds between failed TCP candidate rounds, from 1 to 60; defaults to one.</summary>
+        public int ConnectRetryInterval
+        {
+            get => GetInt32(ConnectRetryIntervalKey) ?? 1;
+            set => this[ConnectRetryIntervalKey] = value.ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>Slow execute/cursor lifetime threshold in milliseconds; zero disables reporting.</summary>
@@ -440,7 +456,8 @@ namespace OceanBaseConnector
                 TreatTinyAsBoolean,
                 UseAffectedRows,
                 UseCompression,
-                statementCacheSize: StatementCacheSize, slowQueryThresholdMilliseconds: SlowQueryThreshold);
+                statementCacheSize: StatementCacheSize, slowQueryThresholdMilliseconds: SlowQueryThreshold,
+                connectRetryCount: ConnectRetryCount, connectRetryIntervalSeconds: ConnectRetryInterval);
         }
 
         // Serialization order for fixed keys; additional PAM passwords are secrets.
@@ -452,6 +469,8 @@ namespace OceanBaseConnector
             PasswordKey,
             DatabaseKey,
             ConnectionTimeoutKey,
+            ConnectRetryCountKey,
+            ConnectRetryIntervalKey,
             CommandTimeoutKey,
             SlowQueryThresholdKey,
             TlsModeKey,
@@ -519,6 +538,8 @@ namespace OceanBaseConnector
                 [PasswordKey] = Password,
                 [DatabaseKey] = Database,
                 [ConnectionTimeoutKey] = ConnectionTimeout,
+                [ConnectRetryCountKey] = ConnectRetryCount,
+                [ConnectRetryIntervalKey] = ConnectRetryInterval,
                 [CommandTimeoutKey] = CommandTimeout,
                 [SlowQueryThresholdKey] = SlowQueryThreshold,
                 [TlsModeKey] = TlsMode.ToString(),
@@ -611,6 +632,17 @@ namespace OceanBaseConnector
                         throw CreateKeywordError($"'{canonicalKey}' must be between 1 and 65535.", canonicalKey, includeValue: true, value: value);
                     }
 
+                    return value;
+
+                case ConnectRetryCountKey:
+                    if (ParseNonNegativeInt32(canonicalKey, value) > 10)
+                        throw CreateKeywordError($"'{canonicalKey}' must be between 0 and 10.", canonicalKey, includeValue: true, value: value);
+                    return value;
+
+                case ConnectRetryIntervalKey:
+                    var interval = ParseNonNegativeInt32(canonicalKey, value);
+                    if (interval < 1 || interval > 60)
+                        throw CreateKeywordError($"'{canonicalKey}' must be between 1 and 60.", canonicalKey, includeValue: true, value: value);
                     return value;
 
                 case StatementCacheSizeKey:
@@ -783,6 +815,12 @@ namespace OceanBaseConnector
                     return true;
                 case "DATABASE":
                     canonical = DatabaseKey;
+                    return true;
+                case "CONNECT RETRY COUNT":
+                    canonical = ConnectRetryCountKey;
+                    return true;
+                case "CONNECT RETRY INTERVAL":
+                    canonical = ConnectRetryIntervalKey;
                     return true;
                 case "CONNECTION TIMEOUT":
                     canonical = ConnectionTimeoutKey;

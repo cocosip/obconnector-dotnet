@@ -1,5 +1,14 @@
 # Compatibility and known gaps
 
+## 2026-10-25 P1-09 bounded TCP connection retry
+
+Developed from master/0ec3e1c. Connect Retry Count (default0,0..10 additional complete candidate rounds) and Connect Retry Interval (default1,1..60seconds) propagate through builder/copies/pool identity. Full-round TCP failures alone wait/retry; TCP success makes greeting/TLS/auth/identity/command failures terminal. Positive count shares the logical Open deadline across pool wait/prewarm, attempts and backoff; zero retains existing waiting semantics. Resolve/credential snapshot once per logical Open. Caller cancellation/Close interrupt backoff, and subsequent explicit Open can reclaim capacity. No active-session reconnect, transaction migration or SQL replay. See [contract](obconnector-dotnet-architecture-design.md#connect-retry-policy) and [retained evidence](obconnector-dotnet-completeness.md#1550-2026-10-25-tcp-建连重试预算与退避).
+
+最终完整单测5549通过（新增64：重试61、池身份3），相关五资产消费者174通过（新增52）；Release全解决方案及修正后消费者构建0警告/错误，7C#限定格式验证通过并保留既有workspace警告。五资产在同一.NET10host消费；无凭据/无SQL探针5022ms读0greeting，本模块没有新增实库互操作验收。
+
+Original6unknown-keyRED,2pass/4TCPRED,70/113GREEN,4warmupRED,125focused121pass/4Listen-before-Accept fixture failures retained. Shared logical budget fixes the four no-callback MinPool2 warmup cases; listening TCS corrects the four peer scripts without relaxing product assertions. Original build/fixture/NuGet and UTF8 script failures retained in the complete module record. Five assets share one.NET10host; no real-server/OBProxy/independent-runtime/load/release acceptance claimed. Full23IDs/eightpackages remain open; local master only, no push/publication.
+
+
 ## Connection-level server errors
 
 Developed from `master/917e9cc`, P0-05/W2 with P0-02/P0-04 boundaries. Connection-level ERR handling now retires failed sessions and preserves the current request's outcome semantics. See the [error and recovery contract](obconnector-dotnet-architecture-design.md#connection-level-server-errors) and [full module record](obconnector-dotnet-completeness.md#1549-2026-10-25-连接级服务器错误与显式连接重建).

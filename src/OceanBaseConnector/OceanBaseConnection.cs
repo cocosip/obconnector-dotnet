@@ -381,7 +381,7 @@ namespace OceanBaseConnector
                 PoolRentReserved = poolRentReserved;
                 CredentialProvider = credentialProvider;
                 RemoteCertificateValidationCallback = remoteCertificateValidationCallback;
-                if (credentialProvider != null || pool != null && resolver != null)
+                if (options.ConnectRetryCount > 0 || credentialProvider != null || pool != null && resolver != null)
                 {
                     RouteBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
                     if (options.ConnectionTimeoutSeconds > 0) RouteBudget.CancelAfter(TimeSpan.FromSeconds(options.ConnectionTimeoutSeconds));

@@ -24,6 +24,8 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `User ID` / `Password` | Empty | Database credentials. |
 | `Database` | Empty | Initial database. `ChangeDatabase` is available in MySQL mode only. |
 | `Connection Timeout` | 15 seconds | Total budget for address discovery, connection, TLS, authentication and identity confirmation. |
+| `Connect Retry Count` | 0 | Additional complete TCP candidate rounds, 0..10; zero preserves one-pass behavior. See [retry contract](#connect-retry-policy). |
+| `Connect Retry Interval` | 1 second | Fixed wait between failed candidate rounds, 1..60; validated even with count zero. |
 | `Command Timeout` | 30 seconds | Command execution budget. |
 | `Slow Query Threshold` | 0 milliseconds | Nonnegative Int32 client execute/cursor lifetime threshold; zero disables slow reporting. See [contract](#slow-query-diagnostics). |
 | `ExpectedMode` | Unset | Validates `MySql` or `Oracle` after detection. |
@@ -35,7 +37,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `Pooling` | false | Reuses physical sessions with protocol reset, capacity/wait controls, minimum-pool prewarming and idle/total lifetime reaping; recognized user session-state or temporary-object statements discard the session on close. |
 | `Min Pool Size` | 0 | Ensures at least this many physical sessions before a borrow; a failed warmup rolls back sessions created by that attempt only while they remain idle; concurrent borrowers retain ownership. |
 | `Max Pool Size` | 100 | Maximum physical sessions per matching pool; additional opens wait for a return. |
-| `Pool Wait Timeout` | `Connection Timeout` | Seconds to wait for a physical session; zero removes this wait limit. With a custom resolver, the total logical Open connection budget also bounds pool waiting. |
+| `Pool Wait Timeout` | `Connection Timeout` | Seconds to wait for a physical session; zero removes this wait limit. With a custom resolver, credential provider, or positive Connect Retry Count, the total logical Open connection budget also bounds pool waiting, even when this wait limit is longer or zero. |
 | `Connection Idle Lifetime` | 0 | Seconds an idle session may remain before lazy reaping; zero disables the limit. |
 | `Connection Lifetime` | 0 | Maximum physical-session age in seconds; zero disables the limit. |
 | `Statement Cache Size` | 0 | Idle server-prepared statements retained per physical session, 0..1024; zero disables sharing across commands. |
@@ -519,3 +521,14 @@ The seven-byte outer header wraps an ordinary MySQL framed byte stream. A block 
 Writes use a 64 KiB buffer and send original bytes if compression would not shrink a block. Receive input/output buffers are limited by the protocol's 24-bit lengths (at most 0xffffff per block); the ordinary 64 MiB logical-packet cap still applies. SharpZipLib's public zlib APIs validate checksum, finished stream, exact output length and absence of trailing input; dictionaries, malformed/truncated streams and unread buffered tails at exchange boundaries fail closed. Async operations use async transport I/O; codec work itself is synchronous CPU work. No SQL is replayed.
 
 `Use Compression=true;Use OB20=true` currently fails validation before networking: compressed OB20 and proxy reroute are separate, unfinished capabilities. Local framework-zlib peers verify the standard compression path, including TLS and pooling/reset; real OceanBase/OBProxy and cross-platform compression acceptance remain open.
+
+<a id="connect-retry-policy"></a>
+## TCP connection retry policy
+
+`Connect Retry Count=1;Connect Retry Interval=1` enables one additional complete candidate round, after a one-second fixed wait. Count is 0..10 (default0); interval is 1..60 seconds (default1), including when count is zero. These keys have matching `OceanBaseConnectionStringBuilder.ConnectRetryCount` / `ConnectRetryInterval` properties and constants on every asset. Both enter canonical serialization, immutable endpoint/credential copies and effective pool identity; omitted and explicit defaults remain equivalent.
+
+Each physical establishment snapshots its candidate start once. Sequential/RoundRobin selection traverses all candidates before waiting, and subsequent rounds retain the same order/start. There is no wait between candidates within a round, no wait after the final failure, and at most `candidate count * (Connect Retry Count + 1)` TCP attempts per physical establishment. Only pre-attachment `IOException` wrapping `SocketException` is eligible. Successful TCP ends this retry scope: greeting, TLS, authentication, identity/session initialization and command failures do not retry or advance to another candidate.
+
+With a positive count, one logical Open budget covers address/credential acquisition, pool wait/prewarm/probe, all TCP attempts/backoffs, TLS, authentication, identity and automatic ambient initialization. This also caps a longer or unlimited Pool Wait Timeout. All warmup physical sessions share the logical token/deadline; each has its own finite round limit. `Connection Timeout=0` removes the time limit but keeps that attempt limit. Caller cancellation (OpenAsync) and Close interrupt backoff; failure releases capacity for a later explicit Open. Count zero retains existing timeout/wait semantics. Pending cleanup captured by an earlier Close must finish under its original cleanup timeout; a new Open deadline does not abandon that cleanup. After cleanup, an expired new Open fails before borrowing. Caller-owned synchronous callbacks must return promptly and honor cancellation; a deadline cannot forcibly interrupt arbitrary application code.
+
+Credentials and resolver results are acquired once per logical Open and reused throughout its warmup/attempts; retries do not refresh them. This policy does not reconnect an active session, migrate a transaction or replay SQL. Reopen explicitly and reconcile unknown writes according to the [recovery guide](unknown-outcome-recovery.md). OCP/TNS adapters, health caching, proxy reroute, deployment fault/load and independent-runtime acceptance remain open.

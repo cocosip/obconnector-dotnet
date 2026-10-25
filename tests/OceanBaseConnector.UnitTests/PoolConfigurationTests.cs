@@ -21,6 +21,8 @@ namespace OceanBaseConnector.UnitTests
             yield return new object[] { "Database", "other" };
             yield return new object[] { "Connection Timeout", "7" };
             yield return new object[] { "Command Timeout", "7" };
+            yield return new object[] { "Connect Retry Count", "2" };
+            yield return new object[] { "Connect Retry Interval", "3" };
             yield return new object[] { "Slow Query Threshold", "7" };
             yield return new object[] { "TLS Mode", "Required" };
             yield return new object[] { "TLS Server Name", "other.invalid" };
@@ -129,6 +131,7 @@ namespace OceanBaseConnector.UnitTests
 
         [Theory]
         [InlineData("User ID=u;Pooling=true", "Pooling=true;User ID=u")]
+        [InlineData("Pooling=true", "Pooling=true;Connect Retry Count=0;Connect Retry Interval=1")]
         [InlineData("Pooling=true", "Pooling=TRUE")]
         [InlineData("Pooling=true", "Pooling=true;Port=2881")]
         [InlineData("Pooling=true", "Pooling=true;Max Pool Size=0100")]

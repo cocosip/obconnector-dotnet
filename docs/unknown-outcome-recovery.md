@@ -4,6 +4,10 @@
 
 驱动不会自动重放这类 SQL。失败传输销毁、事务失效；连接池释放容量并允许新租约，不提供事务迁移。对旧事务再次 Commit/Rollback 会拒绝；Dispose 也不是补偿操作。显式本地事务与 ambient/XA 的恢复协议各自独立，下面只讨论普通本地事务。
 
+## 建连重试与业务重放的边界
+
+`Connect Retry Count` / `Connect Retry Interval` 只控制物理会话 Attach 前的 TCP 失败与整轮候选等待。TCP 成功后，握手、TLS、认证、身份初始化及业务错误不自动重试；活动连接断开仍须显式 Close/Open 并核对 unknown outcome。开启重试不会恢复旧事务，也不证明原写入已失败。[完整配置与预算契约](obconnector-dotnet-architecture-design.md#connect-retry-policy)。
+
 ## 连接级服务器ERR
 
 可信SQLSTATE以08开头，或精确1927/70100时，驱动将物理会话置为Broken并销毁。已发送执行的unknown标志保守为true，不表示服务器一定执行或一定回滚；业务前Prepare/目录/piece确认保持当前非执行标记。普通查询取消1317/70100不属于该分类。错误码和SQLSTATE不替代业务核对依据。
