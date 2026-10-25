@@ -42,6 +42,7 @@ namespace OceanBaseConnector.Internal.Session
         private readonly HashSet<uint> _statementCloses = new HashSet<uint>();
         private bool _xaDedicated;
         private long _generation;
+        private long _complexTypeEpoch;
         private readonly DateTime _createdUtc = DateTime.UtcNow;
         private DateTime _lastReturnedUtc;
         internal bool UseOraclePrepareExecute => _options.UseOraclePrepareExecute;
@@ -61,6 +62,8 @@ namespace OceanBaseConnector.Internal.Session
 
         public SessionState State { get { lock (_gate) return _state; } }
         internal long Generation { get { lock (_gate) return _generation; } }
+        internal long ComplexTypeEpoch { get { lock (_gate) return _complexTypeEpoch; } }
+        internal void InvalidateComplexTypes() { lock (_gate) _complexTypeEpoch++; }
         public ConnectResult? Info { get { lock (_gate) return _info; } }
         internal string Database { get { lock (_gate) return _database; } }
         internal void SetDatabase(CommandLease lease, string database)

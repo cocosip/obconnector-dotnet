@@ -276,7 +276,12 @@ Pure Output/ReturnValue parameters send a protocol NULL placeholder. The declare
 
 `CreateArrayType` accepts NUMBER, VARCHAR2, CHAR, RAW, DATE or TIMESTAMP, or a preloaded named element type. Factory scalar arrays support input/output; ordinary complex-element arrays accept input only. Anonymous descriptions obtained from results are read-only.
 
-Descriptions and values are bound to their connection, session and transaction generation. Close/reopen, transaction changes and `ClearComplexTypeCache` invalidate reuse. After external type DDL, clear the cache and reload; changes are not detected automatically.
+<a id="complex-type-ddl-invalidation"></a>
+Descriptions and values are bound to their connection, session, transaction and complex-metadata generation. Close/reopen, transaction changes and `ClearComplexTypeCache` invalidate reuse. In Oracle mode, executing text statements beginning with CREATE, ALTER, DROP, RENAME or TRUNCATE also invalidates all cached descriptions, including nested and factory-array descriptions. The shared SQL scanner ignores comments and quoted text and checks later statements in an allowed text batch; CREATE program units are DDL, while BEGIN/DECLARE bodies and procedure calls are opaque.
+
+Invalidation occurs once when target execution begins transmission, independently of `Statement Cache Size`. Even a rejected DDL conservatively requires reloading. Standalone Prepare, metadata/control probes, SchemaOnly, local validation failures and cancellation before target transmission do not invalidate the dictionary. Reload with `GetComplexType` and reconstruct parameter values before the next bind; the driver does not retry DDL or automatically reload types. New result exchanges cannot attach the old dictionary snapshot. Values already returned retain their immutable data/layout for reading, but their descriptors cannot construct or bind new values after invalidation.
+
+DDL executed by another connection or hidden in procedures, anonymous blocks, functions or triggers is not automatically detected. After such changes, call `ClearComplexTypeCache` on each affected open connection with the correct transaction, then reload and rebuild bindings. This local implementation does not establish real OceanBase/OBProxy DDL, implicit-commit or lock compatibility.
 
 ### Array binding
 

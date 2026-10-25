@@ -17,16 +17,35 @@ namespace OceanBaseConnector.Internal.Sql
         }
 
         internal static bool HasMultipleStatements(string text, OceanBaseCompatibilityMode mode)
+            => ScanStatements(text, mode, typeDdl: false);
+
+        internal static bool InvalidatesComplexTypes(string text, OceanBaseCompatibilityMode mode)
+            => mode == OceanBaseCompatibilityMode.Oracle && ScanStatements(text, mode, typeDdl: true);
+
+        private static bool IsDdl(string keyword) => keyword == "CREATE" || keyword == "ALTER" || keyword == "DROP" || keyword == "RENAME" || keyword == "TRUNCATE";
+
+        private static bool ScanStatements(string text, OceanBaseCompatibilityMode mode, bool typeDdl)
         {
             var oracle = mode == OceanBaseCompatibilityMode.Oracle;
             // Program-unit semicolons belong to the server's PL/SQL grammar, not to a text batch.
-            if (oracle && IsOracleProgramUnit(text)) return false;
+            if (oracle && IsOracleProgramUnit(text))
+            {
+                var position = 0;
+                return typeDdl && IsDdl(ReadOracleKeyword(text, ref position));
+            }
             var separated = false;
+            var statementStart = true;
             for (var position = 0; position < text.Length; position++)
             {
                 SkipTrivia(text, ref position, oracle);
                 if (position == text.Length) break;
-                if (separated) return true;
+                if (separated && !typeDdl) return true;
+                if (typeDdl && statementStart)
+                {
+                    var keywordPosition = position;
+                    if (IsDdl(ReadOracleKeyword(text, ref keywordPosition))) return true;
+                }
+                statementStart = false;
                 var value = text[position];
                 if (oracle && (value == 'q' || value == 'Q') && position + 1 < text.Length && text[position + 1] == '\'')
                 {
@@ -46,6 +65,7 @@ namespace OceanBaseConnector.Internal.Sql
                     continue;
                 }
                 separated = value == ';';
+                if (separated) statementStart = true;
             }
             return false;
         }

@@ -98,7 +98,7 @@ namespace OceanBaseConnector
         {
             var context = type.Context;
             if (context == null || !ReferenceEquals(context.Connection, this) || !ReferenceEquals(context, _complexTypeContext) ||
-                !ReferenceEquals(session, context.Session) || !ReferenceEquals(context.Transaction, transaction) || context.Epoch != _transactionEpoch ||
+                !ReferenceEquals(session, context.Session) || !ReferenceEquals(context.Transaction, transaction) || context.Epoch != _transactionEpoch || context.MetadataEpoch != session.ComplexTypeEpoch ||
                 !type.IsAnonymous && (!_complexTypes.TryGetValue((type.SchemaName, type.TypeName), out var cached) || !ReferenceEquals(cached, type)))
                 throw new InvalidOperationException("The complex type's session, transaction or cache generation has changed.");
         }
@@ -106,7 +106,7 @@ namespace OceanBaseConnector
         private ComplexTypeContext EnsureComplexTypeContext(PhysicalSession session, OceanBaseTransaction? transaction)
         {
             if (_complexTypeContext == null || !ReferenceEquals(_complexTypeContext.Session, session) ||
-                !ReferenceEquals(_complexTypeContext.Transaction, transaction) || _complexTypeContext.Epoch != _transactionEpoch)
+                !ReferenceEquals(_complexTypeContext.Transaction, transaction) || _complexTypeContext.Epoch != _transactionEpoch || _complexTypeContext.MetadataEpoch != session.ComplexTypeEpoch)
             {
                 _complexTypes = new Dictionary<(string, string), OceanBaseComplexType>();
                 _complexTypeContext = new ComplexTypeContext(this, session, transaction, _transactionEpoch, _builder.CommandTimeout);
@@ -152,7 +152,7 @@ namespace OceanBaseConnector
                 lock (_gate)
                 {
                     var session = GetCommandSession(transaction, owner);
-                    if (!ReferenceEquals(session, context.Session) || context.Epoch != _transactionEpoch || !ReferenceEquals(_complexTypeContext, context))
+                    if (!ReferenceEquals(session, context.Session) || context.Epoch != _transactionEpoch || context.MetadataEpoch != session.ComplexTypeEpoch || !ReferenceEquals(_complexTypeContext, context))
                         throw new InvalidOperationException("The complex type dictionary context changed while loading.");
                     if (loader.Types.Count > ComplexValueCodec.MaximumMembers - _complexTypes.Count) throw new NotSupportedException("The type cache exceeds its supported size.");
                     var published = new Dictionary<(string, string), OceanBaseComplexType>(_complexTypes);

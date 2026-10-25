@@ -64,39 +64,43 @@ namespace OceanBaseConnector.ConsumerTests
                     foreach (var value in values) if (value != null) { var bytes = Encoding.UTF8.GetBytes(value); memory.WriteByte((byte)bytes.Length); memory.Write(bytes); }
                     return memory.ToArray();
                 }
-                byte[] Result(bool members)
+                byte[] Result(bool members, bool refreshed = false)
                 {
                     var names = members ? new[] { "MEMBER_NAME", "MEMBER_POSITION", "MEMBER_SCHEMA", "MEMBER_TYPE", "MEMBER_KIND" }
                         : new[] { "TYPE_SCHEMA", "TYPE_NAME", "TYPE_KIND", "MEMBER_COUNT" };
                     var packets = new List<byte[]> { new[] { (byte)names.Length } }; packets.AddRange(names.Select(Column));
-                    if (members) { packets.Add(Row("ID", "1", null, "NUMBER", "NUMBER")); packets.Add(Row("DATA", "2", null, "RAW", "RAW")); }
+                    if (members) { packets.Add(Row("ID", "1", null, "NUMBER", "NUMBER")); packets.Add(Row("DATA", "2", null, refreshed ? "VARCHAR2" : "RAW", refreshed ? "VARCHAR2" : "RAW")); }
                     else packets.Add(Row("Owner目标", "Mixed_Type", "OBJECT", "2"));
                     var eof = Report(false, 0); eof[0] = 254; packets.Add(eof);
                     return packets.SelectMany((p, i) => Frame((byte)(i + 1), p)).ToArray();
                 }
-                for (uint requestId = 0; requestId < 6; requestId++)
+                async Task Dictionary(uint offset, byte headerId, byte memberId, bool refreshed)
                 {
-                    var request = await ReadRequest(stream, channel, ob20, requestId + 1, budget.Token);
-                    var members = requestId >= 3; var id = members ? (byte)10 : (byte)9; byte[] response;
-                    if (requestId % 3 == 0)
+                    for (uint requestId = offset; requestId < offset + 6; requestId++)
                     {
-                        Assert.Equal(22, request[0]); var sql = Encoding.UTF8.GetString(request, 1, request.Length - 1);
-                        Assert.Contains(members ? "ALL_TYPE_ATTRS" : "ALL_TYPES", sql); Assert.DoesNotContain("Owner目标", sql); Assert.DoesNotContain("Mixed_Type", sql);
-                        response = Frame(1, new byte[] { 0, id, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0 })
-                            .Concat(Frame(2, Column("p"))).Concat(Frame(3, Column("p"))).ToArray();
+                        var request = await ReadRequest(stream, channel, ob20, requestId + 1, budget.Token);
+                        var relative = requestId - offset; var members = relative >= 3; var id = members ? memberId : headerId; byte[] response;
+                        if (relative % 3 == 0)
+                        {
+                            Assert.Equal(22, request[0]); var sql = Encoding.UTF8.GetString(request, 1, request.Length - 1);
+                            Assert.Contains(members ? "ALL_TYPE_ATTRS" : "ALL_TYPES", sql); Assert.DoesNotContain("Owner目标", sql); Assert.DoesNotContain("Mixed_Type", sql);
+                            response = Frame(1, new byte[] { 0, id, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0 })
+                                .Concat(Frame(2, Column("p"))).Concat(Frame(3, Column("p"))).ToArray();
+                        }
+                        else if (relative % 3 == 1)
+                        {
+                            Assert.Equal(23, request[0]); Assert.Equal(id, request[1]);
+                            var cursor = new ByteCursor(request); cursor.Skip(16);
+                            Assert.Equal("Owner目标", Encoding.UTF8.GetString(cursor.ReadLengthEncodedBytes()));
+                            Assert.Equal("Mixed_Type", Encoding.UTF8.GetString(cursor.ReadLengthEncodedBytes())); Assert.False(cursor.HasRemaining);
+                            response = Result(members, refreshed);
+                        }
+                        else { Assert.Equal(new byte[] { 25, id, 0, 0, 0 }, request); if (!ob20) channel.BeginCommand(); continue; }
+                        await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId + 1, 1, response) : response, budget.Token);
+                        if (!ob20) channel.BeginCommand();
                     }
-                    else if (requestId % 3 == 1)
-                    {
-                        Assert.Equal(23, request[0]); Assert.Equal(id, request[1]);
-                        var cursor = new ByteCursor(request); cursor.Skip(16);
-                        Assert.Equal("Owner目标", Encoding.UTF8.GetString(cursor.ReadLengthEncodedBytes()));
-                        Assert.Equal("Mixed_Type", Encoding.UTF8.GetString(cursor.ReadLengthEncodedBytes())); Assert.False(cursor.HasRemaining);
-                        response = Result(members);
-                    }
-                    else { Assert.Equal(new byte[] { 25, id, 0, 0, 0 }, request); if (!ob20) channel.BeginCommand(); continue; }
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId + 1, 1, response) : response, budget.Token);
-                    if (!ob20) channel.BeginCommand();
                 }
+                await Dictionary(0, 9, 10, false);
                 var prepared = await ReadRequest(stream, channel, ob20, 7, budget.Token); Assert.Equal(22, prepared[0]);
                 var preparedReply = Frame(1, new byte[] { 0, 19, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0 })
                     .Concat(Frame(2, Column("p"))).Concat(Frame(3, Column("p"))).Concat(Frame(4, Column("p"))).Concat(Frame(5, Column("p"))).ToArray();
@@ -140,6 +144,13 @@ namespace OceanBaseConnector.ConsumerTests
                 await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 11, 1, outputReply) : outputReply, budget.Token);
                 if (!ob20) channel.BeginCommand();
                 Assert.Equal(new byte[] { 25, 20, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 12, budget.Token));
+                if (!ob20) channel.BeginCommand();
+                var ddl = await ReadRequest(stream, channel, ob20, 13, budget.Token);
+                Assert.Equal(3, ddl[0]); Assert.Equal("ALTER TYPE Owner目标.Mixed_Type MODIFY ATTRIBUTE DATA VARCHAR2(32) CASCADE", Encoding.UTF8.GetString(ddl, 1, ddl.Length - 1));
+                var ddlReply = Frame(1, Report(false, 0));
+                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 13, 1, ddlReply) : ddlReply, budget.Token);
+                if (!ob20) channel.BeginCommand();
+                await Dictionary(13, 29, 30, true);
                 await ObserveClose(stream, budget.Token);
             });
             var context = new AssemblyLoadContext("complex-dictionary-" + target, isCollectible: true);
@@ -219,7 +230,27 @@ namespace OceanBaseConnector.ConsumerTests
                     var elements = (object?[])(await Call(arrayOutput.Value, "GetValues", Array.Empty<object?>()))!;
                     Assert.Equal(new byte[] { 8, 9 }, elements[0]); Assert.Null(elements[1]);
                 }
+                using (var ddl = connection.CreateCommand())
+                {
+                    ddl.CommandText = "ALTER TYPE Owner目标.Mixed_Type MODIFY ATTRIBUTE DATA VARCHAR2(32) CASCADE";
+                    Assert.Equal(0, async ? await ddl.ExecuteNonQueryAsync(budget.Token) : ddl.ExecuteNonQuery());
+                }
+                await Assert.ThrowsAsync<InvalidOperationException>(() => Call(type, "CreateValue", new object?[] { values }));
+                await Assert.ThrowsAsync<InvalidOperationException>(() => Call(arrayType, "CreateValue", new object?[] { Array.Empty<object?>() }));
+                var snapshot = (object?[])(await Call(value, "GetValues", Array.Empty<object?>()))!;
+                Assert.Equal(31, snapshot[0]); Assert.Equal(new byte[] { 1, 2 }, snapshot[1]);
+                using (var stale = connection.CreateCommand())
+                {
+                    stale.CommandText = "SELECT :p FROM dual";
+                    var parameter = stale.CreateParameter(); parameter.ParameterName = "p"; parameter.Value = value; stale.Parameters.Add(parameter);
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => async ? stale.ExecuteNonQueryAsync(budget.Token) : Task.FromResult(stale.ExecuteNonQuery()));
+                }
+                var fresh = (await Call(connection, async ? "GetComplexTypeAsync" : "GetComplexType", arguments))!;
+                Assert.NotSame(type, fresh); Assert.Same(fresh, await Call(connection, async ? "GetComplexTypeAsync" : "GetComplexType", arguments));
+                var freshValue = (await Call(fresh, "CreateValue", new object?[] { new object?[] { 31, "changed" } }))!;
+                Assert.Equal("changed", ((object?[])(await Call(freshValue, "GetValues", Array.Empty<object?>()))!)[1]);
                 await Call(connection, "ClearComplexTypeCache", new object?[] { null });
+                await Assert.ThrowsAsync<InvalidOperationException>(() => Call(fresh, "CreateValue", new object?[] { new object?[] { 31, "changed" } }));
                 await Assert.ThrowsAsync<InvalidOperationException>(() => Call(type, "CreateValue", new object?[] { values }));
                 await Assert.ThrowsAsync<InvalidOperationException>(() => Call(arrayType, "CreateValue", new object?[] { Array.Empty<object?>() }));
                 connection.Close(); await serving.WaitAsync(budget.Token);

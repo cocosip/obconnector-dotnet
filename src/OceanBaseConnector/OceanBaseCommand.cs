@@ -322,6 +322,8 @@ namespace OceanBaseConnector
                     (CommandType == CommandType.StoredProcedure || SessionStateSql.RequiresDiscard(text, session.Info!.Mode));
                 execution.InvalidatePreparedStatements = session.StatementCachingEnabled && !prepareOnly && !schemaOnly &&
                     (CommandType != CommandType.Text || !SqlStatementBoundary.CanCacheStatement(text, session.Info!.Mode));
+                execution.InvalidateComplexTypes = !prepareOnly && !schemaOnly && CommandType == CommandType.Text &&
+                    SqlStatementBoundary.InvalidatesComplexTypes(text, session.Info!.Mode);
                 _execution = execution;
                 if (arrayCount != 0) ArrayBindingResult = null;
                 if (oracle != null)

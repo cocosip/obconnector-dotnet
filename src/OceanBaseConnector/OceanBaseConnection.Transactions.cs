@@ -74,7 +74,7 @@ namespace OceanBaseConnector
                 var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin, localInfileStreamFactory: _localInfileStreamFactory)
                 { IsXa = _xaResource != null };
                 if (_complexTypeContext != null && ReferenceEquals(_complexTypeContext.Session, session) &&
-                    ReferenceEquals(_complexTypeContext.Transaction, transaction) && _complexTypeContext.Epoch == _transactionEpoch)
+                    ReferenceEquals(_complexTypeContext.Transaction, transaction) && _complexTypeContext.Epoch == _transactionEpoch && _complexTypeContext.MetadataEpoch == session.ComplexTypeEpoch)
                     exchange.ComplexTypes = _complexTypes;
                 if (session.UseLobLocators) exchange.Lobs = new LobSession(this, session, transaction, _transactionEpoch, timeout);
                 return exchange;

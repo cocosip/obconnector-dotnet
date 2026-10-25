@@ -8,6 +8,8 @@ User-SQL pool state classification now has a shared mode-aware path and a target
 
 Opt-in [prepared statement caching](obconnector-dotnet-architecture-design.md#prepared-statement-cache) has a local implementation on all five assets. The idle LRU is per physical session; reset, observed DDL/session context and successful ChangeDatabase invalidate entries. Held statements are revalidated after acquiring the exclusive session lease. Active ownership and deferred closes remain exclusive; metadata probes and Oracle PrepareExecute keep their existing owners. External DDL/reprepare, server resources, OBProxy, load and independent runtimes remain unverified; synthetic prepare delays and packet counts are not real database performance evidence.
 
+Oracle [complex-type DDL invalidation](obconnector-dotnet-architecture-design.md#complex-type-ddl-invalidation) has a local implementation: observed text CREATE/ALTER/DROP/RENAME/TRUNCATE target execution invalidates descriptions independently of statement caching. Prepare and pre-send rejection preserve them; reload types and rebuild bindings after invalidation. External or opaque DDL requires explicit `ClearComplexTypeCache`. Real DDL/OBProxy/implicit-commit/lock acceptance remains open.
+
 ## Server and topology matrix
 
 | Target | Status | Boundary |

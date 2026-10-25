@@ -83,6 +83,7 @@ namespace OceanBaseConnector.Internal.Session
         internal bool TreatTinyAsBoolean => _session.TreatTinyAsBoolean;
         internal bool DiscardSessionAfterExecution { get; set; }
         internal bool InvalidatePreparedStatements { get; set; }
+        internal bool InvalidateComplexTypes { get; set; }
         internal bool Succeeded { get; private set; }
         internal LobSession? Lobs { get; set; }
         internal IReadOnlyDictionary<(string, string), OceanBaseComplexType>? ComplexTypes { get; set; }
@@ -101,6 +102,7 @@ namespace OceanBaseConnector.Internal.Session
                 _budget.Token.ThrowIfCancellationRequested();
                 if (executesSql)
                 {
+                    if (InvalidateComplexTypes) { _session.InvalidateComplexTypes(); InvalidateComplexTypes = false; }
                     if (InvalidatePreparedStatements) _session.InvalidatePreparedStatements();
                     if (DiscardSessionAfterExecution) _session.MarkSessionStateChanged();
                     SessionTimeZone = _session.TakeSessionTimeZone(_lease);
