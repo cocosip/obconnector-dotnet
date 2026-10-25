@@ -12,10 +12,14 @@ namespace OceanBaseConnector.UnitTests
     public sealed partial class TextCommandTests
     {
         [Theory]
-        [InlineData(false, false, false)] [InlineData(true, false, false)]
-        [InlineData(false, true, false)] [InlineData(true, true, false)]
-        [InlineData(false, false, true)] [InlineData(true, false, true)]
-        [InlineData(false, true, true)] [InlineData(true, true, true)]
+        [InlineData(false, false, false)]
+        [InlineData(true, false, false)]
+        [InlineData(false, true, false)]
+        [InlineData(true, true, false)]
+        [InlineData(false, false, true)]
+        [InlineData(true, false, true)]
+        [InlineData(false, true, true)]
+        [InlineData(true, true, true)]
         public Task RefCursorOutputStreamsPagesAndKeepsParentUntilReleased(bool async, bool deprecated, bool sequential)
             => ReadRefCursorPagesAndRelease(async, deprecated, sequential);
 
@@ -85,7 +89,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task RefCursorFinalPacketCannotCompleteAfterCancellationOrSessionClose(bool async, bool close)
         {
             var server = Server(async channel =>
@@ -122,7 +129,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(ParameterDirection.Input)] [InlineData(ParameterDirection.InputOutput)]
+        [InlineData(ParameterDirection.Input)]
+        [InlineData(ParameterDirection.InputOutput)]
         public async Task RefCursorInputDirectionsAreRejectedBeforeVersionOrUserSql(ParameterDirection direction)
         {
             var server = Server(async channel => { await Query(channel, "after"); await channel.WritePacketAsync(Ok(1)); });
@@ -138,11 +146,22 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
-        public async Task RefCursorOldHandleAndCommandCannotUseOrCloseReopenedConnection(bool asynchronous)
+        [InlineData(false)]
+        [InlineData(true)]
+        public Task RefCursorOldHandleAndCommandCannotUseOrCloseReopenedConnection(bool asynchronous)
+            => RefCursorOldHandleAndCommandCannotUseOrCloseReopenedConnectionCore(asynchronous, prepared: false);
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public Task PreparedRefCursorOldHandleAndCommandCannotUseOrCloseReopenedConnection(bool asynchronous)
+            => RefCursorOldHandleAndCommandCannotUseOrCloseReopenedConnectionCore(asynchronous, prepared: true);
+
+        private static async Task RefCursorOldHandleAndCommandCannotUseOrCloseReopenedConnectionCore(bool asynchronous, bool prepared)
         {
             var oldServer = Server(async channel =>
             {
+                if (prepared) { await StatementCommand(channel, 22); await Prepared(channel, 42, 1); }
                 await StatementCommand(channel, 0xa1); await RefCursorOutput(channel);
                 await AssertOracleExecuteTransportClosed(channel);
             }, serverVersion: "4.2.0");
@@ -152,6 +171,7 @@ namespace OceanBaseConnector.UnitTests
             {
                 if (asynchronous) await connection.OpenAsync(); else connection.Open();
                 using var command = RefCursorCall(connection);
+                if (prepared) { if (asynchronous) await command.PrepareAsync(); else command.Prepare(); }
                 if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
                 using var cursor = Assert.IsType<OceanBaseRefCursor>(command.Parameters[0].Value);
                 connection.Close(); await oldServer.Completion.WaitAsync(TimeSpan.FromSeconds(10));
@@ -166,7 +186,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task RefCursorTruncatedOrTrailingOutputIdCannotPublish(bool trailing)
         {
             var server = Server(async channel =>
@@ -223,7 +244,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task RefCursorNullOrEmptyOutputClosesOnlyParent(bool empty)
         {
             var server = Server(async channel =>
@@ -243,7 +265,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task RefCursorSiblingsCloseIndependentlyAndLastReleaseClosesParent(bool alias)
         {
             var server = Server(async channel =>
@@ -271,7 +294,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task RefCursorTailErrorPreservesOldOutputAndClosesStagedIds(bool async)
         {
             var server = Server(async channel =>
@@ -292,7 +316,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task RefCursorTransactionContextCannotBeReusedAfterCompletion(bool transactional)
         {
             var server = Server(async channel =>
@@ -319,7 +344,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task RefCursorEarlyReaderOrCursorCloseDestroysUnreadSession(bool disposeCursor)
         {
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -342,7 +368,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task RefCursorFetchCancellationOrTimeoutDoesNotReclassifyCompletedSql(bool timeout, bool nextPage)
         {
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -378,7 +407,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("error")] [InlineData("no-progress")] [InlineData("extra-row")] [InlineData("changed-metadata")]
+        [InlineData("error")]
+        [InlineData("no-progress")]
+        [InlineData("extra-row")]
+        [InlineData("changed-metadata")]
         public async Task RefCursorBadFetchBreaksSessionWithoutClaimingSqlOutcomeUnknown(string kind)
         {
             var server = Server(async channel =>

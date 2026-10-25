@@ -11,7 +11,18 @@ public sealed class ArrayBindingTests
 {
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.OraclePrepareExecuteObjects), MemberType = typeof(ProfileTheoryData))]
-    public async Task ArrayInsertBelongsToExplicitTransaction(string profileName)
+    public Task ArrayInsertBelongsToExplicitTransaction(string profileName)
+        => ArrayInsertCore(profileName, asynchronous: true, prepared: false);
+
+    [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.OraclePrepareExecuteObjects), MemberType = typeof(ProfileTheoryData))]
+    public Task PreparedArrayInsertSync(string profileName) => ArrayInsertCore(profileName, asynchronous: false, prepared: true);
+
+    [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.OraclePrepareExecuteObjects), MemberType = typeof(ProfileTheoryData))]
+    public Task PreparedArrayInsertAsync(string profileName) => ArrayInsertCore(profileName, asynchronous: true, prepared: true);
+
+    private static async Task ArrayInsertCore(string profileName, bool asynchronous, bool prepared)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         Assert.True(db.Oracle);
@@ -21,7 +32,12 @@ public sealed class ArrayBindingTests
         var type = connection.CreateArrayType("NUMBER", transaction);
         await using var command = db.Command(connection, "INSERT INTO " + table + " VALUES (:id)", transaction);
         DatabaseContext.Parameter(command, "id", type.CreateValue(1, 2, 3));
-        var result = await command.ExecuteArrayAsync(3);
+        if (prepared)
+        {
+            if (asynchronous) await command.PrepareAsync(); else command.Prepare();
+            Assert.Equal(0, await db.CountAsync(connection, table, CancellationToken.None, transaction));
+        }
+        var result = asynchronous ? await command.ExecuteArrayAsync(3) : command.ExecuteArray(3);
         Assert.True(result.IsComplete);
         Assert.Equal(3, result.Items.Count);
         Assert.All(result.Items, item => Assert.Equal(OceanBaseArrayBindingStatus.Succeeded, item.Status));

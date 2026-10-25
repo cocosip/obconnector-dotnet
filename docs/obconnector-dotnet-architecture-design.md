@@ -305,6 +305,17 @@ Enable `Use Oracle Prepare Execute=true`. Procedures use `CommandType.StoredProc
 
 For cursor outputs, set `OceanBaseDbType.RefCursor` with Output or ReturnValue. Read the returned `OceanBaseRefCursor` once through `GetDataReader()` / `GetDataReaderAsync()`; default page size is 128. The cursor belongs to its original connection and transaction. An unconsumed cursor causes a pooled physical session to be discarded when its logical connection closes; release the cursor before expecting that session to be reused.
 
+<a id="oracle-standalone-prepare"></a>
+### Oracle standalone preparation
+
+With `Use Oracle Prepare Execute=true`, `Prepare()` / `PrepareAsync()` also prepare supported Oracle text OUT/RETURNING commands, stored procedures and functions. They normalize the SQL and issue COM_STMT_PREPARE without executing the target, encoding input values, reading or uploading streams, publishing outputs, or applying target SQL session-state effects. Invalid input values can be corrected before execution. Preparation still incurs server parsing, privilege checks and possible metadata locks; trusted server errors propagate without text fallback, and interrupted/malformed metadata breaks the session without reporting an unknown target execution.
+
+Repeated Prepare before execution can reuse the same valid command-owned statement. The next Oracle execution transfers that ID to its cursor owner; returned REF CURSORs keep their parent statement alive after command disposal. Once transferred, later execution uses a fresh implicit PrepareExecute unless Prepare is called again. This is not persistent Oracle statement caching. Changed SQL, parameter-count/shape incompatibility, database, physical session, reset generation or statement epoch prevents stale reuse. Ordinary preparation retains its existing reuse rules.
+
+COM_STMT_PREPARE normally describes the full bind count. Oracle DML RETURNING can instead describe input binds as parameters and pure OUT binds as result columns. Only INSERT/UPDATE/DELETE/MERGE with exact output-column and combined counts may use this split; InputOutput and ReturnValue cannot use the split exception. PrepareExecute still sends every bind and validates its own output metadata. Stream uploads use the retained ID and occur only during execution; array execution also carries that ID. Preparation ignores FetchSize, while execution of an Oracle output/PrepareExecute plan still rejects a positive FetchSize. REF CURSOR Input/InputOutput, cursor-valued columns and unsupported complex members remain separate gaps.
+
+Local fixtures and five-asset consumers cover preparation, ownership and failure handling. Direct Oracle4.4.2.2 tests cover synchronous/asynchronous block, RETURNING, procedure, function and REF CURSOR preparation, including no DML before execution and cursor consumption after command disposal. These results do not establish real TLS/OBProxy, other server versions, independent runtimes, or general metadata-lock compatibility.
+
 ### LOBs
 
 Enable `Use Lob Locators=true` and PrepareExecute. `OceanBaseLob.OpenRead()` reads BLOB bytes; `OpenTextReader()` reads character LOBs. Consume the originating reader first; each handle opens one stream. Handles become invalid after their session or transaction ends. A live LOB handle causes its pooled physical session to be discarded when the logical connection closes; dispose the handle before expecting reuse.

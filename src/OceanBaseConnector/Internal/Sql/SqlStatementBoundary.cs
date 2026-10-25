@@ -16,6 +16,13 @@ namespace OceanBaseConnector.Internal.Sql
                 !HasMultipleStatements(text, mode) && !SessionStateSql.RequiresDiscard(text, mode);
         }
 
+        internal static bool IsOracleDml(string text)
+        {
+            var position = 0;
+            var keyword = ReadKeyword(text, ref position);
+            return keyword == "INSERT" || keyword == "UPDATE" || keyword == "DELETE" || keyword == "MERGE";
+        }
+
         internal static bool HasMultipleStatements(string text, OceanBaseCompatibilityMode mode)
             => ScanStatements(text, mode, typeDdl: false);
 

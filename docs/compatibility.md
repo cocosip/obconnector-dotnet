@@ -1,5 +1,11 @@
 # Compatibility and known gaps
 
+## Oracle standalone Prepare
+
+[Standalone preparation](obconnector-dotnet-architecture-design.md#oracle-standalone-prepare) now supports Oracle text OUT/RETURNING, stored procedures and function returns. It neither executes the target nor consumes input values; server parse/privilege/metadata-lock costs remain possible. The command retains a statement only until the next execution transfers ownership to its cursor owner. Full parameter metadata and the exact pure-OUT DML split layout are validated separately; other mismatches reject. Prepare ignores execution FetchSize, while positive FetchSize for the output execution plan and REF CURSOR IN/INOUT/column values remain unsupported.
+
+The direct Oracle4.4.2.2 profile passed ten sync/async block/RETURNING/procedure/function/cursor cases and twenty final cases including existing procedure/cursor and prepared array regressions. Preparation left the test table empty and outputs unchanged; REF CURSORs remained consumable after command disposal. The initial two RETURNING count failures (one wire input plus one output column), profile-data fixture error and all original reports remain in [the module record](obconnector-dotnet-completeness.md#1534-2026-10-25-oracle-独立-prepare). This profile uses TLS disabled on Windows/.NET10; real proxy/TLS, other versions and metadata-lock/fault matrices remain open.
+
 ## Result character sets
 
 Ordinary result strings now use the [explicit strict collation map](obconnector-dotnet-architecture-design.md#result-character-sets): ASCII, MySQL latin1/CP1252, GBK, GB18030-2005, UTF-16/LE and mapped UTF-8 families. The result decoder and MySQL width metadata share one map; binary63, JSON/CLOB and trusted Oracle national rules keep their own contracts. Unknown/2022 families are rejected, not guessed. Client command/parameter encoding remains UTF-8; this is not general charset negotiation.

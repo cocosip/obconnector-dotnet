@@ -28,7 +28,17 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetReadsRefCursorAfterParentCommandDisposalOverTls(string target, bool async, string kind)
             => EveryAssetReadsRefCursorAfterParentCommandDisposalCore(target, async, kind, encrypted: true);
 
-        private static async Task EveryAssetReadsRefCursorAfterParentCommandDisposalCore(string target, bool async, string kind, bool encrypted)
+        [Theory]
+        [MemberData(nameof(OracleAssets))]
+        public Task EveryAssetPreparesRefCursorAndKeepsParentAfterDisposal(string target, bool async, string kind)
+            => EveryAssetReadsRefCursorAfterParentCommandDisposalCore(target, async, kind, encrypted: false, prepared: true);
+
+        [Theory]
+        [MemberData(nameof(OracleAssets))]
+        public Task EveryAssetPreparesRefCursorAndKeepsParentAfterDisposalOverTls(string target, bool async, string kind)
+            => EveryAssetReadsRefCursorAfterParentCommandDisposalCore(target, async, kind, encrypted: true, prepared: true);
+
+        private static async Task EveryAssetReadsRefCursorAfterParentCommandDisposalCore(string target, bool async, string kind, bool encrypted, bool prepared = false)
         {
             using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
@@ -48,28 +58,37 @@ namespace OceanBaseConnector.ConsumerTests
                     if (!ob20) channel.BeginCommand();
                 }
                 var eof = Report(false, 0); eof[0] = 254;
-                var execute = new ByteCursor(await ReadRequest(stream, channel, ob20, 1, budget.Token));
-                Assert.Equal(0xa1, execute.ReadUInt8()); Assert.Equal(0u, execute.ReadUInt32()); Assert.Equal(0, execute.ReadUInt8()); Assert.Equal(1u, execute.ReadUInt32());
+                var offset = prepared ? 1u : 0u;
+                if (prepared)
+                {
+                    var preparation = await ReadRequest(stream, channel, ob20, 1, budget.Token);
+                    Assert.Equal(22, preparation[0]);
+                    Assert.Equal("BEGIN pkg.open_cursor(?); END;", Encoding.UTF8.GetString(preparation, 1, preparation.Length - 1));
+                    await Reply(0, Frame(1, new byte[] { 0, 91, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0 }).Concat(Frame(2, Column(163))).ToArray());
+                }
+                var execute = new ByteCursor(await ReadRequest(stream, channel, ob20, 1 + offset, budget.Token));
+                Assert.Equal(0xa1, execute.ReadUInt8()); Assert.Equal(prepared ? 91u : 0u, execute.ReadUInt32()); Assert.Equal(0, execute.ReadUInt8()); Assert.Equal(1u, execute.ReadUInt32());
                 Assert.Equal("BEGIN pkg.open_cursor(?); END;", Encoding.UTF8.GetString(execute.ReadLengthEncodedBytes()));
                 Assert.Equal(1u, execute.ReadUInt32()); Assert.Equal(new byte[] { 1, 1, 6, 0 }, execute.ReadBytes(4));
-                await Reply(0, Frame(1, new byte[] { 0, 91, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 1 })
+                await Reply(offset, Frame(1, new byte[] { 0, 91, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 1 })
                     .Concat(Frame(2, Column(163))).Concat(Frame(3, Column(163))).Concat(Frame(4, new byte[] { 0, 0, 92, 0, 0, 0 }))
                     .Concat(Frame(5, eof)).Concat(Frame(6, Report(false, 0))).ToArray());
-                Assert.Equal(new byte[] { 28, 92, 0, 0, 0, 2, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 2, budget.Token));
+                Assert.Equal(new byte[] { 28, 92, 0, 0, 0, 2, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 2 + offset, budget.Token));
                 var last = Report(false, 0); last[0] = 254; last[3] |= 128;
                 var response = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(8)))
                     .Concat(Frame(3, new byte[] { 0, 0, 42, 0, 0, 0, 0, 0, 0, 0 })).Concat(Frame(4, last)).ToArray();
                 if (kind == "trailing") response = response.Concat(Frame(5, new byte[] { 0 })).ToArray();
-                await Reply(1, response);
+                await Reply(1 + offset, response);
                 if (kind != "trailing")
                 {
-                    Assert.Equal(new byte[] { 25, 92, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 3, budget.Token));
+                    Assert.Equal(new byte[] { 25, 92, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 3 + offset, budget.Token));
                     if (!ob20) channel.BeginCommand();
-                    Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 4, budget.Token));
+                    Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 4 + offset, budget.Token));
                 }
                 await ObserveClose(stream, budget.Token);
             });
             var context = new AssemblyLoadContext("ref-cursor-" + target, isCollectible: true);
+            Exception? failure = null;
             try
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
@@ -80,6 +99,12 @@ namespace OceanBaseConnector.ConsumerTests
                 var output = command.CreateParameter(); output.ParameterName = "c"; output.Direction = ParameterDirection.Output;
                 output.GetType().GetProperty("OceanBaseDbType")!.SetValue(output, Enum.Parse(assembly.GetType("OceanBaseConnector.OceanBaseDbType")!, "RefCursor"));
                 command.Parameters.Add(output);
+                if (prepared)
+                {
+                    output.Value = "not published";
+                    if (async) await command.PrepareAsync(budget.Token); else command.Prepare();
+                    Assert.Equal("not published", output.Value);
+                }
                 if (async) await command.ExecuteNonQueryAsync(budget.Token); else command.ExecuteNonQuery(); command.Dispose();
                 using var cursor = Assert.IsAssignableFrom<IDisposable>(output.Value);
                 async Task Consume()
@@ -105,7 +130,14 @@ namespace OceanBaseConnector.ConsumerTests
                 else { await Consume(); Assert.Equal(ConnectionState.Open, connection.State); }
                 cursor.Dispose(); connection.Close(); await serving.WaitAsync(budget.Token);
             }
-            finally { budget.Cancel(); listener.Stop(); context.Unload(); }
+            catch (Exception error) { failure = error; throw; }
+            finally
+            {
+                budget.Cancel(); listener.Stop();
+                try { await serving; }
+                catch when (failure != null) { }
+                finally { context.Unload(); }
+            }
         }
     }
 }

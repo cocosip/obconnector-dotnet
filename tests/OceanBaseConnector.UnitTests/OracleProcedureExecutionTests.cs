@@ -97,12 +97,18 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, "42", true)] [InlineData(true, "42", true)]
-        [InlineData(false, "1.2300", true)] [InlineData(true, "1.2300", true)]
-        [InlineData(false, "12345678901234567890123456789012345678", true)] [InlineData(true, "12345678901234567890123456789012345678", true)]
-        [InlineData(false, null, true)] [InlineData(true, null, true)]
-        [InlineData(false, "1e126", false)] [InlineData(true, "1e126", false)]
-        [InlineData(false, "1e-131", false)] [InlineData(true, "1e-131", false)]
+        [InlineData(false, "42", true)]
+        [InlineData(true, "42", true)]
+        [InlineData(false, "1.2300", true)]
+        [InlineData(true, "1.2300", true)]
+        [InlineData(false, "12345678901234567890123456789012345678", true)]
+        [InlineData(true, "12345678901234567890123456789012345678", true)]
+        [InlineData(false, null, true)]
+        [InlineData(true, null, true)]
+        [InlineData(false, "1e126", false)]
+        [InlineData(true, "1e126", false)]
+        [InlineData(false, "1e-131", false)]
+        [InlineData(true, "1e-131", false)]
         public async Task OracleUnconstrainedNumericOutputPreservesExactValuesAndModeLimits(bool async, string? text, bool valid)
         {
             var server = Server(async channel =>
@@ -148,9 +154,12 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, "2.2.75")] [InlineData(true, "2.2.75")]
-        [InlineData(false, "5.7.25-OceanBase 2.2.75")] [InlineData(true, "5.7.25-OceanBase 2.2.75")]
-        [InlineData(false, "unknown-secret")] [InlineData(true, "unknown-secret")]
+        [InlineData(false, "2.2.75")]
+        [InlineData(true, "2.2.75")]
+        [InlineData(false, "5.7.25-OceanBase 2.2.75")]
+        [InlineData(true, "5.7.25-OceanBase 2.2.75")]
+        [InlineData(false, "unknown-secret")]
+        [InlineData(true, "unknown-secret")]
         public async Task OracleProcedureUnsupportedVersionNeverSendsSqlAndLeavesSessionUsable(bool async, string version)
         {
             var server = Server(async channel =>
@@ -179,10 +188,14 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, 1U, false)] [InlineData(true, 1U, false)]
-        [InlineData(false, 3U, false)] [InlineData(true, 3U, false)]
-        [InlineData(false, 1U, true)] [InlineData(true, 1U, true)]
-        [InlineData(false, 3U, true)] [InlineData(true, 3U, true)]
+        [InlineData(false, 1U, false)]
+        [InlineData(true, 1U, false)]
+        [InlineData(false, 3U, false)]
+        [InlineData(true, 3U, false)]
+        [InlineData(false, 1U, true)]
+        [InlineData(true, 1U, true)]
+        [InlineData(false, 3U, true)]
+        [InlineData(true, 3U, true)]
         public async Task OracleReturningIntoUsesBinaryBindingsAndPublishesZeroRowsAsNull(bool async, uint flags, bool empty)
         {
             const string sql = "update t set x=? returning x into ?";
@@ -213,7 +226,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task OracleOutputWaitsForAllResultsAndEarlyClosePreservesOldValue(bool async, bool earlyClose)
         {
             var server = Server(async channel =>
@@ -251,7 +267,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task OracleOutputErrorsNeverPublishAndKnownErrorsAllowSessionReuse(bool async, bool laterError)
         {
             var server = Server(async channel =>
@@ -278,13 +297,20 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, "flags")] [InlineData(true, "flags")]
-        [InlineData(false, "multirow")] [InlineData(true, "multirow")]
-        [InlineData(false, "missing")] [InlineData(true, "missing")]
-        [InlineData(false, "decode")] [InlineData(true, "decode")]
-        [InlineData(false, "metadata-count")] [InlineData(true, "metadata-count")]
-        [InlineData(false, "metadata-no-outputs")] [InlineData(true, "metadata-no-outputs")]
-        [InlineData(false, "ordinary")] [InlineData(true, "ordinary")]
+        [InlineData(false, "flags")]
+        [InlineData(true, "flags")]
+        [InlineData(false, "multirow")]
+        [InlineData(true, "multirow")]
+        [InlineData(false, "missing")]
+        [InlineData(true, "missing")]
+        [InlineData(false, "decode")]
+        [InlineData(true, "decode")]
+        [InlineData(false, "metadata-count")]
+        [InlineData(true, "metadata-count")]
+        [InlineData(false, "metadata-no-outputs")]
+        [InlineData(true, "metadata-no-outputs")]
+        [InlineData(false, "ordinary")]
+        [InlineData(true, "ordinary")]
         public async Task OracleInvalidOutputsAreAtomicAndBreakUnknownExchanges(bool async, string fault)
         {
             var server = Server(async channel =>
@@ -331,7 +357,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task OracleOutputCommitCannotPublishAfterCancellationOrSessionClose(bool async, bool close)
         {
             var server = Server(async channel => { await Query(channel, "commit boundary"); await channel.WritePacketAsync(Ok()); });
@@ -352,10 +381,14 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false, false)] [InlineData(true, false, false)]
-        [InlineData(false, true, false)] [InlineData(true, true, false)]
-        [InlineData(false, false, true)] [InlineData(true, false, true)]
-        [InlineData(false, true, true)] [InlineData(true, true, true)]
+        [InlineData(false, false, false)]
+        [InlineData(true, false, false)]
+        [InlineData(false, true, false)]
+        [InlineData(true, true, false)]
+        [InlineData(false, false, true)]
+        [InlineData(true, false, true)]
+        [InlineData(false, true, true)]
+        [InlineData(true, true, true)]
         public async Task OpeningIdentityAndOutputCancellationNeverPublishOrReplay(bool async, bool versionProbe, bool timeout)
         {
             var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -396,7 +429,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task OracleProcedureRespectsTransactionBindingAndDoesNotChangeItsOwnership(bool async)
         {
             var server = Server(async channel =>
@@ -424,7 +458,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task OpeningIdentityErrorOrMalformedResultDoesNotClaimSqlExecution(bool async, bool malformed)
         {
             var server = IdentityProbeServer(async channel =>
@@ -444,7 +481,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task OracleProcedureWithoutParametersUsesPrepareExecuteAndClosesItsId(bool async)
         {
             var server = Server(async channel =>
@@ -466,7 +504,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task OracleInvalidCallBindingsAndExecutionModesFailBeforeVersionOrSql(bool async)
         {
             var server = Server(async channel => { await Query(channel, "after validation"); await channel.WritePacketAsync(Ok(1)); });
@@ -474,8 +513,9 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await connection.OpenAsync(); using var command = (OceanBaseCommand)connection.CreateCommand(); command.CommandText = "p"; command.CommandType = CommandType.StoredProcedure;
+                command.CommandType = CommandType.TableDirect;
                 await Assert.ThrowsAsync<NotSupportedException>(async () => { if (async) await command.PrepareAsync(); else command.Prepare(); });
-                command.FetchSize = 1;
+                command.CommandType = CommandType.StoredProcedure; command.FetchSize = 1;
                 await Assert.ThrowsAsync<NotSupportedException>(async () => { if (async) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery(); }); command.FetchSize = 0;
                 command.CommandText = "p; delete from secret";
                 var error = await Assert.ThrowsAsync<ArgumentException>(async () => { if (async) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery(); }); Assert.DoesNotContain("secret", error.Message);

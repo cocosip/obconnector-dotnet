@@ -30,14 +30,29 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
-        public async Task OracleArrayExecutionUsesOneRequestKeepsPartialFailuresAndLeavesTransactionOwnedByCaller(bool asynchronous, bool deprecated)
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public Task OracleArrayExecutionUsesOneRequestKeepsPartialFailuresAndLeavesTransactionOwnedByCaller(bool asynchronous, bool deprecated)
+            => OracleArrayExecutionCore(asynchronous, deprecated, prepared: false);
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public Task OracleStandalonePrepareArrayExecutionUsesRetainedStatement(bool asynchronous, bool deprecated)
+            => OracleArrayExecutionCore(asynchronous, deprecated, prepared: true);
+
+        private static async Task OracleArrayExecutionCore(bool asynchronous, bool deprecated, bool prepared)
         {
             var server = Server(async channel =>
             {
                 await TransactionBegin(channel);
+                if (prepared) { await StatementCommand(channel, 22, deprecated); await Prepared(channel, 42, 1, deprecated: deprecated); }
                 var cursor = new ByteCursor(await StatementCommand(channel, 0xa1, deprecated));
-                Assert.Equal(0xa1, cursor.ReadUInt8()); Assert.Equal(0u, cursor.ReadUInt32()); Assert.Equal(0, cursor.ReadUInt8()); Assert.Equal(2u, cursor.ReadUInt32());
+                Assert.Equal(0xa1, cursor.ReadUInt8()); Assert.Equal(prepared ? 42u : 0u, cursor.ReadUInt32()); Assert.Equal(0, cursor.ReadUInt8()); Assert.Equal(2u, cursor.ReadUInt32());
                 Assert.Equal("update t set x=?", ResultColumn.Utf8.GetString(cursor.ReadLengthEncodedBytes())); Assert.Equal(1u, cursor.ReadUInt32());
                 Assert.Equal(new byte[] { 0, 1, 160, 0, 0, 0, 0, 246, 3, 2, 1, 49, 1, 50 }, cursor.ReadBytes(14));
                 Assert.Equal(128u, cursor.ReadUInt32());
@@ -53,6 +68,7 @@ namespace OceanBaseConnector.UnitTests
                 await connection.OpenAsync(); using var transaction = (OceanBaseTransaction)await connection.BeginTransactionAsync();
                 using var command = (OceanBaseCommand)connection.CreateCommand(); command.Transaction = transaction; command.CommandText = "update t set x=:p";
                 var type = connection.CreateArrayType("NUMBER", transaction); command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", Value = type.CreateValue(1, null, 2) });
+                if (prepared) { if (asynchronous) await command.PrepareAsync(); else command.Prepare(); }
                 var result = asynchronous ? await command.ExecuteArrayAsync(3) : command.ExecuteArray(3);
                 Assert.Same(result, command.ArrayBindingResult); Assert.True(result.IsComplete); Assert.Equal(2, result.RecordsAffected);
                 Assert.Equal(new long?[] { 2, null, 0 }, result.Items.Select(i => i.RecordsAffected)); Assert.Equal(1, result.Items[1].ServerErrorCode);
@@ -63,7 +79,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task OracleArrayReturningPublishesGroupedMultipleRowsOnlyAfterTerminalValidation(bool asynchronous, bool tailError)
         {
             var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -110,7 +129,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task OracleArrayPlUsesPositionsAndPreservesProvenPrefixWhenServerStops(bool asynchronous, bool failure)
         {
             var server = Server(async channel =>
@@ -143,10 +165,22 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, "cancel")] [InlineData(true, "cancel")] [InlineData(false, "close")] [InlineData(true, "close")]
-        [InlineData(false, "disconnect")] [InlineData(true, "disconnect")] [InlineData(false, "timeout")] [InlineData(true, "timeout")]
-        [InlineData(false, "count")] [InlineData(true, "count")] [InlineData(false, "extra")] [InlineData(true, "extra")]
-        [InlineData(false, "tail-count")] [InlineData(true, "tail-count")] [InlineData(false, "metadata")] [InlineData(true, "metadata")]
+        [InlineData(false, "cancel")]
+        [InlineData(true, "cancel")]
+        [InlineData(false, "close")]
+        [InlineData(true, "close")]
+        [InlineData(false, "disconnect")]
+        [InlineData(true, "disconnect")]
+        [InlineData(false, "timeout")]
+        [InlineData(true, "timeout")]
+        [InlineData(false, "count")]
+        [InlineData(true, "count")]
+        [InlineData(false, "extra")]
+        [InlineData(true, "extra")]
+        [InlineData(false, "tail-count")]
+        [InlineData(true, "tail-count")]
+        [InlineData(false, "metadata")]
+        [InlineData(true, "metadata")]
         public async Task OracleArrayFailuresNeverReplayAndKeepOnlyReceivedResults(bool asynchronous, string fault)
         {
             var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -196,8 +230,15 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("scalar")] [InlineData("count")] [InlineData("size")] [InlineData("sql")] [InlineData("fetch")]
-        [InlineData("no-column")] [InlineData("output-type")] [InlineData("stale")] [InlineData("pre-cancel")]
+        [InlineData("scalar")]
+        [InlineData("count")]
+        [InlineData("size")]
+        [InlineData("sql")]
+        [InlineData("fetch")]
+        [InlineData("no-column")]
+        [InlineData("output-type")]
+        [InlineData("stale")]
+        [InlineData("pre-cancel")]
         public async Task OracleArrayInvalidDeclarationsAreRejectedBeforeVersionOrSqlAndLeaveTransactionUsable(string fault)
         {
             var server = Server(async channel =>
@@ -287,7 +328,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task OracleArrayNamedOutputElementsRetainTheirDictionaryIdentity(bool asynchronous, bool collection)
         {
             var server = Server(async channel =>
