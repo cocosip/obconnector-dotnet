@@ -1,5 +1,11 @@
 # Compatibility and known gaps
 
+## External persistent LOB acceptance
+
+Four direct Oracle cases now prove actual external BLOB/CLOB locators, exact full data and healthy same-session pool reuse after disposal (100000/220000 UTF8 bytes, sync/async). Eighteen local controlled in-flight chunk cases cover cancellation/Close/disposal/timeout and same-endpoint single-capacity replacement before clearing; these local cases do not prove real-server in-flight cancellation. [Full evidence and limits](obconnector-dotnet-completeness.md#1544-2026-10-25-外置持久-lob-读取与池生命周期验收).
+
+Tests/docs only. Final units5218pass; scoped real119pass/4configuration skips; noopt9pass/99NotExecuted. Review diagnostics/budget suggestions addressed; original Close-assertion failures retained. Direct OceanBase4.4.2.2/Windows/.NET10/TLSdisabled only, new real casesOracle only. Full fault/concurrency/load/reset/other-deployment acceptance remains open; consumers/DI/packages/independent runtimes/full database suites were not rerun. The next section retains the earlier inline-only module's evidence and limits.
+
 ## Persistent LOB and REF CURSOR pool isolation acceptance
 
 Same-endpoint single-capacity pool tests now cover twenty persistent BLOB/CLOB and eight Oracle output-cursor lifecycle cases, both locally and on the configured direct Oracle server. Active LOB handles discard the old physical session; fully disposed read-only LOBs allow reset/reuse. Stale reads, writes, truncation, binding and disposal preserve the new lease, and an independent unpooled observer verifies the stored value's exact text/bytes. REF cursor phases additionally retain conservative opaque-call session retirement; they do not prove reuse after cursor release. [Contract and limits](obconnector-dotnet-completeness.md#518-readerlob-与-ref-cursor-的剩余验收), [original failures and final evidence](obconnector-dotnet-completeness.md#1543-2026-10-25-持久-lob-与-ref-cursor-的同端点池隔离验收).

@@ -12,7 +12,7 @@ using Xunit.Abstractions;
 
 namespace OceanBaseConnector.IntegrationTests.Connections;
 
-public sealed class PoolResourceIsolationTests
+public sealed partial class PoolResourceIsolationTests
 {
     private readonly ITestOutputHelper _output;
     public PoolResourceIsolationTests(ITestOutputHelper output) => _output = output;

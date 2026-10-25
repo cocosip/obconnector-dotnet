@@ -224,7 +224,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal(0, await client.GetStream().ReadAsync(new byte[1], token));
         }
 
-        private static async Task FinishResourceTest(Action[] cleanups, Task serving, CancellationTokenSource stop, Exception? failure)
+        private static async Task FinishResourceTest(Action[] cleanups, Task serving, CancellationTokenSource stop, Exception? failure, Task? pending = null, Exception? observedReadError = null)
         {
             var errors = new List<Exception>();
             foreach (var cleanup in cleanups) { try { cleanup(); } catch (Exception error) { errors.Add(error); } }
@@ -233,6 +233,12 @@ namespace OceanBaseConnector.UnitTests
             catch (SocketException) when (failure != null && stop.IsCancellationRequested) { }
             catch (ObjectDisposedException) when (failure != null && stop.IsCancellationRequested) { }
             catch (Exception error) { errors.Add(error); }
+            if (pending != null)
+            {
+                try { await pending; }
+                catch (Exception error) when (ReferenceEquals(error, observedReadError)) { }
+                catch (Exception error) { errors.Add(error); }
+            }
             if (errors.Count != 0) { if (failure != null) errors.Insert(0, failure); throw new AggregateException(errors); }
         }
     }
