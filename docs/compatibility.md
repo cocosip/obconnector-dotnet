@@ -1,5 +1,11 @@
 # Compatibility and known gaps
 
+## Lost transaction acknowledgement
+
+Commit/rollback response loss now has sixteen controlled real-server cases and sixteen local lifecycle cases. The local relay first receives a real server reply, then drops/truncates it. The driver reports unknown outcome and discards the session; independent committed-data reconciliation and a fresh same-endpoint Max1 lease work before clearing. This is existing behavior acceptance, with no product/API change. [Application reconciliation guide](unknown-outcome-recovery.md), [full evidence/limits](obconnector-dotnet-completeness.md#1545-2026-10-25-事务响应丢失与池恢复验收).
+
+Final full units5234pass; expanded related suite160pass/4configskips includes4local fixture cases; noopt13pass/100NotExecuted. Original fixture failures retained and stop/Accept race addressed. Direct4.4.2.2 dual-mode/Windows/.NET10/TLSdisabled only, fault after a real response. Server/coordinator crash, other send boundaries and complete proxy/TLS/platform acceptance remain open. Consumers/DI/packages/runtimes/full database suites were not rerun.
+
 ## External persistent LOB acceptance
 
 Four direct Oracle cases now prove actual external BLOB/CLOB locators, exact full data and healthy same-session pool reuse after disposal (100000/220000 UTF8 bytes, sync/async). Eighteen local controlled in-flight chunk cases cover cancellation/Close/disposal/timeout and same-endpoint single-capacity replacement before clearing; these local cases do not prove real-server in-flight cancellation. [Full evidence and limits](obconnector-dotnet-completeness.md#1544-2026-10-25-外置持久-lob-读取与池生命周期验收).

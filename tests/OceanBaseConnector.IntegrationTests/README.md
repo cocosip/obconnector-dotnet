@@ -76,13 +76,15 @@ Without a configuration file, `OB_REQUIRE_INTEGRATION=1` plus the four documente
 | XA lifecycle (prepare/recover/commit/rollback), one-phase, invalid phase transitions | `Xa` |
 | PL/SQL OUT/InputOutput, RETURNING INTO, stored procedures + schema, REF CURSOR, temporary LOBs + locator params, complex types (including collection IN/OUT/InputOutput procedure parameters), array binding | `Oracle` |
 | Large binary streaming (LONG DATA / LOB locator), Oracle piece-wise upload | `Streams` |
-| Known server error reuse, cancellation, CommandTimeout | `Faults` |
+| Known server error reuse, cancellation, CommandTimeout; real COMMIT/ROLLBACK acknowledgement loss through a test-only plaintext relay, independent reconciliation and single-slot pool replacement | `Faults` |
 | ActivitySource, meters, ILogger events | `Diagnostics` |
 | SQL under OB20 framing, full-link trace | `Ob20` (needs tagged profiles) |
 
 The previous resource module records 28 new direct Oracle cases (twenty LOB, eight cursor), plus the related two-mode Connections/XA/REF CURSOR/LOB regression: 115 passed, 4 configuration skips. All twenty stored LOB locators were inline; these runs do not cover external locator network chunks/cancellation or other deployment profiles. No-opt-in results are 9 configuration passes and 98 NotExecuted. See the [exact acceptance evidence and retained fixture failures](../../docs/obconnector-dotnet-completeness.md#1543-2026-10-25-持久-lob-与-ref-cursor-的同端点池隔离验收).
 
 External persistent LOB acceptance adds four direct Oracle cases: actual inline=False BLOB100000/CLOB220000 UTF8-byte locators, exact sync/async content and healthy same-physical-session reuse. Preparation uses an independent unpooled temporary seed, freed before the pooled SELECT; no global threshold change. Final related regression119pass/4configuration skips, noopt9pass/99NotExecuted. Local eighteen in-flight interruption cases and two cleanup regressions are unit evidence; real mid-read cancellation/fault and other deployment profiles remain open. See [full external acceptance evidence](../../docs/obconnector-dotnet-completeness.md#1544-2026-10-25-外置持久-lob-读取与池生命周期验收).
+
+Transaction acknowledgement-loss acceptance adds sixteen direct cases (both modes/sync-async/commit-rollback/none-partial), restricted to existing TLSdisabled/noncompressed/nonOB20/single-endpoint profiles. The test relay reads a real server reply before withholding it; an unpooled observer verifies actual outcome and a Max1 fresh lease works before Clear. Its four ordinary fixture checks run without database opt-in. Expanded related suite160pass/4configuration skips INCLUDES those4local checks; noopt13pass/100NotExecuted. This does not prove server/coordinator crash or real OBProxy/TLS failure. [Full evidence](../../docs/obconnector-dotnet-completeness.md#1545-2026-10-25-事务响应丢失与池恢复验收), [application reconciliation](../../docs/unknown-outcome-recovery.md).
 
 ## Isolation and cleanup
 
