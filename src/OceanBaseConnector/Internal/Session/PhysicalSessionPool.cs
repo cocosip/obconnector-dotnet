@@ -682,6 +682,14 @@ namespace OceanBaseConnector.Internal.Session
 
         internal static PhysicalSessionPool Get(string key, IOceanBaseAddressResolver? resolver = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null,
             X509Certificate2? clientCertificate = null, IOceanBaseCredentialProvider? credentialProvider = null)
+            => GetCore(key, resolver, remoteCertificateValidationCallback, clientCertificate, credentialProvider, reserve: false);
+
+        internal static PhysicalSessionPool GetForRent(string key, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null,
+            X509Certificate2? clientCertificate = null, IOceanBaseCredentialProvider? credentialProvider = null)
+            => GetCore(key, resolver, remoteCertificateValidationCallback, clientCertificate, credentialProvider, reserve: true);
+
+        private static PhysicalSessionPool GetCore(string key, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
+            X509Certificate2? clientCertificate, IOceanBaseCredentialProvider? credentialProvider, bool reserve)
         {
             var fingerprint = TlsUpgrade.ClientCertificateFingerprint(clientCertificate);
             var identity = new PoolKey(key, resolver, remoteCertificateValidationCallback, clientCertificate, fingerprint, credentialProvider);
@@ -697,17 +705,7 @@ namespace OceanBaseConnector.Internal.Session
                     }
                     Pools.Add(identity, pool);
                 }
-                return pool;
-            }
-        }
-
-        internal static PhysicalSessionPool GetForRent(string key, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null,
-            X509Certificate2? clientCertificate = null, IOceanBaseCredentialProvider? credentialProvider = null)
-        {
-            lock (Gate)
-            {
-                var pool = Get(key, resolver, remoteCertificateValidationCallback, clientCertificate, credentialProvider);
-                pool.BeginRent();
+                if (reserve) pool.BeginRent();
                 return pool;
             }
         }
@@ -731,6 +729,7 @@ namespace OceanBaseConnector.Internal.Session
         internal static void Clear(string configuration, IOceanBaseAddressResolver? resolver,
             RemoteCertificateValidationCallback? validation, X509Certificate2? certificate, IOceanBaseCredentialProvider? credentialProvider = null)
         {
+            configuration = new OceanBaseConnectionStringBuilder(configuration).ToPoolConfiguration();
             var matches = new List<PhysicalSessionPool>();
             lock (Gate)
             {
@@ -757,7 +756,7 @@ namespace OceanBaseConnector.Internal.Session
             private readonly IOceanBaseCredentialProvider? _credentialProvider;
             internal string Configuration => _configuration;
             internal PoolKey(string configuration, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? validation, X509Certificate2? certificate, string fingerprint, IOceanBaseCredentialProvider? credentialProvider)
-            { _configuration = configuration; _resolver = resolver; _validation = validation; _certificate = certificate; _fingerprint = fingerprint; _credentialProvider = credentialProvider; }
+            { _configuration = new OceanBaseConnectionStringBuilder(configuration).ToPoolConfiguration(); _resolver = resolver; _validation = validation; _certificate = certificate; _fingerprint = fingerprint; _credentialProvider = credentialProvider; }
             internal bool Matches(string configuration, IOceanBaseAddressResolver? resolver, RemoteCertificateValidationCallback? validation, X509Certificate2? certificate, IOceanBaseCredentialProvider? credentialProvider) =>
                 string.Equals(_configuration, configuration, StringComparison.Ordinal) && ReferenceEquals(_resolver, resolver) && ReferenceEquals(_validation, validation) && ReferenceEquals(_certificate, certificate) && ReferenceEquals(_credentialProvider, credentialProvider);
             public bool Equals(PoolKey other) => Matches(other._configuration, other._resolver, other._validation, other._certificate, other._credentialProvider) && string.Equals(_fingerprint, other._fingerprint, StringComparison.Ordinal);

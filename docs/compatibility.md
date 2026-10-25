@@ -1,5 +1,9 @@
 # Compatibility and known gaps
 
+## Ordinary pool configuration identity
+
+Internal [pool configuration normalization](obconnector-dotnet-architecture-design.md#ordinary-pool-configuration-identity) now unifies equivalent option order, typed spelling and effective defaults for ordinary pool reuse, capacity, failure cleanup and clearing. Parsed empty PAM factors remain distinct from absent factors across Open/Close/Clear; text values, policy/certificate references and private sources retain their isolation. Public ConnectionString serialization is unchanged. Synchronous same-full-pool Open inside Closed waits for a slot still owned by Close; defer reopening until Close completes, especially when Pool Wait Timeout=0 has no finite wait limit. Full reset, arbitrary reentry/concurrency, long-running load, proxy/platform and independent-runtime acceptance remain open; see [the module record](obconnector-dotnet-completeness.md#1531-2026-10-25-普通池配置归一化).
+
 ## MySQL stored-procedure execution
 
 The module developed from `1bb13cb` adds MySQL CommandType.StoredProcedure with Input/Output/InputOutput in collection order. It requires effective PS multi-results, uses prepared SET/CALL plus a hidden output SELECT, and drains remaining results on reader close. Output values follow actual SELECT metadata rather than forced parameter DbType conversion. ReturnValue, FetchSize, SchemaOnly and KeyInfo are rejected; InputOutput streams are unsupported. Oracle execution keeps its PrepareExecute contract. See [API and lifecycle rules](obconnector-dotnet-architecture-design.md#mysql-stored-procedures) and [final module evidence](obconnector-dotnet-completeness.md#1530-2026-10-25-mysql-存储过程执行本地交付).

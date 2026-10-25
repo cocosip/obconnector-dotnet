@@ -24,10 +24,11 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
         private readonly Task _accepting;
         private readonly byte[] _greeting;
         private readonly Func<PacketChannel, Task<byte[]>> _readCommand;
+        private readonly bool _oracle;
         private int _accepted;
         private int _resets;
-        public MutualTlsServer(byte[] greeting, Func<PacketChannel, Task<byte[]>> readCommand)
-        { _greeting = greeting; _readCommand = readCommand; Certificate = TestCertificateFactory.CreateSelfSigned(); _listener.Start(); Port = ((IPEndPoint)_listener.LocalEndpoint).Port; _accepting = Accept(); }
+        public MutualTlsServer(byte[] greeting, Func<PacketChannel, Task<byte[]>> readCommand, bool oracle = true)
+        { _greeting = greeting; _readCommand = readCommand; _oracle = oracle; Certificate = TestCertificateFactory.CreateSelfSigned(); _listener.Start(); Port = ((IPEndPoint)_listener.LocalEndpoint).Port; _accepting = Accept(); }
         public X509Certificate2 Certificate { get; }
         public int Port { get; }
         public int Accepted => Volatile.Read(ref _accepted);
@@ -66,8 +67,8 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                     channel.ReplaceUnderlyingStream(tls);
                     await channel.ReadPacketAsync(_stop.Token);
                     AuthenticatedCertificates.Enqueue(tls.RemoteCertificate!.GetCertHashString());
-                    await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, _stop.Token);
-                    await ServerIdentity.ReplyAsync(channel, token: _stop.Token);
+                    await channel.WritePacketAsync(new byte[] { 0, 0, 0, _oracle ? (byte)6 : (byte)2, 0, 0, 0 }, _stop.Token);
+                    await ServerIdentity.ReplyAsync(channel, oracle: _oracle, token: _stop.Token);
                     while (true)
                     {
                         var request = await _readCommand(channel);

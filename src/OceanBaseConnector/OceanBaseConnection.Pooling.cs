@@ -25,7 +25,7 @@ namespace OceanBaseConnector
             {
                 connection.ThrowIfDisposed();
                 if (!connection._builder.Pooling) return;
-                configuration = connection._connectionString;
+                configuration = connection._builder.ToPoolConfiguration();
                 resolver = connection._addressResolver;
                 credentialProvider = connection._credentialProvider;
                 validation = connection._remoteCertificateValidationCallback;

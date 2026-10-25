@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
+using System.Text;
 using OceanBaseConnector.Internal;
 using OceanBaseConnector.Internal.Protocol;
 
@@ -498,6 +499,62 @@ namespace OceanBaseConnector
                     if (TryGetPasswordNumber(key, out _)) serializer[key] = base[key];
 
             return serializer.ConnectionString;
+        }
+
+        // Pool identity includes secrets; never expose it through diagnostics or ConnectionString.
+        internal string ToPoolConfiguration()
+        {
+            var serializer = new DbConnectionStringBuilder
+            {
+                [PortKey] = Port,
+                [PasswordKey] = Password,
+                [DatabaseKey] = Database,
+                [ConnectionTimeoutKey] = ConnectionTimeout,
+                [CommandTimeoutKey] = CommandTimeout,
+                [TlsModeKey] = TlsMode.ToString(),
+                [CheckCertificateRevocationKey] = CheckCertificateRevocation,
+                [PersistSecurityInfoKey] = PersistSecurityInfo,
+                [PoolingKey] = Pooling,
+                [MinPoolSizeKey] = MinPoolSize,
+                [MaxPoolSizeKey] = MaxPoolSize,
+                [PoolWaitTimeoutKey] = PoolWaitTimeout,
+                [ConnectionIdleLifetimeKey] = ConnectionIdleLifetime,
+                [ConnectionLifetimeKey] = ConnectionLifetime,
+                [StatementCacheSizeKey] = StatementCacheSize,
+                [ServerRsaPublicKeyKey] = ServerRsaPublicKey,
+                [AllowPublicKeyRetrievalKey] = AllowPublicKeyRetrieval,
+                [UseOb20Key] = UseOb20,
+                [UseCompressionKey] = UseCompression,
+                [EnableFullLinkTraceKey] = EnableFullLinkTrace,
+                [UseOraclePrepareExecuteKey] = UseOraclePrepareExecute,
+                [UseLobLocatorsKey] = UseLobLocators,
+                [AllowMultiStatementsKey] = AllowMultiStatements,
+                [AllowLocalInfileKey] = AllowLocalInfile,
+                [LoadBalanceKey] = LoadBalance.ToString(),
+                [ServicePrincipalNameKey] = ServicePrincipalName,
+                [TreatTinyAsBooleanKey] = TreatTinyAsBoolean,
+                [UseAffectedRowsKey] = UseAffectedRows,
+            };
+            // These optional empty defaults cannot be explicitly set through our parser.
+            if (Server.Length != 0) serializer[ServerKey] = Server;
+            if (UserId.Length != 0) serializer[UserIdKey] = UserId;
+            if (TlsServerName.Length != 0) serializer[TlsServerNameKey] = TlsServerName;
+            if (ExpectedMode.HasValue) serializer[ExpectedModeKey] = ExpectedMode.Value.ToString();
+
+            var factors = new SortedDictionary<int, string>();
+            foreach (string key in Keys)
+                if (TryGetPasswordNumber(key, out var number)) factors.Add(number, (string)base[key]);
+            var result = new StringBuilder(serializer.ConnectionString);
+            foreach (var factor in factors)
+            {
+                var key = PasswordKey + factor.Key.ToString(CultureInfo.InvariantCulture);
+                serializer.Clear();
+                serializer[key] = factor.Value;
+                result.Append(';').Append(serializer.ConnectionString);
+                // Quoted empty keeps a present PAM factor distinct from an absent one on reparse.
+                if (factor.Value.Length == 0) result.Append("\"\"");
+            }
+            return result.ToString();
         }
 
         private string? GetString(string canonicalKey)

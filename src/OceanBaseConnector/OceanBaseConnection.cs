@@ -294,12 +294,14 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
                 registryPool &= _source == null;
 #endif
-                var pool = registryPool ? _pool = PhysicalSessionPoolRegistry.GetForRent(_connectionString, _addressResolver, _remoteCertificateValidationCallback, clientCertificate, _credentialProvider)
+                // Public serialization can erase a quoted empty PAM factor; snapshot the parsed identity.
+                var poolKey = registryPool ? _builder.ToPoolConfiguration() : _connectionString;
+                var pool = registryPool ? _pool = PhysicalSessionPoolRegistry.GetForRent(poolKey, _addressResolver, _remoteCertificateValidationCallback, clientCertificate, _credentialProvider)
                     : _options.Pooling ? _pool : null;
                 _opening = true;
                 var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
                 _openingCancellation = cancellation;
-                return new OpenContext(_options, pool, _connectionString, _addressResolver, _endpointSelector, clientCertificate, _remoteCertificateValidationCallback, ++_openGeneration, cancellation, token, Transaction.Current, registryPool, _credentialProvider);
+                return new OpenContext(_options, pool, poolKey, _addressResolver, _endpointSelector, clientCertificate, _remoteCertificateValidationCallback, ++_openGeneration, cancellation, token, Transaction.Current, registryPool, _credentialProvider);
             }
         }
 

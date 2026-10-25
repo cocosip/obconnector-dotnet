@@ -395,7 +395,8 @@ namespace OceanBaseConnector
                     catch { session.Break(); }
                 }
                 return (session, transaction, exchange, previous, session?.Endpoint, openCancellation,
-                    _options?.Pooling == true ? _pool : null, _connectionString, _builder.CommandTimeout);
+                    _options?.Pooling == true ? _pool : null,
+                    _options?.Pooling == true ? _builder.ToPoolConfiguration() : _connectionString, _builder.CommandTimeout);
             }
         }
 
