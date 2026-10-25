@@ -47,7 +47,9 @@ namespace OceanBaseConnector.Internal.Protocol
         internal string? SessionTimeZone { get; private set; }
         private NationalCharacterSet? NationalCharacterSet { get; set; }
         internal Encoding TextEncoding => TypeCode == 207 || TypeCode == 208
-            ? (NationalCharacterSet ?? throw new NotSupportedException("The result has no trusted national character set.")).ResultEncoding(Charset) : Utf8;
+            ? (NationalCharacterSet ?? throw new NotSupportedException("The result has no trusted national character set.")).ResultEncoding(Charset)
+            : Charset != 63 && (TypeCode == 15 || TypeCode == 253 || TypeCode == 254 || TypeCode == 252)
+                ? ResultCharacterSet.Resolve(Charset, out _) : Utf8;
         internal string Name { get; }
         internal string Database { get; }
         internal string Table { get; }
@@ -59,7 +61,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal ushort Charset { get; }
         internal bool Unsigned { get; }
         private bool IsTinyBoolean { get; }
-        private bool HasUtf8Charset => Charset == 33 || Charset == 45 || Charset == 46 || Charset == 83 || Charset == 224 || Charset == 255;
+        private bool HasUtf8Charset => ResultCharacterSet.IsUtf8(Charset);
         internal OceanBaseCompatibilityMode Mode { get; }
         internal long Precision { get; }
         internal int Scale { get; }
@@ -257,10 +259,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 254:
                     case 252:
                         if (Charset == 63) return typeof(byte[]);
-                        // Only the negotiated UTF-8 families are decoded; never substitute another charset.
-                        if (HasUtf8Charset)
-                            return typeof(string);
-                        throw new NotSupportedException("The column character set is not supported yet.");
+                        _ = TextEncoding;
+                        return typeof(string);
                     default: throw new NotSupportedException("The column type is not supported by the text reader yet.");
                 }
             }

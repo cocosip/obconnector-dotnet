@@ -195,6 +195,27 @@ The encoded execution request is limited to 64 MiB; Oracle upload bytes count af
 
 Conversions requiring rounding or loss of precision throw. Timezone-free values do not acquire the client's local timezone.
 
+### Result character sets
+
+Ordinary string result columns select a strict decoder from their reported collation ID. The same decoder serves text/binary results, buffered/sequential reads, `GetString`, `GetChars` and `GetTextReader`; SQL NULL remains DBNull and binary collation 63 remains bytes. Metadata names and client SQL/string parameters retain their existing UTF-8 encoding. This adds result decoding, not a connection-string charset option or a general client-encoding negotiation API.
+
+| Result family | Accepted collation IDs | Maximum bytes per character |
+| --- | --- | ---: |
+| ASCII | 11, 65, 331, 346, 361 | 1 |
+| MySQL latin1 (Windows-1252) | 5, 8, 15, 31, 47, 48, 49, 94, 329, 344, 359 | 1 |
+| GBK | 28, 87, 326, 341, 356 | 2 |
+| GB18030-2005 | 248, 249, 251, 328, 343, 358 | 4 |
+| UTF-16 big endian | 54, 55, 101–124, 327, 342, 357 | 4 |
+| UTF-16 little endian | 56, 62, 333, 348, 363 | 4 |
+| UTF8MB3 | 33, 83, 192–215 | 3 |
+| UTF8MB4 | 45, 46, 224–247, 255–323 except 272/276/295/299/301/302; 325, 340, 355 | 4 |
+
+OceanBase IDs follow `v4.3.5_CE` charset definitions; legacy UTF8MB3 IDs additionally follow MySQL's [33/83 definitions](https://github.com/mysql/mysql-server/blob/mysql-8.0.44/strings/ctype-utf8.cc) and [192–215 definitions](https://github.com/mysql/mysql-server/blob/mysql-8.0.40/strings/ctype-uca.cc#L6085). The official `System.Text.Encoding.CodePages` dependency supplies CP1252/936/54936 without process-global `Encoding.RegisterProvider`. MySQL latin1 includes CP1252 C1 mappings; it is not ISO-8859-1. GBK/GB18030 reject illegal single bytes 80/FF and malformed/truncated multibyte input. GB18030 corrects CP54936's older mapping: A8BC decodes U+1E3F and 8135F437 decodes U+E7C7, including streamed reads. A BOM is a returned character, not stripped as a transport marker.
+
+Unknown collation IDs, enum holes, GB18030-2022 and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON and existing CLOB paths retain their UTF-8 restriction; trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope.
+
+Real evidence is limited to direct OceanBase 4.4.2.2 MySQL mode, Windows/.NET10 with TLS disabled: six charset cases, each exercising eight text/prepared × buffered/sequential × sync/async combinations. That server rejects `SET character_set_results=utf16` and `utf16le` with 1231/42000; those two cases instead use `character_set_results=NULL` and `CONVERT` expressions, asserting string metadata and exact decoded text. This does not establish Oracle, proxy, TLS, all collation IDs, other server versions or independent-runtime compatibility. See [verification and retained failures](obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
+
 ### Decimal parameter scale
 
 `OceanBaseParameter.DecimalScale` is an optional signed `int?` declaration for decimal parameters, including Oracle NUMBER negative scale. The setter accepts -84..127; encoding validates Oracle precision <=38/scale -84..127 or MySQL precision <=65/scale 0..30, with scale <= nonzero Precision in MySQL mode. A declaration on a non-decimal parameter is rejected, including typed NULL, complex values and LOB/cursor parameters. SQL NULL retains metadata validation.

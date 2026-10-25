@@ -931,7 +931,7 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(10, 45)]
         [InlineData(16, 63)]
-        [InlineData(253, 8)]
+        [InlineData(253, 65535)]
         public void UnsupportedTypesOrCharsetsNeverBecomeGuessedStrings(byte type, ushort charset)
         {
             var column = ResultColumn.Parse(Column("unsupported", type, charset), OceanBaseCompatibilityMode.Oracle);

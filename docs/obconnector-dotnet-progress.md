@@ -2,6 +2,21 @@
 
 This page retains historical results and open work from the former progress ledger, alongside dated verification of later changes. Local regression results and real database acceptance are recorded separately.
 
+
+## 2026-10-25 P1-08 ordinary result character sets
+
+Developed from master/abd0077: strict shared collation map/widths, Chinese byte validation and GB18030-2005 correction; official CodePages dependency for Standard assets and runtime support for modern assets, no global registration. [Contract](obconnector-dotnet-architecture-design.md#result-character-sets), [full original failures and final evidence](obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集). Binary63, JSON/CLOB, trusted national rules and client UTF8 scope remain explicit.
+
+Reviewer reproduced GBK illegal80/FF and CP54936 mapping differences; actual2RED each retained and fixed. Independent full-table comparison covered latin1, GBK and1,087,996valid GB18030 four-byte values. Initial84RED and public-reader64fixture failures retained; type9 corrected Oracle Int32 fixture, product conversion unchanged. Related524pass;128public reader and160five-asset consumer cases. Final Minor test-cleanup observation corrected without expanding product encoding APIs.
+
+Real MySQL-direct4.4.2.2 six cases pass, each8combinations on Windows/.NET10/TLSdisabled. Preserve UTF16/LE direct SET1231/42000 failures; final NULL-result-charset/source-expression path confirms string metadata/exact text. Retain Int64 fixture correction and intermediate test-source compile failure. No Oracle/proxy/TLS/other-version/full-ID or independent-runtime charset acceptance.
+
+Final full units4915pass/0fail/0skip after test-cleanup fix; DI14pass; no-opt-in Integration9pass/79individualNotExecuted; complete consumers2798pass/0fail/0skip in13m36s, exit0. TestName/testId multisets confirm160consumer additions/no removals and422unit additions/1explicit collation8→65535 negative-case replacement, net421. All original84+2+2product REDs and64fixture failures map to same-named final passes. Eleven prelaunch product/DI/Standard-consumer DLL hashes/timestamps remain identical, all modifications predate original and final consumer starts. Unit and Integration test projects alone were rebuilt for cleanup/fixture corrections; no product or consumer rebuild during full consumers.
+
+Release solution and final test-only builds0warnings/errors; scoped format exits0 with retained workspace warning and original whitespace diagnostics. Independent final review has no remainingCritical/Important/Minor. Two local no-build packages each have5exact-output DLLs plus exact current README/LICENSE/NOTICE. Eng content/dependency validation passes (StandardCodePages/modernruntime); its separate fresh-cache restore/nupkg consumer portion was not run. Preserve initial temporary-script PSScriptRoot failure and incorrect all-assets dependency assertion, both tooling assumptions corrected. Document validation confirms344local links, three23ID tables/eightworkpackages, unchanged historical completeness15.1–15.31/audit12–26 against fixedabd0077. No push/publication. See result-validation.json/document-validation.json for machine checks.
+
+Normal online restore failed NU1900/NU1301/SEC_E_NO_CREDENTIALS; offline cache restore uses per-command NuGetAudit=false, online audit remains unverified. Sandbox full tests fail Windows PFX key import; original failures and normal-user rechecks retained, no product TLS/certificate bypass. All23gap IDs/eightworkpackages and complete-driver acceptance remain open. Reports/logs are ignored local evidence under TestResults/character-sets and TestResults-character-sets-*.log; preserve separately for handoff.
+
 ## 2026-10-25 P0-01 ordinary pool configuration normalization
 
 Implemented from master/c2fe307: effective typed/default configuration identity, numeric PAM factors with quoted-empty presence, original-builder Open/Close/failure/ClearPool snapshots, idempotent registry clearing, unchanged reference/fingerprint/private-source boundaries and public serialization. [Contract](obconnector-dotnet-architecture-design.md#ordinary-pool-configuration-identity), [full record](obconnector-dotnet-completeness.md#1531-2026-10-25-普通池配置归一化).

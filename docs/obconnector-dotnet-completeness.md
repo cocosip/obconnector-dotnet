@@ -1,17 +1,17 @@
 # OceanBaseConnector .NET 完整驱动能力与缺口基线
 
-**最近复核：** 2026-10-25；当前模块开发基线 `master` / `c2fe307`。
-**当前模块：** 普通池配置归一化；[第 5.1.4 节](#514-普通池的有效配置身份)定义有效配置/凭据/清池契约，第 15.31 节及走查报告第 26 节记录本轮验证。
+**最近复核：** 2026-10-25；当前模块开发基线 `master` / `abd0077`。
+**当前模块：** P1-08 / W5 普通结果字符集；第 5.8/15.32 节及走查报告第 27 节记录契约、验证及未关闭范围。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
-**上一模块：** MySQL StoredProcedure 从 `1bb13cb` 开发，已提交为 `c2fe307`，最终记录见第 15.30 节；DDL 从 `96f544d` 开发、提交 `1bb13cb`，见第 15.28 节。
+**上一模块：** 普通池配置归一化从 `c2fe307` 开发，提交为 `abd0077`，见第 15.31 节；过程、DDL 及此前记录完整保留。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
 **文档性质：** 能力审计、公共目标契约与验收基线；已实现、部分实现、明确缺失、未验证和开发检查点分开记录。23 项及八工作包尚未整体完成。
 
-**最新实现：** 等效配置共享普通池容量与清池身份；空 PAM 因子、原始 builder 快照及策略/私有源隔离保留，公开 ConnectionString 不变；Closed 回调内同满池同步重开仍等待归还，应在 Close 完成后再打开。完整 reset、任意重入/并发、长期资源和完整真实部署/运行时矩阵仍待交付。
+**最新实现：** 普通字符串结果按可信 collation 严格解码 ASCII、MySQL latin1、GBK、GB18030-2005、UTF-16/LE 和已映射 UTF-8，MySQL ColumnSize 使用对应宽度；未知/畸形输入拒绝。客户端编码与 national/JSON/CLOB 边界不扩大；六字符集实库专项仅覆盖 MySQL 直连。完整 reset、事务故障、协议/类型余项及正式兼容矩阵仍待交付。
 
-**阅读入口：** 第 4 节列全部 23 项缺口；第 5 节定义契约；第 14 节逐项列触发场景、源码/测试入口及关闭证据；第 16 节拆为八工作包。当前模块见第 5.1.4/15.31 节；[完整走查报告](obconnector-dotnet-driver-audit.md)第 1.1/1.2 节汇总欠项，第 26 节为当前交付，第 8 节是发布门槛。
+**阅读入口：** 第 4 节列全部 23 项缺口；第 5 节定义契约；第 14 节逐项列触发场景、源码/测试入口及关闭证据；第 16 节拆为八工作包。当前模块见第 5.8/15.32 节；[完整走查报告](obconnector-dotnet-driver-audit.md)第 1.1/1.2 节汇总欠项，第 27 节为当前交付，第 8 节是发布门槛。
 
-**历史边界：** 第 5.1.3 节及走查报告第 25 节保留归一化修复前发现；第 5.1.1/15.19/15.21 节及报告第 17 节保留早期会话识别状态，后续识别契约见第 5.1.2/15.24 节。第 15.1—15.30 节保留此前实现、开发检查点、原始失败与跳过；它们不覆盖当前状态，源码存在、本地通过与真实验收分别判断。
+**历史边界：** 第 5.1.3 节及走查报告第 25 节保留归一化修复前发现；第 5.1.1/15.19/15.21 节及报告第 17 节保留早期会话识别状态，后续识别契约见第 5.1.2/15.24 节。第 15.1—15.31 节保留此前实现、开发检查点、原始失败与跳过；它们不覆盖当前状态，源码存在、本地通过与真实验收分别判断。
 
 此前 [P0-06 池路由](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [P1-04 TLS 回调](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)的本地交付保留。本文不删除缺口 ID、不以当前摘要抹去 Oracle 失败，也不将单一 .NET10 host 的五资产消费记为五种独立运行时。
 
@@ -134,7 +134,7 @@
 | P1-05 | P1 | ADO.NET 命令行为 | 部分实现 | MySQL StoredProcedure 已有集合顺序参数/输出/多结果本地实现（第 15.30 节），保留方向、capability 和提前关闭限制；补真实 TLS/代理/版本矩阵；`SchemaOnly` Prepare-only、`SingleRow`/`SingleResult` 已有本地实现；`KeyInfo` 已有有界键元数据/隐藏列实现；完整 Command/Batch/游标行为矩阵及真实目录/准备/锁/结果形状验收仍缺 |
 | P1-06 | P1 | Oracle 输出和游标 | 部分实现 | 完整参数方向、cursor 列和 PrepareExecute 形状 |
 | P1-07 | P1 | 复杂类型 | 部分实现 | 已有嵌套 object/collection、显式清理及可观察 DDL 自动失效本地实现；补齐 LOB/cursor/national 成员和真实 DDL/资源验收，外部或不透明 DDL 需显式清理 |
-| P1-08 | P1 | 类型和字符集 | 部分实现；有符号 decimal 参数 scale 本地完成 | DecimalScale 精确约束已有回归；扩展元数据、更多字符集和完整类型码及实库声明矩阵仍缺 |
+| P1-08 | P1 | 类型和字符集 | 部分实现；DecimalScale 与普通结果字符集子模块已有实现 | 有符号 scale、严格结果解码/宽度已有回归；客户端/national 编码、其他字符集、扩展元数据/类型码及完整实库矩阵仍缺 |
 | P1-09 | P1 | HA/发现 | 部分实现 | OCP/TNS、健康状态、重试退避和 proxy 拓扑 |
 | P1-10 | P1 | Schema 元数据 | 部分实现；参数推导已有本地实现 | 常用目录、DataTypes 及自动参数推导有本地实现；真实目录/权限/版本/代理验收仍缺 |
 | P1-11 | P1 | 凭据提供与轮换 | 本地实现；真实矩阵未验证 | 每次 Open 获取、全口令替换、版本排序、过期及旧会话退休已本地验证；真实凭据服务/plugin/KDC 验收仍开放 |
@@ -396,6 +396,8 @@ MySQL `CommandType.StoredProcedure` 已有独立执行计划：集合顺序绑�
 
 当前类型映射覆盖大量常用值，但遇到未识别 type code、扩展 metadata、非支持字符集或超出精度边界时会失败。
 
+普通结果字符集已有共享严格映射与流式 decoder，覆盖 ASCII、MySQL latin1/CP1252、GBK、GB18030-2005、UTF-16/LE 和列明的 UTF-8 collation；完整 ID、宽度、非法字节拒绝及客户端/national/JSON/CLOB 边界见[结果字符集契约](obconnector-dotnet-architecture-design.md#result-character-sets)。MySQL ColumnSize 使用 charset 最大宽度，Oracle 长度语义保持不变。六字符集实库专项仅覆盖 4.4.2.2 MySQL 直连；UTF16/LE 使用 NULL 保留表达式原编码，直接 SET 的 1231/42000 失败保留，详见第 15.32 节。其他编码、GB18030-2022、全部 collation/模式/版本/代理矩阵继续开放。
+
 Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持 byte 契约，现通过 `int? OceanBaseParameter.DecimalScale` 显式声明有符号 scale。Oracle -84..127、MySQL 0..30 及精度/无舍入约束已有本地回归，赋值优先级见[参数契约](obconnector-dotnet-architecture-design.md#decimal-parameter-scale)，交付记录见第 15.16 节。自动参数推导沿用该表示，本地回归覆盖负值的保留及精度约束；真实目录/声明矩阵仍须验收。
 
 目标要求：
@@ -620,7 +622,7 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 | P1-05 | MySQL `CommandType.StoredProcedure` 已有有序参数/输出与关闭排空实现，仍有限定方向/capability/行为和真实部署验收（第 15.30 节），目录/参数推导不证明执行兼容性；`KeyInfo` 已有主键/唯一键与单基表隐藏列实现，复杂形状保留 unknown；Batch 行为比 Command 更少；`SchemaOnly` 已改为 Prepare-only 并禁止目标执行/fallback/参数上传；真实准备行为及结果形状矩阵仍缺。 | `OceanBaseCommand.cs`；`OceanBaseDataReader.cs`；`OceanBaseBatch.cs`；`KeyInfoTests.cs`、`KeyInfoPlanningTests.cs`、`MySqlProcedureTests.cs`、`MySqlProcedureLifecycleTests.cs`、`SchemaOnlyTests.cs`、`BehaviorOptionsTests.cs`、`ReaderSchemaTests.cs`、`BatchSurfaceTests.cs`；消费者 `KeyInfoConsumerTests.cs`、`SchemaOnlyConsumerTests.cs` | MySQL 过程名、参数方向/输出、多结果及取消/错误/池复用的执行回归与实库报告；命令/Batch/REF CURSOR 行为表、主键/唯一键元数据、SchemaOnly 副作用/锁/大结果用例；按实际实现公开限制，不把 SQL 前缀当成只读证明。 |
 | P1-06 | REF CURSOR 的 Input/InputOutput、普通 cursor-valued column 和 PrepareExecute 独立 Prepare/FetchSize 组合被拒绝。 | `Internal/Sql/OracleCommandPlan.cs`；`OceanBaseCommand.cs`；`RefCursorTests.cs`、`OraclePrepareExecuteResponseTests.cs` | 参数方向 × NULL × 输出行数 × 多结果 × 取消/关闭矩阵；输入/输出游标明确所有权；服务端不支持的形状单列，不伪造通过。 |
 | P1-07 | 嵌套 object/collection 已可编解码，但其中 LOB/cursor/national 成员仍不支持。可观察 DDL 发送时已自动失效，外部/不透明 DDL 须显式清理；真实 DDL/锁/隐式提交仍未验证。 | `OceanBaseConnection.ComplexTypes.cs`；`Internal/Values/ComplexType.cs`、`ComplexValueCodec.cs`；`ComplexTypeDictionaryTests.cs`、`ComplexResultTests.cs` | 保留既有嵌套回归，扩展成员类型与 NULL；DDL 后旧描述失效、跨 session/transaction 不误用；深度/成员/字节限制和循环定义继续拒绝。 |
-| P1-08 | 扩展列 metadata/未知类型码被拒绝；national 字符集限于已支持编码；MySQL 客户端 prepare fallback 的字符串因无可信 session collation 被拒绝。 | `Internal/Protocol/ResultColumn.cs`、`NationalCharacterSet.cs`；`Internal/Sql/ClientPreparedSql.cs`；`NationalCharacterTests.cs`、`ClientPrepareFallbackTests.cs`、`WideDecimalTests.cs` | 每种类型的参数/结果/NULL/精度/溢出表；编码不可表示时不静默替换；可信 collation 与 SQL mode 后才扩展字符串 fallback；不把禁止降级误称 server prepare 缺失。 |
+| P1-08 | 普通结果字符集已有严格映射/宽度及流式解码；其他/2022 编码、扩展 metadata/未知类型码仍拒绝；national 限已支持编码；MySQL 客户端 prepare fallback 字符串仍缺可信 session collation。 | `Internal/Protocol/ResultCharacterSet.cs`、`ChineseEncoding.cs`、`ResultColumn.cs`、`ResultDbColumn.cs`、`NationalCharacterSet.cs`；`Internal/Sql/ClientPreparedSql.cs`；`CharacterSetTests.cs`、`CharacterSetReaderTests.cs`、`CharacterSetConsumerTests.cs`、`NationalCharacterTests.cs`、`ClientPrepareFallbackTests.cs`、`WideDecimalTests.cs` | 每种类型的参数/结果/NULL/精度/溢出表；编码不可表示时不静默替换；可信 collation 与 SQL mode 后才扩展字符串 fallback；不把禁止降级误称 server prepare 缺失。 |
 | P1-09 | OCP/TNS 等发现、健康缓存/退避和代理拓扑没有内置实现；只注入 resolver 不能证明 HA。 | `IOceanBaseAddressResolver.cs`；`Internal/EndpointSelector.cs`；`MultiAddressTests.cs`、`TopologyExecutionTests.cs` | 地址更新、旧会话失效、错误身份/TLS 不重试、预算/退避、代理 reroute 和节点故障报告；与 P0-06 共同冻结池路由契约。 |
 | P1-10 | 常用目录已本地实现；Types/Synonyms 为 Oracle-only，Users/Sequences 可能需要额外权限；真实字典/版本/代理矩阵未验证。DataTypes 及自动参数推导已有本地实现；真实目录互操作未验证。 | `OceanBaseConnection.Schema.cs`、`OceanBaseConnection.Schema.Routines.cs`、`OceanBaseConnection.Schema.Catalog.cs`、`OceanBaseConnection.Schema.DataTypes.cs`；`DataTypeSchemaTests.cs`、`CatalogSchemaTests.cs`、`ConnectionSchemaTests.cs`、`RoutineSchemaTests.cs`；另有 `OceanBaseCommand.Parameters.cs`、`OceanBaseConnection.Parameters.cs`、`Internal/Sql/RoutineParameterDerivation.cs`、`DeriveParameters*Tests.cs`，见第 15.18 节 | 保留 DataTypes 实际 codec/可信字符集正向与拒绝、五资产和完整形状、限制参数、精度、空目录、权限错误回归；完成集合/大小写/权限 × 双模式实库和代理矩阵；保留自动参数推导本地回归，并按第 5.10.1 节完成实库验收。 |
 | P1-11 | 应用需要短期口令/token 或密钥轮换；本地实现已完成，真实过期/拒绝/轮换服务与插件矩阵仍未验证。 | `IOceanBaseCredentialProvider.cs`；`OceanBaseConnection.Credentials.cs`；`Internal/CredentialAcquisition.cs`；`Internal/Session/PhysicalSessionPool.Credentials.cs`；`CredentialProviderTests.cs`、`CredentialProviderLifecycleTests.cs`、`CredentialProviderDiagnosticsTests.cs`；消费者 `CredentialProviderConsumerTests.cs` | API 获取时点、取消、过期/刷新失败、并发刷新和旧会话失效测试；日志/trace/指标不包含凭据；本地插件测试外还需真实 plugin/KDC 成功及拒绝矩阵。 |
@@ -1523,6 +1525,24 @@ close-boundary-red 另外 2 个回调测试原期望“在 Closed 内同步重�
 
 所有报告保存在忽略目录 `TestResults/pool-configuration/`，根日志为 `TestResults-pool-configuration-*.log`。原始 RED、fixture 失败及历史 MySQL/Oracle/证书/清理失败保留。P0-01、全部 23 项和八个工作包继续开放，完整 reset、资源/压力、OBProxy 和独立运行时/正式发布门槛不由本模块替代。
 
+### 15.32 2026-10-25 普通结果字符集
+
+**开发起点 `master/abd0077`；归属 P1-08 / W5。** 新增共享 ResultCharacterSet 映射及严格 ChineseEncoding，普通 ResultColumn 与 MySQL ColumnSize 共用实际最大字符宽度。全部八族的明确 ID/失败契约见[公共 API](obconnector-dotnet-architecture-design.md#result-character-sets)。使用官方 System.Text.Encoding.CodePages >=8.0.0，不做全局 RegisterProvider；两个 Standard 包依赖组声明该依赖，现代资产使用运行时支持。SQL/字符串参数仍 UTF-8；JSON/CLOB、binary63 与可信 national 规则不扩大。
+
+**真实 RED 与独立走查。** initial-red 为84失败/24通过，原 collation8负例因现已支持，明确改为65535未知ID，而非删除拒绝测试。reviewer 发现 CP936 单字节80/FF接受问题，gbk-red 为2失败/10通过；严格语法验证后拒绝。CP54936 属旧映射，gb18030-red 为2失败/98通过；修正 A8BC→U+1E3F、8135F437→U+E7C7，整值/分块一致。独立对照 OceanBase v4.3.5_CE 全表：latin1全部256字节、GBK已定义双字节一致；GB18030双字节仅A8BC差异，1,087,996个有效四字节仅8135F437差异。来源快照和全表核对日志保存在忽略目录；未复制上游映射表到产品。
+
+**fixture 与清理。** reader-green 的64失败/262通过是 Oracle type3 NUMBER 被 fixture 按 Int32 读取，改用实际 Int32 type9，未改变产品转换。shared fixture 在失败时取消服务预算并始终等待任务，保留主异常；最终 reviewer 的 Minor（非法字节测试主断言失败时跳过服务任务等待）也按相同原则修正。相关最终524通过，覆盖双模式、文本/二进制、同步/异步、缓冲/顺序、GetString/GetChars/GetTextReader、分块、NULL、宽度及连接复用；160个五资产消费者覆盖八样本。
+
+**真实服务器。** 4.4.2.2 mysql-direct、Windows/.NET10、TLS disabled 的最终 real-character-sets-source-encoding 为6通过；每例内部验证8种协议/读取/同步组合。初次42字面量 Int32断言失败改为实际Int64；其后报告保留SET utf16/utf16le的1231/42000失败（最终分例4通过/2失败）。服务端禁止该会话设置，最终两例使用 character_set_results=NULL + CONVERT 源表达式，验证string FieldType和精确值，防止仅得到binary63字节却声称文本成功。中途 integration-cases-build 19个测试源码编译错误及修复日志保留，不记为产品缺陷。其余四族保留显式结果字符集设置，末尾重置UTF8并验证复用。没有 Oracle 新增实库字符集、TLS、OBProxy、其他版本/全ID/独立运行时报告。
+
+**最终门禁：** 最终 Release solution build 0警告/错误；测试清理修正后仅重建Unit项目，集成fixture修正后仅重建Integration项目，均0警告/错误，产品及消费者不重建。完整 unit-final 4915通过/0失败/0跳过；DI14通过；无opt-in integration-final-cases 为9通过/79逐用例NotExecuted。完整 consumer-final 2798通过/0失败/0跳过，耗时13分36秒，正常用户上下文退出0；沙箱原unit为4778通过/137失败、consumer为1952通过/846失败，全部原报告保留。最终独立增量复核无剩余Critical/Important/Minor；reviewer不代替主任务全量执行证据。
+
+按testName及testId多重集对比上一pool模块：消费者实际新增160、无移除；单测新增422、移除1，净增421，其中唯一移除是collation8负例改为65535，已单列为期望修订。全部84+2+2产品RED及64fixture失败同名映射到最终通过，细节见result-validation.json。运行前冻结的11个core/DI/Standard-consumer DLL哈希及时间戳在原沙箱与最终正常用户消费者运行后完全一致，修改时间均早于两次启动；没有在消费者运行期间重建产品/消费者。
+
+两个本地包均 --no-build/--no-restore 生成，各5个DLL与冻结输出逐字节一致，README/LICENSE/THIRD-PARTY-NOTICES精确匹配当前文件。已运行eng脚本的内容/依赖检查部分；没有运行其新缓存restore及独立nupkg消费者部分。最初临时提取脚本因PSScriptRoot为空失败，传明确仓库位置后进入检查；其后错误要求现代资产也声明CodePages，实际现代资产使用runtime而被prune，已按Standard包依赖/现代runtime修正检查与文档，最终退出0；两个原失败日志保留，不记为产品缺陷。scoped format最终退出0，保留workspace-load warning及最初whitespace诊断/修正日志；文档检查核对三张23ID表、八工作包、344本地链接、UTF8-noBOM/CRLF，及相对固定abd0077的15.1–15.31与走查12–26历史原文不变。未发布或推送。
+
+**环境与证据边界。** 正常 NuGet restore 出现 NU1900/NU1301 和 SEC_E_NO_CREDENTIALS；使用本机缓存源及单次 NuGetAudit=false 完成 restore，未更改仓库审计策略，漏洞在线审计未完成。默认沙箱完整测试存在 X509CertificateLoader.ImportPfx 的 Windows 用户密钥导入失败，原失败与正常用户复跑分别保留，不修改证书工厂、TLS 校验或产品绕过。全部报告位于忽略目录 TestResults/character-sets/，日志为 TestResults-character-sets-*.log，交接需另行归档。五资产只在同一 .NET10 host 运行；P1-08、全部23项和八工作包及完整驱动目标保持开放，历史 Oracle nested-table-column 及清理失败/跳过不改写。
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。
@@ -1533,7 +1553,7 @@ close-boundary-red 另外 2 个回调测试原期望“在 Closed 内同步重�
 | W2 事务与失败恢复：P0-03、P0-04、P0-05 | 保留已交付的 PSPE 单资源/终态、初始化与晚回调/池身份、自动初始化取消/池与协调器恢复及超时本地回归；补真实事务管理器/代理故障、未知执行结果核对与应用重建契约；分布式提升拒绝，透明恢复另定范围 | 发送前/后、响应中、commit/rollback 回包丢失、超时/in-doubt、提前关闭的故障矩阵；异常分类、会话销毁及业务核对示例；无未知写 replay | W1 租约与隔离规则 |
 | W3 协议选项：P1-01、P1-02、P1-03 | 标准 MySQL 压缩已本地实现；先确认客户端 OB20 压缩契约再补实现，并补 reroute；保留已实现的 opt-in 文本多语句和应用流 LOCAL INFILE，明确不支持的组合 | 客户端链路/版本/capability 依据；协商成功/拒绝、分片/序列/校验/解压限额；多结果中途错误；上传超限/取消/代理策略；真实 OceanBase/OBProxy 互操作 | G0 及第 16.3 节；reroute 依赖 W2/W4 |
 | W4 信任、发现与凭据：P1-04、P1-09、P1-11 | 凭据提供/轮换已有本地实现，补真实凭据服务与插件验收；补发现与健康/退避策略，明确 OCP/TNS 或等价发现范围。现有 TLS 回调、证书副本及池身份无需重做 | 企业 CA/mTLS、证书与凭据过期/刷新失败、撤销、KDC/plugin 成功及拒绝；地址更新/错误身份/节点与代理故障；Windows/Linux 报告 | W1 池身份、W2 重试边界 |
-| W5 命令、Oracle 与类型：P1-05、P1-06、P1-07、P1-08 | 保留 KeyInfo 键/隐藏列和复杂查询 unknown 契约及回归，补真实目录验收；保留 SchemaOnly Prepare-only 本地回归并补真实准备行为验收；保留 MySQL StoredProcedure 参数方向/输出/多结果实现及回归并补部署验收（第 15.30 节），以及已承诺的 Oracle 输出方向/结果形状、复杂成员、类型码/字符集映射；保留可观察 DDL 自动失效回归并补真实验收。有符号 DecimalScale 已本地完成，保留其精度和覆盖规则 | Command/Batch/REF CURSOR 行为表；NULL/方向/精度/溢出/编码/取消与资源释放矩阵；SchemaOnly 副作用/锁/大结果报告；服务端不支持形状单列 | G0；资源生命周期与 W1 联动 |
+| W5 命令、Oracle 与类型：P1-05、P1-06、P1-07、P1-08 | 保留 KeyInfo 键/隐藏列和复杂查询 unknown 契约及回归，补真实目录验收；保留 SchemaOnly Prepare-only 本地回归并补真实准备行为验收；保留 MySQL StoredProcedure 参数方向/输出/多结果实现及回归并补部署验收（第 15.30 节），以及已承诺的 Oracle 输出方向/结果形状、复杂成员、扩展类型码/其余字符集；保留第 15.32 节的普通结果映射/严格 decoder/宽度并补完整部署验收；保留可观察 DDL 自动失效回归并补真实验收。有符号 DecimalScale 已本地完成，保留其精度和覆盖规则 | Command/Batch/REF CURSOR 行为表；NULL/方向/精度/溢出/编码/取消与资源释放矩阵；SchemaOnly 副作用/锁/大结果报告；服务端不支持形状单列 | G0；资源生命周期与 W1 联动 |
 | W6 目录与 ADO.NET 生态：P1-10、P2-01 | 常用目录/限制参数及 DataTypes 已本地完成；自动参数推导已通过本地回归和独立走查（第 15.18 节）；补实库/权限/版本/代理矩阵；DataAdapter/CommandBuilder 已有本地填充、映射/事件和有界 CRUD，补真实验收，不以 ADO.NET provider 代替 EF Core provider | 双模式目录/权限/大小写/空集合；类型映射与过程重载/参数方向；保留 adapter CRUD、键、原始值/NULL 和乐观并发本地回归；补实际 SQL/锁及独立运行时报告 | W5 键与结果元数据 |
 | W7 性能与可观测性：P2-02、P2-03、P2-04 | 保留已有 opt-in idle statement cache，补真实 DDL/reprepare/资源/负载验收；选择并实现承诺的 rewrite/multi-send/bulk 优化；补建连/探活分段及慢查询/协议诊断。保留顺序 Batch 和 Oracle array binding | 缓存容量/失效/关闭、批量部分失败/事务/取消/包限额；吞吐、延迟、峰值内存与资源上限对照；诊断脱敏和监听开销 | W1 generation/reset、W5 绑定规则 |
 | W8 运行时与发布：P2-05、P2-06 | 明确版本、平台、TFM、Framework/ORM 的承诺范围；将六个 matrix.* 占位变成有环境和断言的案例；完成包名、来源/许可和发布审查 | 每个承诺 profile 的 nupkg consumer、实库/代理/TLS/认证/故障报告；保留 Oracle 失败及所有跳过原因；外部 coordinator crash recovery；可复现命令和清理结果 | 各包可并行积累证据，正式发布须满足第 7.3 节 |

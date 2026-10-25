@@ -25,8 +25,11 @@ namespace OceanBaseConnector.Internal.Protocol
             IsUnique = keyInfo?.IsUnique;
             IsLong = column.TypeCode == 252 || column.TypeCode == 245 || column.TypeCode == 210 || column.TypeCode == 211;
             var size = column.Length;
-            if (column.Mode == OceanBaseCompatibilityMode.MySql && DataType == typeof(string))
-                size /= column.Charset == 33 || column.Charset == 83 ? 3U : 4U;
+            if (column.Mode == OceanBaseCompatibilityMode.MySql && DataType == typeof(string) && column.TypeCode != 245)
+            {
+                ResultCharacterSet.Resolve(column.Charset, out var width);
+                size /= width;
+            }
             // JSON's byte length does not establish a maximum character count.
             ColumnSize = column.TypeCode == 160 || column.TypeCode == 245 || column.TypeCode == 210 || column.TypeCode == 211 ? (int?)null : (int)Math.Min(int.MaxValue, size);
             if (column.IsDecimal)

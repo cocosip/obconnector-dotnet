@@ -15,6 +15,7 @@ $version = [string]$rootProperties.Project.PropertyGroup.Version
 [xml]$packageVersions = Get-Content -LiteralPath (Join-Path $repository 'Directory.Packages.props') -Raw
 $cryptoMinimum = ([string]($packageVersions.SelectSingleNode('//PackageVersion[@Include="BouncyCastle.Cryptography"]')).Version) -replace '^\[|,\)$', ''
 $compressionMinimum = ([string]($packageVersions.SelectSingleNode('//PackageVersion[@Include="SharpZipLib"]')).Version) -replace '^\[|,\)$', ''
+$encodingMinimum = ([string]($packageVersions.SelectSingleNode('//PackageVersion[@Include="System.Text.Encoding.CodePages"]')).Version) -replace '^\[|,\)$', ''
 $targets = @('netstandard2.0', 'netstandard2.1', 'net8.0', 'net9.0', 'net10.0')
 $packages = @('OceanBaseConnector', 'OceanBaseConnector.DependencyInjection')
 $hashes = @{}
@@ -79,6 +80,12 @@ foreach ($id in $packages) {
                 Assert-Package ($compression.Count -eq 1 -and (Test-MinimumVersion $compression[0].version $compressionMinimum)) "$target must declare the centrally managed compression dependency."
                 $cryptography = @($dependencies | Where-Object id -eq 'BouncyCastle.Cryptography')
                 Assert-Package ($cryptography.Count -eq 1 -and (Test-MinimumVersion $cryptography[0].version $cryptoMinimum)) "$target must declare the centrally managed cryptography dependency."
+                $encoding = @($dependencies | Where-Object id -eq 'System.Text.Encoding.CodePages')
+                if ($target -like 'netstandard*') {
+                    Assert-Package ($encoding.Count -eq 1 -and (Test-MinimumVersion $encoding[0].version $encodingMinimum)) "$target must declare the centrally managed encoding dependency."
+                } else {
+                    Assert-Package ($encoding.Count -eq 0) "$target must use runtime code-page support."
+                }
                 $diagnostics = @($dependencies | Where-Object id -eq 'System.Diagnostics.DiagnosticSource')
                 if ($target -like 'netstandard*') {
                     Assert-Package ($diagnostics.Count -eq 1 -and (Test-MinimumVersion $diagnostics[0].version '8.0.0')) "$target must allow DiagnosticSource 8.0.0 or newer without an upper bound."

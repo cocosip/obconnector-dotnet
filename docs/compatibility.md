@@ -1,5 +1,11 @@
 # Compatibility and known gaps
 
+## Result character sets
+
+Ordinary result strings now use the [explicit strict collation map](obconnector-dotnet-architecture-design.md#result-character-sets): ASCII, MySQL latin1/CP1252, GBK, GB18030-2005, UTF-16/LE and mapped UTF-8 families. The result decoder and MySQL width metadata share one map; binary63, JSON/CLOB and trusted Oracle national rules keep their own contracts. Unknown/2022 families are rejected, not guessed. Client command/parameter encoding remains UTF-8; this is not general charset negotiation.
+
+The real direct OceanBase4.4.2.2 MySQL test passes six charset cases, each covering eight text/prepared × buffered/sequential × sync/async combinations, including exact GB18030 corrected characters, NULL and connection reuse. UTF16/LE direct SET attempts remain recorded as server1231/42000 failures; the final cases use `character_set_results=NULL` to preserve expression encoding and assert string FieldType. The initial Int32-versus-Int64 literal assertion and an intermediate test-source compilation failure are retained as fixture/development failures. Local dual-mode reader tests and five-asset consumers cover additional paths; they do not establish Oracle/proxy/TLS compatibility. Full evidence and environment limitations are in [the module record](obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
+
 ## Ordinary pool configuration identity
 
 Internal [pool configuration normalization](obconnector-dotnet-architecture-design.md#ordinary-pool-configuration-identity) now unifies equivalent option order, typed spelling and effective defaults for ordinary pool reuse, capacity, failure cleanup and clearing. Parsed empty PAM factors remain distinct from absent factors across Open/Close/Clear; text values, policy/certificate references and private sources retain their isolation. Public ConnectionString serialization is unchanged. Synchronous same-full-pool Open inside Closed waits for a slot still owned by Close; defer reopening until Close completes, especially when Pool Wait Timeout=0 has no finite wait limit. Full reset, arbitrary reentry/concurrency, long-running load, proxy/platform and independent-runtime acceptance remain open; see [the module record](obconnector-dotnet-completeness.md#1531-2026-10-25-普通池配置归一化).
