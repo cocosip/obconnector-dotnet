@@ -21,6 +21,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 case 0: case 3: case 246: code = 0; name = "NUMBER"; break;
                 case 253: code = 253; name = "VARCHAR2"; break;
                 case 254: code = 254; name = "CHAR"; break;
+                case 207: code = 207; name = "NVARCHAR2"; break;
+                case 208: code = 208; name = "NCHAR"; break;
                 case 203: code = 203; name = "RAW"; break;
                 case 12: code = 12; name = "DATE"; break;
                 case 202: code = 202; name = "TIMESTAMP"; break;

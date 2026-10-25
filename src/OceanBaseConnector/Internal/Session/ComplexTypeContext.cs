@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace OceanBaseConnector.Internal.Session
 {
     internal sealed class ComplexTypeContext
@@ -10,5 +12,6 @@ namespace OceanBaseConnector.Internal.Session
         internal long Epoch { get; }
         internal long MetadataEpoch { get; }
         internal int Timeout { get; }
+        internal Encoding? StoredNationalEncoding { get; set; }
     }
 }

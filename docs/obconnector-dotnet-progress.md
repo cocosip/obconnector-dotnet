@@ -3,6 +3,18 @@
 This page retains historical results and open work from the former progress ledger, alongside dated verification of later changes. Local regression results and real database acceptance are recorded separately.
 
 
+## 2026-10-25 P1-07 complex national members
+
+Developed from `master/a1dddde`, P1-07/W5. Named and nested NCHAR/NVARCHAR2 members, scalar factory arrays and PL outputs use strict encoding according to direction: connection encoding for inputs, queried AL16UTF16 for stored members, and the result snapshot's session national encoding for PL outputs. See the [contract](obconnector-dotnet-architecture-design.md#complex-national-members) and [complete evidence](obconnector-dotnet-completeness.md#1547-2026-10-25-复杂类型-national-成员与方向编码). No public API, configuration or dependencies were added.
+
+Other database national encodings, anonymous ordinary non-NULL national results without trusted storage context, and complex whole-column RETURNING with unresolved identity remain unsupported. Such RETURNING failures preserve prior output values, report an unknown execution outcome and break the session; the application must reconcile the write.
+
+The final full unit run passed all 5,326 cases outside the sandbox with collection parallelism disabled; all 180 related consumer cases passed. The earlier full run (5,325 passed, one RSA-stage wait failed) and sandbox run (5,187 passed, 139 failed) remain recorded. The focused RSA run passed 10 cases and the TLS run outside the sandbox passed five; these repeats do not establish a root-cause fix for the original timing failure.
+
+The selected Oracle suite passed 64 of 65 cases; the historical nested-table column case still fails at the server. The 56 new cases comprise 48 positive cases and eight RETURNING rejection guards. Without integration opt-in, 13 cases passed and 105 were not executed. The Release build had no warnings or errors; scoped format and verification of 18 C# files exited successfully with the existing workspace warning retained. Original failures, the NLS review fix and mutation evidence, and three migrated old cases remain recorded. The existing object fixture now loads its descriptor after table DDL; production freshness and identity checks remain strict.
+
+The five consumer assets share one .NET 10 host. Real-server evidence is limited to Oracle mode on OceanBase 4.4.2.2, a direct connection, Windows, disabled TLS and database AL16UTF16. Full consumer, DI, package, independent-runtime and full database suites were not rerun. All 23 gap IDs and eight work packages remain open; delivery is a local master commit.
+
 ## 2026-10-25 P1-06 Oracle output FetchSize hint
 
 Developed from master/a07957e. [Contract](obconnector-dotnet-architecture-design.md#oracle-output-fetch-hint), [complete evidence](obconnector-dotnet-completeness.md#1546-2026-10-25-oracle-输出执行与-fetchsize-提示), [audit](obconnector-dotnet-driver-audit.md#41-oracle-输出执行与-fetchsize-提示2026-10-25). Oracle OUT/RETURNING and procedure/function execution accept positive command FetchSize, with explicit or implicit preparation. Internal output rows remain in the execution response (cursorFlag0, no FETCH); returned REF CURSOR readers keep their independent page size. Output offset and ExecuteArray positive FetchSize still reject before network traffic. Ordinary query paging and MySQL procedure restrictions remain intact; no new API/config/dependencies.

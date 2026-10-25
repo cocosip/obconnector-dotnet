@@ -104,5 +104,70 @@ namespace OceanBaseConnector.ConsumerTests
             }
             finally { budget.Cancel(); listener.Stop(); context.Unload(); }
         }
+
+        public static IEnumerable<object[]> ComplexAssets()
+        {
+            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+                foreach (var national in new[] { "utf8mb4", "utf16" })
+                    foreach (var asynchronous in new[] { false, true })
+                        foreach (var type in new[] { "NCHAR", "NVARCHAR2" }) yield return new object[] { target, national, asynchronous, type };
+        }
+
+        [Theory]
+        [MemberData(nameof(ComplexAssets))]
+        public async Task EveryAssetBindsNationalComplexMembersUsingDirectionalEncodings(string target, string national, bool asynchronous, string scalar)
+        {
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
+            using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
+            var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
+            const string value = "\ufeff中文🙂  "; var code = scalar == "NCHAR" ? (byte)208 : (byte)207;
+            var input = Encoding.UTF8.GetBytes(value);
+            Encoding outputEncoding = national == "utf16" ? new UnicodeEncoding(true, false, true) : new UTF8Encoding(false, true);
+            var output = outputEncoding.GetBytes(value);
+            byte[] Metadata(byte type) => new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 110, 1, 110, 12, 63, 0, 32, 0, 0, 0, type, 0, 0, 0, 0, 0 };
+            var eof = new byte[] { 254, 0, 0, 6, 0 };
+            var serving = Task.Run(async () =>
+            {
+                using var peer = await listener.AcceptTcpClientAsync(budget.Token); var channel = new PacketChannel(peer.GetStream());
+                await channel.WritePacketAsync(greeting, budget.Token); await channel.ReadPacketAsync(budget.Token);
+                await channel.WritePacketAsync(SessionTimeZoneFixture.ReportFor(national), budget.Token);
+                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, token: budget.Token); channel.BeginCommand();
+                Task<byte[]> ReadCommand() => SessionTimeZoneFixture.ReadCommand(channel, budget.Token, expectProbe: false, national: national);
+                var request = await ReadCommand(); Assert.Equal(0xa1, request[0]);
+                var cursor = new ByteCursor(request); cursor.ReadUInt8(); Assert.Equal(0u, cursor.ReadUInt32()); Assert.Equal(0, cursor.ReadUInt8()); Assert.Equal(1u, cursor.ReadUInt32());
+                Assert.Equal("BEGIN pkg.p(?); END;", Encoding.UTF8.GetString(cursor.ReadLengthEncodedBytes())); Assert.Equal(1u, cursor.ReadUInt32());
+                var encoded = new byte[] { 0, 1, 160, 0, 0, 0, 0, code, 2, 2, (byte)input.Length }.Concat(input).ToArray();
+                Assert.Equal(encoded, cursor.ReadBytes(encoded.Length));
+                await channel.WritePacketAsync(new byte[] { 0, 212, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 1 }, budget.Token);
+                await channel.WritePacketAsync(Metadata(253), budget.Token); await channel.WritePacketAsync(eof, budget.Token);
+                await channel.WritePacketAsync(Metadata(160).Concat(new byte[] { 0, 0, 0, code }).ToArray(), budget.Token); await channel.WritePacketAsync(eof, budget.Token);
+                await channel.WritePacketAsync(new byte[] { 0, 0, 2, 8, (byte)output.Length }.Concat(output).ToArray(), budget.Token);
+                await channel.WritePacketAsync(eof, budget.Token); await channel.WritePacketAsync(new byte[] { 0, 1, 0, 6, 0, 0, 0 }, budget.Token);
+                channel.BeginCommand();
+                Assert.Equal(25, (await ReadCommand())[0]);
+            });
+            var context = new AssemblyLoadContext("complex-national-" + target, isCollectible: true);
+            try
+            {
+                var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
+                using var connection = (DbConnection)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!)!;
+                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Use Oracle Prepare Execute=true";
+                if (asynchronous) await connection.OpenAsync(budget.Token); else connection.Open();
+                var type = connection.GetType().GetMethod("CreateArrayType", new[] { typeof(string), assembly.GetType("OceanBaseConnector.OceanBaseTransaction")! })!
+                    .Invoke(connection, new object?[] { scalar, null })!;
+                var valueObject = type.GetType().GetMethod("CreateValue")!.Invoke(type, new object[] { new object?[] { value, null } })!;
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "pkg.p"; command.CommandType = CommandType.StoredProcedure;
+                    var parameter = command.CreateParameter(); parameter.ParameterName = "p"; parameter.Direction = ParameterDirection.InputOutput; parameter.Value = valueObject; command.Parameters.Add(parameter);
+                    Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
+                    var values = (object?[])parameter.Value!.GetType().GetMethod("GetValues")!.Invoke(parameter.Value, null)!;
+                    Assert.Equal(value, values[0]); Assert.Null(values[1]); Assert.Equal(ConnectionState.Open, connection.State);
+                }
+                await serving.WaitAsync(budget.Token);
+            }
+            finally { budget.Cancel(); listener.Stop(); context.Unload(); }
+        }
     }
 }

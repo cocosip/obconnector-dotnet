@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using OceanBaseConnector.Internal.Protocol;
 
 namespace OceanBaseConnector.Internal.Values
@@ -11,10 +12,10 @@ namespace OceanBaseConnector.Internal.Values
         private const int MaximumDepth = 32;
         private const long MaximumBytes = PacketChannel.DefaultMaxPacketSize - 10;
 
-        internal static object?[] DecodeResult(ByteCursor cursor, ComplexType type, OceanBaseCompatibilityMode mode)
+        internal static object?[] DecodeResult(ByteCursor cursor, ComplexType type, OceanBaseCompatibilityMode mode, Encoding? nationalEncoding = null)
         {
             ValidateRoot(type, mode); var budget = MaximumMembers;
-            return Read(cursor, type, 0, ref budget, cursor.Remaining);
+            return Read(cursor, type, 0, ref budget, cursor.Remaining, nationalEncoding: nationalEncoding);
         }
         internal static byte[] ReadResultField(ByteCursor cursor, ComplexType type, OceanBaseCompatibilityMode mode)
         {
@@ -23,16 +24,16 @@ namespace OceanBaseConnector.Internal.Values
             return cursor.CopyConsumed(position);
         }
 
-        internal static byte[] EncodeParameter(ComplexType type, object?[] values, OceanBaseCompatibilityMode mode)
+        internal static byte[] EncodeParameter(ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false)
         {
             using var stream = new MemoryStream(); using var writer = new BinaryWriter(stream, ResultColumn.Utf8, leaveOpen: true);
-            WriteParameter(writer, type, values, mode); return stream.ToArray();
+            WriteParameter(writer, type, values, mode, national, validateOnly); return stream.ToArray();
         }
 
-        internal static void WriteParameter(BinaryWriter writer, ComplexType type, object?[] values, OceanBaseCompatibilityMode mode)
+        internal static void WriteParameter(BinaryWriter writer, ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false)
         {
             ValidateRoot(type, mode); var budget = MaximumMembers;
-            Write(writer, type, values, 0, ref budget);
+            Write(writer, type, values, 0, ref budget, national, validateOnly);
         }
 
         private static void ValidateRoot(ComplexType type, OceanBaseCompatibilityMode mode)
@@ -42,7 +43,7 @@ namespace OceanBaseConnector.Internal.Values
             if (type.TypeCode != 160) throw new ArgumentException("A complex value requires an object or collection layout.", nameof(type));
         }
 
-        private static object?[] Read(ByteCursor cursor, ComplexType type, int depth, ref int budget, int start, bool materialize = true)
+        private static object?[] Read(ByteCursor cursor, ComplexType type, int depth, ref int budget, int start, bool materialize = true, Encoding? nationalEncoding = null)
         {
             if (depth >= MaximumDepth) throw new ProtocolException("Complex nesting exceeds the supported depth.");
             var count = type.IsCollection ? cursor.ReadLengthEncodedInteger() : type.Members.Count;
@@ -57,7 +58,7 @@ namespace OceanBaseConnector.Internal.Values
                 var member = type.Members[type.IsCollection ? 0 : i];
                 if (member.TypeCode == 160)
                 {
-                    var nested = Read(cursor, member, depth + 1, ref budget, start, materialize);
+                    var nested = Read(cursor, member, depth + 1, ref budget, start, materialize, nationalEncoding);
                     if (materialize) values[i] = nested;
                 }
                 else
@@ -78,6 +79,9 @@ namespace OceanBaseConnector.Internal.Values
                             var number = DecimalCodec.Parse(ResultColumn.Utf8.GetString(bytes).Trim());
                             DecimalCodec.Validate(number, OceanBaseCompatibilityMode.Oracle); values[i] = number; break;
                         case 253: case 254: values[i] = ResultColumn.Utf8.GetString(bytes); break;
+                        case 207:
+                        case 208:
+                            values[i] = (nationalEncoding ?? throw new NotSupportedException("The complex result has no trusted national character set.")).GetString(bytes); break;
                         case 203: values[i] = bytes; break;
                         case 12: values[i] = TemporalCodec.DecodeBinary(12, OceanBaseCompatibilityMode.Oracle, bytes, 0); break;
                         case 202:
@@ -95,7 +99,7 @@ namespace OceanBaseConnector.Internal.Values
             return cursor.ReadBytes(count);
         }
 
-        private static void Write(BinaryWriter writer, ComplexType type, object?[] values, int depth, ref int budget)
+        private static void Write(BinaryWriter writer, ComplexType type, object?[] values, int depth, ref int budget, NationalCharacterSet? national, bool validateOnly)
         {
             if (values == null) throw new ArgumentNullException(nameof(values));
             if (depth >= MaximumDepth || values.Length > budget) throw new NotSupportedException("Complex nesting or member count exceeds the supported limit.");
@@ -118,7 +122,7 @@ namespace OceanBaseConnector.Internal.Values
                 if (member.TypeCode == 160)
                 {
                     if (!(value is object?[] nested)) throw new ArgumentException("A nested complex value requires an object array.");
-                    Write(writer, member, nested, depth + 1, ref budget); continue;
+                    Write(writer, member, nested, depth + 1, ref budget, national, validateOnly); continue;
                 }
                 switch (member.TypeCode)
                 {
@@ -129,9 +133,15 @@ namespace OceanBaseConnector.Internal.Values
                             number = new OceanBaseDecimal(Convert.ToDecimal(value, CultureInfo.InvariantCulture));
                         else throw new ArgumentException("A NUMBER member requires an exact numeric value.");
                         DecimalCodec.Validate(number, OceanBaseCompatibilityMode.Oracle); WriteText(writer, DecimalCodec.Format(number)); break;
-                    case 253: case 254:
+                    case 253:
+                    case 254:
                         if (!(value is string text)) throw new ArgumentException("A character member requires a string.");
                         WriteText(writer, text); break;
+                    case 207:
+                    case 208:
+                        if (!(value is string nationalText)) throw new ArgumentException("A national character member requires a string.");
+                        WriteText(writer, nationalText, validateOnly ? ResultColumn.Utf8 :
+                            (national ?? throw new NotSupportedException("The complex parameter has no trusted connection character set.")).ComplexParameterEncoding); break;
                     case 203:
                         if (!(value is byte[] bytes)) throw new ArgumentException("A RAW member requires bytes.");
                         ReserveBytes(writer, bytes.Length); PreparedParameters.WriteBytes(writer, bytes); break;
@@ -146,8 +156,8 @@ namespace OceanBaseConnector.Internal.Values
             }
         }
 
-        private static void WriteText(BinaryWriter writer, string text)
-        { ReserveBytes(writer, ResultColumn.Utf8.GetByteCount(text)); PreparedParameters.WriteBytes(writer, ResultColumn.Utf8.GetBytes(text)); }
+        private static void WriteText(BinaryWriter writer, string text, Encoding? encoding = null)
+        { encoding ??= ResultColumn.Utf8; ReserveBytes(writer, encoding.GetByteCount(text)); PreparedParameters.WriteBytes(writer, encoding.GetBytes(text)); }
         private static void ReserveBytes(BinaryWriter writer, int count)
             => Reserve(writer, (long)count + (count < 251 ? 1 : count <= ushort.MaxValue ? 3 : count <= 0xFFFFFF ? 4 : 9));
         private static void Reserve(BinaryWriter writer, long count)

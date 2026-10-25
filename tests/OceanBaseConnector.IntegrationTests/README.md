@@ -23,6 +23,12 @@ Select a subset with `OB_INTEGRATION_PROFILES` (comma-separated names) or ordina
 
 Misconfiguration fails loudly: with the opt-in set, a missing file, an unresolvable environment reference or an unknown profile name fails the run instead of silently passing.
 
+## Complex national member scope
+
+Filter `FullyQualifiedName~ComplexNationalTests` on the configured Oracle profile. The suite contains 48 positive cases for NCHAR/NVARCHAR2, UTF8/UTF16 session national settings, sync/async, named objects/collections, nested members, ordinary object binary results and anonymous DML arrays. Eight additional cases assert the current rejection of complex whole-column RETURNING when response type identity cannot be resolved; these are boundary tests, not RETURNING compatibility passes. Random test objects are cleaned in dependency order; only session settings change.
+
+The related `ComplexTypeTests.ObjectAndCollectionRoundTrip` loads its descriptor after table DDL because observed DDL invalidates earlier descriptions. Its NUMBER nested-table column case retains the recorded server rejection; do not remove that failure or infer table-column support from successful collection procedure parameters. [Full current evidence and retained failures](../../docs/obconnector-dotnet-completeness.md#1547-2026-10-25-复杂类型-national-成员与方向编码).
+
 ## Configuration file
 
 Point `OB_INTEGRATION_CONFIG` at a JSON file, or place `integration-tests.json` (gitignored) next to this project; copy [integration-tests.example.json](integration-tests.example.json) as a starting point. Keep credentials in .NET User Secrets and reference their key names:

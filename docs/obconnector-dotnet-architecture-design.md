@@ -373,7 +373,7 @@ Use `WriteBytes`, `WriteText` and `Truncate` for mutation, with zero-based byte 
 
 ### Complex types
 
-Load named types with `GetComplexType(schemaName, typeName, transaction)` using exact dictionary names, then call `CreateValue(...)`. Nested members use their declared type descriptors. Supported scalar members are NUMBER, VARCHAR2/CHAR, RAW, DATE and TIMESTAMP; LOB, cursor, national-type members and cycles are unsupported.
+Load named types with `GetComplexType(schemaName, typeName, transaction)` using exact dictionary names, then call `CreateValue(...)`. Nested members use their declared type descriptors. Supported scalar members are NUMBER, VARCHAR2/CHAR, NCHAR/NVARCHAR2, RAW, DATE and TIMESTAMP; LOB, cursor members and cycles remain unsupported. National members have the direction-specific encoding limits below.
 
 Named results require preloading on the same connection/transaction and binary prepared results or REF CURSOR; call `Prepare()` for parameterless named-type queries. Text complex results are unsupported.
 
@@ -381,7 +381,16 @@ Set `OceanBaseParameter.ComplexType` for NULL, Output and ReturnValue. Non-null 
 
 Pure Output/ReturnValue parameters send a protocol NULL placeholder. The declared complex descriptor remains required for session validation and decoding the returned value; InputOutput still sends its input value and type.
 
-`CreateArrayType` accepts NUMBER, VARCHAR2, CHAR, RAW, DATE or TIMESTAMP, or a preloaded named element type. Factory scalar arrays support input/output; ordinary complex-element arrays accept input only. Anonymous descriptions obtained from results are read-only.
+`CreateArrayType` accepts NUMBER, VARCHAR2, CHAR, NCHAR, NVARCHAR2, RAW, DATE or TIMESTAMP, or a preloaded named element type. Factory scalar arrays support input/output; ordinary complex-element arrays accept input only. Anonymous descriptions obtained from results are read-only.
+
+<a id="complex-national-members"></a>
+NCHAR/NVARCHAR2 members retain distinct layouts (208/207), including nested named objects/collections and scalar factory arrays. `CreateValue` validates shape, Unicode and byte budgets without I/O; encoding is selected again at execution. Complex national inputs use the trusted **connection** character set, unlike standalone national scalar parameters. Ordinary VARCHAR2/CHAR members retain UTF-8 behavior. ExecuteArray uses the same encoding path and existing explicit-transaction, row-count and partial-failure contract.
+
+PL complex OUT/INOUT values use the result snapshot's session national encoding. Ordinary binary named complex columns retain database national storage encoding: loading a type containing national members additionally reads `NLS_DATABASE_PARAMETERS` for `NLS_NCHAR_CHARACTERSET` on the same reserved session/transaction, with the existing timeout and cancellation source. Currently only `AL16UTF16` is accepted, using strict UTF-16 big endian without BOM insertion/removal. A valid single-row response is consumed before an unsupported value is rejected; failed loading does not publish that type. Other database national encodings require separate wire evidence and implementation.
+
+The configured direct OceanBase 4.4.2.2 server demonstrates UTF-8 connection input, UTF-8/UTF-16 session national PL outputs and AL16UTF16 stored object members. Stored values must not be decoded using outer complex collation 63 or guessed from session national settings. Malformed bytes or surrogates fail without replacement; failed output decoding preserves all prior output parameters. Returned values retain their descriptor/data snapshot after later cache invalidation.
+
+Anonymous ordinary national results without a trusted storage context reject non-NULL member decoding; metadata, empty collections and NULL members can be read. Factory scalar arrays support declared PL outputs in local fixtures; real anonymous-array acceptance in this module covers DML iterations, not every PL signature. Complex whole-column `RETURNING` with unresolved source type identity remains rejected with unknown execution outcome and a broken session; keep the old output value and reconcile the write. Do not infer this support from successful scalar RETURNING or PL output tests. Real nested-table table-column limitations, LOB/cursor members, cycles, text complex results and the remaining deployment matrix stay open.
 
 <a id="complex-type-ddl-invalidation"></a>
 Descriptions and values are bound to their connection, session, transaction and complex-metadata generation. Close/reopen, transaction changes and `ClearComplexTypeCache` invalidate reuse. In Oracle mode, executing text statements beginning with CREATE, ALTER, DROP, RENAME or TRUNCATE also invalidates all cached descriptions, including nested and factory-array descriptions. The shared SQL scanner ignores comments and quoted text and checks later statements in an allowed text batch; CREATE program units are DDL, while BEGIN/DECLARE bodies and procedure calls are opaque.

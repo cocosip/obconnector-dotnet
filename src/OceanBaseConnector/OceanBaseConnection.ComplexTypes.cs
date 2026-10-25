@@ -26,7 +26,7 @@ namespace OceanBaseConnector
         public Task<OceanBaseComplexType> GetComplexTypeAsync(string schemaName, string typeName, OceanBaseTransaction? transaction = null, CancellationToken cancellationToken = default)
             => GetComplexTypeCore(schemaName, typeName, transaction, true, cancellationToken);
 
-        /// <summary>Creates a session-bound anonymous array of NUMBER, VARCHAR2, CHAR, RAW, DATE or TIMESTAMP.</summary>
+        /// <summary>Creates a session-bound anonymous array of NUMBER, VARCHAR2, CHAR, NCHAR, NVARCHAR2, RAW, DATE or TIMESTAMP.</summary>
         public OceanBaseComplexType CreateArrayType(string elementTypeName, OceanBaseTransaction? transaction = null)
         {
             if (elementTypeName == null) throw new ArgumentNullException(nameof(elementTypeName));
@@ -36,6 +36,8 @@ namespace OceanBaseConnector
                 case "NUMBER": code = 0; break;
                 case "VARCHAR2": code = 253; break;
                 case "CHAR": code = 254; break;
+                case "NVARCHAR2": code = 207; break;
+                case "NCHAR": code = 208; break;
                 case "RAW": code = 203; break;
                 case "DATE": code = 12; break;
                 case "TIMESTAMP": code = 202; break;
@@ -240,6 +242,8 @@ namespace OceanBaseConnector
                             case "NUMBER": code = 0; break;
                             case "VARCHAR2": case "VARCHAR": code = 253; break;
                             case "CHAR": code = 254; break;
+                            case "NVARCHAR2": code = 207; break;
+                            case "NCHAR": code = 208; break;
                             case "RAW": code = 203; break;
                             case "DATE": code = 12; break;
                             case "TIMESTAMP": code = 202; break;
@@ -251,7 +255,25 @@ namespace OceanBaseConnector
                 }
                 var type = new OceanBaseComplexType(_context, schema, name, collection, members);
                 if (depth + type.NestingDepth > 32) throw InvalidDictionary();
+                if (type.Layout.HasNationalMembers && _context.StoredNationalEncoding == null)
+                    await LoadStoredNationalEncoding().ConfigureAwait(false);
                 Types.Add(key, type); _loading.Remove(key); return type;
+            }
+
+            private async Task LoadStoredNationalEncoding()
+            {
+                _command.CommandText = "SELECT VALUE FROM NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_NCHAR_CHARACTERSET'";
+                _command.Parameters.Clear();
+                using var reader = _async ? await _command.ExecuteReaderAsync(_token).ConfigureAwait(false) : _command.ExecuteReaderCore(CommandBehavior.Default, _token);
+                if (reader.FieldCount != 1 || !string.Equals(reader.GetName(0), "VALUE", StringComparison.OrdinalIgnoreCase) ||
+                    !(_async ? await reader.ReadAsync(_token).ConfigureAwait(false) : reader.Read()))
+                    throw InvalidDictionary();
+                var value = reader.GetValue(0);
+                if ((_async ? await reader.ReadAsync(_token).ConfigureAwait(false) : reader.Read()) ||
+                    (_async ? await reader.NextResultAsync(_token).ConfigureAwait(false) : reader.NextResult())) throw InvalidDictionary();
+                if (!(value is string name) || !string.Equals(name, "AL16UTF16", StringComparison.OrdinalIgnoreCase))
+                    throw new NotSupportedException("The database national character set for stored complex members is not supported.");
+                _context.StoredNationalEncoding = NationalCharacterSet.Utf16;
             }
 
             private async Task<List<object[]>> Query(string schema, string name, bool? collection, int maximum)

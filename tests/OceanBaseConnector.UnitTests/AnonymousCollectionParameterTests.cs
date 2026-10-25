@@ -53,7 +53,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task AnonymousArrayOfNamedElementsKeepsFullIdentityAndExactNestedLayout(bool collection)
         {
             var server = Server(async channel =>
@@ -86,8 +87,13 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("")] [InlineData(" NUMBER")] [InlineData("NUMBER(9)")] [InlineData("BLOB")]
-        [InlineData("NVARCHAR2")] [InlineData("Owner.Thing")] [InlineData("\0")]
+        [InlineData("")]
+        [InlineData(" NUMBER")]
+        [InlineData("NUMBER(9)")]
+        [InlineData("BLOB")]
+        [InlineData("NVARCHAR2(4)")]
+        [InlineData("Owner.Thing")]
+        [InlineData("\0")]
         public void AnonymousArrayFactoryDoesNotInferUnsupportedScalarNames(string name)
         {
             using var connection = new OceanBaseConnection();
@@ -104,8 +110,14 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false, false)] [InlineData(true, false, false)] [InlineData(false, true, false)] [InlineData(true, true, false)]
-        [InlineData(false, false, true)] [InlineData(true, false, true)] [InlineData(false, true, true)] [InlineData(true, true, true)]
+        [InlineData(false, false, false)]
+        [InlineData(true, false, false)]
+        [InlineData(false, true, false)]
+        [InlineData(true, true, false)]
+        [InlineData(false, false, true)]
+        [InlineData(true, false, true)]
+        [InlineData(false, true, true)]
+        [InlineData(true, true, true)]
         public async Task AnonymousArrayInputsExecuteWithHeadersBeforeValuesAndTypedNull(bool async, bool extended, bool named)
         {
             var server = Server(async channel =>
@@ -152,7 +164,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task AnonymousArrayCacheClearRejectsValuesAndTypedNullBeforeSending(bool async)
         {
             var server = Server(async channel => { await Query(channel, "after"); await channel.WritePacketAsync(Ok(7)); });
@@ -176,7 +189,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task AnonymousArrayRejectsForeignOrReopenedPhysicalSessions(bool async, bool reopen)
         {
             var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)));
@@ -204,7 +220,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task AnonymousArrayRejectsBothTransactionEpochChangesBeforeSending(bool async)
         {
             var server = Server(async channel =>

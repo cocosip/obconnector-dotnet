@@ -33,11 +33,11 @@ public sealed class ComplexTypeTests
         await db.ExecuteAsync(connection,
             "CREATE TYPE " + name + (collection ? " AS TABLE OF NUMBER" : " AS OBJECT (n NUMBER, s VARCHAR2(40))"),
             CancellationToken.None);
+        var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY, value " + name, CancellationToken.None);
         var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
         var type = await connection.GetComplexTypeAsync(owner, name);
         Assert.Equal(collection, type.IsCollection);
         var value = collection ? type.CreateValue(1, 2, 3) : type.CreateValue(7, "中文");
-        var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY, value " + name, CancellationToken.None);
         await using (var insert = db.Command(connection, "INSERT INTO " + table + " VALUES (1, :value)"))
         {
             DatabaseContext.Parameter(insert, "value", value);

@@ -14,9 +14,16 @@ namespace OceanBaseConnector.UnitTests
     public sealed partial class TextCommandTests
     {
         [Theory]
-        [InlineData((byte)0, "NUMBER")] [InlineData((byte)3, "NUMBER")] [InlineData((byte)246, "NUMBER")]
-        [InlineData((byte)253, "VARCHAR2")] [InlineData((byte)254, "CHAR")] [InlineData((byte)203, "RAW")]
-        [InlineData((byte)12, "DATE")] [InlineData((byte)202, "TIMESTAMP")]
+        [InlineData((byte)0, "NUMBER")]
+        [InlineData((byte)3, "NUMBER")]
+        [InlineData((byte)246, "NUMBER")]
+        [InlineData((byte)253, "VARCHAR2")]
+        [InlineData((byte)254, "CHAR")]
+        [InlineData((byte)203, "RAW")]
+        [InlineData((byte)12, "DATE")]
+        [InlineData((byte)202, "TIMESTAMP")]
+        [InlineData((byte)207, "NVARCHAR2")]
+        [InlineData((byte)208, "NCHAR")]
         public void AnonymousCollectionMetadataResolvesScalarLayoutWithoutDictionary(byte element, string elementName)
         {
             var column = ResultColumn.Parse(ComplexColumn("Owner", "", 17, element), OceanBaseCompatibilityMode.Oracle);
@@ -33,7 +40,11 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData((byte)0)] [InlineData((byte)3)] [InlineData((byte)246)] [InlineData((byte)253)] [InlineData((byte)254)]
+        [InlineData((byte)0)]
+        [InlineData((byte)3)]
+        [InlineData((byte)246)]
+        [InlineData((byte)253)]
+        [InlineData((byte)254)]
         public void AnonymousCollectionScalarValueKeepsExactBytesAndFollowingFieldBoundary(byte element)
         {
             var column = ResultColumn.Parse(ComplexColumn("", "", element: element), OceanBaseCompatibilityMode.Oracle);
@@ -48,7 +59,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public void AnonymousCollectionTemporalMembersKeepDateAndNanoseconds(bool timestamp)
         {
             var column = ResultColumn.Parse(ComplexColumn("", "", element: timestamp ? (byte)202 : (byte)12), OceanBaseCompatibilityMode.Oracle);
@@ -61,8 +73,14 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData((byte)160)] [InlineData((byte)163)] [InlineData((byte)200)] [InlineData((byte)201)] [InlineData((byte)207)]
-        [InlineData((byte)208)] [InlineData((byte)210)] [InlineData((byte)211)] [InlineData((byte)4)] [InlineData((byte)255)]
+        [InlineData((byte)160)]
+        [InlineData((byte)163)]
+        [InlineData((byte)200)]
+        [InlineData((byte)201)]
+        [InlineData((byte)210)]
+        [InlineData((byte)211)]
+        [InlineData((byte)4)]
+        [InlineData((byte)255)]
         public void AnonymousCollectionUnsupportedElementsRejectEvenNullResults(byte element)
         {
             var column = ResultColumn.Parse(ComplexColumn("", "", element: element), OceanBaseCompatibilityMode.Oracle);
@@ -80,7 +98,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public void AnonymousCollectionCannotBypassTheExplicitOutputContract(bool isNull)
         {
             using var command = new OceanBaseCommand { CommandText = "pkg.p", CommandType = CommandType.StoredProcedure };
@@ -92,7 +111,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task AnonymousCollectionOversizedMemberCountDiscardsBufferedAndSequentialSessions(bool async, bool sequential)
         {
             var server = Server(async channel =>
@@ -148,7 +170,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task AnonymousCollectionUnsupportedLayoutOrTextProtocolFailsBeforeRows(bool async, bool text)
         {
             var server = Server(async channel =>
@@ -171,7 +196,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task AnonymousCollectionCursorRejectsElementOrVersionChange(bool async, bool changeVersion)
         {
             var server = Server(async channel =>
@@ -200,7 +228,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task AnonymousCollectionReadsAndSkipsWithoutPreloadingAnyDictionary(bool async, bool sequential)
         {
             var server = Server(async channel =>

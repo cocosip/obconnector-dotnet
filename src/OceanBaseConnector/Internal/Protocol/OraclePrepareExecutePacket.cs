@@ -33,7 +33,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal static byte[] Build(uint statementId, string sql, int parameterCount, byte[] parameters)
             => BuildCore(statementId, sql, parameterCount, parameters, 1, 0);
 
-        internal static byte[] BuildArray(uint statementId, string sql, OceanBaseParameter[] columns)
+        internal static byte[] BuildArray(uint statementId, string sql, OceanBaseParameter[] columns, NationalCharacterSet? national = null, bool validateOnly = false)
         {
             if (columns == null) throw new ArgumentNullException(nameof(columns));
             if (columns.Length == 0 || columns.Length > ushort.MaxValue) throw new ArgumentOutOfRangeException(nameof(columns));
@@ -50,7 +50,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 count = value.Count;
             }
             // OCI_BATCH_ERRORS disables aggregated DML optimization, preserving per-item results.
-            return BuildCore(statementId, sql, columns.Length, PreparedParameters.Encode(columns, OceanBaseCompatibilityMode.Oracle), 2, 0x80);
+            return BuildCore(statementId, sql, columns.Length, PreparedParameters.Encode(columns, OceanBaseCompatibilityMode.Oracle, national, validateOnly), 2, 0x80);
         }
 
         private static byte[] BuildCore(uint statementId, string sql, int parameterCount, byte[] parameters, uint iterations, uint executeMode)

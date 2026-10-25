@@ -12,6 +12,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private OceanBaseConnector.Internal.Session.LobSession? Lobs { get; set; }
         internal ComplexColumnMetadata? ComplexMetadata { get; private set; }
         internal OceanBaseComplexType? ComplexType { get; private set; }
+        private bool _complexOutput;
         internal void BindComplexOutput(OceanBaseComplexType expected)
         {
             var actual = ComplexType;
@@ -19,7 +20,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 ? !actual.IsAnonymous || expected.Members[0].ComplexType != null || actual.Members[0].Layout.TypeCode != expected.Members[0].Layout.TypeCode
                 : !ReferenceEquals(actual, expected)))
                 throw new ProtocolException("Complex output metadata must match its declared type.");
-            ComplexType = expected;
+            ComplexType = expected; _complexOutput = true;
         }
         internal void RequireComplexResult(bool binary)
         {
@@ -388,7 +389,11 @@ namespace OceanBaseConnector.Internal.Protocol
             if (TypeCode == 160)
             {
                 var complex = new ByteCursor(value);
-                var values = ComplexValueCodec.DecodeResult(complex, ComplexType!.Layout, Mode);
+                // Stored complex members retain the database encoding; PL outputs are converted to the session national encoding.
+                var encoding = ComplexType!.Layout.HasNationalMembers && _complexOutput
+                    ? (NationalCharacterSet ?? throw new NotSupportedException("The complex output has no trusted national character set.")).ResultEncoding(Charset)
+                    : ComplexType.Context?.StoredNationalEncoding;
+                var values = ComplexValueCodec.DecodeResult(complex, ComplexType.Layout, Mode, encoding);
                 if (complex.HasRemaining) throw new ProtocolException("Trailing complex value bytes.");
                 return OceanBaseComplexValue.FromResult(ComplexType, values);
             }

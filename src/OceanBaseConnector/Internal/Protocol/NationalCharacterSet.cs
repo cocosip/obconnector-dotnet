@@ -15,6 +15,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal string? Connection { get; }
         private static bool FallsBack(string? value) => value == null || value.Length == 0 || string.Equals(value, "binary", StringComparison.OrdinalIgnoreCase);
         internal Encoding ParameterEncoding => Resolve(FallsBack(National) ? Connection : National);
+        internal Encoding ComplexParameterEncoding => Resolve(Connection);
         internal Encoding ResultEncoding(ushort collation)
         {
             if (!FallsBack(National)) return Resolve(National);
@@ -56,7 +57,9 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var values = new Dictionary<string, string>
             {
-                ["ncharacter_set_connection"] = National ?? "", ["character_set_results"] = Results ?? "", ["character_set_connection"] = Connection ?? ""
+                ["ncharacter_set_connection"] = National ?? "",
+                ["character_set_results"] = Results ?? "",
+                ["character_set_connection"] = Connection ?? ""
             };
             if (zone != null) values["time_zone"] = zone;
             return values;
