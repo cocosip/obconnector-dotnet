@@ -33,6 +33,11 @@ namespace OceanBaseConnector.ConsumerTests
         [InlineData("net8.0", "source")]
         [InlineData("net9.0", "instrument")]
         [InlineData("net10.0", "instrument")]
+        [InlineData("netstandard2.0", "phase")]
+        [InlineData("netstandard2.1", "phase")]
+        [InlineData("net8.0", "phase")]
+        [InlineData("net9.0", "phase")]
+        [InlineData("net10.0", "phase")]
         public async Task EveryAssetPublishesSafeDiagnosticsWithoutInitializationPoisoning(string target, string failure)
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -49,6 +54,7 @@ namespace OceanBaseConnector.ConsumerTests
             });
             var context = new AssemblyLoadContext("diagnostics-" + target, true);
             var armed = false; var spans = new List<Activity>(); var counts = new List<KeyValuePair<string, object?>[]>();
+            var phases = new List<(double Value, string? Unit, KeyValuePair<string, object?>[] Tags)>();
             using var activities = new ActivityListener
             {
                 ShouldListenTo = source => armed && source.Name == "OceanBaseConnector" ? failure == "source" ? throw new InvalidOperationException("listener initialization") : true : false,
@@ -65,7 +71,12 @@ namespace OceanBaseConnector.ConsumerTests
                 owner.EnableMeasurementEvents(instrument);
             };
             metrics.SetMeasurementEventCallback<long>((_, _, tags, _) => counts.Add(tags.ToArray()));
-            metrics.SetMeasurementEventCallback<double>((_, _, _, _) => { }); metrics.Start(); armed = true;
+            metrics.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
+            {
+                if (instrument.Name != "oceanbase.client.connection.phase.duration") return;
+                phases.Add((value, instrument.Unit, tags.ToArray()));
+                if (failure == "phase") throw new InvalidOperationException("private-phase-listener-token");
+            }); metrics.Start(); armed = true;
             try
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
@@ -73,11 +84,18 @@ namespace OceanBaseConnector.ConsumerTests
                 connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;Password=secret;TLS Mode=Disabled";
                 await connection.OpenAsync(budget.Token); using var command = connection.CreateCommand(); command.CommandText = "secret sql";
                 Assert.Equal(0, await command.ExecuteNonQueryAsync(budget.Token));
-                if (failure == "normal")
+                if (failure == "normal" || failure == "phase")
                 {
                     Assert.Equal(new[] { "oceanbase.open", "oceanbase.execute" }, spans.Select(x => x.OperationName)); Assert.Equal(2, counts.Count);
                     Assert.All(counts, tags => { Assert.Equal(4, tags.Length); Assert.Contains(tags, tag => tag.Key == "oceanbase.compatibility_mode" && Equals(tag.Value, "oracle")); Assert.DoesNotContain("secret", string.Join(";", tags)); });
                     Assert.All(spans, span => { Assert.Equal(ActivityStatusCode.Ok, span.Status); Assert.Equal("0.1.0.0", span.Source.Version); });
+                    Assert.Equal(new[] { "tcp", "greeting", "authentication", "identity" }, phases.Select(sample => sample.Tags.Single(tag => tag.Key == "oceanbase.connection.phase").Value));
+                    Assert.All(phases, sample =>
+                    {
+                        Assert.Equal("s", sample.Unit); Assert.True(double.IsFinite(sample.Value) && sample.Value >= 0);
+                        Assert.Equal(2, sample.Tags.Length);
+                        Assert.Contains(sample.Tags, tag => tag.Key == "oceanbase.outcome" && Equals(tag.Value, "success"));
+                    });
                     var reference = Assert.Single(assembly.GetReferencedAssemblies(), x => x.Name == "System.Diagnostics.DiagnosticSource");
                     Assert.Equal(target.StartsWith("netstandard", StringComparison.Ordinal) || target == "net8.0" ? 8 : target == "net9.0" ? 9 : 10, reference.Version!.Major);
                 }

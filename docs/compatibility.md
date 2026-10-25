@@ -1,5 +1,9 @@
 # Compatibility and known gaps
 
+## Connection phase diagnostics
+
+The [phase-duration histogram](obconnector-dotnet-architecture-design.md#connection-phase-diagnostics) measures actual acquisition/discovery, transport/handshake and pool wait/probe attempts without adding high-cardinality or sensitive labels. It preserves existing operation telemetry. A phase interrupted by a linked timeout token may report `canceled` while the enclosing Open reports `timeout`; an unsignaled finite pool wait reports `elapsed`. The full P2-04 diagnostics scope, deployment performance limits and independent-runtime acceptance remain open.
+
 ## Oracle standalone Prepare
 
 [Standalone preparation](obconnector-dotnet-architecture-design.md#oracle-standalone-prepare) now supports Oracle text OUT/RETURNING, stored procedures and function returns. It neither executes the target nor consumes input values; server parse/privilege/metadata-lock costs remain possible. The command retains a statement only until the next execution transfers ownership to its cursor owner. Full parameter metadata and the exact pure-OUT DML split layout are validated separately; other mismatches reject. Prepare ignores execution FetchSize, while positive FetchSize for the output execution plan and REF CURSOR IN/INOUT/column values remain unsupported.

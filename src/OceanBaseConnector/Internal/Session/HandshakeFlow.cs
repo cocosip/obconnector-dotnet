@@ -30,20 +30,33 @@ namespace OceanBaseConnector.Internal.Session
             CancellationToken cancellationToken = default,
             X509Certificate2? clientCertificate = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var handshake = ParseInitialHandshake(channel.ReadPacket(), options);
-            var clientCapabilities = ClientCapabilities.Build(handshake.Capabilities, options);
+            var phase = DriverDiagnostics.StartConnectionPhase("greeting");
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var handshake = ParseInitialHandshake(channel.ReadPacket(), options);
+                var clientCapabilities = ClientCapabilities.Build(handshake.Capabilities, options);
+                phase?.Finish(null);
 
-            TlsHandshakeFlow.Apply(transport, channel, handshake.Capabilities, clientCapabilities, options, clientCertificate, remoteCertificateValidationCallback);
+                phase = options.TlsMode == OceanBaseTlsMode.Disabled ? null : DriverDiagnostics.StartConnectionPhase("tls");
+                TlsHandshakeFlow.Apply(transport, channel, handshake.Capabilities, clientCapabilities, options, clientCertificate, remoteCertificateValidationCallback);
+                phase?.Finish(null);
 
-            cancellationToken.ThrowIfCancellationRequested();
-            using var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
-            cancellationToken.ThrowIfCancellationRequested();
-            channel.WritePacket(BuildHandshakeResponse(handshake, clientCapabilities, options, authentication));
-            var result = ReadAuthenticationResult(channel, handshake, clientCapabilities, options, authentication, cancellationToken);
-            EnableFraming(channel, result, options);
-            ConfirmIdentity(channel, result, cancellationToken);
-            return result;
+                phase = DriverDiagnostics.StartConnectionPhase("authentication");
+                cancellationToken.ThrowIfCancellationRequested();
+                using var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
+                cancellationToken.ThrowIfCancellationRequested();
+                channel.WritePacket(BuildHandshakeResponse(handshake, clientCapabilities, options, authentication));
+                var result = ReadAuthenticationResult(channel, handshake, clientCapabilities, options, authentication, cancellationToken);
+                EnableFraming(channel, result, options);
+                phase?.Finish(null);
+
+                phase = DriverDiagnostics.StartConnectionPhase("identity");
+                ConfirmIdentity(channel, result, cancellationToken);
+                phase?.Finish(null);
+                return result;
+            }
+            catch (Exception error) { phase?.Finish(error); throw; }
         }
 
         public static async Task<ConnectResult> AuthenticateAsync(
@@ -51,21 +64,36 @@ namespace OceanBaseConnector.Internal.Session
             CancellationToken cancellationToken,
             X509Certificate2? clientCertificate = null, RemoteCertificateValidationCallback? remoteCertificateValidationCallback = null)
         {
-            var handshake = ParseInitialHandshake(
-                await channel.ReadPacketAsync(cancellationToken).ConfigureAwait(false), options);
-            var capabilities = ClientCapabilities.Build(handshake.Capabilities, options);
-            await TlsHandshakeFlow.ApplyAsync(transport, channel, handshake.Capabilities, capabilities, options, cancellationToken, clientCertificate, remoteCertificateValidationCallback)
-                .ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-            using var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
-            cancellationToken.ThrowIfCancellationRequested();
-            await channel.WritePacketAsync(BuildHandshakeResponse(handshake, capabilities, options, authentication), cancellationToken)
-                .ConfigureAwait(false);
-            var result = await ReadAuthenticationResultAsync(channel, handshake, capabilities, options, authentication, cancellationToken)
-                .ConfigureAwait(false);
-            EnableFraming(channel, result, options);
-            await ConfirmIdentityAsync(channel, result, cancellationToken).ConfigureAwait(false);
-            return result;
+            var phase = DriverDiagnostics.StartConnectionPhase("greeting");
+            try
+            {
+                var handshake = ParseInitialHandshake(
+                    await channel.ReadPacketAsync(cancellationToken).ConfigureAwait(false), options);
+                var capabilities = ClientCapabilities.Build(handshake.Capabilities, options);
+                phase?.Finish(null);
+
+                phase = options.TlsMode == OceanBaseTlsMode.Disabled ? null : DriverDiagnostics.StartConnectionPhase("tls");
+                await TlsHandshakeFlow.ApplyAsync(transport, channel, handshake.Capabilities, capabilities, options, cancellationToken, clientCertificate, remoteCertificateValidationCallback)
+                    .ConfigureAwait(false);
+                phase?.Finish(null);
+
+                phase = DriverDiagnostics.StartConnectionPhase("authentication");
+                cancellationToken.ThrowIfCancellationRequested();
+                using var authentication = new AuthenticationConversation(options, handshake.AuthenticationPluginName, handshake.Seed);
+                cancellationToken.ThrowIfCancellationRequested();
+                await channel.WritePacketAsync(BuildHandshakeResponse(handshake, capabilities, options, authentication), cancellationToken)
+                    .ConfigureAwait(false);
+                var result = await ReadAuthenticationResultAsync(channel, handshake, capabilities, options, authentication, cancellationToken)
+                    .ConfigureAwait(false);
+                EnableFraming(channel, result, options);
+                phase?.Finish(null);
+
+                phase = DriverDiagnostics.StartConnectionPhase("identity");
+                await ConfirmIdentityAsync(channel, result, cancellationToken).ConfigureAwait(false);
+                phase?.Finish(null);
+                return result;
+            }
+            catch (Exception error) { phase?.Finish(error); throw; }
         }
 
         private static byte[] BuildHandshakeResponse(

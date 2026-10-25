@@ -128,7 +128,7 @@ namespace OceanBaseConnector.Internal.Session
                     budget.Token.ThrowIfCancellationRequested();
                     var options = SelectEndpoint(endpoints[(start + i) % endpoints.Count]);
                     TcpTransport transport;
-                    try { transport = TcpTransport.Connect(options.Server, options.Port, ConnectionTimeout, budget.Token); }
+                    try { transport = DriverDiagnostics.MeasureConnectionPhase("tcp", () => TcpTransport.Connect(options.Server, options.Port, ConnectionTimeout, budget.Token)); }
                     catch (IOException error) when (CanTryNext(error, i, endpoints.Count, budget)) { continue; }
                     Attach(transport);
                     using var registration = budget.Token.Register(CancelOpeningTransport);
@@ -160,7 +160,7 @@ namespace OceanBaseConnector.Internal.Session
                     TcpTransport transport;
                     try
                     {
-                        transport = await TcpTransport.ConnectAsync(options.Server, options.Port, ConnectionTimeout, budget.Token)
+                        transport = await DriverDiagnostics.MeasureConnectionPhaseAsync("tcp", () => TcpTransport.ConnectAsync(options.Server, options.Port, ConnectionTimeout, budget.Token))
                             .ConfigureAwait(false);
                     }
                     catch (IOException error) when (CanTryNext(error, i, endpoints.Count, budget)) { continue; }
@@ -196,11 +196,13 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         internal static IReadOnlyList<OceanBaseEndpoint> ResolveEndpoints(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver, CancellationToken token) =>
-            resolver == null ? options.Endpoints : ParseResolved(resolver.Resolve(token), options.Port);
+            resolver == null ? options.Endpoints : DriverDiagnostics.MeasureConnectionPhase("discovery", () => ParseResolved(resolver.Resolve(token), options.Port));
 
-        internal static async Task<IReadOnlyList<OceanBaseEndpoint>> ResolveEndpointsAsync(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver, CancellationToken token)
+        internal static Task<IReadOnlyList<OceanBaseEndpoint>> ResolveEndpointsAsync(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver, CancellationToken token) =>
+            resolver == null ? Task.FromResult(options.Endpoints) : DriverDiagnostics.MeasureConnectionPhaseAsync("discovery", () => ResolveEndpointsCoreAsync(options, resolver, token));
+
+        private static async Task<IReadOnlyList<OceanBaseEndpoint>> ResolveEndpointsCoreAsync(OceanBaseConnectionOptions options, IOceanBaseAddressResolver resolver, CancellationToken token)
         {
-            if (resolver == null) return options.Endpoints;
             var resolving = resolver.ResolveAsync(token) ?? throw new InvalidOperationException("The address resolver returned no task.");
             var canceled = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             using (token.Register(() => canceled.TrySetCanceled()))
@@ -419,11 +421,13 @@ namespace OceanBaseConnector.Internal.Session
 
         internal void Probe(ConnectionLog log, int timeout, CancellationToken cancellationToken = default)
         {
-            ProbeCore(log, timeout, cancellationToken, asynchronous: false).GetAwaiter().GetResult();
+            DriverDiagnostics.MeasureConnectionPhase("pool.probe", () =>
+            { ProbeCore(log, timeout, cancellationToken, asynchronous: false).GetAwaiter().GetResult(); return true; });
         }
 
         internal Task ProbeAsync(ConnectionLog log, int timeout, CancellationToken cancellationToken = default) =>
-            ProbeCore(log, timeout, cancellationToken, asynchronous: true);
+            DriverDiagnostics.MeasureConnectionPhaseAsync("pool.probe", async () =>
+            { await ProbeCore(log, timeout, cancellationToken, asynchronous: true).ConfigureAwait(false); return true; });
 
         private async Task ProbeCore(ConnectionLog log, int timeout, CancellationToken cancellationToken, bool asynchronous)
         {

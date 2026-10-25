@@ -1,17 +1,17 @@
 # OceanBaseConnector .NET 完整驱动能力与缺口基线
 
-**最近复核：** 2026-10-25；本模块开发基线 `master` / `6b357f0`。
-**当前模块：** P1-06 / W5 Oracle 独立 Prepare；公共契约见第 5.7 节，验证及未关闭范围见第 15.34 节和走查报告第 29 节。第 15.33/28 节保留开发前文档检查点。
+**最近复核：** 2026-10-25；本模块开发基线 `master` / `d6a9169`。
+**当前模块：** P2-04 / W7 建连阶段诊断；[公共契约](obconnector-dotnet-architecture-design.md#connection-phase-diagnostics)，验证与剩余范围见第 15.35 节和走查报告第 30 节。Oracle 独立 Prepare 已提交 `d6a9169`，原始记录完整保留。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **上一模块：** 普通结果字符集从 `abd0077` 开发，提交为 `6b357f0`，见第 15.32 节；池配置归一化、过程、DDL 及此前记录完整保留。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
 **文档性质：** 能力审计、公共目标契约与验收基线；已实现、部分实现、明确缺失、未验证和开发检查点分开记录。23 项及八工作包尚未整体完成。
 
-**最新实现：** Oracle OUT/RETURNING、过程及函数的独立 Prepare 不执行目标或消费输入值；下次执行将 statement 交给游标所有者，保留 cursor 生命周期。DML 拆分元数据精确验证，数组执行携带准备 ID。正 FetchSize 输出执行、REF CURSOR 输入/列值及其他形状继续跟踪；完整驱动仍未完成。
+**最新实现：** 建连阶段秒直方图覆盖凭据、发现、TCP、greeting、TLS、认证、identity、池等待和探活；固定阶段/结果标签，不增加现有操作 span。协议 debug、slow-query profile、其他资源等待和完整部署验收仍开放；完整驱动尚未完成。
 
-**阅读入口：** 第 4 节列全部 23 项缺口；第 5 节定义契约；第 14 节逐项列触发场景、源码/测试入口及关闭证据；第 16 节拆为八工作包。[完整走查报告](obconnector-dotnet-driver-audit.md)第 1.1/1.2 节汇总欠项，第 29 节记录当前模块；第 28 节保留开发前文档检查点，第 8 节是发布门槛。
+**阅读入口：** 第 4 节列全部 23 项缺口；第 5 节定义契约；第 14 节逐项列触发场景、源码/测试入口及关闭证据；第 16 节拆为八工作包。[完整走查报告](obconnector-dotnet-driver-audit.md)第 1.1/1.2 节汇总欠项，第 30 节记录当前模块；第 29 节保留 Oracle Prepare 交付；第 28 节保留开发前文档检查点，第 8 节是发布门槛。
 
-**历史边界：** 第 5.1.3 节及走查报告第 25 节保留归一化修复前发现；第 5.1.1/15.19/15.21 节及报告第 17 节保留早期会话识别状态，后续识别契约见第 5.1.2/15.24 节。第 15.1—15.32 节保留此前实现、开发检查点、原始失败与跳过；它们不覆盖当前状态，源码存在、本地通过与真实验收分别判断。
+**历史边界：** 第 5.1.3 节及走查报告第 25 节保留归一化修复前发现；第 5.1.1/15.19/15.21 节及报告第 17 节保留早期会话识别状态，后续识别契约见第 5.1.2/15.24 节。第 15.1—15.34 节保留此前实现、开发检查点、原始失败与跳过；它们不覆盖当前状态，源码存在、本地通过与真实验收分别判断。
 
 此前 [P0-06 池路由](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [P1-04 TLS 回调](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)的本地交付保留。本文不删除缺口 ID、不以当前摘要抹去 Oracle 失败，也不将单一 .NET10 host 的五资产消费记为五种独立运行时。
 
@@ -94,7 +94,7 @@
 | 复杂类型 | 部分实现 | 标量及嵌套 object/collection 有路径；LOB、cursor、national 成员、循环结构和文本结果不支持；可观察 DDL 发送时自动失效已有本地实现，外部/不透明 DDL 须显式清理，真实 DDL 验收仍缺 |
 | Schema 元数据 | 部分实现 | Oracle 20/MySQL 18 个集合、静态 DataTypes 及自动参数推导已有本地实现；后者只读目录，不扩大过程执行范围。真实目录/权限矩阵仍缺，见 [Schema 契约](schema.md)及第 15.18 节 |
 | 批处理和准备缓存 | 部分实现 | `DbBatch` 顺序执行；已有 opt-in 有限物理会话缓存，未交付 rewrite、multi-send、bulk；真实缓存/负载验收仍缺 |
-| 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter` 和池生命周期指标已有；协议 debug、slow-query profile、建连/探活细分指标未完整提供 |
+| 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter`、池生命周期指标及建连/探活分段已有本地实现；协议 debug、slow-query profile、其他资源等待和完整部署性能验收仍缺 |
 | 真实兼容性 | 部分验证 | 当前记录主要是 Windows/.NET 10、直连 OceanBase 4.4.2.2、TLS disabled；Oracle 失败及未覆盖矩阵仍须闭合 |
 
 ## 3. 完整驱动的目标边界
@@ -141,7 +141,7 @@
 | P2-01 | P2 | DataAdapter | 部分实现；本地模块 | 同步填充、映射/事件、显式或自动参数化 CRUD；保留可见行键、生成值回填、复杂形状限制，补真实 CRUD/并发/运行时验收 |
 | P2-02 | P2 | Statement cache | 部分实现 | 有限 idle LRU、上下文/reset 失效和关闭已有本地实现；真实 DDL/reprepare、资源/负载/代理与运行时验收仍缺 |
 | P2-03 | P2 | 批处理优化 | 部分实现 | rewrite、multi-send、bulk 和统一 partial-failure 结果 |
-| P2-04 | P2 | 诊断 | 部分实现 | 协议 debug、slow-query profile、建连/探活和资源等待 |
+| P2-04 | P2 | 诊断 | 部分实现 | 建连/探活分段已有本地实现；补协议 debug、slow-query profile、其他资源等待及性能验收 |
 | P2-05 | P2 | TFM/生态 | 未验证 | 每个 TFM 的正式支持矩阵和 package consumer 验收 |
 | P2-06 | P2（扩展矩阵）/ 发布阻塞（承诺范围） | 真实兼容性 | 部分验证 | 承诺范围必须有真实版本、OBProxy、TLS、认证、平台和故障报告，扩展范围再分期 |
 
@@ -162,7 +162,7 @@
 | Oracle 形状不足 | REF CURSOR Input/InputOutput、cursor-valued column、输出 PrepareExecute 的 FetchSize 组合；独立 Prepare 已有实现；复杂类型的 LOB/cursor/national 成员；可观察 DDL 自动失效已有本地实现，外部/不透明 DDL 须显式清理，真实 DDL 验收仍缺 | P1-06、P1-07 |
 | 类型与命令契约不足 | 扩展类型码、metadata、字符集和精度矩阵；SchemaOnly 元数据专用路径已有本地回归，真实边界仍需验收；Command/Batch/游标的行为范围不同 | P1-08、P1-05 |
 | 事务与结果不确定性 | 保留单资源/终态/身份/取消及失败清理本地回归，补真实超时/in-doubt/关闭/响应丢失矩阵、XA 外部协调器恢复；写入不自动 replay | P0-03、P0-04、P2-06 |
-| 性能与运维不足 | 顺序 Batch 之外的 rewrite/multi-send/bulk；建连/探活分段、协议 debug、慢查询和资源上限报告。Oracle array binding 与池指标已有 | P2-03、P2-04 |
+| 性能与运维不足 | 顺序 Batch 之外的 rewrite/multi-send/bulk；建连/探活分段已有实现；补协议 debug、慢查询和资源上限报告。Oracle array binding 与池指标已有 | P2-03、P2-04 |
 | 已有实现仍欠真实验收 | TLS/mTLS/撤销/认证插件、文本多语句、LOCAL INFILE、标准 MySQL 压缩、Schema 新目录及 DataTypes 声明对应的服务器类型/DDL，以及版本/OBProxy/平台/包消费矩阵 | P1-01、P1-02、P1-03、P1-04、P1-10、P2-05、P2-06 |
 
 连接池自身的隔离、并发、reset 和路由仍由 P0-01/02/06 跟踪。分布式事务提升当前明确不支持；不能把本地 `TransactionScope` 当成跨连接或跨资源的原子提交。DataAdapter/CommandBuilder 已有本地实现；ORM、透明恢复及性能扩展是否进入首个正式版本须明确决定：本报告保留边界和缺项，不将未确认的取舍写成已批准的排除。
@@ -425,7 +425,7 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 
 ### 5.10 Schema、批处理、缓存和诊断
 
-当前 schema 为 Oracle 20/MySQL 18 个集合，包含 Restrictions、常用关系/对象目录及静态 DataTypes，已有最终本地回归（第 15.14 节），详见 [Schema 契约](schema.md)。双模式实库/权限/版本/OBProxy 验收仍开放。batch 仍顺序执行；prepared statement 已有 opt-in 有限跨命令 idle cache，命令持有和缓存失效规则见第 15.25 节，真实 DDL/reprepare 和负载验收未闭合。诊断能力已覆盖池生命周期，但还没有覆盖协议 debug 和 slow-query profile。
+当前 schema 为 Oracle 20/MySQL 18 个集合，包含 Restrictions、常用关系/对象目录及静态 DataTypes，已有最终本地回归（第 15.14 节），详见 [Schema 契约](schema.md)。双模式实库/权限/版本/OBProxy 验收仍开放。batch 仍顺序执行；prepared statement 已有 opt-in 有限跨命令 idle cache，命令持有和缓存失效规则见第 15.25 节，真实 DDL/reprepare 和负载验收未闭合。诊断能力已覆盖池生命周期及建连/探活分段；固定标签、错误分类和计量边界见[公共契约](obconnector-dotnet-architecture-design.md#connection-phase-diagnostics)。协议 debug、slow-query profile、其他资源等待和部署性能验收仍缺。
 
 目标要求：
 
@@ -636,7 +636,7 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 | P2-01 | Factory 已创建 adapter/builder，本地支持填充、映射/事件、显式及有界自动 CRUD。隐藏/缺失行键、未知查询形状和需绑定上下文的列不能自动生成更新。 | `OceanBaseDataAdapter.cs`、`OceanBaseCommandBuilder.cs`；`DataAdapter*Tests.cs`、`DataAdapterConsumerTests.cs` | 保留 CRUD/原始值/NULL/并发冲突/事务/资源回归，补双模式真实目录、生成 SQL、锁和独立运行时消费；公开生成值回填及显式命令限制。ADO.NET provider 不等于 EF Core provider。 |
 | P2-02 | opt-in idle LRU 已避免跨命令重复 prepare；默认关闭，命令仍独占其 ID。真实 DDL/reprepare、资源及负载效益仍待验收。 | `OceanBaseCommand.cs`；`Internal/Session/PhysicalSession.PreparedStatements.cs`、`PreparedStatement.cs`；`StatementCache*Tests.cs`、五资产消费者 | 容量、淘汰、statement close、reset generation、DDL/schema epoch 及并发上限；保留报文计数和合成延迟对照，补真实 prepare 次数/延迟、资源与代理报告。 |
 | P2-03 | DbBatch 逐条执行，有网络往返成本；Oracle array binding 已有，不能记为“没有批量”。 | `OceanBaseBatch.cs`；`OceanBaseCommand.ArrayBinding.cs`；`BatchFaultTests.cs`、`OracleArrayBindingExecutionTests.cs` | 对已承诺的 rewrite/multi-send/bulk 路径提供行数/OUT、部分失败、取消、包上限和事务边界；与现有顺序模式作吞吐/内存对照。 |
-| P2-04 | 现有日志/Activity/Meter 和池指标存在，建连/探活分段、协议 debug 和慢查询 profile 不完整。 | `Internal/DriverDiagnostics.cs`；`DiagnosticsTests.cs`、`CommandLogCategoryTests.cs` | 指标单位和聚合语义、异常分类、监听开关开销、SQL/凭据脱敏；明确 `borrowed` 是借用次数，不能据此报告当前借出连接数。 |
+| P2-04 | 现有日志/Activity/Meter、池指标及九阶段建连/探活直方图已有实现；协议 debug、慢查询 profile、其他资源等待与负载验收仍缺。 | `Internal/DriverDiagnostics.cs`、`DriverDiagnostics.ConnectionPhases.cs`；`ConnectionPhaseDiagnosticsTests.cs`、`DiagnosticsTests.cs`、`CommandLogCategoryTests.cs` | 指标单位和聚合语义、异常分类、监听开关开销、SQL/凭据脱敏；明确 `borrowed` 是借用次数，不能据此报告当前借出连接数。 |
 | P2-05 | 两个包均产出五个 TFM，但现代 API 条件编译；Framework/ORM 消费与非 Windows 部署不能由一次 net10 单测推定。 | 两个 src 项目 `.csproj`；`.github/workflows/ci.yml`；`eng/Verify-Packages.ps1`；ConsumerTests、DI tests | 对每个承诺运行时运行实际 nupkg consumer；Windows/Linux、标准/现代 API 差异和 Framework 支持决定有报告。savepoint 的当前标识符规则不接受 `__EFSavePoint`，ORM 集成需单独验收。 |
 | P2-06 | Acceptance 的六个 `matrix.*` 目前是带 `DeferredReason` 的占位 skip；普通 test 通过不能关闭部署验收。 | `tests/OceanBaseConnector.Acceptance/DatabaseCases.cs`；IntegrationTests；`docs/compatibility.md` | 实现受控测试环境和断言，保存 JSON/TRX、版本/profile/清理结果；承诺范围缺证据仍阻塞发布，新增范围才可后移。 |
 
@@ -1578,6 +1578,20 @@ array-red 4 失败确认已有 BuildArray 忽略 retained ID，已传入；conte
 
 **保留范围。** 输出执行正 FetchSize、REF CURSOR IN/INOUT/列值、复杂成员及其他 P1-06 形状继续开放；普通准备仅忽略执行 FetchSize。原 Oracle nested-table column 失败、全部跳过、在线 NuGet 审计未完成及第 15.1—15.33/走查第 12—28 节历史不改写；全部 23 项、八工作包和完整驱动目标不关闭。
 
+### 15.35 2026-10-25 建连阶段诊断
+
+从 `master/d6a9169` 开发，归入 P2-04/W7。新增 `oceanbase.client.connection.phase.duration`（秒），仅 `oceanbase.connection.phase` / `oceanbase.outcome` 两个标签；九阶段、可选阶段省略、重试/预热、池复用、linked-token 与 Open 分类差异、旧池等待聚合及回调约束见[公共契约](obconnector-dotnet-architecture-design.md#connection-phase-diagnostics)。保留既有 operation spans/counters，不将阶段次数当作 Open 次数，也不声称其耗时相加等于总耗时。
+
+**原始失败与独立走查。** initial-red 为 10 失败；first-green 为 38 通过/10 失败，暴露 partial class 字段先于 Meter 初始化的问题，已将 histogram 初始化移至既有顺序字段。phases-green 为 62 通过/4 失败：两例 fixture 错误清除 CLIENT_SSL 位，两例未提供 time-zone session-state；修正 fixture 后沙箱 phases-complete 为 76 通过/2 PFX 导入失败，正常用户 phases-user 为 78 通过。初次完整专项编译的可选参数方法组错误保留于日志，不计为产品缺陷。
+
+独立 reviewer 指出 `pool.wait` 在计时结束前执行清理监听器，会误包含应用回调耗时；按用户影响列 Important。实际同步/异步两项 `review-wait-red` 均失败，补 Stop 固定单调时钟终点、清理后再发布，`review-wait-green` 两项通过。未新增产品测试钩子；测试断言在 metric 回调外执行，避免被产品异常隔离吞掉。无其他已确认产品缺陷或延后 Minor。首次全量单测 unit-first-full 为 5003 通过/2 失败：既有 TcpTransport 重复连接压力用例发生接收超时，以及 identity 同步超时用例未在 5 秒观察窗口内完成；原报告和日志保留。相同程序集单独复跑这两个方法的 6 个用例全部通过，只说明未单独复现，不能据此认定环境根因或算全量门禁通过。消费者最终 2863 项通过（732.6 秒），随后以相同冻结程序集单独重跑完整单测，5005 项通过（208.5 秒），均 0 失败/跳过；首次失败的同名用例最终通过，但尚未确认最初的超时根因。两次全量之间未放宽断言、排除用例或修改产品实现。
+
+**最终验证。** Release solution build --no-restore 退出 0、0 警告/错误；本模块 C# 文件 dotnet format whitespace --verify-no-changes 退出 0，既有 workspace-load warning 保留。DI 14 通过；未启用实库的 Integration 9 通过/83 NotExecuted，不能写成 92 项实库通过。real-final 8 通过，包括双模式的同步/异步新增阶段测试及原诊断回归，实际 Open 后 SELECT；目标为 OceanBase4.4.2.2 MySQL/Oracle direct、TLS disabled、Windows/.NET10，不创建对象。
+
+完整单测相对上一模块新增 42、消费者新增 5，按 testName/testId 多重集核对均无移除；所有原始单测失败映射至同名最终通过。11 个启动前冻结 DLL 哈希及纳秒时间戳未变且早于最终消费者启动。两个 --no-build/--no-restore 本地包各五个 DLL 及 README/LICENSE/NOTICE 与工作区完全匹配，依赖组与上一模块相同；未执行新缓存 restore、独立 nupkg 消费者、发布或在线 NuGet 漏洞审计。五资产测试均在同一 .NET10 host，不是五个独立运行时。六份公共文档保留三表 23-ID、八工作包及第 15.1—15.34/走查第 12—29 节原文，通过链接/锚点、编码、历史和 diff 检查。
+
+**交付边界。** 原始日志与 TRX 保存在忽略目录 `TestResults/connection-phases/` 及 `TestResults-connection-phases-*.log`，交接需另行归档。本模块不关闭 P2-04，也不关闭全部 23 项或八工作包。未承诺完整协议 debug、慢查询、其他资源等待、性能 SLA 或独立运行时/OBProxy/TLS 互操作。
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。
@@ -1590,7 +1604,7 @@ array-red 4 失败确认已有 BuildArray 忽略 retained ID，已传入；conte
 | W4 信任、发现与凭据：P1-04、P1-09、P1-11 | 凭据提供/轮换已有本地实现，补真实凭据服务与插件验收；补发现与健康/退避策略，明确 OCP/TNS 或等价发现范围。现有 TLS 回调、证书副本及池身份无需重做 | 企业 CA/mTLS、证书与凭据过期/刷新失败、撤销、KDC/plugin 成功及拒绝；地址更新/错误身份/节点与代理故障；Windows/Linux 报告 | W1 池身份、W2 重试边界 |
 | W5 命令、Oracle 与类型：P1-05、P1-06、P1-07、P1-08 | 保留 KeyInfo 键/隐藏列和复杂查询 unknown 契约及回归，补真实目录验收；保留 SchemaOnly Prepare-only 本地回归并补真实准备行为验收；保留 MySQL StoredProcedure 参数方向/输出/多结果实现及回归并补部署验收（第 15.30 节），保留 Oracle 独立 Prepare/所有权及 DML 元数据回归（第 15.34 节），继续补已承诺的输出方向/结果形状、复杂成员、扩展类型码/其余字符集；保留第 15.32 节的普通结果映射/严格 decoder/宽度并补完整部署验收；保留可观察 DDL 自动失效回归并补真实验收。有符号 DecimalScale 已本地完成，保留其精度和覆盖规则 | Command/Batch/REF CURSOR 行为表；NULL/方向/精度/溢出/编码/取消与资源释放矩阵；SchemaOnly 副作用/锁/大结果报告；服务端不支持形状单列 | G0；资源生命周期与 W1 联动 |
 | W6 目录与 ADO.NET 生态：P1-10、P2-01 | 常用目录/限制参数及 DataTypes 已本地完成；自动参数推导已通过本地回归和独立走查（第 15.18 节）；补实库/权限/版本/代理矩阵；DataAdapter/CommandBuilder 已有本地填充、映射/事件和有界 CRUD，补真实验收，不以 ADO.NET provider 代替 EF Core provider | 双模式目录/权限/大小写/空集合；类型映射与过程重载/参数方向；保留 adapter CRUD、键、原始值/NULL 和乐观并发本地回归；补实际 SQL/锁及独立运行时报告 | W5 键与结果元数据 |
-| W7 性能与可观测性：P2-02、P2-03、P2-04 | 保留已有 opt-in idle statement cache，补真实 DDL/reprepare/资源/负载验收；选择并实现承诺的 rewrite/multi-send/bulk 优化；补建连/探活分段及慢查询/协议诊断。保留顺序 Batch 和 Oracle array binding | 缓存容量/失效/关闭、批量部分失败/事务/取消/包限额；吞吐、延迟、峰值内存与资源上限对照；诊断脱敏和监听开销 | W1 generation/reset、W5 绑定规则 |
+| W7 性能与可观测性：P2-02、P2-03、P2-04 | 保留已有 opt-in idle statement cache，补真实 DDL/reprepare/资源/负载验收；选择并实现承诺的 rewrite/multi-send/bulk 优化；保留建连/探活九阶段直方图及固定标签回归，补慢查询/协议诊断、其他资源等待和负载验收。保留顺序 Batch 和 Oracle array binding | 缓存容量/失效/关闭、批量部分失败/事务/取消/包限额；吞吐、延迟、峰值内存与资源上限对照；诊断脱敏和监听开销 | W1 generation/reset、W5 绑定规则 |
 | W8 运行时与发布：P2-05、P2-06 | 明确版本、平台、TFM、Framework/ORM 的承诺范围；将六个 matrix.* 占位变成有环境和断言的案例；完成包名、来源/许可和发布审查 | 每个承诺 profile 的 nupkg consumer、实库/代理/TLS/认证/故障报告；保留 Oracle 失败及所有跳过原因；外部 coordinator crash recovery；可复现命令和清理结果 | 各包可并行积累证据，正式发布须满足第 7.3 节 |
 
 ### 16.1 压缩与 reroute 的独立交付边界

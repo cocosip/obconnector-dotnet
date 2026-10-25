@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace OceanBaseConnector.Internal
 {
-    internal static class DriverDiagnostics
+    internal static partial class DriverDiagnostics
     {
         private static readonly string Version = typeof(OceanBaseConnection).Assembly.GetName().Version!.ToString();
         private static readonly ActivitySource? Source = Create(() => new ActivitySource("OceanBaseConnector", Version));
@@ -18,6 +18,7 @@ namespace OceanBaseConnector.Internal
         private static readonly Counter<long>? PoolDiscards = Create(() => Meter?.CreateCounter<long>("oceanbase.client.pool.discarded", "{session}"));
         private static readonly Counter<long>? PoolResetFailures = Create(() => Meter?.CreateCounter<long>("oceanbase.client.pool.reset.failures", "{failure}"));
         private static readonly Histogram<double>? PoolWait = Create(() => Meter?.CreateHistogram<double>("oceanbase.client.pool.wait.duration", "s"));
+        private static readonly Histogram<double>? ConnectionPhaseDuration = Create(() => Meter?.CreateHistogram<double>("oceanbase.client.connection.phase.duration", "s"));
 
         private static T? Create<T>(Func<T?> create) where T : class
         {

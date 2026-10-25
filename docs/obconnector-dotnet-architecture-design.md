@@ -391,6 +391,29 @@ Use builder `UseLoggerFactory(...)` or the connection's `ILoggerFactory` constru
 
 `ActivitySource` and `Meter` are named `OceanBaseConnector`. Metrics are `oceanbase.client.operations` and `oceanbase.client.operation.duration` (seconds). Tags identify operation, mode, outcome and unknown outcome; readers complete their execution span when consumption finishes or fails. Local diagnostics do not require server full-link tracing.
 
+<a id="connection-phase-diagnostics"></a>
+### Connection phase durations
+
+The existing `OceanBaseConnector` meter also exposes `oceanbase.client.connection.phase.duration` in seconds. Each sample covers one actual phase invocation; the only labels are `oceanbase.connection.phase` and `oceanbase.outcome`. Existing operation spans, counters and duration semantics remain unchanged.
+
+| Phase | Measured work |
+| --- | --- |
+| `credentials` | Optional credential provider acquisition, cancellation waiting and snapshot validation |
+| `discovery` | Optional application address resolver, cancellation waiting and endpoint-list validation |
+| `tcp` | One transport connection attempt, including runtime DNS resolution; retries and prewarm connections each produce their own sample |
+| `greeting` | Initial server packet, parsing and capability validation |
+| `tls` | Requested TLS negotiation, including SSLRequest and certificate validation; omitted when TLS is disabled |
+| `authentication` | Authentication conversation, response packets and negotiated framing activation |
+| `identity` | OceanBase identity/mode/version confirmation query and validation |
+| `pool.wait` | One semaphore wait for pool availability; its end is captured before cleanup/listener work |
+| `pool.probe` | One idle-session COM_PING and validation, including failure of a candidate later replaced |
+
+Static credentials and configured addresses omit their optional acquisition/discovery phases. Healthy pool reuse normally emits only `pool.probe`, plus provider/resolver phases when configured; it does not emit a second handshake. Phase samples are attempts, not logical Open counts. They exclude work in the measurement listener itself, and their sum does not equal Open duration: reset, warm-up bookkeeping, application callbacks, gaps and logical publication are not all separate phases. `pool.wait` measures only that wait; the older `oceanbase.client.pool.wait.duration` retains its existing elapsed-since-rent aggregation.
+
+Outcomes are `success`, `error`, `canceled` and `timeout`. `elapsed` specifically means a finite pool wait returned without a signal; credential expiry or a later wait may still determine the final Open result. A phase interrupted through a linked connection-budget token can report `canceled` while the enclosing Open maps it to `timeout`; the Open operation remains authoritative for the logical result. No phase metric implies that SQL can be retried or that an active session recovered.
+
+Labels contain no endpoint, username, credential version, SQL, authentication bytes or exception text. Disabled phase instruments create no phase stopwatch object. Listener callbacks execute synchronously and must return promptly; exceptions are isolated and `Activity.Current` is restored. No new configuration switch, Activity span or dependency is required. These local diagnostics do not establish real TLS/OBProxy interoperability or performance limits; slow-query profiling, protocol diagnostics and other resource waits remain separate P2-04 work.
+
 ## MySQL compression
 
 `OceanBaseConnectionStringBuilder.UseCompression` / `Use Compression=true` requests CLIENT_COMPRESS. The default remains false, even when the server advertises compression. A requested capability missing from the greeting fails before the TLS/authentication response; authentication switches and the final authentication OK remain uncompressed. Compression starts after that OK and before OceanBase identity queries, above TLS when TLS is enabled. Both compatibility modes and all five target assets use the same implementation. The option is preserved when selecting an endpoint and is part of the connection configuration used for pool identity.

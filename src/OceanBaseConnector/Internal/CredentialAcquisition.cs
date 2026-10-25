@@ -9,6 +9,11 @@ namespace OceanBaseConnector.Internal
         internal static OceanBaseConnectionOptions Resolve(OceanBaseConnectionOptions options, IOceanBaseCredentialProvider? provider, CancellationToken token)
         {
             if (provider == null) return options;
+            return DriverDiagnostics.MeasureConnectionPhase("credentials", () => ResolveCore(options, provider, token));
+        }
+
+        private static OceanBaseConnectionOptions ResolveCore(OceanBaseConnectionOptions options, IOceanBaseCredentialProvider provider, CancellationToken token)
+        {
             token.ThrowIfCancellationRequested();
             OceanBaseCredential? credential;
             try { credential = provider.GetCredential(new OceanBaseCredentialContext(options), token); }
@@ -16,9 +21,11 @@ namespace OceanBaseConnector.Internal
             return Apply(options, credential, token);
         }
 
-        internal static async Task<OceanBaseConnectionOptions> ResolveAsync(OceanBaseConnectionOptions options, IOceanBaseCredentialProvider? provider, CancellationToken token)
+        internal static Task<OceanBaseConnectionOptions> ResolveAsync(OceanBaseConnectionOptions options, IOceanBaseCredentialProvider? provider, CancellationToken token) =>
+            provider == null ? Task.FromResult(options) : DriverDiagnostics.MeasureConnectionPhaseAsync("credentials", () => ResolveCoreAsync(options, provider, token));
+
+        private static async Task<OceanBaseConnectionOptions> ResolveCoreAsync(OceanBaseConnectionOptions options, IOceanBaseCredentialProvider provider, CancellationToken token)
         {
-            if (provider == null) return options;
             token.ThrowIfCancellationRequested();
             OceanBaseCredential? credential;
             try

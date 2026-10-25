@@ -35,7 +35,8 @@ namespace OceanBaseConnector.UnitTests
         private static byte[] TimeZone() => TextCommandTests.TimeZoneOk("+00:00");
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task RefCursorDiagnosticsPublishSpanAndMetrics(bool asynchronous)
         {
             using var parent = new Activity("application").Start(); using var capture = new Capture();
@@ -498,7 +499,8 @@ namespace OceanBaseConnector.UnitTests
             {
                 _activities = new ActivityListener { ShouldListenTo = source => source.Name == "OceanBaseConnector", Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded, SampleUsingParentId = (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllDataAndRecorded, ActivityStopped = activity => Spans.Add(activity) };
                 ActivitySource.AddActivityListener(_activities);
-                _metrics.InstrumentPublished = (instrument, listener) => { if (instrument.Meter.Name == "OceanBaseConnector") listener.EnableMeasurementEvents(instrument); };
+                _metrics.InstrumentPublished = (instrument, listener) =>
+                { if (instrument.Meter.Name == "OceanBaseConnector" && (instrument.Name == "oceanbase.client.operations" || instrument.Name == "oceanbase.client.operation.duration")) listener.EnableMeasurementEvents(instrument); };
                 _metrics.SetMeasurementEventCallback<long>((instrument, value, tags, _) => { Assert.Equal("oceanbase.client.operations", instrument.Name); Assert.Equal("{operation}", instrument.Unit); Counts.Add((value, Tags(tags))); });
                 _metrics.SetMeasurementEventCallback<double>((instrument, value, tags, _) => { Assert.Equal("oceanbase.client.operation.duration", instrument.Name); Assert.Equal("s", instrument.Unit); Durations.Add((value, Tags(tags))); });
                 _metrics.Start();

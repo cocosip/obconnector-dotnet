@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -13,6 +14,44 @@ namespace OceanBaseConnector.IntegrationTests.Diagnostics;
 
 public sealed class DiagnosticsTests
 {
+    public static TheoryData<string, bool> ConnectionPhaseRows()
+    {
+        var data = new TheoryData<string, bool>();
+        foreach (var profile in IntegrationEnvironment.Profiles)
+        { data.Add(profile.Name, false); data.Add(profile.Name, true); }
+        return data;
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(ConnectionPhaseRows))]
+    public async Task ConnectionPhaseMetricsDescribeAnActualOpen(string profileName, bool asynchronous)
+    {
+        var samples = new ConcurrentQueue<(double Value, string? Unit, KeyValuePair<string, object?>[] Tags)>();
+        using var meter = new MeterListener { MeasurementsCompleted = (_, _) => { } };
+        meter.InstrumentPublished = (instrument, owner) =>
+        {
+            if (instrument.Meter.Name == "OceanBaseConnector" && instrument.Name == "oceanbase.client.connection.phase.duration")
+                owner.EnableMeasurementEvents(instrument);
+        };
+        meter.SetMeasurementEventCallback<double>((instrument, value, tags, _) => samples.Enqueue((value, instrument.Unit, tags.ToArray())));
+        meter.Start();
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        var builder = db.Profile.CreateBuilder(); builder.Pooling = false;
+        await using var connection = new OceanBaseConnection(builder.ConnectionString);
+        if (asynchronous) await connection.OpenAsync(); else connection.Open();
+        var expected = new List<string> { "tcp", "greeting" };
+        if (builder.TlsMode != OceanBaseTlsMode.Disabled) expected.Add("tls");
+        expected.AddRange(new[] { "authentication", "identity" });
+        Assert.Equal(expected, samples.Select(sample => sample.Tags.Single(tag => tag.Key == "oceanbase.connection.phase").Value));
+        Assert.All(samples, sample =>
+        {
+            Assert.Equal("s", sample.Unit); Assert.True(double.IsFinite(sample.Value) && sample.Value >= 0);
+            Assert.Equal(2, sample.Tags.Length);
+            Assert.Contains(sample.Tags, tag => tag.Key == "oceanbase.outcome" && Equals(tag.Value, "success"));
+        });
+        DatabaseContext.EqualNumber(await db.ScalarAsync(connection, db.SelectOne, CancellationToken.None), 1, "The observed connection remains usable.");
+    }
+
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.All), MemberType = typeof(ProfileTheoryData))]
     public async Task OperationsPublishActivitiesAndMetrics(string profileName)

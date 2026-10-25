@@ -541,22 +541,32 @@ namespace OceanBaseConnector.Internal.Session
         private bool WaitForAvailability(Stopwatch started, OceanBaseConnectionOptions options, CancellationToken token)
         {
             var wait = WaitDuration(started, options);
-            try { return wait == Timeout.InfiniteTimeSpan ? _available.Wait(Timeout.Infinite, token) : _available.Wait(wait, token); }
+            var phase = DriverDiagnostics.StartConnectionPhase("pool.wait");
+            var signaled = false; Exception? error = null;
+            try { return signaled = wait == Timeout.InfiniteTimeSpan ? _available.Wait(Timeout.Infinite, token) : _available.Wait(wait, token); }
+            catch (Exception failure) { error = failure; throw; }
             finally
             {
+                phase?.Stop();
                 DecrementWaiter();
                 DriverDiagnostics.PoolWaitDuration(started.Elapsed.TotalSeconds);
+                phase?.Finish(error, elapsed: !signaled);
             }
         }
 
         private async Task<bool> WaitForAvailabilityAsync(Stopwatch started, OceanBaseConnectionOptions options, CancellationToken token)
         {
             var wait = WaitDuration(started, options);
-            try { return wait == Timeout.InfiniteTimeSpan ? await _available.WaitAsync(Timeout.Infinite, token).ConfigureAwait(false) : await _available.WaitAsync(wait, token).ConfigureAwait(false); }
+            var phase = DriverDiagnostics.StartConnectionPhase("pool.wait");
+            var signaled = false; Exception? error = null;
+            try { return signaled = wait == Timeout.InfiniteTimeSpan ? await _available.WaitAsync(Timeout.Infinite, token).ConfigureAwait(false) : await _available.WaitAsync(wait, token).ConfigureAwait(false); }
+            catch (Exception failure) { error = failure; throw; }
             finally
             {
+                phase?.Stop();
                 DecrementWaiter();
                 DriverDiagnostics.PoolWaitDuration(started.Elapsed.TotalSeconds);
+                phase?.Finish(error, elapsed: !signaled);
             }
         }
 
