@@ -35,6 +35,14 @@ namespace OceanBaseConnector.Internal.Session
             channel.CompleteResponse();
             token.ThrowIfCancellationRequested();
             result.ConfirmIdentity(identity.Version, identity.Mode, identity.Autocommit);
+            if (!mysql)
+            {
+                channel.BeginCommand();
+                channel.WritePacket(OceanBaseCommand.SqlPacket("set autocommit = 1", 3));
+                result.ObserveSessionVariables(ValidateOracleAutocommit(channel.ReadPacket(), result.Capabilities.Effective).SessionVariables);
+                channel.CompleteResponse();
+                token.ThrowIfCancellationRequested();
+            }
         }
 
         private static async Task ConfirmIdentityAsync(PacketChannel channel, ConnectResult result, CancellationToken token)
@@ -51,6 +59,32 @@ namespace OceanBaseConnector.Internal.Session
             channel.CompleteResponse();
             token.ThrowIfCancellationRequested();
             result.ConfirmIdentity(identity.Version, identity.Mode, identity.Autocommit);
+            if (!mysql)
+            {
+                channel.BeginCommand();
+                await channel.WritePacketAsync(OceanBaseCommand.SqlPacket("set autocommit = 1", 3), token).ConfigureAwait(false);
+                var ok = ValidateOracleAutocommit(await channel.ReadPacketAsync(token).ConfigureAwait(false), result.Capabilities.Effective);
+                result.ObserveSessionVariables(ok.SessionVariables);
+                channel.CompleteResponse();
+                token.ThrowIfCancellationRequested();
+            }
+        }
+
+        internal static OkPacket ValidateOracleAutocommit(byte[] packet, CapabilityFlags capabilities)
+        {
+            if (ErrPacket.IsErr(packet))
+            {
+                var error = ErrPacket.Parse(packet);
+                throw new OceanBaseException("Oracle autocommit initialization failed.", error.ErrorCode, error.SqlState);
+            }
+            var ok = OkPacket.Parse(packet, capabilities);
+            if (ok.AffectedRows != 0 || ok.LastInsertId != 0 ||
+                (ok.StatusFlags & ServerStatusFlags.Autocommit) == 0 ||
+                (ok.StatusFlags & (ServerStatusFlags.InTransaction | ServerStatusFlags.MoreResultsExists |
+                    ServerStatusFlags.CursorExists | ServerStatusFlags.LastRowSent | ServerStatusFlags.PsOutParameters |
+                    ServerStatusFlags.InTransactionReadOnly)) != 0)
+                throw new ProtocolException("Invalid Oracle autocommit initialization response.");
+            return ok;
         }
 
         private static void CheckIdentityError(byte[] packet)

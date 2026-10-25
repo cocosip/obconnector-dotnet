@@ -95,6 +95,9 @@ namespace OceanBaseConnector.ConsumerTests
             await Send(stream, eof, 4, token);
             await Send(stream, new byte[] { 7, 52, 46, 52, 46, 50, 46, 50, 6, 79, 82, 65, 67, 76, 69 }, 5, token);
             await Send(stream, eof, 6, token);
+            var setup = await Receive(stream, token);
+            Check(setup[0] == 3 && Encoding.ASCII.GetString(setup, 1, setup.Length - 1) == "set autocommit = 1", "Oracle autocommit initialization");
+            await Send(stream, new byte[] { 0, 0, 0, 6, 0, 0, 0 }, 1, token);
         }
         private static async Task Send(Stream stream, byte[] payload, byte sequence, CancellationToken token)
         {

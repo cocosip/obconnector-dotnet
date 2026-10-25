@@ -63,7 +63,7 @@ namespace OceanBaseConnector.ConsumerTests
                 await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, version: "4.2.0", tls: tls, certificate: certificate);
                 byte[] Column(byte type) => new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 112, 1, 112, 12, 45, 0, 20, 0, 0, 0, type, 0, 0, 0, 0, 0 };
                 var eof = Report(false, 0); eof[0] = 254;
-                var execute = new ByteCursor(await ReadRequest(stream, channel, ob20, 1, budget.Token));
+                var execute = new ByteCursor(await ReadRequest(stream, channel, ob20, 2, budget.Token));
                 Assert.Equal(0xa1, execute.ReadUInt8()); Assert.Equal(0u, execute.ReadUInt32()); Assert.Equal(0, execute.ReadUInt8()); Assert.Equal(1u, execute.ReadUInt32());
                 Assert.Equal("BEGIN pkg.proc(?, ?); END;", Encoding.UTF8.GetString(execute.ReadLengthEncodedBytes())); Assert.Equal(2u, execute.ReadUInt32());
                 Assert.Equal(new byte[] { 2, 1, 8, 0, 6, 0, 7, 0, 0, 0, 0, 0, 0, 0 }, execute.ReadBytes(14));
@@ -71,9 +71,9 @@ namespace OceanBaseConnector.ConsumerTests
                     .Concat(Frame(2, Column(8))).Concat(Frame(3, Column(8))).Concat(Frame(4, Column(8)))
                     .Concat(Frame(5, new byte[] { 0, 0, 42, 0, 0, 0, 0, 0, 0, 0 })).Concat(Frame(6, eof)).Concat(Frame(7, Report(false, 2))).ToArray();
                 if (kind == "trailing") response = response.Concat(Frame(8, new byte[] { 0 })).ToArray();
-                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 1, 1, response) : response, budget.Token);
+                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 2, 1, response) : response, budget.Token);
                 if (!ob20) channel.BeginCommand();
-                if (kind != "trailing") Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 2, budget.Token));
+                if (kind != "trailing") Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 3, budget.Token));
                 await ObserveClose(stream, budget.Token);
             });
             var context = new AssemblyLoadContext("oracle-" + target, isCollectible: true);

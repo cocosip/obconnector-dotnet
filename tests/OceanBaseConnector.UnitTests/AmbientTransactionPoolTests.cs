@@ -19,9 +19,11 @@ namespace OceanBaseConnector.UnitTests
             {
                 await AmbientBegin(channel, oracle); await AmbientEnd(channel, oracle, false);
                 await StatementCommand(channel, 31); await channel.WritePacketAsync(TimeZoneOk("+00:00", status: (byte)(oracle ? 6 : 2)));
+                if (oracle) await TestInfrastructure.ServerIdentity.ReplyOracleAutocommitAsync(channel);
                 await StatementCommand(channel, 14); await channel.WritePacketAsync(TimeZoneOk("+00:00", status: (byte)(oracle ? 6 : 2)));
                 await AmbientControl(channel, "next borrower", (byte)(oracle ? 6 : 2));
                 await StatementCommand(channel, 31); await channel.WritePacketAsync(TimeZoneOk("+00:00", status: (byte)(oracle ? 6 : 2)));
+                if (oracle) await TestInfrastructure.ServerIdentity.ReplyOracleAutocommitAsync(channel);
             });
             var options = Configuration(server.Port) + ";Pooling=true;Max Pool Size=1";
             using var owner = new OceanBaseConnection(options);

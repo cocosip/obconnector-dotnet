@@ -52,10 +52,10 @@ namespace OceanBaseConnector.ConsumerTests
                 var channel = new PacketChannel(peer.GetStream());
                 await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, tls: tls, certificate: certificate);
                 uint requestId = 0;
-                async Task<byte[]> Read() => await ReadRequest(stream, channel, ob20, requestId++ + 1, budget.Token);
+                async Task<byte[]> Read() => await ReadRequest(stream, channel, ob20, requestId++ + 2, budget.Token);
                 async Task Reply(byte[] response)
                 {
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId, 1, response) : response, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId + 1, 1, response) : response, budget.Token);
                     if (!ob20) channel.BeginCommand();
                 }
                 async Task Text(string sql)

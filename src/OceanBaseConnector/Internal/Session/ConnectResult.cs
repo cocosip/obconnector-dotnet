@@ -62,6 +62,15 @@ namespace OceanBaseConnector.Internal.Session
         /// <summary>Parsed ob_capability_flag (0 when the server did not report it).</summary>
         public OceanBaseCapabilityFlags ObCapabilityFlag { get; }
 
-        public IReadOnlyDictionary<string, string> SessionVariables { get; }
+        public IReadOnlyDictionary<string, string> SessionVariables { get; private set; }
+
+        internal void ObserveSessionVariables(IReadOnlyDictionary<string, string> variables)
+        {
+            if (variables.Count == 0) return;
+            var merged = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var variable in SessionVariables) merged[variable.Key] = variable.Value;
+            foreach (var variable in variables) merged[variable.Key] = variable.Value;
+            SessionVariables = merged;
+        }
     }
 }

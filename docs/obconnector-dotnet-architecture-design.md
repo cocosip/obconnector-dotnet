@@ -47,11 +47,38 @@ the original MySQL-compatible greeting is retained internally and does not selec
 Malformed identity results and unknown version formats fail Open without publishing a session.
 MySQL-mode sessions must report `@@autocommit` enabled: the provider has no API to commit implicit
 transactions, so Open fails instead of accepting a session whose statements outside an explicit
-transaction would hold locks and roll back when the connection closes. Connector/J instead forces
-`SET autocommit=1` after connecting; this driver mutates no session variables.
+transaction would hold locks and roll back when the connection closes. This MySQL rejection contract
+remains separate from Oracle initialization described below.
 Three- or four-component numeric versions, optional `v`, OceanBase-marked versions and printable
 build suffixes are recognized. An OceanBase marker selects the product version after the marker,
 never a preceding MySQL-compatible version. There is no exact-release allowlist or user version override.
+
+<a id="oracle-autocommit-baseline"></a>
+### Oracle autocommit baseline
+
+After successful Oracle identity verification, Open always sends `set autocommit = 1`, even when
+its authentication packet advertises Autocommit. It publishes Open only after a valid ordinary OK
+with zero affected rows/insert ID, Autocommit enabled and no transaction (including read-only),
+additional-results or cursor/output flags. Server errors preserve code/SQLSTATE without exposing
+server message text; malformed replies, cancellation, timeout and Close destroy the physical session.
+The existing connection timeout and opening cancellation token cover this extra identity-phase exchange.
+MySQL continues to require enabled `@@autocommit`; it does not send this Oracle setup command.
+
+Oracle pool return first completes `COM_RESET_CONNECTION`, then sends and confirms the same SET.
+The order preserves rollback of inherited writes. Only successful completion advances the session
+generation and permits reuse; failure destroys the session and releases its pool slot. Reset keeps
+its existing per-control-exchange command timeout, with cancellation/transport cleanup applied to
+SET as well. Setup adds one server round trip to each new Oracle physical connection and successful
+Oracle pool reset; no connection-string option bypasses it.
+
+Open merges SET-reported system variables over authenticated values. Reset clears old metadata and
+keeps only variables reported by SET. These trusted values feed subsequent timezone/national-character
+handling; an empty reset SET response cannot retain a prior borrower's metadata. This internal setup
+does not classify the session as changed by user SQL. Existing user-state/resource discard rules remain.
+
+Local protocol tests and direct OceanBase4.4.2.2 Windows/.NET10/TLS-disabled pool tests cover the
+initializer; full resource/XA/concurrency isolation, OBProxy, trusted TLS, other versions and independent
+runtime acceptance remain open. See the [current capability baseline](obconnector-dotnet-completeness.md).
 
 Protocol features use the effective client/server capability intersection. OB20, tracing and LOB
 locators additionally require their negotiated OceanBase support and explicit options. PrepareExecute

@@ -53,16 +53,16 @@ namespace OceanBaseConnector.ConsumerTests
                 byte[] Bytes(byte[] value) => new[] { (byte)value.Length }.Concat(value).ToArray();
                 async Task Reply(uint id, byte[] bytes)
                 {
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, id + 1, 1, bytes) : bytes, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, id + 2, 1, bytes) : bytes, budget.Token);
                     if (!ob20) channel.BeginCommand();
                 }
                 var eof = Report(false, 0); eof[0] = 254;
-                var query = await ReadRequest(stream, channel, ob20, 1, budget.Token); Assert.Equal("select lob_value", Encoding.UTF8.GetString(query, 1, query.Length - 1));
+                var query = await ReadRequest(stream, channel, ob20, 2, budget.Token); Assert.Equal("select lob_value", Encoding.UTF8.GetString(query, 1, query.Length - 1));
                 await Reply(0, Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(type))).Concat(Frame(3, Bytes(Locator(Array.Empty<byte>())))).Concat(Frame(4, eof)).ToArray());
                 for (var trim = 0; trim < 2; trim++)
                 {
                     var requestId = (uint)(1 + trim * 2); var parameters = trim == 0 ? 4 : 2;
-                    var request = new ByteCursor(await ReadRequest(stream, channel, ob20, requestId + 1, budget.Token)); Assert.Equal(0xa1, request.ReadUInt8()); request.Skip(9);
+                    var request = new ByteCursor(await ReadRequest(stream, channel, ob20, requestId + 2, budget.Token)); Assert.Equal(0xa1, request.ReadUInt8()); request.Skip(9);
                     Assert.Equal(trim == 0 ? "BEGIN DBMS_LOB.WRITE(?, ?, ?, ?); END;" : "BEGIN DBMS_LOB.TRIM(?, ?); END;", Encoding.UTF8.GetString(request.ReadLengthEncodedBytes()));
                     Assert.Equal((uint)parameters, request.ReadUInt32()); Assert.Equal(0, request.ReadUInt8()); Assert.Equal(1, request.ReadUInt8()); Assert.Equal((ushort)type, request.ReadUInt16());
                     if (trim == 0)
@@ -80,7 +80,7 @@ namespace OceanBaseConnector.ConsumerTests
                     if (kind == "trailing") response = response.Concat(Frame((byte)(6 + parameters), new byte[] { 0 })).ToArray();
                     await Reply(requestId, response);
                     if (kind == "trailing") break;
-                    Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, requestId + 2, budget.Token));
+                    Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, requestId + 3, budget.Token));
                     if (!ob20) channel.BeginCommand();
                 }
                 await ObserveClose(stream, budget.Token);

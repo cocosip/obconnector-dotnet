@@ -33,6 +33,7 @@ namespace OceanBaseConnector.Internal.Protocol
         MetadataChanged = 1024,
         QueryWasSlow = 2048,
         PsOutParameters = 4096,
+        InTransactionReadOnly = 8192,
         ServerSessionStateChanged = 1 << 14,
     }
 }

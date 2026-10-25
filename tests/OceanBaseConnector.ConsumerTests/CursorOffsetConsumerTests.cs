@@ -36,35 +36,35 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream(); var channel = new PacketChannel(stream);
                 await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, version: "2.2.5.0");
-                Assert.Equal(22, (await ReadRequest(stream, channel, ob20, 1, budget.Token))[0]);
+                Assert.Equal(22, (await ReadRequest(stream, channel, ob20, 2, budget.Token))[0]);
                 var response = Frame(1, new byte[] { 0, 80, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 }).Concat(Frame(2, Column(8))).ToArray();
-                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 1, 1, response) : response, budget.Token);
-                if (!ob20) channel.BeginCommand();
-                Assert.Equal(new byte[] { 23, 80, 0, 0, 0, 1, 1, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 2, budget.Token));
-                response = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(8))).ToArray();
                 await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 2, 1, response) : response, budget.Token);
+                if (!ob20) channel.BeginCommand();
+                Assert.Equal(new byte[] { 23, 80, 0, 0, 0, 1, 1, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 3, budget.Token));
+                response = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(8))).ToArray();
+                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 3, 1, response) : response, budget.Token);
                 for (uint page = 0; page < 2; page++)
                 {
                     if (!ob20) channel.BeginCommand();
-                    Assert.Equal(new byte[] { 28, 80, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, page + 3, budget.Token));
+                    Assert.Equal(new byte[] { 28, 80, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, page + 4, budget.Token));
                     var row = new byte[10]; row[2] = (byte)(page + 42);
                     response = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(8))).Concat(Frame(3, row))
                         .Concat(Frame(4, new byte[] { 254, 0, 0, page == 0 ? (byte)78 : (byte)142, 0, 0, 0 })).ToArray();
                     if (page == 1 && outcome == "missing")
                     {
-                        await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, page + 3, 1, response) : response, budget.Token); return;
+                        await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, page + 4, 1, response) : response, budget.Token); return;
                     }
                     var tail = page == 1 && outcome == "error" ? new byte[] { 255, 40, 4, 35, 52, 50, 48, 48, 48 }
                         : new byte[] { 0, (byte)(page + 1), 0, 6, 0, 0, 0 };
                     if (page == 1 && outcome == "boundary" && !ob20) tail[3] |= 8;
                     response = response.Concat(Frame(page == 1 && outcome == "sequence" ? (byte)9 : (byte)5, tail)).ToArray();
                     if (page == 1 && outcome == "boundary" && ob20) response = response.Concat(Frame(6, new byte[] { 0 })).ToArray();
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, page + 3, 1, response) : response, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, page + 4, 1, response) : response, budget.Token);
                 }
                 if (outcome == "success")
                 {
                     if (!ob20) channel.BeginCommand();
-                    Assert.Equal(new byte[] { 25, 80, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 5, budget.Token));
+                    Assert.Equal(new byte[] { 25, 80, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 6, budget.Token));
                 }
                 await ObserveClose(stream, budget.Token);
             });

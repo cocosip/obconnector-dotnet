@@ -73,7 +73,7 @@ namespace OceanBaseConnector.ConsumerTests
                 commands.AddRange(new[] { "ROLLBACK", "set autocommit = 1" });
                 for (uint i = 0; i < commands.Count; i++)
                 {
-                    var query = await ReadRequest(stream, channel, ob20, i + 1, budget.Token);
+                    var query = await ReadRequest(stream, channel, ob20, i + 2, budget.Token);
                     Assert.Equal(3, query[0]); Assert.Equal(commands[(int)i], Encoding.UTF8.GetString(query, 1, query.Length - 1));
                     if (asynchronous && i == 2) { requested.SetResult(); await respond.Task.WaitAsync(budget.Token); }
                     if (i == 3 && outcome == "disconnect") return;
@@ -82,7 +82,7 @@ namespace OceanBaseConnector.ConsumerTests
                     if (i == 3 && outcome == "boundary" && !ob20) packet[3] = 9;
                     var response = Frame(1, packet);
                     if (i == 3 && outcome == "boundary" && ob20) response = response.Concat(Frame(2, new byte[] { 0 })).ToArray();
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, i + 1, 1, response) : response, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, i + 2, 1, response) : response, budget.Token);
                     if (i == 3 && outcome == "boundary") break;
                     if (!ob20) channel.BeginCommand();
                 }

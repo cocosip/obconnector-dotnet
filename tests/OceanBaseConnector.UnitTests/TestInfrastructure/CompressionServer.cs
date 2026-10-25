@@ -68,7 +68,9 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                 await channel.WritePacketAsync(SessionOk(oracle), token);
                 using var compressed = Compressed ? new WireStream(transport) : null;
                 if (compressed != null) channel = new PacketChannel(compressed);
-                await ServerIdentity.ReplyAsync(channel, oracle, token: token);
+                await ServerIdentity.ReplyAsync(channel, oracle, token: token, initializeAutocommit: false);
+                compressed?.Reset();
+                if (oracle) await ServerIdentity.ReplyOracleAutocommitAsync(channel, token);
                 compressed?.Reset();
                 while (true)
                 {
@@ -91,6 +93,11 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                     }
                     await channel.WritePacketAsync(request[0] == 3 ? new byte[] { 0, 1, 0, 2, 0, 0, 0 } : SessionOk(oracle), token);
                     channel.BeginCommand(); compressed?.Reset();
+                    if (oracle && request[0] == 0x1f)
+                    {
+                        await ServerIdentity.ReplyOracleAutocommitAsync(channel, token);
+                        compressed?.Reset();
+                    }
                 }
             }
             catch (OperationCanceledException) when (_budget.IsCancellationRequested) { }

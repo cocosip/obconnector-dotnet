@@ -29,11 +29,11 @@ namespace OceanBaseConnector.ConsumerTests
                 await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token, deprecated: true, version: "4.2.0");
                 uint request = 0;
                 async Task<byte[]> Read()
-                { if (!ob20) channel.BeginCommand(); return await ReadRequest(stream, channel, ob20, request++ + 1, budget.Token); }
+                { if (!ob20) channel.BeginCommand(); return await ReadRequest(stream, channel, ob20, request++ + 2, budget.Token); }
                 async Task Reply(params byte[][] packets)
                 {
                     var frames = packets.SelectMany((p, i) => Frame((byte)(i + 1), p)).ToArray();
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, request, 1, frames) : frames, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, request + 1, 1, frames) : frames, budget.Token);
                 }
                 byte[] Column(byte type) => new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 112, 1, 112, 12, 45, 0, 20, 0, 0, 0, type, 0, 0, 0, 0, 0 };
                 var eof = Report(false, 0); eof[0] = 254;

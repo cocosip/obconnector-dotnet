@@ -74,7 +74,7 @@ namespace OceanBaseConnector.ConsumerTests
             var ob20 = kind == "enabled";
             for (uint request = 0; request < 4; request++)
             {
-                var command = await ReadRequest(stream, channel, ob20, request + 1, token);
+                var command = await ReadRequest(stream, channel, ob20, request + 2, token);
                 byte[] response;
                 if (request == 0)
                 { Assert.Equal(3, command[0]); Assert.Equal("update t set x=1", Encoding.UTF8.GetString(command, 1, command.Length - 1)); response = Frame(1, Report(false, 1)); }
@@ -88,13 +88,13 @@ namespace OceanBaseConnector.ConsumerTests
                 else if (request == 2)
                 { Assert.Equal(23, command[0]); Assert.Equal(9, command[1]); Assert.Equal(7, command[command.Length - 4]); response = Frame(1, Report(false, 1)); }
                 else { Assert.Equal(new byte[] { 25, 9, 0, 0, 0 }, command); break; }
-                if (ob20) await stream.WriteAsync(Ob20Packet.Build(1234, request + 1, 1, response), token);
+                if (ob20) await stream.WriteAsync(Ob20Packet.Build(1234, request + 2, 1, response), token);
                 else { await stream.WriteAsync(response, token); channel.BeginCommand(); }
             }
             await ObserveClose(stream, token);
         }
 
-        private static async Task Handshake(PacketChannel channel, Stream stream, string kind, CancellationToken token, bool deprecated = false, bool lobLocators = false, string version = "4.4.2.2", SslStream? tls = null, X509Certificate2? certificate = null, bool mysql = false)
+        private static async Task Handshake(PacketChannel channel, Stream stream, string kind, CancellationToken token, bool deprecated = false, bool lobLocators = false, string version = "4.4.2.2", SslStream? tls = null, X509Certificate2? certificate = null, bool mysql = false, bool initializeAutocommit = true)
         {
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
@@ -127,21 +127,28 @@ namespace OceanBaseConnector.ConsumerTests
             if (lobLocators) Assert.Equal("1", attributes["__ob_client_attribute_capability_flag"]);
             var report = Report(kind != "unsupported", 0); if (mysql) report[3] &= 251;
             await channel.WritePacketAsync(report, token); channel.BeginCommand();
-            await ReplyIdentity(channel, stream, kind == "enabled", token, deprecated, version, mysql);
+            await ReplyIdentity(channel, stream, kind == "enabled", token, deprecated, version, mysql, initializeAutocommit);
         }
 
-        internal static async Task ReplyIdentity(PacketChannel channel, Stream stream, bool ob20, CancellationToken token, bool deprecated = false, string version = "4.4.2.2", bool mysql = false)
+        internal static async Task ReplyIdentity(PacketChannel channel, Stream stream, bool ob20, CancellationToken token, bool deprecated = false, string version = "4.4.2.2", bool mysql = false, bool initializeAutocommit = true)
         {
             if (!ob20)
             {
-                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, oracle: !mysql, version: version, deprecated: deprecated, token: token);
+                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, oracle: !mysql, version: version, deprecated: deprecated, token: token, initializeAutocommit: initializeAutocommit);
                 return;
             }
-            // Identity is the first OB20 request; feature exchanges start at request 1.
+            // Oracle initialization follows identity; feature exchanges start at request 2 (MySQL: 1).
             var query = await ReadRequest(stream, channel, true, 0, token);
             Assert.Equal(3, query[0]);
             Assert.Equal(mysql ? "select ob_version(), @@ob_compatibility_mode, @@autocommit from dual" : "select ob_version(), @@ob_compatibility_mode from dual", Encoding.UTF8.GetString(query, 1, query.Length - 1));
             await stream.WriteAsync(Ob20Packet.Build(1234, 0, 1, TextResult(deprecated, mysql ? new[] { version, "MYSQL", "1" } : new[] { version, "ORACLE" })), token);
+            if (!mysql && initializeAutocommit)
+            {
+                var setup = await ReadRequest(stream, channel, true, 1, token);
+                Assert.Equal(3, setup[0]);
+                Assert.Equal("set autocommit = 1", Encoding.ASCII.GetString(setup, 1, setup.Length - 1));
+                await stream.WriteAsync(Ob20Packet.Build(1234, 1, 1, Frame(1, Report(false, 0))), token);
+            }
         }
 
         private static async Task<byte[]> ReadRequest(Stream stream, PacketChannel channel, bool ob20, uint request, CancellationToken token)
@@ -188,13 +195,13 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var wire = peer.GetStream(); var channel = new PacketChannel(wire);
                 await Handshake(channel, wire, "enabled", budget.Token);
-                var request = await ReadRequest(wire, channel, true, 1, budget.Token);
+                var request = await ReadRequest(wire, channel, true, 2, budget.Token);
                 Assert.Equal("update t set x=1", Encoding.UTF8.GetString(request, 1, request.Length - 1)); received.SetResult();
                 if (kind == "crc" || kind == "last" || kind == "trailing")
                 {
                     var data = Frame(1, Report(false, 1));
                     if (kind == "trailing") data = data.Concat(Frame(2, new byte[] { 0 })).ToArray();
-                    var bytes = Ob20Packet.Build(1234, 1, 1, data, flags: kind == "last" ? 0u : 2u);
+                    var bytes = Ob20Packet.Build(1234, 2, 1, data, flags: kind == "last" ? 0u : 2u);
                     if (kind == "crc") bytes[bytes.Length - 1] ^= 1;
                     await wire.WriteAsync(bytes, budget.Token);
                 }
@@ -232,7 +239,7 @@ namespace OceanBaseConnector.ConsumerTests
                 await Handshake(channel, wire, "enabled", budget.Token);
                 for (uint request = 0; request < 4; request++)
                 {
-                    var command = await ReadRequest(wire, channel, true, request + 1, budget.Token); Assert.Equal(3, command[0]);
+                    var command = await ReadRequest(wire, channel, true, request + 2, budget.Token); Assert.Equal(3, command[0]);
                     var sql = Encoding.UTF8.GetString(command, 1, command.Length - 1);
                     byte[] response;
                     if (request == 1)
@@ -247,7 +254,7 @@ namespace OceanBaseConnector.ConsumerTests
                         Assert.Equal("update t set x=1", sql);
                         response = Frame(1, request == 0 ? new byte[] { 255, 122, 4, 35, 52, 50, 83, 48, 50, 101, 114, 114 } : Report(false, 1));
                     }
-                    await wire.WriteAsync(Ob20Packet.Build(1234, request + 1, 1, response), budget.Token);
+                    await wire.WriteAsync(Ob20Packet.Build(1234, request + 2, 1, response), budget.Token);
                 }
                 await ObserveClose(wire, budget.Token);
             });
@@ -286,26 +293,26 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var wire = peer.GetStream(); var channel = new PacketChannel(wire);
                 await Handshake(channel, wire, "enabled", budget.Token);
-                Assert.Equal(22, (await ReadRequest(wire, channel, true, 1, budget.Token))[0]);
+                Assert.Equal(22, (await ReadRequest(wire, channel, true, 2, budget.Token))[0]);
                 var prepared = Frame(1, new byte[] { 0, 80, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 })
                     .Concat(Frame(2, column)).Concat(Frame(3, new byte[] { 254, 0, 0, 6, 0 })).ToArray();
-                await wire.WriteAsync(Ob20Packet.Build(1234, 1, 1, prepared), budget.Token);
-                Assert.Equal(new byte[] { 23, 80, 0, 0, 0, 1, 1, 0, 0, 0 }, await ReadRequest(wire, channel, true, 2, budget.Token));
+                await wire.WriteAsync(Ob20Packet.Build(1234, 2, 1, prepared), budget.Token);
+                Assert.Equal(new byte[] { 23, 80, 0, 0, 0, 1, 1, 0, 0, 0 }, await ReadRequest(wire, channel, true, 3, budget.Token));
                 var initial = Frame(1, new byte[] { 1 }).Concat(Frame(2, column)).Concat(Frame(3, new byte[] { 254, 0, 0, 70, 0 })).ToArray();
-                await wire.WriteAsync(Ob20Packet.Build(1234, 2, 1, initial), budget.Token);
+                await wire.WriteAsync(Ob20Packet.Build(1234, 3, 1, initial), budget.Token);
                 for (var page = 0; page < 3; page++)
                 {
-                    Assert.Equal(new byte[] { 28, 80, 0, 0, 0, 1, 0, 0, 0 }, await ReadRequest(wire, channel, true, (uint)(page + 3), budget.Token));
+                    Assert.Equal(new byte[] { 28, 80, 0, 0, 0, 1, 0, 0, 0 }, await ReadRequest(wire, channel, true, (uint)(page + 4), budget.Token));
                     if (page == 1 && kind == "cancel") { waiting.SetResult(); break; }
                     var row = new byte[10]; BitConverter.GetBytes((long)(page + 42)).CopyTo(row, 2);
                     var data = Frame(1, new byte[] { 1 }).Concat(Frame(2, column)).Concat(Frame(3, new byte[] { 254, 0, 0, 6, 0 }))
                         .Concat(Frame(4, row)).Concat(Frame(5, new byte[] { 254, 0, 0, page == 2 ? (byte)134 : (byte)70, 0 })).ToArray();
-                    var bytes = Ob20Packet.Build(1234, (uint)(page + 3), 1, data, flags: page == 1 && kind == "last" ? 0u : 2u);
+                    var bytes = Ob20Packet.Build(1234, (uint)(page + 4), 1, data, flags: page == 1 && kind == "last" ? 0u : 2u);
                     if (page == 1 && kind == "crc") bytes[bytes.Length - 1] ^= 1;
                     await wire.WriteAsync(bytes, budget.Token);
                     if (page == 1 && kind != "success") break;
                 }
-                if (kind == "success") Assert.Equal(new byte[] { 25, 80, 0, 0, 0 }, await ReadRequest(wire, channel, true, 6, budget.Token));
+                if (kind == "success") Assert.Equal(new byte[] { 25, 80, 0, 0, 0 }, await ReadRequest(wire, channel, true, 7, budget.Token));
                 await ObserveClose(wire, budget.Token);
             });
             using var connection = new OceanBaseConnection($"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Use OB20=true");

@@ -76,6 +76,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                         if (request[0] == 0x1f) Interlocked.Increment(ref _resets);
                         if (BeforeCommandReply != null) await BeforeCommandReply(request[0]);
                         await channel.WritePacketAsync(new byte[] { 0, request[0] == 3 ? (byte)1 : (byte)0, 0, 6, 0, 0, 0 }, _stop.Token);
+                        if (_oracle && request[0] == 0x1f) await ServerIdentity.ReplyOracleAutocommitAsync(channel, _stop.Token);
                         channel.BeginCommand();
                     }
                 }

@@ -94,7 +94,9 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                         Assert.Contains(request[0], new byte[] { 3, 0x1f, 0x0e, 2 });
                         if (request[0] == 0x1f && BeforeResetReply != null) await BeforeResetReply().WaitAsync(_stop.Token);
                         if (request[0] == 0x0e && BeforeProbeReply != null) await BeforeProbeReply().WaitAsync(_stop.Token);
-                        await channel.WritePacketAsync(ok, _stop.Token); channel.BeginCommand();
+                        await channel.WritePacketAsync(ok, _stop.Token);
+                        if (_oracle && request[0] == 0x1f) await ServerIdentity.ReplyOracleAutocommitAsync(channel, _stop.Token);
+                        channel.BeginCommand();
                     }
                 }
                 catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }

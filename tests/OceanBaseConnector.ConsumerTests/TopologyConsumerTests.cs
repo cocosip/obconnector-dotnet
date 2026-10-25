@@ -43,6 +43,7 @@ namespace OceanBaseConnector.ConsumerTests
                     channel.BeginCommand();
                     Assert.Equal(new byte[] { 0x1f }, await ReadRequest(stream, channel, false, 0, budget.Token));
                     await channel.WritePacketAsync(Report(false, 0), budget.Token);
+                    await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyOracleAutocommitAsync(channel, budget.Token);
                     await ObserveClose(stream, budget.Token);
                 }
             }
@@ -126,11 +127,11 @@ namespace OceanBaseConnector.ConsumerTests
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token);
                 var stream = peer.GetStream(); var channel = new PacketChannel(stream);
                 await Handshake(channel, stream, ob20 ? "enabled" : "unrequested", budget.Token);
-                var query = await ReadRequest(stream, channel, ob20, 1, budget.Token);
+                var query = await ReadRequest(stream, channel, ob20, 2, budget.Token);
                 Assert.Equal(3, query[0]); Assert.Equal("selected", Encoding.UTF8.GetString(query, 1, query.Length - 1));
                 if (fail) return;
                 var response = Frame(1, Report(false, affected));
-                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 1, 1, response) : response, budget.Token);
+                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 2, 1, response) : response, budget.Token);
                 await ObserveClose(stream, budget.Token);
             }
             var serving = Task.WhenAll(Task.Run(() => Serve(first, 1, false)), Task.Run(() => Serve(second, 2, disconnect)));

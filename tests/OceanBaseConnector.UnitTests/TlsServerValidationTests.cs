@@ -385,6 +385,7 @@ namespace OceanBaseConnector.UnitTests
                             var request = await channel.ReadPacketAsync(_stop.Token);
                             Assert.Single(request); Assert.True(request[0] == 0x1f || request[0] == 0x0e);
                             await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, _stop.Token);
+                            if (request[0] == 0x1f) await ServerIdentity.ReplyOracleAutocommitAsync(channel, _stop.Token);
                             channel.BeginCommand();
                         }
                     }

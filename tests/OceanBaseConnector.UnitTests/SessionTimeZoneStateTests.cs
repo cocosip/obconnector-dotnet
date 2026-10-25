@@ -20,7 +20,7 @@ namespace OceanBaseConnector.UnitTests
             return SessionVariablesOk(new NationalCharacterSet("utf8mb4", "utf8mb4", "utf8mb4").Variables(zone), header, status);
         }
 
-        private static byte[] SessionVariablesOk(System.Collections.Generic.Dictionary<string, string> values, byte header = 0, byte status = 6)
+        internal static byte[] SessionVariablesOk(System.Collections.Generic.Dictionary<string, string> values, byte header = 0, byte status = 6)
         {
             using var state = new MemoryStream();
             foreach (var pair in values)

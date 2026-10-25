@@ -33,7 +33,7 @@ namespace OceanBaseConnector.UnitTests.Session
             return data.ToArray();
         }
 
-        private static async Task IdentityResponse(PacketChannel channel, bool oracle, string? version = "4.4.2.2", bool extraRow = false, string? reportedMode = null, string? autocommit = "1", byte autocommitType = 1)
+        private static async Task IdentityResponse(PacketChannel channel, bool oracle, string? version = "4.4.2.2", bool extraRow = false, string? reportedMode = null, string? autocommit = "1", byte autocommitType = 1, bool initializeAutocommit = true)
         {
             channel.BeginCommand();
             Assert.Equal(oracle ? ServerIdentity.OracleQuery : ServerIdentity.MySqlQuery, Encoding.ASCII.GetString((await channel.ReadPacketAsync())[1..]));
@@ -57,6 +57,8 @@ namespace OceanBaseConnector.UnitTests.Session
             await channel.WritePacketAsync(rowBytes);
             if (extraRow) await channel.WritePacketAsync(rowBytes);
             await channel.WritePacketAsync(eof);
+            if (oracle && initializeAutocommit && !extraRow && version is not null && (reportedMode is null || reportedMode == "ORACLE"))
+                await ServerIdentity.ReplyOracleAutocommitAsync(channel);
         }
 
         [Theory]

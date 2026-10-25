@@ -148,6 +148,7 @@ namespace OceanBaseConnector.ConsumerTests
                     await Expect("ROLLBACK", autoOff); await Expect("set autocommit = 1", autoOn);
                     channel.BeginCommand(); Assert.Equal(new byte[] { 31 }, await channel.ReadPacketAsync(token));
                     await channel.WritePacketAsync(Ok(autoOn), token);
+                    if (oracle) await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyOracleAutocommitAsync(channel, token);
                 }
                 Assert.Equal(0, await stream.ReadAsync(new byte[1], token));
             }

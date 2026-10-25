@@ -64,7 +64,7 @@ namespace OceanBaseConnector.ConsumerTests
                 await Handshake(channel, wire, kind, budget.Token, tls, certificate);
                 for (uint request = 0; request < 3; request++)
                 {
-                    var packet = await ReadFrame(wire, request + 1, budget.Token);
+                    var packet = await ReadFrame(wire, request + 2, budget.Token);
                     Assert.Equal(3, packet.Payload.Array![packet.Payload.Offset + 4]);
                     Assert.Equal("update t set x='private_payload'", Encoding.UTF8.GetString(packet.Payload.Array!, packet.Payload.Offset + 5, packet.Payload.Count - 5));
                     if (active && request > 0)
@@ -89,7 +89,7 @@ namespace OceanBaseConnector.ConsumerTests
                     else Assert.Equal(0, packet.ExtraInfo.Count);
                     var response = Frame(1, Ob20ConsumerTests.Report(false, 1));
                     var extra = request == 0 ? Wrap(Control(), modern) : null;
-                    await wire.WriteAsync(Ob20Packet.Build(1234, request + 1, 1, response, extra, flags: modern && active ? 10u : 2u), budget.Token);
+                    await wire.WriteAsync(Ob20Packet.Build(1234, request + 2, 1, response, extra, flags: modern && active ? 10u : 2u), budget.Token);
                 }
                 Assert.Equal(0, await wire.ReadAsync(new byte[1], budget.Token));
             });
@@ -157,7 +157,7 @@ namespace OceanBaseConnector.ConsumerTests
                 var spans = new HashSet<string>();
                 for (uint request = 0; request < 10; request++)
                 {
-                    var packet = await ReadFrame(wire, request + 1, budget.Token); var command = packet.Payload.ToArray().AsSpan(4).ToArray();
+                    var packet = await ReadFrame(wire, request + 2, budget.Token); var command = packet.Payload.ToArray().AsSpan(4).ToArray();
                     if (request > 0)
                     {
                         var trace = Fields(Unwrap(packet.ExtraInfo.ToArray(), modern)); var span = Fields(trace[2004]);
@@ -196,7 +196,7 @@ namespace OceanBaseConnector.ConsumerTests
                         Assert.Equal(expected, Encoding.UTF8.GetString(command, 1, command.Length - 1));
                         var ok = Ob20ConsumerTests.Report(false, 0); if (request == 7 || request == 8) ok[3] = 4; data = Frame(1, ok);
                     }
-                    await wire.WriteAsync(Ob20Packet.Build(1234, request + 1, 1, data, request == 0 ? Wrap(Control(), modern) : null, flags: modern ? 10u : 2u), budget.Token);
+                    await wire.WriteAsync(Ob20Packet.Build(1234, request + 2, 1, data, request == 0 ? Wrap(Control(), modern) : null, flags: modern ? 10u : 2u), budget.Token);
                 }
                 Assert.Equal(0, await wire.ReadAsync(new byte[1], budget.Token));
             });
@@ -256,9 +256,9 @@ namespace OceanBaseConnector.ConsumerTests
                 using var tls = encrypted ? new SslStream(peer.GetStream()) : null;
                 Stream wire = tls is null ? peer.GetStream() : tls;
                 var channel = new PacketChannel(peer.GetStream());
-                await Handshake(channel, wire, modern ? "modern" : "legacy", budget.Token, tls, certificate); Assert.Equal(0, (await ReadFrame(wire, 1, budget.Token)).ExtraInfo.Count);
+                await Handshake(channel, wire, modern ? "modern" : "legacy", budget.Token, tls, certificate); Assert.Equal(0, (await ReadFrame(wire, 2, budget.Token)).ExtraInfo.Count);
                 var extra = kind == "limit" ? new byte[65537] : Wrap(kind == "malformed" ? new byte[] { 211, 7, 255, 255, 255, 255 } : Control(), modern);
-                var bytes = Ob20Packet.Build(1234, 1, 1, Frame(1, Ob20ConsumerTests.Report(false, 1)), extra, flags: modern ? 10u : 2u);
+                var bytes = Ob20Packet.Build(1234, 2, 1, Frame(1, Ob20ConsumerTests.Report(false, 1)), extra, flags: modern ? 10u : 2u);
                 if (kind == "crc") bytes[bytes.Length - 1] ^= 1;
                 try { await wire.WriteAsync(bytes.AsMemory(0, kind == "partial-cancel" ? 31 + 4 + extra.Length + 2 : bytes.Length), budget.Token); }
                 catch (IOException) when (kind == "limit") { }

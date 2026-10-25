@@ -99,6 +99,7 @@ namespace OceanBaseConnector.UnitTests
                     {
                         Assert.Equal(new byte[] { 0x1f }, await channel.ReadPacketAsync(token));
                         await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, token);
+                        if (oracle) await ServerIdentity.ReplyOracleAutocommitAsync(channel, token);
                     }
                     if (expectUserCommand)
                     {
@@ -198,6 +199,7 @@ namespace OceanBaseConnector.UnitTests
                     Assert.Equal(new byte[] { 0x1f }, packet);
                     resets++;
                     await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 });
+                    await ServerIdentity.ReplyOracleAutocommitAsync(channel);
                     if (i == 0) channel.BeginCommand();
                 }
             });

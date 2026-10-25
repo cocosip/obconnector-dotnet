@@ -26,6 +26,7 @@ namespace OceanBaseConnector.UnitTests
                     await channel.WritePacketAsync(Ok(status: (byte)(oracle ? 6 : 2)));
                     await StatementCommand(channel, 31);
                     await channel.WritePacketAsync(TimeZoneOk("+00:00", status: (byte)(oracle ? 6 : 2)));
+                    if (oracle) await TestInfrastructure.ServerIdentity.ReplyOracleAutocommitAsync(channel);
                 }
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Pooling=true;Max Pool Size=1;Statement Cache Size=2");

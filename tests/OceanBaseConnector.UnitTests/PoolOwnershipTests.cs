@@ -148,6 +148,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(5, count);
                 Assert.Equal(new byte[] { 1, 0, 0, 0, 0x1f }, packet);
                 await stream.WriteAsync(new byte[] { 7, 0, 0, 1, 0, 0, 0, 6, 0, 0, 0 });
+                await ServerIdentity.ReplyOracleAutocommitAsync(channel);
             }
         });
     }

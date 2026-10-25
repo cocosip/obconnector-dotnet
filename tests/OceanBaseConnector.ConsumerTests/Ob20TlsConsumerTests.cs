@@ -73,12 +73,12 @@ namespace OceanBaseConnector.ConsumerTests
                 using var tls = new SslStream(peer.GetStream());
                 var channel = new PacketChannel(peer.GetStream());
                 await Handshake(channel, tls, "enabled", budget.Token, tls: tls, certificate: certificate);
-                var request = await ReadRequest(tls, channel, true, 1, budget.Token);
+                var request = await ReadRequest(tls, channel, true, 2, budget.Token);
                 Assert.Equal(3, request[0]); Assert.Equal("select payload", Encoding.UTF8.GetString(request, 1, request.Length - 1));
                 var column = new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 98, 1, 98, 12, 63, 0, 0, 4, 0, 0, 252, 128, 0, 0, 0, 0 };
                 var metadata = Frame(1, new byte[] { 1 }).Concat(Frame(2, column)).Concat(Frame(3, new byte[] { 254, 0, 0, 6, 0 })).ToArray();
                 var row = new byte[] { 252, 0, 4 }.Concat(Enumerable.Range(0, 1024).Select(i => (byte)i)).ToArray();
-                var response = Ob20Packet.Build(1234, 1, 1, metadata.Concat(Frame(4, row)).Concat(Frame(5, new byte[] { 254, 0, 0, 6, 0 })).ToArray());
+                var response = Ob20Packet.Build(1234, 2, 1, metadata.Concat(Frame(4, row)).Concat(Frame(5, new byte[] { 254, 0, 0, 6, 0 })).ToArray());
                 var prefix = 31 + metadata.Length + 4 + 3 + 128;
                 await tls.WriteAsync(response.AsMemory(0, prefix), budget.Token);
                 if (kind == "crc")

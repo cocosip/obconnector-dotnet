@@ -4,7 +4,11 @@
 
 The [result contract](obconnector-dotnet-architecture-design.md#oracle-number-results-with-unknown-precision) preserves exact Oracle values when precision is unknown; advertised schema metadata remains unchanged. Known-precision and parameter constraints remain strict. The coefficient/value-scale representation can change to reflect the returned text. Four new direct Oracle4.4.2.2/Windows/.NET10/TLS-disabled tests cover bindings and real table/CAST rounding; this is a scoped result-reading regression, not full Oracle acceptance.
 
-**Open pool/transaction finding:** real W1 tests also reproduced invisible implicit Oracle writes on fresh connections and after pool reset. Explicit Oracle autocommit initialization remains to be implemented and verified; do not infer implicit-write safety from the number tests. Original failures and next work are recorded in completeness section15.37.
+**Oracle autocommit follow-up:** the previously invisible fresh/post-reset implicit writes now pass after explicit initialization. The direct MySQL+Oracle pool suite changed from18pass/4fail/1skip to22pass/0fail/1skip; the four same-name Oracle failures cover sync/async fresh and reused sessions. The missing alternateDatabase profile still skips ChangeDatabase. These are OceanBase4.4.2.2/Windows/.NET10/TLS-disabled results; full pool/resource/XA/OBProxy/other-platform acceptance remains open. The [baseline contract](obconnector-dotnet-architecture-design.md#oracle-autocommit-baseline) and completeness15.37/15.38 retain the original failures and RED checkpoints.
+
+## Oracle autocommit verification scope
+
+The final full unit suite passes 5,134 cases, full five-asset consumers pass 2,898 cases, and the final direct Connections + OracleNumber suite passes 52 with 4 configuration skips. Full consumers use one .NET 10 host. Separately, the two standalone raw-wire samples compile and run on installed Windows .NET 8.0.31 / 9.0.20 / 10.0.12 (6 smoke checks); these limited samples do not establish full suites or database acceptance on those runtimes. Original failures and exact limits remain in [the module record](obconnector-dotnet-completeness.md#1539-2026-10-25-oracle-自动提交与真实池隔离). Full OBProxy, trusted TLS, resource, XA and concurrency acceptance remain open.
 
 ## Slow client operation diagnostics
 

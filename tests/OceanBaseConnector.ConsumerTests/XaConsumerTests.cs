@@ -58,7 +58,7 @@ namespace OceanBaseConnector.ConsumerTests
                 if (kind == "success" || kind == "reject") commands.AddRange(new[] { "XA COMMIT " + identity, "XA RECOVER", "XA ROLLBACK " + identity });
                 for (uint i = 0; i < commands.Count; i++)
                 {
-                    var query = await ReadRequest(stream, channel, ob20, i + 1, budget.Token);
+                    var query = await ReadRequest(stream, channel, ob20, i + 2, budget.Token);
                     Assert.Equal(3, query[0]); Assert.Equal(commands[(int)i], Encoding.UTF8.GetString(query, 1, query.Length - 1));
                     if (i == 3 && kind == "disconnect") return;
                     var response = commands[(int)i] == "XA RECOVER" ? XaRecoveryFrames(emptyBranch)
@@ -70,7 +70,7 @@ namespace OceanBaseConnector.ConsumerTests
                         if (ob20) response = response.Concat(Frame(2, new byte[] { 0 })).ToArray();
                         else response = Frame(1, new byte[] { 0, 0, 0, 10, 0, 0, 0 }); // Forbidden MORE_RESULTS.
                     }
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, i + 1, 1, response) : response, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, i + 2, 1, response) : response, budget.Token);
                     if (i == 3 && kind == "boundary") break;
                     if (!ob20) channel.BeginCommand();
                 }

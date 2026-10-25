@@ -31,13 +31,13 @@ namespace OceanBaseConnector.ConsumerTests
                 async Task Reply(uint id, params byte[][] packets)
                 {
                     var response = packets.SelectMany((p, i) => Frame((byte)(i + 1), p)).ToArray();
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, id + 1, 1, response) : response, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, id + 2, 1, response) : response, budget.Token);
                     if (!ob20) channel.BeginCommand();
                 }
                 byte[] Status(byte affected, byte flags) { var packet = Report(ob20, affected); packet[3] = flags; return packet; }
                 async Task Sql(uint id, string sql, byte status)
                 {
-                    var request = await ReadRequest(stream, channel, ob20, id + 1, budget.Token);
+                    var request = await ReadRequest(stream, channel, ob20, id + 2, budget.Token);
                     Assert.Equal(3, request[0]); Assert.Equal(sql, Encoding.UTF8.GetString(request, 1, request.Length - 1));
                     await Reply(id, Status(0, status));
                 }
@@ -57,7 +57,7 @@ namespace OceanBaseConnector.ConsumerTests
                 }
                 await Sql(0, "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED", 6); await Sql(1, "set autocommit = 0", 4);
                 var eof = Status(0, 5); eof[0] = 254;
-                var execute = new ByteCursor(await ReadRequest(stream, channel, ob20, 3, budget.Token));
+                var execute = new ByteCursor(await ReadRequest(stream, channel, ob20, 4, budget.Token));
                 Assert.Equal(0xa1, execute.ReadUInt8()); Assert.Equal(0u, execute.ReadUInt32()); Assert.Equal(0, execute.ReadUInt8()); Assert.Equal(2u, execute.ReadUInt32());
                 Assert.Equal("update t set x=? returning x into ?", Encoding.UTF8.GetString(execute.ReadLengthEncodedBytes())); Assert.Equal(2u, execute.ReadUInt32());
                 Assert.Equal(new byte[] { 0, 1, 160, 0, 0, 0, 0, 246, 160, 0, 0, 0, 0, 246, 3, 2, 1, 49, 1, 50, 3, 7 }, execute.ReadBytes(22));
@@ -72,7 +72,7 @@ namespace OceanBaseConnector.ConsumerTests
                 await Reply(2, packets);
                 if (kind != "trailing")
                 {
-                    Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 4, budget.Token));
+                    Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 5, budget.Token));
                     if (!ob20) channel.BeginCommand();
                     await Sql(4, "ROLLBACK", 4); await Sql(5, "set autocommit = 1", 6);
                 }

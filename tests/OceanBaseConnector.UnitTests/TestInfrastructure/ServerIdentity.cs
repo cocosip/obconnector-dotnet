@@ -12,7 +12,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
         internal const string OracleQuery = "select ob_version(), @@ob_compatibility_mode from dual";
         internal const string MySqlQuery = "select ob_version(), @@ob_compatibility_mode, @@autocommit from dual";
 
-        internal static async Task ReplyAsync(PacketChannel channel, bool oracle = true, string version = "4.4.2.2", bool deprecated = false, CancellationToken token = default, string autocommit = "1")
+        internal static async Task ReplyAsync(PacketChannel channel, bool oracle = true, string version = "4.4.2.2", bool deprecated = false, CancellationToken token = default, string autocommit = "1", bool initializeAutocommit = true)
         {
             channel.BeginCommand();
             var query = await channel.ReadPacketAsync(token);
@@ -51,6 +51,17 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             }
             await channel.WritePacketAsync(row.ToArray(), token);
             await channel.WritePacketAsync(deprecated ? new byte[] { 254, 0, 0, 6, 0, 0, 0 } : eof, token);
+            if (oracle && initializeAutocommit) await ReplyOracleAutocommitAsync(channel, token);
+            channel.BeginCommand();
+        }
+
+        internal static async Task ReplyOracleAutocommitAsync(PacketChannel channel, CancellationToken token = default)
+        {
+            channel.BeginCommand();
+            var command = await channel.ReadPacketAsync(token);
+            Assert.Equal(3, command[0]);
+            Assert.Equal("set autocommit = 1", Encoding.ASCII.GetString(command, 1, command.Length - 1));
+            await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, token);
             channel.BeginCommand();
         }
     }

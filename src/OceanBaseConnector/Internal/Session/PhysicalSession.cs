@@ -471,6 +471,7 @@ namespace OceanBaseConnector.Internal.Session
 
             try
             {
+                IReadOnlyDictionary<string, string>? resetVariables = null;
                 using (var exchange = new CommandExchange(this, log, timeout, cancellationToken, () => { }, logCommand: false))
                 {
                     var request = new byte[] { 0x1f }; // COM_RESET_CONNECTION
@@ -483,6 +484,21 @@ namespace OceanBaseConnector.Internal.Session
                         (ok.StatusFlags & (ServerStatusFlags.MoreResultsExists | ServerStatusFlags.InTransaction)) != 0 ||
                         (Info?.Mode == OceanBaseCompatibilityMode.MySql && (ok.StatusFlags & ServerStatusFlags.Autocommit) == 0))
                         throw new ProtocolException("The session reset response was invalid.");
+                    exchange.ObserveSessionState(ok);
+                    exchange.Complete();
+                }
+
+                if (Info?.Mode == OceanBaseCompatibilityMode.Oracle)
+                {
+                    // Reset must roll back inherited writes before enabling implicit commits.
+                    using var exchange = new CommandExchange(this, log, timeout, cancellationToken, () => { }, logCommand: false);
+                    var request = OceanBaseCommand.SqlPacket("set autocommit = 1", 3);
+                    if (asynchronous) await exchange.SendAsync(request).ConfigureAwait(false); else exchange.Send(request);
+                    var packet = asynchronous
+                        ? await exchange.ReceiveAsync(cancellationToken).ConfigureAwait(false)
+                        : exchange.Receive();
+                    var ok = HandshakeFlow.ValidateOracleAutocommit(packet, exchange.Capabilities);
+                    resetVariables = ok.SessionVariables;
                     exchange.ObserveSessionState(ok);
                     exchange.Complete();
                 }
@@ -509,8 +525,8 @@ namespace OceanBaseConnector.Internal.Session
                 lock (_gate)
                 {
                     _database = _initialDatabase;
-                    _sessionTimeZone = null;
-                    _nationalCharacterSet = null;
+                    _sessionTimeZone = resetVariables == null ? null : ReportedTimeZone(resetVariables);
+                    _nationalCharacterSet = NationalCharacterSet.FromVariables(resetVariables);
                     _statementCloses.Clear();
                     ClearPreparedStatementCache(closeStatements: false);
                     _generation++;

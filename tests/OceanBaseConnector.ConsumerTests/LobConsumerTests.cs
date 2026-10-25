@@ -54,14 +54,14 @@ namespace OceanBaseConnector.ConsumerTests
                 byte[] Bytes(byte[] value) => new[] { (byte)value.Length }.Concat(value).ToArray();
                 async Task Reply(uint id, byte[] bytes)
                 {
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, id + 1, 1, bytes) : bytes, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, id + 2, 1, bytes) : bytes, budget.Token);
                     if (!ob20) channel.BeginCommand();
                 }
                 var eof = Report(false, 0); eof[0] = 254;
-                var query = await ReadRequest(stream, channel, ob20, 1, budget.Token);
+                var query = await ReadRequest(stream, channel, ob20, 2, budget.Token);
                 Assert.Equal("select lob_value", Encoding.UTF8.GetString(query, 1, query.Length - 1));
                 await Reply(0, Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(type))).Concat(Frame(3, Bytes(locator))).Concat(Frame(4, eof)).ToArray());
-                var request = new ByteCursor(await ReadRequest(stream, channel, ob20, 2, budget.Token));
+                var request = new ByteCursor(await ReadRequest(stream, channel, ob20, 3, budget.Token));
                 Assert.Equal(0xa1, request.ReadUInt8()); request.Skip(9);
                 Assert.Equal("BEGIN DBMS_LOB.READ(?, ?, ?, ?); END;", Encoding.UTF8.GetString(request.ReadLengthEncodedBytes()));
                 Assert.Equal(4u, request.ReadUInt32()); Assert.Equal(8, request.ReadUInt8()); Assert.Equal(1, request.ReadUInt8());
@@ -74,7 +74,7 @@ namespace OceanBaseConnector.ConsumerTests
                     .Concat(Frame(9, eof)).Concat(Frame(10, Report(false, 0))).ToArray();
                 if (kind == "trailing") response = response.Concat(Frame(11, new byte[] { 0 })).ToArray();
                 await Reply(1, response);
-                if (kind != "trailing") Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 3, budget.Token));
+                if (kind != "trailing") Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 4, budget.Token));
                 await ObserveClose(stream, budget.Token);
             });
             var context = new AssemblyLoadContext("lob-" + target, isCollectible: true);

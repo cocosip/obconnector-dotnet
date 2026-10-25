@@ -319,6 +319,7 @@ namespace OceanBaseConnector.UnitTests
             {
                 await StatementCommand(channel, 22); await Prepared(channel, 41, 2);
                 Assert.Equal(new byte[] { 31 }, await StatementCommand(channel, 31)); await channel.WritePacketAsync(Ok());
+                await TestInfrastructure.ServerIdentity.ReplyOracleAutocommitAsync(channel);
                 Assert.Equal(new byte[] { 14 }, await StatementCommand(channel, 14)); await channel.WritePacketAsync(Ok());
                 await StatementCommand(channel, 22); await Prepared(channel, 42, 2);
                 var request = new ByteCursor(await StatementCommand(channel, 0xa1)); request.ReadUInt8(); Assert.Equal(42u, request.ReadUInt32());
