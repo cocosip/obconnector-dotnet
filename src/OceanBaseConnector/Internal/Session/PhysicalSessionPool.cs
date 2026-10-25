@@ -32,6 +32,7 @@ namespace OceanBaseConnector.Internal.Session
         private readonly HashSet<PhysicalSession> _sessions = new HashSet<PhysicalSession>();
         private readonly HashSet<PhysicalSession> _retiredSessions = new HashSet<PhysicalSession>();
         private long _clearGeneration;
+        private EndpointHealthCache _endpointHealth = new EndpointHealthCache();
         private readonly SemaphoreSlim _available = new SemaphoreSlim(0);
         private bool _configured;
         private bool _disposed;
@@ -99,7 +100,7 @@ namespace OceanBaseConnector.Internal.Session
                     reused = false;
                     try
                     {
-                        var session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
+                        var session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback, endpointHealth: HealthForGeneration(generation));
                         RegisterCreated(session, generation);
                         DriverDiagnostics.PoolBorrowed();
                         return session;
@@ -175,7 +176,7 @@ namespace OceanBaseConnector.Internal.Session
                 {
                     try
                     {
-                        var session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
+                        var session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback, endpointHealth: HealthForGeneration(generation));
                         RegisterCreated(session, generation);
                         DriverDiagnostics.PoolBorrowed();
                         return session;
@@ -410,7 +411,7 @@ namespace OceanBaseConnector.Internal.Session
                     try
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
+                        session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback, endpointHealth: HealthForGeneration(generation));
                         session.Open(cancellationToken);
                         registrationAttempted = true;
                         RegisterCreated(session, generation, idle: true);
@@ -444,7 +445,7 @@ namespace OceanBaseConnector.Internal.Session
                     try
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback);
+                        session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback, endpointHealth: HealthForGeneration(generation));
                         await session.OpenAsync(cancellationToken).ConfigureAwait(false);
                         registrationAttempted = true;
                         RegisterCreated(session, generation, idle: true);
@@ -657,6 +658,11 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
+        private EndpointHealthCache HealthForGeneration(long generation)
+        {
+            lock (_gate) return !_disposed && generation == _clearGeneration ? _endpointHealth : new EndpointHealthCache();
+        }
+
         internal void Clear()
         {
             List<PhysicalSession> idle;
@@ -676,6 +682,7 @@ namespace OceanBaseConnector.Internal.Session
             {
                 if (_disposed) return;
                 _disposed = true;
+                _endpointHealth = new EndpointHealthCache();
                 sessions = new PhysicalSession[_idle.Count];
                 _idle.CopyTo(sessions, 0);
                 _idle.Clear();

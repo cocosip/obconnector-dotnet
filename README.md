@@ -2,6 +2,8 @@
 
 Opt in to [TCP connection retries](docs/obconnector-dotnet-architecture-design.md#connect-retry-policy) with `Connect Retry Count=1;Connect Retry Interval=1`. Count (0..10, default0) adds full candidate rounds; interval (1..60 seconds, default1) applies only between rounds. A positive count shares Connection Timeout across the whole Open, including pool wait/prewarm and backoff. TCP success ends retries; TLS/authentication/commands and active transactions are never replayed.
 
+Opt in to [endpoint TCP health hints](docs/obconnector-dotnet-architecture-design.md#endpoint-tcp-health) with `Host Recheck Seconds=60` (0..3600 seconds, default0). Recent TCP failures move behind other candidates; every address remains available as fallback. Hints are bounded and scoped to the pool or unpooled selector; Pool Clear and credential retirement isolate late old feedback for pool-owned hints; unpooled hints follow selector lifetime. TCP success clears the hint. This does not probe tenant health or retry TLS/authentication/SQL failures.
+
 A managed ADO.NET provider for OceanBase MySQL and Oracle compatibility modes.
 
 The driver is experimental. Recorded database runs cover direct OceanBase 4.4.2.2 with TLS disabled; the Oracle suite still has a failed case and cleanup failure. OBProxy and other deployment profiles remain unverified. See [failed tests, unsupported behavior and compatibility gaps](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/compatibility.md).

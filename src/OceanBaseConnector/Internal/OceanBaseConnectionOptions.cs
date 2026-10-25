@@ -50,7 +50,8 @@ namespace OceanBaseConnector.Internal
             int statementCacheSize = 0,
             int slowQueryThresholdMilliseconds = 0,
             int connectRetryCount = 0,
-            int connectRetryIntervalSeconds = 1)
+            int connectRetryIntervalSeconds = 1,
+            int hostRecheckSeconds = 0)
         {
             Server = server;
             Port = port;
@@ -72,6 +73,7 @@ namespace OceanBaseConnector.Internal
             ConnectionTimeoutSeconds = connectionTimeoutSeconds;
             ConnectRetryCount = connectRetryCount;
             ConnectRetryIntervalSeconds = connectRetryIntervalSeconds;
+            HostRecheckSeconds = hostRecheckSeconds;
             CommandTimeoutSeconds = commandTimeoutSeconds;
             TlsMode = tlsMode;
             TlsServerName = tlsServerName;
@@ -106,7 +108,7 @@ namespace OceanBaseConnector.Internal
         internal OceanBaseConnectionOptions WithCredential(OceanBaseCredential credential) => Copy(Server, Port, credential);
         private OceanBaseConnectionOptions Copy(string server, int port, OceanBaseCredential? credential) => new OceanBaseConnectionOptions(
             server, port, credential?.UserId ?? UserId, credential?.Password ?? Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, CheckCertificateRevocation, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, credential?.AdditionalPasswords ?? AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows, UseCompression, credential, StatementCacheSize, SlowQueryThresholdMilliseconds, ConnectRetryCount, ConnectRetryIntervalSeconds);
+            TlsMode, TlsServerName, CheckCertificateRevocation, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, credential?.AdditionalPasswords ?? AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows, UseCompression, credential, StatementCacheSize, SlowQueryThresholdMilliseconds, ConnectRetryCount, ConnectRetryIntervalSeconds, HostRecheckSeconds);
 
         internal OceanBaseCredential? Credential { get; }
 
@@ -123,6 +125,7 @@ namespace OceanBaseConnector.Internal
         public int ConnectionTimeoutSeconds { get; }
         public int ConnectRetryCount { get; }
         public int ConnectRetryIntervalSeconds { get; }
+        public int HostRecheckSeconds { get; }
 
         public int CommandTimeoutSeconds { get; }
 

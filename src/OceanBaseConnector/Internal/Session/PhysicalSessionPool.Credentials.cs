@@ -41,6 +41,7 @@ namespace OceanBaseConnector.Internal.Session
         private List<PhysicalSession> RetireSessions()
         {
             _clearGeneration++;
+            _endpointHealth = new EndpointHealthCache();
             _retiredSessions.UnionWith(_sessions);
             var idle = new List<PhysicalSession>(_idle);
             _idle.Clear();

@@ -1,5 +1,18 @@
 # Verification status and remaining work
 
+## 2026-10-26 P1-09 endpoint TCP health cache
+
+Developed from master/bc84ba1. Host Recheck Seconds (default0,0..3600seconds) propagates through every asset's builder/copies/serialization/pool identity. A bounded1024 monotonic failure cache stably puts recent TCP failures last, retaining all candidates and duplicates as fallback. Selection is frozen across each physical Open's retry rounds. Only pre-Attach IOException/SocketException with an uncanceled budget records a failure, including final attempts; TCP success clears it before handshake. Greeting/TLS/auth/identity/SQL/cancellation do not poison reachability. See [contract](obconnector-dotnet-architecture-design.md#endpoint-tcp-health), [complete evidence](obconnector-dotnet-completeness.md#1551-2026-10-26-端点tcp健康缓存) and [audit](obconnector-dotnet-driver-audit.md#46-端点tcp健康缓存2026-10-26).
+
+Pool/private-source/unpooled-selector lifetimes own their caches; ordinary matching borrowers and prewarm sessions share pool state. Pool Clear, credential retirement and Dispose replace pool-owned caches so late old feedback cannot affect a new generation, including reserve-to-constructor races. Pool APIs do not clear unpooled selector-owned hints, which follow selector lifetime. Empty ordinary pool removal also removes health state. There is no global map or active migration/replay.
+
+最终完整单测5620通过（新增71：健康缓存69、池身份2），相关五资产消费者226通过（新增52），均零失败/跳过；Release全解决方案0警告/错误，12C#限定格式验证通过并保留既有workspace警告。五资产同一.NET10host消费；本模块没有新增实库互操作验收。
+
+受限首轮完整单测5480通过/140失败：109为PFX导入、5为Schannel凭据、20为VerifyFull预期不匹配、5为silent TLS等待超时、1为既有异步拓扑超时；相关消费者146通过/80失败，80项均在TestCertificateFactory的PFX导入。相同10个TLS/清池用例普通用户环境通过后，保持源码、夹具、预算和五资产二进制不变，完整单测5620通过（9分21秒）、同226消费者通过（6分31秒）。所有初次失败均同名通过，原报告不删除；拓扑超时原因尚未确认，不声称修复其根因。完整5549单测基线及174消费者基线全部保留。报告位于忽略目录TestResults/endpoint-health，执行日志为根目录TestResults-endpoint-health-*.log，应单独归档。
+
+Initial18unknown-keyRED,2pass/16preferenceRED,84/126GREEN and6expected epoch-mutation failures retained; restored source15targeted checks passed. The portable elapsed-budget test blocks the first TCP metric callback for1200ms with timeout1: local deadline-before-feedback evidence, not actual network TCP timeout or Linux execution. Existing real reports/probes remain historical; this module adds no real database interoperability. OCP/TNS/equivalent adapter, proxy topology/reroute, real health/fault/load, enterprise trust, independent runtimes/platforms and release acceptance remain open. All23IDs/eight packages remain open; local master only, no push/publication.
+
+
 ## 2026-10-25 P1-09 bounded TCP connection retry
 
 Developed from master/0ec3e1c. Connect Retry Count (default0,0..10 additional complete candidate rounds) and Connect Retry Interval (default1,1..60seconds) propagate through builder/copies/pool identity. Full-round TCP failures alone wait/retry; TCP success makes greeting/TLS/auth/identity/command failures terminal. Positive count shares the logical Open deadline across pool wait/prewarm, attempts and backoff; zero retains existing waiting semantics. Resolve/credential snapshot once per logical Open. Caller cancellation/Close interrupt backoff, and subsequent explicit Open can reclaim capacity. No active-session reconnect, transaction migration or SQL replay. See [contract](obconnector-dotnet-architecture-design.md#connect-retry-policy) and [retained evidence](obconnector-dotnet-completeness.md#1550-2026-10-25-tcp-建连重试预算与退避).

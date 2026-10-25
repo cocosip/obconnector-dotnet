@@ -8,6 +8,8 @@
 
 `Connect Retry Count` / `Connect Retry Interval` 只控制物理会话 Attach 前的 TCP 失败与整轮候选等待。TCP 成功后，握手、TLS、认证、身份初始化及业务错误不自动重试；活动连接断开仍须显式 Close/Open 并核对 unknown outcome。开启重试不会恢复旧事务，也不证明原写入已失败。[完整配置与预算契约](obconnector-dotnet-architecture-design.md#connect-retry-policy)。
 
+`Host Recheck Seconds`仅改变后续物理建连的候选偏好：近期TCP失败靠后、全部地址仍可fallback，TCP成功即清除记录。它不验证业务健康，不恢复旧事务，也不改变unknown outcome核对规则。池Clear和凭据退休隔离池缓存的旧尝试反馈；非池缓存随selector存活，不由清池API清除。已借出连接继续原工作。[TCP健康缓存契约](obconnector-dotnet-architecture-design.md#endpoint-tcp-health)。
+
 ## 连接级服务器ERR
 
 可信SQLSTATE以08开头，或精确1927/70100时，驱动将物理会话置为Broken并销毁。已发送执行的unknown标志保守为true，不表示服务器一定执行或一定回滚；业务前Prepare/目录/piece确认保持当前非执行标记。普通查询取消1317/70100不属于该分类。错误码和SQLSTATE不替代业务核对依据。
