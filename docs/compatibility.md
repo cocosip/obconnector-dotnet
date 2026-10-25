@@ -1,5 +1,15 @@
 # Compatibility and known gaps
 
+## 2026-10-26 P1-09 TNS file discovery
+
+Developed from master/9dc3f06, P1-09/W4. All five assets expose the immutable OceanBaseTnsAddressResolver for explicit UTF-8 file/alias discovery through the existing address-resolver API. Each logical Open reloads the file before idle pool reuse. Standard/wrapped descriptions, aliases/comments/quotes, TCP IPv4/IPv6 and optional exact SERVICE_NAME file-metadata binding are supported. Unsupported policy/group/weight/include/protocol options fail explicitly. See [contract and examples](obconnector-dotnet-architecture-design.md#tns-file-discovery), [complete evidence](obconnector-dotnet-completeness.md#1552-2026-10-26-tns文件地址发现) and [audit](obconnector-dotnet-driver-audit.md#47-tns文件地址发现2026-10-26).
+
+Limits are 1MiB actual UTF-8 bytes, 16 descriptor levels, 4096 combined nodes/aliases, 256 addresses and 65536 canonical output characters. Publish complete replacements; in-place writes have no snapshot guarantee. Only file-open FileNotFound or Win32 sharing/lock conflicts retry, at most five attempts with four cancelable 25ms waits. Persistent conflicts still fail; no stale fallback. The 100ms configured waits do not bound blocked native IO. Pre-cancel/wait-cancel tests do not prove comprehensive mid-read cancellation. Windows sharing tests do not establish Linux acceptance.
+
+最终完整单测5687通过（新增67），相关五资产消费者290通过（新增64），均零失败/跳过；Release全解决方案0警告/错误（23.62秒），5C#限定格式验证通过并保留既有workspace加载警告。单测9分13秒，消费者6分57秒；五资产在同一.NET10host运行，无新增实库互操作验收。
+
+Original missing-type, PORT injection, oversized-alias allocation, blank quoted-name and file replacement failures are retained. File.Move failure and transient File.Replace sharing/missing observations also occurred outside the sandbox; bounded opening retries address those transient observations without promising continuous availability. Five assets share one .NET10host. No new real database/OBProxy/network-filesystem acceptance is claimed. OCP, richer TNS policies, proxy reroute, enterprise trust, faults/load, independent platforms/runtimes and release acceptance remain open; all23IDs/eight packages stay open. Local master commit only, no push/publication.
+
 ## 2026-10-26 P1-09 endpoint TCP health cache
 
 Developed from master/bc84ba1. Host Recheck Seconds (default0,0..3600seconds) propagates through every asset's builder/copies/serialization/pool identity. A bounded1024 monotonic failure cache stably puts recent TCP failures last, retaining all candidates and duplicates as fallback. Selection is frozen across each physical Open's retry rounds. Only pre-Attach IOException/SocketException with an uncanceled budget records a failure, including final attempts; TCP success clears it before handshake. Greeting/TLS/auth/identity/SQL/cancellation do not poison reachability. See [contract](obconnector-dotnet-architecture-design.md#endpoint-tcp-health), [complete evidence](obconnector-dotnet-completeness.md#1551-2026-10-26-端点tcp健康缓存) and [audit](obconnector-dotnet-driver-audit.md#46-端点tcp健康缓存2026-10-26).
@@ -241,7 +251,7 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 | Oracle outputs/cursors | REF CURSOR Input/InputOutput and ordinary cursor-valued columns; output offset and ExecuteArray positive FetchSize. Standalone Prepare and positive command hints for ordinary output plans are supported; internal output rows do not use cursor paging. |
 | Complex types | Text-protocol complex results, cyclic layouts and LOB/cursor members; other national storage encodings than queried AL16UTF16, anonymous ordinary national members without trusted storage context, complex whole-column RETURNING with unresolved source identity, and undeclared or stale type identities. |
 | Array execution | SELECT, DDL and FetchSize; execution does not commit or roll back automatically. |
-| Discovery and recovery | Built-in OCP/TNS discovery, transparent migration of active sessions/transactions and automatic SQL replay. |
+| Discovery and recovery | Basic TCP TNS file discovery is implemented; OCP/full TNS policy/group discovery, transparent migration of active sessions/transactions and automatic SQL replay remain unsupported. |
 
 For supported alternatives and binding rules, see the [API reference](obconnector-dotnet-architecture-design.md).
 
