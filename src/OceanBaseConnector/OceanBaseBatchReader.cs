@@ -94,13 +94,13 @@ namespace OceanBaseConnector
         {
             if (_closed) return; _closed = true;
             try { _current?.Dispose(); UpdateCount(); }
-            finally { _current = null; _operation.Dispose(); if ((_operation.Behavior & CommandBehavior.CloseConnection) != 0) _operation.Connection.CloseSession(_operation.Session!); }
+            finally { _current = null; _operation.Dispose(); if ((_operation.Behavior & CommandBehavior.CloseConnection) != 0) _operation.Connection.CloseSession(_operation.Session!, _operation.OpenGeneration); }
         }
         public override async Task CloseAsync()
         {
             if (_closed) return; _closed = true;
             try { if (_current != null) await _current.DisposeAsync().ConfigureAwait(false); UpdateCount(); }
-            finally { _current = null; _operation.Dispose(); if ((_operation.Behavior & CommandBehavior.CloseConnection) != 0) await _operation.Connection.CloseSessionAsync(_operation.Session!).ConfigureAwait(false); }
+            finally { _current = null; _operation.Dispose(); if ((_operation.Behavior & CommandBehavior.CloseConnection) != 0) await _operation.Connection.CloseSessionAsync(_operation.Session!, _operation.OpenGeneration).ConfigureAwait(false); }
         }
         protected override void Dispose(bool disposing) { if (disposing) Close(); base.Dispose(disposing); }
         public override async ValueTask DisposeAsync() { await CloseAsync().ConfigureAwait(false); GC.SuppressFinalize(this); }

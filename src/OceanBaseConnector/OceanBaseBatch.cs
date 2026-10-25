@@ -52,7 +52,8 @@ namespace OceanBaseConnector
                 var operation = new Operation(this, connection, token, behavior);
                 try
                 {
-                    operation.Session = connection.ReserveBatch(transaction, operation);
+                    operation.Session = connection.ReserveBatch(transaction, operation, out var openGeneration);
+                    operation.OpenGeneration = openGeneration;
                     operation.Items = new OceanBaseBatchCommand[_commands.Count]; operation.Commands = new OceanBaseCommand[_commands.Count]; operation.Counts = new int[_commands.Count];
                     for (var i = 0; i < _commands.Count; i++)
                     {
@@ -144,6 +145,7 @@ namespace OceanBaseConnector
                 CancellationOrigin().ThrowIfCancellationRequested();
                 throw new OperationCanceledException("Batch canceled.");
             }
+            internal long OpenGeneration { get; set; }
             internal PhysicalSession? Session { get; set; }
             internal OceanBaseBatchCommand[] Items { get; set; } = Array.Empty<OceanBaseBatchCommand>();
             internal OceanBaseCommand[] Commands { get; set; } = Array.Empty<OceanBaseCommand>();

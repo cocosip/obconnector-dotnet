@@ -45,9 +45,10 @@ namespace OceanBaseConnector.Internal.Session
         internal void StartDiagnostics(string operation)
         { _diagnosticOperation = operation; _diagnostics = DriverDiagnostics.Start(operation); _traceContext = _diagnostics?.Context ?? default; }
 
-        internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release, bool logCommand = true, object? owner = null, Func<CancellationToken>? cancellationOrigin = null, Func<string, Stream?>? localInfileStreamFactory = null)
+        internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release, bool logCommand = true, object? owner = null, Func<CancellationToken>? cancellationOrigin = null, Func<string, Stream?>? localInfileStreamFactory = null, long openGeneration = 0)
         {
             _session = session;
+            OpenGeneration = openGeneration;
             _log = log;
             _release = release;
             _caller = caller;
@@ -77,6 +78,7 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
+        internal long OpenGeneration { get; }
         internal CapabilityFlags Capabilities => _session.Info!.Capabilities.Effective;
         internal string? SessionTimeZone { get; private set; }
         internal NationalCharacterSet? NationalCharacterSet { get; private set; }

@@ -467,10 +467,10 @@ namespace OceanBaseConnector
         }
 
         public override void Close() => CloseCore(null);
-        internal void CloseSession(PhysicalSession session) => CloseCore(session);
-        private void CloseCore(PhysicalSession? requiredSession)
+        internal void CloseSession(PhysicalSession session, long openGeneration) => CloseCore(session, openGeneration);
+        private void CloseCore(PhysicalSession? requiredSession, long? requiredOpenGeneration = null)
         {
-            var closing = DetachForClose(requiredSession);
+            var closing = DetachForClose(requiredSession, requiredOpenGeneration);
             try { closing.OpenCancellation?.Cancel(); } catch (ObjectDisposedException) { }
             try
             {
@@ -482,10 +482,10 @@ namespace OceanBaseConnector
 
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
         public override Task CloseAsync() => CloseCoreAsync(null);
-        internal Task CloseSessionAsync(PhysicalSession session) => CloseCoreAsync(session);
-        private async Task CloseCoreAsync(PhysicalSession? requiredSession)
+        internal Task CloseSessionAsync(PhysicalSession session, long openGeneration) => CloseCoreAsync(session, openGeneration);
+        private async Task CloseCoreAsync(PhysicalSession? requiredSession, long? requiredOpenGeneration = null)
         {
-            var closing = DetachForClose(requiredSession);
+            var closing = DetachForClose(requiredSession, requiredOpenGeneration);
             try { closing.OpenCancellation?.Cancel(); } catch (ObjectDisposedException) { }
             try
             {

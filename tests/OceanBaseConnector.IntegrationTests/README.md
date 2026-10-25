@@ -64,6 +64,7 @@ Without a configuration file, `OB_REQUIRE_INTEGRATION=1` plus the four documente
 | Open/close/reopen, identity vs `ob_version()`, factory/data source, ChangeDatabase, password hiding, address resolver, unreachable endpoint | `Connections/ConnectionTests` |
 | ExpectedMode mismatch, TLS name, pooling, EnlistTransaction, unsupported auth plugin, autocommit-disabled rejection | `Connections/IdentityGateTests` |
 | Fresh implicit writes visible before/after Close, same-session prepared/generation reuse, explicit state discard, transaction rollback then next implicit commit, unread-reader and Oracle active temporary-LOB discard, optional ChangeDatabase reset (sync/async) | `Connections/PoolIsolationTests` |
+| Completed CloseConnection reader retained across same-physical-session pool reuse; old reader sync/async disposal preserves the new lease and real SQL | `Connections/PoolReaderLeaseTests` |
 | Text vs prepared CRUD, MySQL client-side interpolation, command type/behavior gates, idle Cancel | `Commands` |
 | Full provider type round-trips (text + prepared) per mode, TINYINT/affected-rows option matrix; Oracle unknown-precision prepared bindings and real negative-scale table/CAST results | `Types` |
 | SequentialAccess streaming, cursor fetch paging (incl. Oracle offset), CloseConnection, column schema | `Readers` |

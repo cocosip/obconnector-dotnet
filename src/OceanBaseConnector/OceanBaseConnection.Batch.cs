@@ -11,12 +11,13 @@ namespace OceanBaseConnector
         {
             lock (_gate) { ThrowIfDisposed(); return new OceanBaseBatch { Connection = this, Timeout = _builder.CommandTimeout }; }
         }
-        internal PhysicalSession ReserveBatch(OceanBaseTransaction? transaction, object owner)
+        internal PhysicalSession ReserveBatch(OceanBaseTransaction? transaction, object owner, out long openGeneration)
         {
             lock (_gate)
             {
                 var session = GetCommandSession(transaction);
                 session.Reserve(owner);
+                openGeneration = _openGeneration;
                 return session;
             }
         }

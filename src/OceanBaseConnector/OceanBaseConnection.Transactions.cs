@@ -71,7 +71,7 @@ namespace OceanBaseConnector
                         if (type != null) ValidateComplexBinding(type, session, transaction);
                     }
                 }
-                var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin, localInfileStreamFactory: _localInfileStreamFactory)
+                var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin, localInfileStreamFactory: _localInfileStreamFactory, openGeneration: _openGeneration)
                 { IsXa = _xaResource != null };
                 if (_complexTypeContext != null && ReferenceEquals(_complexTypeContext.Session, session) &&
                     ReferenceEquals(_complexTypeContext.Transaction, transaction) && _complexTypeContext.Epoch == _transactionEpoch && _complexTypeContext.MetadataEpoch == session.ComplexTypeEpoch)
@@ -374,11 +374,11 @@ namespace OceanBaseConnector
             catch { DetachTransaction(transaction); transaction.Session.Break(); }
         }
 
-        private (PhysicalSession? Session, OceanBaseTransaction? Transaction, CommandExchange? Exchange, ConnectionState Previous, string? Endpoint, CancellationTokenSource? OpenCancellation, PhysicalSessionPool? Pool, string PoolKey, int Timeout) DetachForClose(PhysicalSession? requiredSession = null)
+        private (PhysicalSession? Session, OceanBaseTransaction? Transaction, CommandExchange? Exchange, ConnectionState Previous, string? Endpoint, CancellationTokenSource? OpenCancellation, PhysicalSessionPool? Pool, string PoolKey, int Timeout) DetachForClose(PhysicalSession? requiredSession = null, long? requiredOpenGeneration = null)
         {
             lock (_gate)
             {
-                if (requiredSession != null && !ReferenceEquals(_session, requiredSession)) return (null, null, null, ConnectionState.Closed, null, null, null, string.Empty, 0);
+                if (requiredSession != null && (!ReferenceEquals(_session, requiredSession) || requiredOpenGeneration != _openGeneration)) return (null, null, null, ConnectionState.Closed, null, null, null, string.Empty, 0);
                 var previous = State;
                 _opening = false;
                 var openCancellation = _openingCancellation;

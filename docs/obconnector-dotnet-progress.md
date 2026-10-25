@@ -3,6 +3,14 @@
 This page retains historical results and open work from the former progress ledger, alongside dated verification of later changes. Local regression results and real database acceptance are recorded separately.
 
 
+## 2026-10-25 P0-02 pooled reader CloseConnection lease isolation
+
+Developed from master/00b3976. A completed CloseConnection reader could close a later logical lease when Close/Open reused the same physical session. The fix captures the existing logical Open generation under the connection lock at command start or Batch reservation and checks it with session identity in conditional closure. All four reader sync/async close paths are covered; public Close remains unconditional. See the [contract](obconnector-dotnet-architecture-design.md#closeconnection-reader-ownership), [full evidence](obconnector-dotnet-completeness.md#1541-2026-10-25-旧-reader-延迟关闭与池租约隔离) and [audit](obconnector-dotnet-driver-audit.md#36-旧-reader-延迟关闭与池租约隔离2026-10-25).
+
+Original local4 and real4 REDs are retained. Eight new local cases include the deterministic Batch reservation-release callback window; twenty new public consumers prove same-socket reuse across five assets. Controlled removal of the generation guard fails all four Batch cases, then restores the source bytes. Initial fixture CS0266, a zero-match filter and consumer10pass/10Oracle-timezone-fixture failures remain recorded. Independent review found no remaining production issue after fixing task/error cleanup.
+
+Final Release solution build: zero warnings/errors. Full units 5,170, full consumers 2,918, DI14 pass; no-opt-in Integration9pass/96NotExecuted; real Connections+XaTests+RefCursorTests+LobTests 87pass/4configuration skips. Scoped ten-file format passes with the existing workspace-load warning. Consumer assets remain frozen during execution and run on one .NET10 host. Real tests cover direct OceanBase4.4.2.2 MySQL/Oracle, Windows/.NET10, TLS disabled only. Full resources/concurrency/load, proxy/enterprise TLS, independent runtimes, package and release gates remain open, along with all23IDs/eight packages. No push/publication.
+
 ## 2026-10-25 P0-02 pooled XA isolation acceptance
 
 Developed from master/ffadc7a; test/documentation changes only. [Contract](obconnector-dotnet-completeness.md#516-xa-专用会话的池隔离), [complete evidence](obconnector-dotnet-completeness.md#1540-2026-10-25-xa-池隔离与-prepared-分支恢复验收), [audit](obconnector-dotnet-driver-audit.md#35-xa-池隔离与-prepared-分支恢复验收2026-10-25). Existing production behavior passed all new cases without a product change: 28 local cases cover seven phases, socket destruction without implicit completion, MaxPoolSize=1 replacement before clearing and all twelve stale-resource APIs. Twenty direct cases prove dedicated discard after idle/commit/rollback, replacement autocommit/local rollback, and prepared branches surviving Close for explicit recovery and completion.

@@ -314,7 +314,7 @@ namespace OceanBaseConnector
             finally
             {
                 try { _query.Dispose(); }
-                finally { _result.InvalidateRows(); if (_closeConnection) _connection.CloseSession(_session); }
+                finally { _result.InvalidateRows(); if (_closeConnection) _connection.CloseSession(_session, _query.OpenGeneration); }
             }
         }
         protected override void Dispose(bool disposing) { if (disposing) Close(); base.Dispose(disposing); }
@@ -327,7 +327,7 @@ namespace OceanBaseConnector
             finally
             {
                 try { _query.Dispose(); }
-                finally { _result.InvalidateRows(); if (_closeConnection) await _connection.CloseSessionAsync(_session).ConfigureAwait(false); }
+                finally { _result.InvalidateRows(); if (_closeConnection) await _connection.CloseSessionAsync(_session, _query.OpenGeneration).ConfigureAwait(false); }
             }
         }
         public override async ValueTask DisposeAsync()
