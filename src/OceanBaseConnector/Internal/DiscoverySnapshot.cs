@@ -34,8 +34,10 @@ namespace OceanBaseConnector.Internal
     {
         private readonly DiscoveryGroup[] _groups;
         private readonly OceanBaseEndpoint[] _endpoints;
-        internal DiscoverySnapshot(List<DiscoveryGroup> groups)
+        internal DiscoverySnapshot(List<DiscoveryGroup> groups, DiscoveryBlacklistPolicy? blacklist = null, int? retryAllDowns = null)
         {
+            BlacklistPolicy = blacklist ?? (retryAllDowns.HasValue ? new DiscoveryBlacklistPolicy() : null);
+            RetryAllDowns = retryAllDowns ?? (BlacklistPolicy != null ? 120 : (int?)null);
             _groups = groups.ToArray();
             var endpoints = new List<OceanBaseEndpoint>();
             var canonical = new StringBuilder();
@@ -52,6 +54,14 @@ namespace OceanBaseConnector.Internal
         }
 
         internal string CanonicalAddresses { get; }
+        internal DiscoveryBlacklistPolicy? BlacklistPolicy { get; }
+        internal int? RetryAllDowns { get; }
+        internal int[] CopyGroupSizes()
+        {
+            var sizes = new int[_groups.Length];
+            for (var i = 0; i < sizes.Length; i++) sizes[i] = _groups[i].Count;
+            return sizes;
+        }
         public int Count => _endpoints.Length;
         public OceanBaseEndpoint this[int index] => _endpoints[index];
         public IEnumerator<OceanBaseEndpoint> GetEnumerator() => ((IEnumerable<OceanBaseEndpoint>)_endpoints).GetEnumerator();

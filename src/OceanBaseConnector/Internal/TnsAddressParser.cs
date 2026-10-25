@@ -18,6 +18,7 @@ namespace OceanBaseConnector.Internal
             var children = Children(selected);
             var strategy = Policy(children, DiscoveryStrategy.Inherit, true);
             var addresses = new List<Node>(); var lists = new List<Node>(); Node? connect = null;
+            DiscoveryBlacklistPolicy? blacklist = null; int? retry = null;
             foreach (var child in children)
             {
                 if (Is(child.Key, "ADDRESS")) addresses.Add(child);
@@ -26,6 +27,16 @@ namespace OceanBaseConnector.Internal
                 {
                     if (connect != null) throw Invalid();
                     connect = child;
+                }
+                else if (Is(child.Key, "OBLB_BLACKLIST"))
+                {
+                    if (blacklist != null) throw Invalid();
+                    blacklist = ReadBlacklist(child);
+                }
+                else if (Is(child.Key, "OBLB_RETRY_ALL_DOWNS"))
+                {
+                    if (retry.HasValue) throw Invalid();
+                    retry = Unsigned(child);
                 }
                 else if (!IsPolicy(child.Key, true)) throw Unsupported();
             }
@@ -50,8 +61,46 @@ namespace OceanBaseConnector.Internal
                 groups.Add(ReadGroup(members, Policy(fields, strategy, false), token));
             }
             token.ThrowIfCancellationRequested();
-            return new DiscoverySnapshot(groups);
+            return new DiscoverySnapshot(groups, blacklist, retry);
         }
+
+        private static DiscoveryBlacklistPolicy ReadBlacklist(Node node)
+        {
+            var fields = node.Children == null && node.Value == "" ? new Dictionary<string, Node>(StringComparer.OrdinalIgnoreCase) : Fields(node, "APPEND_STRATEGY", "REMOVE_STRATEGY");
+            var retryDuration = false; var retryTimes = 1; var duration = 0; var timeout = 50;
+            if (fields.TryGetValue("APPEND_STRATEGY", out var append))
+            {
+                var values = Fields(append, "NAME", "RETRYTIMES", "DURATION");
+                var name = Value(Required(values, "NAME"));
+                if (Is(name, "RETRYDURATION"))
+                {
+                    retryDuration = true; retryTimes = Unsigned(Required(values, "RETRYTIMES")); duration = Unsigned(Required(values, "DURATION"));
+                }
+                else if (!Is(name, "NORMAL") || values.Count != 1) throw Unsupported();
+            }
+            if (fields.TryGetValue("REMOVE_STRATEGY", out var remove))
+            {
+                var values = Fields(remove, "NAME", "TIMEOUT");
+                if (!Is(Value(Required(values, "NAME")), "TIMEOUT")) throw Unsupported();
+                timeout = Unsigned(Required(values, "TIMEOUT"));
+            }
+            return new DiscoveryBlacklistPolicy(retryDuration, retryTimes, duration, timeout);
+        }
+        private static Dictionary<string, Node> Fields(Node node, params string[] allowed)
+        {
+            var result = new Dictionary<string, Node>(StringComparer.OrdinalIgnoreCase);
+            foreach (var field in Children(node))
+            {
+                var known = false;
+                foreach (var key in allowed) if (Is(field.Key, key)) { known = true; break; }
+                if (!known) throw Unsupported();
+                if (result.ContainsKey(field.Key)) throw Invalid();
+                result.Add(field.Key, field);
+            }
+            return result;
+        }
+        private static Node Required(Dictionary<string, Node> fields, string key) => fields.TryGetValue(key, out var value) ? value : throw Invalid();
+        private static int Unsigned(Node node) => int.TryParse(Value(node), NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : throw Invalid();
 
         private static DiscoveryGroup ReadGroup(List<Node> addresses, DiscoveryStrategy strategy, CancellationToken token)
         {

@@ -164,7 +164,12 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("(OBLB_BLACKLIST=ON)")]
         [InlineData("(OBLB_RETRY_ALL_DOWNS=2)")]
         [InlineData("(FAILOVER=ON)")]
-        public void UnsupportedPoliciesAreNotSilentlyIgnored(string policy) => Assert.Throws<NotSupportedException>(() => Parse(policy + Address("a")));
+        public void PoliciesAreAcceptedOrRejectedExplicitly(string policy)
+        {
+            if (policy == "(OBLB_RETRY_ALL_DOWNS=2)") Assert.Equal(2, Parse(policy + Address("a")).RetryAllDowns);
+            else if (policy == "(OBLB_BLACKLIST=ON)") Assert.Throws<FormatException>(() => Parse(policy + Address("a")));
+            else Assert.Throws<NotSupportedException>(() => Parse(policy + Address("a")));
+        }
 
         [Fact]
         public void InvalidGroupWeightsAndMixedFormsAreRejected()

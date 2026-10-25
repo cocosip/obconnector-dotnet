@@ -177,7 +177,8 @@ namespace OceanBaseConnector.UnitTests
         public async Task SupportedPoliciesAndUnknownDescriptorMembersAreValidated(string prefix)
         {
             using var http = new OcpHttpFixture(OcpHttpFixture.Entry(2881).Replace("\"DESCRIPTION\":{", "\"DESCRIPTION\":{" + prefix));
-            if (prefix.StartsWith("\"OBLB_STRATEGY\":", StringComparison.Ordinal) || prefix.StartsWith("\"OBLB_GROUP_STRATEGY\":", StringComparison.Ordinal))
+            if (prefix.StartsWith("\"OBLB_STRATEGY\":", StringComparison.Ordinal) || prefix.StartsWith("\"OBLB_GROUP_STRATEGY\":", StringComparison.Ordinal) ||
+                prefix.StartsWith("\"OBLB_BLACKLIST\":", StringComparison.Ordinal) || prefix.StartsWith("\"OBLB_RETRY_ALL_DOWNS\":", StringComparison.Ordinal))
                 Assert.Equal("127.0.0.1:2881", await Create(http).ResolveAsync(CancellationToken.None));
             else await Assert.ThrowsAsync<NotSupportedException>(() => Create(http).ResolveAsync(CancellationToken.None));
         }

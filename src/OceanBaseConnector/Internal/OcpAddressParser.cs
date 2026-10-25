@@ -27,11 +27,13 @@ namespace OceanBaseConnector.Internal
             if (envelope.TryGetValue("status", out var status) && (status.Type != "number" || status.Value != "200")) throw Invalid();
             var data = Object(Required(envelope, "data"), "NET_SERVICE_NAME", "DESCRIPTION");
             if (!string.Equals(String(Required(data, "NET_SERVICE_NAME")), name, StringComparison.Ordinal)) throw Invalid();
-            var description = Object(Required(data, "DESCRIPTION"), "ADDRESS_LIST", "CONNECT_DATA", "OBLB", "LOAD_BALANCE", "OBLB_STRATEGY", "LOAD_BALANCE_STRATEGY", "OBLB_GROUP_STRATEGY");
+            var description = Object(Required(data, "DESCRIPTION"), "ADDRESS_LIST", "CONNECT_DATA", "OBLB", "LOAD_BALANCE", "OBLB_STRATEGY", "LOAD_BALANCE_STRATEGY", "OBLB_GROUP_STRATEGY", "OBLB_BLACKLIST", "OBLB_RETRY_ALL_DOWNS");
             var groups = Array(Required(description, "ADDRESS_LIST"));
             if (groups.Count == 0 || groups.Count > 256) throw Invalid();
             var tns = new StringBuilder("APP=(DESCRIPTION=");
             AppendPolicies(tns, description);
+            if (description.TryGetValue("OBLB_RETRY_ALL_DOWNS", out var retry)) tns.Append("(OBLB_RETRY_ALL_DOWNS=").Append(Quote(Integer(retry))).Append(')');
+            if (description.TryGetValue("OBLB_BLACKLIST", out var blacklist)) AppendBlacklist(tns, blacklist);
             foreach (var groupNode in groups)
             {
                 var group = Object(groupNode, "ADDRESS", "OBLB", "LOAD_BALANCE", "OBLB_STRATEGY", "LOAD_BALANCE_STRATEGY");
@@ -56,6 +58,22 @@ namespace OceanBaseConnector.Internal
             }
             tns.Append(')');
             return TnsAddressParser.ParseSnapshot(tns.ToString(), "APP", service, token);
+        }
+
+        private static void AppendBlacklist(StringBuilder tns, Node node)
+        {
+            var fields = Object(node, "APPEND_STRATEGY", "REMOVE_STRATEGY");
+            tns.Append("(OBLB_BLACKLIST=");
+            foreach (var key in new[] { "APPEND_STRATEGY", "REMOVE_STRATEGY" })
+            {
+                if (!fields.TryGetValue(key, out var value)) continue;
+                var strategy = key == "APPEND_STRATEGY" ? Object(value, "NAME", "RETRYTIMES", "DURATION") : Object(value, "NAME", "TIMEOUT");
+                tns.Append('(').Append(key).Append("=(NAME=").Append(Quote(String(Required(strategy, "NAME")))).Append(')');
+                foreach (var number in new[] { "RETRYTIMES", "DURATION", "TIMEOUT" })
+                    if (strategy.TryGetValue(number, out var amount)) tns.Append('(').Append(number).Append('=').Append(Quote(Integer(amount))).Append(')');
+                tns.Append(')');
+            }
+            tns.Append(')');
         }
 
         private static void AppendPolicies(StringBuilder tns, Dictionary<string, Node> fields)

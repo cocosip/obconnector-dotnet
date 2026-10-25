@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/DiscoveryBlacklistFixture.cs" Link="TestInfrastructure/DiscoveryBlacklistFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/DiscoveryPolicyFixture.cs" Link="TestInfrastructure/DiscoveryPolicyFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/OcpHttpFixture.cs" Link="TestInfrastructure/OcpHttpFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/TnsFileFixture.cs" Link="TestInfrastructure/TnsFileFixture.cs" />

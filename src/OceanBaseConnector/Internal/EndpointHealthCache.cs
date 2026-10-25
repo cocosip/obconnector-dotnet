@@ -10,6 +10,7 @@ namespace OceanBaseConnector.Internal
         private const int Capacity = 1024;
         private readonly object _gate = new object();
         private readonly Dictionary<string, long> _failures = new Dictionary<string, long>(StringComparer.Ordinal);
+        internal DiscoveryBlacklistCache Blacklist { get; } = new DiscoveryBlacklistCache();
 
         internal IReadOnlyList<OceanBaseEndpoint> Order(IReadOnlyList<OceanBaseEndpoint> endpoints, int start, int seconds)
         {

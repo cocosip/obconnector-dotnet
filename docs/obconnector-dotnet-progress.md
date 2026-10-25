@@ -1,5 +1,15 @@
 # Verification status and remaining work
 
+## 2026-10-26 P1-09 discovery blacklist and TCP ceiling
+
+Developed from master/888bd1c. Built-in TNS/OCP DESCRIPTION accepts explicit global OBLB_BLACKLIST and OBLB_RETRY_ALL_DOWNS. NORMAL/RETRYDURATION count individual failures with millisecond windows; TIMEOUT uses seconds. Either field defaults absent ceiling120 and NORMAL/TIMEOUT50; with neither field supplied, prior behavior is preserved. One frozen group order, threshold requeue inside its group, one unfiltered fallback and optional additional cycles share an actual-TCP ceiling and total logical Open deadline. Skipped blocked entries do not consume this .NET cap; exact Java candidate-counter parity is not claimed. See [contract](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling), [full evidence](obconnector-dotnet-completeness.md#1555-2026-10-26-发现黑名单与tcp尝试上限) and [audit](obconnector-dotnet-driver-audit.md#50-发现黑名单与tcp尝试上限2026-10-26).
+
+Cap0 skips minimum-pool replenishment but still validates/probes and can reuse an existing valid idle session below minimum; no idle means zero-TCP failure. A later nonzero cap restores normal replenishment. Independent review identified this priority conflict; depleted-prewarm regressions retain its RED. Cache ownership isolates policy/pool generations and late feedback, with1024 entries/16384 failure events; eviction forgets whole-entry history and may permit extra probes. TCP success clears matching history before terminal greeting/TLS/auth/identity. No active migration or SQL replay.
+
+最终完整单测5980通过（新增101），相关五资产消费者738通过（新增128），均零失败/跳过；Release全解决方案0警告/错误（17.80秒），16C#限定格式及验证退出0，保留既有workspace加载警告。单测11分47秒，精确消费者15分30秒；五资产同一.NET10host运行，没有新增真实OCP/网络HTTP、数据库或独立运行时验收。
+
+Original44RED/44GREEN/state33 and expanded reports are retained; intentional legacy policy-name/argument expectation changes and wrapped malformed-discovery errors are documented in15.55. Five assets share one.NET10host; controlled HTTP and loopback peers are local evidence, not actual OCP/network HTTP, real database/OBProxy/enterpriseTLS or independent-runtime acceptance. Local overrides/other discovery policies, real fault/load/deployment/release gates and all23IDs/eightpackages remain open. Localmaster only; no push/publication. Earlier entries retain historical boundaries.
+
 ## 2026-10-26 P1-09 discovery groups and selection
 
 Developed from master/1416c55. Built-in TNS/OCP snapshots now preserve declared groups, ROTATION/RANDOM/SERVERAFFINITY, per-group overrides, ON defaults, aliases and bounded weights through actual physical connection selection and pool prewarm. Public Resolve strings remain declaration membership; idle pool reuse is based on membership, not rebalancing. Health is scoped within groups and to the current pool generation; TCP retries reuse one frozen selection. See [contract](obconnector-dotnet-architecture-design.md#discovery-group-selection), [evidence](obconnector-dotnet-completeness.md#1554-2026-10-26-发现分组策略与权重) and [audit](obconnector-dotnet-driver-audit.md#49-发现分组策略与权重2026-10-26).
