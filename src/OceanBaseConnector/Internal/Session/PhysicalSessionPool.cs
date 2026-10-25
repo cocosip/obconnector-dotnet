@@ -58,7 +58,11 @@ namespace OceanBaseConnector.Internal.Session
             Action<OceanBaseCredential?>? credentialResolved = null)
         {
             if (!reserved) BeginRent();
-            try { return RentCore(options, resolver, selector, out reused, cancellationToken, credentialResolved); }
+            try
+            {
+                CloseCallbackScope.CompletePending();
+                return RentCore(options, resolver, selector, out reused, cancellationToken, credentialResolved);
+            }
             finally { EndRent(); }
         }
 
@@ -142,7 +146,11 @@ namespace OceanBaseConnector.Internal.Session
             CancellationToken cancellationToken = default, bool reserved = false, Action<OceanBaseCredential?>? credentialResolved = null)
         {
             if (!reserved) BeginRent();
-            try { return await RentAsyncCore(options, resolver, selector, cancellationToken, credentialResolved).ConfigureAwait(false); }
+            try
+            {
+                await CloseCallbackScope.CompletePendingAsync().ConfigureAwait(false);
+                return await RentAsyncCore(options, resolver, selector, cancellationToken, credentialResolved).ConfigureAwait(false);
+            }
             finally { EndRent(); }
         }
 

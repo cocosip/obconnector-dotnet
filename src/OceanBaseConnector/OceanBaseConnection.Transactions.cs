@@ -374,11 +374,11 @@ namespace OceanBaseConnector
             catch { DetachTransaction(transaction); transaction.Session.Break(); }
         }
 
-        private (PhysicalSession? Session, OceanBaseTransaction? Transaction, CommandExchange? Exchange, ConnectionState Previous, string? Endpoint, CancellationTokenSource? OpenCancellation, PhysicalSessionPool? Pool, string PoolKey, int Timeout) DetachForClose(PhysicalSession? requiredSession = null, long? requiredOpenGeneration = null)
+        private (CloseCallbackScope? Cleanup, ConnectionState Previous, CancellationTokenSource? OpenCancellation) DetachForClose(PhysicalSession? requiredSession = null, long? requiredOpenGeneration = null)
         {
             lock (_gate)
             {
-                if (requiredSession != null && (!ReferenceEquals(_session, requiredSession) || requiredOpenGeneration != _openGeneration)) return (null, null, null, ConnectionState.Closed, null, null, null, string.Empty, 0);
+                if (requiredSession != null && (!ReferenceEquals(_session, requiredSession) || requiredOpenGeneration != _openGeneration)) return (null, ConnectionState.Closed, null);
                 var previous = State;
                 _opening = false;
                 var openCancellation = _openingCancellation;
@@ -394,9 +394,28 @@ namespace OceanBaseConnector
                     try { exchange = new CommandExchange(session, _log, transaction.Timeout, CancellationToken.None, () => { }, logCommand: false); }
                     catch { session.Break(); }
                 }
-                return (session, transaction, exchange, previous, session?.Endpoint, openCancellation,
-                    _options?.Pooling == true ? _pool : null,
-                    _options?.Pooling == true ? _builder.ToPoolConfiguration() : _connectionString, _builder.CommandTimeout);
+                if (session == null) return (null, previous, openCancellation);
+                var pool = _options?.Pooling == true ? _pool : null;
+                var poolKey = _options?.Pooling == true ? _builder.ToPoolConfiguration() : _connectionString;
+                var timeout = _builder.CommandTimeout;
+                var endpoint = session.Endpoint;
+                return (new CloseCallbackScope(() =>
+                {
+                    try { if (exchange != null) CleanupTransaction(transaction!, exchange); }
+                    finally
+                    {
+                        try { exchange?.Dispose(); }
+                        finally { FinishClose(session, endpoint, pool, poolKey, timeout); }
+                    }
+                }, async () =>
+                {
+                    try { if (exchange != null) await CleanupTransactionAsync(transaction!, exchange).ConfigureAwait(false); }
+                    finally
+                    {
+                        try { exchange?.Dispose(); }
+                        finally { await FinishCloseAsync(session, endpoint, pool, poolKey, timeout).ConfigureAwait(false); }
+                    }
+                }), previous, openCancellation);
             }
         }
 

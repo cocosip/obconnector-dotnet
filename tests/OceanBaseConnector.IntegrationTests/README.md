@@ -23,6 +23,10 @@ Select a subset with `OB_INTEGRATION_PROFILES` (comma-separated names) or ordina
 
 Misconfiguration fails loudly: with the opt-in set, a missing file, an unresolvable environment reference or an unknown profile name fails the run instead of silently passing.
 
+## Closed callback pool reuse
+
+Filter `FullyQualifiedName~CloseCallbackPoolTests`. Each configured profile covers synchronous/asynchronous Close, committed implicit writes or an active local transaction, and reopening the same logical connection or a second borrower from one private capacity-one pool. The callback queries the real table after cleanup: implicit writes remain, while uncommitted writes have rolled back. The test also verifies physical-session identity and an increased reset generation. This does not replace topology, long-running load, fault injection or platform acceptance.
+
 ## Complex national member scope
 
 Filter `FullyQualifiedName~ComplexNationalTests` on the configured Oracle profile. The suite contains 48 positive cases for NCHAR/NVARCHAR2, UTF8/UTF16 session national settings, sync/async, named objects/collections, nested members, ordinary object binary results and anonymous DML arrays. Eight additional cases assert the current rejection of complex whole-column RETURNING when response type identity cannot be resolved; these are boundary tests, not RETURNING compatibility passes. Random test objects are cleaned in dependency order; only session settings change.

@@ -13,7 +13,7 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public async Task ClosedCallbackCannotBypassEquivalentPoolCapacityAndFailureReturnsOriginalSession(bool asynchronous)
+        public async Task ClosedCallbackReopensEquivalentPoolAfterReturningOriginalSession(bool asynchronous)
         {
             await using var server = new MutualTlsServer(ProtocolFixture.Load("initial-handshake-oceanbase").Payload,
                 channel => TextCommandTests.ReadClientCommand(channel));
@@ -32,10 +32,8 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await connection.OpenAsync(); var original = connection.GetOpenSession();
-                // Closed is raised before the original borrower returns; reentry must still obey capacity.
-                await Assert.ThrowsAsync<TimeoutException>(() => asynchronous ? connection.CloseAsync() : Task.Run(connection.Close));
-                Assert.Equal(ConnectionState.Closed, connection.State);
-                await connection.OpenAsync();
+                if (asynchronous) await connection.CloseAsync(); else connection.Close();
+                Assert.Equal(ConnectionState.Open, connection.State);
                 Assert.Same(original, connection.GetOpenSession());
                 Assert.Equal(1, server.Accepted);
             }

@@ -472,12 +472,13 @@ namespace OceanBaseConnector
         {
             var closing = DetachForClose(requiredSession, requiredOpenGeneration);
             try { closing.OpenCancellation?.Cancel(); } catch (ObjectDisposedException) { }
+            if (closing.Cleanup == null) return;
             try
             {
-                if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
-                if (closing.Exchange != null) CleanupTransaction(closing.Transaction!, closing.Exchange);
+                using (closing.Cleanup.Enter())
+                    if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
             }
-            finally { closing.Exchange?.Dispose(); FinishClose(closing.Session, closing.Endpoint, closing.Pool, closing.PoolKey, closing.Timeout); }
+            finally { closing.Cleanup.Complete(); }
         }
 
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
@@ -487,12 +488,13 @@ namespace OceanBaseConnector
         {
             var closing = DetachForClose(requiredSession, requiredOpenGeneration);
             try { closing.OpenCancellation?.Cancel(); } catch (ObjectDisposedException) { }
+            if (closing.Cleanup == null) return;
             try
             {
-                if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
-                if (closing.Exchange != null) await CleanupTransactionAsync(closing.Transaction!, closing.Exchange).ConfigureAwait(false);
+                using (closing.Cleanup.Enter())
+                    if (closing.Previous == ConnectionState.Open) OnStateChange(new StateChangeEventArgs(closing.Previous, ConnectionState.Closed));
             }
-            finally { closing.Exchange?.Dispose(); await FinishCloseAsync(closing.Session, closing.Endpoint, closing.Pool, closing.PoolKey, closing.Timeout).ConfigureAwait(false); }
+            finally { await closing.Cleanup.CompleteAsync().ConfigureAwait(false); }
         }
         public override async ValueTask DisposeAsync()
         {
