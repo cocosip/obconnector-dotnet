@@ -115,12 +115,14 @@ namespace OceanBaseConnector
             return (level, "SET SESSION TRANSACTION ISOLATION LEVEL " + sql);
         }
 
-        private (OceanBaseTransaction Transaction, CommandExchange Exchange, string IsolationSql) StartTransaction(IsolationLevel level, CancellationToken token, bool allowAmbient = false)
+        private (OceanBaseTransaction Transaction, CommandExchange Exchange, string IsolationSql) StartTransaction(IsolationLevel level, CancellationToken token, bool allowAmbient = false, long? requiredOpenGeneration = null)
         {
             if (!allowAmbient) EnsureAmbientTransaction();
             token.ThrowIfCancellationRequested();
             lock (_gate)
             {
+                if (requiredOpenGeneration.HasValue && requiredOpenGeneration.Value != _openGeneration)
+                    throw new InvalidOperationException("The connection was reopened before ambient transaction initialization.");
                 var session = GetOpenSession();
                 if (_xaResource != null) throw new InvalidOperationException("The connection is dedicated to XA until Close.");
                 if (_transaction != null) throw new InvalidOperationException("A local transaction is already active.");
@@ -138,9 +140,9 @@ namespace OceanBaseConnector
             return BeginTransactionCore(isolationLevel, CancellationToken.None, allowAmbient: false);
         }
 
-        private OceanBaseTransaction BeginTransactionCore(IsolationLevel isolationLevel, CancellationToken token, bool allowAmbient)
+        private OceanBaseTransaction BeginTransactionCore(IsolationLevel isolationLevel, CancellationToken token, bool allowAmbient, long? requiredOpenGeneration = null)
         {
-            var operation = StartTransaction(isolationLevel, token, allowAmbient);
+            var operation = StartTransaction(isolationLevel, token, allowAmbient, requiredOpenGeneration);
             var timer = Stopwatch.StartNew();
             var diagnostics = DriverDiagnostics.Start("transaction.begin");
             operation.Exchange.SetTraceContext(diagnostics?.Context ?? default);
@@ -156,8 +158,8 @@ namespace OceanBaseConnector
             catch (Exception error) { var mapped = BeginFailed(operation.Transaction, operation.Exchange, timer, error); diagnostics?.Finish(operation.Transaction.Session.Info!.Mode, mapped); throw mapped; }
         }
 
-        internal OceanBaseTransaction BeginAmbientTransaction(Transaction transaction) =>
-            BeginTransactionCore(AmbientIsolationLevel(transaction), CancellationToken.None, allowAmbient: true);
+        internal OceanBaseTransaction BeginAmbientTransaction(Transaction transaction, long openGeneration, CancellationToken openingToken) =>
+            BeginTransactionCore(AmbientIsolationLevel(transaction), openingToken, allowAmbient: true, requiredOpenGeneration: openGeneration);
 
         private static IsolationLevel AmbientIsolationLevel(Transaction transaction)
         {

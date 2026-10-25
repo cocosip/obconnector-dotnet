@@ -2,21 +2,21 @@
 
 **审计日期：** 2026-10-24
 **初次源码基线：** .NET `06d58e1`；Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`（Connector/J 2.4.14）
-**本模块开发起点：** .NET `6d399fd`（会话识别已提交）；Java `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。本次开发 P2-02 有限跨命令 statement cache；此前交付和文档快照保留。
-**最新状态：** P2-02 缓存已有本地实现；提交前另复现并修复了取得租约前后的上下文检查竞争，同步/异步回归、独立复核及最终完整验证均通过，见第 15.25 节。会话识别见第 15.24 节；真实 DDL/资源/负载、代理/运行时及完整会话隔离继续开放。
+**本模块开发起点：** .NET `f15716e`（statement cache 已提交）；Java 参考仍为初次固定基线。本次补 P0-03 的 ambient 单资源登记与 P0-04/05 的回调边界；此前交付和文档快照保留。
+**最新状态：** ambient 单资源登记、协调器终态/回调身份及自动 OpenAsync 初始化取消已完成本地实现、完整回归和独立复核，见第 15.27 节；第 15.26 节保留修复前开发/文档检查点。缓存和会话识别保留在第 15.25/15.24 节；真实故障/资源/负载、代理/运行时及完整会话隔离继续开放。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`
 **参考实现：** 本仓库源码、测试和兼容性记录；本地 `D:\java-code\obconnector-j` 的 Connector/J 实现
 **文档性质：** 能力审计、目标契约和验收基线；不代表尚未完成的功能已经实现
 
-**最近复核：** 2026-10-25；当前模块见第 15.25 节及走查报告第 19 节。第 15.1—15.24 节保留此前实现、文档快照、原始失败与跳过，不以早期未实现状态覆盖后续本地交付；真实验收仍未闭合。
+**最近复核：** 2026-10-25；当前模块见第 15.27 节及走查报告第 21 节。第 15.1—15.26 节保留此前实现、文档快照、原始失败与跳过，不以早期未实现状态覆盖后续本地交付；真实验收仍未闭合。
 
 初次审计的 .NET 提交为 `06d58e1`。其后 P0-06 的本地修复及 P1-04 的自定义服务器证书验证分别见 [池路由记录](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)和 [TLS 验证记录](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)。23 个缺口 ID 保持不变；本地实现不关闭尚未取得的真实服务器验收。
 
-面向项目评审的汇总和交付门槛见 [驱动完整性走查报告](obconnector-dotnet-driver-audit.md)，当前模块见该报告[第 19 节](obconnector-dotnet-driver-audit.md#19-跨命令-statement-cache-模块2026-10-25)；本文件保留逐模块验收和源码索引。
+面向项目评审的汇总和交付门槛见 [驱动完整性走查报告](obconnector-dotnet-driver-audit.md)，当前模块见该报告[第 21 节](obconnector-dotnet-driver-audit.md#21-ambient-单资源事务与初始化取消本地交付2026-10-25)；本文件保留逐模块验收和源码索引。
 
-**阅读入口：** 第 4 节列出全部 23 项缺口，第 5 节定义功能契约，第 14 节逐项关联触发场景、源码/测试入口及关闭标准，第 16 节给出八个工作包。第 15 节保留历史开发/验证；当前识别契约见第 5.1.2 节，最新模块证据见第 15.25 节。源码存在、本地通过与真实模块验收是不同状态。
+**阅读入口：** 第 4 节列出全部 23 项缺口，第 5 节定义功能契约，第 14 节逐项关联触发场景、源码/测试入口及关闭标准，第 16 节给出八个工作包。第 15 节保留历史开发/验证；当前识别契约见第 5.1.2 节，最新模块证据见第 15.27 节。源码存在、本地通过与真实模块验收是不同状态。
 
-**完整文档入口（2026-10-25）：** [评审摘要与剩余交付清单](obconnector-dotnet-driver-audit.md#11-本次评审摘要与剩余交付清单)汇总八工作包的当前欠项、实际影响、验收产物及待确定支持范围。本次交付以 `master` / `6d399fd` 为开发基线，缓存模块及最终回归单列于第 15.25 节。早期 `4dd20a7` 文档快照保留在第 15.19/15.21 节及走查报告第 17 节，不能作为当前状态。
+**完整文档入口（2026-10-25）：** [评审摘要与剩余交付清单](obconnector-dotnet-driver-audit.md#11-本次评审摘要与剩余交付清单)汇总八工作包的当前欠项、实际影响、验收产物及待确定支持范围。本次交付以 `master` / `f15716e` 为开发基线，ambient 模块和回归单列于第 15.27 节，修复前检查点保留在第 15.26 节，缓存保留在第 15.25 节。早期 `4dd20a7` 文档快照保留在第 15.19/15.21 节及走查报告第 17 节，不能作为当前状态。
 
 **前次完整文档快照：** [走查报告第 17 节](obconnector-dotnet-driver-audit.md#17-完整文档交付与当前待办2026-10-25)和第 5.1.1 节保留本次修复前的具体发现；最新实现见第 5.1.2/15.24 节。本次不关闭任何完整缺口。
 
@@ -24,7 +24,7 @@
 
 本项目是一个面向 OceanBase MySQL 兼容模式和 Oracle 兼容模式的托管 ADO.NET provider。当前已经具备连接、认证、基础 SQL、参数绑定、结果读取、本地事务、XA、Oracle PrepareExecute、LOB、复杂类型、数组绑定、TLS、OB20 和诊断等基础模块。
 
-当前驱动仍不能称为完整的生产级 ADO.NET 驱动。连接池已具备基础容量、等待、存活探测和生命周期控制，ambient transaction 已支持本地 volatile enlistment，但还需要补齐完整 reset、协议可选能力、活动连接故障恢复、企业 TLS、ADO.NET 命令行为、Oracle 结果形状、目录元数据和真实兼容矩阵。
+当前驱动仍不能称为完整的生产级 ADO.NET 驱动。连接池已具备基础容量、等待、存活探测和生命周期控制，ambient transaction 已采用协调器单资源登记并传播自动初始化的 opening token，但还需要补齐完整 reset、协议可选能力、活动连接故障恢复、企业 TLS、ADO.NET 命令行为、Oracle 结果形状、目录元数据和真实兼容矩阵。
 
 本文件统一区分以下状态：
 
@@ -127,7 +127,7 @@
 | --- | --- | --- | --- | --- |
 | P0-01 | P0 | 连接池 | 部分实现 | 容量/等待/预热/回收/指标及显式清池已有本地实现；补并发交错、资源上限、长期运行及真实行为验收，完整 reset 与 P0-02 联合关闭 |
 | P0-02 | P0 | 会话隔离 | 部分实现 | 借用/归还确认 autocommit 基线；prepared statement 已按物理会话 generation 失效，未消费 REF CURSOR、活动 LOB 句柄以及可识别的用户 session-state/temporary-object 语句已标记为归还时销毁，注释/多语句/不透明调用识别及仅目标发送标记已有本地回归（第 5.1.2 节），任意隐式副作用、reader、XA、并发及实库泄漏矩阵仍缺 |
-| P0-03 | P0 | Ambient transaction | 本地实现 | 打开连接自动 enlist、命令/Batch 绑定同一本地事务、提交/回滚/prepare/in-doubt 状态机和真实故障矩阵；分布式提升明确拒绝 |
+| P0-03 | P0 | Ambient transaction | 本地单资源实现；真实矩阵未闭合 | PSPE 拒绝第二数据库资源/提升，提交确认/拒绝/未知、初始化与晚回调身份、自动初始化取消及池/协调器恢复已有本地证据（第 15.27 节）；保留命令/Batch 绑定，补真实模式/版本/代理/事务管理器故障和恢复示例；不提供 durable prepare |
 | P0-04 | P0 | Unknown outcome | 部分实现 | 连接断开、取消、提交失败后的可判定恢复边界 |
 | P0-05 | P0 | 活动连接恢复 | 部分实现 | 先闭合断线状态与应用重建连接契约；透明迁移和自动重试另行定义范围 |
 | P0-06 | P0 | 池的路由身份隔离 | 本地实现；真实拓扑未验证 | resolver 引用身份隔离、每次 Open 路由快照及旧端点闲置会话清理已有回归；真实拓扑/故障矩阵待验收 |
@@ -164,7 +164,7 @@
 | 发现与恢复不足 | 内置 OCP/TNS 或等价适配、健康缓存和退避；活动连接故障后的状态/重建契约；无透明迁移和自动重连 | P1-09、P0-05 |
 | Oracle 形状不足 | REF CURSOR Input/InputOutput、cursor-valued column、PrepareExecute 与独立 Prepare/FetchSize 的组合；复杂类型的 LOB/cursor/national 成员及外部 DDL 缓存失效 | P1-06、P1-07 |
 | 类型与命令契约不足 | 扩展类型码、metadata、字符集和精度矩阵；SchemaOnly 元数据专用路径已有本地回归，真实边界仍需验收；Command/Batch/游标的行为范围不同 | P1-08、P1-05 |
-| 事务与结果不确定性 | 本地 ambient 的超时/in-doubt/关闭竞态、提交或回滚响应丢失；XA 外部协调器恢复；写入不自动 replay | P0-03、P0-04、P2-06 |
+| 事务与结果不确定性 | 保留单资源/终态/身份/取消及失败清理本地回归，补真实超时/in-doubt/关闭/响应丢失矩阵、XA 外部协调器恢复；写入不自动 replay | P0-03、P0-04、P2-06 |
 | 性能与运维不足 | 顺序 Batch 之外的 rewrite/multi-send/bulk；建连/探活分段、协议 debug、慢查询和资源上限报告。Oracle array binding 与池指标已有 | P2-03、P2-04 |
 | 已有实现仍欠真实验收 | TLS/mTLS/撤销/认证插件、文本多语句、LOCAL INFILE、标准 MySQL 压缩、Schema 新目录及 DataTypes 声明对应的服务器类型/DDL，以及版本/OBProxy/平台/包消费矩阵 | P1-01、P1-02、P1-03、P1-04、P1-10、P2-05、P2-06 |
 
@@ -246,7 +246,7 @@ SQL_MODE 尚未可信跟踪，MySQL 引号中出现反斜杠会保守销毁，�
 
 ### 5.2 事务、取消和 unknown outcome
 
-当前显式本地事务和 XA 有实现；ambient transaction 会在打开连接时登记 volatile enlistment，并复用本地事务协议。取消或连接断开时也不能证明服务端是否已经执行完成，提交/回滚响应丢失仍按 unknown outcome 处理。
+当前显式本地事务和 XA 有实现；ambient 模块在打开时通过 PSPE 占用协调器单资源槽，再初始化同一本地事务。第二数据库资源和分布式提升明确拒绝，不能静默组成多个独立本地提交。取消或连接断开时也不能证明服务端是否已经执行完成，提交/回滚响应丢失仍按 unknown outcome 处理。
 
 目标要求：
 
@@ -257,7 +257,7 @@ SQL_MODE 尚未可信跟踪，MySQL 引号中出现反斜杠会保守销毁，�
 - 重试策略必须按只读、幂等写、非幂等写和事务提交分别定义；
 - pool reset 不能自动替应用程序重试未知写操作。
 
-验收必须覆盖：发送前取消、发送后取消、响应中断、提交响应丢失、回滚响应丢失、事务 dispose、连接 dispose 和池归还。
+验收必须覆盖：发送前取消、发送后取消、响应中断、提交响应丢失、回滚响应丢失、事务 dispose、连接 dispose 和池归还。ambient 的确认提交/拒绝/未知、忙碌 reader、Open 初始化交错、晚回调及池 A/B 路径已有本地证据；自动 OpenAsync 初始化现传播有效 opening token，取消中断后丢弃会话、清理登记及池容量；成功 Open 后 token 不影响后续提交/回滚，证据见第 15.27 节。契约及同步初始化/双重超时预算见 [ambient API](obconnector-dotnet-architecture-design.md#ambient-transactions)。真实双模式、代理和事务管理器故障矩阵仍需验收。
 
 ### 5.3 协议、压缩和 OB20
 
@@ -526,7 +526,7 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 这份清单是“完整驱动”可以对外发布前的最低闭环，不是所有可能的增强功能：
 
 1. 保持池指标可观测；补齐并验证所有会话资源的 reset/丢弃规则。
-2. 补齐 ambient transaction 的超时、提交/回滚响应丢失、连接关闭和真实故障测试；当前本地 enlistment 已实现，分布式提升仍明确不支持。
+2. 保留 PSPE 单资源、终态/身份和自动初始化取消本地交付；补真实超时、响应丢失、连接关闭故障矩阵及应用核对/重建示例。分布式提升明确不支持。
 3. 完成多语句和 LOCAL INFILE 的真实互操作验收，验收标准 MySQL 压缩；先确认客户端 OB20 压缩协议契约再实现，并补 proxy reroute；未实现项必须保持显式拒绝。
 4. 验收企业信任/自定义验证回调，补认证插件、mTLS 池策略和 HA/发现的真实矩阵；撤销检查已有入口，仍需跨平台验收。
 5. 补齐 ADO.NET 命令行为、Oracle 输出/游标、复杂类型、字符集、Schema 和 statement cache 的公开契约。
@@ -569,7 +569,7 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 | --- | --- | --- | --- |
 | P0-01 | 满池等待时 Close、重开、source Dispose 交错；可能影响资源归属、等待者退出和连接数上限。回调重开归属已修复，多线程压力仍缺。 | `OceanBaseConnection.cs`；`Internal/Session/PhysicalSessionPool.cs`；`PoolOwnershipTests.cs`、`Session/PhysicalSessionPoolTests.cs` | 同步/异步压力下无超额建连、双重归还或等待泄漏；保留公开清池/全池清理、换策略旧池退休及容量等待回归；清理超时、Dispose/reset 交错、长借用和预热失败都有报告。 |
 | P0-02 | 注释、多语句、不透明过程/动态执行和目标发送标记已有本地实现；任意函数/触发器隐式副作用及真实资源/reset 矩阵仍未闭合，不能认定所有状态已隔离。 | `Internal/Sql/SessionStateSql.cs`、`Internal/Session/CommandExchange.cs`、`PhysicalSession.cs`；`SessionStateSqlTests.cs`、`PoolSessionStateTests.cs`、`PoolSessionStateLifecycleTests.cs`、`PoolingTests.cs`、`TemporaryLobLifecycleTests.cs`、`RefCursorTests.cs`；五资产 `SessionStateConsumerTests.cs` | 保留第 5.1.2/15.24 节回归；事务、变量、临时对象、reader、statement、LOB、cursor、XA 各有 A 污染/B 验证的真实双模式和代理测试；不能恢复的状态强制销毁。 |
-| P0-03 | `TransactionScope` 超时、连接提前关闭或 commit 回包丢失；本地 volatile enlistment 不能视为 durable XA 或跨资源原子提交。 | `Internal/Session/AmbientEnlistment.cs`；`OceanBaseConnection.Transactions.cs`；`TransactionTests.cs`、`TransactionFailureTests.cs` | commit/rollback/prepare/in-doubt 和 dispose 竞态有回归；多连接/多资源组合有明确拒绝或经验证的支持契约；提升仍不得被静默当成本地事务。 |
+| P0-03 | PSPE 拒绝第二资源/提升并区分 InDoubt；Initialize 与晚回调绑定原 Open/事务；自动初始化取消及同 scope/单容量池重开已有本地证据，仍不能视为跨资源原子提交或真实故障验收。 | `Internal/Session/AmbientEnlistment.cs`；`OceanBaseConnection.cs`、`OceanBaseConnection.Transactions.cs`；`AmbientTransaction*Tests.cs`、五资产消费者；原 `TransactionTests.cs`/`TransactionFailureTests.cs` 保留 | 保留两条初始化控制 SQL 取消、exact caller token、池/协调器清理、成功 Open 后 token 独立及既有终态/身份回归；补真实模式/版本/代理/事务管理器故障及恢复示例，不以本地 PSPE 关闭整个 P0-03。 |
 | P0-04 | 业务写入或提交已发送，响应断开/取消；应用错误重试会重复写入。 | `OceanBaseException.cs`；`Internal/Session/CommandExchange.cs`；`CommandFaultTests.cs`、`TransactionFailureTests.cs` | 在发送前、发送后、响应中、commit/rollback 响应丢失注入故障；验证异常分类、会话销毁、禁止 replay 及应用核对操作结果的示例。 |
 | P0-05 | 已打开连接遇到节点/代理故障，现有候选重试只覆盖建连 TCP 失败。 | `Internal/Session/PhysicalSession.cs`；`Internal/EndpointSelector.cs`；`TopologyExecutionTests.cs` | 先证明故障后连接/事务状态稳定且应用能安全重建；若新增透明恢复，须分别证明只读、幂等写、非幂等写和活动事务边界。完整驱动不要求自动重放未知写。 |
 | P0-06 | 不同 resolver 共池、路由更新后复用旧会话的问题已复现并本地修复；真实拓扑/故障矩阵未验证。 | `OceanBaseConnection.cs` 的 `AddressResolver`/`PrepareOpen`；`PhysicalSessionPoolRegistry`/`PhysicalSessionPool.Rent`（同在池文件中）；`PoolRoutingTests.cs` | 保留双服务端、引用身份、快照/预热、失败/取消/总预算、并发发现、Closed 回调清理和借出会话回归；补真实发现/代理/跨平台报告。 |
@@ -1290,6 +1290,83 @@ dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-change
 
 本模块的本地结果不关闭真实 DDL/reprepare、外部副作用、资源/负载、OBProxy、跨平台或独立运行时；23 个 ID、八工作包及历史实库失败和跳过保持开放。
 
+### 15.26 2026-10-25 ambient 单资源事务开发与完整文档检查点
+
+**状态：开发中，未提交，不关闭 P0-03/04/05 或 W2。** 当前 HEAD 为 `f15716e`；以下 PSPE 行为属于其上的工作区。本文此次交付为走查文档，保留现有实现和原始报告，不把未完成模块记为正式交付。
+
+#### 发现、影响和当前处理
+
+| 发现 | 触发场景和影响 | 当前处理 / 剩余验收 |
+| --- | --- | --- |
+| 原 volatile 登记不能限制数据库资源数 | 同一 ambient 事务加入两条数据库连接，分别本地提交，无法保证整体原子性 | 工作区采用 `IPromotableSinglePhaseNotification`，协调器接受单资源后才初始化；第二资源/提升发送事务 SQL 前拒绝；本地双模式测试已有，真实事务管理器验收仍缺 |
+| 原通知异常处理会掩盖提交未知结果 | `Prepared()` 同步触发提交并抛异常后，catch 再调用 `ForceRollback`，可能用非法第二次通知覆盖原异常 | 工作区按确认提交/已知拒绝/未知提交报告 Committed/Aborted/InDoubt；通知放在数据库操作 catch 外；保留恢复失败后已确认提交的结果，不重放 SQL |
+| Initialize 与 Close/Open 交错会误用新会话 | 先验证 A，等待协调器期间关闭并打开 B，再 Initialize 时错误启动 B 的事务 | 独立复核发现并以真实线程交错复现双模式 2 RED；工作区在原登记时捕获 Open generation，并在取得事务 exchange 的同一锁内复核；晚回调另校验原本地事务实例；池 A/B 断言复用同一物理会话 |
+| **自动登记初始化忽略 OpenAsync 取消令牌（Important，未修复）** | OpenAsync 发布会话后调用同步 EnlistTransaction；Initialize 到 BeginAmbientTransaction 使用 `CancellationToken.None`。控制 SQL 等回包时取消调用者 token 无法中断该阶段；Command Timeout=0 时缺少有限命令截止时间 | 源码调用链已核实，尚无该位置的专门 RED/GREEN。最小修复：自动登记内部路径传递本次 opening token，公开同步 EnlistTransaction 保持原签名；需双模式阻塞回包取消、调用者 token、失败会话销毁、无池/协调器槽泄漏及无 replay 回归，并覆盖五资产消费者 |
+| scope timeout 不是初始化 wire cancellation | 协调器超时发生在同步 Initialize 等待期间，回滚可能等待 Initialize 返回 | 现有测试只证明返回后最终回滚且无 replay，不能声称立即取消网络等待；CommandTimeout 与 scope timeout 独立，修复调用者取消后仍需保留此区别 |
+
+关键入口为 `OceanBaseConnection.cs` 的 Open/OpenAsync/EnlistTransaction、`OceanBaseConnection.Transactions.cs` 的 BeginAmbientTransaction/StartTransaction，以及 `Internal/Session/AmbientEnlistment.cs`。现有新增测试为 `AmbientTransactionTests`、`AmbientTransactionLifecycleTests`、`AmbientTransactionConcurrencyTests`、`AmbientTransactionFailureTests`、`AmbientTransactionPoolTests` 和消费者 `AmbientTransactionConsumerTests`。API 与终态表见 [ambient 契约](obconnector-dotnet-architecture-design.md#ambient-transactions)。
+
+#### 已有本地证据（本次读取报告，不是本次重新运行）
+
+报告位于忽略目录 `TestResults/ambient-single-phase/`，日志位于根目录 `TestResults-ambient-single-phase-*.log`；不会随 Markdown 自动分发。需要交接完整原始证据时须另行归档这些产物。
+
+| 报告 / 检查 | 实际结果与边界 |
+| --- | --- |
+| `initial-red.trx` → `initial-green.trx` | 原始 6 失败保留；首轮 10 通过（含原 4 项） |
+| `lifecycle-first.trx` | 32 通过 |
+| `initialization-race-red.trx` → `initialization-race-green.trx` | 原始双模式 2 失败保留；修复后专项 34 通过 |
+| `failure-first.trx` → `pool-green.trx` | 44 → 52 通过；含原 4 项，新增 48 项，覆盖命令超时、scope 延迟回滚、busy reader、回滚丢包、池 A/B 身份 |
+| `unit-verified.trx` | 全量 4285 通过、0 失败/跳过；相对缓存模块 4237 实际新增 48 项，无旧例移除；这不覆盖上述未测取消缺口 |
+| `consumer-focused.trx` | 专项 40 通过，五资产 × 两模式 × 同步/异步 × 确认/丢失提交；通过公共 API 操作实际两个 TCP fixture，验证第二资源无事务 SQL、首资源精确一次且无 replay；不是全量消费者 |
+| `di.trx` | 14 通过、0 失败/跳过 |
+| `integration.trx` | 9 通过；81 个结果中 72 个单独 NotExecuted，未启用实库。Counters 的 notExecuted=0 不代表没有跳过，须检查每个 UnitTestResult |
+| `TestResults-ambient-single-phase-build-first.log` | 已有 Release solution build 0 警告/0 错误，五资产构建；不是独立运行时测试 |
+| `TestResults-ambient-single-phase-format-first.log` | 已有 9 个 C# 文件 scoped whitespace 检查，保留 workspace-load warning |
+
+以上测试使用 `dotnet test <测试项目> -c Release --no-build --no-restore --logger 'trx;LogFileName=<报告名>' --results-directory TestResults/ambient-single-phase`；专项另带过滤器。构建使用 `dotnet build OceanBaseConnector.slnx -c Release --no-restore`。报告反映当时构建产物，不验证后续修改；修复取消传播后必须重新构建并验证受影响资产。
+
+独立 `review_ambient_single_phase` 已完成源码/测试/契约走查，未运行测试：初始化 generation 竞态已复现修复，rollback 测试已加强为精确 ROLLBACK 报文；当前剩余 Important 为自动登记取消传播。完整消费者、取消修复后的最终构建/格式/单测/DI/Integration、最终独立复核、两包五资产哈希及嵌入 README 验证均未完成，不能写成模块已通过交付门槛。上一模块 2428 消费者及旧包只验证其自身版本，不替代本模块。
+
+#### 下一步和关闭标准
+
+1. 在自动 OpenAsync 的 Initialize 已到服务器且响应暂停时取消 token，先取得双模式实际失败；有界清理 fixture，不能靠放行响应后才断言取消。
+2. 在自动登记共享路径传播 opening token，保留 Open generation、原事务实例和通知一次的保护；证明取消时连接和会话终态、池容量及协调器槽无泄漏，且没有 SQL 重放。
+3. 修复后完成五资产专项和全量消费者、完整单测/DI/Integration、构建与必要格式检查、独立源码/测试/文档复核、包哈希及 README 对照；保留所有原始失败/跳过，再记录模块交付。
+4. 本地模块完成后，继续双模式/版本/OBProxy/事务管理器真实故障和应用结果核对/重建示例；单资源 PSPE 不提供 durable prepare、跨数据库原子提交或分布式恢复。五资产均在 .NET10 host 加载，Windows 本地 fixture 不证明独立运行时或跨平台互操作。
+
+本次文档检查同步总体摘要、23-ID 表、详细追踪、W2、README、兼容性、API 和进度台账；第 15.1—15.25 节原文保留。真实 OceanBase 既有 Oracle nested-table column 失败、其他历史失败和未执行项继续保留，八工作包均未整体关闭。
+
+本次文档验收：9 份 Markdown 的 255 个相对链接/锚点有效；三张表各完整覆盖 23 个 ID，八工作包无重复且覆盖全部缺口；第 15.1—15.25 节与 HEAD 原文一致；六份改动文档保持 UTF-8 无 BOM/CRLF。`git diff --check` 无空白错误，现有 AmbientEnlistment.cs 的 LF→CRLF 提示保留。本次只做文档/报告结构检查，未重跑构建、测试或打包。检查产物为忽略目录 `TestResults/ambient-single-phase/document-validation.json`。
+
+### 15.27 2026-10-25 ambient 单资源事务与初始化取消本地交付
+
+开发起点 `f15716e`。完成 P0-03 的本地单资源登记及 P0-04/05 的失败/回调边界，不关闭整个 W2 或真实故障验收。第 15.26 节和走查报告第 20 节为修复前检查点，保留其原始 4285/40 报告及当时未关闭的取消问题；以下记录修复后的最终资产与结果。
+
+实现采用 `IPromotableSinglePhaseNotification`：协调器接受资源后才开始本地事务，第二数据库资源在其本地事务 SQL 前拒绝；后续 promotion 明确拒绝并中止原本地事务；clone 登记幂等。可信 COMMIT 确认/拒绝/响应丢失分别报告 Committed/Aborted/InDoubt，确认提交后恢复 autocommit 失败仍保留 Committed，失败物理会话丢弃；通知在数据库操作 catch 外，仅报告一次。Initialize 捕获原 Open generation，并在获取事务 exchange 的同一锁内复核；完成回调再要求原本地事务实例，不能影响 Close/Open 或池的下一借用者。没有 durable prepare、跨资源原子提交、分布式恢复或 SQL replay。发送前拒绝只针对第二资源自己的本地事务 SQL，不能解读为后续 promotion 发生时原事务尚未发 SQL；提升失败仍须中止原本地事务。
+
+独立复核新增的 Important 已闭合：自动 Open/OpenAsync 通过私有登记入口把 `context.Token` 送至 Initialize 的同一事务 exchange；公开同步 EnlistTransaction 保持原签名且使用 None。取消中断控制响应后，BeginFailed、登记 catch 与 FailedOpen 依次清理本地/ambient 状态、销毁旧会话并释放池容量，OpenAsync 对外保留原 caller token。成功 Open 结束 exchange 注册后，后续 commit/rollback 不使用 opening token。scope timeout 仍不能立即中断同步 Initialize，它与 CommandTimeout/调用者取消是不同机制。[公共契约](obconnector-dotnet-architecture-design.md#ambient-transactions)保留此边界。
+
+原始过程报告保留在忽略目录 `TestResults/ambient-single-phase/` 和根目录 `TestResults-ambient-single-phase-*.log`：initial-red 实际 6 失败；initialization-race-red 实际双模式 2 失败，修复后专项 34 通过；failure-first 44、pool-green 52 通过。取消回归首次因测试把 scope Dispose 排在断线清理之前而等待初始化，手工中止并保留 initialization-cancellation-interrupted.log，确认无遗留测试进程后调整有界清理顺序；不计为产品通过或正常 RED。之后 initialization-cancellation-red 实际 4 TimeoutException：双模式 × 两条初始化控制 SQL，在服务器确实收到请求后取消，原路径仍无法在 3 秒内退出。修复后 initialization-cancellation-green 为相关 ambient 73 项通过。
+
+新增五资产取消消费者 10 项（双模式）真实依次接受两个物理 TCP 会话：`Command Timeout=0`、池最大容量 1/等待 1 秒，第二初始化 SQL 已到达但不回复；取消后断言原 token/Closed，再用同一 scope、CommittableTransaction、连接及池配置重开，完成初始化和精确业务 SQL，随后 Close 的 ROLLBACK/restore/reset、晚到 rollback 及 ClearPool→EOF。它实际验证协调器槽和池容量释放；不是只有状态断言。consumer-cancellation-focused 共 50 项通过（原 40 + 新 10）。另有双模式成功 Open 后取消并 Dispose caller CTS 再 COMMIT 的回归，证明后续事务不受 opening token 生命周期影响。
+
+独立 review_ambient_single_phase 完成产品、生命周期、真实交错、五资产消费者和取消契约复核，无剩余可操作 Critical/Important/Minor；审阅者未运行构建或测试。两次 Important（初始化代次竞态、取消传播）均有实际 RED 后修复，Minor rollback 测试已改为精确 ROLLBACK 报文断言；最终文档复核另区分第二资源发送前拒绝与后续 promotion 回滚，并明确初始化失败释放资源后允许同 scope 重试，成功登记后 Close 的重开限制仍保留。所有原始失败均保留并对应最终通过；未改弱现有失败断言或删除旧用例。
+
+| 最终命令 / 产物 | 结果与证据范围 |
+| --- | --- |
+| `dotnet build OceanBaseConnector.slnx -c Release --no-restore` | 0；build-final.log，0 警告/错误，五产品资产及 DI 资产均编译 |
+| `dotnet test tests/OceanBaseConnector.UnitTests` | 0；unit-final.trx，4291 通过、0 失败/跳过；相对 4237 实际新增 54 项，无旧例移除；原 unit-verified.trx 的 4285 为取消修复前历史 |
+| `dotnet test tests/OceanBaseConnector.ConsumerTests` | 0；consumer-final.trx，2478 通过、0 失败/跳过；相对 2428 实际新增 50 项，无旧例移除，包含所有 ambient 50 项；运行期间未重建被加载程序集 |
+| `dotnet test tests/OceanBaseConnector.DependencyInjection.Tests` | 0；di-final.trx，14 通过、0 失败/跳过 |
+| `dotnet test tests/OceanBaseConnector.IntegrationTests` | 0；integration-final.trx，9 通过/72 个单独 NotExecuted，未启用真实数据库；按每例结果核对，不依赖汇总 notExecuted 属性 |
+| `dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-changes --include <本模块9个C#文件>` | 0；format-final.log，保留 workspace-load warning |
+| `dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestResults/ambient-single-phase/packages` | 0；pack-final.log；package-validation.json 校验两包各五资产 DLL 哈希和嵌入 README 与最终构建/工作区一致；未发布 |
+| 文档 / 结果追踪 | document-validation.json 核对链接、三张 23-ID 表、八工作包和历史章节；red-green-validation.json 核对实际新增/移除与三份原始 RED 映射；git diff --check 无空白错误 |
+
+测试从仓库根目录执行，附公共参数 `-c Release --no-build --no-restore --logger 'trx;LogFileName=<报告名>' --results-directory TestResults/ambient-single-phase`；专项再带过滤器。表内日志名均以前缀 `TestResults-ambient-single-phase-` 位于根目录，TRX/JSON 位于忽略结果目录；需要独立交接时另行归档，不因提交 Markdown 自动分发。
+
+五资产均在同一 .NET10 host 运行，不是五种独立运行时。无新增真实 OceanBase/OBProxy/事务管理器、跨平台或长期负载报告；P0-03/04/05 仍须真实故障/结果核对和应用重建验收。既有 Oracle nested-table column 失败及全部历史跳过继续保留；23 项和八工作包仍开放。
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。
@@ -1297,7 +1374,7 @@ dotnet format whitespace OceanBaseConnector.slnx --no-restore --verify-no-change
 | 工作包 / 覆盖 ID | 剩余开发或范围决定 | 必须交付的验证产物 | 主要依赖 |
 | --- | --- | --- | --- |
 | W1 池与会话隔离：P0-01、P0-02、P0-06 | 保留会话识别/不透明调用及目标发送销毁规则，补任意隐式副作用、reader/cursor/LOB/XA 的恢复与实库隔离；定义连接字符串归一化和是否需要统一 shutdown。已有容量、探活、预热、路由隔离、证书隔离、清池/退休及指标保留 | 双借用者污染/隔离报告；满池、清池、取消、预热、Dispose/reset、Close/Open 并发及长期运行资源曲线；双模式、直连/OBProxy reset 报告 | G0 契约；与 W2/W4 联合验收 |
-| W2 事务与失败恢复：P0-03、P0-04、P0-05 | 闭合 ambient 本地事务、未知执行结果、断线后的连接/事务状态与应用重建契约；分布式提升明确拒绝，透明恢复另定范围 | 发送前/后、响应中、commit/rollback 回包丢失、超时/in-doubt、提前关闭的故障矩阵；异常分类、会话销毁及业务核对示例；无未知写 replay | W1 租约与隔离规则 |
+| W2 事务与失败恢复：P0-03、P0-04、P0-05 | 保留已交付的 PSPE 单资源/终态、初始化与晚回调/池身份、自动初始化取消/池与协调器恢复及超时本地回归；补真实事务管理器/代理故障、未知执行结果核对与应用重建契约；分布式提升拒绝，透明恢复另定范围 | 发送前/后、响应中、commit/rollback 回包丢失、超时/in-doubt、提前关闭的故障矩阵；异常分类、会话销毁及业务核对示例；无未知写 replay | W1 租约与隔离规则 |
 | W3 协议选项：P1-01、P1-02、P1-03 | 标准 MySQL 压缩已本地实现；先确认客户端 OB20 压缩契约再补实现，并补 reroute；保留已实现的 opt-in 文本多语句和应用流 LOCAL INFILE，明确不支持的组合 | 客户端链路/版本/capability 依据；协商成功/拒绝、分片/序列/校验/解压限额；多结果中途错误；上传超限/取消/代理策略；真实 OceanBase/OBProxy 互操作 | G0 及第 16.3 节；reroute 依赖 W2/W4 |
 | W4 信任、发现与凭据：P1-04、P1-09、P1-11 | 凭据提供/轮换已有本地实现，补真实凭据服务与插件验收；补发现与健康/退避策略，明确 OCP/TNS 或等价发现范围。现有 TLS 回调、证书副本及池身份无需重做 | 企业 CA/mTLS、证书与凭据过期/刷新失败、撤销、KDC/plugin 成功及拒绝；地址更新/错误身份/节点与代理故障；Windows/Linux 报告 | W1 池身份、W2 重试边界 |
 | W5 命令、Oracle 与类型：P1-05、P1-06、P1-07、P1-08 | 保留 KeyInfo 键/隐藏列和复杂查询 unknown 契约及回归，补真实目录验收；保留 SchemaOnly Prepare-only 本地回归并补真实准备行为验收；补已承诺的 Oracle 输出方向/结果形状、复杂成员、DDL 缓存失效、类型码/字符集映射。有符号 DecimalScale 已本地完成，保留其精度和覆盖规则 | Command/Batch/REF CURSOR 行为表；NULL/方向/精度/溢出/编码/取消与资源释放矩阵；SchemaOnly 副作用/锁/大结果报告；服务端不支持形状单列 | G0；资源生命周期与 W1 联动 |

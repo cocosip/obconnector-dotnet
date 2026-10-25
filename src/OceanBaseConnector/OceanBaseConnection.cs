@@ -36,7 +36,6 @@ namespace OceanBaseConnector
         private X509Certificate2? _clientCertificate;
         private RemoteCertificateValidationCallback? _remoteCertificateValidationCallback;
         private Transaction? _ambientTransaction;
-        private AmbientEnlistment? _ambientEnlistment;
 #if NET8_0_OR_GREATER
         private readonly OceanBaseDataSource? _source;
 #endif
@@ -223,7 +222,7 @@ namespace OceanBaseConnector
                 else if (session.State != SessionState.Open) throw new InvalidOperationException("The pooled physical session is not available.");
                 context.Token.ThrowIfCancellationRequested();
                 PublishOpen(session, context);
-                if (context.AmbientTransaction != null) EnlistTransaction(context.AmbientTransaction);
+                if (context.AmbientTransaction != null) EnlistTransactionCore(context.AmbientTransaction, context.Token);
             }
             catch (Exception error)
             {
@@ -254,7 +253,7 @@ namespace OceanBaseConnector
                 else if (session.State != SessionState.Open) throw new InvalidOperationException("The pooled physical session is not available.");
                 context.Token.ThrowIfCancellationRequested();
                 PublishOpen(session, context);
-                if (context.AmbientTransaction != null) EnlistTransaction(context.AmbientTransaction);
+                if (context.AmbientTransaction != null) EnlistTransactionCore(context.AmbientTransaction, context.Token);
             }
             catch (Exception error)
             {
@@ -512,12 +511,16 @@ namespace OceanBaseConnector
         }
 
         public override void EnlistTransaction(Transaction? transaction)
+            => EnlistTransactionCore(transaction, CancellationToken.None);
+
+        private void EnlistTransactionCore(Transaction? transaction, CancellationToken openingToken)
         {
             if (transaction == null) throw new ArgumentNullException(nameof(transaction));
             if (transaction.TransactionInformation.Status != TransactionStatus.Active)
                 throw new InvalidOperationException("The transaction is not active.");
             if (transaction.TransactionInformation.DistributedIdentifier != Guid.Empty)
                 throw new NotSupportedException("Distributed transaction promotion is not supported.");
+            long openGeneration;
             lock (_gate)
             {
                 ThrowIfDisposed();
@@ -534,19 +537,19 @@ namespace OceanBaseConnector
                 }
                 if (_transaction != null) throw new InvalidOperationException("A local transaction is already active.");
                 _ambientTransaction = transaction;
+                openGeneration = _openGeneration;
             }
 
-            var enlistment = new AmbientEnlistment(this, transaction);
-            OceanBaseTransaction? local = null;
+            var enlistment = new AmbientEnlistment(this, transaction, openGeneration, openingToken);
             try
             {
-                local = BeginAmbientTransaction(transaction);
-                transaction.EnlistVolatile(enlistment, EnlistmentOptions.None);
-                lock (_gate) _ambientEnlistment = enlistment;
+                if (!transaction.EnlistPromotableSinglePhase(enlistment))
+                    throw new NotSupportedException("An ambient transaction supports only one database resource; distributed promotion is not supported.");
             }
             catch
             {
                 enlistment.Deactivate();
+                var local = enlistment.LocalTransaction;
                 if (local != null)
                 {
                     try { DisposeTransaction(local); }
@@ -555,7 +558,6 @@ namespace OceanBaseConnector
                 lock (_gate)
                 {
                     if (SameTransaction(_ambientTransaction, transaction)) _ambientTransaction = null;
-                    _ambientEnlistment = null;
                 }
                 throw;
             }
@@ -589,50 +591,26 @@ namespace OceanBaseConnector
             }
         }
 
-        internal void EndAmbientTransaction(Transaction transaction, bool commit)
+        internal void EndAmbientTransaction(Transaction transaction, OceanBaseTransaction local, bool commit)
         {
-            OceanBaseTransaction? local;
-            lock (_gate)
-            {
-                if (!SameTransaction(_ambientTransaction, transaction)) return;
-                local = _transaction;
-            }
             try
             {
-                if (local != null) FinishTransaction(local, StartTransactionEnd(local, CancellationToken.None, allowAmbient: true), commit);
+                lock (_gate)
+                {
+                    if (!SameTransaction(_ambientTransaction, transaction) || !ReferenceEquals(_transaction, local))
+                        throw new InvalidOperationException("The ambient transaction is no longer active on this connection.");
+                }
+                FinishTransaction(local, StartTransactionEnd(local, CancellationToken.None, allowAmbient: true), commit);
             }
             finally
             {
                 lock (_gate)
                 {
                     if (SameTransaction(_ambientTransaction, transaction)) _ambientTransaction = null;
-                    _ambientEnlistment = null;
                 }
             }
         }
 
-        internal void PrepareAmbientTransaction(Transaction transaction)
-        {
-            lock (_gate)
-            {
-                if (!SameTransaction(_ambientTransaction, transaction) || _transaction == null ||
-                    _transaction.InProgress || !IsActiveTransaction(_transaction))
-                    throw new InvalidOperationException("The ambient transaction is no longer active on this connection.");
-            }
-        }
-
-        internal void EndAmbientInDoubt(Transaction transaction)
-        {
-            lock (_gate)
-            {
-                if (SameTransaction(_ambientTransaction, transaction))
-                {
-                    _ambientTransaction = null;
-                    _ambientEnlistment = null;
-                    _session?.Break();
-                }
-            }
-        }
         private void ThrowIfDisposed() { if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseConnection)); }
 
         private static bool SameTransaction(Transaction? left, Transaction? right) =>
