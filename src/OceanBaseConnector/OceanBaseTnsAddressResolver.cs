@@ -9,8 +9,9 @@ namespace OceanBaseConnector
 {
     /// <summary>Reads a fresh UTF-8 TNS address snapshot for each Open. The immutable
     /// resolver is caller-owned and safe for concurrent use. Publish file updates by
-    /// atomic replacement. TNS load policies and non-TCP protocols are rejected.</summary>
-    public sealed class OceanBaseTnsAddressResolver : IOceanBaseAddressResolver
+    /// atomic replacement. Groups, rotation, random and weighted selection are supported;
+    /// unsupported policies and non-TCP protocols are rejected.</summary>
+    public sealed class OceanBaseTnsAddressResolver : IOceanBaseAddressResolver, IDiscoveryAddressResolver
     {
         private const int MaximumBytes = 1024 * 1024;
         private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
@@ -32,8 +33,14 @@ namespace OceanBaseConnector
 
         public string Resolve(CancellationToken cancellationToken) => ResolveAsync(cancellationToken).GetAwaiter().GetResult();
 
+        public async Task<string> ResolveAsync(CancellationToken cancellationToken) =>
+            (await ReadSnapshotAsync(cancellationToken).ConfigureAwait(false)).CanonicalAddresses;
+
+        DiscoverySnapshot IDiscoveryAddressResolver.ResolveSnapshot(CancellationToken token) => ReadSnapshotAsync(token).GetAwaiter().GetResult();
+        Task<DiscoverySnapshot> IDiscoveryAddressResolver.ResolveSnapshotAsync(CancellationToken token) => ReadSnapshotAsync(token);
+
         // Opening a file on a network filesystem can block before the first async read.
-        public Task<string> ResolveAsync(CancellationToken cancellationToken) => Task.Run(async () =>
+        private Task<DiscoverySnapshot> ReadSnapshotAsync(CancellationToken cancellationToken) => Task.Run(async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var file = await OpenFileAsync(cancellationToken).ConfigureAwait(false);
@@ -50,7 +57,7 @@ namespace OceanBaseConnector
             string text;
             try { text = Utf8.GetString(contents.GetBuffer(), 0, (int)contents.Length); }
             catch (DecoderFallbackException error) { throw new FormatException("TNS input must be valid UTF-8.", error); }
-            return TnsAddressParser.Parse(text, _alias, _service, cancellationToken);
+            return TnsAddressParser.ParseSnapshot(text, _alias, _service, cancellationToken);
         }, cancellationToken);
 
         private async Task<FileStream> OpenFileAsync(CancellationToken token)

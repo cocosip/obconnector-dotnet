@@ -125,11 +125,17 @@ namespace OceanBaseConnector.Internal.Session
                 budget.Token.ThrowIfCancellationRequested();
                 var endpoints = _resolvedEndpoints ?? ResolveEndpoints(_options, _addressResolver, budget.Token);
                 budget.Token.ThrowIfCancellationRequested();
-                var start = _endpointSelector.SelectStart(endpoints.Count, _options.LoadBalance);
-                if (_options.HostRecheckSeconds > 0)
+                var start = 0;
+                if (endpoints is DiscoverySnapshot discovery)
+                    endpoints = discovery.Order(_endpointSelector, _options.LoadBalance, _options.HostRecheckSeconds, health: _endpointHealth);
+                else
                 {
-                    endpoints = _endpointHealth.Order(endpoints, start, _options.HostRecheckSeconds);
-                    start = 0;
+                    start = _endpointSelector.SelectStart(endpoints.Count, _options.LoadBalance);
+                    if (_options.HostRecheckSeconds > 0)
+                    {
+                        endpoints = _endpointHealth.Order(endpoints, start, _options.HostRecheckSeconds);
+                        start = 0;
+                    }
                 }
                 var attempts = endpoints.Count * (_options.ConnectRetryCount + 1);
                 for (var i = 0; ; i++)
@@ -173,11 +179,17 @@ namespace OceanBaseConnector.Internal.Session
                 budget.Token.ThrowIfCancellationRequested();
                 var endpoints = _resolvedEndpoints ?? await ResolveEndpointsAsync(_options, _addressResolver, budget.Token).ConfigureAwait(false);
                 budget.Token.ThrowIfCancellationRequested();
-                var start = _endpointSelector.SelectStart(endpoints.Count, _options.LoadBalance);
-                if (_options.HostRecheckSeconds > 0)
+                var start = 0;
+                if (endpoints is DiscoverySnapshot discovery)
+                    endpoints = discovery.Order(_endpointSelector, _options.LoadBalance, _options.HostRecheckSeconds, health: _endpointHealth);
+                else
                 {
-                    endpoints = _endpointHealth.Order(endpoints, start, _options.HostRecheckSeconds);
-                    start = 0;
+                    start = _endpointSelector.SelectStart(endpoints.Count, _options.LoadBalance);
+                    if (_options.HostRecheckSeconds > 0)
+                    {
+                        endpoints = _endpointHealth.Order(endpoints, start, _options.HostRecheckSeconds);
+                        start = 0;
+                    }
                 }
                 var attempts = endpoints.Count * (_options.ConnectRetryCount + 1);
                 for (var i = 0; ; i++)
@@ -232,15 +244,16 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         internal static IReadOnlyList<OceanBaseEndpoint> ResolveEndpoints(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver, CancellationToken token) =>
-            resolver == null ? options.Endpoints : DriverDiagnostics.MeasureConnectionPhase("discovery", () => ParseResolved(resolver.Resolve(token), options.Port));
+            resolver == null ? options.Endpoints : DriverDiagnostics.MeasureConnectionPhase<IReadOnlyList<OceanBaseEndpoint>>("discovery", () =>
+                resolver is IDiscoveryAddressResolver discovery ? discovery.ResolveSnapshot(token) : ParseResolved(resolver.Resolve(token), options.Port));
 
         internal static Task<IReadOnlyList<OceanBaseEndpoint>> ResolveEndpointsAsync(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver, CancellationToken token) =>
             resolver == null ? Task.FromResult(options.Endpoints) : DriverDiagnostics.MeasureConnectionPhaseAsync("discovery", () => ResolveEndpointsCoreAsync(options, resolver, token));
 
         private static async Task<IReadOnlyList<OceanBaseEndpoint>> ResolveEndpointsCoreAsync(OceanBaseConnectionOptions options, IOceanBaseAddressResolver resolver, CancellationToken token)
         {
-            var resolving = resolver.ResolveAsync(token) ?? throw new InvalidOperationException("The address resolver returned no task.");
-            var canceled = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var resolving = ReadResolvedAsync(options, resolver, token);
+            var canceled = new TaskCompletionSource<IReadOnlyList<OceanBaseEndpoint>>(TaskCreationOptions.RunContinuationsAsynchronously);
             using (token.Register(() => canceled.TrySetCanceled()))
             {
                 var completed = await Task.WhenAny(resolving, canceled.Task).ConfigureAwait(false);
@@ -250,8 +263,15 @@ namespace OceanBaseConnector.Internal.Session
                     _ = resolving.ContinueWith(task => { _ = task.Exception; }, CancellationToken.None,
                         TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                 }
-                return ParseResolved(await completed.ConfigureAwait(false), options.Port);
+                return await completed.ConfigureAwait(false);
             }
+        }
+
+        private static async Task<IReadOnlyList<OceanBaseEndpoint>> ReadResolvedAsync(OceanBaseConnectionOptions options, IOceanBaseAddressResolver resolver, CancellationToken token)
+        {
+            if (resolver is IDiscoveryAddressResolver discovery) return await discovery.ResolveSnapshotAsync(token).ConfigureAwait(false);
+            var task = resolver.ResolveAsync(token) ?? throw new InvalidOperationException("The address resolver returned no task.");
+            return ParseResolved(await task.ConfigureAwait(false), options.Port);
         }
 
         private OceanBaseConnectionOptions SelectEndpoint(OceanBaseEndpoint endpoint)

@@ -1,5 +1,16 @@
 # Verification status and remaining work
 
+## 2026-10-26 P1-09 discovery groups and selection
+
+Developed from master/1416c55. Built-in TNS/OCP snapshots now preserve declared groups, ROTATION/RANDOM/SERVERAFFINITY, per-group overrides, ON defaults, aliases and bounded weights through actual physical connection selection and pool prewarm. Public Resolve strings remain declaration membership; idle pool reuse is based on membership, not rebalancing. Health is scoped within groups and to the current pool generation; TCP retries reuse one frozen selection. See [contract](obconnector-dotnet-architecture-design.md#discovery-group-selection), [evidence](obconnector-dotnet-completeness.md#1554-2026-10-26-发现分组策略与权重) and [audit](obconnector-dotnet-driver-audit.md#49-发现分组策略与权重2026-10-26).
+
+最终完整单测5879通过（新增91），相关五资产消费者610通过（新增256），均零失败/跳过；Release全解决方案0警告/错误（12.86秒），12C#限定格式验证退出0，保留既有workspace加载警告。单测9分40秒，精确消费者8分15秒；五资产同一.NET10host运行，没有新增真实OCP/网络HTTP、数据库或独立运行时验收。
+
+消费者门禁最初筛选误包含整个Ob20ConsumerTests类；仅列举测试确认实际2587项（该类2029项而非目标TCP重试52项）后主动取消，session89911退出1且确认无遗留testhost，不计为通过。原取消日志、列表及consumer-scope-correction.json保留。纠正为精确建连重试方法后，运行前仅列举确认610项，复用同一冻结产物；不是因静默日志或观察超时而重启。
+
+RED32/health4/alias2 and the252pass/2timeout retry-fixture report are retained. The fixture budget was corrected from8to30seconds; production budgets did not change. Independent review corrected Framework clock-seeded per-selector Random to a default shared locked source. Three intentional legacy policy-test name mappings are documented in15.54; their parameter rows remain and now distinguish supported policies, malformed groups and unsupported options. Five assets share one.NET10host; controlled HTTP/loopback peers are not real OCP/network HTTP/database, enterprise TLS or independent-platform evidence. Blacklist/discovery retry policies, proxy topology/reroute, real faults/load and release acceptance remain open. All23IDs/eightpackages remain open; localmaster only, no push/publication. Earlier entries below are historical module evidence.
+
+
 ## 2026-10-26 P1-09 OCP HTTP discovery
 
 Developed from master/5cbe5c9, P1-09/W4. All five assets expose OceanBaseOcpAddressResolver with a caller-owned HttpClient, explicit HTTP(S) origin, net service name and optional expected SERVICE_NAME. Each logical Open fetches a fresh fixed-route OCP snapshot before idle reuse. The request escapes appName and carries no database credentials. See [contract](obconnector-dotnet-architecture-design.md#ocp-http-discovery), [full evidence](obconnector-dotnet-completeness.md#1553-2026-10-26-ocp-http地址发现) and [audit](obconnector-dotnet-driver-audit.md#48-ocp-http地址发现2026-10-26).

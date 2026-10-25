@@ -87,11 +87,19 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("APP=(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=host)(PORT=2881)))(ADDRESS=(PROTOCOL=TCP)(HOST=other)(PORT=2881)))")]
         [InlineData("IFILE=elsewhere.ob")]
         [InlineData("OTHER=(DESCRIPTION=(IFILE='secret-path')) APP=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=host)(PORT=2881)))")]
-        public async Task UnsupportedPoliciesProtocolsAndIncludesAreNeverIgnored(string content)
+        public async Task PoliciesProtocolsAndIncludesAreValidated(string content)
         {
             using var file = new TnsFileFixture(content); var resolver = Create(file);
-            Assert.Throws<NotSupportedException>(() => resolver.Resolve(CancellationToken.None));
-            await Assert.ThrowsAsync<NotSupportedException>(() => resolver.ResolveAsync(CancellationToken.None));
+            if (content.Contains("LOAD_BALANCE=ON", StringComparison.Ordinal) || (content.Contains("HOST=other", StringComparison.Ordinal) && !content.Contains(")(ADDRESS=", StringComparison.Ordinal)))
+            {
+                Assert.Equal(content.Contains("HOST=other", StringComparison.Ordinal) ? "host:2881,other:2881" : "host:2881", resolver.Resolve(CancellationToken.None));
+                Assert.Equal(resolver.Resolve(CancellationToken.None), await resolver.ResolveAsync(CancellationToken.None));
+            }
+            else
+            {
+                Assert.Throws<NotSupportedException>(() => resolver.Resolve(CancellationToken.None));
+                await Assert.ThrowsAsync<NotSupportedException>(() => resolver.ResolveAsync(CancellationToken.None));
+            }
         }
 
         [Fact]

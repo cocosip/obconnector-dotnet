@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using System.Threading;
 
@@ -7,36 +8,28 @@ namespace OceanBaseConnector.Internal
 {
     internal static class TnsAddressParser
     {
-        internal static string Parse(string text, string alias, string? service, CancellationToken token)
+        internal static string Parse(string text, string alias, string? service, CancellationToken token) =>
+            ParseSnapshot(text, alias, service, token).CanonicalAddresses;
+
+        internal static DiscoverySnapshot ParseSnapshot(string text, string alias, string? service, CancellationToken token)
         {
             var selected = new Parser(text, token).Select(alias);
             if (!Is(selected.Key, "DESCRIPTION")) throw Unsupported();
-            var addresses = new List<Node>(); Node? connect = null; Node? list = null;
-            foreach (var child in Children(selected))
+            var children = Children(selected);
+            var strategy = Policy(children, DiscoveryStrategy.Inherit, true);
+            var addresses = new List<Node>(); var lists = new List<Node>(); Node? connect = null;
+            foreach (var child in children)
             {
                 if (Is(child.Key, "ADDRESS")) addresses.Add(child);
-                else if (Is(child.Key, "ADDRESS_LIST"))
-                {
-                    if (list != null) throw Unsupported();
-                    list = child;
-                }
+                else if (Is(child.Key, "ADDRESS_LIST")) lists.Add(child);
                 else if (Is(child.Key, "CONNECT_DATA"))
                 {
                     if (connect != null) throw Invalid();
                     connect = child;
                 }
-                else throw Unsupported();
+                else if (!IsPolicy(child.Key, true)) throw Unsupported();
             }
-            if (list != null)
-            {
-                if (addresses.Count != 0) throw Unsupported();
-                foreach (var child in Children(list))
-                {
-                    if (!Is(child.Key, "ADDRESS")) throw Unsupported();
-                    addresses.Add(child);
-                }
-            }
-            if (addresses.Count == 0 || addresses.Count > 256) throw Invalid();
+            if (lists.Count != 0 && addresses.Count != 0) throw Unsupported();
             if (connect != null)
             {
                 var fields = Children(connect);
@@ -46,16 +39,34 @@ namespace OceanBaseConnector.Internal
                 if (!string.Equals(declared, service, StringComparison.Ordinal)) throw Invalid();
             }
             else if (service != null) throw Invalid();
-            var result = new StringBuilder();
+            var groups = new List<DiscoveryGroup>();
+            if (lists.Count == 0) groups.Add(ReadGroup(addresses, strategy, token));
+            else foreach (var list in lists)
+            {
+                var fields = Children(list); var members = new List<Node>();
+                foreach (var child in fields)
+                    if (Is(child.Key, "ADDRESS")) members.Add(child);
+                    else if (!IsPolicy(child.Key, false)) throw Unsupported();
+                groups.Add(ReadGroup(members, Policy(fields, strategy, false), token));
+            }
+            token.ThrowIfCancellationRequested();
+            return new DiscoverySnapshot(groups);
+        }
+
+        private static DiscoveryGroup ReadGroup(List<Node> addresses, DiscoveryStrategy strategy, CancellationToken token)
+        {
+            if (addresses.Count == 0 || addresses.Count > 256) throw Invalid();
+            var endpoints = new List<OceanBaseEndpoint>(); var weights = new List<int>(); long total = 0;
             foreach (var address in addresses)
             {
                 token.ThrowIfCancellationRequested();
-                string? host = null, port = null, protocol = null;
+                string? host = null, port = null, protocol = null, weight = null;
                 foreach (var child in Children(address))
                 {
                     if (Is(child.Key, "HOST")) { if (host != null) throw Invalid(); host = Value(child); }
                     else if (Is(child.Key, "PORT")) { if (port != null) throw Invalid(); port = Value(child); }
                     else if (Is(child.Key, "PROTOCOL")) { if (protocol != null) throw Invalid(); protocol = Value(child); }
+                    else if (Is(child.Key, "WEIGHT")) { if (weight != null) throw Invalid(); weight = Value(child); }
                     else throw Unsupported();
                 }
                 if (host == null || port == null || protocol == null) throw Invalid();
@@ -66,12 +77,46 @@ namespace OceanBaseConnector.Internal
                 try { parsed = OceanBaseEndpoint.Parse(endpointText, 2881); }
                 catch (ArgumentException) { throw Invalid(); }
                 if (parsed.Length != 1) throw Invalid();
-                if (result.Length != 0) result.Append(',');
-                result.Append(parsed[0].ToString());
-                if (result.Length > 65536) throw Invalid();
+                var amount = 1;
+                if (weight != null)
+                {
+                    if (strategy != DiscoveryStrategy.ServerAffinity) throw Unsupported();
+                    if (!int.TryParse(weight, NumberStyles.None, CultureInfo.InvariantCulture, out amount)) throw Invalid();
+                }
+                endpoints.Add(parsed[0]); weights.Add(amount); total += amount;
             }
-            token.ThrowIfCancellationRequested();
-            return result.ToString();
+            if (strategy == DiscoveryStrategy.ServerAffinity && total == 0) throw Invalid();
+            return new DiscoveryGroup(endpoints, weights, strategy);
+        }
+
+        private static bool IsPolicy(string key, bool description) => Is(key, "OBLB") || Is(key, "LOAD_BALANCE") ||
+            Is(key, "OBLB_STRATEGY") || Is(key, "LOAD_BALANCE_STRATEGY") || (description && Is(key, "OBLB_GROUP_STRATEGY"));
+
+        private static DiscoveryStrategy Policy(List<Node> fields, DiscoveryStrategy inherited, bool description)
+        {
+            DiscoveryStrategy? strategy = null; var enabled = false;
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var field in fields)
+            {
+                if (!IsPolicy(field.Key, description)) continue;
+                var key = Is(field.Key, "LOAD_BALANCE") ? "OBLB" : Is(field.Key, "LOAD_BALANCE_STRATEGY") ? "OBLB_STRATEGY" : field.Key;
+                if (!seen.Add(key)) throw Invalid();
+                var value = Value(field);
+                if (Is(key, "OBLB"))
+                {
+                    if (!Is(value, "ON")) throw Unsupported();
+                    enabled = true;
+                }
+                else if (Is(key, "OBLB_GROUP_STRATEGY"))
+                {
+                    if (!Is(value, "ROTATION")) throw Unsupported();
+                }
+                else if (Is(value, "ROTATION")) strategy = DiscoveryStrategy.Rotation;
+                else if (Is(value, "RANDOM")) strategy = DiscoveryStrategy.Random;
+                else if (Is(value, "SERVERAFFINITY")) strategy = DiscoveryStrategy.ServerAffinity;
+                else throw Unsupported();
+            }
+            return strategy ?? (enabled ? DiscoveryStrategy.Random : inherited);
         }
 
         private static bool Is(string left, string right) => string.Equals(left, right, StringComparison.OrdinalIgnoreCase);

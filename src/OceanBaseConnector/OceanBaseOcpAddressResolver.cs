@@ -11,8 +11,9 @@ namespace OceanBaseConnector
 {
     /// <summary>Fetches a fresh OCP TCP address snapshot before each Open. The caller owns
     /// the concurrency-safe HttpClient, including its authentication, TLS and redirect policy.
-    /// Rich load policies are rejected rather than silently flattened.</summary>
-    public sealed class OceanBaseOcpAddressResolver : IOceanBaseAddressResolver
+    /// Groups and rotation, random and weighted selection are preserved for physical Opens;
+    /// unsupported policies are rejected.</summary>
+    public sealed class OceanBaseOcpAddressResolver : IOceanBaseAddressResolver, IDiscoveryAddressResolver
     {
         private const int MaximumBytes = 1024 * 1024;
         private readonly HttpClient _client;
@@ -36,7 +37,13 @@ namespace OceanBaseConnector
 
         public string Resolve(CancellationToken cancellationToken) => ResolveAsync(cancellationToken).GetAwaiter().GetResult();
 
-        public async Task<string> ResolveAsync(CancellationToken cancellationToken)
+        public async Task<string> ResolveAsync(CancellationToken cancellationToken) =>
+            (await ReadSnapshotAsync(cancellationToken).ConfigureAwait(false)).CanonicalAddresses;
+
+        DiscoverySnapshot IDiscoveryAddressResolver.ResolveSnapshot(CancellationToken token) => ReadSnapshotAsync(token).GetAwaiter().GetResult();
+        Task<DiscoverySnapshot> IDiscoveryAddressResolver.ResolveSnapshotAsync(CancellationToken token) => ReadSnapshotAsync(token);
+
+        private async Task<DiscoverySnapshot> ReadSnapshotAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var request = new HttpRequestMessage(HttpMethod.Get, _uri);
@@ -66,7 +73,7 @@ namespace OceanBaseConnector
                 if (body.Length > MaximumBytes) throw new FormatException("OCP response exceeds the 1 MiB limit.");
             }
             cancellationToken.ThrowIfCancellationRequested();
-            return OcpAddressParser.Parse(body.ToArray(), _name, _service, cancellationToken);
+            return OcpAddressParser.ParseSnapshot(body.ToArray(), _name, _service, cancellationToken);
         }
     }
 }

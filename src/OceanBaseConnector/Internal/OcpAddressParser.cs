@@ -10,6 +10,9 @@ namespace OceanBaseConnector.Internal
         private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
 
         internal static string Parse(byte[] bytes, string name, string? service, CancellationToken token)
+            => ParseSnapshot(bytes, name, service, token).CanonicalAddresses;
+
+        internal static DiscoverySnapshot ParseSnapshot(byte[] bytes, string name, string? service, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
             Node root;
@@ -24,33 +27,47 @@ namespace OceanBaseConnector.Internal
             if (envelope.TryGetValue("status", out var status) && (status.Type != "number" || status.Value != "200")) throw Invalid();
             var data = Object(Required(envelope, "data"), "NET_SERVICE_NAME", "DESCRIPTION");
             if (!string.Equals(String(Required(data, "NET_SERVICE_NAME")), name, StringComparison.Ordinal)) throw Invalid();
-            var description = Object(Required(data, "DESCRIPTION"), "ADDRESS_LIST", "CONNECT_DATA", "OBLB");
-            if (description.TryGetValue("OBLB", out var enabled) && !string.Equals(String(enabled), "ON", StringComparison.OrdinalIgnoreCase)) throw Unsupported();
+            var description = Object(Required(data, "DESCRIPTION"), "ADDRESS_LIST", "CONNECT_DATA", "OBLB", "LOAD_BALANCE", "OBLB_STRATEGY", "LOAD_BALANCE_STRATEGY", "OBLB_GROUP_STRATEGY");
             var groups = Array(Required(description, "ADDRESS_LIST"));
-            if (groups.Count != 1) throw Unsupported();
-            var group = Object(groups[0], "ADDRESS");
-            var addresses = Array(Required(group, "ADDRESS"));
-            if (addresses.Count == 0 || addresses.Count > 256) throw Invalid();
-            var tns = new StringBuilder("APP=(DESCRIPTION=(ADDRESS_LIST=");
-            foreach (var address in addresses)
+            if (groups.Count == 0 || groups.Count > 256) throw Invalid();
+            var tns = new StringBuilder("APP=(DESCRIPTION=");
+            AppendPolicies(tns, description);
+            foreach (var groupNode in groups)
             {
-                var fields = Object(address, "PROTOCOL", "HOST", "PORT");
-                tns.Append("(ADDRESS=(PROTOCOL=").Append(Quote(String(Required(fields, "PROTOCOL"))))
-                    .Append(")(HOST=").Append(Quote(String(Required(fields, "HOST")))).Append(")(PORT=");
-                var port = Required(fields, "PORT");
-                if (port.Type != "string" && port.Type != "number") throw Invalid();
-                if (port.Value.Length == 0) throw Invalid();
-                foreach (var digit in port.Value) if (digit < '0' || digit > '9') throw Invalid();
-                tns.Append(Quote(port.Value)).Append("))");
+                var group = Object(groupNode, "ADDRESS", "OBLB", "LOAD_BALANCE", "OBLB_STRATEGY", "LOAD_BALANCE_STRATEGY");
+                var addresses = Array(Required(group, "ADDRESS"));
+                if (addresses.Count == 0 || addresses.Count > 256) throw Invalid();
+                tns.Append("(ADDRESS_LIST="); AppendPolicies(tns, group);
+                foreach (var address in addresses)
+                {
+                    var fields = Object(address, "PROTOCOL", "HOST", "PORT", "WEIGHT");
+                    tns.Append("(ADDRESS=(PROTOCOL=").Append(Quote(String(Required(fields, "PROTOCOL"))))
+                        .Append(")(HOST=").Append(Quote(String(Required(fields, "HOST")))).Append(")(PORT=")
+                        .Append(Quote(Integer(Required(fields, "PORT")))).Append(')');
+                    if (fields.TryGetValue("WEIGHT", out var weight)) tns.Append("(WEIGHT=").Append(Quote(Integer(weight))).Append(')');
+                    tns.Append(')');
+                }
+                tns.Append(')');
             }
-            tns.Append(')');
             if (description.TryGetValue("CONNECT_DATA", out var connect))
             {
                 var fields = Object(connect, "SERVICE_NAME");
                 tns.Append("(CONNECT_DATA=(SERVICE_NAME=").Append(Quote(String(Required(fields, "SERVICE_NAME")))).Append("))");
             }
             tns.Append(')');
-            return TnsAddressParser.Parse(tns.ToString(), "APP", service, token);
+            return TnsAddressParser.ParseSnapshot(tns.ToString(), "APP", service, token);
+        }
+
+        private static void AppendPolicies(StringBuilder tns, Dictionary<string, Node> fields)
+        {
+            foreach (var key in new[] { "OBLB", "LOAD_BALANCE", "OBLB_STRATEGY", "LOAD_BALANCE_STRATEGY", "OBLB_GROUP_STRATEGY" })
+                if (fields.TryGetValue(key, out var value)) tns.Append('(').Append(key).Append('=').Append(Quote(String(value))).Append(')');
+        }
+        private static string Integer(Node node)
+        {
+            if ((node.Type != "string" && node.Type != "number") || node.Value.Length == 0) throw Invalid();
+            foreach (var digit in node.Value) if (digit < '0' || digit > '9') throw Invalid();
+            return node.Value;
         }
 
         private static Dictionary<string, Node> Object(Node node, params string[] allowed)

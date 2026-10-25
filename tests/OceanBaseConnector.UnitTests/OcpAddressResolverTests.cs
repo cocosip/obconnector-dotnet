@@ -174,10 +174,12 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("\"OBLB\":\"OFF\",")]
         [InlineData("\"UNKNOWN\":true,")]
         [InlineData("\"__type\":\"unsupported\",")]
-        public async Task ExplicitPoliciesAndUnknownDescriptorMembersCannotBeFlattened(string prefix)
+        public async Task SupportedPoliciesAndUnknownDescriptorMembersAreValidated(string prefix)
         {
             using var http = new OcpHttpFixture(OcpHttpFixture.Entry(2881).Replace("\"DESCRIPTION\":{", "\"DESCRIPTION\":{" + prefix));
-            await Assert.ThrowsAsync<NotSupportedException>(() => Create(http).ResolveAsync(CancellationToken.None));
+            if (prefix.StartsWith("\"OBLB_STRATEGY\":", StringComparison.Ordinal) || prefix.StartsWith("\"OBLB_GROUP_STRATEGY\":", StringComparison.Ordinal))
+                Assert.Equal("127.0.0.1:2881", await Create(http).ResolveAsync(CancellationToken.None));
+            else await Assert.ThrowsAsync<NotSupportedException>(() => Create(http).ResolveAsync(CancellationToken.None));
         }
 
         [Theory]
@@ -185,10 +187,14 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("\"ADDRESS\":[", "\"OBLB_STRATEGY\":\"ROTATION\",\"ADDRESS\":[")]
         [InlineData("\"PORT\":2881", "\"WEIGHT\":2,\"PORT\":2881")]
         [InlineData("\"PROTOCOL\":\"TCP\"", "\"PROTOCOL\":\"TCPS\"")]
-        public async Task MultipleGroupsAndAddressPoliciesCannotBeSilentlyIgnored(string find, string replace)
+        public async Task GroupShapesAndAddressPoliciesAreValidated(string find, string replace)
         {
             using var http = new OcpHttpFixture(OcpHttpFixture.Entry(2881).Replace(find, replace));
-            await Assert.ThrowsAsync<NotSupportedException>(() => Create(http).ResolveAsync(CancellationToken.None));
+            if (replace.Contains("OBLB_STRATEGY", StringComparison.Ordinal))
+                Assert.Equal("127.0.0.1:2881", await Create(http).ResolveAsync(CancellationToken.None));
+            else if (replace.Contains("{}", StringComparison.Ordinal))
+                await Assert.ThrowsAsync<FormatException>(() => Create(http).ResolveAsync(CancellationToken.None));
+            else await Assert.ThrowsAsync<NotSupportedException>(() => Create(http).ResolveAsync(CancellationToken.None));
         }
 
         [Fact]

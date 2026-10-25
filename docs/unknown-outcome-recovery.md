@@ -1,5 +1,8 @@
 # Unknown outcome 与应用核对
 
+内置TNS/OCP发现现保留组、策略与权重，仅在新建物理连接时选择候选；顺序跨本次TCP重试冻结，健康偏好不跨组。权重/组序变更不会主动重分配仍符合地址membership的idle会话，需Clear后重新建连。它不恢复旧事务或重放未知写入；发现失败仍不得回退旧快照。见[分组选择契约](obconnector-dotnet-architecture-design.md#discovery-group-selection)与[本次验证](obconnector-dotnet-completeness.md#1554-2026-10-26-发现分组策略与权重)。
+
+
 `OceanBaseException.IsExecutionOutcomeUnknown=true` 表示请求可能已经执行，客户端没有得到足够的最终确认。它不表示执行失败或已回滚。网络断开、超时、取消，以及 COMMIT/ROLLBACK 回包丢失都可能进入该状态；取消调用者的令牌也不能撤销已经完成的服务器操作。
 
 驱动不会自动重放这类 SQL。失败传输销毁、事务失效；连接池释放容量并允许新租约，不提供事务迁移。对旧事务再次 Commit/Rollback 会拒绝；Dispose 也不是补偿操作。显式本地事务与 ambient/XA 的恢复协议各自独立，下面只讨论普通本地事务。
