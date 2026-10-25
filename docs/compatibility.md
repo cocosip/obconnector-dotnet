@@ -1,5 +1,11 @@
 # Compatibility and known gaps
 
+## Persistent LOB and REF CURSOR pool isolation acceptance
+
+Same-endpoint single-capacity pool tests now cover twenty persistent BLOB/CLOB and eight Oracle output-cursor lifecycle cases, both locally and on the configured direct Oracle server. Active LOB handles discard the old physical session; fully disposed read-only LOBs allow reset/reuse. Stale reads, writes, truncation, binding and disposal preserve the new lease, and an independent unpooled observer verifies the stored value's exact text/bytes. REF cursor phases additionally retain conservative opaque-call session retirement; they do not prove reuse after cursor release. [Contract and limits](obconnector-dotnet-completeness.md#518-readerlob-与-ref-cursor-的剩余验收), [original failures and final evidence](obconnector-dotnet-completeness.md#1543-2026-10-25-持久-lob-与-ref-cursor-的同端点池隔离验收).
+
+This is acceptance of existing behavior, with no production change. Full units pass5198; scoped real Connections/XA/REF CURSOR/LOB pass115 with4configuration skips; no-opt-in Integration9pass/98NotExecuted. All twenty real persistent locators report inline=True: external LOB network reads/cancellation, full concurrency/load and complete reset matrices remain open. Real scope remains direct OceanBase4.4.2.2, Windows/.NET10, TLSdisabled; new resource cases are Oracle-only. Consumers, DI, packages, independent runtimes, OBProxy, enterprise trust and full database suites were not rerun. Original fixture failures and historical server failures remain recorded.
+
 ## Pooled reader CloseConnection ownership
 
 A completed reader's CloseConnection callback now checks the original logical Open lease, so it cannot close a later lease that reuses the same pooled physical session. Batch captures that lease with its reservation and guards the release-to-close window. Current-lease reader closure and public Close retain their behavior. [Contract](obconnector-dotnet-architecture-design.md#closeconnection-reader-ownership) and [original failures/final evidence](obconnector-dotnet-completeness.md#1541-2026-10-25-旧-reader-延迟关闭与池租约隔离).

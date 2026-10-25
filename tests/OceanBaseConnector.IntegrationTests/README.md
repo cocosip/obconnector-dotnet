@@ -65,6 +65,7 @@ Without a configuration file, `OB_REQUIRE_INTEGRATION=1` plus the four documente
 | ExpectedMode mismatch, TLS name, pooling, EnlistTransaction, unsupported auth plugin, autocommit-disabled rejection | `Connections/IdentityGateTests` |
 | Fresh implicit writes visible before/after Close, same-session prepared/generation reuse, explicit state discard, transaction rollback then next implicit commit, unread-reader and Oracle active temporary-LOB discard, optional ChangeDatabase reset (sync/async) | `Connections/PoolIsolationTests` |
 | Completed CloseConnection reader retained across same-physical-session pool reuse; old reader sync/async disposal preserves the new lease and real SQL | `Connections/PoolReaderLeaseTests` |
+| Same-endpoint single-slot persistent BLOB/CLOB handle/stream phases, safe reset/reuse after disposal, stale resource rejection and independent exact-content observer; Oracle REF CURSOR four phases under opaque-call retirement (sync/async) | `Connections/PoolResourceIsolationTests` |
 | Text vs prepared CRUD, MySQL client-side interpolation, command type/behavior gates, idle Cancel | `Commands` |
 | Full provider type round-trips (text + prepared) per mode, TINYINT/affected-rows option matrix; Oracle unknown-precision prepared bindings and real negative-scale table/CAST results | `Types` |
 | SequentialAccess streaming, cursor fetch paging (incl. Oracle offset), CloseConnection, column schema | `Readers` |
@@ -78,6 +79,8 @@ Without a configuration file, `OB_REQUIRE_INTEGRATION=1` plus the four documente
 | Known server error reuse, cancellation, CommandTimeout | `Faults` |
 | ActivitySource, meters, ILogger events | `Diagnostics` |
 | SQL under OB20 framing, full-link trace | `Ob20` (needs tagged profiles) |
+
+Resource acceptance currently records 28 new direct Oracle cases (twenty LOB, eight cursor), plus the related two-mode Connections/XA/REF CURSOR/LOB regression: 115 passed, 4 configuration skips. All twenty stored LOB locators were inline; these runs do not cover external locator network chunks/cancellation or other deployment profiles. No-opt-in results are 9 configuration passes and 98 NotExecuted. See the [exact acceptance evidence and retained fixture failures](../../docs/obconnector-dotnet-completeness.md#1543-2026-10-25-持久-lob-与-ref-cursor-的同端点池隔离验收).
 
 ## Isolation and cleanup
 
