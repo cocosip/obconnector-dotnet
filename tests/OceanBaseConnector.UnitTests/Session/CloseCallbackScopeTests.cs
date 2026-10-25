@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,7 +28,14 @@ namespace OceanBaseConnector.UnitTests.Session
             }
             else if (asynchronous) await scope.CompleteAsync();
             else scope.Complete();
-            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+            var collectionWindow = Stopwatch.StartNew();
+            do
+            {
+                // Task completion can resume this test before the cleanup producer's stack unwinds.
+                await Task.Delay(10);
+                GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+            }
+            while (resource.IsAlive && collectionWindow.Elapsed < TimeSpan.FromSeconds(5));
             Assert.False(resource.IsAlive, "A completed event context must not retain the old cleanup's resource graph.");
             GC.KeepAlive(scope); GC.KeepAlive(capturedContext);
         }

@@ -1,5 +1,44 @@
 # Compatibility and known gaps
 
+## 2026-10-26 P2-04 protocol frame diagnostics
+
+Developed from master/e0d1d30. DiagnosticListener OceanBaseConnector.Protocol reports metadata-only
+Frame/Error/Boundary dictionaries across MySQL, compression and OB20, including handshake and pool
+reuse. ChannelId is scoped to the listener instance. Read headers are observed before validation/body;
+write events mean next-stream acceptance, not delivery. No raw bytes, SQL, authentication, user/endpoint
+or exception objects/messages are emitted. Observer failures are isolated, Activity.Current restored,
+same-thread recursion suppressed; disabled events allocate no dictionary. See the
+[public contract](protocol-diagnostics.md) and [module evidence](obconnector-dotnet-completeness.md#1557-2026-10-26-协议帧诊断).
+
+首轮最终全量6122通过/1失败，失败为LOB夹具把30位小数的NUMBER声明成scale0；输出行解码提前拒绝，
+客户端销毁连接与server尾部EOF/OK写入竞态。原始失败及同产物4项调查通过均保留，后者不证明路径正确。
+新增精确错误断言得到3通过/1失败，确认原用例走命令初始化错误而非LOB amount校验；夹具按数值写入实际
+scale后，93项LOB/诊断相关回归通过。仅修正两处测试文件，不吞IO错误、不放宽产品数值校验。
+
+夹具修正后另一轮全量6122通过/1失败，为既有DriverDiagnostics off分配断言观测98352bytes；
+该Start调用不经过新协议诊断路径，相关产品/原测试未修改。同冻结产物下分配3项及完整诊断相关192项
+均通过，但不足以证明该次异常分配的根因或修复；原始报告保留，零分配断言不放宽，负载/分配调查仍开放。
+
+第三轮全量6122通过/1失败，为异步CloseCallbackScope立即GC的弱引用断言；同产物整类18项调查通过。
+源码机制允许Task完成内联恢复测试时，最外层清理生产者栈尚未退出；未采集GC root栈，不能把该解释
+当作已证明的具体根。测试改为5秒预算内让出执行并重复GC，保留最终弱引用断言及scope/context KeepAlive。
+临时故障注入保留清理字段，4项均在预算后失败；原产品源码逐字节恢复后89项相关回归通过。产品释放逻辑
+未改，故障注入不在交付源码中；该检查证明有界等待仍检出持续字段泄漏，不证明生产内存/负载预算。
+
+最终完整单测6123通过（新增67），相关五资产消费者341通过（新增170），均零失败/跳过；LOB/诊断专项93通过，scope/诊断相关89通过及三轮各4项scope通过。
+Release全解决方案0警告/错误（6.84秒）；11C#限定格式验证退出0，保留既有workspace加载警告。
+独立源码/契约/证据走查无未处理阻塞发现；最终单测期间76DLL及36源码/项目哈希不变；消费者341通过使用的26项provider/hostDLL哈希与最终产物相同。
+五资产消费者在同一.NET10host运行，不代表五个独立运行时；无新增实库、真实OBProxy/企业TLS、跨平台或生产负载验收。
+
+Initial6RED showed missing events. Review found externally closed read suppression and misclassified
+buffered continuation faults; actual4continuationRED and corrected4client-only cancellationRED retained.
+The first cancellation fixture accidentally accepted the server listener's Error; its original4pass
+remain with4continuationfail and are not counted as diagnostic proof. An additional2boundaryRED/65pass
+led to boundary-error observation without changing payload/close behavior. Local fixtures/consumers do
+not establish real database/OBProxy/TLS, independent runtime or production load acceptance. Other
+resource waits/performance and all23IDs/eightpackages remain open. Local master only, no push/release.
+
+
 ## 2026-10-26 P1-06 binary Oracle cursor columns
 
 Developed from master/75d3751. Binary prepared cursor columns now return OceanBaseRefCursor, retain

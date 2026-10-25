@@ -9,6 +9,7 @@ namespace OceanBaseConnector.Internal.Protocol
     {
         private PacketPayload? _activePayload;
         private bool _closed;
+        private int _readFailureReported;
 
         // One logical packet owns the channel until its last frame has been consumed.
         internal PacketPayload OpenPayload()
@@ -16,7 +17,7 @@ namespace OceanBaseConnector.Internal.Protocol
             EnsureIdle();
             var payload = _activePayload = new PacketPayload(this);
             try { payload.StartFrame(); return payload; }
-            catch { AbortPayload(); throw; }
+            catch (Exception error) { AbortPayload(error); throw; }
         }
 
         internal async Task<PacketPayload> OpenPayloadAsync(CancellationToken token = default)
@@ -25,7 +26,7 @@ namespace OceanBaseConnector.Internal.Protocol
             token.ThrowIfCancellationRequested();
             var payload = _activePayload = new PacketPayload(this);
             try { await payload.StartFrameAsync(token).ConfigureAwait(false); return payload; }
-            catch { AbortPayload(); throw; }
+            catch (Exception error) { AbortPayload(error); throw; }
         }
 
         private void EnsureIdle()
@@ -34,8 +35,9 @@ namespace OceanBaseConnector.Internal.Protocol
             if (_activePayload != null) throw new InvalidOperationException("The current packet payload must be consumed before reusing the channel.");
         }
 
-        private void AbortPayload()
+        private void AbortPayload(Exception? error = null)
         {
+            if (Interlocked.Exchange(ref _readFailureReported, 1) == 0) _diagnostics.Error("mysql", "read", error);
             // Preserve the framing/cancellation error if closing the failed transport also throws.
             try { Close(); }
             catch { }
@@ -92,14 +94,14 @@ namespace OceanBaseConnector.Internal.Protocol
 
             internal void StartFrame()
             {
-                _channel.ReadExactly(_channel._headerBuffer, 0, 4, "packet header");
-                TakeFrame();
+                try { _channel.ReadExactly(_channel._headerBuffer, 0, 4, "packet header"); TakeFrame(); }
+                catch (Exception error) { _channel.AbortPayload(error); throw; }
             }
 
             internal async Task StartFrameAsync(CancellationToken token)
             {
-                await _channel.ReadExactlyAsync(_channel._headerBuffer, 0, 4, token).ConfigureAwait(false);
-                TakeFrame();
+                try { await _channel.ReadExactlyAsync(_channel._headerBuffer, 0, 4, token).ConfigureAwait(false); TakeFrame(); }
+                catch (Exception error) { _channel.AbortPayload(error); throw; }
             }
 
             private void TakeFrame()
@@ -138,7 +140,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     CompleteIfConsumed();
                     return size;
                 }
-                catch { _channel.AbortPayload(); throw; }
+                catch (Exception error) { _channel.AbortPayload(error); throw; }
             }
 
             public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken token)
@@ -155,7 +157,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     CompleteIfConsumed();
                     return size;
                 }
-                catch { _channel.AbortPayload(); throw; }
+                catch (Exception error) { _channel.AbortPayload(error); throw; }
             }
 
             protected override void Dispose(bool disposing)

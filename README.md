@@ -1,5 +1,9 @@
 # OceanBaseConnector for .NET
 
+Observe [protocol frame diagnostics](docs/protocol-diagnostics.md) through the standard .NET
+DiagnosticListener named `OceanBaseConnector.Protocol`. Fixed frame/boundary/error metadata spans
+MySQL, compression and OB20; SQL, authentication, parameters and payloads are omitted.
+
 Read ordinary Oracle [binary cursor columns](docs/obconnector-dotnet-architecture-design.md#oracle-cursor-valued-columns)
 with `OceanBaseRefCursor`: prepare the query, obtain the value, consume all parent results, then open its
 single reader. Positive parent FetchSize is a hint without parent paging; cursor-column offset fetch is unsupported.
@@ -34,7 +38,7 @@ For the current source baseline, remaining implementation work and verification 
 
 Opt in to [slow client operation diagnostics](docs/obconnector-dotnet-architecture-design.md#slow-query-diagnostics) with `Slow Query Threshold=1000` (milliseconds; default 0 disables). Completed execute/REF CURSOR lifetimes report a safe Warning, counter and existing-span tag, including reader consumption time; SQL and values are omitted. This does not measure server-only SQL time or change timeout/retry behavior.
 
-The existing meter now reports [connection phase durations](docs/obconnector-dotnet-architecture-design.md#connection-phase-diagnostics) for credential acquisition, discovery, TCP, greeting, TLS, authentication, identity, pool waiting and probing. Samples use only fixed phase/outcome labels; optional phases are omitted and retries are measured separately. Protocol diagnostics, other resource waits and deployment performance acceptance remain open.
+The existing meter now reports [connection phase durations](docs/obconnector-dotnet-architecture-design.md#connection-phase-diagnostics) for credential acquisition, discovery, TCP, greeting, TLS, authentication, identity, pool waiting and probing. Samples use only fixed phase/outcome labels; optional phases are omitted and retries are measured separately. Protocol frame diagnostics follow the contract above; other resource waits and deployment performance acceptance remain open.
 
 Ordinary pools use [effective configuration identity](docs/obconnector-dotnet-architecture-design.md#ordinary-pool-configuration-identity): equivalent option order, typed spelling and explicit defaults share capacity and ClearPool identity. Credentials (including present empty PAM factors), exact text values, policy/certificate references and private data sources remain isolated; public ConnectionString serialization is unchanged. A pooled Open from a [Closed state callback](docs/obconnector-dotnet-architecture-design.md#pooled-close-callbacks) completes the captured old cleanup before borrowing, allowing capacity-one reuse without waiting on its own Close. Complete isolation, OBProxy and runtime acceptance remain open.
 

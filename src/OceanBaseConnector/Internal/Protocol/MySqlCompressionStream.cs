@@ -15,8 +15,11 @@ namespace OceanBaseConnector.Internal.Protocol
         private int _readPosition, _writeCount;
         private byte _sequence;
         private bool _disposed;
+        private readonly ProtocolDiagnostics _diagnostics;
+        private int _failureReported;
 
-        internal MySqlCompressionStream(Stream inner) => _inner = inner;
+        internal MySqlCompressionStream(Stream inner, ProtocolDiagnostics? diagnostics = null)
+        { _inner = inner; _diagnostics = diagnostics ?? new ProtocolDiagnostics(); }
 
         internal void BeginCommand() { CompleteResponse(); _sequence = 0; }
         internal void CompleteResponse()
@@ -43,7 +46,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 }
                 return CopyRead(buffer, offset, count);
             }
-            catch { Poison(); throw; }
+            catch (Exception error) { Poison(error, "read"); throw; }
         }
 
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
@@ -61,11 +64,12 @@ namespace OceanBaseConnector.Internal.Protocol
                 }
                 return CopyRead(buffer, offset, count);
             }
-            catch { Poison(); throw; }
+            catch (Exception error) { Poison(error, "read"); throw; }
         }
 
         private byte[] TakeHeader(out int originalLength)
         {
+            _diagnostics.Frame("compressed", "read", LengthAt(0), _header[3], _sequence, LengthAt(4));
             if (_header[3] != _sequence++) throw new ProtocolException("Compressed packet sequence mismatch.");
             var length = LengthAt(0); originalLength = LengthAt(4);
             if (length == 0) throw new ProtocolException("Empty compressed block.");
@@ -92,7 +96,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     if (_writeCount == _writeBuffer.Length) WriteBlock();
                 }
             }
-            catch { Poison(); throw; }
+            catch (Exception error) { Poison(error, "write"); throw; }
         }
 
         public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
@@ -107,7 +111,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     if (_writeCount == _writeBuffer.Length) await WriteBlockAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
-            catch { Poison(); throw; }
+            catch (Exception error) { Poison(error, "write"); throw; }
         }
 
         private int CopyWrite(byte[] buffer, int offset, int count)
@@ -128,19 +132,21 @@ namespace OceanBaseConnector.Internal.Protocol
         private void WriteBlock()
         {
             var body = PrepareBlock(); _inner.Write(_header, 0, 7); _inner.Write(body.Array!, body.Offset, body.Count); _writeCount = 0;
+            _diagnostics.Frame("compressed", "write", body.Count, _header[3], _header[3], LengthAt(4));
         }
         private async Task WriteBlockAsync(CancellationToken token)
         {
             var body = PrepareBlock();
             await _inner.WriteAsync(_header, 0, 7, token).ConfigureAwait(false);
             await _inner.WriteAsync(body.Array!, body.Offset, body.Count, token).ConfigureAwait(false); _writeCount = 0;
+            _diagnostics.Frame("compressed", "write", body.Count, _header[3], _header[3], LengthAt(4));
         }
 
         public override void Flush()
         {
             EnsureAvailable();
             try { if (_writeCount != 0) WriteBlock(); _inner.Flush(); }
-            catch { Poison(); throw; }
+            catch (Exception error) { Poison(error, "write"); throw; }
         }
         public override async Task FlushAsync(CancellationToken cancellationToken)
         {
@@ -151,7 +157,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (_writeCount != 0) await WriteBlockAsync(cancellationToken).ConfigureAwait(false);
                 await _inner.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
-            catch { Poison(); throw; }
+            catch (Exception error) { Poison(error, "write"); throw; }
         }
         private void ReadExactly(byte[] bytes, int count)
         {
@@ -174,7 +180,11 @@ namespace OceanBaseConnector.Internal.Protocol
             }
         }
         private void EnsureAvailable() { if (_disposed) throw new ObjectDisposedException(nameof(MySqlCompressionStream)); }
-        private void Poison() { try { Dispose(); } catch { } }
+        private void Poison(Exception? error = null, string direction = "boundary")
+        {
+            if (Interlocked.Exchange(ref _failureReported, 1) == 0) _diagnostics.Error("compressed", direction, error);
+            try { Dispose(); } catch { }
+        }
         protected override void Dispose(bool disposing)
         {
             if (disposing && !_disposed)

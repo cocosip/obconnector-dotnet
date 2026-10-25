@@ -31,8 +31,10 @@ namespace OceanBaseConnector.Internal.Protocol
         private bool _pending;
         private bool _closed;
 
-        public Ob20Stream(Stream inner, uint connectionId, Ob20TraceContext? trace = null)
-        { _inner = inner ?? throw new ArgumentNullException(nameof(inner)); _connectionId = connectionId; _trace = trace; }
+        private readonly ProtocolDiagnostics _diagnostics;
+        private int _failureReported;
+        public Ob20Stream(Stream inner, uint connectionId, Ob20TraceContext? trace = null, ProtocolDiagnostics? diagnostics = null)
+        { _inner = inner ?? throw new ArgumentNullException(nameof(inner)); _connectionId = connectionId; _trace = trace; _diagnostics = diagnostics ?? new ProtocolDiagnostics(); }
 
         internal bool FullLinkTraceEnabled => _trace != null;
 
@@ -56,13 +58,13 @@ namespace OceanBaseConnector.Internal.Protocol
         public void FinishRequest()
         {
             try { EnsureWriting(); WriteFrame(true); _writing = false; }
-            catch { Abort(); throw; }
+            catch (Exception error) { Abort(error, "write"); throw; }
         }
 
         public async Task FinishRequestAsync(CancellationToken token)
         {
             try { EnsureWriting(); token.ThrowIfCancellationRequested(); await WriteFrameAsync(true, token).ConfigureAwait(false); _writing = false; }
-            catch { Abort(); throw; }
+            catch (Exception error) { Abort(error, "write"); throw; }
         }
 
         public void CompleteResponse(bool expectsResponse = true)
@@ -76,7 +78,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 _pending = false;
                 _trace?.CompleteRequest();
             }
-            catch { Abort(); throw; }
+            catch (Exception error) { Abort(error, "boundary"); throw; }
         }
 
         public override void Write(byte[] buffer, int offset, int count)
@@ -92,7 +94,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     _writeCount += size; offset += size; count -= size;
                 }
             }
-            catch { Abort(); throw; }
+            catch (Exception error) { Abort(error, "write"); throw; }
         }
 
         public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken token)
@@ -109,7 +111,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     _writeCount += size; offset += size; count -= size;
                 }
             }
-            catch { Abort(); throw; }
+            catch (Exception error) { Abort(error, "write"); throw; }
         }
 
         private void PrepareWriteFrame(bool last)
@@ -125,6 +127,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             PrepareWriteFrame(last);
             _inner.Write(_header, 0, _header.Length); _inner.Write(_writeBuffer, 0, _writeCount); _inner.Write(_scratch, 0, 4);
+            _diagnostics.Ob20Frame("write", _header, _header[18]);
             _writeCount = 0; _writeExtra = false;
         }
 
@@ -134,6 +137,7 @@ namespace OceanBaseConnector.Internal.Protocol
             await _inner.WriteAsync(_header, 0, _header.Length, token).ConfigureAwait(false);
             await _inner.WriteAsync(_writeBuffer, 0, _writeCount, token).ConfigureAwait(false);
             await _inner.WriteAsync(_scratch, 0, 4, token).ConfigureAwait(false); _writeCount = 0; _writeExtra = false;
+            _diagnostics.Ob20Frame("write", _header, _header[18]);
         }
 
         public override int Read(byte[] buffer, int offset, int count)
@@ -148,7 +152,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (_remaining == 0) ReadTail();
                 return size;
             }
-            catch { Abort(); throw; }
+            catch (Exception error) { Abort(error, "read"); throw; }
         }
 
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken token)
@@ -163,7 +167,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (_remaining == 0) await ReadTailAsync(token).ConfigureAwait(false);
                 return size;
             }
-            catch { Abort(); throw; }
+            catch (Exception error) { Abort(error, "read"); throw; }
         }
 
         private void BeforeReadFrame()
@@ -174,6 +178,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private bool TakeHeader()
         {
+            _diagnostics.Ob20Frame("read", _header, _sequence);
             var header = Ob20Packet.ParseHeader(_header, _connectionId, _requestId, _sequence);
             if ((header.Flags & ~11u) != 0) throw new ProtocolException("Unsupported OB20 response flags, including proxy reroute.");
             _sequence = (byte)((_sequence + 1) & 255);
@@ -272,7 +277,11 @@ namespace OceanBaseConnector.Internal.Protocol
         }
         private void EnsureOpen() { if (_closed) throw new ObjectDisposedException(nameof(Ob20Stream)); }
         private void EnsureWriting() { EnsureOpen(); if (!_writing) throw new InvalidOperationException("No OB20 request is being written."); }
-        private void Abort() { try { Dispose(); } catch { } }
+        private void Abort(Exception? error = null, string direction = "boundary")
+        {
+            if (Interlocked.Exchange(ref _failureReported, 1) == 0) _diagnostics.Error("ob20", direction, error);
+            try { Dispose(); } catch { }
+        }
         protected override void Dispose(bool disposing)
         { if (disposing && !_closed) { _closed = true; _inner.Dispose(); } base.Dispose(disposing); }
         public override bool CanRead => !_closed && _inner.CanRead;

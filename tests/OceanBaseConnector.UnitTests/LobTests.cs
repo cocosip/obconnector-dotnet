@@ -36,10 +36,14 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false, false)] [InlineData(true, false, false)]
-        [InlineData(false, true, false)] [InlineData(true, true, false)]
-        [InlineData(false, false, true)] [InlineData(true, false, true)]
-        [InlineData(false, true, true)] [InlineData(true, true, true)]
+        [InlineData(false, false, false)]
+        [InlineData(true, false, false)]
+        [InlineData(false, true, false)]
+        [InlineData(true, true, false)]
+        [InlineData(false, false, true)]
+        [InlineData(true, false, true)]
+        [InlineData(false, true, true)]
+        [InlineData(true, true, true)]
         public async Task LobInlineReaderReturnsBoundHandleAndStreamsWithoutLocatorBytes(bool async, bool character, bool sequential)
         {
             var data = Encoding.UTF8.GetBytes("患者😀abc");
@@ -79,7 +83,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task LobExternalReadUsesBoundedReadCallsWithByteOrScalarOffsets(bool async, bool character)
         {
             var text = string.Concat(Enumerable.Repeat("患者😀a", 9000)); var data = character ? Encoding.UTF8.GetBytes(text) : Enumerable.Range(0, 80000).Select(i => (byte)i).ToArray();
@@ -137,7 +144,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task UnreleasedLobDiscardsPooledSession(bool async)
         {
             var oldServer = Server(async channel =>
@@ -178,6 +186,8 @@ namespace OceanBaseConnector.UnitTests
             for (var i = 0; i < 4; i++) await channel.WritePacketAsync(Column("p" + i, 253));
             await channel.WritePacketAsync(Eof());
             var amountColumn = Column("amount", number == null ? (byte)8 : (byte)246); amountColumn[amountColumn.Length - 2] = precision;
+            var decimalPoint = number?.IndexOf('.') ?? -1;
+            if (decimalPoint >= 0) amountColumn[amountColumn.Length - 3] = checked((byte)(number!.Length - decimalPoint - 1));
             await channel.WritePacketAsync(amountColumn);
             await channel.WritePacketAsync(Column("buffer", character ? (byte)253 : (byte)203, character ? (ushort)45 : (ushort)63));
             await channel.WritePacketAsync(Eof());

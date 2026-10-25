@@ -11,7 +11,9 @@ namespace OceanBaseConnector.UnitTests
     public sealed partial class TextCommandTests
     {
         [Theory]
-        [InlineData("line")] [InlineData("end")] [InlineData("block")]
+        [InlineData("line")]
+        [InlineData("end")]
+        [InlineData("block")]
         public async Task LobTextAsyncEntrypointsCancelTheActualNetworkRead(string operation)
         {
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -38,7 +40,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("4", 9, true)] [InlineData("4", 38, true)]
+        [InlineData("4", 9, true)]
+        [InlineData("4", 38, true)]
         [InlineData("4.000000000000000000000000000001", 38, false)]
         [InlineData("99999999999999999999999999999999999999", 38, false)]
         public async Task LobReadAcceptsExactNumberAmountsWithoutRounding(string amount, byte precision, bool valid)
@@ -55,14 +58,15 @@ namespace OceanBaseConnector.UnitTests
                 await connection.OpenAsync(); using var command = connection.CreateCommand(); command.CommandText = "select lob_value";
                 using var lob = (OceanBaseLob)(await command.ExecuteScalarAsync())!; using var source = lob.OpenRead(); var bytes = new byte[8];
                 if (valid) { Assert.Equal(4, await source.ReadAsync(bytes, 0, bytes.Length)); Assert.Equal(new byte[] { 1, 2, 3, 4 }, bytes.AsSpan(0, 4).ToArray()); }
-                else { await Assert.ThrowsAsync<OceanBaseException>(() => source.ReadAsync(bytes, 0, bytes.Length)); Assert.Equal(ConnectionState.Broken, connection.State); }
+                else { var error = await Assert.ThrowsAsync<OceanBaseException>(() => source.ReadAsync(bytes, 0, bytes.Length)); Assert.Equal("The LOB read returned an invalid chunk or amount.", error.Message); Assert.Equal(ConnectionState.Broken, connection.State); }
             }
             finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task LobChunkTimeoutUsesOriginalCommandBudgetWithoutUnknownExecution(bool async)
         {
             var server = Server(async channel =>
@@ -83,7 +87,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task LobCachedAndExhaustedReadsCheckCancellationAndConnectionLifetime(bool character)
         {
             var server = Server(async channel =>
@@ -116,7 +121,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task LobContextExpiresAfterOriginalOrLaterTransaction(bool insideTransaction)
         {
             var server = Server(async channel =>
@@ -146,7 +152,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task LobReservationBlocksOtherCommandsAndHandleDisposalReleasesIt(bool character)
         {
             var server = Server(async channel =>
@@ -170,7 +177,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("zero")] [InlineData("oversize")] [InlineData("wrong-amount")] [InlineData("wrong-buffer")]
+        [InlineData("zero")]
+        [InlineData("oversize")]
+        [InlineData("wrong-amount")]
+        [InlineData("wrong-buffer")]
         public async Task LobMalformedChunkCannotEscapeOrLeaveAUsableSession(string fault)
         {
             var server = Server(async channel =>
@@ -192,7 +202,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task LobInFlightCancellationDoesNotReclassifyOriginalSql(bool dispose)
         {
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

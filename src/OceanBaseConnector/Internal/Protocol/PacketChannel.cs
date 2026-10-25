@@ -31,6 +31,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private Ob20Stream? _ob20;
         private MySqlCompressionStream? _compression;
         private ActivityContext _traceContext;
+        private readonly ProtocolDiagnostics _diagnostics = new ProtocolDiagnostics();
 
         public PacketChannel(Stream stream, long maxPacketSize = DefaultMaxPacketSize)
         {
@@ -56,14 +57,14 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             EnsureIdle();
             if (_compression != null || _ob20 != null) throw new InvalidOperationException("A framed transport is already enabled.");
-            _stream = _compression = new MySqlCompressionStream(_stream);
+            _stream = _compression = new MySqlCompressionStream(_stream, _diagnostics);
         }
 
         internal void EnableOb20(uint connectionId, bool fullLinkTrace = false, bool modernExtra = false)
         {
             EnsureIdle();
             if (_ob20 != null || _compression != null) throw new InvalidOperationException("A framed transport is already enabled.");
-            _stream = _ob20 = new Ob20Stream(_stream, connectionId, fullLinkTrace ? new Ob20TraceContext(modernExtra) : null);
+            _stream = _ob20 = new Ob20Stream(_stream, connectionId, fullLinkTrace ? new Ob20TraceContext(modernExtra) : null, _diagnostics);
         }
 
         internal bool FullLinkTraceEnabled => _ob20?.FullLinkTraceEnabled == true;
@@ -72,7 +73,14 @@ namespace OceanBaseConnector.Internal.Protocol
         { _ob20?.BeginRequest(_traceContext); _traceContext = default; }
 
         internal void CompleteResponse(bool expectsResponse = true)
-        { EnsureIdle(); _ob20?.CompleteResponse(expectsResponse); _compression?.CompleteResponse(); }
+        {
+            try
+            {
+                EnsureIdle(); _ob20?.CompleteResponse(expectsResponse); _compression?.CompleteResponse();
+                _diagnostics.Boundary("complete");
+            }
+            catch (Exception error) { _diagnostics.Error("mysql", "boundary", error); throw; }
+        }
 
         internal void ValidateReceivedResponseBoundary()
         {
@@ -107,6 +115,7 @@ namespace OceanBaseConnector.Internal.Protocol
             EnsureIdle();
             _compression?.BeginCommand();
             _sequence = 0;
+            _diagnostics.Boundary("begin");
         }
 
         public byte[] ReadPacket()
@@ -220,6 +229,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 ((uint)_headerBuffer[1] << 8) |
                 ((uint)_headerBuffer[2] << 16));
             var sequenceId = _headerBuffer[3];
+            _diagnostics.Frame("mysql", "read", frameLength, sequenceId, (byte)_sequence);
 
             // MySQL may renumber inner packets when compressed buffers flush; the outer stream validates ordering.
             if (_compression == null && sequenceId != (byte)_sequence)
@@ -259,21 +269,31 @@ namespace OceanBaseConnector.Internal.Protocol
         private void WriteFrame(byte[] payload, int offset, int count)
         {
             PrepareHeader(count);
-            _stream.Write(_headerBuffer, 0, 4);
-            if (count > 0)
+            try
             {
-                _stream.Write(payload, offset, count);
+                _stream.Write(_headerBuffer, 0, 4);
+                if (count > 0)
+                {
+                    _stream.Write(payload, offset, count);
+                }
+                _diagnostics.Frame("mysql", "write", count, _headerBuffer[3], _headerBuffer[3]);
             }
+            catch (Exception error) { _diagnostics.Error("mysql", "write", error); throw; }
         }
 
         private async Task WriteFrameAsync(byte[] payload, int offset, int count, CancellationToken cancellationToken)
         {
             PrepareHeader(count);
-            await _stream.WriteAsync(_headerBuffer, 0, 4, cancellationToken).ConfigureAwait(false);
-            if (count > 0)
+            try
             {
-                await _stream.WriteAsync(payload, offset, count, cancellationToken).ConfigureAwait(false);
+                await _stream.WriteAsync(_headerBuffer, 0, 4, cancellationToken).ConfigureAwait(false);
+                if (count > 0)
+                {
+                    await _stream.WriteAsync(payload, offset, count, cancellationToken).ConfigureAwait(false);
+                }
+                _diagnostics.Frame("mysql", "write", count, _headerBuffer[3], _headerBuffer[3]);
             }
+            catch (Exception error) { _diagnostics.Error("mysql", "write", error); throw; }
         }
 
         private void PrepareHeader(int count)

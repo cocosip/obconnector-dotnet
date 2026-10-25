@@ -514,6 +514,23 @@ Use builder `UseLoggerFactory(...)` or the connection's `ILoggerFactory` constru
 
 `ActivitySource` and `Meter` are named `OceanBaseConnector`. Metrics are `oceanbase.client.operations` and `oceanbase.client.operation.duration` (seconds). Tags identify operation, mode, outcome and unknown outcome; readers complete their execution span when consumption finishes or fails. Local diagnostics do not require server full-link tracing.
 
+<a id="protocol-diagnostics"></a>
+### Protocol diagnostics
+
+DiagnosticListener `OceanBaseConnector.Protocol` exposes Frame/Error/Boundary events with read-only
+scalar dictionaries. A local ChannelId links inner MySQL and compressed/OB20 wrappers within a listener
+instance, spanning handshake, commands, pool reset/probe and streaming. No logical-connection logger
+identity is retained by pooled channels. Read Frame means header observation before validation/body;
+write Frame means acceptance by the next stream, not flush/server receipt or successful SQL. Caught
+faults preserve the layer's original classification even after external Close or buffered continuation
+failure. Boundary rejects remain errors and preserve the existing transport behavior.
+
+No SQL, payload/authentication/extra-info bytes, endpoint, username or exception object/message is
+emitted. Disabled events allocate no dictionary; observers are synchronous, exception-isolated and
+Activity.Current is restored. Same-thread diagnostic recursion is suppressed. Follow the complete
+[subscription, field and callback contract](protocol-diagnostics.md), including creation failures and
+per-listener identity. Other resource waits and real deployment/performance gates remain open.
+
 <a id="slow-query-diagnostics"></a>
 ### Slow client operation diagnostics
 
@@ -527,7 +544,7 @@ Three independent channels report the result:
 - Meter counter `oceanbase.client.slow.operations`, unit `{operation}`, incremented by one with exactly the existing `db.operation.name`, `oceanbase.compatibility_mode`, `oceanbase.outcome` and `oceanbase.execution_outcome_unknown` labels. No endpoint or threshold is a metric label.
 - `oceanbase.slow=true` on an existing sampled activity, when one exists; no extra span is created and fast/disabled spans gain no slow tag.
 
-Outcomes are success/error/canceled/timeout with the existing unknown-outcome classification. SQL, parameter values, usernames, credentials and exception text are omitted. Correlate through application tracing; the feature does not compute or log a SQL fingerprint. Listener/logger callbacks run synchronously, must return promptly and cannot change an operation's result; failures are isolated and Activity.Current is restored for each new reporting channel. No SQL is retried or canceled by profiling. Existing CommandCompleted/CommandFailed logs and operation metrics remain available. Protocol diagnostics, other resource waits, performance limits and deployment acceptance remain separate P2-04 work.
+Outcomes are success/error/canceled/timeout with the existing unknown-outcome classification. SQL, parameter values, usernames, credentials and exception text are omitted. Correlate through application tracing; the feature does not compute or log a SQL fingerprint. Listener/logger callbacks run synchronously, must return promptly and cannot change an operation's result; failures are isolated and Activity.Current is restored for each new reporting channel. No SQL is retried or canceled by profiling. Existing CommandCompleted/CommandFailed logs and operation metrics remain available. Protocol diagnostics follow their separate contract above; other resource waits, performance limits and deployment acceptance remain open P2-04 work.
 
 <a id="connection-phase-diagnostics"></a>
 ### Connection phase durations
@@ -550,7 +567,7 @@ Static credentials and configured addresses omit their optional acquisition/disc
 
 Outcomes are `success`, `error`, `canceled` and `timeout`. `elapsed` specifically means a finite pool wait returned without a signal; credential expiry or a later wait may still determine the final Open result. A phase interrupted through a linked connection-budget token can report `canceled` while the enclosing Open maps it to `timeout`; the Open operation remains authoritative for the logical result. No phase metric implies that SQL can be retried or that an active session recovered.
 
-Labels contain no endpoint, username, credential version, SQL, authentication bytes or exception text. Disabled phase instruments create no phase stopwatch object. Listener callbacks execute synchronously and must return promptly; exceptions are isolated and `Activity.Current` is restored. No new configuration switch, Activity span or dependency is required. These local diagnostics do not establish real TLS/OBProxy interoperability or performance limits; slow client profiling has its separate contract above, while protocol diagnostics and other resource waits remain open P2-04 work.
+Labels contain no endpoint, username, credential version, SQL, authentication bytes or exception text. Disabled phase instruments create no phase stopwatch object. Listener callbacks execute synchronously and must return promptly; exceptions are isolated and `Activity.Current` is restored. No new configuration switch, Activity span or dependency is required. These local diagnostics do not establish real TLS/OBProxy interoperability or performance limits; slow client profiling has its separate contract above, while protocol diagnostics follow their separate contract above and other resource waits remain open P2-04 work.
 
 ## MySQL compression
 
