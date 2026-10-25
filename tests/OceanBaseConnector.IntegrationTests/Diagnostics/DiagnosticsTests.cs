@@ -14,6 +14,35 @@ namespace OceanBaseConnector.IntegrationTests.Diagnostics;
 
 public sealed class DiagnosticsTests
 {
+    [IntegrationTheory]
+    [MemberData(nameof(ConnectionPhaseRows))]
+    public async Task SlowQueryProfileIncludesActualReaderConsumption(string profileName, bool asynchronous)
+    {
+        var samples = new ConcurrentQueue<(long Value, string? Unit, KeyValuePair<string, object?>[] Tags)>();
+        using var meter = new MeterListener();
+        meter.InstrumentPublished = (instrument, owner) =>
+        {
+            if (instrument.Meter.Name == "OceanBaseConnector" && instrument.Name == "oceanbase.client.slow.operations") owner.EnableMeasurementEvents(instrument);
+        };
+        meter.SetMeasurementEventCallback<long>((instrument, value, tags, _) => samples.Enqueue((value, instrument.Unit, tags.ToArray()))); meter.Start();
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        var builder = db.Profile.CreateBuilder(); builder.Pooling = false; builder.SlowQueryThreshold = 1;
+        using var factory = new RecordingLoggerFactory();
+        await using var connection = new OceanBaseConnection(builder.ConnectionString, factory);
+        if (asynchronous) await connection.OpenAsync(); else connection.Open();
+        await using var command = connection.CreateCommand(); command.CommandText = db.SelectOne;
+        await using var reader = asynchronous ? await command.ExecuteReaderAsync() : command.ExecuteReader();
+        Assert.Empty(samples); await Task.Delay(30);
+        Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read()); DatabaseContext.EqualNumber(reader.GetValue(0), 1, "The profiled reader returns actual data.");
+        Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+        var sample = Assert.Single(samples); Assert.Equal(1, sample.Value); Assert.Equal("{operation}", sample.Unit);
+        Assert.Equal(4, sample.Tags.Length);
+        Assert.Contains(sample.Tags, tag => tag.Key == "db.operation.name" && Equals(tag.Value, "execute"));
+        Assert.Contains(sample.Tags, tag => tag.Key == "oceanbase.outcome" && Equals(tag.Value, "success"));
+        Assert.Contains(sample.Tags, tag => tag.Key == "oceanbase.compatibility_mode" && Equals(tag.Value, db.Profile.Mode == OceanBaseCompatibilityMode.Oracle ? "oracle" : "mysql"));
+        Assert.Single(factory.Records, record => record.Id.Id == 1102 && record.Category == "OceanBaseConnector.Command" && record.Level == LogLevel.Warning);
+    }
+
     public static TheoryData<string, bool> ConnectionPhaseRows()
     {
         var data = new TheoryData<string, bool>();
@@ -102,7 +131,7 @@ public sealed class DiagnosticsTests
 
     private sealed class RecordingLoggerFactory : ILoggerFactory
     {
-        public ConcurrentQueue<(string Category, LogLevel Level)> Records { get; } = new();
+        public ConcurrentQueue<(string Category, LogLevel Level, EventId Id)> Records { get; } = new();
 
         public ILogger CreateLogger(string categoryName) => new RecordingLogger(categoryName, Records);
 
@@ -110,7 +139,7 @@ public sealed class DiagnosticsTests
 
         public void Dispose() { }
 
-        private sealed class RecordingLogger(string category, ConcurrentQueue<(string, LogLevel)> records) : ILogger
+        private sealed class RecordingLogger(string category, ConcurrentQueue<(string, LogLevel, EventId)> records) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -118,7 +147,7 @@ public sealed class DiagnosticsTests
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
                 Func<TState, Exception?, string> formatter)
-                => records.Enqueue((category, logLevel));
+                => records.Enqueue((category, logLevel, eventId));
         }
     }
 }

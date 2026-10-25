@@ -1,5 +1,9 @@
 # Compatibility and known gaps
 
+## Slow client operation diagnostics
+
+[Slow Query Threshold](obconnector-dotnet-architecture-design.md#slow-query-diagnostics) is an opt-in millisecond client-lifetime threshold, default zero. It covers named execute/cursor.fetch exchanges through reader completion, includes consumption time, preserves errors/unknown outcomes and emits no SQL/values. It provides independent Warning/counter/existing-span channels. Server-only profiling, protocol diagnostics, load limits and the complete deployment/runtime matrix are not implied.
+
 ## Connection phase diagnostics
 
 The [phase-duration histogram](obconnector-dotnet-architecture-design.md#connection-phase-diagnostics) measures actual acquisition/discovery, transport/handshake and pool wait/probe attempts without adding high-cardinality or sensitive labels. It preserves existing operation telemetry. A phase interrupted by a linked timeout token may report `canceled` while the enclosing Open reports `timeout`; an unsignaled finite pool wait reports `elapsed`. The full P2-04 diagnostics scope, deployment performance limits and independent-runtime acceptance remain open.

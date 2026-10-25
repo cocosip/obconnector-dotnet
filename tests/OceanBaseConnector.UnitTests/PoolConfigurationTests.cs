@@ -21,6 +21,7 @@ namespace OceanBaseConnector.UnitTests
             yield return new object[] { "Database", "other" };
             yield return new object[] { "Connection Timeout", "7" };
             yield return new object[] { "Command Timeout", "7" };
+            yield return new object[] { "Slow Query Threshold", "7" };
             yield return new object[] { "TLS Mode", "Required" };
             yield return new object[] { "TLS Server Name", "other.invalid" };
             yield return new object[] { "Check Certificate Revocation", "true" };

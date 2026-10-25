@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -31,6 +32,20 @@ namespace OceanBaseConnector.Internal
             Write(error == null ? 1100 : 1101, error == null ? "CommandCompleted" : "CommandFailed", endpoint, mode, elapsed, error, _commandLogger);
         internal void TransactionFinished(string operation, string endpoint, OceanBaseCompatibilityMode mode, long elapsed, Exception? error) =>
             Write(error == null ? 1200 : 1201, "Transaction" + operation + (error == null ? "Completed" : "Failed"), endpoint, mode, elapsed, error, _transactionLogger);
+
+        internal void SlowCommand(string operation, string endpoint, OceanBaseCompatibilityMode mode, double elapsed, int threshold, Exception? error)
+        {
+            var previous = Activity.Current;
+            try
+            {
+                if (!_commandLogger.IsEnabled(LogLevel.Warning)) return;
+                _commandLogger.Log(LogLevel.Warning, new EventId(1102, "SlowCommand"),
+                    "SlowCommand Operation={Operation} Endpoint={Endpoint} Mode={Mode} ElapsedMilliseconds={ElapsedMilliseconds} ThresholdMilliseconds={ThresholdMilliseconds} Outcome={Outcome} OutcomeUnknown={OutcomeUnknown}",
+                    operation, endpoint, mode, elapsed, threshold, DriverDiagnostics.Outcome(error), (error as OceanBaseException)?.IsExecutionOutcomeUnknown ?? false);
+            }
+            catch { }
+            finally { try { Activity.Current = previous; } catch { } }
+        }
 
         private void Write(int id, string name, string endpoint, OceanBaseCompatibilityMode? mode, long elapsed, Exception? error, ILogger? logger = null)
         {

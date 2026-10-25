@@ -39,10 +39,11 @@ namespace OceanBaseConnector.Internal.Session
         private int _finished;
         private int _packets;
         private DriverDiagnostics.Operation? _diagnostics;
+        private string? _diagnosticOperation;
         private ActivityContext _traceContext;
         internal void SetTraceContext(ActivityContext context) => _traceContext = context;
         internal void StartDiagnostics(string operation)
-        { _diagnostics = DriverDiagnostics.Start(operation); _traceContext = _diagnostics?.Context ?? default; }
+        { _diagnosticOperation = operation; _diagnostics = DriverDiagnostics.Start(operation); _traceContext = _diagnostics?.Context ?? default; }
 
         internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release, bool logCommand = true, object? owner = null, Func<CancellationToken>? cancellationOrigin = null, Func<string, Stream?>? localInfileStreamFactory = null)
         {
@@ -376,6 +377,9 @@ namespace OceanBaseConnector.Internal.Session
         private void Finish(Exception? error)
         {
             if (Interlocked.Exchange(ref _finished, 1) != 0) return;
+            var elapsed = _elapsed.Elapsed.TotalMilliseconds;
+            var threshold = _session.SlowQueryThresholdMilliseconds;
+            var slow = threshold > 0 && elapsed >= threshold && (_diagnosticOperation == "execute" || _diagnosticOperation == "cursor.fetch");
             foreach (var id in _statementCloses) _session.QueueStatementClose(id);
             _statementCloses = Array.Empty<uint>();
             _registration.Dispose();
@@ -386,7 +390,12 @@ namespace OceanBaseConnector.Internal.Session
 #if NET8_0_OR_GREATER
             if (error != null) BatchFailed?.Invoke();
 #endif
-            _diagnostics?.Finish(_session.Info!.Mode, error);
+            _diagnostics?.Finish(_session.Info!.Mode, error, slow);
+            if (slow)
+            {
+                DriverDiagnostics.SlowOperation(_diagnosticOperation!, _session.Info!.Mode, error);
+                _log.SlowCommand(_diagnosticOperation!, _session.Endpoint, _session.Info!.Mode, elapsed, threshold, error);
+            }
             if (_logCommand) _log.CommandFinished(_session.Endpoint, _session.Info!.Mode, _elapsed.ElapsedMilliseconds, error);
         }
 

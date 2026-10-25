@@ -23,7 +23,7 @@ namespace OceanBaseConnector.UnitTests
         public Task RefCursorOutputStreamsPagesAndKeepsParentUntilReleased(bool async, bool deprecated, bool sequential)
             => ReadRefCursorPagesAndRelease(async, deprecated, sequential);
 
-        internal static async Task ReadRefCursorPagesAndRelease(bool async, bool deprecated, bool sequential)
+        internal static async Task ReadRefCursorPagesAndRelease(bool async, bool deprecated, bool sequential, int slowThreshold = 0)
         {
             var server = Server(async channel =>
             {
@@ -54,7 +54,7 @@ namespace OceanBaseConnector.UnitTests
                 }
                 channel.BeginCommand(); await Query(channel, "after", deprecated); await channel.WritePacketAsync(Ok(1));
             }, deprecated, serverVersion: "4.3.5.0");
-            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true;Slow Query Threshold=" + slowThreshold);
             try
             {
                 await connection.OpenAsync();
@@ -70,6 +70,7 @@ namespace OceanBaseConnector.UnitTests
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cursor.GetDataReaderAsync(cancellationToken: canceled.Token));
                 using var reader = async ? await cursor.GetDataReaderAsync(2, sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default)
                     : cursor.GetDataReader(2, sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default);
+                if (slowThreshold > 0) await Task.Delay(30);
                 Assert.Equal("n", reader.GetName(0)); Assert.Equal(typeof(long), reader.GetFieldType(0));
                 for (var i = 1L; i <= 3; i++) { Assert.True(async ? await reader.ReadAsync() : reader.Read()); Assert.Equal(i, reader.GetInt64(0)); }
                 Assert.False(async ? await reader.ReadAsync() : reader.Read()); Assert.False(reader.NextResult());

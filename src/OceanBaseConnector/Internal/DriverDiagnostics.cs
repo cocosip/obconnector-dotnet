@@ -19,6 +19,7 @@ namespace OceanBaseConnector.Internal
         private static readonly Counter<long>? PoolResetFailures = Create(() => Meter?.CreateCounter<long>("oceanbase.client.pool.reset.failures", "{failure}"));
         private static readonly Histogram<double>? PoolWait = Create(() => Meter?.CreateHistogram<double>("oceanbase.client.pool.wait.duration", "s"));
         private static readonly Histogram<double>? ConnectionPhaseDuration = Create(() => Meter?.CreateHistogram<double>("oceanbase.client.connection.phase.duration", "s"));
+        private static readonly Counter<long>? SlowOperations = Create(() => Meter?.CreateCounter<long>("oceanbase.client.slow.operations", "{operation}"));
 
         private static T? Create<T>(Func<T?> create) where T : class
         {
@@ -67,6 +68,28 @@ namespace OceanBaseConnector.Internal
             finally { Restore(previous); }
         }
 
+        internal static string Outcome(Exception? error)
+        {
+            var cause = (error as OceanBaseException)?.InnerException ?? error;
+            return cause is OperationCanceledException ? "canceled" : cause is TimeoutException ? "timeout" : error == null ? "success" : "error";
+        }
+
+        private static TagList OperationTags(string operation, OceanBaseCompatibilityMode? mode, Exception? error) => new TagList
+        {
+            { "db.operation.name", operation },
+            { "oceanbase.compatibility_mode", mode == OceanBaseCompatibilityMode.Oracle ? "oracle" : mode == OceanBaseCompatibilityMode.MySql ? "mysql" : "unknown" },
+            { "oceanbase.outcome", Outcome(error) },
+            { "oceanbase.execution_outcome_unknown", (error as OceanBaseException)?.IsExecutionOutcomeUnknown ?? false }
+        };
+
+        internal static void SlowOperation(string operation, OceanBaseCompatibilityMode mode, Exception? error)
+        {
+            var previous = Activity.Current;
+            try { SlowOperations?.Add(1, OperationTags(operation, mode, error)); }
+            catch { }
+            finally { Restore(previous); }
+        }
+
         internal static Operation? Start(string operation)
         {
             if (Source?.HasListeners() != true && Operations?.Enabled != true && Duration?.Enabled != true) return null;
@@ -106,19 +129,10 @@ namespace OceanBaseConnector.Internal
             private int _finished;
             internal Operation(string name, Activity? activity) { _name = name; _activity = activity; }
             internal ActivityContext Context => _activity?.Context ?? default;
-            internal void Finish(OceanBaseCompatibilityMode? mode, Exception? error)
+            internal void Finish(OceanBaseCompatibilityMode? mode, Exception? error, bool slow = false)
             {
                 if (Interlocked.Exchange(ref _finished, 1) != 0) return;
-                var databaseError = error as OceanBaseException;
-                var cause = databaseError?.InnerException ?? error;
-                var outcome = cause is OperationCanceledException ? "canceled" : cause is TimeoutException ? "timeout" : error == null ? "success" : "error";
-                var tags = new TagList
-                {
-                    { "db.operation.name", _name },
-                    { "oceanbase.compatibility_mode", mode == OceanBaseCompatibilityMode.Oracle ? "oracle" : mode == OceanBaseCompatibilityMode.MySql ? "mysql" : "unknown" },
-                    { "oceanbase.outcome", outcome },
-                    { "oceanbase.execution_outcome_unknown", databaseError?.IsExecutionOutcomeUnknown ?? false }
-                };
+                var tags = OperationTags(_name, mode, error);
                 var elapsed = (Stopwatch.GetTimestamp() - _started) / (double)Stopwatch.Frequency;
                 // Listener callbacks are application code; each channel must survive the others failing.
                 var previous = Activity.Current;
@@ -128,6 +142,7 @@ namespace OceanBaseConnector.Internal
                     {
                         _activity.SetTag("db.system.name", "oceanbase");
                         foreach (var tag in tags) _activity.SetTag(tag.Key, tag.Value);
+                        if (slow) _activity.SetTag("oceanbase.slow", true);
                         _activity.SetStatus(error == null ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
                         _activity.Stop();
                     }

@@ -160,8 +160,17 @@ namespace OceanBaseConnector.UnitTests
                 if (completion == "release") { first.Close(); await pending; }
                 else if (completion == "cancel") { second.Close(); await Assert.ThrowsAnyAsync<Exception>(() => pending); }
                 else await Assert.ThrowsAsync<TimeoutException>(() => pending);
-                Assert.Equal(completion == "release" ? new[] { "pool.wait", "pool.probe" } : new[] { "pool.wait" }, capture.Phases);
-                Assert.Equal(completion == "release" ? "success" : completion == "elapsed" ? "elapsed" : "canceled", capture.Samples.First().Outcome);
+                if (completion == "elapsed")
+                {
+                    // Finite semaphore waits can finish before the overall rent budget; every attempt is measured.
+                    Assert.NotEmpty(capture.Samples);
+                    Assert.All(capture.Samples, sample => Assert.Equal(("pool.wait", "elapsed"), sample));
+                }
+                else
+                {
+                    Assert.Equal(completion == "release" ? new[] { "pool.wait", "pool.probe" } : new[] { "pool.wait" }, capture.Phases);
+                    Assert.Equal(completion == "release" ? "success" : "canceled", capture.Samples.First().Outcome);
+                }
                 Assert.Equal(1, server.Accepted);
                 first.Close(); second.Close(); await Open(second, asynchronous); Assert.Equal(1, server.Accepted);
             }

@@ -38,9 +38,20 @@ namespace OceanBaseConnector.ConsumerTests
         [InlineData("net8.0", "phase")]
         [InlineData("net9.0", "phase")]
         [InlineData("net10.0", "phase")]
+        [InlineData("netstandard2.0", "slow")]
+        [InlineData("netstandard2.1", "slow")]
+        [InlineData("net8.0", "slow")]
+        [InlineData("net9.0", "slow")]
+        [InlineData("net10.0", "slow")]
+        [InlineData("netstandard2.0", "slow.throw")]
+        [InlineData("netstandard2.1", "slow.throw")]
+        [InlineData("net8.0", "slow.throw")]
+        [InlineData("net9.0", "slow.throw")]
+        [InlineData("net10.0", "slow.throw")]
         public async Task EveryAssetPublishesSafeDiagnosticsWithoutInitializationPoisoning(string target, string failure)
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var profile = failure.StartsWith("slow", StringComparison.Ordinal);
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
@@ -50,11 +61,13 @@ namespace OceanBaseConnector.ConsumerTests
                 await channel.WritePacketAsync(greeting, budget.Token); await channel.ReadPacketAsync(budget.Token); await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token);
                 await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, token: budget.Token);
                 channel.BeginCommand(); var sql = await channel.ReadPacketAsync(budget.Token); Assert.Equal(3, sql[0]);
+                if (profile) await Task.Delay(30, budget.Token);
                 await channel.WritePacketAsync(SessionTimeZoneFixture.Report, budget.Token);
             });
             var context = new AssemblyLoadContext("diagnostics-" + target, true);
             var armed = false; var spans = new List<Activity>(); var counts = new List<KeyValuePair<string, object?>[]>();
             var phases = new List<(double Value, string? Unit, KeyValuePair<string, object?>[] Tags)>();
+            var slow = new List<(long Value, string? Unit, KeyValuePair<string, object?>[] Tags)>();
             using var activities = new ActivityListener
             {
                 ShouldListenTo = source => armed && source.Name == "OceanBaseConnector" ? failure == "source" ? throw new InvalidOperationException("listener initialization") : true : false,
@@ -70,7 +83,13 @@ namespace OceanBaseConnector.ConsumerTests
                 if (failure == "instrument") throw new InvalidOperationException("instrument initialization");
                 owner.EnableMeasurementEvents(instrument);
             };
-            metrics.SetMeasurementEventCallback<long>((_, _, tags, _) => counts.Add(tags.ToArray()));
+            metrics.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
+            {
+                if (instrument.Name == "oceanbase.client.operations") counts.Add(tags.ToArray());
+                if (instrument.Name != "oceanbase.client.slow.operations") return;
+                slow.Add((value, instrument.Unit, tags.ToArray()));
+                if (failure == "slow.throw") throw new InvalidOperationException("private-slow-listener-token");
+            });
             metrics.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
             {
                 if (instrument.Name != "oceanbase.client.connection.phase.duration") return;
@@ -81,14 +100,25 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
                 using var connection = (DbConnection)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!)!;
-                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;Password=secret;TLS Mode=Disabled";
+                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;Password=secret;TLS Mode=Disabled;Slow Query Threshold={(profile ? 1 : 0)}";
                 await connection.OpenAsync(budget.Token); using var command = connection.CreateCommand(); command.CommandText = "secret sql";
                 Assert.Equal(0, await command.ExecuteNonQueryAsync(budget.Token));
-                if (failure == "normal" || failure == "phase")
+                if (failure == "normal" || failure == "phase" || profile)
                 {
                     Assert.Equal(new[] { "oceanbase.open", "oceanbase.execute" }, spans.Select(x => x.OperationName)); Assert.Equal(2, counts.Count);
                     Assert.All(counts, tags => { Assert.Equal(4, tags.Length); Assert.Contains(tags, tag => tag.Key == "oceanbase.compatibility_mode" && Equals(tag.Value, "oracle")); Assert.DoesNotContain("secret", string.Join(";", tags)); });
                     Assert.All(spans, span => { Assert.Equal(ActivityStatusCode.Ok, span.Status); Assert.Equal("0.1.0.0", span.Source.Version); });
+                    var execute = Assert.Single(spans, x => x.OperationName == "oceanbase.execute");
+                    Assert.Equal(profile ? true : null, execute.GetTagItem("oceanbase.slow"));
+                    Assert.Equal(profile ? 1 : 0, slow.Count);
+                    if (profile)
+                    {
+                        var sample = Assert.Single(slow); Assert.Equal(1, sample.Value); Assert.Equal("{operation}", sample.Unit);
+                        Assert.Equal(4, sample.Tags.Length);
+                        Assert.Contains(sample.Tags, x => x.Key == "db.operation.name" && Equals(x.Value, "execute"));
+                        Assert.Contains(sample.Tags, x => x.Key == "oceanbase.outcome" && Equals(x.Value, "success"));
+                        Assert.DoesNotContain("secret", string.Join(";", sample.Tags));
+                    }
                     Assert.Equal(new[] { "tcp", "greeting", "authentication", "identity" }, phases.Select(sample => sample.Tags.Single(tag => tag.Key == "oceanbase.connection.phase").Value));
                     Assert.All(phases, sample =>
                     {

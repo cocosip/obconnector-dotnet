@@ -11,7 +11,7 @@ namespace OceanBaseConnector
     /// <summary>
     /// Parses and serializes OceanBase connection strings. Canonical keys are
     /// <c>Server</c>, <c>Port</c>, <c>User ID</c>, <c>Password</c>,
-    /// <c>Database</c>, <c>Connection Timeout</c>, <c>Command Timeout</c>,
+    /// <c>Database</c>, <c>Connection Timeout</c>, <c>Command Timeout</c>, <c>Slow Query Threshold</c>,
     /// <c>TLS Mode</c>, <c>TLS Server Name</c>, <c>Persist Security Info</c>,
     /// <c>ExpectedMode</c>, <c>Pooling</c>, pool sizing/lifetime options,
     /// <c>Server RSA Public Key</c> and
@@ -31,6 +31,7 @@ namespace OceanBaseConnector
         public const string DatabaseKey = "Database";
         public const string ConnectionTimeoutKey = "Connection Timeout";
         public const string CommandTimeoutKey = "Command Timeout";
+        public const string SlowQueryThresholdKey = "Slow Query Threshold";
         public const string TlsModeKey = "TLS Mode";
         public const string TlsServerNameKey = "TLS Server Name";
         public const string CheckCertificateRevocationKey = "Check Certificate Revocation";
@@ -129,6 +130,13 @@ namespace OceanBaseConnector
         {
             get => GetInt32(ConnectionTimeoutKey) ?? DefaultConnectionTimeoutSeconds;
             set => this[ConnectionTimeoutKey] = value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>Slow execute/cursor lifetime threshold in milliseconds; zero disables reporting.</summary>
+        public int SlowQueryThreshold
+        {
+            get => GetInt32(SlowQueryThresholdKey) ?? 0;
+            set => this[SlowQueryThresholdKey] = value.ToString(CultureInfo.InvariantCulture);
         }
 
         public int CommandTimeout
@@ -432,7 +440,7 @@ namespace OceanBaseConnector
                 TreatTinyAsBoolean,
                 UseAffectedRows,
                 UseCompression,
-                statementCacheSize: StatementCacheSize);
+                statementCacheSize: StatementCacheSize, slowQueryThresholdMilliseconds: SlowQueryThreshold);
         }
 
         // Serialization order for fixed keys; additional PAM passwords are secrets.
@@ -445,6 +453,7 @@ namespace OceanBaseConnector
             DatabaseKey,
             ConnectionTimeoutKey,
             CommandTimeoutKey,
+            SlowQueryThresholdKey,
             TlsModeKey,
             TlsServerNameKey,
             CheckCertificateRevocationKey,
@@ -511,6 +520,7 @@ namespace OceanBaseConnector
                 [DatabaseKey] = Database,
                 [ConnectionTimeoutKey] = ConnectionTimeout,
                 [CommandTimeoutKey] = CommandTimeout,
+                [SlowQueryThresholdKey] = SlowQueryThreshold,
                 [TlsModeKey] = TlsMode.ToString(),
                 [CheckCertificateRevocationKey] = CheckCertificateRevocation,
                 [PersistSecurityInfoKey] = PersistSecurityInfo,
@@ -610,6 +620,7 @@ namespace OceanBaseConnector
 
                 case ConnectionTimeoutKey:
                 case CommandTimeoutKey:
+                case SlowQueryThresholdKey:
                 case MinPoolSizeKey:
                 case MaxPoolSizeKey:
                 case PoolWaitTimeoutKey:
@@ -775,6 +786,9 @@ namespace OceanBaseConnector
                     return true;
                 case "CONNECTION TIMEOUT":
                     canonical = ConnectionTimeoutKey;
+                    return true;
+                case "SLOW QUERY THRESHOLD":
+                    canonical = SlowQueryThresholdKey;
                     return true;
                 case "COMMAND TIMEOUT":
                     canonical = CommandTimeoutKey;

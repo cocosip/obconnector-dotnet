@@ -47,6 +47,7 @@ namespace OceanBaseConnector.Internal.Session
         private DateTime _lastReturnedUtc;
         internal bool UseOraclePrepareExecute => _options.UseOraclePrepareExecute;
         internal bool TreatTinyAsBoolean => _options.TreatTinyAsBoolean;
+        internal int SlowQueryThresholdMilliseconds => _options.SlowQueryThresholdMilliseconds;
         internal bool IsCredentialExpired => _options.Credential?.IsExpired == true;
         internal bool UseLobLocators => _options.UseLobLocators && Info?.Mode == OceanBaseCompatibilityMode.Oracle &&
             (Info.Capabilities.Effective & CapabilityFlags.ClientSupportLobLocator) != 0;
