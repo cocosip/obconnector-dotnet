@@ -21,12 +21,27 @@ public sealed class StandalonePrepareTests
     [IntegrationTheory]
     [MemberData(nameof(Profiles))]
     public async Task PreparationDefersExecutionAndSupportsOutputs(string profileName, bool asynchronous, string shape)
+        => await PreparationDefersExecutionAndSupportsOutputsCore(profileName, asynchronous, shape);
+
+    public static IEnumerable<object[]> FetchHintProfiles()
+    {
+        foreach (var data in Profiles())
+            foreach (var prepared in new[] { false, true })
+                yield return new object[] { data[0], data[1], data[2], prepared };
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(FetchHintProfiles))]
+    public async Task PositiveFetchHintSupportsImplicitAndPreparedOutputs(string profileName, bool asynchronous, string shape, bool prepared)
+        => await PreparationDefersExecutionAndSupportsOutputsCore(profileName, asynchronous, shape, prepared, fetchSize: 2);
+
+    private static async Task PreparationDefersExecutionAndSupportsOutputsCore(string profileName, bool asynchronous, string shape, bool prepared = true, int fetchSize = 0)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
         var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY", CancellationToken.None);
         var sql = shape == "returning" ? "INSERT INTO " + table + " VALUES (:input) RETURNING id INTO :result"
-            : shape == "cursor" ? "BEGIN OPEN :result FOR SELECT :input AS value FROM DUAL; END;"
+            : shape == "cursor" ? "BEGIN OPEN :result FOR SELECT :input AS value FROM DUAL" + (fetchSize > 0 ? " UNION ALL SELECT 8 FROM DUAL UNION ALL SELECT 9 FROM DUAL ORDER BY value" : "") + "; END;"
             : "BEGIN INSERT INTO " + table + " VALUES (:input); :result := 42; END;";
         if (shape == "procedure")
         {
@@ -48,12 +63,13 @@ public sealed class StandalonePrepareTests
         OceanBaseRefCursor? cursor = null;
         await using (var command = db.Command(connection, sql))
         {
+            command.FetchSize = fetchSize;
             if (shape is "procedure" or "function") command.CommandType = CommandType.StoredProcedure;
             var input = DatabaseContext.Parameter(command, "input", "not encoded during Prepare", DbType.Int32);
             var output = DatabaseContext.Parameter(command, "result", -1, shape == "cursor" ? null : DbType.Int32);
             output.Direction = shape == "function" ? ParameterDirection.ReturnValue : ParameterDirection.Output;
             if (shape == "cursor") output.OceanBaseDbType = OceanBaseDbType.RefCursor;
-            for (var i = 0; i < 2; i++)
+            for (var i = 0; prepared && i < 2; i++)
             {
                 if (asynchronous) await command.PrepareAsync(); else command.Prepare();
                 Assert.Equal(-1, output.Value);
@@ -61,6 +77,7 @@ public sealed class StandalonePrepareTests
             }
             input.Value = shape == "returning" ? 42 : 7;
             if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+            Assert.Equal(fetchSize, command.FetchSize);
             if (shape == "cursor") cursor = Assert.IsType<OceanBaseRefCursor>(output.Value);
             else DatabaseContext.EqualNumber(output.Value, 42, "Prepared execution output mismatch.");
         }
@@ -69,8 +86,11 @@ public sealed class StandalonePrepareTests
             using (cursor)
             await using (var reader = asynchronous ? await cursor.GetDataReaderAsync(1) : cursor.GetDataReader(1))
             {
-                Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
-                DatabaseContext.EqualNumber(reader.GetValue(0), 7, "Prepared REF CURSOR must outlive command disposal.");
+                for (var row = 7; row <= (fetchSize > 0 ? 9 : 7); row++)
+                {
+                    Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                    DatabaseContext.EqualNumber(reader.GetValue(0), row, "REF CURSOR must retain its own page size after command disposal.");
+                }
                 Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
             }
         }

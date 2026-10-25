@@ -23,12 +23,25 @@ namespace OceanBaseConnector.UnitTests
         public Task RefCursorOutputStreamsPagesAndKeepsParentUntilReleased(bool async, bool deprecated, bool sequential)
             => ReadRefCursorPagesAndRelease(async, deprecated, sequential);
 
-        internal static async Task ReadRefCursorPagesAndRelease(bool async, bool deprecated, bool sequential, int slowThreshold = 0)
+        [Theory]
+        [InlineData(false, false, false)]
+        [InlineData(true, false, false)]
+        [InlineData(false, true, false)]
+        [InlineData(true, true, false)]
+        [InlineData(false, false, true)]
+        [InlineData(true, false, true)]
+        [InlineData(false, true, true)]
+        [InlineData(true, true, true)]
+        public Task RefCursorPositiveCommandFetchHintKeepsIndependentPageSize(bool async, bool deprecated, bool sequential)
+            => ReadRefCursorPagesAndRelease(async, deprecated, sequential, commandFetchSize: 1);
+
+        internal static async Task ReadRefCursorPagesAndRelease(bool async, bool deprecated, bool sequential, int slowThreshold = 0, int commandFetchSize = 0)
         {
             var server = Server(async channel =>
             {
 
-                await StatementCommand(channel, 0xa1, deprecated);
+                var execute = await StatementCommand(channel, 0xa1, deprecated);
+                Assert.Equal(0, execute[5]);
                 await channel.WritePacketAsync(OracleExecuteHeader(1, 1, 4));
                 await channel.WritePacketAsync(Column("c", 163));
                 if (!deprecated) await channel.WritePacketAsync(Eof());
@@ -58,7 +71,8 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await connection.OpenAsync();
-                var command = connection.CreateCommand(); command.CommandType = CommandType.StoredProcedure; command.CommandText = "pkg.open_cursor";
+                var command = (OceanBaseCommand)connection.CreateCommand(); command.CommandType = CommandType.StoredProcedure; command.CommandText = "pkg.open_cursor";
+                command.FetchSize = commandFetchSize;
                 var parameter = new OceanBaseParameter { ParameterName = "c", Direction = ParameterDirection.Output, OceanBaseDbType = OceanBaseDbType.RefCursor };
                 command.Parameters.Add(parameter);
                 Assert.Equal(0, async ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());

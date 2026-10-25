@@ -36,6 +36,11 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingOverTls(string target, bool async, string kind)
             => EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingCore(target, async, kind, encrypted: true);
 
+        [Theory]
+        [MemberData(nameof(OracleAssets))]
+        public Task EveryAssetAcceptsOracleOutputFetchHintWithoutRequestingFetch(string target, bool async, string kind)
+            => EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingCore(target, async, kind, encrypted: false, fetchSize: 1);
+
         public static IEnumerable<object[]> OracleBatchAssets() => OracleAssets().Where(value => !((string)value[0]).StartsWith("netstandard", StringComparison.Ordinal));
 
         [Theory]
@@ -48,7 +53,7 @@ namespace OceanBaseConnector.ConsumerTests
         public Task ModernAssetsPublishBatchOutputsOnlyAfterValidatedCompletionOverTls(string target, bool async, string kind)
             => EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingCore(target, async, kind, encrypted: true, batchExecution: true);
 
-        private static async Task EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingCore(string target, bool async, string kind, bool encrypted, bool batchExecution = false)
+        private static async Task EveryAssetExecutesOracleOutputsAndValidatesOb20BeforePublishingCore(string target, bool async, string kind, bool encrypted, bool batchExecution = false, int fetchSize = 0)
         {
             using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -84,6 +89,7 @@ namespace OceanBaseConnector.ConsumerTests
                 connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode={(encrypted ? "Required" : "Disabled")};Use Oracle Prepare Execute=true;Use OB20={ob20}";
                 if (async) await connection.OpenAsync(budget.Token); else connection.Open();
                 var command = connection.CreateCommand(); command.CommandText = "pkg.proc"; command.CommandType = CommandType.StoredProcedure;
+                command.GetType().GetProperty("FetchSize")!.SetValue(command, fetchSize);
                 var input = command.CreateParameter(); input.ParameterName = "input"; input.Value = 7L; command.Parameters.Add(input);
                 var output = command.CreateParameter(); output.ParameterName = "output"; output.Value = "old"; output.Direction = ParameterDirection.Output; command.Parameters.Add(output);
                 using var batch = batchExecution ? connection.CreateBatch() : null;

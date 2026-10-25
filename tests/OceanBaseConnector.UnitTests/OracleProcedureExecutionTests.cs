@@ -197,6 +197,9 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, 3U, true)]
         [InlineData(true, 3U, true)]
         public async Task OracleReturningIntoUsesBinaryBindingsAndPublishesZeroRowsAsNull(bool async, uint flags, bool empty)
+            => await OracleReturningIntoUsesBinaryBindingsAndPublishesZeroRowsAsNullCore(async, flags, empty);
+
+        private static async Task OracleReturningIntoUsesBinaryBindingsAndPublishesZeroRowsAsNullCore(bool async, uint flags, bool empty, int fetchSize = 0)
         {
             const string sql = "update t set x=? returning x into ?";
             var inout = flags == 3 && !empty;
@@ -213,7 +216,7 @@ namespace OceanBaseConnector.UnitTests
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
-                await connection.OpenAsync(); var command = connection.CreateCommand(); command.CommandText = "update t set x=:input returning x into :output";
+                await connection.OpenAsync(); var command = (OceanBaseCommand)connection.CreateCommand(); command.FetchSize = fetchSize; command.CommandText = "update t set x=:input returning x into :output";
                 command.Parameters.Add(new OceanBaseParameter { ParameterName = "input", Value = 7L });
                 var output = new OceanBaseParameter { ParameterName = "output", Direction = inout ? ParameterDirection.InputOutput : ParameterDirection.Output, Value = inout ? (object)8L : "old" };
                 command.Parameters.Add(output);
@@ -231,6 +234,9 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, true)]
         [InlineData(true, true)]
         public async Task OracleOutputWaitsForAllResultsAndEarlyClosePreservesOldValue(bool async, bool earlyClose)
+            => await OracleOutputWaitsForAllResultsAndEarlyClosePreservesOldValueCore(async, earlyClose);
+
+        private static async Task OracleOutputWaitsForAllResultsAndEarlyClosePreservesOldValueCore(bool async, bool earlyClose, int fetchSize = 0)
         {
             var server = Server(async channel =>
             {
@@ -245,7 +251,7 @@ namespace OceanBaseConnector.UnitTests
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
-                await connection.OpenAsync(); var command = connection.CreateCommand(); command.CommandType = CommandType.StoredProcedure; command.CommandText = "p";
+                await connection.OpenAsync(); var command = (OceanBaseCommand)connection.CreateCommand(); command.FetchSize = fetchSize; command.CommandType = CommandType.StoredProcedure; command.CommandText = "p";
                 command.Parameters.Add(new OceanBaseParameter { ParameterName = "input", Value = 7L });
                 var output = new OceanBaseParameter { ParameterName = "output", Direction = ParameterDirection.Output, Value = "old" }; command.Parameters.Add(output);
                 using var reader = async ? await command.ExecuteReaderAsync() : command.ExecuteReader();
@@ -272,6 +278,9 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, true)]
         [InlineData(true, true)]
         public async Task OracleOutputErrorsNeverPublishAndKnownErrorsAllowSessionReuse(bool async, bool laterError)
+            => await OracleOutputErrorsNeverPublishAndKnownErrorsAllowSessionReuseCore(async, laterError);
+
+        private static async Task OracleOutputErrorsNeverPublishAndKnownErrorsAllowSessionReuseCore(bool async, bool laterError, int fetchSize = 0)
         {
             var server = Server(async channel =>
             {
@@ -284,7 +293,7 @@ namespace OceanBaseConnector.UnitTests
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
-                await connection.OpenAsync(); var command = connection.CreateCommand(); command.CommandType = CommandType.StoredProcedure; command.CommandText = "p";
+                await connection.OpenAsync(); var command = (OceanBaseCommand)connection.CreateCommand(); command.FetchSize = fetchSize; command.CommandType = CommandType.StoredProcedure; command.CommandText = "p";
                 command.Parameters.Add(new OceanBaseParameter { ParameterName = "input", Value = 7L });
                 var output = new OceanBaseParameter { ParameterName = "output", Direction = ParameterDirection.InputOutput, Value = 8L }; command.Parameters.Add(output);
                 var error = await Assert.ThrowsAsync<OceanBaseException>(async () => { if (async) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery(); });
@@ -390,6 +399,9 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, true, true)]
         [InlineData(true, true, true)]
         public async Task OpeningIdentityAndOutputCancellationNeverPublishOrReplay(bool async, bool versionProbe, bool timeout)
+            => await OpeningIdentityAndOutputCancellationNeverPublishOrReplayCore(async, versionProbe, timeout);
+
+        private static async Task OpeningIdentityAndOutputCancellationNeverPublishOrReplayCore(bool async, bool versionProbe, bool timeout, int fetchSize = 0)
         {
             var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var server = versionProbe ? IdentityProbeServer(async channel =>
@@ -404,7 +416,7 @@ namespace OceanBaseConnector.UnitTests
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true" + (versionProbe && timeout ? ";Connection Timeout=1" : ""));
             try
             {
-                if (!versionProbe) await connection.OpenAsync(); using var command = connection.CreateCommand(); command.CommandType = CommandType.StoredProcedure; command.CommandText = "p";
+                if (!versionProbe) await connection.OpenAsync(); using var command = (OceanBaseCommand)connection.CreateCommand(); command.FetchSize = fetchSize; command.CommandType = CommandType.StoredProcedure; command.CommandText = "p";
                 command.CommandTimeout = timeout ? 1 : 5;
                 command.Parameters.Add(new OceanBaseParameter { ParameterName = "in", Value = 7L });
                 var output = new OceanBaseParameter { ParameterName = "out", Direction = ParameterDirection.Output, Value = "old" }; command.Parameters.Add(output);
@@ -484,6 +496,9 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false)]
         [InlineData(true)]
         public async Task OracleProcedureWithoutParametersUsesPrepareExecuteAndClosesItsId(bool async)
+            => await OracleProcedureWithoutParametersUsesPrepareExecuteAndClosesItsIdCore(async);
+
+        private static async Task OracleProcedureWithoutParametersUsesPrepareExecuteAndClosesItsIdCore(bool async, int fetchSize = 0)
         {
             var server = Server(async channel =>
             {
@@ -495,7 +510,7 @@ namespace OceanBaseConnector.UnitTests
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
             try
             {
-                await connection.OpenAsync(); var command = connection.CreateCommand(); command.CommandText = "p"; command.CommandType = CommandType.StoredProcedure;
+                await connection.OpenAsync(); var command = (OceanBaseCommand)connection.CreateCommand(); command.FetchSize = fetchSize; command.CommandText = "p"; command.CommandType = CommandType.StoredProcedure;
                 Assert.Equal(3, async ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
                 if (async) await command.DisposeAsync(); else command.Dispose();
             }
@@ -515,8 +530,8 @@ namespace OceanBaseConnector.UnitTests
                 await connection.OpenAsync(); using var command = (OceanBaseCommand)connection.CreateCommand(); command.CommandText = "p"; command.CommandType = CommandType.StoredProcedure;
                 command.CommandType = CommandType.TableDirect;
                 await Assert.ThrowsAsync<NotSupportedException>(async () => { if (async) await command.PrepareAsync(); else command.Prepare(); });
-                command.CommandType = CommandType.StoredProcedure; command.FetchSize = 1;
-                await Assert.ThrowsAsync<NotSupportedException>(async () => { if (async) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery(); }); command.FetchSize = 0;
+                command.CommandType = CommandType.StoredProcedure; command.FetchSize = 1; command.UseCursorOffset = true;
+                await Assert.ThrowsAsync<NotSupportedException>(async () => { if (async) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery(); }); command.FetchSize = 0; command.UseCursorOffset = false;
                 command.CommandText = "p; delete from secret";
                 var error = await Assert.ThrowsAsync<ArgumentException>(async () => { if (async) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery(); }); Assert.DoesNotContain("secret", error.Message);
                 command.CommandType = CommandType.Text; command.CommandText = "begin p(:out, :out); end;";

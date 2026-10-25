@@ -1,5 +1,11 @@
 # Compatibility and known gaps
 
+## Oracle output FetchSize hint
+
+Oracle OUT/RETURNING and procedure/function execution now accept a positive command [FetchSize hint](obconnector-dotnet-architecture-design.md#oracle-output-fetch-hint) with explicit or implicit preparation. Internal output rows stay in the execution response with cursorFlag0 and no FETCH; returned REF CURSOR readers use their own page size. This does not add output-result pagination. Output offset and ExecuteArray positive FetchSize remain unsupported; ordinary query cursors keep their existing behavior.
+
+[Module evidence](obconnector-dotnet-completeness.md#1546-2026-10-25-oracle-输出执行与-fetchsize-提示): original24RED, final5280unit, affected510consumer (30added), expanded58real (20added), noopt13pass/101NotExecuted. New real cases cover Oracle4.4.2.2 direct/Windows/.NET10/TLSdisabled and five command shapes; consumers load five assets on one.NET10host. Source review found no actionable findings. No full consumer/DI/package/independent-runtime/full-database rerun or proxy/trust/platform acceptance; REF CURSOR IN/INOUT/columns and all23gap IDs remain open. Historical module snapshots below retain their original boundaries.
+
 ## Lost transaction acknowledgement
 
 Commit/rollback response loss now has sixteen controlled real-server cases and sixteen local lifecycle cases. The local relay first receives a real server reply, then drops/truncates it. The driver reports unknown outcome and discards the session; independent committed-data reconciliation and a fresh same-endpoint Max1 lease work before clearing. This is existing behavior acceptance, with no product/API change. [Application reconciliation guide](unknown-outcome-recovery.md), [full evidence/limits](obconnector-dotnet-completeness.md#1545-2026-10-25-事务响应丢失与池恢复验收).
@@ -48,7 +54,7 @@ The [phase-duration histogram](obconnector-dotnet-architecture-design.md#connect
 
 ## Oracle standalone Prepare
 
-[Standalone preparation](obconnector-dotnet-architecture-design.md#oracle-standalone-prepare) now supports Oracle text OUT/RETURNING, stored procedures and function returns. It neither executes the target nor consumes input values; server parse/privilege/metadata-lock costs remain possible. The command retains a statement only until the next execution transfers ownership to its cursor owner. Full parameter metadata and the exact pure-OUT DML split layout are validated separately; other mismatches reject. Prepare ignores execution FetchSize, while positive FetchSize for the output execution plan and REF CURSOR IN/INOUT/column values remain unsupported.
+[Standalone preparation](obconnector-dotnet-architecture-design.md#oracle-standalone-prepare) now supports Oracle text OUT/RETURNING, stored procedures and function returns. It neither executes the target nor consumes input values; server parse/privilege/metadata-lock costs remain possible. The command retains a statement only until the next execution transfers ownership to its cursor owner. Full parameter metadata and the exact pure-OUT DML split layout are validated separately; other mismatches reject. At that preparation-module checkpoint, positive FetchSize for output execution was unsupported; the later output-hint module above accepts the hint without paging internal outputs. Prepare still ignores execution FetchSize; REF CURSOR IN/INOUT/column values remain unsupported.
 
 The direct Oracle4.4.2.2 profile passed ten sync/async block/RETURNING/procedure/function/cursor cases and twenty final cases including existing procedure/cursor and prepared array regressions. Preparation left the test table empty and outputs unchanged; REF CURSORs remained consumable after command disposal. The initial two RETURNING count failures (one wire input plus one output column), profile-data fixture error and all original reports remain in [the module record](obconnector-dotnet-completeness.md#1534-2026-10-25-oracle-独立-prepare). This profile uses TLS disabled on Windows/.NET10; real proxy/TLS, other versions and metadata-lock/fault matrices remain open.
 
@@ -175,7 +181,7 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 | Standard assets | `DbDataSource`, `DbBatch`, savepoint APIs and GSSAPI require modern TFMs; complete cross-TFM behavior and real GSSAPI/KDC validation remain unverified. |
 | Savepoints | Oracle release; quoted/Unicode names and leading underscores such as `__EFSavePoint`. |
 | Binary stream parameters | InputOutput, text streams, array-binding combinations and client-prepare fallback. |
-| Oracle outputs/cursors | Standalone Prepare or FetchSize on the PrepareExecute output path; REF CURSOR Input/InputOutput and ordinary cursor-valued result columns. |
+| Oracle outputs/cursors | REF CURSOR Input/InputOutput and ordinary cursor-valued columns; output offset and ExecuteArray positive FetchSize. Standalone Prepare and positive command hints for ordinary output plans are supported; internal output rows do not use cursor paging. |
 | Complex types | Text-protocol complex results, cyclic layouts and LOB/cursor/national-type members; undeclared or stale type identities. |
 | Array execution | SELECT, DDL and FetchSize; execution does not commit or roll back automatically. |
 | Discovery and recovery | Built-in OCP/TNS discovery, transparent migration of active sessions/transactions and automatic SQL replay. |

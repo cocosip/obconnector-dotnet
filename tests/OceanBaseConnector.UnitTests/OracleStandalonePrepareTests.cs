@@ -22,6 +22,14 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [MemberData(nameof(OracleStandalonePrepareCases))]
         public async Task OracleStandalonePrepareDefersValuesAndTransfersStatementToExecution(bool asynchronous, bool deprecated, string shape)
+            => await OracleStandalonePrepareDefersValuesAndTransfersStatementToExecutionCore(asynchronous, deprecated, shape);
+
+        [Theory]
+        [MemberData(nameof(OracleStandalonePrepareCases))]
+        public async Task OracleOutputPositiveFetchHintPreservesPreparationAndStatementOwnership(bool asynchronous, bool deprecated, string shape)
+            => await OracleStandalonePrepareDefersValuesAndTransfersStatementToExecutionCore(asynchronous, deprecated, shape, int.MaxValue);
+
+        private static async Task OracleStandalonePrepareDefersValuesAndTransfersStatementToExecutionCore(bool asynchronous, bool deprecated, string shape, int fetchSize = 0)
         {
             var sql = shape == "returning" ? "insert into t values (?) returning id into ?" : shape == "text" ? "BEGIN ? := ?; END;" : shape == "function" ? "BEGIN ? := pkg.func(?); END;" : "BEGIN pkg.proc(?, ?); END;";
             var server = Server(async channel =>
@@ -49,6 +57,7 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync();
                 using var command = (OceanBaseCommand)connection.CreateCommand();
+                command.FetchSize = fetchSize;
                 command.CommandType = shape == "text" || shape == "returning" ? CommandType.Text : CommandType.StoredProcedure;
                 command.CommandText = shape == "returning" ? "insert into t values (:input) returning id into :result" : shape == "text" ? "BEGIN :result := :input; END;" : shape == "function" ? "pkg.func" : "pkg.proc";
                 var input = new OceanBaseParameter { ParameterName = "input", DbType = DbType.Int64, Value = "not encoded during Prepare" };
@@ -65,6 +74,7 @@ namespace OceanBaseConnector.UnitTests
                 for (var i = 0; i < 2; i++)
                 {
                     Assert.Equal(2, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+                    Assert.Equal(fetchSize, command.FetchSize);
                     Assert.Equal(42L, output.Value); output.Value = "unchanged";
                 }
                 using var after = connection.CreateCommand(); after.CommandText = "after";
@@ -105,7 +115,7 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync(); using var source = new LongDataSource(10, asynchronous);
                 var command = OracleStandaloneCall(connection); command.Parameters[0].ResetDbType(); command.Parameters[0].Value = source;
-                command.FetchSize = 1; // Preparing is independent of the execution-only fetch restriction.
+                command.FetchSize = 1; // Preparing never requests cursor pages.
                 if (asynchronous) await command.PrepareAsync(); else command.Prepare();
                 Assert.Equal(0, source.BytesRead); Assert.False(source.WasDisposed);
                 Assert.Equal("old", command.Parameters[1].Value); Assert.False(command.HasSentSql);
