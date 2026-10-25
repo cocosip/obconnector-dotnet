@@ -70,6 +70,7 @@ Without a configuration file, `OB_REQUIRE_INTEGRATION=1` plus the four documente
 | Commit/rollback/dispose semantics, savepoints + validation, isolation levels per mode, concurrent-tx gate | `Transactions` |
 | Multi-result batches, parameterized batch commands + Prepare, per-command RecordsAffected | `Batches` |
 | Mode-advertised schema collections sync/async, restriction filtering, composite key/index/FK ordering, views, Oracle types/synonyms and sequence non-advancement | `Schema` |
+| Single-slot pool XA dedication after idle/commit/rollback, replacement autocommit/local transaction, prepared branch Close then explicit recovery/commit/rollback (sync/async) | `Connections/PoolXaIsolationTests` |
 | XA lifecycle (prepare/recover/commit/rollback), one-phase, invalid phase transitions | `Xa` |
 | PL/SQL OUT/InputOutput, RETURNING INTO, stored procedures + schema, REF CURSOR, temporary LOBs + locator params, complex types (including collection IN/OUT/InputOutput procedure parameters), array binding | `Oracle` |
 | Large binary streaming (LONG DATA / LOB locator), Oracle piece-wise upload | `Streams` |

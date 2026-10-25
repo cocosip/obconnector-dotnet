@@ -3,6 +3,12 @@
 This page retains historical results and open work from the former progress ledger, alongside dated verification of later changes. Local regression results and real database acceptance are recorded separately.
 
 
+## 2026-10-25 P0-02 pooled XA isolation acceptance
+
+Developed from master/ffadc7a; test/documentation changes only. [Contract](obconnector-dotnet-completeness.md#516-xa-专用会话的池隔离), [complete evidence](obconnector-dotnet-completeness.md#1540-2026-10-25-xa-池隔离与-prepared-分支恢复验收), [audit](obconnector-dotnet-driver-audit.md#35-xa-池隔离与-prepared-分支恢复验收2026-10-25). Existing production behavior passed all new cases without a product change: 28 local cases cover seven phases, socket destruction without implicit completion, MaxPoolSize=1 replacement before clearing and all twelve stale-resource APIs. Twenty direct cases prove dedicated discard after idle/commit/rollback, replacement autocommit/local rollback, and prepared branches surviving Close for explicit recovery and completion.
+
+Full unit first and final: 5,162 passed, no failures/skips. Connections + XaTests first and final: 76 passed, 4 configuration skips. No-opt-in Integration: 9 passed, 95 NotExecuted. Release solution/integration builds: zero warnings/errors; scoped format passes with existing workspace warning. Independent review required safer failure cleanup before owner disposal, independent unpooled rollback, failure aggregation and awaiting the wire peer; all addressed, no actionable findings remain. Direct OceanBase 4.4.2.2 / Windows / .NET 10 / TLS disabled only. Consumer, DI, package and runtime sample suites were not rerun; prior results remain historical. Response loss, coordinator crash, real active/suspended disconnect recovery, full resource/concurrency/proxy/trust/platform acceptance and all 23 IDs/eight packages remain open. No push/publication.
+
 ## 2026-10-25 P0-02 Oracle autocommit and real pool isolation
 
 Developed from master/4810907. [Public contract](obconnector-dotnet-architecture-design.md#oracle-autocommit-baseline), [complete retained evidence](obconnector-dotnet-completeness.md#1539-2026-10-25-oracle-自动提交与真实池隔离), [audit](obconnector-dotnet-driver-audit.md#34-oracle-自动提交与真实池隔离2026-10-25). Oracle Open confirms SET after identity; reset confirms it after COM_RESET_CONNECTION before generation advances. Strict replies, setup metadata, cancellation/Close/timeout destruction and pool capacity recovery preserve the MySQL reject-only login contract. One extra round trip per Oracle physical Open/successful reset is documented.

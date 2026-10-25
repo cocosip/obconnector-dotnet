@@ -1,5 +1,9 @@
 # Compatibility and known gaps
 
+## Pooled XA isolation acceptance
+
+New local tests cover seven XA phases, both modes and sync/async Close: dedicated sessions close without reset or implicit XA completion; a single-capacity pool authenticates a replacement before clearing, and stale resource APIs reject after logical reopen. Twenty new direct cases cover idle/completed dedication and prepared-branch recovery after Close. Final full units pass 5,162; Connections + XA passes 76 with 4 configuration skips. These are existing behavior acceptance results, with no production code changes. They apply only to OceanBase 4.4.2.2 direct MySQL/Oracle on Windows/.NET 10 with TLS disabled. Real active/suspended disconnect recovery, response loss, coordinator crash and the complete deployment matrix remain open. [Full evidence and retained limits](obconnector-dotnet-completeness.md#1540-2026-10-25-xa-池隔离与-prepared-分支恢复验收).
+
 ## Oracle unknown-precision NUMBER results
 
 The [result contract](obconnector-dotnet-architecture-design.md#oracle-number-results-with-unknown-precision) preserves exact Oracle values when precision is unknown; advertised schema metadata remains unchanged. Known-precision and parameter constraints remain strict. The coefficient/value-scale representation can change to reflect the returned text. Four new direct Oracle4.4.2.2/Windows/.NET10/TLS-disabled tests cover bindings and real table/CAST rounding; this is a scoped result-reading regression, not full Oracle acceptance.
