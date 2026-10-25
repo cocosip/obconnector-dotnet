@@ -167,6 +167,7 @@ namespace OceanBaseConnector.Internal.Protocol
             var column = ResultColumn.Parse(packet, _query.Mode, SessionTimeZone, NationalCharacterSet, _query.Lobs, _query.ComplexTypes, _query.SourceComplexTypes, _query.TreatTinyAsBoolean);
             if (!parameter && _oracleOutputResult) _oraclePlan!.ValidateOutputColumn(ordinal, column);
             if (!parameter) column.RequireComplexResult(IsBinary);
+            if (!parameter) column.BindCursorResult(IsBinary, _query.CursorColumns);
             return column;
         }
         private void End(ServerStatusFlags flags, OkPacket? ok = null)
@@ -222,6 +223,7 @@ namespace OceanBaseConnector.Internal.Protocol
             }
             else for (var i = 0; i < row.Length; i++) row[i] = cursor.ReadNullableLengthEncodedBytes();
             if (cursor.HasRemaining) throw new ProtocolException("Trailing row bytes.");
+            for (var i = 0; i < row.Length; i++) Columns[i].TrackCursor(row[i]);
             TrackCursorRow();
             return row;
         }

@@ -11,6 +11,29 @@ public sealed class RefCursorTests
 {
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.WithPrepareExecute), MemberType = typeof(ProfileTheoryData))]
+    public async Task PreparedCursorColumnSurvivesParentCommandDisposal(string profileName)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        OceanBaseRefCursor cursor;
+        await using (var command = db.Command(connection, "SELECT CURSOR(SELECT 7 AS value FROM DUAL) AS c FROM DUAL"))
+        {
+            await command.PrepareAsync();
+            await using var parent = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess);
+            Assert.True(await parent.ReadAsync());
+            cursor = parent.GetFieldValue<OceanBaseRefCursor>(0);
+            Assert.False(await parent.ReadAsync()); Assert.False(await parent.NextResultAsync());
+        }
+        using (cursor)
+        await using (var child = await cursor.GetDataReaderAsync(1))
+        {
+            Assert.True(await child.ReadAsync()); DatabaseContext.EqualNumber(child.GetValue(0), 7, "Cursor column value mismatch.");
+            Assert.False(await child.ReadAsync()); Assert.False(await child.NextResultAsync());
+        }
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.WithPrepareExecute), MemberType = typeof(ProfileTheoryData))]
     public async Task CursorConsumableAfterCommandDisposal(string profileName)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));

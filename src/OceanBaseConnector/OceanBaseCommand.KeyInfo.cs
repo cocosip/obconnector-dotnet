@@ -22,6 +22,8 @@ namespace OceanBaseConnector
                 else execution.ResolveComplexColumns(statement);
                 if ((behavior & CommandBehavior.SchemaOnly) != 0)
                     return new OceanBaseDataReader(execution, QueryResult.FromPrepared(execution, statement), operation.Connection, operation.Session, behavior, resolved.Metadata);
+                var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement);
+                TransferCursorColumns(statement, execution);
                 if (operation.CursorOffset)
                 {
                     if (asynchronous) await execution.EnsureCursorOffsetAsync(token).ConfigureAwait(false); else execution.EnsureCursorOffset();
@@ -32,7 +34,7 @@ namespace OceanBaseConnector
                 var parameters = HasNationalParameters(operation.Bindings.Parameters)
                     ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
                 ValidateCursorStatement(operation.FetchSize, statement);
-                var request = PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0);
+                var request = PreparedParameters.Execute(statement.Id, parameters, fetchSize > 0);
                 if (asynchronous)
                 {
                     await execution.SendLongDataAsync(statement.Id, operation.Bindings.Parameters, request.Length).ConfigureAwait(false);
@@ -44,7 +46,7 @@ namespace OceanBaseConnector
                     execution.Send(request, executesSql: !IsLobRead);
                 }
                 var result = new QueryResult(execution, binary: true, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
-                    cursorId: operation.FetchSize > 0 ? statement.Id : (uint?)null, fetchSize: operation.FetchSize, cursorOffset: operation.CursorOffset);
+                    cursorId: fetchSize > 0 ? statement.Id : (uint?)null, fetchSize: fetchSize, cursorOffset: operation.CursorOffset);
                 if (asynchronous) await result.StartAsync(token).ConfigureAwait(false); else result.Start();
                 var metadata = resolved.Metadata.ForResult(result.Columns);
                 return new OceanBaseDataReader(execution, result, operation.Connection, operation.Session, behavior, metadata);

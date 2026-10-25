@@ -121,7 +121,7 @@ namespace OceanBaseConnector.Internal.Sql
             }
             if (Outputs.Length == 0) return;
             if (_values == null) throw new ProtocolException("Oracle execution completed without its bound output values.");
-            Cursors?.Publish();
+            foreach (var value in _values) if (value is OceanBaseRefCursor cursor) Cursors?.Publish(cursor.Id);
             for (var i = 0; i < _values.Length; i++) Outputs[i].Value = _values[i];
         }
 

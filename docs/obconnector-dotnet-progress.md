@@ -1,5 +1,33 @@
 # Verification status and remaining work
 
+## 2026-10-26 P1-06 binary Oracle cursor columns
+
+Developed from master/75d3751. Binary prepared cursor columns now return OceanBaseRefCursor, retain
+their parent statement after completed-reader/command disposal, release skipped siblings, and preserve
+nested ancestors until published descendants finish. All descendants share4096 distinct IDs. KeyInfo
+original/rewritten statements transfer ownership; SchemaOnly stays metadata-only. Wrong typed access
+and covariant arrays do not publish a handle before failing. Full parent response consumption is required
+before child fetch; disposing an active command preserves cancellation. See [contract](obconnector-dotnet-architecture-design.md#oracle-cursor-valued-columns)
+and [module evidence](obconnector-dotnet-completeness.md#1556-2026-10-26-oracle-二进制游标列与嵌套资源所有权).
+
+A positive parent command FetchSize is accepted as a hint, but prepared cursor-valued columns
+use cursorFlag=0 and stream the parent response without parent FETCH. Child cursor page sizes remain
+independent. UseCursorOffset rejects this shape after final prepare metadata, before parameter upload
+or target execution; this also applies to KeyInfo rewriting. SchemaOnly ignores these hints as before.
+This follows the fixed Java source policy and does not prove real-server support for SELECT CURSOR.
+
+最终完整单测6056通过（新增76），相关五资产消费者561通过（新增160），均零失败/跳过；父FetchSize修复后相关218通过。
+单测8分20秒，消费者1分18秒。Release全解决方案0警告/错误（14.66秒）；15C#限定格式及验证退出0，保留既有workspace加载警告。
+独立源码/契约/证据走查无未处理阻塞发现；76DLL及25源码/项目哈希在两项最终门禁期间不变。
+五资产消费者在同一.NET10host运行，不代表五个独立运行时；新实库入口1失败于greeting前，未执行SQL。
+
+Initial decoder8RED, root budget and ancestor-dispose regressions, KeyInfo/output/typed publication
+findings, original malformed expectations and first80consumer fixture failures remain archived locally.
+The fixed Java public ResultSet specialized branch supplies binary four-byte source evidence, not SQL
+acceptance. The new real cursor-column integration entry was run directly from its built DLL: oracle-direct1failed/0skipped before greeting in Open/HandshakeFlow70; no SQL ran. The initial project command executed no tests because its restored package imports point to the restricted account; its empty exit0 is not passing evidence.
+Text cursor columns, REF CURSOR Input/InputOutput and other shapes/real deployment gates remain open;
+all23IDs/eightpackages stay open. Localmaster only, no push/publication. Earlier sections are history.
+
 ## 2026-10-26 P1-09 discovery blacklist and TCP ceiling
 
 Developed from master/888bd1c. Built-in TNS/OCP DESCRIPTION accepts explicit global OBLB_BLACKLIST and OBLB_RETRY_ALL_DOWNS. NORMAL/RETRYDURATION count individual failures with millisecond windows; TIMEOUT uses seconds. Either field defaults absent ceiling120 and NORMAL/TIMEOUT50; with neither field supplied, prior behavior is preserved. One frozen group order, threshold requeue inside its group, one unfiltered fallback and optional additional cycles share an actual-TCP ceiling and total logical Open deadline. Skipped blocked entries do not consume this .NET cap; exact Java candidate-counter parity is not claimed. See [contract](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling), [full evidence](obconnector-dotnet-completeness.md#1555-2026-10-26-发现黑名单与tcp尝试上限) and [audit](obconnector-dotnet-driver-audit.md#50-发现黑名单与tcp尝试上限2026-10-26).

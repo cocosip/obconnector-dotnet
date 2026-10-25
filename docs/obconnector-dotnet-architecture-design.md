@@ -184,7 +184,7 @@ This is local driver behavior, not proof of OceanBase/OBProxy reset compatibilit
 - Set `DbType` or `OceanBaseDbType` when inference from `Value` is insufficient. Use `DBNull.Value` for SQL NULL. `ResetDbType()` restores inference.
 - Read all results with `Read` and `NextResult` to establish completion. Closing an unread reader destroys its unfinished session; disposing a field stream does not finish its parent reader.
 - `CommandBehavior.SequentialAccess` exposes field streams without buffering the whole result. `SingleRow` returns only the first row of each exposed result and drains the remainder; `SingleResult` drains later results without exposing them. `SchemaOnly` accepts text prefixes `SELECT`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `VALUES` after whitespace/comments. It obtains metadata through server preparation and never sends a target COM_QUERY, COM_STMT_EXECUTE, COM_STMT_FETCH or parameter-data upload. It accepts one text statement with input parameters only; names/order/count remain required, but values are not encoded, consumed or validated as bindings. FetchSize and offset hints are inactive. Preparation errors propagate without client-side fallback, including error 1295 when AllowClientSidePrepareFallback=true. An existing valid prepared statement is reused. The empty reader exposes prepared column metadata, HasRows=false and RecordsAffected=-1; its exchange is complete, so another connection operation is allowed. CloseConnection still closes the original logical Open lease when that reader is disposed; a later lease is protected even if pooling reuses the same physical session. Named complex columns require existing preloaded descriptions and may issue directory lookups for a missing source identity; those lookups do not execute the target. Metadata is the server prepare-time shape, which may differ from execution-time metadata. Server preparation can still incur parsing, permission checks and metadata locks; real OceanBase/OBProxy side-effect/lock/large-result acceptance remains open. Ordinary row readers retain their existing operation restrictions.
-- Positive `OceanBaseCommand.FetchSize` enables forward-only server cursor pages for ordinary queries. Oracle internal procedure/RETURNING output rows do not use this hint; returned REF CURSOR readers have their own page size. Oracle `UseCursorOffset=true` additionally requires OceanBase >=2.2.5; it does not provide scrolling.
+- Positive `OceanBaseCommand.FetchSize` enables forward-only server cursor pages for ordinary queries without cursor-valued columns. Oracle internal procedure/RETURNING output rows do not use this hint; returned REF CURSOR readers have their own page size. Oracle `UseCursorOffset=true` additionally requires OceanBase >=2.2.5; it does not provide scrolling.
 - `AllowClientSidePrepareFallback=true` permits limited scalar-input text fallback only after automatic prepare returns a validated `1295/HY000`. Explicit Prepare, cursors and Oracle PrepareExecute never fall back. Date/time, special types and output parameters are excluded; MySQL non-null strings require trusted session collation. Fallback literals may appear in server SQL logs.
 
 ### CloseConnection reader ownership
@@ -365,6 +365,45 @@ Initialization is synchronous even when OpenAsync triggers it. CommandTimeout li
 
 ## Oracle extensions
 
+### Oracle cursor-valued columns
+
+A positive parent command FetchSize is accepted as a hint, but prepared cursor-valued columns
+use cursorFlag=0 and stream the parent response without parent FETCH. Child cursor page sizes remain
+independent. UseCursorOffset rejects this shape after final prepare metadata, before parameter upload
+or target execution; this also applies to KeyInfo rewriting. SchemaOnly ignores these hints as before.
+This follows the fixed Java source policy and does not prove real-server support for SELECT CURSOR.
+
+Ordinary Oracle cursor columns use the binary result protocol: call `Prepare()`/`PrepareAsync()` for a
+plain parameterless command, or use an existing binary path such as KeyInfo, positive FetchSize or
+server-prepared input parameters. Ordinary COM_STMT_EXECUTE cursor columns must declare type163 during
+preparation; unowned unexpected cursor metadata is rejected and its session retired. Nested fetches and
+procedure-owned ordinary results use their existing execution owner. Text cursor values remain unsupported. `Use Oracle Prepare Execute=true` is required for OUT
+parameters, not for an ordinary binary cursor column.
+
+`GetValue`, provider-specific getters and compatible `GetFieldValue<T>` calls return the same single-use
+`OceanBaseRefCursor` for aliases of an ID within an execution. NULL returns `DBNull.Value`. Consume the
+entire parent response, including all results, before calling the cursor's `GetDataReader`/Async; an early
+busy-parent attempt fails without consuming the handle. Disposing an executing command or closing an
+unread ordinary reader preserves the existing cancellation/session-destruction contract. After parent
+completion, command disposal does not close a published cursor's parent statement. Dispose each returned
+cursor if it will not be read. Wrong typed access, `IsDBNull`, skipped fields and drained rows do not publish
+handles. Unaccessed IDs are closed when the exchange ends, including SequentialAccess skips.
+
+Nested cursor fetches retain ancestors until every published descendant completes or is disposed.
+All descendants share a limit of 4096 distinct cursor IDs from the root execution, including skipped IDs;
+aliases in the same execution reuse one handle. Nonzero IDs are required. Ancestor references and IDs
+already owned by another descendant scope are rejected; silently recycling IDs is not supported. Overflow
+or malformed framing destroys the session. Live published cursors prevent pool reuse; original physical
+session, transaction epoch and logical lease protections remain in force. Cursor-owning statements leave
+the command/idle statement cache; later execution prepares again. KeyInfo transfers the final rewritten
+statement when applicable; SchemaOnly only returns metadata and allocates no cursor handles.
+
+Fixed Connector/J6adc311 has public JDBC4ResultSet.getObject -> getComplexCursor -> four-byte binary
+decoding, which supports the wire design. This is source/local-fixture evidence, not actual SQL acceptance.
+The ordinary cursor-column integration case remains unverified: current oracle-direct attempts fail before
+the greeting and do not execute SQL. REF CURSOR Input/InputOutput, text columns, other output/complex
+shapes and real database/OBProxy/TLS/platform/runtime acceptance remain open.
+
 ### Procedures and REF CURSOR
 
 Enable `Use Oracle Prepare Execute=true`. Procedures use `CommandType.StoredProcedure`; scalar outputs use the standard `ParameterDirection` values. Output values publish only after the complete response succeeds. Errors, cancellation or early reader close preserve previous values.
@@ -378,7 +417,7 @@ With `Use Oracle Prepare Execute=true`, `Prepare()` / `PrepareAsync()` also prep
 
 Repeated Prepare before execution can reuse the same valid command-owned statement. The next Oracle execution transfers that ID to its cursor owner; returned REF CURSORs keep their parent statement alive after command disposal. Once transferred, later execution uses a fresh implicit PrepareExecute unless Prepare is called again. This is not persistent Oracle statement caching. Changed SQL, parameter-count/shape incompatibility, database, physical session, reset generation or statement epoch prevents stale reuse. Ordinary preparation retains its existing reuse rules.
 
-COM_STMT_PREPARE normally describes the full bind count. Oracle DML RETURNING can instead describe input binds as parameters and pure OUT binds as result columns. Only INSERT/UPDATE/DELETE/MERGE with exact output-column and combined counts may use this split; InputOutput and ReturnValue cannot use the split exception. PrepareExecute still sends every bind and validates its own output metadata. Stream uploads use the retained ID and occur only during execution; array execution also carries that ID. Preparation ignores FetchSize. REF CURSOR Input/InputOutput, cursor-valued columns and unsupported complex members remain separate gaps.
+COM_STMT_PREPARE normally describes the full bind count. Oracle DML RETURNING can instead describe input binds as parameters and pure OUT binds as result columns. Only INSERT/UPDATE/DELETE/MERGE with exact output-column and combined counts may use this split; InputOutput and ReturnValue cannot use the split exception. PrepareExecute still sends every bind and validates its own output metadata. Stream uploads use the retained ID and occur only during execution; array execution also carries that ID. Preparation ignores FetchSize. REF CURSOR Input/InputOutput and unsupported complex members remain separate gaps; binary cursor columns follow the ordinary cursor-column ownership contract above.
 
 Local fixtures and five-asset consumers cover preparation, ownership and failure handling. Direct Oracle4.4.2.2 tests cover synchronous/asynchronous block, RETURNING, procedure, function and REF CURSOR preparation, including no DML before execution and cursor consumption after command disposal. These results do not establish real TLS/OBProxy, other server versions, independent runtimes, or general metadata-lock compatibility.
 

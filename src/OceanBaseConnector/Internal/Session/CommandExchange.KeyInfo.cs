@@ -29,7 +29,8 @@ namespace OceanBaseConnector.Internal.Session
                 else Send(OceanBaseCommand.SqlPacket(sql, 22), executesSql: false);
                 statement = (asynchronous ? await PreparedStatement.ReadAsync(this, _session, sql, token).ConfigureAwait(false) : PreparedStatement.Read(this, _session, sql))!;
                 // This exchange owns the rewritten statement; the original command cache remains unchanged.
-                statement.Release();
+                if (statement.HasCursorColumns && CursorColumns != null) CursorColumns.SetStatement(statement.Id);
+                else statement.Release();
                 if (statement.ParameterCount != original.ParameterCount || statement.Columns.Length != original.Columns.Length + missing.Count)
                     throw new ProtocolException("KeyInfo rewriting changed the result or parameter count.");
                 for (var i = 0; i < original.Columns.Length; i++) KeyInfoMetadata.ValidateColumn(original.Columns[i], statement.Columns[i]);

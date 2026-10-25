@@ -90,6 +90,7 @@ namespace OceanBaseConnector.Internal.Session
         internal bool Succeeded { get; private set; }
         internal bool IsActive => Volatile.Read(ref _finished) == 0;
         internal LobSession? Lobs { get; set; }
+        internal OracleCursorOwner? CursorColumns { get; set; }
         internal IReadOnlyDictionary<(string, string), OceanBaseComplexType>? ComplexTypes { get; set; }
         internal void EnsureReading()
         {

@@ -7,7 +7,7 @@ using OceanBaseConnector.Internal.Session;
 
 namespace OceanBaseConnector
 {
-    /// <summary>A single-use Oracle output cursor, bound to its original connection and transaction.</summary>
+    /// <summary>A single-use Oracle output or result-column cursor, bound to its original connection and transaction.</summary>
     public sealed class OceanBaseRefCursor : IDisposable
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
         , IAsyncDisposable
@@ -20,6 +20,7 @@ namespace OceanBaseConnector
         private bool _disposed;
         private int _released;
         internal uint Id { get; }
+        internal OracleCursorOwner Owner => _owner;
         internal OceanBaseRefCursor(OracleCursorOwner owner, uint id) { _owner = owner; Id = id; }
 
         /// <summary>Opens one reader. Dispose the cursor if it will not be read; unread reader closure destroys its session.</summary>
@@ -66,7 +67,9 @@ namespace OceanBaseConnector
             {
                 if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseRefCursor));
                 if (_used) throw new InvalidOperationException("A REF CURSOR can only be opened once.");
-                var exchange = _owner.Connection.StartRefCursor(_owner.Session, _owner.Transaction, _owner.Epoch, _owner.Timeout, token, ReleaseResource);
+                var children = new OracleCursorOwner(this);
+                var exchange = _owner.Connection.StartRefCursor(_owner.Session, _owner.Transaction, _owner.Epoch, _owner.Timeout, token, children.EndExecution);
+                exchange.CursorColumns = children;
                 _used = true; _exchange = exchange; exchange.OwnCursor(refCursor: true); exchange.StartDiagnostics("cursor.fetch");
                 return exchange;
             }
@@ -81,7 +84,7 @@ namespace OceanBaseConnector
             {
                 if (_disposed) return;
                 _disposed = true;
-                _exchange?.Dispose(); ReleaseResource();
+                if (_exchange == null) ReleaseResource(); else _exchange.Dispose();
             }
         }
         public void Dispose() { Close(); PreparedStatement.CloseIdle(_owner.Session, _owner.Timeout); }

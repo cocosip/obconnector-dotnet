@@ -104,7 +104,7 @@ namespace OceanBaseConnector
         {
             if (values == null) throw new ArgumentNullException(nameof(values));
             var count = Math.Min(values.Length, FieldCount);
-            for (var i = 0; i < count; i++) values[i] = GetValue(i);
+            for (var i = 0; i < count; i++) { RequireCursorCast(i, values.GetType().GetElementType()!); values[i] = GetValue(i); }
             return count;
         }
         public override Type GetProviderSpecificFieldType(int ordinal)
@@ -123,12 +123,22 @@ namespace OceanBaseConnector
         {
             if (values == null) throw new ArgumentNullException(nameof(values));
             var count = Math.Min(values.Length, FieldCount);
-            for (var i = 0; i < count; i++) values[i] = GetProviderSpecificValue(i);
+            for (var i = 0; i < count; i++) { RequireCursorCast(i, values.GetType().GetElementType()!); values[i] = GetProviderSpecificValue(i); }
             return count;
         }
-        public override T GetFieldValue<T>(int ordinal) => typeof(T) == typeof(Stream) ? (T)(object)GetStream(ordinal)
-            : typeof(T) == typeof(TextReader) ? (T)(object)GetTextReader(ordinal)
-            : ConvertValue<T>(IsProviderValue<T>() ? GetProviderSpecificValue(ordinal) : GetValue(ordinal));
+        public override T GetFieldValue<T>(int ordinal)
+        {
+            RequireCursorCast(ordinal, typeof(T));
+            return typeof(T) == typeof(Stream) ? (T)(object)GetStream(ordinal)
+                : typeof(T) == typeof(TextReader) ? (T)(object)GetTextReader(ordinal)
+                : ConvertValue<T>(IsProviderValue<T>() ? GetProviderSpecificValue(ordinal) : GetValue(ordinal));
+        }
+
+        private void RequireCursorCast(int ordinal, Type type)
+        {
+            if (Column(ordinal).TypeCode == 163 && !type.IsAssignableFrom(typeof(OceanBaseRefCursor)))
+                throw new InvalidCastException("The cursor field has a different type.");
+        }
 
         private static bool IsProviderValue<T>() => typeof(T) == typeof(OceanBaseDecimal) || typeof(T) == typeof(OceanBaseTimestamp) || typeof(T) == typeof(OceanBaseDate) || typeof(T) == typeof(OceanBaseDateTime);
         private static T ConvertValue<T>(object value)
@@ -146,7 +156,7 @@ namespace OceanBaseConnector
         public override async Task<T> GetFieldValueAsync<T>(int ordinal, CancellationToken cancellationToken = default)
         {
             if (!_sequential) return await base.GetFieldValueAsync<T>(ordinal, cancellationToken).ConfigureAwait(false);
-            var column = Column(ordinal); cancellationToken.ThrowIfCancellationRequested(); var row = Sequential;
+            var column = Column(ordinal); cancellationToken.ThrowIfCancellationRequested(); RequireCursorCast(ordinal, typeof(T)); var row = Sequential;
             if (typeof(T) == typeof(Stream) || typeof(T) == typeof(TextReader))
             {
                 RequireFieldType(ordinal, typeof(T) == typeof(Stream) ? typeof(byte[]) : typeof(string));
@@ -192,30 +202,21 @@ namespace OceanBaseConnector
             if (!_sequential) return base.IsDBNullAsync(ordinal, cancellationToken);
             Column(ordinal); cancellationToken.ThrowIfCancellationRequested(); return Sequential.IsNullAsync(ordinal, cancellationToken);
         }
-        public override bool GetBoolean(int ordinal) => (bool)GetValue(ordinal);
-        public override byte GetByte(int ordinal) => (byte)GetValue(ordinal);
-        public override char GetChar(int ordinal) => (char)GetValue(ordinal);
-        public override DateTime GetDateTime(int ordinal)
-        {
-            var value = GetValue(ordinal);
-            return value is OceanBaseTimestamp timestamp ? timestamp.ToDateTime()
-                : value is OceanBaseTimestampLocalTimeZone local ? local.ToDateTime() : (DateTime)value;
-        }
-        public override decimal GetDecimal(int ordinal)
-        {
-            var value = GetValue(ordinal);
-            return value is OceanBaseDecimal number ? number.ToDecimal() : (decimal)value;
-        }
-        public override double GetDouble(int ordinal) => (double)GetValue(ordinal);
-        public override float GetFloat(int ordinal) => (float)GetValue(ordinal);
-        public override Guid GetGuid(int ordinal) => (Guid)GetValue(ordinal);
-        public override short GetInt16(int ordinal) => (short)GetValue(ordinal);
-        public override int GetInt32(int ordinal) => (int)GetValue(ordinal);
-        public override long GetInt64(int ordinal) => (long)GetValue(ordinal);
-        public override string GetString(int ordinal) => (string)GetValue(ordinal);
+        public override bool GetBoolean(int ordinal) => GetFieldValue<bool>(ordinal);
+        public override byte GetByte(int ordinal) => GetFieldValue<byte>(ordinal);
+        public override char GetChar(int ordinal) => GetFieldValue<char>(ordinal);
+        public override DateTime GetDateTime(int ordinal) => GetFieldValue<DateTime>(ordinal);
+        public override decimal GetDecimal(int ordinal) => GetFieldValue<decimal>(ordinal);
+        public override double GetDouble(int ordinal) => GetFieldValue<double>(ordinal);
+        public override float GetFloat(int ordinal) => GetFieldValue<float>(ordinal);
+        public override Guid GetGuid(int ordinal) => GetFieldValue<Guid>(ordinal);
+        public override short GetInt16(int ordinal) => GetFieldValue<short>(ordinal);
+        public override int GetInt32(int ordinal) => GetFieldValue<int>(ordinal);
+        public override long GetInt64(int ordinal) => GetFieldValue<long>(ordinal);
+        public override string GetString(int ordinal) => GetFieldValue<string>(ordinal);
         public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length)
         {
-            if (!_sequential) return Copy((byte[])GetValue(ordinal), dataOffset, buffer, bufferOffset, length);
+            if (!_sequential) return Copy(GetFieldValue<byte[]>(ordinal), dataOffset, buffer, bufferOffset, length);
             RequireFieldType(ordinal, typeof(byte[])); return Sequential.GetBytes(ordinal, dataOffset, buffer, bufferOffset, length);
         }
         public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length)

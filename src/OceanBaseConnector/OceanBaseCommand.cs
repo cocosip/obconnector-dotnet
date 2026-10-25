@@ -39,9 +39,11 @@ namespace OceanBaseConnector
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get => _timeout; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _timeout = value; } }
         /// <summary>Rows requested per server cursor fetch; zero uses ordinary result streaming.
-        /// Oracle internal output rows do not use this hint; returned REF CURSOR readers have their own page size.</summary>
+        /// Oracle internal output rows and cursor-valued columns do not page their parent result;
+        /// returned REF CURSOR readers have their own page size.</summary>
         public int FetchSize { get => _fetchSize; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _fetchSize = value; } }
-        /// <summary>Use Oracle offset fetch for a positive FetchSize; requires OceanBase 2.2.5 or later.</summary>
+        /// <summary>Use Oracle offset fetch for a positive FetchSize; requires OceanBase 2.2.5 or later.
+        /// Not supported for Oracle output plans or cursor-valued result columns.</summary>
         public bool UseCursorOffset { get; set; }
         /// <summary>Allow scalar input text execution only after an unsupported-prepare error (1295/HY000).
         /// Disabled by default; explicit Prepare, cursors and Oracle PrepareExecute never fall back.</summary>
@@ -102,7 +104,9 @@ namespace OceanBaseConnector
                 var text = operation.Binary && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode) : operation.Bindings.CommandText;
                 ValidateCursorStatement(operation.FetchSize, statement);
+                var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement);
                 if (statement != null && operation.Oracle == null) execution.ResolveComplexColumns(statement);
+                if (statement != null && operation.Oracle == null) TransferCursorColumns(statement, execution);
                 if (execution.SourceComplexTypes != null)
                 {
                     zone = execution.EnsureSessionTimeZone();
@@ -113,12 +117,12 @@ namespace OceanBaseConnector
                     ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
                 var request = operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters, national)
                     : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
-                    : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0);
+                    : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, fetchSize > 0);
                 if (statement != null) execution.SendLongData(statement.Id, operation.Bindings.Parameters, request.Length);
                 execution.BeforeSuccessfulCompletion = operation.MySql != null ? operation.MySql.PublishOutputs : operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
                 execution.Send(request, executesSql: !IsLobRead);
                 var result = new QueryResult(execution, operation.Oracle != null || statement != null, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
-                    cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize,
+                    cursorId: fetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: fetchSize,
                     oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle, cursorOffset: operation.CursorOffset, mysqlPlan: operation.MySql);
                 result.Start();
                 return new OceanBaseDataReader(execution, result, operation.Connection, operation.Session, behavior);
@@ -178,7 +182,9 @@ namespace OceanBaseConnector
                 var text = operation.Binary && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode) : operation.Bindings.CommandText;
                 ValidateCursorStatement(operation.FetchSize, statement);
+                var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement);
                 if (statement != null && operation.Oracle == null) await execution.ResolveComplexColumnsAsync(statement, cancellationToken).ConfigureAwait(false);
+                if (statement != null && operation.Oracle == null) TransferCursorColumns(statement, execution);
                 if (execution.SourceComplexTypes != null)
                 {
                     zone = await execution.EnsureSessionTimeZoneAsync(cancellationToken).ConfigureAwait(false);
@@ -189,12 +195,12 @@ namespace OceanBaseConnector
                     ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
                 var request = operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters, national)
                     : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
-                    : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0);
+                    : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, fetchSize > 0);
                 if (statement != null) await execution.SendLongDataAsync(statement.Id, operation.Bindings.Parameters, request.Length).ConfigureAwait(false);
                 execution.BeforeSuccessfulCompletion = operation.MySql != null ? operation.MySql.PublishOutputs : operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
                 await execution.SendAsync(request, executesSql: !IsLobRead).ConfigureAwait(false);
                 var result = new QueryResult(execution, operation.Oracle != null || statement != null, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
-                    cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize,
+                    cursorId: fetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: fetchSize,
                     oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle, cursorOffset: operation.CursorOffset, mysqlPlan: operation.MySql);
                 await result.StartAsync(cancellationToken).ConfigureAwait(false);
                 return new OceanBaseDataReader(execution, result, operation.Connection, operation.Session, behavior);
@@ -315,7 +321,7 @@ namespace OceanBaseConnector
                 CommandExchange? execution = null;
                 execution = connection.StartCommand(session, transaction, _timeout, token, () =>
                 {
-                    oracle?.Cursors?.EndExecution();
+                    execution?.CursorColumns?.EndExecution();
                     lock (_gate)
                     {
                         if (ReferenceEquals(_execution, execution))
@@ -340,13 +346,28 @@ namespace OceanBaseConnector
                     SqlStatementBoundary.InvalidatesComplexTypes(text, session.Info!.Mode);
                 _execution = execution;
                 if (arrayCount != 0) ArrayBindingResult = null;
+                if (!prepareOnly && !schemaOnly && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle)
+                    execution.CursorColumns = new OracleCursorOwner(connection, session, transaction, _timeout);
                 if (oracle != null && !prepareOnly)
                 {
-                    oracle.Cursors = new OracleCursorOwner(connection, session, transaction, _timeout);
+                    oracle.Cursors = execution.CursorColumns!;
                     oracle.StatementCreated = oracle.Cursors.SetStatement;
                     _oracleSession = session;
                 }
                 return (execution, session, connection, bindings, parameters, binary, fetchSize, oracle, clientFallback, cursorOffset, mysql);
+            }
+        }
+
+        private void TransferCursorColumns(PreparedStatement statement, CommandExchange execution)
+        {
+            if (!statement.HasCursorColumns) return;
+            lock (_gate)
+            {
+                if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseCommand));
+                var owner = execution.CursorColumns ?? throw new NotSupportedException("Cursor columns require Oracle mode.");
+                owner.SetStatement(statement.Id);
+                if (ReferenceEquals(_prepared, statement)) _prepared = null;
+                _oracleSession = statement.Session;
             }
         }
 
@@ -445,6 +466,13 @@ namespace OceanBaseConnector
         {
             if (fetchSize > 0 && (statement == null || statement.ColumnCount == 0))
                 throw new NotSupportedException("Server cursors require a prepared statement with result columns.");
+        }
+
+        private static int ResultFetchSize(int requested, bool cursorOffset, PreparedStatement? statement)
+        {
+            if (statement?.HasCursorColumns != true) return requested;
+            if (cursorOffset) throw new NotSupportedException("Offset fetch is not supported for cursor-valued result columns.");
+            return 0;
         }
 
         internal static byte[] SqlPacket(string text, byte code)

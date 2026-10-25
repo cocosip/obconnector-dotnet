@@ -36,6 +36,10 @@ namespace OceanBaseConnector.Internal.Session
         internal int ParameterCount { get; }
         internal int ColumnCount { get; }
         internal ResultColumn[] Columns { get; }
+        internal bool HasCursorColumns
+        {
+            get { foreach (var column in Columns) if (column.TypeCode == 163) return true; return false; }
+        }
 
         internal static PreparedStatement? Read(CommandExchange exchange, PhysicalSession session, string sql, bool allowFallback = false)
         {

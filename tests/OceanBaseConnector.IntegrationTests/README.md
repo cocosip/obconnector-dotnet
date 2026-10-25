@@ -8,6 +8,22 @@ xUnit suites that exercise the driver's public ADO.NET surface against **real, e
 
 This suite is the engineering counterpart of the [acceptance console](../OceanBaseConnector.Acceptance/README.md): the console produces curated release reports; these suites are what you filter, debug and re-run from an IDE or `dotnet test`.
 
+## Ordinary Oracle cursor columns
+
+A positive parent command FetchSize is accepted as a hint, but prepared cursor-valued columns
+use cursorFlag=0 and stream the parent response without parent FETCH. Child cursor page sizes remain
+independent. UseCursorOffset rejects this shape after final prepare metadata, before parameter upload
+or target execution; this also applies to KeyInfo rewriting. SchemaOnly ignores these hints as before.
+This follows the fixed Java source policy and does not prove real-server support for SELECT CURSOR.
+
+Filter `FullyQualifiedName~PreparedCursorColumnSurvivesParentCommandDisposal` with an Oracle
+prepare-execute profile. This new case explicitly prepares SELECT CURSOR, consumes the parent
+SequentialAccess response, disposes the parent command, then fetches the returned cursor. It currently
+has no passing real-server evidence: the built-DLL run recorded oracle-direct1failed/0skipped in
+Open/HandshakeFlow70 before greeting, before SQL execution. The initial project command executed no
+tests due to restored package-import paths pointing at the restricted account; it is not passing evidence. Binary fixtures/consumers are separate evidence. Text cursor columns and cursor input
+directions remain unsupported; the whole Oracle result-shape matrix remains open.
+
 ## Running
 
 1. Opt in: set `OB_REQUIRE_INTEGRATION=1`. Anything else (or unset) skips database tests.
