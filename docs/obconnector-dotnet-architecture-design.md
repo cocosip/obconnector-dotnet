@@ -532,7 +532,7 @@ Each physical establishment snapshots its candidate start once. Sequential/Round
 
 With a positive count, one logical Open budget covers address/credential acquisition, pool wait/prewarm/probe, all TCP attempts/backoffs, TLS, authentication, identity and automatic ambient initialization. This also caps a longer or unlimited Pool Wait Timeout. All warmup physical sessions share the logical token/deadline; each has its own finite round limit. `Connection Timeout=0` removes the time limit but keeps that attempt limit. Caller cancellation (OpenAsync) and Close interrupt backoff; failure releases capacity for a later explicit Open. Count zero retains existing timeout/wait semantics. Pending cleanup captured by an earlier Close must finish under its original cleanup timeout; a new Open deadline does not abandon that cleanup. After cleanup, an expired new Open fails before borrowing. Caller-owned synchronous callbacks must return promptly and honor cancellation; a deadline cannot forcibly interrupt arbitrary application code.
 
-Credentials and resolver results are acquired once per logical Open and reused throughout its warmup/attempts; retries do not refresh them. This policy does not reconnect an active session, migrate a transaction or replay SQL. Reopen explicitly and reconcile unknown writes according to the [recovery guide](unknown-outcome-recovery.md). Endpoint TCP health hints are described below. Built-in TCP TNS file discovery is described below; OCP, richer TNS policies, proxy reroute, real health/fault/load and independent-runtime acceptance remain open.
+Credentials and resolver results are acquired once per logical Open and reused throughout its warmup/attempts; retries do not refresh them. This policy does not reconnect an active session, migrate a transaction or replay SQL. Reopen explicitly and reconcile unknown writes according to the [recovery guide](unknown-outcome-recovery.md). Endpoint TCP health hints are described below. Built-in TCP TNS file and OCP HTTP address adapters are described below; full OCP/TNS policies, proxy reroute, real health/fault/load and independent-runtime acceptance remain open.
 
 <a id="endpoint-tcp-health"></a>
 ## Endpoint TCP health cache
@@ -547,7 +547,7 @@ Failure timestamps use the monotonic clock with lazy expiry. Each cache holds at
 
 Matching ordinary pool borrowers and prewarm sessions share their pool's cache; each private data-source pool owns a separate cache. Unpooled connections reuse only their existing selector's cache, and an unpooled data source shares its selector among its connections. Existing configuration, resolver, credential, certificate and callback identities remain isolated. Pool Clear, pool credential retirement and pool Dispose replace the pool-owned cache object. Pool APIs do not clear unpooled selector-owned hints, which follow selector lifetime. Late success/failure from old sessions and constructors reserved before a generation change cannot modify the new cache; Clear does not interrupt already borrowed work. Removal of an empty ordinary registry pool also removes its cache. No global endpoint map, background probe or retained empty pool is added.
 
-The local evidence covers both compatibility modes, sync/async, direct/pool/data-source/prewarm paths, fallback, expiry, policy identity and generation boundaries. Success clearing, rotated ordering and reserve-to-constructor races include internal unit evidence. The deadline-before-feedback fixture establishes a local elapsed-budget boundary, not a real network timeout or Linux result. Five assets run on one .NET 10 host. The TNS file adapter below is implemented; OCP, richer TNS policies, proxy topology/reroute and real health/fault/load/platform acceptance remain open.
+The local evidence covers both compatibility modes, sync/async, direct/pool/data-source/prewarm paths, fallback, expiry, policy identity and generation boundaries. Success clearing, rotated ordering and reserve-to-constructor races include internal unit evidence. The deadline-before-feedback fixture establishes a local elapsed-budget boundary, not a real network timeout or Linux result. Five assets run on one .NET 10 host. The TNS file and OCP HTTP adapters below are implemented; full OCP/TNS policies, proxy topology/reroute and real health/fault/load/platform acceptance remain open.
 
 <a id="tns-file-discovery"></a>
 ## TNS file address discovery
@@ -587,4 +587,53 @@ Publish complete file replacements. In-place writes are not guaranteed coherent.
 
 ResolveAsync schedules potentially blocking file open away from its caller thread, uses async reads with cancellation, and checks cancellation before parse/publication. Sync Resolve waits for the same operation. A blocked OS file open/read cannot be forcibly interrupted; existing logical Open cancellation/deadline guards reject late results. Pre-cancel and retry-wait cancellation tests are separate from comprehensive actual mid-read IO cancellation, which is not established. Use Connection Timeout/cancellation and responsive storage accordingly.
 
-Existing pool routing applies unchanged: the resolver reference participates in ordinary pool identity, each Open resolves once before idle reuse/prewarm/new establishment, deleted or malformed files fail without stale fallback, and changed host/port snapshots retire idle candidates no longer present. Active leases are not migrated or replayed. Two same-path resolver instances have distinct reference identity. Modern private pooled/unpooled data sources use the same adapter. Local tests cover both modes/sync/async and all five assets on one .NET10 host; they do not establish real OceanBase/OBProxy, Linux or network-filesystem behavior. OCP, full TNS policies, proxy topology/reroute and real HA acceptance remain open.
+Existing pool routing applies unchanged: the resolver reference participates in ordinary pool identity, each Open resolves once before idle reuse/prewarm/new establishment, deleted or malformed files fail without stale fallback, and changed host/port snapshots retire idle candidates no longer present. Active leases are not migrated or replayed. Two same-path resolver instances have distinct reference identity. Modern private pooled/unpooled data sources use the same adapter. Local tests cover both modes/sync/async and all five assets on one .NET10 host; they do not establish real OceanBase/OBProxy, Linux or network-filesystem behavior. Full OCP/TNS policies, proxy topology/reroute and real HA acceptance remain open.
+
+<a id="ocp-http-discovery"></a>
+## OCP HTTP address discovery
+
+All five assets expose `OceanBaseOcpAddressResolver(HttpClient httpClient, Uri server, string netServiceName, string? expectedServiceName = null)`. The sealed immutable resolver is caller-owned and safe for concurrent use with a concurrency-safe client/handler. The driver never disposes that client or copies database credentials into HTTP requests. The caller configures HTTP authentication, TLS, proxy, timeout and handler behavior. The server must be an absolute HTTP(S) origin with root path and no userinfo/query/fragment. The trimmed nonblank net service name becomes the escaped appName in `/api/v2/obproxy/loadBalanceInfo?appName=...`; optional expected service must be nonblank.
+
+```csharp
+using var http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
+var resolver = new OceanBaseOcpAddressResolver(
+    http, new Uri("https://ocp.example/"), "APP", expectedServiceName: "tenant_service");
+using var connection = new OceanBaseConnection(connectionString);
+connection.AddressResolver = resolver;
+await connection.OpenAsync(cancellationToken);
+// Modern builders also accept builder.UseAddressResolver(resolver).
+```
+
+The accepted address response shape is:
+
+```json
+{
+  "successful": true,
+  "status": 200,
+  "data": {
+    "NET_SERVICE_NAME": "APP",
+    "DESCRIPTION": {
+      "OBLB": "ON",
+      "CONNECT_DATA": { "SERVICE_NAME": "tenant_service" },
+      "ADDRESS_LIST": [{
+        "ADDRESS": [
+          { "PROTOCOL": "TCP", "HOST": "db-a.example", "PORT": 2881 },
+          { "PROTOCOL": "TCP", "HOST": "2001:db8::1", "PORT": "2881" }
+        ]
+      }]
+    }
+  }
+}
+```
+
+The envelope must be an object with data; successful/success, when present, must be boolean true, and status, when present, must be the integer token200. Other envelope metadata is parsed and bounded but does not route. data only accepts NET_SERVICE_NAME and DESCRIPTION, with an exact ordinal service-name match. DESCRIPTION accepts exactly one ADDRESS_LIST group, optional CONNECT_DATA with exactly SERVICE_NAME, and optional OBLB=ON marker. The group only accepts ADDRESS; each address requires exactly PROTOCOL/HOST/PORT. TCP is case-insensitive, ports are integer JSON numbers or decimal digit strings in1..65535. Order and duplicates are retained; existing connection load selection still applies. This address adapter does not implement Java's default/random/group/weight/blacklist policy engine. Explicit strategies, retries, weights, unknown descriptor members, non-TCP and multiple groups are rejected rather than flattened. Rich OCP/TNS policy integration remains required work.
+
+NET_SERVICE_NAME binds to caller configuration; a present SERVICE_NAME also requires an exact ordinal expectedServiceName, and an expectation requires that field. These are metadata checks, not real server/tenant authentication. Normal credentials/database/TLS/identity behavior remains unchanged. Basic TNS file discovery is described above.
+
+Each Resolve/Open issues one GET with Accept application/json and Cache-Control no-cache/no-store. Only HTTP200 and application/json or a +json media type are accepted, with absent/UTF-8 charset and no residual Content-Encoding. When response.RequestMessage.RequestUri is supplied and differs, the response is rejected. Disable automatic redirects on the client's handler: checking the final URI cannot prevent or undo already-followed requests. The driver has no HTTP retry, cache, watcher, disk write or stale fallback; caller handlers may implement their own behavior, and must not reintroduce stale discovery or unwanted redirects. Fresh means a new request invocation, not a guarantee against caches outside the driver.
+
+The response limit is1MiB actual bytes, including optional leading UTF-8 BOM; oversized Content-Length rejects before reads, and actual reading stops at limit+1. UTF-16/invalid UTF-8 and malformed JSON fail explicitly. The strict bounded parser enforces16 JSON value levels and4096 value nodes (root, property values and array elements); it checks the remaining node budget before allocating the next object key. All decoded object keys are ordinal and duplicate keys are rejected, even in unused metadata. Serializer __type metadata is unsupported everywhere. JSON escapes follow JSON grammar, including escaped UTF-16 code units; endpoint/name checks still determine usable values. Endpoint/service validation reuses the TNS validator through safely quoted tokens, with256 endpoints/65536 canonical characters. Parse/limit/value failures are FormatException; unsupported policy/shape is NotSupportedException; HTTP status/redirect failures are HttpRequestException. Messages do not echo response content. Caller HTTP errors may contain the configured request URI.
+
+Request/response/body stream ownership is scoped to each operation and released on success/error/cancellation. Send and body ReadAsync receive cancellation, with checks before parse and publication. ResponseHeadersRead means HttpClient.Timeout alone does not cover the entire body; direct callers should supply a cancellation deadline, and logical Open keeps the existing Connection Timeout budget. Sync Resolve waits for the same operation. Caller handlers/streams must return promptly and honor tokens; arbitrary blocked code cannot be forcibly interrupted, while existing logical Open guards reject late results. Parsing checks cancellation per value and at completion, not during every character of a bounded long string/whitespace scan. No active connection migration, transaction restoration or SQL replay is introduced.
+
+Existing resolver-reference pool identity and one-snapshot-per-Open routing remain unchanged. Failure rejects idle reuse without old-address fallback; a changed host/port retires idle sessions absent from the new snapshot, leaving active leases alone. Modern pooled/unpooled sources share the same adapter contract. Local controlled HTTP handlers and protocol peers cover five assets on one.NET10host, not actual OCP/network HTTP/enterprise TLS/Linux/independent runtimes. Full discovery policy, proxy topology/reroute and real HA/load acceptance remain open.

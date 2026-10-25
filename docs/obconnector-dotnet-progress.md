@@ -1,5 +1,15 @@
 # Verification status and remaining work
 
+## 2026-10-26 P1-09 OCP HTTP discovery
+
+Developed from master/5cbe5c9, P1-09/W4. All five assets expose OceanBaseOcpAddressResolver with a caller-owned HttpClient, explicit HTTP(S) origin, net service name and optional expected SERVICE_NAME. Each logical Open fetches a fresh fixed-route OCP snapshot before idle reuse. The request escapes appName and carries no database credentials. See [contract](obconnector-dotnet-architecture-design.md#ocp-http-discovery), [full evidence](obconnector-dotnet-completeness.md#1553-2026-10-26-ocp-http地址发现) and [audit](obconnector-dotnet-driver-audit.md#48-ocp-http地址发现2026-10-26).
+
+HTTP200, UTF-8 JSON, 1MiB actual bytes, 16 value levels/4096 value nodes, exact NET_SERVICE_NAME and optional exact SERVICE_NAME metadata are enforced. One TCP address group preserves order/duplicates and existing256/65536 limits; explicit policies/weights/blacklists/multiple groups fail. The driver has no HTTP retry/cache/stale fallback. The caller controls HTTP authentication/TLS/proxy/handlers and must disable automatic redirects; final-URI rejection cannot undo a followed redirect. Send/body cancellation is passed through, but arbitrary handlers and long bounded CPU scans are not forcibly interrupted. HttpClient.Timeout with ResponseHeadersRead does not alone bound body consumption.
+
+最终完整单测5788通过（新增101），相关五资产消费者354通过（新增64），均零失败/跳过；Release全解决方案0警告/错误（14.57秒），5C#限定格式验证通过且无诊断。单测9分14秒，消费者7分20秒；五资产同一.NET10host运行，没有新增真实OCP/网络HTTP或实库互操作验收。
+
+Original platform-reader failures (__type mapping, numeric syntax, truncated JSON and trailing commas), exact-node fixture correction and raw numeric whitespace RED remain recorded. The replacement strict bounded parser has a313-fragment syntax comparison against test-only JsonDocument, not exhaustive grammar proof. Controlled HTTP handlers and loopback database peers establish local behavior only; no actual OCP/network HTTP, enterprise trust, Linux or independent-runtime acceptance is claimed. Full OCP/TNS policies/groups/weights, proxy topology/reroute, faults/load and release acceptance remain open. All23IDs/eightpackages stay open; local master only, no push/publication.
+
 ## 2026-10-26 P1-09 TNS file discovery
 
 Developed from master/9dc3f06, P1-09/W4. All five assets expose the immutable OceanBaseTnsAddressResolver for explicit UTF-8 file/alias discovery through the existing address-resolver API. Each logical Open reloads the file before idle pool reuse. Standard/wrapped descriptions, aliases/comments/quotes, TCP IPv4/IPv6 and optional exact SERVICE_NAME file-metadata binding are supported. Unsupported policy/group/weight/include/protocol options fail explicitly. See [contract and examples](obconnector-dotnet-architecture-design.md#tns-file-discovery), [complete evidence](obconnector-dotnet-completeness.md#1552-2026-10-26-tns文件地址发现) and [audit](obconnector-dotnet-driver-audit.md#47-tns文件地址发现2026-10-26).
