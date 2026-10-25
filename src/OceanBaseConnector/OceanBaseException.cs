@@ -8,7 +8,8 @@ namespace OceanBaseConnector
     /// carries the server error code and SQLSTATE when the server supplied
     /// them, and <see cref="IsExecutionOutcomeUnknown"/> marks cases where a
     /// command was already on the wire but no trustworthy terminal response
-    /// arrived (cancellation, timeout, network break): such SQL may or may
+    /// arrived (cancellation, timeout, network break), or a connection-level
+    /// server error left execution uncertain: such SQL may or may
     /// not have executed and must never be retried automatically. Messages
     /// never contain SQL text, bind values or credentials.
     /// </summary>

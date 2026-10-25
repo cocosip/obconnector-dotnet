@@ -310,11 +310,19 @@ namespace OceanBaseConnector.Internal.Session
                     ResponseComplete();
                     return packet;
                 }
-                var error = new OceanBaseException("The server rejected the command.", server.ErrorCode, server.SqlState);
+                var connectionFailure = server.SqlState?.StartsWith("08", StringComparison.Ordinal) == true ||
+                    (server.ErrorCode == 1927 && server.SqlState == "70100");
+                var error = new OceanBaseException(connectionFailure ? "The server reported a connection failure." : "The server rejected the command.",
+                    server.ErrorCode, server.SqlState, isExecutionOutcomeUnknown: connectionFailure && _sqlSent);
 #if NET8_0_OR_GREATER
                 error.FailedBatchCommand = BatchCommand;
 #endif
-                if (_longDataPending && !_sqlSent && Mode == OceanBaseCompatibilityMode.Oracle)
+                if (connectionFailure)
+                {
+                    _channel.ValidateReceivedResponseBoundary();
+                    _session.Break();
+                }
+                else if (_longDataPending && !_sqlSent && Mode == OceanBaseCompatibilityMode.Oracle)
                 {
                     ResponseComplete();
                     _session.Break(); // A piece error does not prove that staged parameter data was cleared.

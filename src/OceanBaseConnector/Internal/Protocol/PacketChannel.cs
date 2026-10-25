@@ -74,6 +74,13 @@ namespace OceanBaseConnector.Internal.Protocol
         internal void CompleteResponse(bool expectsResponse = true)
         { EnsureIdle(); _ob20?.CompleteResponse(expectsResponse); _compression?.CompleteResponse(); }
 
+        internal void ValidateReceivedResponseBoundary()
+        {
+            // Cancellation can close a fully received bare packet before its ERR is parsed.
+            if (_closed && _activePayload == null && _ob20 == null && _compression == null) return;
+            CompleteResponse();
+        }
+
         /// <summary>
         /// Swaps the underlying stream after a TLS upgrade. Sequence counters
         /// are preserved: the TLS handshake is invisible to the packet

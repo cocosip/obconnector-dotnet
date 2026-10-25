@@ -3,6 +3,17 @@
 This page retains historical results and open work from the former progress ledger, alongside dated verification of later changes. Local regression results and real database acceptance are recorded separately.
 
 
+## 2026-10-25 P0-05 connection-level server errors
+
+Developed from `master/917e9cc`, P0-05/W2 with P0-02/P0-04 boundaries. Connection-level ERR handling now retires failed sessions and preserves the current request's outcome semantics. See the [error and recovery contract](obconnector-dotnet-architecture-design.md#connection-level-server-errors) and [full module record](obconnector-dotnet-completeness.md#1549-2026-10-25-连接级服务器错误与显式连接重建).
+
+Final complete units: 5,485 passed, including 67 new cases. Affected consumers: 172 passed, including 80 new cases across five assets on one .NET10 host. Release build: zero warnings/errors; six changed C# files pass scoped format verification with the retained workspace-load warning. Without integration opt-in, nine configuration cases passed and two transaction cases were not executed.
+
+The first full unit run had 5,484 passes and one existing partial-cursor fixture failure. Its server terminator write hit a reset before accepting the replacement, which then timed out waiting for a greeting. The fixture now finishes writing the page before the partial branch closes; row two and the terminator remain unread, and isolation assertions remain. The original report is preserved; this does not establish the cause of earlier historical timeouts. The first consumer run had 142 passes/30 failures because the Oracle fixture wrongly required a time-zone probe before transaction controls; optional-probe handling corrected it, without product changes or relaxed assertions.
+
+The four selected real transaction regressions all failed before the initial greeting. An independent no-credential/no-SQL TCP probe also received zero greeting bytes after 5,035ms. No real connection-level ERR fault was exercised, and neither this local ERR matrix nor historical database passes establish final real-server acceptance. Full reset, server/proxy/coordinator failures, enterprise trust, load, independent runtimes and package/release acceptance remain open. All 23 gap IDs/eight work packages remain open; no push or publication.
+
+
 ## 2026-10-25 P0-01 Closed callback pool cleanup
 
 Developed from `master/80ddfbe` for P0-01/W1. A pooled Open or OpenAsync inside a Closed state handler completes the captured close chain before borrowing, including nested callbacks and another logical borrower. Pool capacity, captured ownership, early Closed events, external asynchronous rollback interleaving and old-reader generation guards remain in force. Completed scopes release their captured delegates; asynchronous cleanup also releases its lifted local delegate before publishing completion. See the [contract](obconnector-dotnet-architecture-design.md#pooled-close-callbacks) and [full evidence](obconnector-dotnet-completeness.md#1548-2026-10-25-closed-回调中的满池重开与清理资源释放).

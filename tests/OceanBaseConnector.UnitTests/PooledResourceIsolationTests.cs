@@ -127,6 +127,7 @@ namespace OceanBaseConnector.UnitTests
         public async Task OracleOutputCursorRetirementProtectsTheNextSameEndpointBorrower(bool asynchronous, string phase)
         {
             using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var pageSent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             var serving = Task.Run(async () =>
             {
@@ -141,6 +142,7 @@ namespace OceanBaseConnector.UnitTests
                     await channel.WritePacketAsync(CursorRow(1), stop.Token);
                     await channel.WritePacketAsync(CursorRow(2), stop.Token);
                     await channel.WritePacketAsync(CursorTerminator(130, false), stop.Token);
+                    pageSent.SetResult();
                 }
                 // Reader completion queues IDs; only explicit cursor disposal flushes them before Close.
                 if (phase == "disposed")
@@ -179,6 +181,8 @@ namespace OceanBaseConnector.UnitTests
                     }
                 }
                 if (phase == "disposed") { if (asynchronous) await cursor.DisposeAsync(); else cursor.Dispose(); }
+                // Keep row two unread, but finish the scripted write before closing its socket.
+                if (phase == "partial") await pageSent.Task.WaitAsync(stop.Token);
                 Assert.True(session.RequiresDiscardOnReturn); // The opaque call retires even fully released cursor sessions.
                 if (asynchronous) await connection.CloseAsync(); else connection.Close();
                 if (asynchronous) await connection.OpenAsync(stop.Token); else connection.Open();

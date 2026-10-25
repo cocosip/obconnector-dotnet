@@ -4,6 +4,16 @@ For a basic query, see the [README](../README.md). For tested server profiles, s
 
 The [Connector/J architecture outline](obconnector-j-architecture-outline.md) is retained as the protocol and behavior reference. Its Java feature inventory does not establish .NET support; unverified and unsupported combinations are listed in Compatibility.
 
+## Connection-level server errors
+
+A trusted server ERR with ordinal SQLSTATE prefix `08`, or exactly error `1927` and SQLSTATE `70100`, retires the physical session. The connection reports `Broken`; its local transaction becomes unusable. Server code and SQLSTATE are retained with a generic message that omits server details. Ordinary errors, including `1317/70100`, `1927/HY000` and syntax errors, retain their existing session semantics.
+
+`IsExecutionOutcomeUnknown` uses the current exchange's execution flag. A connection-level failure for a sent business execution, COMMIT/ROLLBACK or ChangeDatabase is conservative unknown: an ERR does not prove the backend never executed it. A prepare, explicitly non-executing metadata request or Oracle upload-piece acknowledgement sent before execution is not an unknown business outcome. A later explicitly non-executing request after a confirmed response does not invalidate the confirmed parent. Cursor fetch semantics depend on whether the original execution is still pending; do not infer the flag from the FETCH opcode alone.
+
+The complete framing boundary is validated before retiring the session and completing the exchange. Invalid OB20/compression boundaries remain protocol failures without trusted server code/SQLSTATE. If cancellation closes a fully consumed bare MySQL packet before ERR parsing, its identity is retained. A closed framed transport cannot supply the required boundary evidence and remains a generic conservative failure; the driver does not bypass framing validation. Oracle piece failures do not run response completion a second time after retirement.
+
+Recovery is explicit: Close, then Open to obtain credentials, resolve addresses and acquire a new lease. The driver does not replay the failed request, send a Batch suffix, migrate a transaction or reconnect during ERR handling. Dispose old resources without relying on disposal as compensation; reconcile unknown writes using the [application recovery guidance](unknown-outcome-recovery.md). Capacity-one pools, delayed old transaction/command/CloseConnection-reader disposal and changed resolver endpoints have local regressions.
+
 ## Connections and configuration
 
 Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown or conflicting options are rejected.
