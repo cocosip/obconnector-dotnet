@@ -23,6 +23,7 @@ namespace OceanBaseConnector
         private PreparedStatement? _prepared;
         private PhysicalSession? _oracleSession;
         private bool _explicitPreparation;
+        private string? _mysqlVariablePrefix;
         private bool _disposed;
         private int _fetchSize;
         internal PhysicalSession? RequiredSession { get; set; }
@@ -94,6 +95,7 @@ namespace OceanBaseConnector
                 var zone = execution.EnsureSessionTimeZone();
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = execution.EnsureNationalCharacterSet();
+                operation.MySql?.Initialize(execution, operation.Session);
                 var statement = operation.Binary && (operation.Oracle == null || HasStreamParameters(operation.Bindings.Parameters))
                     ? EnsurePrepared(operation, operation.ClientFallback) : null;
                 var text = operation.Binary && operation.Oracle == null && statement == null
@@ -112,11 +114,11 @@ namespace OceanBaseConnector
                     : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
                     : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0);
                 if (statement != null) execution.SendLongData(statement.Id, operation.Bindings.Parameters, request.Length);
-                execution.BeforeSuccessfulCompletion = operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
+                execution.BeforeSuccessfulCompletion = operation.MySql != null ? operation.MySql.PublishOutputs : operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
                 execution.Send(request, executesSql: !IsLobRead);
                 var result = new QueryResult(execution, operation.Oracle != null || statement != null, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize,
-                    oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle, cursorOffset: operation.CursorOffset);
+                    oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle, cursorOffset: operation.CursorOffset, mysqlPlan: operation.MySql);
                 result.Start();
                 return new OceanBaseDataReader(execution, result, operation.Connection, operation.Session, behavior);
             }
@@ -169,6 +171,7 @@ namespace OceanBaseConnector
                 var zone = await execution.EnsureSessionTimeZoneAsync(cancellationToken).ConfigureAwait(false);
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = await execution.EnsureNationalCharacterSetAsync(cancellationToken).ConfigureAwait(false);
+                if (operation.MySql != null) await operation.MySql.InitializeAsync(execution, operation.Session, cancellationToken).ConfigureAwait(false);
                 var statement = operation.Binary && (operation.Oracle == null || HasStreamParameters(operation.Bindings.Parameters))
                     ? await EnsurePreparedAsync(operation, cancellationToken, operation.ClientFallback).ConfigureAwait(false) : null;
                 var text = operation.Binary && operation.Oracle == null && statement == null
@@ -187,11 +190,11 @@ namespace OceanBaseConnector
                     : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
                     : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, operation.FetchSize > 0);
                 if (statement != null) await execution.SendLongDataAsync(statement.Id, operation.Bindings.Parameters, request.Length).ConfigureAwait(false);
-                execution.BeforeSuccessfulCompletion = operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
+                execution.BeforeSuccessfulCompletion = operation.MySql != null ? operation.MySql.PublishOutputs : operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
                 await execution.SendAsync(request, executesSql: !IsLobRead).ConfigureAwait(false);
                 var result = new QueryResult(execution, operation.Oracle != null || statement != null, sequential: (behavior & CommandBehavior.SequentialAccess) != 0,
                     cursorId: operation.FetchSize > 0 ? statement!.Id : (uint?)null, fetchSize: operation.FetchSize,
-                    oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle, cursorOffset: operation.CursorOffset);
+                    oracleParameterCount: operation.Oracle != null ? operation.Bindings.Parameters.Length : (int?)null, oraclePlan: operation.Oracle, cursorOffset: operation.CursorOffset, mysqlPlan: operation.MySql);
                 await result.StartAsync(cancellationToken).ConfigureAwait(false);
                 return new OceanBaseDataReader(execution, result, operation.Connection, operation.Session, behavior);
             }
@@ -219,7 +222,7 @@ namespace OceanBaseConnector
             if (_oracleSession != null && !ReferenceEquals(_oracleSession, statement?.Session)) await PreparedStatement.CloseIdleAsync(_oracleSession, _timeout).ConfigureAwait(false);
             _oracleSession = null;
         }
-        private (CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset)
+        private (CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset, MySqlCommandPlan? MySql)
             Start(CommandBehavior behavior, CancellationToken token, bool prepareOnly, int arrayCount = 0)
         {
             lock (_gate)
@@ -255,20 +258,28 @@ namespace OceanBaseConnector
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
                 var oracle = session.UseOraclePrepareExecute && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle &&
                     (arrayCount != 0 || CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters, arrayCount) : null;
-                var multiStatement = SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
+                var mysql = CommandType == CommandType.StoredProcedure && session.Info!.Mode == OceanBaseCompatibilityMode.MySql
+                    ? MySqlCommandPlan.Create(text, _parameters, _mysqlVariablePrefix ??= "obc_" + Guid.NewGuid().ToString("N")) : null;
+                if (mysql != null && (_fetchSize > 0 || !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientPsMultiResults)))
+                    throw new NotSupportedException("MySQL stored procedures require PS multi-results support and do not support FetchSize.");
+                var multiStatement = CommandType == CommandType.Text && SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
                 if (schemaOnly && multiStatement) throw new NotSupportedException("SchemaOnly requires a single statement.");
                 if (keyInfo && multiStatement) throw new NotSupportedException("KeyInfo requires a single statement.");
                 if (multiStatement && !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientMultiStatements))
                     throw new NotSupportedException("Multi-statement execution requires Allow Multi Statements=true and server support.");
 #if NET8_0_OR_GREATER
-                if (oracle != null && BatchCommand is OceanBaseBatchCommand batch) batch.BindOutputs(oracle);
+                if (BatchCommand is OceanBaseBatchCommand batch)
+                {
+                    if (oracle != null) batch.BindOutputs(oracle.Outputs);
+                    if (mysql != null) batch.BindOutputs(mysql.Outputs);
+                }
 #endif
-                if (oracle == null && CommandType != CommandType.Text) throw new NotSupportedException("Oracle stored procedures require Use Oracle Prepare Execute=true.");
+                if (oracle == null && mysql == null && CommandType != CommandType.Text) throw new NotSupportedException("Oracle stored procedures require Use Oracle Prepare Execute=true.");
                 if (oracle != null && (prepareOnly || _fetchSize > 0)) throw new NotSupportedException("PrepareExecute prepares during execution and does not support standalone Prepare or FetchSize.");
-                var bindings = oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
+                var bindings = mysql?.Bindings ?? oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
                 if (multiStatement && (bindings.Parameters.Length != 0 || prepareOnly || _fetchSize > 0 || oracle != null))
                     throw new NotSupportedException("Multi-statement execution does not support parameters, Prepare or server cursors.");
-                var clientFallback = AllowClientSidePrepareFallback && !prepareOnly && !schemaOnly && !keyInfo && !_explicitPreparation && _fetchSize == 0 && oracle == null;
+                var clientFallback = AllowClientSidePrepareFallback && !prepareOnly && !schemaOnly && !keyInfo && !_explicitPreparation && _fetchSize == 0 && oracle == null && mysql == null;
                 // Stream identity must not depend on a user stream's equality implementation.
                 ConditionalWeakTable<Stream, OceanBaseParameter>? streamBindings = null;
                 foreach (var parameter in bindings.Parameters)
@@ -291,7 +302,7 @@ namespace OceanBaseConnector
                         throw new NotSupportedException("LOB parameters require negotiated Use Lob Locators=true.");
                 var fetchSize = prepareOnly || schemaOnly ? 0 : _fetchSize;
                 if (prepareOnly) _explicitPreparation = true;
-                var binary = keyInfo || schemaOnly || oracle != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
+                var binary = keyInfo || schemaOnly || oracle != null || mysql != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
                 var parameters = binary && !prepareOnly && !schemaOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true) : Array.Empty<byte>();
                 if (arrayCount != 0) _ = OraclePrepareExecutePacket.BuildArray(0, bindings.CommandText, bindings.Parameters);
                 if (_prepared != null && (oracle != null || !binary || !ReferenceEquals(_prepared.Session, session) ||
@@ -332,7 +343,7 @@ namespace OceanBaseConnector
                     oracle.StatementCreated = oracle.Cursors.SetStatement;
                     _oracleSession = session;
                 }
-                return (execution, session, connection, bindings, parameters, binary, fetchSize, oracle, clientFallback, cursorOffset);
+                return (execution, session, connection, bindings, parameters, binary, fetchSize, oracle, clientFallback, cursorOffset, mysql);
             }
         }
 
@@ -355,7 +366,7 @@ namespace OceanBaseConnector
             return false;
         }
 
-        private PreparedStatement? EnsurePrepared((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset) operation, bool allowFallback = false, bool useCache = true)
+        private PreparedStatement? EnsurePrepared((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset, MySqlCommandPlan? MySql) operation, bool allowFallback = false, bool useCache = true)
         {
             InvalidatePreparedContext(operation.Session);
             if (_prepared != null) return _prepared;
@@ -369,7 +380,7 @@ namespace OceanBaseConnector
             return statement == null ? null : PublishPrepared(statement, operation.Bindings.Parameters.Length, operation.Oracle?.Cursors);
         }
 
-        private async Task<PreparedStatement?> EnsurePreparedAsync((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset) operation, CancellationToken token, bool allowFallback = false, bool useCache = true)
+        private async Task<PreparedStatement?> EnsurePreparedAsync((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset, MySqlCommandPlan? MySql) operation, CancellationToken token, bool allowFallback = false, bool useCache = true)
         {
             InvalidatePreparedContext(operation.Session);
             if (_prepared != null) return _prepared;

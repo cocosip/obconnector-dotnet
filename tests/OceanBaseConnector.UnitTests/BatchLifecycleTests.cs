@@ -161,6 +161,36 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public async Task ClosedBatchReaderCountsCannotOverwriteReexecutedCommand(bool asynchronous, bool mysql)
+        {
+            async Task Exchange(PacketChannel channel)
+            {
+                await Query(channel, "first"); await channel.WritePacketAsync(Ok(2)); channel.BeginCommand();
+                await Query(channel, "second"); await channel.WritePacketAsync(Ok(5));
+            }
+            var server = mysql ? MySqlProcedureServer(Exchange) : Server(Exchange);
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch(); var item = BatchItem(batch, "first");
+                using var oldReader = asynchronous ? await batch.ExecuteReaderAsync() : batch.ExecuteReader();
+                if (asynchronous) await oldReader.CloseAsync(); else oldReader.Close();
+                Assert.Equal(2, oldReader.RecordsAffected); Assert.Equal(2, item.RecordsAffected);
+                item.CommandText = "second";
+                Assert.Equal(5, asynchronous ? await batch.ExecuteNonQueryAsync() : batch.ExecuteNonQuery());
+                Assert.Equal(5, item.RecordsAffected);
+                Assert.Equal(2, oldReader.RecordsAffected);
+                Assert.Equal(5, item.RecordsAffected);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData(false)]
         [InlineData(true)]
         public async Task BatchPrepareReusesEachStatementAndClosesOwnedIds(bool asynchronous)

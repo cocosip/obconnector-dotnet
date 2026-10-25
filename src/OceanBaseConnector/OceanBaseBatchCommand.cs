@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using OceanBaseConnector.Internal.Session;
-using OceanBaseConnector.Internal.Sql;
 
 namespace OceanBaseConnector
 {
@@ -41,10 +40,10 @@ namespace OceanBaseConnector
             return _command;
         }
 
-        internal void BindOutputs(OracleCommandPlan plan)
+        internal void BindOutputs(OceanBaseParameter[] outputs)
         {
             // Keep validation and inputs frozen; only successful output publication targets the caller.
-            for (var i = 0; i < plan.Outputs.Length; i++) plan.Outputs[i] = _outputTargets[plan.Outputs[i]];
+            for (var i = 0; i < outputs.Length; i++) outputs[i] = _outputTargets[outputs[i]];
         }
 
         internal void Release() { var command = _command; _command = null; _outputTargets.Clear(); command?.Dispose(); }

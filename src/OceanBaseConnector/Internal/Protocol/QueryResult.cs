@@ -16,14 +16,14 @@ namespace OceanBaseConnector.Internal.Protocol
         private long _affected = -1;
         private bool _faulted;
         private int _metadataBytes;
-        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true, bool sequential = false, uint? cursorId = null, int fetchSize = 0, int? oracleParameterCount = null, OracleCommandPlan? oraclePlan = null, bool refCursor = false, bool cursorOffset = false)
+        internal QueryResult(CommandExchange query, bool binary = false, bool completeExchange = true, bool sequential = false, uint? cursorId = null, int fetchSize = 0, int? oracleParameterCount = null, OracleCommandPlan? oraclePlan = null, bool refCursor = false, bool cursorOffset = false, MySqlCommandPlan? mysqlPlan = null)
         {
             _query = query; IsBinary = binary; _completeExchange = completeExchange; _sequential = sequential; _cursorId = cursorId; _fetchSize = fetchSize;
             if (oracleParameterCount.HasValue && (!binary || cursorId.HasValue || query.Mode != OceanBaseCompatibilityMode.Oracle || (uint)oracleParameterCount.Value > ushort.MaxValue))
                 throw new ArgumentException("Oracle PrepareExecute requires a binary Oracle response without a fetch cursor.", nameof(oracleParameterCount));
             _oracleParameterCount = oracleParameterCount; _oracleHeaderPending = oracleParameterCount.HasValue;
             _oraclePlan = oraclePlan; _refCursorInitial = refCursor;
-            _cursorOffset = cursorOffset;
+            _cursorOffset = cursorOffset; _mysqlPlan = mysqlPlan;
             if (cursorId.HasValue) query.OwnCursor(refCursor);
         }
         internal bool IsBinary { get; }
@@ -188,6 +188,11 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (_more) throw new ProtocolException("The session state query returned multiple results.");
                 _query.ResponseComplete();
             }
+            else if (!_more && _mysqlPlan?.Outputs.Length > 0)
+            {
+                _mysqlOutputsPending = _more = true;
+                _query.ResponseComplete();
+            }
             else if (!_more) _query.Complete();
         }
 
@@ -257,6 +262,11 @@ namespace OceanBaseConnector.Internal.Protocol
         internal bool NextResult()
         {
             while (Read()) { }
+            if (_mysqlOutputsPending)
+            {
+                try { ReadMySqlOutputs(); return false; }
+                catch (Exception error) { throw Fault(error); }
+            }
             if (!_more) { ClearColumns(); return false; }
             Start();
             return true;
@@ -265,6 +275,11 @@ namespace OceanBaseConnector.Internal.Protocol
         internal async Task<bool> NextResultAsync(CancellationToken token)
         {
             while (await ReadAsync(token).ConfigureAwait(false)) { }
+            if (_mysqlOutputsPending)
+            {
+                try { await ReadMySqlOutputsAsync(token).ConfigureAwait(false); return false; }
+                catch (Exception error) { throw Fault(error); }
+            }
             if (!_more) { ClearColumns(); return false; }
             await StartAsync(token).ConfigureAwait(false);
             return true;

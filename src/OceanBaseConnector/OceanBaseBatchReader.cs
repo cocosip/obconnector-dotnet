@@ -33,7 +33,7 @@ namespace OceanBaseConnector
         }
         private void UpdateCount()
         {
-            if (!_closed && !_failed && _current != null)
+            if (!_failed && _current != null)
                 _operation.Items[_index].Affected = _operation.Counts[_index] = _current.RecordsAffected;
         }
         private DbDataReader Current
@@ -93,14 +93,14 @@ namespace OceanBaseConnector
         public override void Close()
         {
             if (_closed) return; _closed = true;
-            try { _current?.Dispose(); }
-            finally { _operation.Dispose(); if ((_operation.Behavior & CommandBehavior.CloseConnection) != 0) _operation.Connection.CloseSession(_operation.Session!); }
+            try { _current?.Dispose(); UpdateCount(); }
+            finally { _current = null; _operation.Dispose(); if ((_operation.Behavior & CommandBehavior.CloseConnection) != 0) _operation.Connection.CloseSession(_operation.Session!); }
         }
         public override async Task CloseAsync()
         {
             if (_closed) return; _closed = true;
-            try { if (_current != null) await _current.DisposeAsync().ConfigureAwait(false); }
-            finally { _operation.Dispose(); if ((_operation.Behavior & CommandBehavior.CloseConnection) != 0) await _operation.Connection.CloseSessionAsync(_operation.Session!).ConfigureAwait(false); }
+            try { if (_current != null) await _current.DisposeAsync().ConfigureAwait(false); UpdateCount(); }
+            finally { _current = null; _operation.Dispose(); if ((_operation.Behavior & CommandBehavior.CloseConnection) != 0) await _operation.Connection.CloseSessionAsync(_operation.Session!).ConfigureAwait(false); }
         }
         protected override void Dispose(bool disposing) { if (disposing) Close(); base.Dispose(disposing); }
         public override async ValueTask DisposeAsync() { await CloseAsync().ConfigureAwait(false); GC.SuppressFinalize(this); }

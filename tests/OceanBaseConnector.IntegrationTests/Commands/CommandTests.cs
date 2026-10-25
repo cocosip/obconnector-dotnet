@@ -84,13 +84,14 @@ public sealed class CommandTests
 
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.MySql), MemberType = typeof(ProfileTheoryData))]
-    public async Task StoredProcedureRequiresOraclePrepareExecute(string profileName)
+    public async Task MissingMySqlProcedureReturnsConfirmedServerError(string profileName)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
-        await using var command = db.Command(connection, "nonexistent_procedure");
+        await using var command = db.Command(connection, "OBI_MISSING_" + Guid.NewGuid().ToString("N"));
         command.CommandType = CommandType.StoredProcedure;
-        Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery());
+        var error = await Assert.ThrowsAsync<OceanBaseException>(() => command.ExecuteNonQueryAsync());
+        Assert.Equal(1305, error.ServerErrorCode); Assert.False(error.IsExecutionOutcomeUnknown);
     }
 
     [IntegrationTheory]
@@ -100,7 +101,7 @@ public sealed class CommandTests
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
         await using var command = db.Command(connection, db.SelectOne);
-        Assert.Throws<NotSupportedException>(() => command.ExecuteReader(CommandBehavior.SchemaOnly));
+        Assert.Throws<NotSupportedException>(() => command.ExecuteReader((CommandBehavior)128));
     }
 
     [IntegrationTheory]

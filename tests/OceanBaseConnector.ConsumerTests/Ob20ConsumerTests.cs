@@ -41,8 +41,11 @@ namespace OceanBaseConnector.ConsumerTests
                 using var connection = (DbConnection)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!)!;
                 connection.ConnectionString = new DbConnectionStringBuilder
                 {
-                    ["Server"] = "127.0.0.1", ["Port"] = ((IPEndPoint)listener.LocalEndpoint).Port,
-                    ["User ID"] = "u", ["TLS Mode"] = "Disabled", ["Use OB20"] = kind != "unrequested",
+                    ["Server"] = "127.0.0.1",
+                    ["Port"] = ((IPEndPoint)listener.LocalEndpoint).Port,
+                    ["User ID"] = "u",
+                    ["TLS Mode"] = "Disabled",
+                    ["Use OB20"] = kind != "unrequested",
                 }.ConnectionString;
                 if (async) await connection.OpenAsync(budget.Token); else connection.Open();
                 using (var command = connection.CreateCommand())
@@ -91,12 +94,13 @@ namespace OceanBaseConnector.ConsumerTests
             await ObserveClose(stream, token);
         }
 
-        private static async Task Handshake(PacketChannel channel, Stream stream, string kind, CancellationToken token, bool deprecated = false, bool lobLocators = false, string version = "4.4.2.2", SslStream? tls = null, X509Certificate2? certificate = null)
+        private static async Task Handshake(PacketChannel channel, Stream stream, string kind, CancellationToken token, bool deprecated = false, bool lobLocators = false, string version = "4.4.2.2", SslStream? tls = null, X509Certificate2? certificate = null, bool mysql = false)
         {
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
             var upper = Array.IndexOf(greeting, (byte)0, 1) + 1 + 4 + 8 + 1 + 2 + 1 + 2;
             if (kind != "no-attributes") greeting[upper] |= 16;
+            if (mysql) greeting[upper] |= 4;
             if (deprecated) greeting[upper + 1] |= 1;
             if (lobLocators) greeting[upper + 1] |= 32;
             await channel.WritePacketAsync(greeting, token);
@@ -121,22 +125,23 @@ namespace OceanBaseConnector.ConsumerTests
             if (kind != "unrequested" && kind != "no-attributes") Assert.Equal("256", attributes["__proxy_capability_flag"]);
             else Assert.False(attributes.ContainsKey("__proxy_capability_flag"));
             if (lobLocators) Assert.Equal("1", attributes["__ob_client_attribute_capability_flag"]);
-            await channel.WritePacketAsync(Report(kind != "unsupported", 0), token); channel.BeginCommand();
-            await ReplyIdentity(channel, stream, kind == "enabled", token, deprecated, version);
+            var report = Report(kind != "unsupported", 0); if (mysql) report[3] &= 251;
+            await channel.WritePacketAsync(report, token); channel.BeginCommand();
+            await ReplyIdentity(channel, stream, kind == "enabled", token, deprecated, version, mysql);
         }
 
-        internal static async Task ReplyIdentity(PacketChannel channel, Stream stream, bool ob20, CancellationToken token, bool deprecated = false, string version = "4.4.2.2")
+        internal static async Task ReplyIdentity(PacketChannel channel, Stream stream, bool ob20, CancellationToken token, bool deprecated = false, string version = "4.4.2.2", bool mysql = false)
         {
             if (!ob20)
             {
-                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, version: version, deprecated: deprecated, token: token);
+                await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, oracle: !mysql, version: version, deprecated: deprecated, token: token);
                 return;
             }
             // Identity is the first OB20 request; feature exchanges start at request 1.
             var query = await ReadRequest(stream, channel, true, 0, token);
             Assert.Equal(3, query[0]);
-            Assert.Equal("select ob_version(), @@ob_compatibility_mode from dual", Encoding.UTF8.GetString(query, 1, query.Length - 1));
-            await stream.WriteAsync(Ob20Packet.Build(1234, 0, 1, TextResult(deprecated, version, "ORACLE")), token);
+            Assert.Equal(mysql ? "select ob_version(), @@ob_compatibility_mode, @@autocommit from dual" : "select ob_version(), @@ob_compatibility_mode from dual", Encoding.UTF8.GetString(query, 1, query.Length - 1));
+            await stream.WriteAsync(Ob20Packet.Build(1234, 0, 1, TextResult(deprecated, mysql ? new[] { version, "MYSQL", "1" } : new[] { version, "ORACLE" })), token);
         }
 
         private static async Task<byte[]> ReadRequest(Stream stream, PacketChannel channel, bool ob20, uint request, CancellationToken token)
@@ -161,12 +166,18 @@ namespace OceanBaseConnector.ConsumerTests
         }
 
         [Theory]
-        [InlineData(false, "crc")] [InlineData(true, "crc")]
-        [InlineData(false, "last")] [InlineData(true, "last")]
-        [InlineData(false, "trailing")] [InlineData(true, "trailing")]
-        [InlineData(false, "timeout")] [InlineData(true, "timeout")]
-        [InlineData(false, "cancel")] [InlineData(true, "cancel")]
-        [InlineData(false, "close")] [InlineData(true, "close")]
+        [InlineData(false, "crc")]
+        [InlineData(true, "crc")]
+        [InlineData(false, "last")]
+        [InlineData(true, "last")]
+        [InlineData(false, "trailing")]
+        [InlineData(true, "trailing")]
+        [InlineData(false, "timeout")]
+        [InlineData(true, "timeout")]
+        [InlineData(false, "cancel")]
+        [InlineData(true, "cancel")]
+        [InlineData(false, "close")]
+        [InlineData(true, "close")]
         public async Task Ob20FaultsBreakSessionWithoutReplayingSql(bool async, string kind)
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -209,7 +220,8 @@ namespace OceanBaseConnector.ConsumerTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task Ob20TrustedServerErrorEndsResponseAndAllowsNextCommand(bool async)
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -255,10 +267,14 @@ namespace OceanBaseConnector.ConsumerTests
         }
 
         [Theory]
-        [InlineData(false, "success")] [InlineData(true, "success")]
-        [InlineData(false, "crc")] [InlineData(true, "crc")]
-        [InlineData(false, "last")] [InlineData(true, "last")]
-        [InlineData(false, "cancel")] [InlineData(true, "cancel")]
+        [InlineData(false, "success")]
+        [InlineData(true, "success")]
+        [InlineData(false, "crc")]
+        [InlineData(true, "crc")]
+        [InlineData(false, "last")]
+        [InlineData(true, "last")]
+        [InlineData(false, "cancel")]
+        [InlineData(true, "cancel")]
         public async Task Ob20CursorPagesValidateEachOuterBoundary(bool async, string kind)
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));

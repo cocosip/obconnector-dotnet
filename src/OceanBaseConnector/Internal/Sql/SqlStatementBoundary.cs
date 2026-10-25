@@ -27,12 +27,13 @@ namespace OceanBaseConnector.Internal.Sql
         private static bool ScanStatements(string text, OceanBaseCompatibilityMode mode, bool typeDdl)
         {
             var oracle = mode == OceanBaseCompatibilityMode.Oracle;
-            // Program-unit semicolons belong to the server's PL/SQL grammar, not to a text batch.
+            // Program-unit semicolons belong to the server grammar, not to a text batch.
             if (oracle && IsOracleProgramUnit(text))
             {
                 var position = 0;
-                return typeDdl && IsDdl(ReadOracleKeyword(text, ref position));
+                return typeDdl && IsDdl(ReadKeyword(text, ref position));
             }
+            if (!oracle && IsMySqlProgramUnit(text)) return false;
             var separated = false;
             var statementStart = true;
             for (var position = 0; position < text.Length; position++)
@@ -43,7 +44,7 @@ namespace OceanBaseConnector.Internal.Sql
                 if (typeDdl && statementStart)
                 {
                     var keywordPosition = position;
-                    if (IsDdl(ReadOracleKeyword(text, ref keywordPosition))) return true;
+                    if (IsDdl(ReadKeyword(text, ref keywordPosition))) return true;
                 }
                 statementStart = false;
                 var value = text[position];
@@ -83,22 +84,72 @@ namespace OceanBaseConnector.Internal.Sql
                 position += 2;
                 SkipTrivia(text, ref position, true);
             }
-            var keyword = ReadOracleKeyword(text, ref position);
+            var keyword = ReadKeyword(text, ref position);
             if (keyword == "BEGIN" || keyword == "DECLARE") return true;
             if (keyword != "CREATE") return false;
-            keyword = ReadOracleKeyword(text, ref position);
+            keyword = ReadKeyword(text, ref position);
             if (keyword == "OR")
             {
-                if (ReadOracleKeyword(text, ref position) != "REPLACE") return false;
-                keyword = ReadOracleKeyword(text, ref position);
+                if (ReadKeyword(text, ref position) != "REPLACE") return false;
+                keyword = ReadKeyword(text, ref position);
             }
-            if (keyword == "EDITIONABLE" || keyword == "NONEDITIONABLE") keyword = ReadOracleKeyword(text, ref position);
+            if (keyword == "EDITIONABLE" || keyword == "NONEDITIONABLE") keyword = ReadKeyword(text, ref position);
             return keyword == "PROCEDURE" || keyword == "FUNCTION" || keyword == "PACKAGE" || keyword == "TRIGGER" || keyword == "TYPE";
         }
 
-        private static string ReadOracleKeyword(string text, ref int position)
+        private static bool IsMySqlProgramUnit(string text)
         {
-            SkipTrivia(text, ref position, true);
+            var position = 0;
+            if (ReadKeyword(text, ref position, oracle: false) != "CREATE") return false;
+            var keyword = ReadKeyword(text, ref position, oracle: false);
+            if (keyword == "OR")
+            {
+                if (ReadKeyword(text, ref position, oracle: false) != "REPLACE") return false;
+                keyword = ReadKeyword(text, ref position, oracle: false);
+            }
+            if (keyword == "DEFINER")
+            {
+                SkipTrivia(text, ref position, false);
+                if (position == text.Length || text[position++] != '=') return false;
+                if (!SkipMySqlAccountPart(text, ref position)) return false;
+                SkipTrivia(text, ref position, false);
+                if (position < text.Length && text[position] == '(')
+                {
+                    position++; SkipTrivia(text, ref position, false);
+                    if (position == text.Length || text[position++] != ')') return false;
+                }
+                SkipTrivia(text, ref position, false);
+                if (position < text.Length && text[position] == '@')
+                { position++; if (!SkipMySqlAccountPart(text, ref position)) return false; }
+                keyword = ReadKeyword(text, ref position, oracle: false);
+            }
+            return keyword == "PROCEDURE" || keyword == "FUNCTION" || keyword == "TRIGGER" || keyword == "EVENT";
+        }
+
+        private static bool SkipMySqlAccountPart(string text, ref int position)
+        {
+            SkipTrivia(text, ref position, false);
+            if (position == text.Length) return false;
+            var quote = text[position];
+            if (quote == '\'' || quote == '"' || quote == '`')
+            {
+                for (position++; position < text.Length; position++)
+                {
+                    if (text[position] == '\\') { position++; continue; }
+                    if (text[position] != quote) continue;
+                    if (position + 1 < text.Length && text[position + 1] == quote) { position++; continue; }
+                    position++; return true;
+                }
+                return false;
+            }
+            var start = position;
+            while (position < text.Length && (char.IsLetterOrDigit(text[position]) || text[position] == '_' || text[position] == '$' || text[position] == '.' || text[position] == '%')) position++;
+            return position != start;
+        }
+
+        private static string ReadKeyword(string text, ref int position, bool oracle = true)
+        {
+            SkipTrivia(text, ref position, oracle);
             var start = position;
             while (position < text.Length && (char.IsLetterOrDigit(text[position]) || text[position] == '_' || text[position] == '$' || text[position] == '#')) position++;
             return text.Substring(start, position - start).ToUpperInvariant();

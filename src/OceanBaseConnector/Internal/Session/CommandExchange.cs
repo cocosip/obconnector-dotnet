@@ -85,6 +85,7 @@ namespace OceanBaseConnector.Internal.Session
         internal bool InvalidatePreparedStatements { get; set; }
         internal bool InvalidateComplexTypes { get; set; }
         internal bool Succeeded { get; private set; }
+        internal bool IsActive => Volatile.Read(ref _finished) == 0;
         internal LobSession? Lobs { get; set; }
         internal IReadOnlyDictionary<(string, string), OceanBaseComplexType>? ComplexTypes { get; set; }
         internal void EnsureReading()

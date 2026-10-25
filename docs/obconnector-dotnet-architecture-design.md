@@ -207,7 +207,7 @@ Task DeriveParametersAsync(CancellationToken cancellationToken = default);
 Task DeriveParametersAsync(string? overload, CancellationToken cancellationToken = default);
 ```
 
-They require CommandType.StoredProcedure and an open idle connection. Bind the command to the current local transaction when one exists. They read the visible routine directory and its complete top-level signature without executing the target. MySQL StoredProcedure execution remains unsupported; Oracle execution still requires Use Oracle Prepare Execute=true and its existing type/direction rules.
+They require CommandType.StoredProcedure and an open idle connection. Bind the command to the current local transaction when one exists. They read the visible routine directory and its complete top-level signature without executing the target. MySQL execution has a separate [stored-procedure contract](#mysql-stored-procedures). Oracle execution still requires Use Oracle Prepare Execute=true and its existing type/direction rules.
 
 MySQL accepts routine or database.routine, with optional backticks; an unqualified name uses DATABASE(). Oracle accepts routine, owner.routine or package.routine, and owner.package.routine, with double-quoted identifiers retaining case and unquoted identifiers converted to uppercase. Unqualified Oracle names use CURRENT_SCHEMA. Two-part Oracle names check both interpretations and reject ambiguity. The optional overload is an exact Oracle directory selector, not argument-based overload inference; MySQL rejects it. No matching visible routine, ambiguous signatures, incomplete metadata, unsupported type declarations or unavailable named descriptors fail explicitly. Synonym resolution is not promised.
 
@@ -216,6 +216,22 @@ Success replaces the parameter collection with fresh DBNull-valued parameters or
 The operation reserves one physical session across routine, argument and named-type queries. It uses CommandTimeout for each query, with no total-duration guarantee. CancellationToken, Cancel and Dispose cover the operation and query gaps; a canceled in-flight request follows the existing connection-break/unknown-outcome rules. Directory permission errors retain the server error code and SQL state. Each routine/argument directory table is bounded to 1024 rows and 4 MiB of UTF-8 string content; named descriptors retain the existing complex-type member/depth/cache bounds.
 
 Supported mappings and rejection boundaries are listed in the [Schema contract](schema.md#parameter-derivation). Directory, privilege, server-version and OBProxy interoperability require separate real-server validation.
+
+<a id="mysql-stored-procedures-development-checkpoint"></a>
+
+## MySQL stored procedures
+
+Implemented from `1bb13cb`. The [module evidence](obconnector-dotnet-completeness.md#1530-2026-10-25-mysql-存储过程执行本地交付) separates local regression, limited direct-server runs and open deployment acceptance; the earlier development checkpoint retains original failures.
+
+In MySQL mode, use CommandType.StoredProcedure with a one- or two-part routine identifier, parsed and quoted as identifiers. Parameters bind in collection order, irrespective of their names. Input, Output and InputOutput are accepted; ReturnValue is rejected because MySQL procedures have no function return. Call stored functions with a text SELECT. Effective CLIENT_PS_MULTI_RESULTS is required. FetchSize, SchemaOnly and KeyInfo are rejected; explicit Prepare is supported and client-side prepare fallback is disabled. Input streams use the long-data path; InputOutput streams are rejected. The plan accepts at most 65535 parameters and 4096 output parameters, subject to packet limits.
+
+For outputs, one transient binary-prepared SET initializes private per-command user variables on every execution: Output starts at SQL NULL and InputOutput uses its input snapshot. The binary-prepared CALL binds Input values and refers to these variables for outputs. After the terminal CALL response, a private text SELECT retrieves outputs; this result is hidden and excluded from affected-row totals. Outputs follow the SELECT column metadata and normal decoding, including user-variable temporal/string behavior; the declared parameter DbType does not force an output conversion. Values publish together only after a valid single-row output response completes successfully. Errors or cancellation preserve prior output values; the driver does not replay the procedure.
+
+One exclusive exchange spans initialization, CALL results and output collection. Read/NextResult exposes ordinary CALL results; Close/Dispose drains the remaining procedure response and collects outputs, so early close can perform network I/O and can fail or time out. Closing a batch reader drains the active procedure and updates its affected count without executing remaining batch commands. Other command modes retain their existing close behavior. Procedure sessions retire on pool return; CALL preparations remain command-owned and do not enter the idle statement cache.
+
+The initialization SET is SQL sent before the business CALL. A later transport failure can therefore conservatively carry unknown outcome even if CALL transmission has not been proved; do not infer business execution from that flag alone. A confirmed error from the output SELECT can follow a successfully executed CALL, so a confirmed SQL error does not imply the procedure had no side effects. Output publication does not imply transaction commit. Real proxy/TLS, failure, resource and independent-runtime acceptance remain open.
+
+The statement-boundary scanner also recognizes MySQL CREATE PROCEDURE/FUNCTION/TRIGGER/EVENT program units, including OR REPLACE and supported DEFINER forms, so body semicolons do not require text multi-statement opt-in. This classifies a program unit; the server validates its grammar and suffix. The local grammar regressions and default-policy direct-server procedure run cover this boundary; other versions and proxies still require validation.
 
 ## Transactions, batches and failures
 

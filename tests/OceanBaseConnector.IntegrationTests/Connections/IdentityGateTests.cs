@@ -59,11 +59,11 @@ public sealed class IdentityGateTests
 
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.All), MemberType = typeof(ProfileTheoryData))]
-    public async Task EnlistTransactionIsRejected(string profileName)
+    public async Task EnlistTransactionRejectsNullArgument(string profileName)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
-        Assert.Throws<NotSupportedException>(() => connection.EnlistTransaction(null));
+        Assert.Throws<ArgumentNullException>(() => connection.EnlistTransaction(null));
     }
 
     [IntegrationTheory("unsupportedAuth")]

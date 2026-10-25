@@ -310,8 +310,12 @@ namespace OceanBaseConnector
         {
             if (_closed) return;
             _closed = true;
-            try { _query.Dispose(); }
-            finally { _result.InvalidateRows(); if (_closeConnection) _connection.CloseSession(_session); }
+            try { if (_result.DrainOnClose) DrainAllResults(); }
+            finally
+            {
+                try { _query.Dispose(); }
+                finally { _result.InvalidateRows(); if (_closeConnection) _connection.CloseSession(_session); }
+            }
         }
         protected override void Dispose(bool disposing) { if (disposing) Close(); base.Dispose(disposing); }
 #if NETSTANDARD2_1 || NET8_0_OR_GREATER
@@ -319,8 +323,12 @@ namespace OceanBaseConnector
         {
             if (_closed) return;
             _closed = true;
-            try { _query.Dispose(); }
-            finally { _result.InvalidateRows(); if (_closeConnection) await _connection.CloseSessionAsync(_session).ConfigureAwait(false); }
+            try { if (_result.DrainOnClose) await DrainAllResultsAsync(CancellationToken.None).ConfigureAwait(false); }
+            finally
+            {
+                try { _query.Dispose(); }
+                finally { _result.InvalidateRows(); if (_closeConnection) await _connection.CloseSessionAsync(_session).ConfigureAwait(false); }
+            }
         }
         public override async ValueTask DisposeAsync()
         {
