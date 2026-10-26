@@ -102,7 +102,8 @@ namespace OceanBaseConnector
                 var statement = operation.Binary && (operation.Oracle == null || _prepared != null || HasStreamParameters(operation.Bindings.Parameters))
                     ? EnsurePrepared(operation, operation.ClientFallback) : null;
                 var text = operation.Binary && operation.Oracle == null && statement == null
-                    ? ClientPreparedSql.Build(operation.Bindings, execution.Mode) : operation.Bindings.CommandText;
+                    ? ClientPreparedSql.Build(operation.Bindings, execution.Mode,
+                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? execution.ReadMySqlLiteralContext() : null) : operation.Bindings.CommandText;
                 ValidateCursorStatement(operation.FetchSize, statement);
                 var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement);
                 if (statement != null && operation.Oracle == null) execution.ResolveComplexColumns(statement);
@@ -180,7 +181,8 @@ namespace OceanBaseConnector
                 var statement = operation.Binary && (operation.Oracle == null || _prepared != null || HasStreamParameters(operation.Bindings.Parameters))
                     ? await EnsurePreparedAsync(operation, cancellationToken, operation.ClientFallback).ConfigureAwait(false) : null;
                 var text = operation.Binary && operation.Oracle == null && statement == null
-                    ? ClientPreparedSql.Build(operation.Bindings, execution.Mode) : operation.Bindings.CommandText;
+                    ? ClientPreparedSql.Build(operation.Bindings, execution.Mode,
+                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? await execution.ReadMySqlLiteralContextAsync(cancellationToken).ConfigureAwait(false) : null) : operation.Bindings.CommandText;
                 ValidateCursorStatement(operation.FetchSize, statement);
                 var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement);
                 if (statement != null && operation.Oracle == null) await execution.ResolveComplexColumnsAsync(statement, cancellationToken).ConfigureAwait(false);

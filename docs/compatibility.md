@@ -1,5 +1,20 @@
 # Compatibility and known gaps
 
+## 2026-10-26 MySQL client string preparation
+
+Opt-in automatic prepare fallback now supports ordinary MySQL strings after exact1295/HY000.
+Each string fallback reads fresh client/connection charset, connection collation and SQL mode on
+the same reserved command exchange. Only UTF8/UTF8MB3/UTF8MB4 client and connection combinations
+are supported; quotes/backslashes follow the queried mode, and unrepresentable Unicode is rejected.
+Single-statement and64MiB checks prevent parsing-state changes and unbounded target requests.
+Other charset families and NUL under NO_BACKSLASH_ESCAPES remain unsupported; no new public option
+or charset mutation is introduced. See the [public contract](obconnector-dotnet-architecture-design.md#mysql-client-string-preparation).
+
+Local discovery failures, connection reuse, cancellation/timeout, transaction/snapshot and five-asset
+standard/OB20 consumers do not establish real collation/coercibility equivalence or deployment
+compatibility. No real database was accessed for this module. P1-08 and all23 gaps remain open;
+historical real reports below retain their original scope.
+
 ## 2026-10-26 MySQL batch INSERT rewrite
 
 Modern batches expose opt-in RewriteBatchedInserts for NonQuery only. Eligible adjacent identical

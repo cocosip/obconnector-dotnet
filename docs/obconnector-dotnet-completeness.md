@@ -1,9 +1,9 @@
 # OceanBaseConnector .NET 完整驱动能力与缺口基线
 
-**最近复核：** 2026-10-26；基于7c1a602的opt-in MySQL Batch INSERT rewrite；全部23项及八工作包仍开放。
-**当前模块：** P2-03/W7；完整性第15.72节。
-**当前验证：** 完整单测6887、受影响消费者353通过，无失败/跳过；Release构建零警告/错误，独立走查问题已回归修复。
-**本次补充：** NonQuery相邻单tuple INSERT合并、原参数绑定、包/行/参数上限、计数及只读失败组归属。
+**最近复核：** 2026-10-26；基于6fc1891的可信MySQL客户端字符串prepare降级；全部23项及八工作包仍开放。
+**当前模块：** P1-08/W5；完整性第15.73节。
+**当前验证：** 专项111、完整单测6953及受影响消费者403通过，无失败/跳过；Release构建零警告/错误，独立走查无遗留阻断。
+**本次补充：** 每次降级同会话查询UTF-8字符集/collation/SQL mode、严格字面量及单语句边界。
 本模块无新增实库兼容性证据；历史12项greeting前失败保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
@@ -258,7 +258,7 @@ P0-02 本地实现使用共享 `SessionStateSql`，按兼容模式识别普通�
 
 分类结果附在单次 CommandExchange 上，仅在目标 `executesSql` 发送前、取消检查之后写入物理会话的持久标记。Prepare、SchemaOnly/KeyInfo 目录阶段、内部元数据和 long-data 上传不因此提前标记；发送前的长度、行为组合、参数等拒绝也不误损复用。执行中的错误可能使服务端副作用不确定，因此目标发送后即使收到错误，保守销毁仍成立。协议/传输失败本身仍可独立销毁会话。
 
-SQL_MODE 尚未可信跟踪，MySQL 引号中出现反斜杠会保守销毁，可能增加合法转义字符串的建连成本；quoted 命名锁调用也按模式歧义保守识别。这是公开的复用成本，不是声称驱动已经解析任意 SQL。任意存储函数/触发器等隐式副作用、完整 reader/LOB/cursor/XA、reset 失败/并发及真实双模式/代理隔离矩阵仍须继续验收；未证明其 reset 的应用应关闭池化。原始 XA SQL 的销毁标记不能替代 branch/coordinator 恢复。
+池化状态分类器未跟踪SQL_MODE；第15.73节每次字符串降级的局部snapshot不改变此分类策略。MySQL引号中出现反斜杠会保守销毁，可能增加合法转义字符串的建连成本；quoted命名锁调用也按模式歧义保守识别。这是公开的复用成本，不是声称驱动已经解析任意SQL。任意存储函数/触发器等隐式副作用、完整reader/LOB/cursor/XA、reset失败/并发及真实双模式/代理隔离矩阵仍须继续验收；未证明其reset的应用应关闭池化。原始XA SQL的销毁标记不能替代branch/coordinator恢复。
 
 详细的本地 RED/修复、独立走查与最终验证见第 15.24 节；公开契约见 [API 文档](obconnector-dotnet-architecture-design.md#pooled-session-state-after-user-sql)。本子模块不关闭整个 P0-02 或 W1。
 
@@ -702,7 +702,7 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 | P1-05 | MySQL `CommandType.StoredProcedure` 已有有序参数/输出与关闭排空实现，仍有限定方向/capability/行为和真实部署验收（第 15.30 节），目录/参数推导不证明执行兼容性；`KeyInfo` 已有主键/唯一键与单基表隐藏列实现，复杂形状保留 unknown；Batch已支持SchemaOnly/KeyInfo及源条目创建（第15.60节），SingleRow/SingleResult跨批次限制及共享SingleRow修正见第15.61节；REF CURSOR支持SingleRow/SingleResult（第15.62节）；`SchemaOnly` 已改为 Prepare-only 并禁止目标执行/fallback/参数上传；真实准备行为及结果形状矩阵仍缺。 | `OceanBaseCommand.cs`；`OceanBaseDataReader.cs`；`OceanBaseBatch.cs`；`KeyInfoTests.cs`、`KeyInfoPlanningTests.cs`、`MySqlProcedureTests.cs`、`MySqlProcedureLifecycleTests.cs`、`SchemaOnlyTests.cs`、`BehaviorOptionsTests.cs`、`ReaderSchemaTests.cs`、`BatchSurfaceTests.cs`、`BatchMetadataTests.cs`、`LimitedResultBehaviorTests.cs`、`LimitedCursorBehaviorTests.cs`、`RefCursorTests.cs`；消费者 `KeyInfoConsumerTests.cs`、`SchemaOnlyConsumerTests.cs`、`BatchMetadataConsumerTests.cs`、`LimitedResultConsumerTests.cs`、`RefCursorConsumerTests.cs` | MySQL 过程名、参数方向/输出、多结果及取消/错误/池复用的执行回归与实库报告；命令/Batch/REF CURSOR 行为表、主键/唯一键元数据、SchemaOnly 副作用/锁/大结果用例；按实际实现公开限制，不把 SQL 前缀当成只读证明。 |
 | P1-06 | REF CURSOR Input/InputOutput与文本cursor列仍拒绝；普通二进制列/嵌套所有权已有本地实现（第15.56节），实库仍待验收；独立Prepare及正命令FetchSize提示已有实现，内部输出不分页（第15.46节）。输出offset与ExecuteArray正FetchSize仍拒绝，其余方向/结果形状与部署矩阵继续开放。 | `Internal/Sql/OracleCommandPlan.cs`；`OceanBaseCommand.cs`；`RefCursorTests.cs`、`OraclePrepareExecuteResponseTests.cs` | 参数方向 × NULL × 输出行数 × 多结果 × 取消/关闭矩阵；输入/输出游标明确所有权；服务端不支持的形状单列，不伪造通过。 |
 | P1-07 | 嵌套 object/collection 已可编解码，NCHAR/NVARCHAR2已有有界支持；LOB/cursor、其他national存储/匿名结果和复杂整列RETURNING身份仍受限。可观察 DDL 发送时已自动失效，外部/不透明 DDL 须显式清理；真实 DDL/锁/隐式提交仍未验证。 | `OceanBaseConnection.ComplexTypes.cs`；`Internal/Values/ComplexType.cs`、`ComplexValueCodec.cs`；`ComplexTypeDictionaryTests.cs`、`ComplexResultTests.cs` | 保留既有嵌套回归，扩展成员类型与 NULL；DDL 后旧描述失效、跨 session/transaction 不误用；深度/成员/字节限制和循环定义继续拒绝。 |
-| P1-08 | 普通结果字符集已有严格映射/宽度及流式解码；其他/2022 编码、扩展 metadata/未知类型码仍拒绝；national 限已支持编码；MySQL 客户端 prepare fallback 字符串仍缺可信 session collation。 | `Internal/Protocol/ResultCharacterSet.cs`、`ChineseEncoding.cs`、`ResultColumn.cs`、`ResultDbColumn.cs`、`NationalCharacterSet.cs`；`Internal/Sql/ClientPreparedSql.cs`；`CharacterSetTests.cs`、`CharacterSetReaderTests.cs`、`CharacterSetConsumerTests.cs`、`NationalCharacterTests.cs`、`ClientPrepareFallbackTests.cs`、`WideDecimalTests.cs` | 每种类型的参数/结果/NULL/精度/溢出表；编码不可表示时不静默替换；可信 collation 与 SQL mode 后才扩展字符串 fallback；不把禁止降级误称 server prepare 缺失。 |
+| P1-08 | 普通结果字符集已有严格映射/宽度及流式解码；其他/2022 编码、扩展 metadata/未知类型码仍拒绝；national 限已支持编码；MySQL 客户端字符串降级已有可信UTF-8会话子集（第15.73节），非UTF-8及无反斜杠模式NUL仍拒绝。 | `Internal/Protocol/ResultCharacterSet.cs`、`ChineseEncoding.cs`、`ResultColumn.cs`、`ResultDbColumn.cs`、`NationalCharacterSet.cs`；`Internal/Sql/ClientPreparedSql.cs`、`MySqlLiteralContext.cs`；`CharacterSetTests.cs`、`CharacterSetReaderTests.cs`、`CharacterSetConsumerTests.cs`、`NationalCharacterTests.cs`、`ClientPrepareFallbackTests.cs`、`MySqlClientStringPrepareTests.cs`、`WideDecimalTests.cs` | 每种类型的参数/结果/NULL/精度/溢出表；编码不可表示时不静默替换；字符串降级的真实collation/coercibility及SQL mode/代理验收继续开放；不把禁止降级误称server prepare缺失。 |
 | P1-09 | 整轮TCP重试/预算、端点TCP健康缓存、TNS/OCP适配、分组/策略/权重及分组黑名单覆盖已有本地实现（第15.63节）；其他发现策略边界、代理拓扑及真实健康/故障验收仍缺；只注入resolver不能证明HA。 | `IOceanBaseAddressResolver.cs`；`Internal/EndpointSelector.cs`；`MultiAddressTests.cs`、`TopologyExecutionTests.cs`、`ConnectRetryTests.cs`、`EndpointHealthTests.cs`、`EndpointHealthCacheTests.cs`、`OceanBaseTnsAddressResolver.cs`、`TnsAddressResolverTests.cs`、`OceanBaseOcpAddressResolver.cs`、`OcpAddressResolverTests.cs`、`DiscoverySnapshot.cs`、`DiscoveryPolicyTests.cs`、`GroupBlacklistTests.cs` | 地址更新、旧会话失效、错误身份/TLS 不重试、预算/退避、代理 reroute 和节点故障报告；与 P0-06 共同冻结池路由契约。 |
 | P1-10 | 常用目录已本地实现；Types/Synonyms 为 Oracle-only，Users/Sequences 可能需要额外权限；真实字典/版本/代理矩阵未验证。DataTypes 及自动参数推导已有本地实现；真实目录互操作未验证。 | `OceanBaseConnection.Schema.cs`、`OceanBaseConnection.Schema.Routines.cs`、`OceanBaseConnection.Schema.Catalog.cs`、`OceanBaseConnection.Schema.DataTypes.cs`；`DataTypeSchemaTests.cs`、`CatalogSchemaTests.cs`、`ConnectionSchemaTests.cs`、`RoutineSchemaTests.cs`；另有 `OceanBaseCommand.Parameters.cs`、`OceanBaseConnection.Parameters.cs`、`Internal/Sql/RoutineParameterDerivation.cs`、`DeriveParameters*Tests.cs`，见第 15.18 节 | 保留 DataTypes 实际 codec/可信字符集正向与拒绝、五资产和完整形状、限制参数、精度、空目录、权限错误回归；完成集合/大小写/权限 × 双模式实库和代理矩阵；保留自动参数推导本地回归，并按第 5.10.1 节完成实库验收。 |
 | P1-11 | 应用需要短期口令/token 或密钥轮换；本地实现已完成，真实过期/拒绝/轮换服务与插件矩阵仍未验证。 | `IOceanBaseCredentialProvider.cs`；`OceanBaseConnection.Credentials.cs`；`Internal/CredentialAcquisition.cs`；`Internal/Session/PhysicalSessionPool.Credentials.cs`；`CredentialProviderTests.cs`、`CredentialProviderLifecycleTests.cs`、`CredentialProviderDiagnosticsTests.cs`；消费者 `CredentialProviderConsumerTests.cs` | API 获取时点、取消、过期/刷新失败、并发刷新和旧会话失效测试；日志/trace/指标不包含凭据；本地插件测试外还需真实 plugin/KDC 成功及拒绝矩阵。 |
@@ -2571,6 +2571,36 @@ execution及parser初始RED；另复现并修复失败回调提前释放、comme
 测试对端sequence/queued close、缺失using及Oracle/MySQL默认隔离级别误用的失败日志保留。
 本轮没有访问实库。真实SQL、触发器/默认值/错误计数、实际包限额、OBProxy、TLS/压缩及吞吐/
 内存对照仍待验收；multi-send/pipelining及独立bulk协议仍未实现。全部23项及八工作包继续开放。
+
+### 15.73 2026-10-26 MySQL client string preparation
+
+P1-08/W5, developed from6fc1891. Existing opt-in automatic fallback now accepts ordinary MySQL
+strings after exact1295/HY000. Every string fallback reads client/connection charset, connection
+collation and SQL mode on the same exchange, with the original transaction, timeout/cancellation
+and frozen bindings. No session cache or new option. UTF8/UTF8MB3/UTF8MB4 only; ordinary literals
+retain session collation, use mode-aware escaping and reject invalid/unrepresentable Unicode.
+Four-mode marker scanning plus a single-statement boundary prevents earlier statements from changing
+parse state. Existing64MiB budget includes expanded literals. Discovery failure stays before target
+execution; a rejected complete result can permit reuse (including an empty result), while an
+incomplete or corrupt response retires the session.
+See the [public contract](obconnector-dotnet-architecture-design.md#mysql-client-string-preparation).
+
+New units66 and consumers20; focused111, complete units6953 and affected consumers403 passed, no
+failures/skips. Release solution build passed with zero warnings/errors. Independent source/test/docs
+review found no remaining blockers. Public checks cover changed SQL modes on repeated fallback,
+rejected charset then recovery/requery, malformed shape/NULL/type/encoding/size/rows/results, discovery
+ERR/connection ERR/disconnect, sync/async cancel/timeout and original caller token, explicit transaction,
+concurrent command rejection and frozen parameter/text/opt-in snapshots. Five assets are loaded in
+one.NET10host for sync/async standard/OB20 consumers; this is not five independent runtime evidence.
+
+Retained initialRED4 proves missing trusted state. A declared-type validation-order regression was
+reproduced and fixed; fixture failures for invalid Unicode in InlineData and Windows reset versus EOF
+remain separately recorded. Runtime surrogate construction and reset-command reads now verify the
+intended malformed data and prevent a sent target from passing as a sequence error. Logs/TRX are in
+ignored TestResults/local-completeness/mysql-client-strings-*. No real database was accessed. Non-UTF-8
+clients, NUL under NO_BACKSLASH_ESCAPES, real literal/parameter collation and coercibility, mode/version/
+proxy/TLS/runtime and performance matrices remain open. This does not close P1-08, all23 IDs or eight
+work packages, or establish that all remaining offline implementation is complete.
 
 ## 16. 剩余交付工作包
 

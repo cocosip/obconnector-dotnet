@@ -206,7 +206,7 @@ With `Pooling=true`, recognized state-changing SQL makes its physical session in
 
 Classification scans all statement heads across mode-specific whitespace/comments and semicolons. It recognizes SET/RESET/USE, ALTER SESSION, temporary-table forms, explicit transaction/XA statements and opaque CALL/DO/EXECUTE/PREPARE operations. Oracle BEGIN/DECLARE and labeled blocks, plus `CommandType.StoredProcedure` names sent through PrepareExecute, retire the session because their internal state changes cannot be inferred from the call. MySQL executable comments, user-variable references and named-lock function calls also retire it. Ordinary literals, identifiers and non-executable comments containing these words do not by themselves retire a session; table/CTE column lists are distinguished from named-lock calls.
 
-MySQL SQL_MODE is not tracked. A backslash within quoted text is therefore treated conservatively as ambiguous and retires the session, including otherwise harmless escaped strings. Quoted named-lock calls are conservative under ANSI_QUOTES/backtick rules. The lexical classifier preserves covered common query/DML forms; a nested CTE declaration named like a lock function can still conservatively retire a safe session. It does not prove that arbitrary stored functions, triggers or other server-side code have no session effects. Such applications need verified reset behavior for their exact profile or must disable pooling. The existing COM_RESET_CONNECTION/initial-database restoration, active-resource disposal and dedicated-XA rules still apply; marking raw XA SQL does not implement coordinator recovery.
+MySQL SQL_MODE is not tracked by this pooled-state classifier; the per-fallback string snapshot does not change that policy. A backslash within quoted text is therefore treated conservatively as ambiguous and retires the session, including otherwise harmless escaped strings. Quoted named-lock calls are conservative under ANSI_QUOTES/backtick rules. The lexical classifier preserves covered common query/DML forms; a nested CTE declaration named like a lock function can still conservatively retire a safe session. It does not prove that arbitrary stored functions, triggers or other server-side code have no session effects. Such applications need verified reset behavior for their exact profile or must disable pooling. The existing COM_RESET_CONNECTION/initial-database restoration, active-resource disposal and dedicated-XA rules still apply; marking raw XA SQL does not implement coordinator recovery.
 
 This is local driver behavior, not proof of OceanBase/OBProxy reset compatibility. The remaining resource, fault, concurrent-return and real-profile acceptance requirements are tracked under P0-02 in the [completeness baseline](obconnector-dotnet-completeness.md).
 
@@ -219,7 +219,7 @@ This is local driver behavior, not proof of OceanBase/OBProxy reset compatibilit
 - Read all results with `Read` and `NextResult` to establish completion. Closing an unread reader destroys its unfinished session; disposing a field stream does not finish its parent reader.
 - `CommandBehavior.SequentialAccess` exposes field streams without buffering the whole result. `SingleRow` returns only the first row of the first result, even when that result is empty or only an affected count; it implies SingleResult. `SingleResult` drains later results without exposing them. `SchemaOnly` accepts text prefixes `SELECT`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `VALUES` after whitespace/comments. It obtains metadata through server preparation and never sends a target COM_QUERY, COM_STMT_EXECUTE, COM_STMT_FETCH or parameter-data upload. It accepts one text statement with input parameters only; names/order/count remain required, but values are not encoded, consumed or validated as bindings. FetchSize and offset hints are inactive. Preparation errors propagate without client-side fallback, including error 1295 when AllowClientSidePrepareFallback=true. An existing valid prepared statement is reused. The empty reader exposes prepared column metadata, HasRows=false and RecordsAffected=-1; its exchange is complete, so another connection operation is allowed. CloseConnection still closes the original logical Open lease when that reader is disposed; a later lease is protected even if pooling reuses the same physical session. Named complex columns require existing preloaded descriptions and may issue directory lookups for a missing source identity; those lookups do not execute the target. Metadata is the server prepare-time shape, which may differ from execution-time metadata. Server preparation can still incur parsing, permission checks and metadata locks; real OceanBase/OBProxy side-effect/lock/large-result acceptance remains open. Ordinary row readers retain their existing operation restrictions.
 - Positive `OceanBaseCommand.FetchSize` enables forward-only server cursor pages for ordinary queries without cursor-valued columns. Oracle internal procedure/RETURNING output rows do not use this hint; returned REF CURSOR readers have their own page size. Oracle `UseCursorOffset=true` additionally requires OceanBase >=2.2.5; it does not provide scrolling.
-- `AllowClientSidePrepareFallback=true` permits limited scalar-input text fallback only after automatic prepare returns a validated `1295/HY000`. Explicit Prepare, cursors and Oracle PrepareExecute never fall back. Date/time, special types and output parameters are excluded; MySQL non-null strings require trusted session collation. Fallback literals may appear in server SQL logs.
+- `AllowClientSidePrepareFallback=true` permits limited scalar-input text fallback only after automatic prepare returns a validated `1295/HY000`. Explicit Prepare, cursors and Oracle PrepareExecute never fall back. Date/time, special types and output parameters are excluded. MySQL non-null strings use the [trusted state contract](#mysql-client-string-preparation). Fallback literals may appear in server SQL logs.
 
 ### CloseConnection reader ownership
 
@@ -274,6 +274,44 @@ connection. Connection/Transaction getters/setters and standalone Prepare remain
 join the ambient single-resource transaction. The source command timeout is the batch default. Normal
 connection batches keep caller-owned connection behavior. Standard assets expose no modern batch API.
 See [local evidence and remaining acceptance](obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
+
+### MySQL client string preparation
+
+Automatic prepare remains the first attempt. Only a complete first-response 1295/HY000 permits the
+existing opt-in fallback. A fallback containing a non-NULL MySQL string queries
+`@@character_set_client`, `@@character_set_connection`, `@@collation_connection` and `@@sql_mode`
+inside the same exchange, before target execution. Every such fallback reads fresh state: no session,
+pool, reset or prepared-cache state is assumed. Numeric/binary/NULL-only and Oracle fallback do not
+issue this query. Explicit Prepare, SchemaOnly, KeyInfo, procedure/output/array plans and server
+cursors retain their existing exclusions. Supported ordinary string DbTypes retain their existing
+type validation; this is not a national/special type expansion.
+
+Both client and connection must report UTF8, UTF8MB3 or UTF8MB4, and the connection collation must
+belong to that UTF-8 family. Names and comma-separated SQL modes are validated as bounded identifiers.
+Four ordinary string columns and exactly one row are required. Their supported reported source
+encoding decodes the state strictly. NULL, malformed/oversized values and extra rows/results fail
+closed. Valid but unsupported state is rejected after the result boundary is consumed, allowing
+another command on that session; an incomplete or corrupt response retires the session. Discovery
+uses the original command timeout/cancellation, transaction, physical session and frozen bindings.
+Its failure does not claim unknown execution of the target, which has not yet been sent.
+
+Strings use ordinary parenthesized single-quoted literals, without introducers, binary conversion
+or explicit COLLATE, so session string collation and ordinary literal coercibility apply. Quotes
+are doubled. With backslash escapes active, backslash, NUL, backspace, tab, LF, CR and Ctrl-Z are
+escaped; with NO_BACKSLASH_ESCAPES, backslashes and controls are retained and quotes doubled. NUL
+in that mode is explicitly unsupported. UTF-8 encoding is strict; if either endpoint charset is
+UTF8/UTF8MB3, supplementary characters in a parameter or the original SQL are rejected instead of
+replaced. A BOM and trailing spaces are preserved. No charset session mutation is introduced.
+
+SQL marker positions must agree in all four backslash/ANSI_QUOTES combinations. String fallback
+allows one statement, with an optional terminal semicolon followed only by whitespace/comments;
+multiple statements, executable comments, NUL in SQL and ambiguous quoting are rejected. This
+prevents earlier statements from changing the snapshot's parsing/encoding assumptions. The existing
+64MiB request budget includes UTF-8 bytes, parentheses and escaping across every replacement.
+Ordinary query errors and known/unknown target execution boundaries retain their existing rules;
+there is no execute-error fallback or replay. This local implementation does not establish real
+server literal/parameter collation parity, all SQL modes, non-UTF-8 clients, proxy or performance
+compatibility. Fallback literals can be visible in server SQL logs.
 
 ### Batch INSERT rewrite
 

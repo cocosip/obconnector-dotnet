@@ -10,18 +10,29 @@ namespace OceanBaseConnector.Internal.Sql
 {
     internal static class ClientPreparedSql
     {
-        internal static string Build(ParameterBindingPlan bindings, OceanBaseCompatibilityMode mode)
+        internal static bool RequiresMySqlLiteralContext(ParameterBindingPlan bindings, OceanBaseCompatibilityMode mode)
         {
-            var positions = bindings.BindingPositions ?? MySqlPositions(bindings.CommandText);
-            if (positions.Length != bindings.Parameters.Length) throw new ArgumentException("Client preparation parameter count mismatch.");
+            if (mode == OceanBaseCompatibilityMode.MySql)
+                foreach (var parameter in bindings.Parameters)
+                    if (parameter.Value is string) return true;
+            return false;
+        }
+
+        internal static string Build(ParameterBindingPlan bindings, OceanBaseCompatibilityMode mode, MySqlLiteralContext? context = null)
+        {
             // Reuse all declared-type, exact conversion and packet-budget validation.
             _ = PreparedParameters.Encode(bindings.Parameters, mode, validateOnly: true);
+            var strings = RequiresMySqlLiteralContext(bindings, mode);
+            if (strings && context == null) throw new NotSupportedException("MySQL client string preparation requires a trusted session collation.");
+            if (strings) context!.ValidateText(bindings.CommandText);
+            var positions = bindings.BindingPositions ?? MySqlPositions(bindings.CommandText, singleStatement: strings);
+            if (positions.Length != bindings.Parameters.Length) throw new ArgumentException("Client preparation parameter count mismatch.");
             var sql = new StringBuilder();
             var copied = 0;
             long bytes = ResultColumn.Utf8.GetByteCount(bindings.CommandText) + 1L;
             for (var i = 0; i < positions.Length; i++)
             {
-                var literal = Literal(bindings.Parameters[i], mode);
+                var literal = Literal(bindings.Parameters[i], mode, context);
                 bytes += ResultColumn.Utf8.GetByteCount(literal) + 1L;
                 if (bytes > PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Client prepared SQL exceeds the packet size limit.");
                 sql.Append(bindings.CommandText, copied, positions[i] - copied).Append('(').Append(literal).Append(')');
@@ -31,7 +42,7 @@ namespace OceanBaseConnector.Internal.Sql
             return sql.Append(bindings.CommandText, copied, bindings.CommandText.Length - copied).ToString();
         }
 
-        private static string Literal(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode)
+        private static string Literal(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode, MySqlLiteralContext? context)
         {
             if (parameter.Direction != ParameterDirection.Input) throw Unsupported();
             var provider = parameter.OceanBaseDbType;
@@ -48,8 +59,7 @@ namespace OceanBaseConnector.Internal.Sql
             if (value == null || value == DBNull.Value) return "NULL";
             if (value is string text)
             {
-                // shortcut: no trusted MySQL connection collation, enable strings after session tracking exists.
-                if (mode == OceanBaseCompatibilityMode.MySql) throw new NotSupportedException("MySQL client string preparation requires a trusted session collation.");
+                if (mode == OceanBaseCompatibilityMode.MySql) return context!.Literal(text);
                 if (text.IndexOf('\0') >= 0) throw new ArgumentException("Oracle client text literals cannot contain NUL.");
                 text = text.Replace("'", "''");
                 if (ResultColumn.Utf8.GetByteCount(text) > 4000) throw new ArgumentException("Oracle client text literal exceeds 4000 bytes.");
@@ -100,24 +110,29 @@ namespace OceanBaseConnector.Internal.Sql
             return new string(text);
         }
 
-        private static int[] MySqlPositions(string sql)
+        private static int[] MySqlPositions(string sql, bool singleStatement)
         {
             // Accept only SQL whose placeholder locations agree with and without backslash escapes.
-            var escaped = ScanMySql(sql, true);
-            var plain = ScanMySql(sql, false);
-            var ansi = ScanMySql(sql, true, ansiQuotes: true);
-            if (escaped.Count != plain.Count || escaped.Count != ansi.Count) throw Ambiguous();
-            for (var i = 0; i < escaped.Count; i++) if (escaped[i] != plain[i] || escaped[i] != ansi[i]) throw Ambiguous();
+            if (sql.IndexOf('\0') >= 0) throw Ambiguous();
+            var escaped = ScanMySql(sql, true, false, singleStatement);
+            foreach (var positions in new[] { ScanMySql(sql, false, false, singleStatement), ScanMySql(sql, true, true, singleStatement), ScanMySql(sql, false, true, singleStatement) })
+            {
+                if (escaped.Count != positions.Count) throw Ambiguous();
+                for (var i = 0; i < escaped.Count; i++) if (escaped[i] != positions[i]) throw Ambiguous();
+            }
             return escaped.ToArray();
         }
 
-        private static List<int> ScanMySql(string sql, bool backslash, bool ansiQuotes = false)
+        private static List<int> ScanMySql(string sql, bool backslash, bool ansiQuotes, bool singleStatement)
         {
             var positions = new List<int>();
+            var terminated = false;
             for (var i = 0; i < sql.Length; i++)
             {
                 var c = sql[i];
-                if (c == '\0') throw Ambiguous();
+                var lineComment = c == '#' || c == '-' && i + 2 < sql.Length && sql[i + 1] == '-' && (sql[i + 2] <= ' ' || char.IsControl(sql[i + 2]));
+                var blockComment = c == '/' && i + 1 < sql.Length && sql[i + 1] == '*';
+                if (terminated && !char.IsWhiteSpace(c) && !lineComment && !blockComment) throw Ambiguous();
                 if (c == '\'' || c == '"' || c == '`')
                 {
                     var closed = false;
@@ -130,15 +145,16 @@ namespace OceanBaseConnector.Internal.Sql
                     }
                     if (!closed) throw Ambiguous();
                 }
-                else if (c == '#' || c == '-' && i + 2 < sql.Length && sql[i + 1] == '-' && (sql[i + 2] <= ' ' || char.IsControl(sql[i + 2])))
+                else if (lineComment)
                 { while (i + 1 < sql.Length && sql[i + 1] != '\r' && sql[i + 1] != '\n') i++; }
-                else if (c == '/' && i + 1 < sql.Length && sql[i + 1] == '*')
+                else if (blockComment)
                 {
                     if (i + 2 < sql.Length && (sql[i + 2] == '!' || sql[i + 2] == 'M')) throw Ambiguous();
                     var end = sql.IndexOf("*/", i + 2, StringComparison.Ordinal);
                     if (end < 0) throw Ambiguous();
                     i = end + 1;
                 }
+                else if (c == ';' && singleStatement) terminated = true;
                 else if (c == '?') positions.Add(i);
             }
             return positions;

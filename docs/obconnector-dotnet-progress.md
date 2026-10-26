@@ -1,5 +1,43 @@
 # Verification status and remaining work
 
+## 2026-10-26 MySQL client string preparation
+
+Developed from6fc1891 for P1-08/W5. Existing opt-in exact1295/HY000 automatic fallback now supports
+ordinary MySQL string inputs under fresh trusted UTF-8 session state. Every string fallback queries
+client/connection charset, connection collation and SQL mode on its existing exchange; no pool/session
+cache or new public option. Ordinary literals preserve session collation, use strict Unicode and
+mode-aware escaping, and enforce one statement plus the existing64MiB request budget. Numeric/binary/
+NULL-only and Oracle fallback retain their existing paths. Discovery failures never classify the
+unsent target as unknown. The [contract](obconnector-dotnet-architecture-design.md#mysql-client-string-preparation)
+defines charset, statement, lifecycle and unsupported boundaries.
+
+New66 units and20 consumers. Focused111, complete units6953 and affected consumers403 passed, no
+failures/skips. Release solution build passed with zero warnings/errors,6.87seconds. Complete units
+took8minutes18seconds and consumers1minute39seconds. Independent source/tests/docs review found no
+remaining blockers; the reviewer did not run tests or access real databases.
+The public tests cover fresh state after changed modes, drained rejection then requery/recovery,
+malformed metadata/NULL/type/UTF-8/size/row/result shapes, discovery ordinary/connection ERR/disconnect,
+sync/async cancel/timeout and caller token, transaction/snapshot/concurrent ownership. Pure tests cover
+escape/injection boundaries, MB3 aliases, Unicode, comments/semicolon parsing and expanded request
+limits. All five assets use sync/async standard/OB20 consumers in one.NET10host; this is not five
+independent runtimes or a package/deployment claim.
+
+InitialRED4 captured the previous explicit refusal. The first green candidate passed the new4 but
+exposed one retained declared-type exception-order regression; type validation was restored. Later
+test failures were isolated to metadata replacement of invalid InlineData Unicode and six peer reads
+expecting orderly EOF instead of Windows TCP reset. Invalid surrogates are now constructed at runtime;
+the peer starts a new command read before asserting closure, so unexpected target SQL cannot pass
+as a sequence mismatch. All original logs/TRX remain under ignored TestResults/local-completeness/
+mysql-client-strings-*. The final candidate completed both suites; no candidate run was aborted.
+Documentation review also narrowed the response-retirement statement to preserve the complete empty
+result's tested reuse, and limited SQL_MODE nontracking to the pooled-state classifier. The final
+diff check and contract-link check passed.
+
+No real database was accessed in this module. Non-UTF-8 clients, NUL under NO_BACKSLASH_ESCAPES, real
+server literal/parameter collation and coercibility, full mode/version/proxy/TLS/runtime and load
+validation remain open. All23 gap IDs/eight work packages and further offline implementation remain
+open. Earlier real reports and prior candidate counts below retain their historical boundaries.
+
 ## 2026-10-26 MySQL batch INSERT rewrite
 
 Developed from `7c1a602` for P2-03/W7. Modern OceanBaseBatch now exposes opt-in
