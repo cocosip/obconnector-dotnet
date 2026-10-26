@@ -7,12 +7,12 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 ## Current checkpoint
 
 - Development stays on `master`. No new branch/worktree and no implicit push.
-- Current local delivery: Oracle complex BLOB/CLOB members decode from binary named and anonymous
-  results into session-bound `OceanBaseLob` handles when `Use Lob Locators=true`; NULL and skipped
-  members do not allocate handles, and complex LOB input remains rejected. The complete complex
-  unit family passes 421/421 and no-TLS affected consumers pass 220/220; TLS/PFX consumer and full
-  unit failures are environment-bound. Real OceanBase/OBProxy complex-Lob interoperability is
-  unverified. See the [module record](obconnector-dotnet-progress.md#2026-10-27-oracle-complex-lob-result-members).
+- Current local delivery: Oracle complex BLOB/CLOB members decode from binary named results into
+  session-bound `OceanBaseLob` handles when `Use Lob Locators=true`; anonymous collection metadata
+  is covered, while a dedicated anonymous materialization fixture remains open. The complete
+  complex unit family passes 422/422 and no-TLS affected consumers pass 220/220; TLS/PFX consumer
+  and full unit failures are environment-bound. Real OceanBase/OBProxy complex-Lob interoperability
+  is unverified. See the [module record](obconnector-dotnet-progress.md#2026-10-27-oracle-complex-lob-result-members).
 - Latest local delivery, developed from184a767: Oracle FLOAT/NUMBER_FLOAT routine derivation keeps
   binary precision out of Decimal constraints, normalizes INOUT and exposes raw numeric
   metadata. Numeric signatures omit CHAR_LENGTH; character signatures require a matching

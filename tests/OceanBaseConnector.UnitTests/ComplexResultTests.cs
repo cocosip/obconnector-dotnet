@@ -74,7 +74,16 @@ namespace OceanBaseConnector.UnitTests
             var column = ResultColumn.Parse(ComplexColumn(name: "", element: element), OceanBaseCompatibilityMode.Oracle);
             Assert.Equal("ARRAY", column.DataTypeName);
             Assert.Equal(name, column.ComplexType!.Members[0].TypeName);
-            Assert.Equal(typeof(OceanBaseComplexValue), column.FieldType);
+            Assert.Throws<NotSupportedException>(() => column.FieldType);
+        }
+
+        [Fact]
+        public void ComplexLobMetadataRequiresNegotiatedLocators()
+        {
+            var type = ComplexResultType(false, ComplexResultScalar("A", 210));
+            var column = ResultColumn.Parse(ComplexColumn(), OceanBaseCompatibilityMode.Oracle,
+                complexTypes: new Dictionary<(string, string), OceanBaseComplexType> { [("Owner", "Thing")] = type });
+            Assert.Throws<NotSupportedException>(() => column.FieldType);
         }
 
         [Theory]

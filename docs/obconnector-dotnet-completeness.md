@@ -4,7 +4,7 @@
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
 **最近复核：** 2026-10-27，基于184a767开发；保持master，全部23项及八工作包仍开放。
-**当前开发模块：** P1-07 Oracle复杂类型 BLOB/CLOB 结果成员；二进制命名/匿名结果在协商 `Use Lob Locators=true` 时生成绑定当前会话的 `OceanBaseLob`，非空复杂 LOB 输入仍拒绝。专项8项、复杂单元421项及无TLS受影响消费者220项通过；完整全量门禁受当前TLS/证书环境失败影响，见第15.85节。
+**当前开发模块：** P1-07 Oracle复杂类型 BLOB/CLOB 结果成员；二进制命名结果在协商 `Use Lob Locators=true` 时生成绑定当前会话的 `OceanBaseLob`，匿名集合已覆盖元素元数据，非空复杂 LOB 输入仍拒绝。专项9项、复杂单元422项及无TLS受影响消费者220项通过；完整全量门禁受当前TLS/证书环境失败影响，见第15.85节。
 **最近完成模块：** P1-08/P1-10 Oracle FLOAT/NUMBER_FLOAT参数派生、INOUT目录归一及按需字符长度补查；完整单测7656、专项189及受影响消费者168通过，独立最终走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation)及第15.84节。新增实库过程/函数用例仅编译，未运行。
 **此前完成模块：** Oracle NUMBER_FLOAT206精确结果、binary precision元数据及CommandBuilder绑定（184a767）；完整单测7578、专项204及受影响消费者229通过，独立走查无遗留问题，见第15.83节。2项实库和2项既有NUMBER对照均在初始握手失败，未完成认证或SQL，不能声称FLOAT存储成功。
 此前JSON客户端字符集（b94a421）完整单测7543、专项111、消费者570通过；其10项实库与2项默认字符集对照握手失败保留在第15.82节。
@@ -2885,8 +2885,9 @@ because the parameter wire contract is not established. Cursor members, further 
 shapes and whole-complex RETURNING remain open.
 
 The module regressions cover dictionary loading/input rejection, synchronous and asynchronous named
-BLOB/CLOB result handles, and anonymous BLOB/CLOB element metadata. The old guard produced the
-initial RED; focused coverage is 8 passed and the complete complex unit family is 421 passed, all
+BLOB/CLOB result handles, anonymous BLOB/CLOB element metadata, and metadata rejection before
+materialization when locators are not negotiated. The old guard produced the initial RED; focused
+coverage is 9 passed and the complete complex unit family is 422 passed, all
 with zero failures/skips. The no-TLS affected consumer selection is 220 passed; the broader
 Complex/Lob filter is 680 passed and 260 failed while constructing TLS/PFX fixtures. A complete
 unit attempt is 7521 passed/143 failed; its feature-specific stale BLOB assertions were corrected

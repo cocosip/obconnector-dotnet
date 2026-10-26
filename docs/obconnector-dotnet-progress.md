@@ -15,9 +15,10 @@ parameters remain rejected because no trustworthy parameter wire contract was fo
 whole-complex RETURNING and further anonymous/national shapes remain open.
 
 The new regressions cover BLOB/CLOB dictionary loading with input rejection, synchronous and
-asynchronous named result materialization, and anonymous BLOB/CLOB element metadata. The initial
-RED run failed on the old unsupported-member guard; the focused GREEN run passes 8/8, and the full
-complex unit family passes 421/421 with zero failures/skips. The no-TLS affected consumer selection
+asynchronous named result materialization, anonymous BLOB/CLOB element metadata, and metadata
+rejection before materialization when locators are not negotiated. The initial RED run failed on
+the old unsupported-member guard; the focused GREEN run passes 9/9, and the full
+complex unit family passes 422/422 with zero failures/skips. The no-TLS affected consumer selection
 passes 220/220; the broader Complex/Lob consumer filter passes 680 and has 260 TLS/PFX environment
 failures. A complete unit attempt passes 7521 and has 143 failures, including the pre-fix stale
 BLOB assertions and the same TLS/SSPI certificate environment failures; the stale assertions are

@@ -264,6 +264,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 160:
                         if (Mode != OceanBaseCompatibilityMode.Oracle || ComplexType == null)
                             throw new NotSupportedException("The complex layout is unavailable; preload named types and use a supported anonymous scalar element.");
+                        if (ComplexType.Layout.HasLobMembers && Lobs == null)
+                            throw new NotSupportedException("Complex LOB members require negotiated Oracle LOB locators.");
                         return typeof(OceanBaseComplexValue);
                     case 210:
                     case 211:
