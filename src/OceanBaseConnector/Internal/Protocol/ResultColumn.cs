@@ -66,7 +66,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private NationalCharacterSet? NationalCharacterSet { get; set; }
         internal Encoding TextEncoding => TypeCode == 207 || TypeCode == 208
             ? (NationalCharacterSet ?? throw new NotSupportedException("The result has no trusted national character set.")).ResultEncoding(Charset)
-            : Charset != 63 && (TypeCode == 15 || TypeCode == 253 || TypeCode == 254 || TypeCode == 252)
+            : Charset != 63 && (TypeCode == 15 || TypeCode == 253 || TypeCode == 254 || TypeCode >= 249 && TypeCode <= 252)
                 ? ResultCharacterSet.Resolve(Charset, out _) : Utf8;
         internal string Name { get; }
         internal string Database { get; }
@@ -190,6 +190,9 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 15: return Charset == 63 ? "VARBINARY" : "VARCHAR";
                     case 253: return Charset == 63 ? "VARBINARY" : Mode == OceanBaseCompatibilityMode.Oracle ? "VARCHAR2" : "VARCHAR";
                     case 254: return Charset == 63 ? "BINARY" : "CHAR";
+                    case 249: return Charset == 63 ? "TINYBLOB" : "TINYTEXT";
+                    case 250: return Charset == 63 ? "MEDIUMBLOB" : "MEDIUMTEXT";
+                    case 251: return Charset == 63 ? "LONGBLOB" : "LONGTEXT";
                     case 252: return Charset == 63 ? "BLOB" : "TEXT";
                     default: throw new NotSupportedException("The column type is not supported yet.");
                 }
@@ -275,6 +278,9 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 15:
                     case 253:
                     case 254:
+                    case 249:
+                    case 250:
+                    case 251:
                     case 252:
                         if (Charset == 63) return typeof(byte[]);
                         _ = TextEncoding;
@@ -321,6 +327,9 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 15:
                     case 253:
                     case 254:
+                    case 249:
+                    case 250:
+                    case 251:
                     case 252: return Charset == 63 ? OceanBaseDbType.Binary : OceanBaseDbType.String;
                     default: throw new NotSupportedException("The column type has no supported provider identity.");
                 }

@@ -23,7 +23,7 @@ namespace OceanBaseConnector.Internal.Protocol
             IsHidden = keyInfo?.IsHidden ?? false;
             IsKey = keyInfo?.IsKey;
             IsUnique = keyInfo?.IsUnique;
-            IsLong = column.TypeCode == 252 || column.TypeCode == 245 || column.TypeCode == 210 || column.TypeCode == 211;
+            IsLong = column.TypeCode >= 249 && column.TypeCode <= 252 || column.TypeCode == 245 || column.TypeCode == 210 || column.TypeCode == 211;
             var size = column.Length;
             if (column.Mode == OceanBaseCompatibilityMode.MySql && DataType == typeof(string) && column.TypeCode != 245)
             {

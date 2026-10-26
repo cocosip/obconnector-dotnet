@@ -1,5 +1,32 @@
 # Verification status and remaining work
 
+## 2026-10-26 BLOB family result codes
+
+Developed from `aab2755` for P1-08/W5 and P1-10/W6. Result codes249/250/251 now distinguish
+TINY/MEDIUM/LONG BLOB or TEXT by collation, retaining Binary/String provider identity. Existing
+length-encoded buffering and streaming apply without new codecs, dependencies or public options.
+IsLong/size metadata and MySQL DataTypes inventory cover the additional families. Oracle SQL
+declarations and locator ownership keep their existing separate contract.
+
+New units99:96 public loopback combinations (three codes, bytes/text, both modes, sync/async,
+text/prepared, buffered/sequential) plus three strict/binary boundary cases. Existing charset cases
+also exercise all three codes across the accepted collations. Initial RED235:4pass/231fail; focused
+GREEN537pass, no failures/skips. Release solution build: zero warnings/errors,25.18seconds.
+Affected consumers280pass (160 retained plus120), no failures/skips,1minute24seconds.
+Full units6560pass (6461 retained plus99), no failures/skips,8minutes9seconds.
+DI14pass, no failures/skips.
+Consumer additions120 cover five assets, MySQL/async, bytes/text and text/prepared/buffered/sequential.
+Independent source/caller/fixture review found no blockers; reviewer did not build/test.
+
+The preceding committed discovery candidate was repacked with the corrected README; both package
+smokes passed again on the documented actual runtimes, including Framework4.8. Artifacts:
+`TestResults/package-validation/965d134ac42c429ea7b488b7a9c572c6` and
+`TestResults/local-completeness/address-blacklist-repack*`. This is configuration/API smoke only.
+
+No real database accessed in this module. It does not establish server type emission, new large-packet
+coverage, OBProxy/TLS, other platforms or load compatibility. All23IDs/eight packages and other local
+development remain open. Reports retained under ignored `TestResults/local-completeness/blob-family-*`.
+
 ## 2026-10-26 Discovery address blacklist overrides
 
 Developed from `414b7cc` for P1-09/W4. ADDRESS.OBLB_BLACKLIST replaces the entire inherited group/root

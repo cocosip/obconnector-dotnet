@@ -64,6 +64,13 @@ namespace OceanBaseConnector.UnitTests
                     Assert.DoesNotContain("NUMBER", names); Assert.DoesNotContain("REF CURSOR", names);
                     Assert.Equal(tinyBoolean, names.Contains("TINYINT(1)"));
                     Assert.Equal((int)OceanBaseDbType.Binary, DataTypeRow(table, "BLOB", typeof(byte[]))["ProviderDbType"]);
+                    foreach (var prefix in new[] { "TINY", "MEDIUM", "LONG" })
+                        foreach (var raw in new[] { false, true })
+                        {
+                            var family = DataTypeRow(table, prefix + (raw ? "BLOB" : "TEXT"), raw ? typeof(byte[]) : typeof(string));
+                            Assert.Equal((int)(raw ? OceanBaseDbType.Binary : OceanBaseDbType.String), family["ProviderDbType"]);
+                            Assert.True((bool)family["IsLong"]); Assert.True((bool)family["IsSupportedForResults"]);
+                        }
                 }
                 else
                 {

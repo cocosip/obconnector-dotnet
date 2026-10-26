@@ -29,11 +29,13 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
         };
 
         internal static async Task Verify(Type connectionType, byte[] greeting, Func<PacketChannel, CancellationToken, Task<byte[]>> readCommand,
-            int sample, bool oracle, bool asynchronous, bool binary, bool sequential)
+            int sample, bool oracle, bool asynchronous, bool binary, bool sequential, byte type = 253, bool raw = false)
         {
             var (collation, part, hex, width) = Samples[sample];
-            var expected = string.Concat(Enumerable.Repeat(part, 400));
-            var field = Enumerable.Range(0, 400).SelectMany(_ => Convert.FromHexString(hex)).ToArray();
+            var repetitions = type == 249 ? 10 : 400;
+            var expected = string.Concat(Enumerable.Repeat(part, repetitions));
+            var field = Enumerable.Range(0, repetitions).SelectMany(_ => Convert.FromHexString(hex)).ToArray();
+            if (raw) collation = 63;
             var eof = new byte[] { 254, 0, 0, oracle ? (byte)6 : (byte)2, 0 };
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
@@ -56,14 +58,17 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                 }
                 await channel.WritePacketAsync(new byte[] { 5 }, budget.Token);
                 for (var i = 0; i < 5; i++)
-                    await channel.WritePacketAsync(Column(i == 4 ? (byte)9 : (byte)253, i == 4 ? (ushort)63 : collation), budget.Token);
+                    await channel.WritePacketAsync(Column(i == 4 ? (byte)9 : type, i == 4 ? (ushort)63 : collation), budget.Token);
                 await channel.WritePacketAsync(eof, budget.Token);
                 using var row = new MemoryStream();
                 if (binary) row.Write(new byte[] { 0, 32 });
                 for (var i = 0; i < 3; i++) WriteField(row, field);
                 if (!binary) row.WriteByte(251);
                 if (binary) row.Write(new byte[] { 42, 0, 0, 0 }); else row.Write(new byte[] { 2, 52, 50 });
-                await channel.WritePacketAsync(row.ToArray(), budget.Token); await channel.WritePacketAsync(eof, budget.Token);
+                await channel.WritePacketAsync(row.ToArray(), budget.Token);
+                if (type >= 249 && type <= 251)
+                    await channel.WritePacketAsync(binary ? new byte[] { 0, 32, 0, 0, 0, 42, 0, 0, 0 } : new byte[] { 0, 0, 0, 251, 2, 52, 50 }, budget.Token);
+                await channel.WritePacketAsync(eof, budget.Token);
                 channel.BeginCommand();
                 if (binary) { Assert.Equal(25, (await readCommand(channel, budget.Token))[0]); channel.BeginCommand(); }
                 request = await readCommand(channel, budget.Token);
@@ -80,17 +85,45 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                     if (binary) { if (asynchronous) await command.PrepareAsync(budget.Token); else command.Prepare(); }
                     using var reader = asynchronous ? await command.ExecuteReaderAsync(sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default, budget.Token)
                         : command.ExecuteReader(sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default);
-                    Assert.Equal(oracle ? 120 : 120 / width, reader.GetColumnSchema()[0].ColumnSize);
-                    Assert.Equal(typeof(string), reader.GetFieldType(0)); Assert.Equal("字符列", reader.GetName(0));
+                    Assert.Equal(oracle || raw ? 120 : 120 / width, reader.GetColumnSchema()[0].ColumnSize);
+                    Assert.Equal(raw ? typeof(byte[]) : typeof(string), reader.GetFieldType(0)); Assert.Equal("字符列", reader.GetName(0));
+                    if (type >= 249 && type <= 251)
+                    {
+                        Assert.Equal((type == 249 ? "TINY" : type == 250 ? "MEDIUM" : "LONG") + (raw ? "BLOB" : "TEXT"), reader.GetDataTypeName(0));
+                        Assert.True(reader.GetColumnSchema()[0].IsLong);
+                        Assert.Equal((int)(raw ? OceanBaseDbType.Binary : OceanBaseDbType.String), reader.GetColumnSchema()[0]["ProviderType"]);
+                    }
                     Assert.True(asynchronous ? await reader.ReadAsync(budget.Token) : reader.Read());
-                    using (var text = reader.GetTextReader(0))
-                        Assert.Equal(expected, asynchronous ? await text.ReadToEndAsync() : text.ReadToEnd());
-                    var buffer = new char[expected.Length];
-                    Assert.Equal(buffer.Length, reader.GetChars(1, 0, buffer, 0, buffer.Length));
-                    Assert.Equal(expected, new string(buffer));
-                    Assert.Equal(expected, reader.GetString(2));
+                    if (raw)
+                    {
+                        using (var stream = reader.GetStream(0))
+                        using (var copy = new MemoryStream())
+                        {
+                            if (asynchronous) await stream.CopyToAsync(copy, budget.Token); else stream.CopyTo(copy);
+                            Assert.Equal(field, copy.ToArray());
+                        }
+                        var buffer = new byte[field.Length];
+                        Assert.Equal(buffer.Length, reader.GetBytes(1, 0, buffer, 0, buffer.Length));
+                        Assert.Equal(field, buffer); Assert.Equal(field, reader.GetValue(2));
+                    }
+                    else
+                    {
+                        using (var text = reader.GetTextReader(0))
+                            Assert.Equal(expected, asynchronous ? await text.ReadToEndAsync() : text.ReadToEnd());
+                        var buffer = new char[expected.Length];
+                        Assert.Equal(buffer.Length, reader.GetChars(1, 0, buffer, 0, buffer.Length));
+                        Assert.Equal(expected, new string(buffer));
+                        Assert.Equal(expected, reader.GetString(2));
+                    }
                     Assert.True(reader.IsDBNull(3)); Assert.Equal(DBNull.Value, reader.GetValue(3));
                     Assert.Equal(42, reader.GetInt32(4));
+                    if (type >= 249 && type <= 251)
+                    {
+                        Assert.True(asynchronous ? await reader.ReadAsync(budget.Token) : reader.Read());
+                        for (var i = 0; i < 3; i++)
+                            Assert.Equal(raw ? (object)Array.Empty<byte>() : "", reader.GetValue(i));
+                        Assert.True(reader.IsDBNull(3)); Assert.Equal(42, reader.GetInt32(4));
+                    }
                     Assert.False(asynchronous ? await reader.ReadAsync(budget.Token) : reader.Read());
                 }
                 using var reuse = connection.CreateCommand(); reuse.CommandText = "reuse";

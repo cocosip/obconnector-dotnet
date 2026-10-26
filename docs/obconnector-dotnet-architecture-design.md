@@ -333,6 +333,14 @@ Direct Oracle 4.4.2.2/Windows/.NET10/TLS-disabled evidence covers prepared integ
 
 Ordinary string result columns select a strict decoder from their reported collation ID. The same decoder serves text/binary results, buffered/sequential reads, `GetString`, `GetChars` and `GetTextReader`; SQL NULL remains DBNull and binary collation 63 remains bytes. Metadata names and client SQL/string parameters retain their existing UTF-8 encoding. This adds result decoding, not a connection-string charset option or a general client-encoding negotiation API.
 
+Result wire codes 249/250/251 identify the TINY/MEDIUM/LONG BLOB family; 252 retains BLOB/TEXT.
+Binary collation 63 returns byte arrays and byte streams; other supported collations return strictly
+decoded text. `GetDataTypeName` distinguishes each BLOB/TEXT family, schema marks them `IsLong`, and
+provider identities remain Binary/String. They share the existing length-encoded buffered/sequential
+paths, including empty and NULL values. MySQL DataTypes lists the six additional SQL declarations;
+Oracle's SQL inventory retains its separate locator-based BLOB/CLOB contract. Accepting these shared
+wire codes in either mode does not establish that a particular server emits them.
+
 | Result family | Accepted collation IDs | Maximum bytes per character |
 | --- | --- | ---: |
 | ASCII | 11, 65, 331, 346, 361 | 1 |

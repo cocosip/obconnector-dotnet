@@ -93,6 +93,11 @@ namespace OceanBaseConnector
                 Text("BINARY", OceanBaseDbType.Binary, binary: true, fixedLength: true);
                 Text("VARBINARY", OceanBaseDbType.Binary, binary: true)["IsBestMatch"] = true;
                 Text("BLOB", OceanBaseDbType.Binary, binary: true, longValue: true);
+                foreach (var prefix in new[] { "TINY", "MEDIUM", "LONG" })
+                {
+                    Text(prefix + "TEXT", OceanBaseDbType.String, longValue: true);
+                    Text(prefix + "BLOB", OceanBaseDbType.Binary, binary: true, longValue: true);
+                }
                 Temporal("DATE", OceanBaseDbType.Date, typeof(DateTime), 0, 0, typeof(OceanBaseDate));
                 Temporal("DATETIME", OceanBaseDbType.DateTime, typeof(DateTime), 0, 6, typeof(OceanBaseDateTime))["IsBestMatch"] = true;
                 Temporal("TIMESTAMP", OceanBaseDbType.Timestamp, typeof(DateTime), 0, 6, typeof(OceanBaseDateTime));

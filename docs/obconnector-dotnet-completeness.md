@@ -1,9 +1,9 @@
 # OceanBaseConnector .NET 完整驱动能力与缺口基线
 
-**最近复核：** 2026-10-26；基于414b7cc的TNS/OCP地址级黑名单；全部23项及八工作包仍开放。
-**当前模块：** P1-09/W4；完整性第15.65节。
-**当前验证：** 完整单测6461通过、相关消费者512通过，均无失败/跳过；Release构建无警告/错误，见最新进度台账。
-**本次补充：** ADDRESS黑名单整块覆盖组/根策略；策略随地址排序，反馈按实际候选归属。
+**最近复核：** 2026-10-26；基于aab2755的BLOB家族结果码；全部23项及八工作包仍开放。
+**当前模块：** P1-08/W5、P1-10/W6；完整性第15.66节。
+**当前验证：** 完整单测6560、相关消费者280、DI14通过，均无失败/跳过；Release构建无警告/错误。
+**本次补充：** 249/250/251结果类型、严格字符集/二进制读取及元数据和MySQL DataTypes。
 本模块无新增实库兼容性证据；前一模块12项greeting前失败保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
@@ -2460,6 +2460,19 @@ dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTe
 `TestResults/local-completeness/address-blacklist-*`，忽略目录不随提交或包发布。
 未访问真实数据库；不新增真实 OCP/OBProxy、独立运行时、平台或负载兼容结论。
 其余工作包和全部 23 个 ID 的整体关闭继续开放。
+
+### 15.66 2026-10-26 BLOB 家族结果码
+
+P1-08/W5、P1-10/W6：共享结果读取原先只接受252，补齐249/250/251的
+TINY/MEDIUM/LONG BLOB或TEXT名称、Binary/String身份、严格collation解码及IsLong/宽度。
+沿用既有length-encoded缓冲/流式路径，无新增wire格式或依赖；MySQL DataTypes补六种声明。
+Oracle SQL声明和LOB locator契约保留独立，接受共享wire码不代表实库一定发出这些码。
+
+新增99项单测（96种公开reader组合和3项严格/二进制边界），既有字符集回归扩展到三种码；
+首次235项为4通过/231失败，相关GREEN537通过。新消费者120项只覆盖MySQL/异步，
+双模式/同步路径由单测覆盖。最终完整门禁及独立走查见最新进度台账。
+保留空内容、NULL、邻列、后续命令及未知/损坏字符集断言；本模块未新增大包边界或实库证据。
+报告位于忽略目录`TestResults/local-completeness/blob-family-*`。其余本地开发及全部ID继续开放。
 
 ## 16. 剩余交付工作包
 

@@ -1,5 +1,14 @@
 # Compatibility and known gaps
 
+## 2026-10-26 BLOB family result codes
+
+The reader accepts wire codes 249/250/251 alongside 252. TINY/MEDIUM/LONG BLOB and TEXT names,
+Binary/String provider identity, strict collation decoding, IsLong/size metadata, byte/text streams,
+empty values and NULL use the existing result framing. MySQL DataTypes lists all six declarations.
+Local dual-mode sync/async unit fixtures and MySQL async consumers cover buffered/sequential and
+text/prepared results. These tests do not prove real server emission, large-packet boundaries or
+deployment interoperability. See [delivery evidence](obconnector-dotnet-progress.md#2026-10-26-blob-family-result-codes).
+
 ## 2026-10-26 Discovery address blacklist and group ceilings
 
 ADDRESS blacklists now replace inherited ADDRESS_LIST/DESCRIPTION blocks; group TCP ceilings count
