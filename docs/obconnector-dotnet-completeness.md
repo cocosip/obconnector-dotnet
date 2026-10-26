@@ -4,7 +4,7 @@
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
 **最近复核：** 2026-10-27，基于184a767开发；保持master，全部23项及八工作包仍开放。
-**当前开发模块：** P1-07 Oracle复杂类型 BLOB/CLOB 结果成员；二进制命名结果在协商 `Use Lob Locators=true` 时生成绑定当前会话的 `OceanBaseLob`，匿名集合已覆盖元素元数据，非空复杂 LOB 输入仍拒绝。专项9项、复杂单元422项及无TLS受影响消费者220项通过；完整全量门禁受当前TLS/证书环境失败影响，见第15.85节。
+**当前开发模块：** P1-07 Oracle复杂类型 BLOB/CLOB 结果成员；二进制命名及匿名集合结果在协商 `Use Lob Locators=true` 时生成绑定当前会话的 `OceanBaseLob`，非空复杂 LOB 输入仍拒绝。专项13项、复杂单元426项及无TLS受影响消费者220项通过；完整全量门禁受当前TLS/证书环境失败影响，见第15.85节。
 **最近完成模块：** P1-08/P1-10 Oracle FLOAT/NUMBER_FLOAT参数派生、INOUT目录归一及按需字符长度补查；完整单测7656、专项189及受影响消费者168通过，独立最终走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation)及第15.84节。新增实库过程/函数用例仅编译，未运行。
 **此前完成模块：** Oracle NUMBER_FLOAT206精确结果、binary precision元数据及CommandBuilder绑定（184a767）；完整单测7578、专项204及受影响消费者229通过，独立走查无遗留问题，见第15.83节。2项实库和2项既有NUMBER对照均在初始握手失败，未完成认证或SQL，不能声称FLOAT存储成功。
 此前JSON客户端字符集（b94a421）完整单测7543、专项111、消费者570通过；其10项实库与2项默认字符集对照握手失败保留在第15.82节。
@@ -118,7 +118,7 @@ The overview separates remaining development from real-environment validation; h
 | Oracle 类型 | 部分实现 | DATE、TIMESTAMP、TZ/LTZ、INTERVAL、NCHAR、RAW、LOB、复杂类型已有部分实现 |
 | MySQL 过程 | 部分实现 | 集合顺序 Input/Output/InputOutput、显式 Prepare、多结果和隐藏输出；关闭排空；PS_MULTI_RESULTS 必需，ReturnValue、FetchSize、SchemaOnly/KeyInfo 和 INOUT stream 拒绝；实际部署矩阵仍缺 |
 | Oracle 输出 | 部分实现 | 过程、OUT、RETURNING、REF CURSOR 和数组绑定有路径；若干参数方向和结果形状不支持 |
-| 复杂类型 | 部分实现 | 标量及嵌套 object/collection 有路径；NCHAR/NVARCHAR2成员已有有界实现；LOB/cursor、其他national存储/匿名结果及复杂整列RETURNING身份、循环和文本结果仍受限；可观察 DDL 发送时自动失效已有本地实现，外部/不透明 DDL 须显式清理，真实 DDL 验收仍缺 |
+| 复杂类型 | 部分实现 | 标量及嵌套 object/collection 有路径；NCHAR/NVARCHAR2成员已有有界实现；BLOB/CLOB命名及匿名集合结果已有本地物化；cursor、其他national存储及复杂整列RETURNING身份、循环和文本结果仍受限；可观察 DDL 发送时自动失效已有本地实现，外部/不透明 DDL 须显式清理，真实 DDL 验收仍缺 |
 | Schema 元数据 | 部分实现 | Oracle 20/MySQL 18 个集合、静态 DataTypes 及自动参数推导已有本地实现；后者只读目录，不扩大过程执行范围。真实目录/权限矩阵仍缺，见 [Schema 契约](schema.md)及第 15.18 节 |
 | 批处理和准备缓存 | 部分实现 | `DbBatch` 默认顺序；opt-in MySQL INSERT rewrite见第15.72节，multi-send/bulk仍缺；已有有限物理会话缓存，真实缓存/负载验收仍缺 |
 | 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter`、含当前租约数的[池指标](pool-metrics.md)及建连/探活分段已有本地实现；慢命令阈值、协议帧诊断及[会话I/O耗时](session-io-diagnostics.md)已有本地实现；其他资源等待和完整部署性能验收仍缺 |
@@ -160,7 +160,7 @@ The overview separates remaining development from real-environment validation; h
 | P1-04 | P1 | TLS/mTLS | 部分实现 | 自定义服务器证书回调、客户端证书池化身份隔离和数据源证书快照已有本地实现（第 15.4 节）；真实企业 CA/mTLS、轮换和跨平台撤销矩阵仍缺 |
 | P1-05 | P1 | ADO.NET 命令行为 | 部分实现 | MySQL StoredProcedure 已有集合顺序参数/输出/多结果本地实现（第 15.30 节），保留方向、capability 和提前关闭限制；补真实 TLS/代理/版本矩阵；`SchemaOnly` Prepare-only、`SingleRow`/`SingleResult` 已有本地实现；`KeyInfo` 已有有界键元数据/隐藏列实现；Batch元数据/源条目创建见第15.60节，跨批次结果限制见第15.61节；REF CURSOR结果限制见第15.62节；其余 Command/Batch/游标行为矩阵及真实目录/准备/锁/结果形状验收仍缺 |
 | P1-06 | P1 | Oracle 输出和游标 | 部分实现；独立 Prepare 与输出 FetchSize 提示已有实现 | 保留准备与所有权转移、正提示不对内部输出发FETCH（第15.46节）；二进制cursor列/嵌套所有权已有本地实现（第15.56节）；补完整参数方向、文本cursor列、其余结果形状和部署矩阵；输出offset/数组正FetchSize仍拒绝 |
-| P1-07 | P1 | 复杂类型 | 部分实现 | 已有嵌套 object/collection、显式清理及可观察 DDL 自动失效本地实现；保留第15.47节national实现及限定直连证据，补LOB/cursor、其他national边界及复杂整列RETURNING身份和真实DDL/资源验收，外部或不透明 DDL 需显式清理 |
+| P1-07 | P1 | 复杂类型 | 部分实现 | 已有嵌套 object/collection、显式清理及可观察 DDL 自动失效本地实现；第15.85节补齐BLOB/CLOB命名及匿名集合结果物化；保留第15.47节national实现及限定直连证据，继续补cursor、其他national边界及复杂整列RETURNING身份和真实DDL/资源验收，外部或不透明 DDL 需显式清理 |
 | P1-08 | P1 | 类型和字符集 | 部分实现；DecimalScale、普通结果字符集及客户端编码子模块已有实现，输入编码见第15.80节 | 有符号 scale、严格结果解码/宽度及 Oracle 未知精度 NUMBER 保真已有回归；其余national/JSON/CLOB边界、其他字符集、扩展元数据/类型码及完整实库矩阵仍缺 |
 | P1-09 | P1 | HA/发现 | 部分实现 | TCP重试预算/退避、端点TCP健康缓存、TNS/OCP适配、分组/策略/权重及全局黑名单/尝试上限已有本地实现（第15.50—15.55节），分组黑名单、组尝试上限及地址覆盖见第15.63—15.65节；其他发现策略边界、proxy拓扑及真实健康/故障验收仍缺 |
 | P1-10 | P1 | Schema 元数据 | 部分实现；参数推导已有本地实现 | 常用目录、DataTypes 及自动参数推导有本地实现；真实目录/权限/版本/代理验收仍缺 |
@@ -2885,9 +2885,9 @@ because the parameter wire contract is not established. Cursor members, further 
 shapes and whole-complex RETURNING remain open.
 
 The module regressions cover dictionary loading/input rejection, synchronous and asynchronous named
-BLOB/CLOB result handles, anonymous BLOB/CLOB element metadata, and metadata rejection before
-materialization when locators are not negotiated. The old guard produced the initial RED; focused
-coverage is 9 passed and the complete complex unit family is 422 passed, all
+and anonymous BLOB/CLOB result handles, anonymous BLOB/CLOB element metadata, and metadata rejection
+before materialization when locators are not negotiated. The old guard produced the initial RED;
+focused coverage is 13 passed and the complete complex unit family is 426 passed, all
 with zero failures/skips. The no-TLS affected consumer selection is 220 passed; the broader
 Complex/Lob filter is 680 passed and 260 failed while constructing TLS/PFX fixtures. A complete
 unit attempt is 7521 passed/143 failed; its feature-specific stale BLOB assertions were corrected

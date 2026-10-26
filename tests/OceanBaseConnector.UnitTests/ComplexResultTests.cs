@@ -423,6 +423,38 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
+        [InlineData("BLOB", false)] [InlineData("BLOB", true)]
+        [InlineData("CLOB", false)] [InlineData("CLOB", true)]
+        public async Task AnonymousComplexLobElementsPublishBoundHandlesFromBinaryResults(string scalar, bool async)
+        {
+            var locator = InlineLob(Encoding.UTF8.GetBytes(scalar == "CLOB" ? "患者" : "blob"));
+            var element = scalar == "CLOB" ? (byte)211 : (byte)210;
+            var server = Server(async channel =>
+            {
+                await StatementCommand(channel, 22); await Prepared(channel, 242, 0); await StatementCommand(channel, 23);
+                await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(ComplexColumn("", "", element: element)); await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 0, 0, 1, 0 }.Concat(WithLength(locator)).ToArray()); await channel.WritePacketAsync(Eof());
+                await StatementCommand(channel, 25);
+            }, lobLocators: true);
+            using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                using var command = connection.CreateCommand(); command.CommandText = "anonymous"; await command.PrepareAsync();
+                using (var reader = async ? await command.ExecuteReaderAsync() : command.ExecuteReader())
+                {
+                    Assert.True(async ? await reader.ReadAsync() : reader.Read());
+                    var value = Assert.IsType<OceanBaseComplexValue>(reader.GetValue(0));
+                    using var lob = Assert.IsType<OceanBaseLob>(Assert.Single(value.GetValues()));
+                    Assert.Equal(scalar == "CLOB", lob.IsCharacter); Assert.Equal(scalar == "CLOB" ? 6 : 4, lob.ByteLength);
+                    Assert.False(async ? await reader.ReadAsync() : reader.Read());
+                }
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
         public async Task ComplexCursorPagesRejectAChangedTypeVersion(bool async, bool sequential)
         {
