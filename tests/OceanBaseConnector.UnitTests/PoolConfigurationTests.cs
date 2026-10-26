@@ -41,6 +41,7 @@ namespace OceanBaseConnector.UnitTests
             yield return new object[] { "Allow Public Key Retrieval", "true" };
             yield return new object[] { "Use OB20", "true" };
             yield return new object[] { "Use Compression", "true" };
+            yield return new object[] { "Character Set", "gbk" };
             yield return new object[] { "Enable Full Link Trace", "true" };
             yield return new object[] { "Use Oracle Prepare Execute", "true" };
             yield return new object[] { "Use Lob Locators", "true" };

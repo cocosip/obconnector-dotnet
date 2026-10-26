@@ -16,7 +16,7 @@ namespace OceanBaseConnector.Internal.Session
             result.Start();
             var values = ReadMySqlLiteralState(result, result.Read());
             if (result.Read()) throw new ProtocolException("The MySQL literal state query returned extra rows.");
-            return MySqlLiteralContext.Parse(values[0], values[1], values[2], values[3]);
+            return ParseMySqlLiteralContext(values);
         }
 
         internal async Task<MySqlLiteralContext> ReadMySqlLiteralContextAsync(CancellationToken token)
@@ -26,6 +26,13 @@ namespace OceanBaseConnector.Internal.Session
             await result.StartAsync(token).ConfigureAwait(false);
             var values = ReadMySqlLiteralState(result, await result.ReadAsync(token).ConfigureAwait(false));
             if (await result.ReadAsync(token).ConfigureAwait(false)) throw new ProtocolException("The MySQL literal state query returned extra rows.");
+            return ParseMySqlLiteralContext(values);
+        }
+
+        private MySqlLiteralContext ParseMySqlLiteralContext(string[] values)
+        {
+            if (_session.ClientCharacterSet.Managed && (!_session.ClientCharacterSet.Matches(values[0]) || !_session.ClientCharacterSet.Matches(values[1])))
+                throw new System.NotSupportedException("The literal session character sets do not match the configured client encoding.");
             return MySqlLiteralContext.Parse(values[0], values[1], values[2], values[3]);
         }
 

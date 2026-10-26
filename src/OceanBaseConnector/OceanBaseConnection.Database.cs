@@ -42,11 +42,11 @@ namespace OceanBaseConnector
             token.ThrowIfCancellationRequested();
             if (database == null) throw new ArgumentNullException(nameof(database));
             if (database.Length == 0 || database.IndexOf('\0') >= 0) throw new ArgumentException("A nonempty database name without NUL is required.", nameof(database));
-            if (ResultColumn.Utf8.GetByteCount(database) >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Database name exceeds the packet size limit.", nameof(database));
-            var request = OceanBaseCommand.SqlPacket(database, 2);
             lock (_gate)
             {
                 var session = GetOpenSession();
+                if (session.ClientEncoding.GetByteCount(database) >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Database name exceeds the packet size limit.", nameof(database));
+                var request = OceanBaseCommand.SqlPacket(database, 2, session.ClientEncoding);
                 if (_xaResource != null) throw new InvalidOperationException("The connection is dedicated to XA until Close.");
                 if (session.Info!.Mode != OceanBaseCompatibilityMode.MySql) throw new NotSupportedException("Database switching is supported only in MySQL mode.");
                 ValidateCommandTransaction(session, _transaction);

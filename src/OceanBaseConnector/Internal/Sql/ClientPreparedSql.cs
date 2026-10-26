@@ -18,10 +18,11 @@ namespace OceanBaseConnector.Internal.Sql
             return false;
         }
 
-        internal static string Build(ParameterBindingPlan bindings, OceanBaseCompatibilityMode mode, MySqlLiteralContext? context = null)
+        internal static string Build(ParameterBindingPlan bindings, OceanBaseCompatibilityMode mode, MySqlLiteralContext? context = null, Encoding? clientEncoding = null)
         {
+            clientEncoding ??= ResultColumn.Utf8;
             // Reuse all declared-type, exact conversion and packet-budget validation.
-            _ = PreparedParameters.Encode(bindings.Parameters, mode, validateOnly: true);
+            _ = PreparedParameters.Encode(bindings.Parameters, mode, validateOnly: true, clientEncoding: clientEncoding);
             var strings = RequiresMySqlLiteralContext(bindings, mode);
             if (strings && context == null) throw new NotSupportedException("MySQL client string preparation requires a trusted session collation.");
             if (strings) context!.ValidateText(bindings.CommandText);
@@ -29,11 +30,11 @@ namespace OceanBaseConnector.Internal.Sql
             if (positions.Length != bindings.Parameters.Length) throw new ArgumentException("Client preparation parameter count mismatch.");
             var sql = new StringBuilder();
             var copied = 0;
-            long bytes = ResultColumn.Utf8.GetByteCount(bindings.CommandText) + 1L;
+            long bytes = clientEncoding.GetByteCount(bindings.CommandText) + 1L;
             for (var i = 0; i < positions.Length; i++)
             {
-                var literal = Literal(bindings.Parameters[i], mode, context);
-                bytes += ResultColumn.Utf8.GetByteCount(literal) + 1L;
+                var literal = Literal(bindings.Parameters[i], mode, context, clientEncoding);
+                bytes += clientEncoding.GetByteCount(literal) + 1L;
                 if (bytes > PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Client prepared SQL exceeds the packet size limit.");
                 sql.Append(bindings.CommandText, copied, positions[i] - copied).Append('(').Append(literal).Append(')');
                 copied = positions[i] + 1;
@@ -42,7 +43,7 @@ namespace OceanBaseConnector.Internal.Sql
             return sql.Append(bindings.CommandText, copied, bindings.CommandText.Length - copied).ToString();
         }
 
-        private static string Literal(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode, MySqlLiteralContext? context)
+        private static string Literal(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode, MySqlLiteralContext? context, Encoding clientEncoding)
         {
             if (parameter.Direction != ParameterDirection.Input) throw Unsupported();
             var provider = parameter.OceanBaseDbType;
@@ -62,7 +63,7 @@ namespace OceanBaseConnector.Internal.Sql
                 if (mode == OceanBaseCompatibilityMode.MySql) return context!.Literal(text);
                 if (text.IndexOf('\0') >= 0) throw new ArgumentException("Oracle client text literals cannot contain NUL.");
                 text = text.Replace("'", "''");
-                if (ResultColumn.Utf8.GetByteCount(text) > 4000) throw new ArgumentException("Oracle client text literal exceeds 4000 bytes.");
+                if (clientEncoding.GetByteCount(text) > 4000) throw new ArgumentException("Oracle client text literal exceeds 4000 bytes.");
                 return "CAST('" + text + "' AS VARCHAR2(4000))";
             }
             if (value is byte[] binary)

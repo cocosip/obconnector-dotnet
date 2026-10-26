@@ -37,7 +37,7 @@ namespace OceanBaseConnector
         /// <summary>Writes CLOB text at a zero-based Unicode scalar offset. Multiple chunks are not atomic.</summary>
         public void WriteText(long characterOffset, string text)
             => WriteTextCore(characterOffset, text, false, CancellationToken.None).GetAwaiter().GetResult();
-        /// <summary>Asynchronously writes strict UTF-8 CLOB text, preserving surrogate pairs between chunks.</summary>
+        /// <summary>Asynchronously writes CLOB text through the client parameter encoding, preserving surrogate pairs between chunks.</summary>
         public Task WriteTextAsync(long characterOffset, string text, CancellationToken cancellationToken = default)
             => WriteTextCore(characterOffset, text, true, cancellationToken);
         private async Task WriteTextCore(long characterOffset, string text, bool async, CancellationToken token)

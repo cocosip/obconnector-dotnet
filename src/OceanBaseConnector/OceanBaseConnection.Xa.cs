@@ -64,7 +64,7 @@ namespace OceanBaseConnector
                     default: valid = state == XaState.Idle; break;
                 }
                 if (!valid) throw new InvalidOperationException("The XA operation does not match the branch identity or phase.");
-                var exchange = new CommandExchange(session, _log, resource.Timeout, token, () => { }) { IsXa = true };
+                var exchange = new CommandExchange(session, _log, resource.Timeout, token, () => { }) { IsXa = true, SkipClientCharacterSetVerification = true };
                 resource.InProgress = true;
                 return exchange;
             }

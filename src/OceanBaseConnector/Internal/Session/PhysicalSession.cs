@@ -37,6 +37,7 @@ namespace OceanBaseConnector.Internal.Session
         private int _discardOnReturnCount;
         private int _liveLobCount;
         private bool _sessionStateChanged;
+        private bool _clientCharacterSetVerified = true;
         private ConnectResult? _info;
         private string? _sessionTimeZone;
         private NationalCharacterSet? _nationalCharacterSet;
@@ -47,6 +48,10 @@ namespace OceanBaseConnector.Internal.Session
         private readonly DateTime _createdUtc = DateTime.UtcNow;
         private DateTime _lastReturnedUtc;
         internal bool UseOraclePrepareExecute => _options.UseOraclePrepareExecute;
+        internal ClientCharacterSet ClientCharacterSet => _options.ClientCharacterSet;
+        internal Encoding ClientEncoding => ClientCharacterSet.Managed ? ClientCharacterSet : ResultColumn.Utf8;
+        internal bool ClientCharacterSetVerified { get { lock (_gate) return _clientCharacterSetVerified; } }
+        internal void SetClientCharacterSetVerified(bool verified) { lock (_gate) _clientCharacterSetVerified = verified; }
         internal bool TreatTinyAsBoolean => _options.TreatTinyAsBoolean;
         internal int SlowQueryThresholdMilliseconds => _options.SlowQueryThresholdMilliseconds;
         internal bool IsCredentialExpired => _options.Credential?.IsExpired == true;
@@ -395,6 +400,14 @@ namespace OceanBaseConnector.Internal.Session
             lock (_gate)
             {
                 if (_state != SessionState.Busy || !ReferenceEquals(_lease, lease)) return null;
+                if (variables != null && ClientCharacterSet.Managed)
+                    foreach (var item in variables)
+                    {
+                        var key = item.Key.ToLowerInvariant();
+                        if ((key == "character_set_client" || key == "character_set_connection") && !ClientCharacterSet.Matches(item.Value) ||
+                            key == "character_set_results" && !string.Equals(item.Value, "utf8mb4", StringComparison.OrdinalIgnoreCase) ||
+                            key == "collation_connection" && !ClientCharacterSet.MatchesCollation(item.Value)) _clientCharacterSetVerified = false;
+                    }
                 _sessionTimeZone = variables == null ? null : ReportedTimeZone(variables);
                 _nationalCharacterSet = NationalCharacterSet.FromVariables(variables);
                 return _sessionTimeZone;
@@ -505,6 +518,7 @@ namespace OceanBaseConnector.Internal.Session
                 IReadOnlyDictionary<string, string>? resetVariables = null;
                 using (var exchange = new CommandExchange(this, log, timeout, cancellationToken, () => { }, logCommand: false))
                 {
+                    exchange.SkipClientCharacterSetVerification = true;
                     var request = new byte[] { 0x1f }; // COM_RESET_CONNECTION
                     if (asynchronous) await exchange.SendAsync(request).ConfigureAwait(false); else exchange.Send(request);
                     var packet = asynchronous
@@ -516,6 +530,13 @@ namespace OceanBaseConnector.Internal.Session
                         (Info?.Mode == OceanBaseCompatibilityMode.MySql && (ok.StatusFlags & ServerStatusFlags.Autocommit) == 0))
                         throw new ProtocolException("The session reset response was invalid.");
                     exchange.ObserveSessionState(ok);
+                    exchange.Complete();
+                }
+
+                if (ClientCharacterSet.Managed)
+                {
+                    using var exchange = new CommandExchange(this, log, timeout, cancellationToken, () => { }, logCommand: false);
+                    await exchange.InitializeClientCharacterSet(asynchronous, cancellationToken).ConfigureAwait(false);
                     exchange.Complete();
                 }
 
@@ -537,7 +558,7 @@ namespace OceanBaseConnector.Internal.Session
                 if (_initialDatabase.Length != 0 && Info?.Mode == OceanBaseCompatibilityMode.MySql)
                 {
                     using var exchange = new CommandExchange(this, log, timeout, cancellationToken, () => { }, logCommand: false);
-                    var database = Encoding.UTF8.GetBytes(_initialDatabase);
+                    var database = ClientEncoding.GetBytes(_initialDatabase);
                     var request = new byte[database.Length + 1];
                     request[0] = 2; // COM_INIT_DB
                     Buffer.BlockCopy(database, 0, request, 1, database.Length);

@@ -52,6 +52,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `Connection Lifetime` | 0 | Maximum physical-session age in seconds; zero disables the limit. |
 | `Statement Cache Size` | 0 | Idle server-prepared statements retained per physical session, 0..1024; zero disables sharing across commands. |
 | `Use Compression` | false | Requires standard MySQL zlib compression. Unsupported servers fail before credentials; cannot currently combine with Use OB20. |
+| `Character Set` | utf8mb4 | SQL/ordinary parameters; non-default names enable cached charset trust and UTF-8 results. See [input encoding and session limits](client-character-sets.md). |
 | `Use OB20` | false | Requests OB20 framing when negotiated by the server. |
 | `Enable Full Link Trace` | false | Requests server tracing; requires `Use OB20=true`. |
 | `Use Oracle Prepare Execute` | false | Enables Oracle procedures and output bindings; requires server version discovery and OceanBase >=2.2.76. |
@@ -326,7 +327,7 @@ The conservative parser also falls back above262144 lexical tokens. Oracle, read
 and default batches retain their sequential paths. Only Input parameters are eligible. Every row
 containing a Stream is a singleton boundary: planning never reads or disposes caller streams.
 
-Chunks contain at most65535 rows/parameters, with independent64MiB budgets for UTF-8 SQL including
+Chunks contain at most65535 rows/parameters, with independent64MiB budgets for SQL in the selected client encoding including
 its command byte and inline EXECUTE including its10-byte header, combined NULL bitmap, types and
 encoded values. Planning validates/encodes one row at a time; it does not retain all encoded rows.
 Actual server/proxy max_allowed_packet may be smaller. Original batch snapshots still retain the
@@ -426,7 +427,7 @@ encoding keep their existing contracts. Real server emission and SQL interoperab
 
 ### Result character sets
 
-Ordinary string result columns select a strict decoder from their reported collation ID. The same decoder serves text/binary results, buffered/sequential reads, `GetString`, `GetChars` and `GetTextReader`; SQL NULL remains DBNull and binary collation 63 remains bytes. Metadata names and client SQL/string parameters retain their existing UTF-8 encoding. This adds result decoding, not a connection-string charset option or a general client-encoding negotiation API.
+Ordinary string result columns select a strict decoder from their reported collation ID. The same decoder serves text/binary results, buffered/sequential reads, `GetString`, `GetChars` and `GetTextReader`; SQL NULL remains DBNull and binary collation 63 remains bytes. Metadata names retain UTF-8. SQL and ordinary string parameters use the configured [client Character Set](client-character-sets.md), default utf8mb4; result decoding remains a separate contract.
 
 Result wire codes 249/250/251 identify the TINY/MEDIUM/LONG BLOB family; 252 retains BLOB/TEXT.
 Binary collation 63 returns byte arrays and byte streams; other supported collations return strictly
@@ -566,7 +567,7 @@ Python nor source files are runtime/test dependencies. This remains ordinary-res
 SQL/parameter, national, JSON and CLOB contracts retain their scope. Actual emission/storage and
 deployment interoperability require real-server evidence.
 
-Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON and existing CLOB paths retain their UTF-8 restriction; trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope.
+Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON results and CLOB reads retain their UTF-8 scope. Explicit JSON parameters require default utf8mb4 input. CLOB write buffers inherit the selected client parameter encoding and its representability checks; storage interoperability is not expanded. Trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope. See [client charset and cached session trust](client-character-sets.md).
 
 Real evidence is limited to direct OceanBase 4.4.2.2 MySQL mode, Windows/.NET10 with TLS disabled: six charset cases, each exercising eight text/prepared × buffered/sequential × sync/async combinations. That server rejects `SET character_set_results=utf16` and `utf16le` with 1231/42000; those two cases instead use `character_set_results=NULL` and `CONVERT` expressions, asserting string metadata and exact decoded text. This does not establish Oracle, proxy, TLS, all collation IDs, other server versions or independent-runtime compatibility. See [verification and retained failures](obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
 
@@ -764,7 +765,7 @@ Pure Output/ReturnValue parameters send a protocol NULL placeholder. The declare
 `CreateArrayType` accepts NUMBER, VARCHAR2, CHAR, NCHAR, NVARCHAR2, RAW, DATE or TIMESTAMP, or a preloaded named element type. Factory scalar arrays support input/output; ordinary complex-element arrays accept input only. Anonymous descriptions obtained from results are read-only.
 
 <a id="complex-national-members"></a>
-NCHAR/NVARCHAR2 members retain distinct layouts (208/207), including nested named objects/collections and scalar factory arrays. `CreateValue` validates shape, Unicode and byte budgets without I/O; encoding is selected again at execution. Complex national inputs use the trusted **connection** character set, unlike standalone national scalar parameters. Ordinary VARCHAR2/CHAR members retain UTF-8 behavior. ExecuteArray uses the same encoding path and existing explicit-transaction, row-count and partial-failure contract.
+NCHAR/NVARCHAR2 members retain distinct layouts (208/207), including nested named objects/collections and scalar factory arrays. `CreateValue` validates shape, Unicode and byte budgets without I/O; encoding is selected again at execution. Complex national inputs use the trusted **connection** character set, unlike standalone national scalar parameters. Ordinary VARCHAR2/CHAR members use the [selected client encoding](client-character-sets.md), default UTF-8. ExecuteArray uses the same encoding path and existing explicit-transaction, row-count and partial-failure contract.
 
 PL complex OUT/INOUT values use the result snapshot's session national encoding. Ordinary binary named complex columns retain database national storage encoding: loading a type containing national members additionally reads `NLS_DATABASE_PARAMETERS` for `NLS_NCHAR_CHARACTERSET` on the same reserved session/transaction, with the existing timeout and cancellation source. Currently only `AL16UTF16` is accepted, using strict UTF-16 big endian without BOM insertion/removal. A valid single-row response is consumed before an unsupported value is rejected; failed loading does not publish that type. Other database national encodings require separate wire evidence and implementation.
 

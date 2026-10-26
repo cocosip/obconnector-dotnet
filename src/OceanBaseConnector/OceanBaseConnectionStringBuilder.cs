@@ -17,8 +17,8 @@ namespace OceanBaseConnector
     /// <c>Server RSA Public Key</c> and
     /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
     /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c>, <c>Allow Multi Statements</c>, <c>Allow Local Infile</c>, <c>Check Certificate Revocation</c>, <c>Load Balance</c>, <c>Service Principal Name</c>,
-    /// <c>Treat Tiny As Boolean</c> and <c>Use Affected Rows</c>; the only synonyms are
-    /// <c>Host</c>, <c>Uid</c> and <c>Pwd</c>. PAM accepts secret <c>PasswordN</c> keys for N >= 2.
+    /// <c>Treat Tiny As Boolean</c>, <c>Character Set</c> and <c>Use Affected Rows</c>; synonyms are
+    /// <c>Host</c>, <c>Uid</c>, <c>Pwd</c> and <c>CharacterSet</c>. PAM accepts secret <c>PasswordN</c> keys for N >= 2.
     /// Unknown keys, synonym conflicts
     /// and malformed values are rejected instead of being silently accepted.
     /// </summary>
@@ -51,6 +51,7 @@ namespace OceanBaseConnector
         public const string AllowPublicKeyRetrievalKey = "Allow Public Key Retrieval";
         public const string UseOb20Key = "Use OB20";
         public const string UseCompressionKey = "Use Compression";
+        public const string CharacterSetKey = "Character Set";
         public const string EnableFullLinkTraceKey = "Enable Full Link Trace";
         public const string UseOraclePrepareExecuteKey = "Use Oracle Prepare Execute";
         public const string UseLobLocatorsKey = "Use Lob Locators";
@@ -275,6 +276,14 @@ namespace OceanBaseConnector
             set => this[AllowPublicKeyRetrievalKey] = value ? "true" : "false";
         }
 
+        /// <summary>ASCII-compatible SQL and ordinary parameter encoding; default utf8mb4.
+        /// Non-default values enable cached session charset verification. Results remain UTF-8.</summary>
+        public string CharacterSet
+        {
+            get => GetString(CharacterSetKey) ?? "utf8mb4";
+            set => this[CharacterSetKey] = value;
+        }
+
         /// <summary>Require the standard MySQL zlib compression protocol. Default false.</summary>
         public bool UseCompression
         {
@@ -465,7 +474,7 @@ namespace OceanBaseConnector
                 UseAffectedRows,
                 UseCompression,
                 statementCacheSize: StatementCacheSize, slowQueryThresholdMilliseconds: SlowQueryThreshold,
-                connectRetryCount: ConnectRetryCount, connectRetryIntervalSeconds: ConnectRetryInterval, hostRecheckSeconds: HostRecheckSeconds);
+                connectRetryCount: ConnectRetryCount, connectRetryIntervalSeconds: ConnectRetryInterval, hostRecheckSeconds: HostRecheckSeconds, characterSet: CharacterSet);
         }
 
         // Serialization order for fixed keys; additional PAM passwords are secrets.
@@ -498,6 +507,7 @@ namespace OceanBaseConnector
             AllowPublicKeyRetrievalKey,
             UseOb20Key,
             UseCompressionKey,
+            CharacterSetKey,
             EnableFullLinkTraceKey,
             UseOraclePrepareExecuteKey,
             UseLobLocatorsKey,
@@ -566,6 +576,7 @@ namespace OceanBaseConnector
                 [AllowPublicKeyRetrievalKey] = AllowPublicKeyRetrieval,
                 [UseOb20Key] = UseOb20,
                 [UseCompressionKey] = UseCompression,
+                [CharacterSetKey] = CharacterSet,
                 [EnableFullLinkTraceKey] = EnableFullLinkTrace,
                 [UseOraclePrepareExecuteKey] = UseOraclePrepareExecute,
                 [UseLobLocatorsKey] = UseLobLocators,
@@ -619,6 +630,8 @@ namespace OceanBaseConnector
         {
             switch (canonicalKey)
             {
+                case CharacterSetKey:
+                    return Internal.Protocol.ClientCharacterSet.Parse(value).Name;
                 case ServerKey:
                     OceanBaseEndpoint.Parse(value, DefaultPort);
                     return value;
@@ -804,6 +817,10 @@ namespace OceanBaseConnector
         {
             switch (keyword.Trim().ToUpperInvariant())
             {
+                case "CHARACTER SET":
+                case "CHARACTERSET":
+                    canonical = CharacterSetKey;
+                    return true;
                 case "TREAT TINY AS BOOLEAN":
                     canonical = TreatTinyAsBooleanKey;
                     return true;

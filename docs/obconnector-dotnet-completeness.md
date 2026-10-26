@@ -3,11 +3,11 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-26，恢复8291ca6检查点；保持master，全部23项及八工作包仍开放。
-**最近完成模块：** 会话协议I/O耗时（f0edabf）及当前借出物理会话指标，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-26-current-borrowed-physical-session-metrics)和[池指标契约](pool-metrics.md)。
-**下一项：** P1-08客户端SQL/参数字符集；已初查SqlPacket、PreparedParameters及可信literal状态路径，尚未新增编码配置或扩大输入字符集承诺。
-**当前验证：** 当前借出会话指标最终完整单测7391、专项16、受影响消费者140通过，均零失败/跳过；最终串行Release构建零警告/错误，独立走查无剩余阻断。构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，前一模块八次独立及两次完整运行均未复现；没有修改TNS或添加绕过。
-**剩余开发：** 客户端SQL/参数字符集、输入/双向及文本REF CURSOR、复杂LOB/游标成员、压缩OB20/代理reroute、多发送/独立bulk及六项验收占位等，逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
+**最近复核：** 2026-10-27，基于33c052b开发；保持master，全部23项及八工作包仍开放。
+**最近完成模块：** P1-08客户端SQL/参数字符集，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-client-sql-and-parameter-character-sets)和[输入字符集契约](client-character-sets.md)。此前会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录。
+**当前验证：** 字符集模块最终完整单测7491、专项166、受影响消费者560通过，均零失败/跳过；串行Release构建零警告/错误，格式验证通过（workspace-load warning），独立源码/测试/文档走查无剩余可操作问题。首次完整运行7484通过/2失败及后续专项164通过/2失败的原因和修正均保留于台账，不删除原报告。
+**历史限制：** 前一模块构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，八次独立及后续完整运行未复现；没有修改TNS或添加绕过。
+**剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向及文本REF CURSOR、复杂LOB/游标成员、压缩OB20/代理reroute、多发送/独立bulk及六项验收占位等，逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
 当前模块未访问真实数据库；后续仍需其他资源指标、负载及完整部署验收。历史TNS及12项greeting前失败保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
@@ -90,8 +90,8 @@ The overview separates remaining development from real-environment validation; h
 | 类型/性能 | 嵌套complex/DDL失效、字符集/NUMBER/scale、idle cache、分段/慢命令诊断 | 扩展成员/其余形状、批量优化、其他资源等待诊断及负载 |
 | 发布 | 五资产本地消费和部分直连报告 | 承诺版本/平台/独立运行时/OBProxy/TLS/认证/故障及包发布验收 |
 
-当前开发点：组TCP上限及地址级覆盖见第15.64/15.65节；其余离线开发继续推进。
-具体已交付、验证结果和仍欠功能见[最新进度检查点](obconnector-dotnet-progress.md#2026-10-26-development-checkpoint-after-f71a979)。
+当前开发点：客户端SQL/参数编码见第15.80节；组TCP上限及地址级覆盖保留第15.64/15.65节。
+具体已交付、验证结果和仍欠功能见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-client-sql-and-parameter-character-sets)及[交付总览](obconnector-dotnet-delivery-status.md)。
 
 ## 2. 当前能力基线
 
@@ -157,7 +157,7 @@ The overview separates remaining development from real-environment validation; h
 | P1-05 | P1 | ADO.NET 命令行为 | 部分实现 | MySQL StoredProcedure 已有集合顺序参数/输出/多结果本地实现（第 15.30 节），保留方向、capability 和提前关闭限制；补真实 TLS/代理/版本矩阵；`SchemaOnly` Prepare-only、`SingleRow`/`SingleResult` 已有本地实现；`KeyInfo` 已有有界键元数据/隐藏列实现；Batch元数据/源条目创建见第15.60节，跨批次结果限制见第15.61节；REF CURSOR结果限制见第15.62节；其余 Command/Batch/游标行为矩阵及真实目录/准备/锁/结果形状验收仍缺 |
 | P1-06 | P1 | Oracle 输出和游标 | 部分实现；独立 Prepare 与输出 FetchSize 提示已有实现 | 保留准备与所有权转移、正提示不对内部输出发FETCH（第15.46节）；二进制cursor列/嵌套所有权已有本地实现（第15.56节）；补完整参数方向、文本cursor列、其余结果形状和部署矩阵；输出offset/数组正FetchSize仍拒绝 |
 | P1-07 | P1 | 复杂类型 | 部分实现 | 已有嵌套 object/collection、显式清理及可观察 DDL 自动失效本地实现；保留第15.47节national实现及限定直连证据，补LOB/cursor、其他national边界及复杂整列RETURNING身份和真实DDL/资源验收，外部或不透明 DDL 需显式清理 |
-| P1-08 | P1 | 类型和字符集 | 部分实现；DecimalScale 与普通结果字符集子模块已有实现 | 有符号 scale、严格结果解码/宽度及 Oracle 未知精度 NUMBER 保真已有回归；客户端/national 编码、其他字符集、扩展元数据/类型码及完整实库矩阵仍缺 |
+| P1-08 | P1 | 类型和字符集 | 部分实现；DecimalScale、普通结果字符集及客户端编码子模块已有实现，输入编码见第15.80节 | 有符号 scale、严格结果解码/宽度及 Oracle 未知精度 NUMBER 保真已有回归；其余national/JSON/CLOB边界、其他字符集、扩展元数据/类型码及完整实库矩阵仍缺 |
 | P1-09 | P1 | HA/发现 | 部分实现 | TCP重试预算/退避、端点TCP健康缓存、TNS/OCP适配、分组/策略/权重及全局黑名单/尝试上限已有本地实现（第15.50—15.55节），分组黑名单、组尝试上限及地址覆盖见第15.63—15.65节；其他发现策略边界、proxy拓扑及真实健康/故障验收仍缺 |
 | P1-10 | P1 | Schema 元数据 | 部分实现；参数推导已有本地实现 | 常用目录、DataTypes 及自动参数推导有本地实现；真实目录/权限/版本/代理验收仍缺 |
 | P1-11 | P1 | 凭据提供与轮换 | 本地实现；真实矩阵未验证 | 每次 Open 获取、全口令替换、版本排序、过期及旧会话退休已本地验证；真实凭据服务/plugin/KDC 验收仍开放 |
@@ -481,6 +481,9 @@ MySQL `CommandType.StoredProcedure` 已有独立执行计划：集合顺序绑�
 普通结果字符集已有共享严格映射与流式 decoder，覆盖 ASCII、MySQL latin1/CP1252、GBK、GB18030-2005、UTF-16/LE 和列明的 UTF-8 collation；GB18030-2022本地开发/验证见第15.75节。完整 ID、宽度、非法字节拒绝及客户端/national/JSON/CLOB 边界见[结果字符集契约](obconnector-dotnet-architecture-design.md#result-character-sets)。MySQL ColumnSize 使用 charset 最大宽度，Oracle 长度语义保持不变。六字符集历史实库专项仅覆盖 4.4.2.2 MySQL 直连；UTF16/LE 使用 NULL 保留表达式原编码，直接 SET 的 1231/42000 失败保留，详见第 15.32 节。2022实库、其他编码及全部 collation/模式/版本/代理矩阵继续开放。
 
 Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持 byte 契约，现通过 `int? OceanBaseParameter.DecimalScale` 显式声明有符号 scale。Oracle -84..127、MySQL 0..30 及精度/无舍入约束已有本地回归，赋值优先级见[参数契约](obconnector-dotnet-architecture-design.md#decimal-parameter-scale)，交付记录见第 15.16 节。自动参数推导沿用该表示，本地回归覆盖负值的保留及精度约束；真实目录/声明矩阵仍须验收。
+
+客户端SQL/普通参数编码本地实现见第15.80节及[输入字符集契约](client-character-sets.md)。
+该配置与结果解码、独立national参数及JSON/CLOB边界分别定义；不将普通输入编码扩大为完整类型支持。
 
 目标要求：
 
@@ -2752,6 +2755,29 @@ commands, results and limitations. No real database was accessed.
 The [delivery overview](obconnector-dotnet-delivery-status.md) now tracks all23 original IDs, separates
 implemented subfeatures from remaining code and external gates, and gives commit evidence. All23 IDs/
 eight packages remain open because whole-gap closure criteria are broader than these local modules.
+
+### 15.80 2026-10-27 Client SQL and parameter character sets
+
+P1-08/W5, developed from33c052b on master. The `Character Set` option adds twelve strict,
+ASCII-preserving input families with canonical pool identity, managed initialization/reset and
+four-value session validation. Text/prepare/database requests, ordinary scalar/complex/array inputs,
+procedures, metadata parameters and byte budgets use the chosen encoding. Authentication and
+initial identity remain UTF-8; results keep existing column decoders and UTF8MB4 result settings.
+The [public contract](client-character-sets.md) records the exact names and restrictions.
+
+Verified state is cached. Classified stateful/opaque SQL and reported mismatches invalidate it;
+the next input payload rechecks before upload/execution. Generated ASCII XA controls bypass the
+probe. Rechecks can change session diagnostic functions after conservative classification, and
+arbitrary hidden function/trigger effects are not continuously detected. JSON parameters remain
+default-utf8mb4-only; MySQL string fallback remains UTF-8-only. Standalone national parameters are
+independent; complex national restrictions and CLOB UTF-8 reads retain their existing boundaries.
+
+Focused units166 and final format verification passed. Serial Release build passed with zero
+warnings/errors. Final complete units7491 and affected consumers560 passed, zero failures/skips;
+independent final source/tests/docs review has no remaining actionable finding. The
+[module ledger](obconnector-dotnet-progress.md#2026-10-27-client-sql-and-parameter-character-sets)
+retains initial RED, the first full-run failures and their corrections. No real database was
+accessed; all23 IDs/eight packages retain their complete closure requirements.
 
 ## 16. 剩余交付工作包
 

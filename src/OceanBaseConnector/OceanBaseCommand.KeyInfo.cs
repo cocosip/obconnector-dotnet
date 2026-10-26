@@ -32,7 +32,7 @@ namespace OceanBaseConnector
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = asynchronous ? await execution.EnsureNationalCharacterSetAsync(token).ConfigureAwait(false) : execution.EnsureNationalCharacterSet();
                 var parameters = HasNationalParameters(operation.Bindings.Parameters)
-                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
+                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national, clientEncoding: execution.ClientEncoding) : operation.Parameters;
                 ValidateCursorStatement(operation.FetchSize, statement);
                 var request = PreparedParameters.Execute(statement.Id, parameters, fetchSize > 0);
                 if (asynchronous)

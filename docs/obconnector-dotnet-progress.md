@@ -4,6 +4,58 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Client SQL and parameter character sets
+
+Developed from33c052b on master for P1-08/W5. The new `Character Set` / `CharacterSet`
+option defaults to utf8mb4; `utf8` canonicalizes to utf8mb3. Twelve non-default names reuse strict
+server mappings while preserving ASCII SQL bytes and rejecting non-round-tripping aliases.
+UTF16/LE, binary and unknown names fail before networking. Canonical input encoding partitions
+pools and survives endpoint/credential snapshots. Authentication and initial identity stay UTF-8.
+Managed initialization/reset sets the input family, restores UTF8MB4 results and validates four
+session values before publication/reuse. See the [complete contract](client-character-sets.md).
+
+The encoding reaches text/prepare/database requests, ordinary scalar/nested complex parameters and
+type identities, Oracle PrepareExecute lengths/checksum and array columns, procedure inputs,
+metadata lookup parameters, KeyInfo and INSERT rewrite byte budgets. Standalone national parameters
+remain independent. Explicit JSON parameters including typed NULL require default utf8mb4 because
+their existing wire type is an ordinary string. Complex national members retain their existing
+connection-encoding restrictions; CLOB writes inherit ordinary input encoding, reads stay UTF-8.
+MySQL string literal fallback remains UTF-8-only; Oracle literal limits use actual encoded bytes.
+
+An early design probed before every command. Review identified changed ROW_COUNT/FOUND_ROWS/warnings
+and invalid queries between XA phases. The final design caches verified state, invalidates on
+classified stateful/opaque SQL or mismatching reported variables, and verifies before the next
+input payload. Generated ASCII XA controls bypass that query. Stateless classified SQL gains no
+probe. A recheck after conservative classification can still change session diagnostic functions;
+manual charset mutation and arbitrary hidden function/trigger effects are outside the invariant.
+Trust is checked before stream upload; a later change with staged data breaks the session.
+
+Initial RED captured13 missing-option failures and5 expected invalid-name passes. Expanded local
+fixtures cover twelve names, both modes, sync/async, text/prepare, result identifiers/decoding,
+EOF/reset variants, strict aliases, byte budgets, trust transitions, procedure INOUT, XA controls,
+staged data and Oracle PrepareExecute. Final focused units166 passed, zero failures/skips.
+Release solution build passed with zero warnings/errors in11.12s. Final whitespace format
+verification exited0 with a workspace-load warning; no whitespace error remained.
+
+The first complete unit run failed:7484 passed,2 failed,total7486 in9m06s. The new option was absent
+from the exhaustive pool-key fixture, and an initial JSON-preservation assertion exposed the
+ordinary-string wire type. Both were corrected, with default-only JSON parameter prevalidation.
+A subsequent focused run passed164 and failed2 new Oracle procedure fixtures because unquoted
+non-ASCII identifiers were used; those fixtures now quote the identifier under the existing API
+contract. Original failed TRX/logs remain under ignored TestResults/local-completeness/client-charset-*.
+
+Final affected consumers560 passed in3m07s with zero failures/skips on the final built artifact;
+the earlier consumer run before JSON/fixture corrections is retained separately. Consumers load
+five assets in one.NET10host, not five independent runtimes. Final complete units7491 passed in
+8m50s, zero failures/skips. Independent final read-only source/tests/contract and delivery-ledger
+review has no remaining actionable finding; the reviewer did not execute build/test gates.
+Final diff whitespace and local Markdown target/fence/new-anchor checks passed. This completes
+the local module's implementation, verification and review gates for its master commit.
+
+No real OceanBase or OBProxy was accessed. Accepted server names/collations, storage/coercibility,
+national/JSON/CLOB combinations, version/proxy/reset behavior and performance still require their
+corresponding matrices. This module does not close P1-08, any other gap ID or any work package.
+
 ## 2026-10-26 Current borrowed physical-session metrics
 
 Developed fromf0edabf on master for P0-01/P2-04. The existing untagged pool meter adds

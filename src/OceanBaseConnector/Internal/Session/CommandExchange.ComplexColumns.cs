@@ -71,13 +71,13 @@ namespace OceanBaseConnector.Internal.Session
             return true;
         }
 
-        private static byte[] ComplexColumnRequest(PreparedStatement statement, ResultColumn column)
+        private byte[] ComplexColumnRequest(PreparedStatement statement, ResultColumn column)
         {
             if (statement.ParameterCount != 3) throw new ProtocolException("Invalid complex source column query parameter count.");
             return PreparedParameters.Execute(statement.Id, PreparedParameters.Encode(new[] {
                 new OceanBaseParameter { Value = column.Database }, new OceanBaseParameter { Value = column.OriginalTable },
                 new OceanBaseParameter { Value = column.OriginalName }
-            }, OceanBaseCompatibilityMode.Oracle));
+            }, OceanBaseCompatibilityMode.Oracle, clientEncoding: ClientEncoding));
         }
 
         private static (string, string) ReadComplexColumnIdentity(QueryResult result, bool hasRow)

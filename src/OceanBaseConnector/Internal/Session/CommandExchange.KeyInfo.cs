@@ -25,8 +25,8 @@ namespace OceanBaseConnector.Internal.Session
             if (missing.Count != 0)
             {
                 var sql = query.Append(missing, original.Columns);
-                if (asynchronous) await SendAsync(OceanBaseCommand.SqlPacket(sql, 22), executesSql: false).ConfigureAwait(false);
-                else Send(OceanBaseCommand.SqlPacket(sql, 22), executesSql: false);
+                if (asynchronous) await SendAsync(OceanBaseCommand.SqlPacket(sql, 22, ClientEncoding), executesSql: false).ConfigureAwait(false);
+                else Send(OceanBaseCommand.SqlPacket(sql, 22, ClientEncoding), executesSql: false);
                 statement = (asynchronous ? await PreparedStatement.ReadAsync(this, _session, sql, token).ConfigureAwait(false) : PreparedStatement.Read(this, _session, sql))!;
                 // This exchange owns the rewritten statement; the original command cache remains unchanged.
                 if (statement.HasCursorColumns && CursorColumns != null) CursorColumns.SetStatement(statement.Id);
@@ -46,8 +46,8 @@ namespace OceanBaseConnector.Internal.Session
         private async Task<KeyInfoMetadata.Catalog> ReadKeyCatalogAsync(KeyInfoQuery query, bool asynchronous, CancellationToken token)
         {
             var sql = Mode == OceanBaseCompatibilityMode.MySql ? MySqlKeyInfoSql : OracleKeyInfoSql;
-            if (asynchronous) await SendAsync(OceanBaseCommand.SqlPacket(sql, 22), executesSql: false).ConfigureAwait(false);
-            else Send(OceanBaseCommand.SqlPacket(sql, 22), executesSql: false);
+            if (asynchronous) await SendAsync(OceanBaseCommand.SqlPacket(sql, 22, ClientEncoding), executesSql: false).ConfigureAwait(false);
+            else Send(OceanBaseCommand.SqlPacket(sql, 22, ClientEncoding), executesSql: false);
             var lookup = (asynchronous ? await PreparedStatement.ReadAsync(this, _session, sql, token).ConfigureAwait(false) : PreparedStatement.Read(this, _session, sql))!;
             var closed = false;
             try
@@ -56,7 +56,7 @@ namespace OceanBaseConnector.Internal.Session
                 var request = PreparedParameters.Execute(lookup.Id, PreparedParameters.Encode(new[] {
                     new OceanBaseParameter { DbType = DbType.String, Value = (object?)query.Schema ?? DBNull.Value },
                     new OceanBaseParameter { DbType = DbType.String, Value = query.Table }
-                }, Mode));
+                }, Mode, clientEncoding: ClientEncoding));
                 if (asynchronous) await SendAsync(request, executesSql: false).ConfigureAwait(false); else Send(request, executesSql: false);
                 var result = new QueryResult(this, binary: true, completeExchange: false);
                 if (asynchronous) await result.StartAsync(token).ConfigureAwait(false); else result.Start();

@@ -106,7 +106,7 @@ namespace OceanBaseConnector
                 index + 1 == operation.Commands.Length || !EligibleParameters(first)) return first;
             var shape = MySqlInsertRewrite.TryParse(first.CommandText, operation.Token);
             if (shape == null || shape.ParameterCount != first.Parameters.Count) return first;
-            var sqlBytes = (long)shape.BaseBytes; var tupleBytes = shape.TupleBytes;
+            var sqlBytes = (long)shape.GetBaseBytes(operation.Session.ClientEncoding); var tupleBytes = shape.GetTupleBytes(operation.Session.ClientEncoding);
             long valuesBytes = 0; var parameters = 0;
             for (var i = index; i < operation.Commands.Length && rows <= ushort.MaxValue; i++)
             {
@@ -116,7 +116,7 @@ namespace OceanBaseConnector
                 var count = item.Parameters.Count;
                 if (parameters + count > ushort.MaxValue) break;
                 long encoded;
-                try { encoded = PreparedParameters.Encode(item.Parameters.Cast<OceanBaseParameter>().ToArray()).LongLength; }
+                try { encoded = PreparedParameters.Encode(item.Parameters.Cast<OceanBaseParameter>().ToArray(), clientEncoding: operation.Session.ClientEncoding).LongLength; }
                 // A later invalid row must fail in its original sequential position, after confirmed groups.
                 catch (ArgumentException) { break; }
                 catch (NotSupportedException) { break; }

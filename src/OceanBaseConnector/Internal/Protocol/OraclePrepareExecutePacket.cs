@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 
 namespace OceanBaseConnector.Internal.Protocol
 {
@@ -30,10 +31,10 @@ namespace OceanBaseConnector.Internal.Protocol
         // This is the extended metadata header; execution still requires its results and final OK/ERR.
         internal static OraclePrepareExecutePacket ParseHeader(byte[] bytes) => new OraclePrepareExecutePacket(new ByteCursor(bytes));
 
-        internal static byte[] Build(uint statementId, string sql, int parameterCount, byte[] parameters)
-            => BuildCore(statementId, sql, parameterCount, parameters, 1, 0);
+        internal static byte[] Build(uint statementId, string sql, int parameterCount, byte[] parameters, Encoding? clientEncoding = null)
+            => BuildCore(statementId, sql, parameterCount, parameters, 1, 0, clientEncoding);
 
-        internal static byte[] BuildArray(uint statementId, string sql, OceanBaseParameter[] columns, NationalCharacterSet? national = null, bool validateOnly = false)
+        internal static byte[] BuildArray(uint statementId, string sql, OceanBaseParameter[] columns, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null)
         {
             if (columns == null) throw new ArgumentNullException(nameof(columns));
             if (columns.Length == 0 || columns.Length > ushort.MaxValue) throw new ArgumentOutOfRangeException(nameof(columns));
@@ -50,22 +51,23 @@ namespace OceanBaseConnector.Internal.Protocol
                 count = value.Count;
             }
             // OCI_BATCH_ERRORS disables aggregated DML optimization, preserving per-item results.
-            return BuildCore(statementId, sql, columns.Length, PreparedParameters.Encode(columns, OceanBaseCompatibilityMode.Oracle, national, validateOnly), 2, 0x80);
+            return BuildCore(statementId, sql, columns.Length, PreparedParameters.Encode(columns, OceanBaseCompatibilityMode.Oracle, national, validateOnly, clientEncoding), 2, 0x80, clientEncoding);
         }
 
-        private static byte[] BuildCore(uint statementId, string sql, int parameterCount, byte[] parameters, uint iterations, uint executeMode)
+        private static byte[] BuildCore(uint statementId, string sql, int parameterCount, byte[] parameters, uint iterations, uint executeMode, Encoding? clientEncoding)
         {
+            clientEncoding ??= ResultColumn.Utf8;
             if (sql == null) throw new ArgumentNullException(nameof(sql));
             if (parameters == null) throw new ArgumentNullException(nameof(parameters));
             if ((uint)parameterCount > ushort.MaxValue) throw new ArgumentOutOfRangeException(nameof(parameterCount));
             if (parameterCount == 0 ? parameters.Length != 0 : parameters.Length < (parameterCount + 7) / 8 + 1 + parameterCount * 2)
                 throw new ArgumentException("The encoded Oracle parameter block does not match its count.", nameof(parameters));
-            var sqlLength = ResultColumn.Utf8.GetByteCount(sql);
+            var sqlLength = clientEncoding.GetByteCount(sql);
             var prefix = sqlLength < 251 ? 1 : sqlLength <= ushort.MaxValue ? 3 : sqlLength <= 0xffffff ? 4 : 9;
             var length = 30L + prefix + sqlLength + parameters.Length;
             if (length > PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Oracle PrepareExecute exceeds the packet size limit.");
 
-            var text = ResultColumn.Utf8.GetBytes(sql);
+            var text = clientEncoding.GetBytes(sql);
             var packet = new byte[(int)length];
             using var stream = new MemoryStream(packet);
             using var writer = new BinaryWriter(stream, ResultColumn.Utf8);

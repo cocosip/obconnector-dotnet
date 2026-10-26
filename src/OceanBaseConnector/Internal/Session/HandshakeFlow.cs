@@ -53,6 +53,7 @@ namespace OceanBaseConnector.Internal.Session
 
                 phase = DriverDiagnostics.StartConnectionPhase("identity");
                 ConfirmIdentity(channel, result, cancellationToken);
+                InitializeClientCharacterSet(channel, result, options.ClientCharacterSet, false, cancellationToken).GetAwaiter().GetResult();
                 phase?.Finish(null);
                 return result;
             }
@@ -90,6 +91,7 @@ namespace OceanBaseConnector.Internal.Session
 
                 phase = DriverDiagnostics.StartConnectionPhase("identity");
                 await ConfirmIdentityAsync(channel, result, cancellationToken).ConfigureAwait(false);
+                await InitializeClientCharacterSet(channel, result, options.ClientCharacterSet, true, cancellationToken).ConfigureAwait(false);
                 phase?.Finish(null);
                 return result;
             }

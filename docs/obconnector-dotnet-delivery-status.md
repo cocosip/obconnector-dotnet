@@ -1,13 +1,22 @@
 # Driver delivery status
 
-Last checked: 2026-10-26. This is the current overview; the detailed
+Last checked: 2026-10-27. This is the current overview; the detailed
 [completeness baseline](obconnector-dotnet-completeness.md) retains requirements and historical evidence.
 The [module records](obconnector-dotnet-progress.md) retain individual test/review results.
 
 ## Current checkpoint
 
 - Development stays on `master`. No new branch/worktree and no implicit push.
-- Latest local delivery: current borrowed physical-session metrics, based on `f0edabf`.
+- Latest local delivery: client SQL/parameter character sets, based on `33c052b`.
+  The [input-encoding contract](client-character-sets.md) describes twelve non-default names,
+  strict round-trip validation, managed initialization/reset and cached session trust. Text/prepare,
+  ordinary scalar/complex/array inputs, procedures, metadata parameters and byte budgets use the
+  selected encoding. Complete units7,491, focused units166 and affected consumers560 passed,
+  zero failures/skips. Serial Release build has zero warnings/errors; format verification passed
+  with a workspace-load warning and independent source/tests/docs review has no remaining finding.
+  Original failed verification reports and their corrections remain in the
+  [module ledger](obconnector-dotnet-progress.md#2026-10-27-client-sql-and-parameter-character-sets).
+- Previous local delivery: current borrowed physical-session metrics (`33c052b`), based on `f0edabf`.
   The [pool contract](pool-metrics.md) distinguishes `leased` deltas from cumulative `borrowed`.
   Complete units passed7,391, focused units16 and affected consumers140, zero failures/skips;
   final serial Release build has zero warnings/errors and independent source/tests/docs review has
@@ -15,8 +24,10 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   log is retained, and serial retry passed without a source workaround.
 - Previous completed module: session protocol I/O durations (`f0edabf`), with7,375 complete units,
   89 focused units and279 affected consumers, all passing. See its [contract](session-io-diagnostics.md).
-- Next work: client SQL/parameter charset contract, including trusted session state and escaping.
-  Only initial caller inspection has begun; no expanded client-encoding support is delivered yet.
+- Further work: remaining national/JSON/CLOB and extended type boundaries, resource waits,
+  Oracle cursor/complex shapes and the other priorities below. The charset module keeps JSON
+  parameters default-utf8mb4-only and MySQL string literal fallback UTF-8-only; managed charset
+  rechecks can change session diagnostic functions after conservatively classified SQL.
 - The historical TNS File.Replace failure remains cause-unconfirmed. Eight isolated runs and both
   fresh complete runs passed; no TNS source change, retry workaround or skipped assertion was made.
 - At `e0498e9`, there were 67 commits since audit baseline `06d58e1`, including implementation, fixes,
@@ -62,7 +73,8 @@ the [module ledger](obconnector-dotnet-progress.md#2026-10-26-session-io-diagnos
 
 These are concrete code/scope gaps, not merely missing real-database reports:
 
-1. Client SQL/parameter charset contract and remaining national/JSON/CLOB/extended metadata (P1-08).
+1. Remaining national/JSON/CLOB and extended metadata boundaries (P1-08), following the locally
+   completed client SQL/parameter charset module.
 2. Remaining resource-wait instrumentation and workload/overhead validation (P2-04).
 3. Input/InputOutput REF CURSOR, text cursor-valued columns and additional output shapes (P1-06).
 4. Complex LOB/cursor members, additional national/anonymous shapes and whole-complex RETURNING
@@ -99,7 +111,7 @@ approved wire contract or can be implemented without protocol research.
 | P1-05 Command/Batch behavior | SchemaOnly Prepare-only, bounded KeyInfo/hidden keys, SingleRow/SingleResult; MySQL procedure parameters/output/multi-results; Batch metadata/data-source creation/result limits; REF CURSOR limits | Complete behavior/shape matrix; existing explicit restrictions remain | Real metadata/permissions, prepare side effects/locks, procedure and cursor behavior |
 | P1-06 Oracle output/cursors | Independent Prepare, output ownership, positive ordinary-output FetchSize hints, binary cursor-valued columns and nested ownership | **Input/InputOutput REF CURSOR, text cursor-valued columns and additional shapes**; output offset and positive array FetchSize remain rejected | Real direction/shape/pagination and resource matrix |
 | P1-07 Complex types | Nested objects/collections, directional national members, explicit descriptor clear and invalidation after observed DDL | **LOB/cursor members, further national storage/anonymous shapes, whole-complex RETURNING identity** | Real DDL invalidation, resource behavior and server-supported shapes; retained server failures remain visible |
-| P1-08 Types/charsets | Signed DecimalScale, faithful unknown-precision Oracle NUMBER, strict result decoding/widths; tiny/medium/long BLOB, ENUM/SET/raw GEOMETRY, ROWID, Oracle Inf/NaN; national Unicode fallback IDs; trusted MySQL string prepare fallback; GB18030-2022, DEC8/TIS620, SJIS, Big5 and HKSCS/HKSCS31 | Client SQL/parameter charset expansion, further national/JSON/CLOB scope and extended metadata/types still need work | Real emission/storage/coercibility, all promised collation/mode/version profiles |
+| P1-08 Types/charsets | Signed DecimalScale, faithful unknown-precision Oracle NUMBER, strict result decoding/widths; tiny/medium/long BLOB, ENUM/SET/raw GEOMETRY, ROWID, Oracle Inf/NaN; national Unicode fallback IDs; trusted MySQL string prepare fallback; GB18030-2022, DEC8/TIS620, SJIS, Big5 and HKSCS/HKSCS31; configured client SQL/ordinary parameter encodings | Further national/JSON/CLOB scope and extended metadata/types still need work | Real emission/storage/coercibility, all promised collation/mode/version profiles |
 | P1-09 Discovery/HA | TCP retry rounds/backoff/shared budget, endpoint TCP reachability cache, TNS/OCP adapters, groups/weights/selection, global/group/address blacklist controls and attempt ceilings | Further discovery/policy boundaries; TCP reachability does not prove database/tenant health | Real discovery services, node/proxy failure and route changes |
 | P1-10 Schema | Mode-aware catalog collections/DataTypes and atomic routine-parameter derivation | Boundary regressions as actual dictionary differences are found; local core APIs exist | Real catalogs, permissions, case, overloads, versions and proxies |
 | P1-11 Credentials | Per-Open provider acquisition, expiry/cancel, versioned rotation and old-session retirement, redacted diagnostics | Boundary regressions as real provider/plugin differences are found; local core exists | Real credential service, authentication plugins/KDC, rejection/expiry/rotation |

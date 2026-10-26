@@ -110,7 +110,11 @@ namespace OceanBaseConnector.Internal.Session
                 {
                     if (InvalidateComplexTypes) { _session.InvalidateComplexTypes(); InvalidateComplexTypes = false; }
                     if (InvalidatePreparedStatements) _session.InvalidatePreparedStatements();
-                    if (DiscardSessionAfterExecution) _session.MarkSessionStateChanged();
+                    if (DiscardSessionAfterExecution)
+                    {
+                        _session.MarkSessionStateChanged();
+                        _session.SetClientCharacterSetVerified(false);
+                    }
                     SessionTimeZone = _session.TakeSessionTimeZone(_lease);
                     NationalCharacterSet = _session.TakeNationalCharacterSet(_lease);
                 }
@@ -169,12 +173,13 @@ namespace OceanBaseConnector.Internal.Session
         internal bool HasSentSql { get { lock (_gate) return _anySqlSent; } }
         internal void ValidateResponseBoundary() => _channel.CompleteResponse();
         internal void ResponseComplete(bool expectsResponse = true)
-        { lock (_gate) { _channel.CompleteResponse(expectsResponse); _responsePending = false; _sqlSent = false; } }
+        { lock (_gate) { _channel.CompleteResponse(expectsResponse); _responsePending = false; if (_sqlSent) _longDataPending = false; _sqlSent = false; } }
 
         internal void Send(byte[] request, bool executesSql = true, int? count = null)
         {
             try
             {
+                VerifyClientCharacterSet(request[0], false, CancellationToken.None).GetAwaiter().GetResult();
                 foreach (var id in _statementCloses)
                 { BeginSend(false); WritePacket(PreparedStatement.ClosePacket(id)); ResponseComplete(expectsResponse: false); }
                 _statementCloses = Array.Empty<uint>();
@@ -189,6 +194,7 @@ namespace OceanBaseConnector.Internal.Session
             using var registration = readerToken.Register(Cancel);
             try
             {
+                await VerifyClientCharacterSet(request[0], true, readerToken).ConfigureAwait(false);
                 foreach (var id in _statementCloses)
                 { BeginSend(false); await WritePacketAsync(PreparedStatement.ClosePacket(id)).ConfigureAwait(false); ResponseComplete(expectsResponse: false); }
                 _statementCloses = Array.Empty<uint>();

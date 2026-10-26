@@ -103,7 +103,7 @@ namespace OceanBaseConnector
                     ? EnsurePrepared(operation, operation.ClientFallback) : null;
                 var text = operation.Binary && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode,
-                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? execution.ReadMySqlLiteralContext() : null) : operation.Bindings.CommandText;
+                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? execution.ReadMySqlLiteralContext() : null, execution.ClientEncoding) : operation.Bindings.CommandText;
                 ValidateCursorStatement(operation.FetchSize, statement);
                 var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement);
                 if (statement != null && operation.Oracle == null) execution.ResolveComplexColumns(statement);
@@ -115,10 +115,10 @@ namespace OceanBaseConnector
                     national = execution.EnsureNationalCharacterSet();
                 }
                 var parameters = HasNationalParameters(operation.Bindings.Parameters)
-                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
-                var request = operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters, national)
-                    : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
-                    : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, fetchSize > 0);
+                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national, clientEncoding: execution.ClientEncoding) : operation.Parameters;
+                var request = operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters, national, clientEncoding: execution.ClientEncoding)
+                    : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters, execution.ClientEncoding)
+                    : statement == null ? SqlPacket(text, 3, execution.ClientEncoding) : PreparedParameters.Execute(statement.Id, parameters, fetchSize > 0);
                 if (statement != null) execution.SendLongData(statement.Id, operation.Bindings.Parameters, request.Length);
                 execution.BeforeSuccessfulCompletion = operation.MySql != null ? operation.MySql.PublishOutputs : operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
                 execution.Send(request, executesSql: !IsLobRead);
@@ -182,7 +182,7 @@ namespace OceanBaseConnector
                     ? await EnsurePreparedAsync(operation, cancellationToken, operation.ClientFallback).ConfigureAwait(false) : null;
                 var text = operation.Binary && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode,
-                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? await execution.ReadMySqlLiteralContextAsync(cancellationToken).ConfigureAwait(false) : null) : operation.Bindings.CommandText;
+                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? await execution.ReadMySqlLiteralContextAsync(cancellationToken).ConfigureAwait(false) : null, execution.ClientEncoding) : operation.Bindings.CommandText;
                 ValidateCursorStatement(operation.FetchSize, statement);
                 var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement);
                 if (statement != null && operation.Oracle == null) await execution.ResolveComplexColumnsAsync(statement, cancellationToken).ConfigureAwait(false);
@@ -194,10 +194,10 @@ namespace OceanBaseConnector
                     national = await execution.EnsureNationalCharacterSetAsync(cancellationToken).ConfigureAwait(false);
                 }
                 var parameters = HasNationalParameters(operation.Bindings.Parameters)
-                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national) : operation.Parameters;
-                var request = operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters, national)
-                    : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters)
-                    : statement == null ? SqlPacket(text, 3) : PreparedParameters.Execute(statement.Id, parameters, fetchSize > 0);
+                    ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national, clientEncoding: execution.ClientEncoding) : operation.Parameters;
+                var request = operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters, national, clientEncoding: execution.ClientEncoding)
+                    : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters, execution.ClientEncoding)
+                    : statement == null ? SqlPacket(text, 3, execution.ClientEncoding) : PreparedParameters.Execute(statement.Id, parameters, fetchSize > 0);
                 if (statement != null) await execution.SendLongDataAsync(statement.Id, operation.Bindings.Parameters, request.Length).ConfigureAwait(false);
                 execution.BeforeSuccessfulCompletion = operation.MySql != null ? operation.MySql.PublishOutputs : operation.Oracle == null ? null : operation.Oracle.PublishOutputs;
                 await execution.SendAsync(request, executesSql: !IsLobRead).ConfigureAwait(false);
@@ -263,12 +263,12 @@ namespace OceanBaseConnector
                     throw new NotSupportedException("Array binding requires Oracle mode, Use Oracle Prepare Execute=true and an explicit transaction.");
                 if (RequiredSession != null && !ReferenceEquals(session, RequiredSession))
                     throw new InvalidOperationException("The connection's physical session changed before the operation started.");
-                var length = ResultColumn.Utf8.GetByteCount(text);
+                var length = session.ClientEncoding.GetByteCount(text);
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
                 var oracle = session.UseOraclePrepareExecute && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle &&
                     (arrayCount != 0 || CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters, arrayCount) : null;
                 var mysql = CommandType == CommandType.StoredProcedure && session.Info!.Mode == OceanBaseCompatibilityMode.MySql
-                    ? MySqlCommandPlan.Create(text, _parameters, _mysqlVariablePrefix ??= "obc_" + Guid.NewGuid().ToString("N")) : null;
+                    ? MySqlCommandPlan.Create(text, _parameters, _mysqlVariablePrefix ??= "obc_" + Guid.NewGuid().ToString("N"), session.ClientEncoding) : null;
                 if (mysql != null && (_fetchSize > 0 || !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientPsMultiResults)))
                     throw new NotSupportedException("MySQL stored procedures require PS multi-results support and do not support FetchSize.");
                 var multiStatement = CommandType == CommandType.Text && SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
@@ -314,8 +314,8 @@ namespace OceanBaseConnector
                 var fetchSize = prepareOnly || schemaOnly || oracle != null ? 0 : _fetchSize;
                 if (prepareOnly) _explicitPreparation = true;
                 var binary = keyInfo || schemaOnly || oracle != null || mysql != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
-                var parameters = binary && !prepareOnly && !schemaOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true) : Array.Empty<byte>();
-                if (arrayCount != 0) _ = OraclePrepareExecutePacket.BuildArray(0, bindings.CommandText, bindings.Parameters, validateOnly: true);
+                var parameters = binary && !prepareOnly && !schemaOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true, clientEncoding: session.ClientEncoding) : Array.Empty<byte>();
+                if (arrayCount != 0) _ = OraclePrepareExecutePacket.BuildArray(0, bindings.CommandText, bindings.Parameters, validateOnly: true, clientEncoding: session.ClientEncoding);
                 if (_prepared != null && (!binary || !ReferenceEquals(_prepared.Session, session) ||
                     _prepared.Generation != session.Generation || _prepared.CacheEpoch != session.StatementCacheEpoch || _prepared.CommandText != bindings.CommandText))
                 { _prepared.Session.ReturnPreparedStatement(_prepared); _prepared = null; }
@@ -401,7 +401,7 @@ namespace OceanBaseConnector
                 SqlStatementBoundary.CanCacheStatement(operation.Bindings.CommandText, operation.Exchange.Mode);
             var cached = useCache ? operation.Session.TakePreparedStatement(operation.Bindings.CommandText) : null;
             if (cached != null) return PublishPrepared(cached, operation.Bindings.Parameters.Length);
-            operation.Exchange.Send(SqlPacket(operation.Bindings.CommandText, 22), executesSql: false);
+            operation.Exchange.Send(SqlPacket(operation.Bindings.CommandText, 22, operation.Exchange.ClientEncoding), executesSql: false);
             var statement = PreparedStatement.Read(operation.Exchange, operation.Session, operation.Bindings.CommandText, allowFallback);
             if (statement != null) statement.Cacheable = useCache;
             return statement == null ? null : PublishPrepared(statement, operation.Bindings.Parameters.Length, operation.Oracle);
@@ -415,7 +415,7 @@ namespace OceanBaseConnector
                 SqlStatementBoundary.CanCacheStatement(operation.Bindings.CommandText, operation.Exchange.Mode);
             var cached = useCache ? operation.Session.TakePreparedStatement(operation.Bindings.CommandText) : null;
             if (cached != null) return PublishPrepared(cached, operation.Bindings.Parameters.Length);
-            await operation.Exchange.SendAsync(SqlPacket(operation.Bindings.CommandText, 22), executesSql: false).ConfigureAwait(false);
+            await operation.Exchange.SendAsync(SqlPacket(operation.Bindings.CommandText, 22, operation.Exchange.ClientEncoding), executesSql: false).ConfigureAwait(false);
             var statement = await PreparedStatement.ReadAsync(operation.Exchange, operation.Session, operation.Bindings.CommandText, token, allowFallback).ConfigureAwait(false);
             if (statement != null) statement.Cacheable = useCache;
             return statement == null ? null : PublishPrepared(statement, operation.Bindings.Parameters.Length, operation.Oracle);
@@ -477,9 +477,9 @@ namespace OceanBaseConnector
             return 0;
         }
 
-        internal static byte[] SqlPacket(string text, byte code)
+        internal static byte[] SqlPacket(string text, byte code, System.Text.Encoding? clientEncoding = null)
         {
-            var bytes = ResultColumn.Utf8.GetBytes(text);
+            var bytes = (clientEncoding ?? ResultColumn.Utf8).GetBytes(text);
             var packet = new byte[bytes.Length + 1];
             packet[0] = code;
             Buffer.BlockCopy(bytes, 0, packet, 1, bytes.Length);

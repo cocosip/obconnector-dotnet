@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
 
@@ -9,6 +10,7 @@ namespace OceanBaseConnector.Internal.Session
     {
         internal void SendLongData(uint statement, OceanBaseParameter[] parameters, int executionBytes)
         {
+            VerifyClientCharacterSet(23, false, CancellationToken.None).GetAwaiter().GetResult();
             if (Mode == OceanBaseCompatibilityMode.Oracle) { SendPieceData(statement, parameters, executionBytes); return; }
             byte[]? packet = null;
             long remaining = PacketChannel.DefaultMaxPacketSize - executionBytes;
@@ -36,6 +38,7 @@ namespace OceanBaseConnector.Internal.Session
 
         internal async Task SendLongDataAsync(uint statement, OceanBaseParameter[] parameters, int executionBytes)
         {
+            await VerifyClientCharacterSet(23, true, CancellationToken.None).ConfigureAwait(false);
             if (Mode == OceanBaseCompatibilityMode.Oracle) { await SendPieceDataAsync(statement, parameters, executionBytes).ConfigureAwait(false); return; }
             byte[]? packet = null;
             long remaining = PacketChannel.DefaultMaxPacketSize - executionBytes;

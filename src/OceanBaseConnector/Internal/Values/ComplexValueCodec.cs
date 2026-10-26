@@ -24,16 +24,16 @@ namespace OceanBaseConnector.Internal.Values
             return cursor.CopyConsumed(position);
         }
 
-        internal static byte[] EncodeParameter(ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false)
+        internal static byte[] EncodeParameter(ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null)
         {
             using var stream = new MemoryStream(); using var writer = new BinaryWriter(stream, ResultColumn.Utf8, leaveOpen: true);
-            WriteParameter(writer, type, values, mode, national, validateOnly); return stream.ToArray();
+            WriteParameter(writer, type, values, mode, national, validateOnly, clientEncoding); return stream.ToArray();
         }
 
-        internal static void WriteParameter(BinaryWriter writer, ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false)
+        internal static void WriteParameter(BinaryWriter writer, ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null)
         {
             ValidateRoot(type, mode); var budget = MaximumMembers;
-            Write(writer, type, values, 0, ref budget, national, validateOnly);
+            Write(writer, type, values, 0, ref budget, national, validateOnly, clientEncoding ?? ResultColumn.Utf8);
         }
 
         private static void ValidateRoot(ComplexType type, OceanBaseCompatibilityMode mode)
@@ -99,7 +99,7 @@ namespace OceanBaseConnector.Internal.Values
             return cursor.ReadBytes(count);
         }
 
-        private static void Write(BinaryWriter writer, ComplexType type, object?[] values, int depth, ref int budget, NationalCharacterSet? national, bool validateOnly)
+        private static void Write(BinaryWriter writer, ComplexType type, object?[] values, int depth, ref int budget, NationalCharacterSet? national, bool validateOnly, Encoding clientEncoding)
         {
             if (values == null) throw new ArgumentNullException(nameof(values));
             if (depth >= MaximumDepth || values.Length > budget) throw new NotSupportedException("Complex nesting or member count exceeds the supported limit.");
@@ -122,7 +122,7 @@ namespace OceanBaseConnector.Internal.Values
                 if (member.TypeCode == 160)
                 {
                     if (!(value is object?[] nested)) throw new ArgumentException("A nested complex value requires an object array.");
-                    Write(writer, member, nested, depth + 1, ref budget, national, validateOnly); continue;
+                    Write(writer, member, nested, depth + 1, ref budget, national, validateOnly, clientEncoding); continue;
                 }
                 switch (member.TypeCode)
                 {
@@ -136,7 +136,7 @@ namespace OceanBaseConnector.Internal.Values
                     case 253:
                     case 254:
                         if (!(value is string text)) throw new ArgumentException("A character member requires a string.");
-                        WriteText(writer, text); break;
+                        WriteText(writer, text, clientEncoding); break;
                     case 207:
                     case 208:
                         if (!(value is string nationalText)) throw new ArgumentException("A national character member requires a string.");

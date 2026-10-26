@@ -1,14 +1,16 @@
 using System;
 using System.Data;
 using System.IO;
+using System.Text;
 using OceanBaseConnector.Internal.Values;
 
 namespace OceanBaseConnector.Internal.Protocol
 {
     internal static class PreparedParameters
     {
-        internal static byte[] Encode(OceanBaseParameter[] parameters, OceanBaseCompatibilityMode mode = OceanBaseCompatibilityMode.MySql, NationalCharacterSet? nationalCharacterSet = null, bool validateOnly = false)
+        internal static byte[] Encode(OceanBaseParameter[] parameters, OceanBaseCompatibilityMode mode = OceanBaseCompatibilityMode.MySql, NationalCharacterSet? nationalCharacterSet = null, bool validateOnly = false, Encoding? clientEncoding = null)
         {
+            clientEncoding ??= ResultColumn.Utf8;
             if (parameters.Length == 0) return Array.Empty<byte>();
             if (parameters.Length > ushort.MaxValue) throw new ArgumentException("The prepared parameter count exceeds the protocol limit.");
             var nullBytes = (parameters.Length + 7) / 8;
@@ -17,6 +19,8 @@ namespace OceanBaseConnector.Internal.Protocol
             var nulls = new byte[nullBytes];
             for (var i = 0; i < parameters.Length; i++)
             {
+                if (parameters[i].OceanBaseDbType == OceanBaseDbType.Json && clientEncoding is ClientCharacterSet charset && charset.Managed)
+                    throw new NotSupportedException("Explicit JSON parameters require the default UTF8MB4 client encoding.");
                 complexTypes[i] = GetComplexType(parameters[i]);
                 if (complexTypes[i] != null && mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Complex parameters require Oracle mode.");
                 types[i] = complexTypes[i] != null ? (ushort)160 : TypeCode(parameters[i], mode);
@@ -38,11 +42,11 @@ namespace OceanBaseConnector.Internal.Protocol
                 writer.Write(types[i]);
                 var complex = complexTypes[i];
                 if (complex == null || types[i] != 160) continue;
-                WriteComplexIdentity(writer, complex);
+                WriteComplexIdentity(writer, complex, clientEncoding);
                 if (complex.IsAnonymous)
                 {
                     var element = complex.Members[0]; writer.Write(element.Layout.TypeCode == 0 ? (byte)246 : element.Layout.TypeCode);
-                    if (element.ComplexType != null) WriteComplexIdentity(writer, element.ComplexType);
+                    if (element.ComplexType != null) WriteComplexIdentity(writer, element.ComplexType, clientEncoding);
                 }
             }
             if (stream.Position > PacketChannel.DefaultMaxPacketSize - 10) throw TooLarge();
@@ -57,7 +61,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 }
                 else if (value is Stream) continue; // Stream data is uploaded before EXECUTE, without an inline value.
                 else if (type == 160)
-                    ComplexValueCodec.WriteParameter(writer, complexTypes[i]!.Layout, ((OceanBaseComplexValue)value).WireValues(), mode, nationalCharacterSet, validateOnly);
+                    ComplexValueCodec.WriteParameter(writer, complexTypes[i]!.Layout, ((OceanBaseComplexValue)value).WireValues(), mode, nationalCharacterSet, validateOnly, clientEncoding);
                 else if (type == 207 || type == 208)
                 {
                     if (!(value is string text)) throw new ArgumentException("A national character parameter requires a string.");
@@ -123,7 +127,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     if (!(value is TimeSpan time)) throw new ArgumentException("The parameter value does not match its declared DbType.");
                     TemporalCodec.WriteTime(writer, time, parameter.DeclaredScale);
                 }
-                else WriteValue(writer, parameter.DbType, value);
+                else WriteValue(writer, parameter.DbType, value, clientEncoding);
                 if (stream.Position > PacketChannel.DefaultMaxPacketSize - 10) throw TooLarge();
             }
             return stream.ToArray();
@@ -151,12 +155,12 @@ namespace OceanBaseConnector.Internal.Protocol
             return type;
         }
 
-        private static void WriteComplexIdentity(BinaryWriter writer, OceanBaseComplexType type)
+        private static void WriteComplexIdentity(BinaryWriter writer, OceanBaseComplexType type, Encoding clientEncoding)
         {
-            CheckLength(writer, ResultColumn.Utf8.GetByteCount(type.SchemaName));
-            WriteBytes(writer, ResultColumn.Utf8.GetBytes(type.SchemaName));
-            CheckLength(writer, ResultColumn.Utf8.GetByteCount(type.TypeName));
-            WriteBytes(writer, ResultColumn.Utf8.GetBytes(type.TypeName));
+            CheckLength(writer, clientEncoding.GetByteCount(type.SchemaName));
+            WriteBytes(writer, clientEncoding.GetBytes(type.SchemaName));
+            CheckLength(writer, clientEncoding.GetByteCount(type.TypeName));
+            WriteBytes(writer, clientEncoding.GetBytes(type.TypeName));
             writer.Write((byte)0); // The dictionary has no server version; external DDL requires explicit refresh.
         }
 
@@ -295,7 +299,7 @@ namespace OceanBaseConnector.Internal.Protocol
             }
         }
 
-        private static void WriteValue(BinaryWriter writer, DbType type, object value)
+        private static void WriteValue(BinaryWriter writer, DbType type, object value, Encoding clientEncoding)
         {
             switch (type)
             {
@@ -315,8 +319,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 case DbType.StringFixedLength:
                 case DbType.AnsiStringFixedLength:
                     if (!(value is string text)) break;
-                    CheckLength(writer, ResultColumn.Utf8.GetByteCount(text));
-                    WriteBytes(writer, ResultColumn.Utf8.GetBytes(text));
+                    CheckLength(writer, clientEncoding.GetByteCount(text));
+                    WriteBytes(writer, clientEncoding.GetBytes(text));
                     return;
                 case DbType.Binary when value is byte[] bytes: CheckLength(writer, bytes.Length); WriteBytes(writer, bytes); return;
             }

@@ -21,7 +21,7 @@ namespace OceanBaseConnector.Internal.Sql
         private readonly ParameterBindingPlan _initialization;
         private object[]? _values;
 
-        internal static MySqlCommandPlan Create(string name, OceanBaseParameterCollection parameters, string variablePrefix)
+        internal static MySqlCommandPlan Create(string name, OceanBaseParameterCollection parameters, string variablePrefix, Encoding? clientEncoding = null)
         {
             var parts = RoutineParameterDerivation.ParseName(name, mysql: true);
             if (parameters.Count > ushort.MaxValue) throw new ArgumentException("Too many routine parameters.");
@@ -50,7 +50,7 @@ namespace OceanBaseConnector.Internal.Sql
             }
             var initialization = new ParameterBindingPlan("SET " + string.Join(", ", assignments), initializers.ToArray());
             // Validate INOUT values before any initialization or CALL can be transmitted.
-            if (initializers.Count != 0) PreparedParameters.Encode(initialization.Parameters, OceanBaseCompatibilityMode.MySql, validateOnly: true);
+            if (initializers.Count != 0) PreparedParameters.Encode(initialization.Parameters, OceanBaseCompatibilityMode.MySql, validateOnly: true, clientEncoding: clientEncoding);
             return new MySqlCommandPlan(new ParameterBindingPlan(sql.Append(')').ToString(), inputs.ToArray()), outputs.ToArray(),
                 initialization, "SELECT " + string.Join(", ", variables));
         }
@@ -58,8 +58,8 @@ namespace OceanBaseConnector.Internal.Sql
         internal void Initialize(CommandExchange exchange, PhysicalSession session)
         {
             if (Outputs.Length == 0) return;
-            var encoded = PreparedParameters.Encode(_initialization.Parameters, OceanBaseCompatibilityMode.MySql);
-            exchange.Send(OceanBaseCommand.SqlPacket(_initialization.CommandText, 22), executesSql: false);
+            var encoded = PreparedParameters.Encode(_initialization.Parameters, OceanBaseCompatibilityMode.MySql, clientEncoding: exchange.ClientEncoding);
+            exchange.Send(OceanBaseCommand.SqlPacket(_initialization.CommandText, 22, exchange.ClientEncoding), executesSql: false);
             var statement = PreparedStatement.Read(exchange, session, _initialization.CommandText)!;
             var closed = false;
             try
@@ -76,8 +76,8 @@ namespace OceanBaseConnector.Internal.Sql
         internal async Task InitializeAsync(CommandExchange exchange, PhysicalSession session, CancellationToken token)
         {
             if (Outputs.Length == 0) return;
-            var encoded = PreparedParameters.Encode(_initialization.Parameters, OceanBaseCompatibilityMode.MySql);
-            await exchange.SendAsync(OceanBaseCommand.SqlPacket(_initialization.CommandText, 22), executesSql: false).ConfigureAwait(false);
+            var encoded = PreparedParameters.Encode(_initialization.Parameters, OceanBaseCompatibilityMode.MySql, clientEncoding: exchange.ClientEncoding);
+            await exchange.SendAsync(OceanBaseCommand.SqlPacket(_initialization.CommandText, 22, exchange.ClientEncoding), executesSql: false).ConfigureAwait(false);
             var statement = (await PreparedStatement.ReadAsync(exchange, session, _initialization.CommandText, token).ConfigureAwait(false))!;
             var closed = false;
             try
