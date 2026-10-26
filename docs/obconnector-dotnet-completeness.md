@@ -2700,6 +2700,31 @@ No real database was accessed. Big5/HKSCS/HKSCS31 and other missing capabilities
 emission/storage and complete deployment matrices remain open. All23 IDs/eight work packages remain
 open; earlier reports retain their historical scope.
 
+### 15.78 2026-10-26 Big5 ordinary results
+
+P1-08/W5, developed from4821d54 on master. All five Big5 IDs in the fixed v4.3.5_CE map now select
+a strict lazy CP950-derived lookup with15 scattered and249 C6/C7 corrections, plus width2 metadata.
+It supports13710 defined double-byte positions and128 ASCII characters, with exact reverse mappings.
+Seven source FFFD placeholders, zero holes, Windows extensions/aliases and malformed/truncated bytes
+fail. Incremental count/reset/invalid-flush/overflow preserve decoder state. No client option,
+parameter/national/JSON/CLOB encoding change, resource or dependency is introduced.
+
+RED7 showed explicit unsupported-collation errors; GREEN7 and expanded focused698 passed without
+failures/skips. Fresh source-table regeneration matches exhaustive256-single/32768-pair decode and
+65536-BMP encoding/refusal digests. Every valid pair additionally tests split/count/reverse behavior;
+all-split/tiny Convert/bounds/state cases and all-ID nine-wire-type codec/schema coverage accompany16
+new dual-mode reader cases. Valid readers execute reuse SQL; malformed sequential cases verify the
+consumed connection stays Open. Release solution build passed with zero warnings/errors. Initial
+independent source/tests review found no blockers. Affected five-asset consumers500 passed without
+failures/skips, adding20 MySQL async four-shape cases on one.NET10host. Final independent docs and
+provenance-facts review found no blockers. Full units7262 passed without failures/skips in8minutes11seconds;
+final staged diff whitespace checks passed. Full results belong in the
+[module record](obconnector-dotnet-progress.md#2026-10-26-big5-ordinary-results).
+
+No real database was accessed. HKSCS/HKSCS31 and other missing capabilities, actual server emission/
+storage and complete deployment matrices remain open. All23 IDs/eight work packages remain open;
+earlier reports retain their historical scope.
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。

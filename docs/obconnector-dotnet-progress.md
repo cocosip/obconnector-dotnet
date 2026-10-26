@@ -1,5 +1,47 @@
 # Verification status and remaining work
 
+## 2026-10-26 Big5 ordinary results
+
+Developed from4821d54 on master for P1-08/W5. Big5 IDs1/84/335/350/365 now use a distinct lazy codec
+with width2 metadata. It builds an immutable approximately45KB character lookup and a reverse
+dictionary from existing strict CP950 plus15 scattered corrections and249 C6/C7 assignments. All13710
+defined BMP pair mappings and128 ASCII characters round-trip exactly; source reverse entries have no
+aliases/nonminimal canonical choices. This includes four box-drawing pairs absent from strict CP950.
+The seven source FFFD placeholders, zero holes, Windows extensions/private-use aliases, malformed
+and truncated input fail explicitly. Count probes, invalid flush and output overflow do not consume
+pending lead state; Reset clears it. No client option, dependency, resource file or parameter/national/
+JSON/CLOB expansion is introduced. See the
+[fixed-source contract](obconnector-dotnet-architecture-design.md#result-character-sets).
+
+The source is OceanBase v4.3.5_CE commit5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5 ob_ctype_big5.cc/
+ob_ctype_big5_tab.h; ignored source snapshots and research are under TestResults/local-completeness/.
+The optional Python generator freshly regenerated independent digest expectations from the two decode
+tables and11 reverse ranges:256 singles plus32768 high-byte pairs, and65536 BMP encoding/refusal
+positions. The strict policy normalizes source FFFD placeholders to failures. Tests require no Python,
+source download or database. THIRD-PARTY-NOTICES now accurately inventories compact numeric assignment
+data and CP932/950 use alongside earlier charset modules; it retains the separate release provenance
+review, without claiming an upstream implementation port or embedding full upstream tables.
+
+Initial RED7 failed on explicit unsupported-collation errors; GREEN7 and expanded focused698 passed
+without failures/skips. Exhaustive valid pair tests additionally check counts, each-byte decoder
+splits and exact reverse bytes. Three explicit samples test every split/reset/count and tiny Convert;
+invalid flush/overflow-retry and array offset/empty/null/range/max-count behavior are covered. All five
+IDs have pure ordinary codec/schema coverage across nine string/BLOB types. The appended shared sample
+adds16 dual-mode sync/async text/prepared buffered/sequential cases with exact values, NULL and reuse
+SQL. Two malformed sequential cases leave the fully consumed connection Open. Release solution build
+passed with zero warnings/errors in11.48seconds. Initial independent source/tests review found no
+blockers; the reviewer only read files and ran diff whitespace checks. Affected five-asset consumers
+passed500 without failures/skips in2minutes10seconds. New20 cases cover MySQL async text/prepared
+buffered/sequential reads on one.NET10host; other modes/sync run in unit peers. No new family-specific
+public BLOB reader matrix was added. Final independent documentation/provenance-facts review found
+no blockers or actionable inconsistencies; no legal/release approval is claimed. Full units passed7262
+without failures/skips in8minutes11seconds, a net increase of61 cases. Final staged diff whitespace
+checks passed. Verification logs/TRX results remain under ignored TestResults/local-completeness/big5-*.
+
+No real database was accessed. HKSCS/HKSCS31, actual emission/storage, full collation/mode/version/
+OBProxy/TLS/runtime/platform and remaining offline implementation remain open. All23 IDs/eight work
+packages remain open; historical reports below retain their original scope.
+
 ## 2026-10-26 SJIS ordinary results
 
 Developed from37a0aba for P1-08/W5. SJIS IDs13/88/334/349/364 select a distinct strict CP932 adapter

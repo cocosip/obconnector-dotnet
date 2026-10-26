@@ -30,6 +30,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             (3, "\u0080\u009f¤ŒŸœÿ\0  ", "809FA8D7DDF7FD002020", 1),
             (18, "\u0080\u009fกฺ฿๛\0  ", "809FA1DADFFB002020", 1),
             (13, "日本語ｶﾅ\\〜‖−¢£¬\0  ", "93FA967B8CEAB6C5815F81608161817C8191819281CA002020", 2),
+            (1, "中•∼¥ヾぁЁ①\0  ", "A4A4A145A1E3A244C6A1C6A5C7B3C7E9002020", 2),
         };
 
         internal static async Task Verify(Type connectionType, byte[] greeting, Func<PacketChannel, CancellationToken, Task<byte[]>> readCommand,

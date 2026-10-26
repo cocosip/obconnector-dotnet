@@ -458,6 +458,7 @@ ROWID SQL/parameter behavior and deployment compatibility require real validatio
 | DEC8 | 3, 69, 338, 353, 368 | 1 |
 | TIS620 | 18, 89, 332, 347, 362 | 1 |
 | SJIS | 13, 88, 334, 349, 364 | 2 |
+| Big5 | 1, 84, 335, 350, 365 | 2 |
 | MySQL latin1 (Windows-1252) | 5, 8, 15, 31, 47, 48, 49, 94, 329, 344, 359 | 1 |
 | GBK | 28, 87, 326, 341, 356 | 2 |
 | GB18030-2005 | 248, 249, 251, 328, 343, 358 | 4 |
@@ -516,6 +517,26 @@ FFFFFFFF for failure. Encoding covers all65536 BMP positions, hashing a two-byte
 canonical wire code or FFFFFFFF for failure. Unit tests require neither Python nor downloaded sources.
 These local mappings and reader tests do not establish actual server emission/storage or deployment
 compatibility; national/JSON/CLOB contracts retain their scope.
+
+Big5 supports all13710 defined BMP double-byte assignments and ASCII in the fixed
+[source converter](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_ctype_big5.cc#L242)
+and [mapping tables](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_ctype_big5_tab.h#L1078).
+A lazy, shared immutable lookup derives from strict CP950 plus15 scattered corrections and249 C6/C7
+assignments for kana/Cyrillic/circled forms. It also restores four box-drawing pairs absent from strict
+Windows decoding. No resource file or new dependency is needed. It deliberately rejects the server
+table's seven FFFD placeholders (A15A/A1C3/A1C5/A1FE/A240/A2CC/A2CE), zero holes and Windows extensions,
+following the existing strict result policy. Single bytes80–FF and incomplete leads also fail.
+All13838 defined characters, including ASCII/NUL, have exact reverse mappings; Windows private-use
+aliases and unrepresentable UTF-16/supplementary characters throw EncoderFallbackException.
+The decoder retains one lead byte; count probes, invalid flush and output overflow do not consume it.
+Reset clears it. MySQL width metadata uses2, while Oracle retains its ordinary character-size rule.
+
+The optional `python tests/fixtures/character-sets/Big5Reference.py ob_ctype_big5_tab.h` command regenerates
+independent fixed-source SHA256 expectations for256 singles,32768 high-byte pairs and all65536 BMP
+encoding/refusal positions. Digest serialization follows the SJIS description above, with all leads
+80–FF and explicit FFFD refusal. Tests do not require Python or source downloads. This ordinary-result
+addition does not negotiate a client charset or expand national/JSON/CLOB encoding. Actual server
+emission/storage and deployment interoperability remain unverified; HKSCS/HKSCS31 remain separate.
 
 Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON and existing CLOB paths retain their UTF-8 restriction; trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope.
 
