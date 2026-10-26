@@ -1,9 +1,9 @@
 # OceanBaseConnector .NET 完整驱动能力与缺口基线
 
-**最近复核：** 2026-10-26；基于6fc1891的可信MySQL客户端字符串prepare降级；全部23项及八工作包仍开放。
-**当前模块：** P1-08/W5；完整性第15.73节。
-**当前验证：** 专项111、完整单测6953及受影响消费者403通过，无失败/跳过；Release构建零警告/错误，独立走查无遗留阻断。
-**本次补充：** 每次降级同会话查询UTF-8字符集/collation/SQL mode、严格字面量及单语句边界。
+**最近复核：** 2026-10-26；基于0484943的真实nupkg本地协议消费者；全部23项及八工作包仍开放。
+**当前模块：** P2-05/W8；完整性第15.74节；上一模块字符串prepare降级保留第15.73节。
+**当前验证：** 六资产/运行时配置共48项协议场景通过，无失败/跳过；消费者构建零警告/错误，独立走查无遗留阻断。
+**本次补充：** 双模式参数执行、结果/NULL、已知ERR恢复、事务、池reset及不同逻辑借用者的物理复用。
 本模块无新增实库兼容性证据；历史12项greeting前失败保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
@@ -161,7 +161,7 @@
 | P2-02 | P2 | Statement cache | 部分实现 | 有限 idle LRU、上下文/reset 失效和关闭已有本地实现；真实 DDL/reprepare、资源/负载/代理与运行时验收仍缺 |
 | P2-03 | P2 | 批处理优化 | 部分实现 | opt-in INSERT rewrite及合并组失败归属已有本地路径；multi-send/bulk及真实负载验收仍缺 |
 | P2-04 | P2 | 诊断 | 部分实现 | 建连/探活分段及慢命令阈值报告已有本地实现；协议帧诊断已有本地实现；补其他资源等待及性能验收 |
-| P2-05 | P2 | TFM/生态 | 部分验证；诊断卸载缺陷已修复 | 每个TFM的正式支持矩阵和package consumer验收；第15.58节保留原默认CLR崩溃与条件通过；第15.59节的诊断卸载修复已有默认642项通过，独立运行时与包矩阵仍缺 |
+| P2-05 | P2 | TFM/生态 | 部分验证；诊断卸载缺陷已修复 | 每个TFM的正式支持矩阵和package consumer验收；第15.58节保留原默认CLR崩溃与条件通过；第15.59节保留诊断卸载修复；第15.74节新增Windows六配置nupkg协议子集，完整运行时/平台/实库矩阵仍缺 |
 | P2-06 | P2（扩展矩阵）/ 发布阻塞（承诺范围） | 真实兼容性 | 部分验证 | 承诺范围必须有真实版本、OBProxy、TLS、认证、平台和故障报告，扩展范围再分期 |
 
 ### 4.1 除连接池外，具体还缺什么
@@ -2601,6 +2601,32 @@ ignored TestResults/local-completeness/mysql-client-strings-*. No real database 
 clients, NUL under NO_BACKSLASH_ESCAPES, real literal/parameter collation and coercibility, mode/version/
 proxy/TLS/runtime and performance matrices remain open. This does not close P1-08, all23 IDs or eight
 work packages, or establish that all remaining offline implementation is complete.
+
+### 15.74 2026-10-26 Packaged protocol runtime verification
+
+P2-05/W8, developed from0484943. Verify-Packages.ps1 now additionally runs a portable protocol
+companion through the actual restored product nupkgs. Eight scenarios/profile cover Oracle/MySQL,
+sync/async commands and buffered/sequential binary readers: automatic integer prepare/bind, metadata/
+value/NULL, statement close, known terminal ERR/recovery, transaction commit/autocommit restoration,
+capacity-one reset/reborrow/ping and physical close on pool clear. Standard2.0 transaction begin/commit
+and Close use synchronous APIs, including its async-command cases. No product code, dependency or
+release policy changed. Peer bounds, timeout cancellation and combined failure reporting apply.
+
+Windows48/48 scenarios passed without skips across net8/8.0.32, net9/9.0.21, net10/10.0.13,
+Standard2.0 and2.1/10.0.13, and Standard2.0/Framework4.8.10008.0 (Release534296). Both product hashes,
+asset and dependency selection were checked in fresh restore caches. All consumer builds passed with
+zero warnings/errors. Four isolated negative controls rejected corrupted row value, bound request,
+server-error expectation and major runtime roll-forward; the error expectation runs on desktop CLR.
+Modern Main explicitly asserts its target runtime major (major10 for Standard ALC), supplementing
+the existing dependency-major checks. The roll-forward negative control does not establish an earlier
+wrong-host false pass. Explicit Framework host type/message/inner
+reporting replaced unprintable unhandled async exception diagnostics and returns a nonzero exit code.
+The stack-formatting cause remains unproven. Candidate harness mismatches and logs are retained in
+the [progress record](obconnector-dotnet-progress.md#2026-10-26-packaged-protocol-runtime-verification).
+
+This adds local Windows packaged protocol evidence only. No real database was accessed; complete
+feature/runtime/platform/real server/OBProxy/TLS/auth/fault/load/publication matrices remain open.
+All23 gap IDs/eight work packages and further offline implementation remain open.
 
 ## 16. 剩余交付工作包
 

@@ -163,7 +163,8 @@ public static class PackageConsumer
             catch (ObjectDisposedException) { }
         }
 #endif
-        return target + " passed on " + Environment.Version;
+        ProtocolScenarios.Verify().GetAwaiter().GetResult();
+        return target + " passed on " + Environment.Version + " (8 loopback protocol scenarios)";
     }
 
     private static void Check(bool condition, string contract)
@@ -174,6 +175,15 @@ public static class PackageConsumer
 #if NET8_0_OR_GREATER
     public static void Main(string[] arguments)
     {
+#if NET8_0
+        const int targetRuntime = 8;
+#elif NET9_0
+        const int targetRuntime = 9;
+#else
+        const int targetRuntime = 10;
+#endif
+        var expectedRuntime = arguments.Length == 0 ? targetRuntime : 10;
+        Check(Environment.Version.Major == expectedRuntime, "Expected runtime major " + expectedRuntime);
         if (arguments.Length == 0) { Console.WriteLine(Verify()); return; }
         var path = Path.GetFullPath(arguments[0]);
         var context = new ConsumerContext(Path.GetDirectoryName(path)!);

@@ -1,5 +1,47 @@
 # Verification status and remaining work
 
+## 2026-10-26 Packaged protocol runtime verification
+
+Developed from0484943 for P2-05/W8. The existing Verify-Packages.ps1 consumer now copies one portable
+ProtocolScenarios.cs companion and invokes it from PackageConsumer.Verify. No product code, package
+dependency, CI release policy or public option changed. Every profile runs both authenticated modes
+x sync/async commands x buffered/sequential readers. Peers assert exact packet sequence/command bytes,
+automatic integer prepare/bind, binary metadata/value/NULL, statement close, known server ERR and
+subsequent reuse, explicit transaction/commit/autocommit restoration, capacity-one reset, a different
+logical borrower over the same physical connection, ping and physical close on pool clear. The
+Standard2.0 asset uses synchronous transaction begin/commit and Close even in async-command scenarios.
+Peers have bounded packet allocation/read/write and cancellation closes listeners/sockets; combined
+failures retain both peer and consumer causes.
+
+Package baseline six API/config profiles passed before implementation. New protocol48/48 scenarios
+passed with no skips across net8/8.0.32, net9/9.0.21, net10/10.0.13, Standard2.0 and2.1/10.0.13,
+and Standard2.0/Framework4.8.10008.0 (Release534296). Both product nupkgs were checked by fresh-cache
+SHA512 and exact asset/dependency selection. All five consumer targets and the Framework host built
+with zero warnings/errors. Three isolated protocol negative controls verified wrong binary value and bound
+request on.NET8, and wrong server-error expectation on desktop CLR; each failed at the intended
+assertion and terminated within5seconds (the Framework control includes its host rebuild).
+Review requested an explicit runtime identity assertion, then confirmed that the existing
+DiagnosticSource dependency-major check already rejects ordinary major roll-forward. Main now also
+asserts its compile-target runtime major for direct execution and major10 for Standard ALC loading.
+A fourth isolated negative control forced net8 to LatestMajor and verified rejection by this direct
+assertion; it does not prove the earlier harness would pass on the wrong host. The final positive
+matrix was repeated after this addition.
+Independent source/tests/scripts/docs review found no remaining blockers; the reviewer did not run
+tests or access a real database. Final git diff --check passed.
+
+Retained candidate failures were test-harness mismatches: an invalid ExpectedMode keyword and missing
+Oracle time-zone/national rediscovery after consumed snapshots. The first Framework negative control
+could not print the unhandled async exception string; explicit host type/message/inner reporting now
+returns1 and shows the expected assertion. This does not establish the cause or completeness of CLR
+stack-trace formatting behavior. Logs and isolated consumers remain in ignored
+TestResults/local-completeness/package-protocol-* and TestResults/package-validation/.
+
+No real database was accessed. No full unit/consumer suite was repeated for this test-only module;
+the changed package consumer itself runs against exact candidate nupkgs. All23 gap IDs/eight work
+packages and further offline implementation remain open. Real server/OBProxy/TLS/auth/fault/load,
+non-Windows and publication evidence must be recorded separately; historical reports below retain
+their original scope.
+
 ## 2026-10-26 MySQL client string preparation
 
 Developed from6fc1891 for P1-08/W5. Existing opt-in exact1295/HY000 automatic fallback now supports

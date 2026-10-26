@@ -167,6 +167,7 @@ Write-ConsumerFile 'PackageConsumer.csproj' @'
 </Project>
 '@
 Copy-Item -LiteralPath (Join-Path $repository 'tests/PackageConsumer/Program.cs') -Destination $run
+Copy-Item -LiteralPath (Join-Path $repository 'tests/PackageConsumer/ProtocolScenarios.cs') -Destination $run
 $projectPath = Join-Path $run 'PackageConsumer.csproj'
 Invoke-Dotnet @('restore', $projectPath, '--configfile', (Join-Path $run 'NuGet.Config'), '--packages', (Join-Path $run 'packages'))
 $restored = Get-Content -LiteralPath (Join-Path $run 'obj/project.assets.json') -Raw | ConvertFrom-Json
@@ -219,13 +220,27 @@ using Microsoft.Win32;
 
 internal static class Program
 {
-    private static void Main()
+    private static int Main()
     {
-        if (!RuntimeInformation.FrameworkDescription.StartsWith(".NET Framework", StringComparison.Ordinal))
-            throw new InvalidOperationException("The sample must run on the desktop CLR.");
-        Console.WriteLine(PackageConsumer.Verify());
-        using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full");
-        Console.WriteLine("Host=" + RuntimeInformation.FrameworkDescription + " Release=" + key?.GetValue("Release"));
+        try
+        {
+            if (!RuntimeInformation.FrameworkDescription.StartsWith(".NET Framework", StringComparison.Ordinal))
+                throw new InvalidOperationException("The sample must run on the desktop CLR.");
+            Console.WriteLine(PackageConsumer.Verify());
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full");
+            Console.WriteLine("Host=" + RuntimeInformation.FrameworkDescription + " Release=" + key?.GetValue("Release"));
+            return 0;
+        }
+        catch (Exception error) { Report(error); return 1; }
+    }
+
+    private static void Report(Exception error)
+    {
+        // Desktop CLR can fail to format an unhandled async exception's stack trace.
+        Console.Error.WriteLine(error.GetType().FullName + ": " + error.Message);
+        if (error is AggregateException aggregate)
+            foreach (var inner in aggregate.InnerExceptions) Report(inner);
+        else if (error.InnerException != null) Report(error.InnerException);
     }
 }
 '@

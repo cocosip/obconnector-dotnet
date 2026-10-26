@@ -147,6 +147,12 @@ dotnet pack OceanBaseConnector.slnx -c Release --no-build --no-restore -o TestRe
 ```
 
 To check package consumption, run `pwsh -File eng/Verify-Packages.ps1 -PackageDirectory TestResults/packages`. This requires PowerShell 7.1+ and .NET/ASP.NET Core 8/9/10 runtimes.
+The script checks exact restored package hashes/assets and runs eight synthetic loopback protocol
+scenarios per asset/runtime profile, covering both modes, sync/async and buffered/sequential reads.
+Modern hosts assert the expected runtime major so major roll-forward cannot satisfy another profile.
+Add `-VerifyNetFramework` on Windows with .NET Framework 4.8 and its targeting pack to also run the
+Standard2.0 asset on desktop CLR. Standard2.0 transaction begin/commit and Close use synchronous APIs.
+These local checks require no database credentials and do not establish real-server compatibility.
 
 ## CI/CD and releases
 

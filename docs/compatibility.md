@@ -1,5 +1,24 @@
 # Compatibility and known gaps
 
+## 2026-10-26 Packaged protocol runtime verification
+
+The existing exact nupkg consumer now additionally exercises eight synthetic loopback scenarios per
+profile: Oracle/MySQL, sync/async commands and buffered/sequential binary readers. Assertions cover
+automatic integer prepare/bind, metadata/value/NULL, statement close, terminal server ERR and recovery,
+explicit transaction commit, capacity-one reset/reborrow/ping and physical close after pool clearing.
+Standard2.0 uses synchronous transaction begin/commit and Close, including its async-command cases.
+The Framework host reports failures with type/message/inner exceptions and a nonzero exit code;
+desktop CLR unhandled async exception stack formatting failed during a negative control.
+
+Windows local48/48 scenarios passed with no skips in six asset/runtime profiles: net8 on8.0.32,
+net9 on9.0.21, net10 on10.0.13, Standard2.0 and2.1 on10.0.13, and Standard2.0 on Framework4.8.10008.0
+(Release534296). Fresh isolated restores verify both product package hashes and selected assets.
+Modern hosts assert their expected runtime major. Four isolated negative controls rejected a wrong
+row value, bound request, server-error code and major roll-forward from the net8 host.
+This is a limited public protocol subset, not full feature, server, OBProxy, TLS, Linux, load or
+publication acceptance. P2-05/W8 and all23 gap IDs/eight work packages remain open. See
+[delivery evidence](obconnector-dotnet-progress.md#2026-10-26-packaged-protocol-runtime-verification).
+
 ## 2026-10-26 MySQL client string preparation
 
 Opt-in automatic prepare fallback now supports ordinary MySQL strings after exact1295/HY000.
