@@ -19,6 +19,7 @@ namespace OceanBaseConnector
         private bool _failed;
         internal OceanBaseBatchReader(OceanBaseBatch.Operation operation) => _operation = operation;
         private CommandBehavior Behavior => _operation.Behavior & ~CommandBehavior.CloseConnection;
+        private bool SingleResult => (_operation.Behavior & (CommandBehavior.SingleResult | CommandBehavior.SingleRow)) != 0;
         internal void Start()
         {
             _operation.ThrowIfCanceled();
@@ -59,10 +60,15 @@ namespace OceanBaseConnector
             EnsureOpen(); if (_current == null) return false;
             try
             {
-                var next = _current.NextResult(); UpdateCount(); if (next) return true;
-                _current.Dispose(); _current = null; _index++;
-                if (_index == _operation.Commands.Length) return false;
-                Start(); return true;
+                while (_current != null)
+                {
+                    var next = _current.NextResult(); UpdateCount();
+                    if (next) { if (!SingleResult) return true; continue; }
+                    _current.Dispose(); _current = null; _index++;
+                    if (_index == _operation.Commands.Length) return false;
+                    Start(); if (!SingleResult) return true;
+                }
+                return false;
             }
             catch { Close(); throw; }
         }
@@ -73,10 +79,15 @@ namespace OceanBaseConnector
             _operation.ReaderToken = cancellationToken;
             try
             {
-                var next = await _current.NextResultAsync(cancellationToken).ConfigureAwait(false); UpdateCount(); if (next) return true;
-                await _current.DisposeAsync().ConfigureAwait(false); _current = null; _index++;
-                if (_index == _operation.Commands.Length) return false;
-                await StartAsync().ConfigureAwait(false); return true;
+                while (_current != null)
+                {
+                    var next = await _current.NextResultAsync(cancellationToken).ConfigureAwait(false); UpdateCount();
+                    if (next) { if (!SingleResult) return true; continue; }
+                    await _current.DisposeAsync().ConfigureAwait(false); _current = null; _index++;
+                    if (_index == _operation.Commands.Length) return false;
+                    await StartAsync().ConfigureAwait(false); if (!SingleResult) return true;
+                }
+                return false;
             }
             catch { await CloseAsync().ConfigureAwait(false); throw; }
             finally { _operation.ReaderToken = default; }

@@ -47,7 +47,7 @@ namespace OceanBaseConnector
             lock (Gate)
             {
                 CheckMutable(); token.ThrowIfCancellationRequested();
-                if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess | CommandBehavior.SchemaOnly | CommandBehavior.KeyInfo)) != 0) throw new NotSupportedException("This CommandBehavior is not supported.");
+                if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess | CommandBehavior.SchemaOnly | CommandBehavior.KeyInfo | CommandBehavior.SingleRow | CommandBehavior.SingleResult)) != 0) throw new NotSupportedException("This CommandBehavior is not supported.");
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
                 connection.EnsureAmbientTransaction();
                 var transaction = connection.ResolveCommandTransaction(_transaction);

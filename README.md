@@ -1,6 +1,6 @@
 # OceanBaseConnector for .NET
 
-Modern `DbBatch` supports [SchemaOnly/KeyInfo metadata](docs/obconnector-dotnet-architecture-design.md#batch-metadata). Advance entries with NextResult and dispose the reader to release its reservation. Data-source batches support direct CreateBatchCommand and own their connection lifetime.
+Modern `DbBatch` supports [SingleRow/SingleResult across the batch](docs/obconnector-dotnet-architecture-design.md#batch-result-limits) and [SchemaOnly/KeyInfo metadata](docs/obconnector-dotnet-architecture-design.md#batch-metadata). Advance entries with NextResult and dispose the reader to release its reservation. Data-source batches support direct CreateBatchCommand and own their connection lifetime.
 
 Observe [protocol frame diagnostics](docs/protocol-diagnostics.md) through the standard .NET
 DiagnosticListener named `OceanBaseConnector.Protocol`. Fixed frame/boundary/error metadata spans

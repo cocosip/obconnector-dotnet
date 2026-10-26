@@ -207,7 +207,7 @@ This is local driver behavior, not proof of OceanBase/OBProxy reset compatibilit
 - For `LOAD DATA LOCAL INFILE`, opt in with `Allow Local Infile=true` and set `LocalInfileStreamFactory` before opening. The factory receives the server-supplied filename as opaque text and must return a readable stream; the driver uploads it in chunks, sends the terminating empty packet, reads the final response, and disposes the stream. Missing factories, read failures, cancellation, the 64 MiB default upload limit, or a lost final response break the physical session and report an unknown outcome.
 - Set `DbType` or `OceanBaseDbType` when inference from `Value` is insufficient. Use `DBNull.Value` for SQL NULL. `ResetDbType()` restores inference.
 - Read all results with `Read` and `NextResult` to establish completion. Closing an unread reader destroys its unfinished session; disposing a field stream does not finish its parent reader.
-- `CommandBehavior.SequentialAccess` exposes field streams without buffering the whole result. `SingleRow` returns only the first row of each exposed result and drains the remainder; `SingleResult` drains later results without exposing them. `SchemaOnly` accepts text prefixes `SELECT`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `VALUES` after whitespace/comments. It obtains metadata through server preparation and never sends a target COM_QUERY, COM_STMT_EXECUTE, COM_STMT_FETCH or parameter-data upload. It accepts one text statement with input parameters only; names/order/count remain required, but values are not encoded, consumed or validated as bindings. FetchSize and offset hints are inactive. Preparation errors propagate without client-side fallback, including error 1295 when AllowClientSidePrepareFallback=true. An existing valid prepared statement is reused. The empty reader exposes prepared column metadata, HasRows=false and RecordsAffected=-1; its exchange is complete, so another connection operation is allowed. CloseConnection still closes the original logical Open lease when that reader is disposed; a later lease is protected even if pooling reuses the same physical session. Named complex columns require existing preloaded descriptions and may issue directory lookups for a missing source identity; those lookups do not execute the target. Metadata is the server prepare-time shape, which may differ from execution-time metadata. Server preparation can still incur parsing, permission checks and metadata locks; real OceanBase/OBProxy side-effect/lock/large-result acceptance remains open. Ordinary row readers retain their existing operation restrictions.
+- `CommandBehavior.SequentialAccess` exposes field streams without buffering the whole result. `SingleRow` returns only the first row of the first result, even when that result is empty or only an affected count; it implies SingleResult. `SingleResult` drains later results without exposing them. `SchemaOnly` accepts text prefixes `SELECT`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `VALUES` after whitespace/comments. It obtains metadata through server preparation and never sends a target COM_QUERY, COM_STMT_EXECUTE, COM_STMT_FETCH or parameter-data upload. It accepts one text statement with input parameters only; names/order/count remain required, but values are not encoded, consumed or validated as bindings. FetchSize and offset hints are inactive. Preparation errors propagate without client-side fallback, including error 1295 when AllowClientSidePrepareFallback=true. An existing valid prepared statement is reused. The empty reader exposes prepared column metadata, HasRows=false and RecordsAffected=-1; its exchange is complete, so another connection operation is allowed. CloseConnection still closes the original logical Open lease when that reader is disposed; a later lease is protected even if pooling reuses the same physical session. Named complex columns require existing preloaded descriptions and may issue directory lookups for a missing source identity; those lookups do not execute the target. Metadata is the server prepare-time shape, which may differ from execution-time metadata. Server preparation can still incur parsing, permission checks and metadata locks; real OceanBase/OBProxy side-effect/lock/large-result acceptance remains open. Ordinary row readers retain their existing operation restrictions.
 - Positive `OceanBaseCommand.FetchSize` enables forward-only server cursor pages for ordinary queries without cursor-valued columns. Oracle internal procedure/RETURNING output rows do not use this hint; returned REF CURSOR readers have their own page size. Oracle `UseCursorOffset=true` additionally requires OceanBase >=2.2.5; it does not provide scrolling.
 - `AllowClientSidePrepareFallback=true` permits limited scalar-input text fallback only after automatic prepare returns a validated `1295/HY000`. Explicit Prepare, cursors and Oracle PrepareExecute never fall back. Date/time, special types and output parameters are excluded; MySQL non-null strings require trusted session collation. Fallback literals may appear in server SQL logs.
 
@@ -231,7 +231,7 @@ External DDL and arbitrary stored-function/trigger side effects have no client-s
 
 ### Key information and hidden columns
 
-`CommandBehavior.KeyInfo` requires a single text statement with input parameters and server preparation; it never uses client prepare fallback. Procedure/output/array and multi-statement combinations are rejected before sending the target. It can be combined with SchemaOnly, SequentialAccess, SingleRow, SingleResult and CloseConnection. Batch supports KeyInfo with SchemaOnly, SequentialAccess and CloseConnection; SingleRow/SingleResult remain unsupported for batches. See the [batch metadata contract](#batch-metadata).
+`CommandBehavior.KeyInfo` requires a single text statement with input parameters and server preparation; it never uses client prepare fallback. Procedure/output/array and multi-statement combinations are rejected before sending the target. It can be combined with SchemaOnly, SequentialAccess, SingleRow, SingleResult and CloseConnection. Batch supports KeyInfo with SchemaOnly, SequentialAccess, CloseConnection and batch-wide SingleRow/SingleResult. See the [batch metadata contract](#batch-metadata).
 
 For a provably row-preserving single-base-table SELECT, the driver reads the key catalog on the same reserved physical session and transaction before target execution or long-data upload. Catalog filters are parameters. It chooses the complete primary key, otherwise a deterministic complete nonnullable unique key. A nullable single-column unique constraint sets IsUnique=true and may keep AllowDBNull=true, but is not selected as IsKey; composite members are not individually unique. Oracle effective P/U constraints use ALL_CONS_COLUMNS, independently of their backing index, with disabled/unvalidated/deferrable constraints excluded. Eligible standalone normal valid unique indexes are separate candidates. MySQL prefix/functional index members disqualify that entire candidate.
 
@@ -255,7 +255,7 @@ NextResult advances lazily to the next entry. The reservation persists even afte
 until the batch reader closes. Early close skips unstarted entries. Metadata failure releases the
 reservation; server errors identify BatchCommand. Preparation/catalog failure does not imply target
 execution. Pending-metadata cancellation/timeout can break the session. No replay or implicit transaction
-is added. Batch SingleRow and SingleResult remain unsupported.
+is added. Batch-wide SingleRow/SingleResult limits are described [below](#batch-result-limits).
 
 OceanBaseDataSource.CreateBatch returns a provider batch with an owned connection and supports direct
 CreateBatchCommand. Each execution opens its connection; reader closure closes or returns that lease.
@@ -264,6 +264,26 @@ connection. Connection/Transaction getters/setters and standalone Prepare remain
 join the ambient single-resource transaction. The source command timeout is the batch default. Normal
 connection batches keep caller-owned connection behavior. Standard assets expose no modern batch API.
 See [local evidence and remaining acceptance](obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
+
+### Batch result limits
+
+Modern batches support SingleResult and SingleRow with the existing metadata, SequentialAccess and
+CloseConnection flags. The limit applies to the entire batch. SingleResult exposes only its first
+result; SingleRow exposes only the first row of that result and implies SingleResult. A first empty
+result or affected-count response does not cause the reader to search later results for a row.
+Ordinary command SingleRow uses the same first-result rule; its previous per-result behavior was a defect.
+
+NextResult drains all hidden results, starts and consumes remaining entries sequentially, and returns
+false on successful exhaustion. A hidden error or cancellation propagates with the ordinary BatchCommand,
+unknown-outcome and cleanup rules. Successful counts and procedure outputs are retained, including hidden
+results. Limits do not rewrite SQL, add an implicit transaction or replay failed operations.
+
+Read returning false only finishes the current result. To process remaining batch entries, call
+NextResult even though it will not expose another result. Early Close keeps the existing lazy contract:
+unstarted entries are skipped. An unread current response can destroy its session. CloseConnection
+still belongs to the original logical lease; data-source batches still own that connection.
+SchemaOnly with limits may prepare hidden entries and query their metadata catalogs, but executes no
+target SQL. The batch reservation remains until reader close. See [verification and open acceptance](obconnector-dotnet-completeness.md#1561-2026-10-26-singlerowsingleresult-跨批次结果限制).
 
 ### Data adapters and command generation
 

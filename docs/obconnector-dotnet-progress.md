@@ -1,5 +1,32 @@
 # Verification status and remaining work
 
+## 2026-10-26 Batch result limits and standard SingleRow semantics
+
+Developed from master/27bd176 for P1-05/W5. Ordinary command SingleRow now exposes only the first row
+of the first result, as required by CommandBehavior. The previous per-result first-row behavior was a
+defect; callers relying on it must remove SingleRow and control per-result reads explicitly. Empty or
+count-only first results do not cause a search for later rows.
+
+Modern batches now support SingleRow/SingleResult across the whole batch. NextResult consumes hidden
+results and remaining entries sequentially, returning false only on success. Counts, outputs, hidden
+errors and cancellation/unknown attribution remain intact. Read=false only finishes the current result;
+call NextResult to process remaining entries. Early Close still skips unstarted entries. Metadata flags
+never execute targets; source-owned connections and CloseConnection lease checks remain. No implicit
+transaction, SQL rewrite, replay, dependency or public API addition.
+See [contract](obconnector-dotnet-architecture-design.md#batch-result-limits) and
+[full evidence/history](obconnector-dotnet-completeness.md#1561-2026-10-26-singlerowsingleresult-跨批次结果限制).
+
+New units62; focused218 pass. New public consumers132 pass; combined294 retain previous162,0fail/skip.
+Metadata8 simultaneously set both limits, varying sync/mode/KeyInfo rather than separately enumerating
+the limits. First24RED and corrected test-import build failure are retained. Full units6260 pass
+(prior6198 retained plus62,8m12),0fail/skip. Final Release solution0warnings/errors,2.40s; seven-file
+scoped formatting exits0 with the existing workspace-load warning. Source/project526 and ReleaseDLL1266
+frozen hashes remain unchanged. Final independent read-only review checked raw TRX, retained cases, hashes and scope with no blockers;
+the reviewer did not run builds/tests. Five assets share one Windows/.NET10host. No new real database,
+OBProxy/enterprise TLS, independent-runtime/platform/load acceptance. All23IDs/eight packages stay open.
+Local master commit only; no push/publication.
+
+
 ## 2026-10-26 Batch metadata and data-source batch command creation
 
 Developed from master/d7a5354 for P1-05/W5. Modern batches now accept SchemaOnly and KeyInfo through

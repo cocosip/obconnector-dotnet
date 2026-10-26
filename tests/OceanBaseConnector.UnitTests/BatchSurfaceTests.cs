@@ -34,7 +34,7 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync(); using var batch = connection.CreateBatch(); var command = BatchItem(batch, "");
                 Assert.Throws<ArgumentOutOfRangeException>(() => batch.Timeout = -1);
-                Assert.Throws<NotSupportedException>(() => batch.ExecuteReader(CommandBehavior.SingleResult));
+                Assert.Throws<NotSupportedException>(() => batch.ExecuteReader((CommandBehavior)64));
                 Assert.Throws<InvalidOperationException>(() => batch.ExecuteNonQuery()); command.CommandText = "not sent"; command.CommandType = CommandType.StoredProcedure;
                 Assert.Throws<NotSupportedException>(() => batch.ExecuteNonQuery()); command.CommandType = CommandType.Text;
                 using var canceled = new CancellationTokenSource(); canceled.Cancel();

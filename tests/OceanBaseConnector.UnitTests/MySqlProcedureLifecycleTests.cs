@@ -393,7 +393,8 @@ namespace OceanBaseConnector.UnitTests
                     var parameters = AddMySqlProcedureParameters(command);
                     using var reader = async ? await command.ExecuteReaderAsync(behavior) : command.ExecuteReader(behavior);
                     Assert.True(async ? await reader.ReadAsync() : reader.Read()); Assert.Equal(9L, reader.GetInt64(0));
-                    if (behavior == CommandBehavior.SingleResult) Assert.False(async ? await reader.NextResultAsync() : reader.NextResult());
+                    Assert.False(async ? await reader.NextResultAsync() : reader.NextResult());
+                    Assert.Equal(7L, parameters.Output.Value); Assert.Equal("new", parameters.InOut.Value); Assert.Equal(3, reader.RecordsAffected);
                     if (async) await reader.CloseAsync(); else reader.Close();
                     Assert.Equal(7L, parameters.Output.Value); Assert.Equal("new", parameters.InOut.Value); Assert.Equal(3, reader.RecordsAffected);
                     Assert.True(session.RequiresDiscardOnReturn);

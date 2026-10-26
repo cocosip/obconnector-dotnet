@@ -34,7 +34,7 @@ namespace OceanBaseConnector
             _closeConnection = (behavior & CommandBehavior.CloseConnection) != 0;
             _sequential = (behavior & CommandBehavior.SequentialAccess) != 0;
             _singleRow = (behavior & CommandBehavior.SingleRow) != 0;
-            _singleResult = (behavior & CommandBehavior.SingleResult) != 0;
+            _singleResult = (behavior & (CommandBehavior.SingleResult | CommandBehavior.SingleRow)) != 0;
             _schemaOnly = (behavior & CommandBehavior.SchemaOnly) != 0;
         }
         public override object this[int ordinal] => GetValue(ordinal);

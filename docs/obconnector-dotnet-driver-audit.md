@@ -1,18 +1,17 @@
 # OceanBase .NET 驱动完整性走查报告
 
-**最近复核：** 2026-10-26；基于master/d7a5354的Batch元数据及数据源条目创建；全部23项及八工作包仍开放。
-**当前模块：** P1-05/W5；完整性第15.60节、报告第55节。
-**当前验证：** 完整单位6198通过（保留此前6147及新增51，8分7秒）；受影响单位269、消费者162通过（新增72），均零失败/跳过。
-Release全解决方案0警告/错误（2.39秒）；4C#限定格式验证退出0，保留既有workspace加载警告。
-**本次修复：** Batch开放SchemaOnly/KeyInfo；数据源Batch不再落入框架CreateDbBatchCommand的NotImplemented入口。
-保留批次预留、同会话目录、目标不执行、懒启动/提前关闭、精确取消、CloseConnection租约和源连接所有权。
-原12RED、消费者36/36及后续夹具失败全部保留；当前未新增实库/OBProxy、企业TLS、跨平台或独立运行时验收。
+**最近复核：** 2026-10-26；基于master/27bd176的跨批次结果限制及共享SingleRow修正；全部23项及八工作包仍开放。
+**当前模块：** P1-05/W5；完整性第15.61节、报告第56节。
+**当前验证：** 完整单位6260通过（新增62），受影响单位218、消费者294通过（新增132），均零失败/跳过。
+**本次修复：** SingleRow按标准只暴露首结果首行；Batch支持整批SingleRow/SingleResult，NextResult处理隐藏条目。
+保留counts/outputs、隐藏错误/unknown、精确取消、元数据不执行目标、提前关闭跳过后缀及源连接/原租约。
+首批24RED及一次测试import构建失败保留；当前无新增实库/OBProxy、企业TLS、跨平台或独立运行时验收。
 **仓库：** `D:\dotnet-code\obconnector-dotnet`。
 **初次走查：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **目标和结论级别：** 为 MySQL/Oracle 双模式定义可执行的完整驱动清单；源码、本地 fixture、包消费和真实互操作分别记载，不互相替代。
 
 
-**阅读入口：** 第55节记录Batch元数据及源条目创建，第54节记录诊断卸载修复和默认642项回归，第53节保留池通知交接及原崩溃检查点；第52节记录本次协议帧诊断，第51节保留二进制游标列与嵌套所有权，第50节保留黑名单/尝试上限，第49节保留发现分组/策略/权重，第48节保留OCP HTTP适配，第47节保留TNS文件适配，第46节保留TCP健康缓存，第45节保留TCP重试，第44节保留连接级ERR，第43节保留Closed回调修复，第42节保留national复杂成员，第41节保留Oracle输出提示，第40节保留事务响应丢失验收，第 39 节保留外置 LOB 验收，第 38 节保留内联资源验收；第 37 节保留此前文档交付与未完成验收；[第 1.1 节](#11-本次评审摘要与剩余交付清单)列剩余工作；[第 1.2 节](#12-明确缺失和受限组合实施入口)列实施入口；第 3/4 节列当前能力和全部缺口；第 8 节定义发布门槛。第 36 节为当前 reader 租约修复；第 35 节保留 XA 池隔离验收；第 34 节保留自动提交模块；第 33 节保留文档与 RED 检查点；第 32 节为已提交 NUMBER 模块；第 31 节保留慢命令诊断交付；第 30 节保留建连阶段诊断交付；第 29 节保留 Oracle Prepare 交付；第 28 节为开发前文档检查点；第 27 节为已提交字符集模块；第 25 节保留归一化开发前快照，第 12/14/17 节和基线第 15 节保留原始失败、修复及跳过，不作为当前未实现声明。
+**阅读入口：** 第56节记录批次结果限制及共享SingleRow修正，第55节记录Batch元数据及源条目创建，第54节记录诊断卸载修复和默认642项回归，第53节保留池通知交接及原崩溃检查点；第52节记录本次协议帧诊断，第51节保留二进制游标列与嵌套所有权，第50节保留黑名单/尝试上限，第49节保留发现分组/策略/权重，第48节保留OCP HTTP适配，第47节保留TNS文件适配，第46节保留TCP健康缓存，第45节保留TCP重试，第44节保留连接级ERR，第43节保留Closed回调修复，第42节保留national复杂成员，第41节保留Oracle输出提示，第40节保留事务响应丢失验收，第 39 节保留外置 LOB 验收，第 38 节保留内联资源验收；第 37 节保留此前文档交付与未完成验收；[第 1.1 节](#11-本次评审摘要与剩余交付清单)列剩余工作；[第 1.2 节](#12-明确缺失和受限组合实施入口)列实施入口；第 3/4 节列当前能力和全部缺口；第 8 节定义发布门槛。第 36 节为当前 reader 租约修复；第 35 节保留 XA 池隔离验收；第 34 节保留自动提交模块；第 33 节保留文档与 RED 检查点；第 32 节为已提交 NUMBER 模块；第 31 节保留慢命令诊断交付；第 30 节保留建连阶段诊断交付；第 29 节保留 Oracle Prepare 交付；第 28 节为开发前文档检查点；第 27 节为已提交字符集模块；第 25 节保留归一化开发前快照，第 12/14/17 节和基线第 15 节保留原始失败、修复及跳过，不作为当前未实现声明。
 
 此前池路由和 TLS 验证分别见[池路由记录](obconnector-dotnet-progress.md#2026-10-24-p0-06-pooled-resolver-routing)及 [TLS 记录](obconnector-dotnet-progress.md#2026-10-25-p1-04-tls-server-validation-callback)。当前双模式直连证据不代表 OBProxy、企业 TLS、跨平台或独立运行时验收。
 
@@ -168,7 +167,7 @@ Java 和 .NET 的连接池都已存在；.NET 默认 `Pooling=false`。会话识
 | P1-02 | 压缩/OB20 | 标准 MySQL 压缩已有本地实现；先确认客户端 OB20 压缩的链路/版本/协商契约，再补实现；reroute 及真实服务器/代理验收仍缺 |
 | P1-03 | LOCAL INFILE | 只允许应用提供的流，禁止驱动读取任意本地路径 |
 | P1-04 | TLS/mTLS | 自定义服务器验证回调、池化客户端证书隔离和 source 快照已有本地实现；真实企业 CA/轮换/撤销/跨平台和 mTLS 矩阵仍待完成 |
-| P1-05 | ADO.NET 行为 | 保留 MySQL StoredProcedure 参数方向、输出和多结果实现及回归（第 24 节）；保留 KeyInfo 键/隐藏列与复杂形状 unknown 契约及回归，补真实目录和完整 schema/parameter metadata、Batch/游标行为表；保留 `SchemaOnly` Prepare-only及第55节Batch元数据/源条目创建回归；补真实准备行为验收，以及明确的 adapter 策略 |
+| P1-05 | ADO.NET 行为 | 保留 MySQL StoredProcedure 参数方向、输出和多结果实现及回归（第 24 节）；保留 KeyInfo 键/隐藏列与复杂形状 unknown 契约及回归，补真实目录和完整 schema/parameter metadata、Batch/游标行为表；保留 `SchemaOnly` Prepare-only、第55节Batch元数据/源条目创建及第56节结果限制回归；补真实准备行为验收，以及明确的 adapter 策略 |
 | P1-06 | Oracle 输出/游标 | 完整参数方向、文本cursor列及二进制列真实验收、PrepareExecute 结果形状 |
 | P1-07 | 复杂类型 | 保留已有嵌套 object/collection、显式/可观察 DDL 自动失效；保留第42节有界national实现；补LOB/cursor、其他national、复杂整列RETURNING身份和真实DDL验收 |
 | P1-08 | 类型/字符集 | 保留已实现的 DecimalScale 及普通结果严格字符集/宽度；补其余编码、扩展类型码/metadata、客户端/national 及完整真实矩阵，见第 27 节 |
@@ -1033,3 +1032,21 @@ DataSource现直接创建持有自有连接的原生Batch，每次执行Open，r
 
 三现代资产在同一Windows/.NET10host运行，不是三个独立运行时；没有新增实库、真实OBProxy、
 企业TLS、跨平台或长期负载验收。Batch SingleRow/SingleResult、其他命令/游标组合和23ID/八包继续开放。
+
+## 56. 2026-10-26 SingleRow/SingleResult 跨批次结果限制
+
+基于master/27bd176，补P1-05/W5。官方SingleRow要求只返回首结果首行，旧reader允许NextResult再次
+暴露每集首行是确定偏差；共享reader现将SingleRow并入既有SingleResult排空。首结果为空/count也不找后集。
+Batch开放两标志并在NextResult逐项消费隐藏结果及后缀，成功才返回false，保留counts/outputs、隐藏错误、
+BatchCommand归属、发送后unknown及精确取消。Read=false不代表已执行后缀；提前Close仍跳过未启动条目。
+SchemaOnly只准备元数据，CloseConnection原租约及数据源自有连接语义保持，不加隐式事务/replay。
+前一节当时保留的Batch限制由本节新实现取代，历史正文保留；当前[公共契约](obconnector-dotnet-architecture-design.md#batch-result-limits)已同步。
+
+新增62单位，旧MySQL过程4项加强为Close前输出/计数断言；首批24RED修后连同5旧回归共29GREEN。
+扩展单位218、公共消费者132及合并294均零失败/跳过。62项含metadata8同时设置两标志，并非分别穷举。
+五资产command60和三现代资产普通/源Batch72，均实际双模式loopback握手；同一peer验证prefix/suffix及断开。
+最终完整单位6260通过（原6198保留、新增62，8分12秒），Release0警告/错误2.40秒；7C#格式验证退出0，
+保留workspace加载警告。526源码/项目及1266Release DLL冻结hash未变；最终独立只读复核已确认原始TRX、保留用例、冻结hash及文档范围，无剩余阻断项；reviewer未执行构建/测试。
+详细场景、原始结果及剩余验收见[完整性15.61](obconnector-dotnet-completeness.md#1561-2026-10-26-singlerowsingleresult-跨批次结果限制)。
+五资产仍只一个Windows/.NET10host，未新增实库/OBProxy/企业TLS、独立运行时、跨平台或生产负载证据。
+其他Command/Batch/游标组合、全部23ID及八包仍开放；本地master提交，不推送。
