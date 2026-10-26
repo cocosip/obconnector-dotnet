@@ -55,7 +55,20 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetReadsEnumSetAndGeometryResults(string target, byte type, bool raw, bool binary, bool sequential)
             => Verify(target, type == 247 ? 2 : 7, binary, sequential, type, raw);
 
-        private static async Task Verify(string target, int sample, bool binary, bool sequential, byte type = 253, bool raw = false)
+        public static IEnumerable<object[]> RowIdAssets()
+        {
+            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+                foreach (var binary in new[] { false, true })
+                    foreach (var sequential in new[] { false, true })
+                        yield return new object[] { target, binary, sequential };
+        }
+
+        [Theory]
+        [MemberData(nameof(RowIdAssets))]
+        public Task EveryAssetReadsOracleRowIdResults(string target, bool binary, bool sequential)
+            => Verify(target, 7, binary, sequential, type: 209, oracle: true);
+
+        private static async Task Verify(string target, int sample, bool binary, bool sequential, byte type = 253, bool raw = false, bool oracle = false)
         {
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var context = new AssemblyLoadContext("character-sets-" + target, isCollectible: true);
@@ -65,7 +78,7 @@ namespace OceanBaseConnector.ConsumerTests
                 await CharacterSetFixture.Verify(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!,
                     Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!),
                     (channel, token) => SessionTimeZoneFixture.ReadCommand(channel, token, expectProbe: false),
-                    sample, oracle: false, asynchronous: true, binary, sequential, type, raw);
+                    sample, oracle, asynchronous: true, binary, sequential, type, raw);
             }
             finally { context.Unload(); }
         }

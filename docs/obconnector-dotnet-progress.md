@@ -1,5 +1,37 @@
 # Verification status and remaining work
 
+## 2026-10-26 Oracle ROWID results
+
+Developed from `94fcd85` for P1-08/W5. Oracle result209 now reports ROWID/String and returns unchanged
+text using strict session UTF-8, including binary/unknown reported collation. Existing length-encoded
+text/prepared buffered/sequential readers apply; MySQL rejects the code. No public value type,
+parameter code or SQL inventory entry is added. Java fixed-source getObject/getString handling and
+its generic field-length path provide the protocol precedent, not a live compatibility result.
+
+New units15:8 public sync/async text/prepared buffered/sequential cases; three collation/metadata
+cases, three malformed UTF-8 and one MySQL rejection. Initial RED15:1pass/14fail; related GREEN464
+pass, no failures/skips. New consumers20 use Oracle async with five assets, text/prepared and
+buffered/sequential. Release solution build passed with zero warnings/errors,4.55seconds. Affected
+consumers400pass (380 retained plus20), no failures/skips,1minute37seconds. Source/caller/fixture/
+documentation independent review found no blockers; reviewer did not build/test. Full units6756pass
+(6741 retained plus15), no failures/skips,8minutes2seconds.
+
+Both candidate nupkgs passed `eng/Verify-Packages.ps1 -VerifyNetFramework`: identity/license/readme/
+dependency checks, fresh-cache SHA512 and asset selection. Actual .NET8.0.32/9.0.21/10.0.13 hosts,
+netstandard2.0/2.1 on10 and netstandard2.0 on Framework4.8.10008.0 (CLR4.0.30319.42000, Release534296)
+passed API/configuration smoke. Retained package consumers/graphs:
+`TestResults/package-validation/c81fbe62e656468494ef866b1f3730db`.
+The existing RuntimeConsumerSample and BatchRuntimeConsumerSample also built warning-free against
+these nupkgs and passed all six actual8/9/10 loopback runs: authenticated Oracle identity/autocommit,
+decimal/schema/CloseConnection/pre-cancel/failover; Batch counts/known-error attribution/source
+ownership and Activity/Meter checks. This is local protocol evidence, not real SQL or fresh ROWID
+coverage on each runtime. Probe sources/script/logs are retained in ignored
+`TestResults/local-completeness/rowid-runtime-loopback*`; no source sample edits were needed.
+
+No real database accessed. Actual ROWID emission/SQL/parameter behavior and other deployment
+acceptance remain open. All23IDs/eight packages and other local work remain open. Artifacts under
+ignored `TestResults/local-completeness/oracle-rowid-*`. No push.
+
 ## 2026-10-26 ENUM, SET and GEOMETRY result codes
 
 Developed from `a3532fc` for P1-08/W5 and P1-10/W6. Codes247/248 return strict text or collation63

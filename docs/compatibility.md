@@ -1,5 +1,19 @@
 # Compatibility and known gaps
 
+## 2026-10-26 Oracle ROWID results
+
+Oracle wire209 now reads as unchanged strict session UTF-8 text with ROWID/String metadata,
+independently of collation. MySQL rejects it. No identifier conversion, new CLR type, parameter
+wire code or SQL inventory declaration is added. Local units cover sync/async text/prepared
+buffered/sequential reads, empty/NULL, metadata and malformed UTF-8; five-asset consumers use Oracle
+async. No real database was accessed, so actual emission and SQL/deployment behavior remain open.
+See [delivery evidence](obconnector-dotnet-progress.md#2026-10-26-oracle-rowid-results).
+
+The candidate nupkgs passed actual .NET8.0.32/9.0.21/10.0.13 and Framework4.8 package API/configuration
+smoke with fresh-cache hashes and asset selection. Existing basic protocol and Batch/diagnostics
+samples also passed six loopback runs on actual8/9/10. This adds Windows local runtime evidence;
+it does not validate real SQL, every new type on each runtime, Framework protocol traffic or Linux.
+
 ## 2026-10-26 ENUM, SET and GEOMETRY result codes
 
 Wire247/248 use the existing strict text/binary-collation result contract; SET remains an unsplit

@@ -32,7 +32,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             int sample, bool oracle, bool asynchronous, bool binary, bool sequential, byte type = 253, bool raw = false)
         {
             var (collation, part, hex, width) = Samples[sample];
-            var extended = type >= 247 && type <= 251 || type == 255;
+            var extended = type >= 247 && type <= 251 || type == 255 || type == 209;
             var repetitions = type == 249 ? 10 : 400;
             var expected = string.Concat(Enumerable.Repeat(part, repetitions));
             var field = Enumerable.Range(0, repetitions).SelectMany(_ => Convert.FromHexString(hex)).ToArray();
@@ -90,7 +90,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                     Assert.Equal(raw ? typeof(byte[]) : typeof(string), reader.GetFieldType(0)); Assert.Equal("字符列", reader.GetName(0));
                     if (extended)
                     {
-                        Assert.Equal(type == 247 ? "ENUM" : type == 248 ? "SET" : type == 255 ? "GEOMETRY"
+                        Assert.Equal(type == 209 ? "ROWID" : type == 247 ? "ENUM" : type == 248 ? "SET" : type == 255 ? "GEOMETRY"
                             : (type == 249 ? "TINY" : type == 250 ? "MEDIUM" : "LONG") + (raw ? "BLOB" : "TEXT"), reader.GetDataTypeName(0));
                         Assert.Equal(type >= 249 && type <= 251, reader.GetColumnSchema()[0].IsLong);
                         Assert.Equal((int)(raw ? OceanBaseDbType.Binary : OceanBaseDbType.String), reader.GetColumnSchema()[0]["ProviderType"]);

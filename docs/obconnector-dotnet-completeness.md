@@ -1,9 +1,9 @@
 # OceanBaseConnector .NET 完整驱动能力与缺口基线
 
-**最近复核：** 2026-10-26；基于a3532fc的ENUM/SET/GEOMETRY结果码扩展；全部23项及八工作包仍开放。
-**当前模块：** P1-08/W5、P1-10/W6；完整性第15.68节。
-**当前验证：** 完整单测6741、相关消费者380及目录消费者16通过，无失败/跳过；Release构建无警告/错误。
-**本次补充：** ENUM/SET复用严格字符集/二进制读取；MySQL GEOMETRY保留完整原始字节。
+**最近复核：** 2026-10-26；基于94fcd85的Oracle ROWID结果码扩展；全部23项及八工作包仍开放。
+**当前模块：** P1-08/W5；完整性第15.69节。
+**当前验证：** 完整单测6756、相关消费者400通过，无失败/跳过；Release构建零警告/错误，候选包及实际8/9/10本地运行通过。
+**本次补充：** Oracle ROWID复用严格session UTF-8和既有length编码，保留标识符文本。
 本模块无新增实库兼容性证据；历史12项greeting前失败保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
@@ -2502,6 +2502,21 @@ GEOMETRY SQL目录项、空间API或参数类型。
 固定Java参考的ENUM/GEOMETRY getObject及通用length编码提供源码先例；其SET getObject
 分支未实现，不能以类型枚举存在宣称Java完整支持。此处SET按共享length编码及字符集契约实现。
 未访问实库，不证明服务器实际返回这些码、ENUM/SET SQL部署或空间能力；其余类型码与全部ID继续开放。
+
+### 15.69 2026-10-26 Oracle ROWID 结果码
+
+P1-08/W5：209报告ROWID，使用现有String身份及严格session UTF-8；包括collation63或未知
+collation在内均保留字符串，不解析、不归一化标识符。MySQL明确拒绝。复用既有length编码
+及text/prepared buffered/sequential路径，保留空值/NULL/原始长度元数据；没有增加公开值类型、
+参数wire码或SQL目录声明。固定Java JDBC4ResultSet.getObject将ROWID包装为RowIdImpl(getString)，
+二进制行使用通用length编码，是源码依据而非实库验收。
+
+新增15单测（8项公开reader组合、3项collation元数据、3项畸形UTF-8及1项MySQL拒绝）和
+20项Oracle异步五资产消费者。RED为1通过/14失败；相关GREEN464通过，无失败/跳过。
+最终Release构建零警告/错误，完整单测6756、相关消费者400通过，无失败/跳过；候选包及
+实际8/9/10的六次既有本地样例运行通过，Framework4.8仅API/配置烟测。独立走查无阻塞。
+未访问实库，不证明真实ROWID发出、SQL/参数或部署
+行为。NUMBER_FLOAT206的精度/scale契约及其他Oracle资源形状继续开放，全部ID不因此关闭。
 
 ## 16. 剩余交付工作包
 

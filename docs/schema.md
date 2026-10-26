@@ -79,6 +79,10 @@ wire codes in either mode does not add Oracle SQL declarations. MySQL GEOMETRY r
 opaque bytes regardless of collation; it does not add a GEOMETRY inventory row, spatial parameter
 type or SQL-support claim. These result-code extensions have local evidence only.
 
+Oracle ROWID result code209 likewise has local result-reading support using String and strict session
+UTF-8, independent of its reported collation. It preserves identifier text and wire length metadata;
+it adds no ROWID SQL inventory entry or parameter wire identity. MySQL results reject this code.
+
 NUMBER/DECIMAL each have two rows with the same SQL name and provider identity. The System.Decimal row covers precision 1..28 with 0 <= scale <= precision; otherwise an unknown/nonpositive precision, precision above 28, negative scale or scale above precision selects OceanBaseDecimal. The wide rows retain mode codec limits: Oracle precision <=38, metadata scale -84..127; MySQL precision <=65, scale 0..30 and scale <= precision. Overlapping bounds are intentional; ResultTypeCondition selects the normal reader representation, while ProviderSpecificDataType always reports the exact provider representation. Oracle TIMESTAMP similarly has DateTime for scale 0..7 and OceanBaseTimestamp for scale 8..9. MySQL zero-date shapes require provider-specific date access; ordinary DateTime conversion retains its existing checks.
 
 REF CURSOR is Output/ReturnValue only with Use Oracle Prepare Execute and IsSupportedForResults=false; this does not add cursor-valued columns or input cursors. Oracle LOBs require negotiated Use Lob Locators, session-bound handles and a supported UTF-8 character set for CLOB. National strings require trusted national-character-set state; ordinary text and JSON still enforce their supported collations. YEAR values remain zero or 1901..2155, BIT widths 1..64 and interval precision/scale retain existing codec validation.

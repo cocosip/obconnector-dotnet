@@ -190,6 +190,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 205: return "INTERVAL DAY TO SECOND";
                     case 207: return "NVARCHAR2";
                     case 208: return "NCHAR";
+                    case 209: return "ROWID";
                     case 15: return Charset == 63 ? "VARBINARY" : "VARCHAR";
                     case 253: return Charset == 63 ? "VARBINARY" : Mode == OceanBaseCompatibilityMode.Oracle ? "VARCHAR2" : "VARCHAR";
                     case 254: return Charset == 63 ? "BINARY" : "CHAR";
@@ -277,6 +278,9 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 208:
                         if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("National character types require Oracle mode.");
                         return typeof(string);
+                    case 209:
+                        if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("ROWID requires Oracle mode.");
+                        return typeof(string);
                     case 245:
                         if (Mode != OceanBaseCompatibilityMode.MySql || Charset != 63 && !HasUtf8Charset)
                             throw new NotSupportedException("Only MySQL JSON text with a supported UTF-8 or binary collation is supported.");
@@ -333,6 +337,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 205: return OceanBaseDbType.IntervalDayToSecond;
                     case 207: return OceanBaseDbType.NVarchar2;
                     case 208: return OceanBaseDbType.NChar;
+                    case 209: return OceanBaseDbType.String;
                     case 15:
                     case 253:
                     case 254:

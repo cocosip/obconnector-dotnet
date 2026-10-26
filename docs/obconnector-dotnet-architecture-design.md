@@ -360,6 +360,13 @@ SRID/WKB conversion. It adds no spatial API, geometry parameter code or GEOMETRY
 Empty/NULL and buffered/sequential text/prepared results reuse existing framing. Server emission and
 SQL/spatial interoperability require real acceptance; local fixtures do not establish them.
 
+Oracle ROWID result code209 returns an unchanged string through the existing String provider identity.
+It uses the strict session UTF-8 decoder, including when binary or unknown collation is reported;
+the identifier is not parsed or normalized. Text/prepared buffered/sequential readers share the
+ordinary length-encoded path, with empty and NULL values preserved. MySQL rejects this code. No new
+ROWID CLR type, parameter wire code or SQL inventory declaration is added. Actual server metadata,
+ROWID SQL/parameter behavior and deployment compatibility require real validation.
+
 | Result family | Accepted collation IDs | Maximum bytes per character |
 | --- | --- | ---: |
 | ASCII | 11, 65, 331, 346, 361 | 1 |
