@@ -1,5 +1,43 @@
 # Verification status and remaining work
 
+## 2026-10-26 DEC8 and TIS620 ordinary results
+
+Developed fromd842fee for P1-08/W5. DEC8 IDs3/69/338/353/368 and TIS62018/89/332/347/362 now
+select strict stateless single-byte result tables with width1. Both preserve C1 controls; DEC8 has
+its own currency/ligature mappings and TIS620 uses Thai mappings without Windows874 extensions.
+Undefined source slots throw rather than return NUL/replacement:14 DEC8 positions and nine TIS620
+positions. This follows the existing strict result policy; the TIS620 server converter itself accepts
+its FFFD placeholders. The [contract](obconnector-dotnet-architecture-design.md#result-character-sets)
+records exact source links, IDs, mapping policy and independent digest regeneration.
+
+The fixed v4.3.5_CE source is5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5. ob_ctype_extra.cc contains
+identical DEC8 Swedish/bin tables; ob_ctype_tis620_tab.h contains the TIS620 table. Each has256 entries
+and identity00–9F. The optional Python standard-library generator parses the server tables and emits
+SHA256 over big-endian scalar positions with FFFF for undefined slots. Fresh regeneration matches
+the two committed test expectations. Tests do not need Python, source downloads or a database.
+
+Initial RED12 failed on explicit unsupported-collation errors; GREEN12 passed. Expanded focused576
+passed without failures/skips, including all ten IDs, all256 bytes, strict counts/decoders, every BMP
+reverse mapping or refusal, surrogate-pair refusal, tiny decoder output/count/reset and array bounds.
+Shared ordinary-reader fixtures add32 dual-mode sync/async text/prepared buffered/sequential cases;
+pure codec/schema tests cover ordinary string/BLOB wire families. Two malformed sequential cases
+leave the fully consumed connection Open. Release solution build passed with zero warnings/errors in7.10seconds
+after fixing an ambiguous null test overload. That test-source compilation failure is recorded here
+and in session diagnostics; it was not a product failure.
+
+Affected five-asset consumers passed460 without failures/skips in2minutes10seconds. New40 consumers
+cover both new families in MySQL async text/prepared buffered/sequential reads on one.NET10host;
+other modes/sync are covered by the unit peers. No new family-specific public BLOB reader matrix was
+added. Independent source/tests review found no blockers; the reviewer did not run tests, Python or
+database operations. Final independent documentation review found no blockers; consumer status and
+malformed-reader Open-state wording were synchronized. Full units passed7140 without failures/skips
+in8minutes9seconds, a net increase of98 cases. Final diff whitespace check passed. Verification logs
+and TRX results remain under ignored TestResults/local-completeness/single-byte-*.
+No real database was accessed. Actual emission/storage, complete collation/mode/version/OBProxy/TLS/
+runtime/platform and remaining offline functionality stay open; all23 IDs/eight work packages remain
+open. No client encoding option, parameter encoding, dependency or national/JSON/CLOB expansion was
+introduced. Historical reports below retain their original scope.
+
 ## 2026-10-26 GB18030-2022 ordinary results
 
 Developed from3196a45 for P1-08/W5. Ordinary result collations216–222/330/345/360 now select a distinct

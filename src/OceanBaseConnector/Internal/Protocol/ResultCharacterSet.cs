@@ -40,6 +40,10 @@ namespace OceanBaseConnector.Internal.Protocol
             if (IsUtf16Be(collation)) return NationalCharacterSet.Utf16;
             switch (collation)
             {
+                case 3: case 69: case 338: case 353: case 368:
+                    maximumBytesPerCharacter = 1; return SingleByteResultEncoding.Dec8;
+                case 18: case 89: case 332: case 347: case 362:
+                    maximumBytesPerCharacter = 1; return SingleByteResultEncoding.Tis620;
                 case 11:
                 case 65:
                 case 331:

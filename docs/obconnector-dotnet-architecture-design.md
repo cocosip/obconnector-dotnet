@@ -455,6 +455,8 @@ ROWID SQL/parameter behavior and deployment compatibility require real validatio
 | Result family | Accepted collation IDs | Maximum bytes per character |
 | --- | --- | ---: |
 | ASCII | 11, 65, 331, 346, 361 | 1 |
+| DEC8 | 3, 69, 338, 353, 368 | 1 |
+| TIS620 | 18, 89, 332, 347, 362 | 1 |
 | MySQL latin1 (Windows-1252) | 5, 8, 15, 31, 47, 48, 49, 94, 329, 344, 359 | 1 |
 | GBK | 28, 87, 326, 341, 356 | 2 |
 | GB18030-2005 | 248, 249, 251, 328, 343, 358 | 4 |
@@ -479,6 +481,21 @@ change SQL/parameter encoding or expand national/JSON/CLOB rules. Actual server 
 version/OBProxy/TLS/runtime interoperability require separate real acceptance.
 The strict decoder rejects malformed/reserved sequences; it does not reproduce the server's lenient
 replacement behavior for otherwise unassigned byte ranges.
+
+DEC8 and TIS620 use the fixed server's
+[DEC8 tables](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_ctype_extra.cc#L91)
+and [TIS620 table](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_ctype_tis620_tab.h#L678),
+with identity mappings for00–9F, including C1 controls. DEC8 is not Latin1: A8 maps to U+00A4,
+D7/DD/F7/FD to U+0152/U+0178/U+0153/U+00FF. TIS620 is not Windows874: byte80 remains U+0080.
+Following the strict result policy, the14 DEC8 zero placeholders outside NUL and nine TIS620 FFFD
+placeholders throw DecoderFallbackException; the latter deliberately rejects the server table's
+replacement output. Defined bytes round-trip; unrepresentable characters throw EncoderFallbackException.
+The stateless decoder serves whole fields and streaming reads; both families report width1.
+The optional `python tests/fixtures/character-sets/SingleByteReference.py ob_ctype_extra.cc ob_ctype_tis620_tab.h`
+command regenerates independent all256-byte SHA256 expectations from downloaded pinned source files:
+each position contributes a two-byte big-endian scalar, or FFFF for an undefined position. Python and
+server sources are not test/runtime dependencies. Client encoding and national/JSON/CLOB rules retain
+their separate scope. Real emission/storage and deployment compatibility remain unverified.
 
 Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON and existing CLOB paths retain their UTF-8 restriction; trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope.
 

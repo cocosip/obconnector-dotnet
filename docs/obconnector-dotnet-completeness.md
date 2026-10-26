@@ -2652,6 +2652,30 @@ No real database was accessed. Historical2005 real reports do not validate2022; 
 storage, complete collation/mode/version/proxy/TLS/runtime/platform and remaining offline functionality
 stay open. All23 IDs/eight work packages remain open.
 
+### 15.76 2026-10-26 DEC8 and TIS620 ordinary results
+
+P1-08/W5, developed fromd842fee. All five DEC8 and five TIS620 IDs in the fixed v4.3.5_CE map now
+use strict single-byte result tables and width1 metadata. C1 controls remain controls; these are not
+Latin1/Windows874 aliases. All defined byte assignments match the pinned server tables. Fourteen DEC8
+zero placeholders and nine TIS620 FFFD placeholders fail explicitly, including counts/incremental
+reads; this deliberately applies the strict result policy to the server's lenient TIS620 placeholders.
+No new option/dependency, client charset negotiation or national/JSON/CLOB expansion is introduced.
+
+RED12 showed explicit unsupported-collation errors; GREEN12 and expanded focused576 passed without
+failures/skips. Independent server-table regeneration matched exhaustive256-byte SHA256 expectations.
+Every ID tests reverse BMP representation/refusal; shared fixtures add32 dual-mode sync/async reader
+cases and pure codec/schema coverage for ordinary string/BLOB types. Tiny decoder buffers, reset/count,
+array bounds and malformed sequential/Open-state are covered; valid shared readers execute reuse SQL.
+Release solution build passed with zero warnings/errors. Affected five-asset consumers460 passed
+without failures/skips, adding40 MySQL async four-shape cases on one.NET10host. Independent source/
+tests/contracts review found no blockers. Full units7140 passed without failures/skips in8minutes9seconds;
+final diff whitespace check passed. Full gate results belong in the
+[module record](obconnector-dotnet-progress.md#2026-10-26-dec8-and-tis620-ordinary-results).
+
+No real database was accessed. SJIS/Big5/HKSCS/HKSCS31 and other missing capabilities, actual server
+emission/storage and complete deployment matrices remain open. All23 IDs/eight work packages remain
+open; historical real reports do not validate this module.
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。
