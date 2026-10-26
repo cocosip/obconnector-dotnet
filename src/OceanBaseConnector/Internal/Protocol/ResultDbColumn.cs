@@ -35,7 +35,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (column.IsDecimal)
             {
                 NumericPrecision = column.Precision > 0 ? (int?)column.Precision : null;
-                NumericScale = column.Precision > 0 || column.Scale != 0 ? (int?)column.Scale : null;
+                NumericScale = column.TypeCode != 206 && (column.Precision > 0 || column.Scale != 0) ? (int?)column.Scale : null;
             }
             else
             {

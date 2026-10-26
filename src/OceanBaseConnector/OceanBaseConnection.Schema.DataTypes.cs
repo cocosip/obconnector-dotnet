@@ -117,6 +117,10 @@ namespace OceanBaseConnector
             else
             {
                 DecimalRows("NUMBER");
+                var floating = TypeRow("FLOAT", OceanBaseDbType.Decimal, typeof(OceanBaseDecimal), "FLOAT({0})", "binary precision");
+                floating["MinimumPrecision"] = 1; floating["MaximumPrecision"] = 126;
+                floating["IsFixedPrecisionScale"] = false;
+                floating["RequiredFeatures"] = "Oracle result206; binary precision, variable scale; parameters bind as NUMBER with decimal Precision";
                 Number("BINARY_FLOAT", OceanBaseDbType.Single, typeof(float), 7, minScale: null, maxScale: null);
                 Number("BINARY_DOUBLE", OceanBaseDbType.Double, typeof(double), 15, minScale: null, maxScale: null);
                 Temporal("DATE", OceanBaseDbType.OracleDate, typeof(DateTime), 0, 0);

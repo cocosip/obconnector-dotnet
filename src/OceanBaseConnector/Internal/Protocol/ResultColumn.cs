@@ -58,7 +58,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (mode == OceanBaseCompatibilityMode.Oracle && IsDecimal)
             {
                 if (precision == 255) Precision = 0;
-                if (Scale == -85) Scale = 0;
+                if (Scale == -85 && type != 206) Scale = 0;
             }
             if (mode == OceanBaseCompatibilityMode.Oracle && type == 3 && precision == 0 && scale == 0) Precision = 10;
         }
@@ -83,7 +83,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal OceanBaseCompatibilityMode Mode { get; }
         internal long Precision { get; }
         internal int Scale { get; }
-        internal bool IsDecimal => TypeCode == 0 || TypeCode == 246 || TypeCode == 3 && Mode == OceanBaseCompatibilityMode.Oracle;
+        internal bool IsDecimal => TypeCode == 0 || TypeCode == 246 || (TypeCode == 3 || TypeCode == 206) && Mode == OceanBaseCompatibilityMode.Oracle;
         internal bool IsTemporal => TypeCode == 7 || TypeCode == 10 || TypeCode == 11 || TypeCode == 12 || TypeCode == 200 || TypeCode == 201 || TypeCode == 202;
         internal bool IsMySqlDate => Mode == OceanBaseCompatibilityMode.MySql && (TypeCode == 10 || TypeCode == 12 || TypeCode == 7);
         internal Type ProviderSpecificFieldType => IsMySqlDate ? TypeCode == 10 ? typeof(OceanBaseDate) : typeof(OceanBaseDateTime) : IsDecimal ? typeof(OceanBaseDecimal) : TypeCode == 202 ? typeof(OceanBaseTimestamp) : FieldType;
@@ -191,6 +191,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 207: return "NVARCHAR2";
                     case 208: return "NCHAR";
                     case 209: return "ROWID";
+                    case 206: return Mode == OceanBaseCompatibilityMode.Oracle ? "FLOAT" : throw new NotSupportedException("NUMBER_FLOAT requires Oracle mode.");
                     case 15: return Charset == 63 ? "VARBINARY" : "VARCHAR";
                     case 253: return Charset == 63 ? "VARBINARY" : Mode == OceanBaseCompatibilityMode.Oracle ? "VARCHAR2" : "VARCHAR";
                     case 254: return Charset == 63 ? "BINARY" : "CHAR";
@@ -209,6 +210,12 @@ namespace OceanBaseConnector.Internal.Protocol
             {
                 if (IsDecimal)
                 {
+                    if (TypeCode == 206)
+                    {
+                        if (Precision > 126 || Scale != -85 && Scale != -1)
+                            throw new NotSupportedException("Oracle FLOAT requires binary precision 1 through 126 or unknown, and unknown scale.");
+                        return typeof(OceanBaseDecimal);
+                    }
                     var oracle = Mode == OceanBaseCompatibilityMode.Oracle;
                     if (Precision > (oracle ? 38 : 65) || Scale < (oracle ? -84 : 0) || Scale > (oracle ? 127 : 30) ||
                         !oracle && Precision > 0 && Scale > Precision)
@@ -498,7 +505,8 @@ namespace OceanBaseConnector.Internal.Protocol
             }
             else number = DecimalCodec.Parse(Utf8.GetString(value));
             // Oracle can report the same unknown precision/scale for binds and declared NUMBER(*,s).
-            if (constrain && (Precision > 0 || Mode != OceanBaseCompatibilityMode.Oracle && Scale != 0))
+            // FLOAT precision is binary digits and its scale is variable; the server already rounded the value.
+            if (constrain && TypeCode != 206 && (Precision > 0 || Mode != OceanBaseCompatibilityMode.Oracle && Scale != 0))
                 number = DecimalCodec.Constrain(number, Precision > 0 ? (int)Precision : Mode == OceanBaseCompatibilityMode.Oracle ? 38 : 65, Scale, Unsigned);
             DecimalCodec.Validate(number, Mode, Unsigned);
             return number;

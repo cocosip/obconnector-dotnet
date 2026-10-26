@@ -4,6 +4,58 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Oracle FLOAT results
+
+Developed from b94a421 on master for P1-08/W5. Oracle result206 now reports FLOAT
+and Decimal provider identity, always returning exact OceanBaseDecimal. Both row
+protocols use length-encoded decimal text. Binary precision1..126 (0/255 unknown)
+and unknown scale-85/-1 have their own metadata validation; results skip fixed
+decimal Constrain but keep the existing Oracle NUMBER range. Schema NumericPrecision
+retains binary digits, NumericScale is null, and DataTypes advertises FLOAT accordingly.
+The [contract](obconnector-dotnet-architecture-design.md#oracle-float-results-with-binary-precision)
+links the fixed OceanBase5d6cb5c sources establishing the type class, wire encoding,
+precision bounds, resolver scale and metadata serialization.
+
+Thirty-five new units cover exact coefficient/scale, narrow and extreme values,
+NULL, rejection of unsupported metadata/mode/tokens/range, existing NUMBER246
+rebinding, scalar output atomicity (including precision0/scale-1), NUMBER array
+outputs and metadata rejection without mutation. The shared public-reader fixture
+also checks both row protocols, sync/async, buffered/sequential, provider metadata,
+overflow from GetDecimal, a neighboring integer and subsequent connection reuse.
+Twenty new consumer cases use that fixture across five assets in one.NET10host.
+
+Independent review caught CommandBuilder copying binary FLOAT precision into decimal
+parameter Precision, rejecting FLOAT(126)/(53) and potentially valid values such as
+FLOAT(1)=700. Four new public generated-CRUD regressions failed on this copy; the
+builder now retains Precision0/undeclared scale and binds through NUMBER246. The
+reviewer independently checked the fix and all connected output/reader/schema paths
+with no remaining actionable finding.
+
+Verification: final serial Release solution build passed with zero warnings/errors
+in6.29s. Focused units204 and affected consumers229 passed, zero failures/skips;
+the two disjoint consumer runs contain88 and141 cases (18s/42s), including twenty new
+five-asset cases. Changed-file format verification exited0 with a workspace-load warning.
+Complete units7578 passed, zero failures/skips, in8minutes32seconds. Final independent
+source/tests/contracts/evidence review found no remaining actionable issue.
+
+New opt-in Oracle table/CAST tests cover FLOAT(126)/(24), exact NUMBER binding,
+NULL and buffered/sequential reads in both row protocols. Both sync/async cases and
+both existing unknown-precision NUMBER controls failed while reading the initial
+greeting, before authentication or SQL. No table was created and no FLOAT storage,
+server rounding, version or OBProxy compatibility success is established. The cause
+of the endpoint's closing connection remains unknown; it is not classified as a
+FLOAT product defect. The preceding MySQL JSON greeting failures remain historical.
+
+Original evidence is retained under ignored TestResults/local-completeness/number-float-*:
+the first test-source build failed on two unsupported test constructor calls, then
+the corrected RED build passed and all23 new feature cases failed as expected. Initial
+GREEN had22 passes/7 failures from an incorrect parameter-header index in the test;
+correcting that assertion produced111 passes. Builder RED4/4, final focused/build/format,
+consumer and real Oracle reports remain separate. FLOAT routine derivation, new
+complex codecs and other national/resource shapes remain open; all23 audit IDs and
+eight work packages remain open. No branch/worktree/push or new runtime/package
+validation is included.
+
 ## 2026-10-27 JSON parameters with client character sets
 
 Developed from1da3ea8 on master for P1-08/W5. Explicit MySQL JSON parameters already use

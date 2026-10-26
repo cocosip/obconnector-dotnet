@@ -3,13 +3,14 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27，基于1da3ea8开发；保持master，全部23项及八工作包仍开放。
-**最近完成模块：** P1-08显式MySQL JSON参数沿用选定客户端编码及type253绑定，完整单测7543、专项111及受影响消费者570通过，独立走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-json-parameters-with-client-character-sets)及第15.82节。10项实库及2项默认编码对照均在初始握手失败，不能声称JSON存储成功。
+**最近复核：** 2026-10-27，基于b94a421开发；保持master，全部23项及八工作包仍开放。
+**最近完成模块：** P1-08 Oracle NUMBER_FLOAT206精确结果、binary precision元数据及CommandBuilder绑定；完整单测7578、专项204及受影响消费者229通过，独立走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-results)及第15.83节。2项实库和2项既有NUMBER对照均在初始握手失败，未完成认证或SQL，不能声称FLOAT存储成功。
+此前JSON客户端字符集（b94a421）完整单测7543、专项111、消费者570通过；其10项实库与2项默认字符集对照握手失败保留在第15.82节。
 此前CLOB整输入预校验（1da3ea8）、客户端SQL/参数字符集（b66cda1）、会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录；[输入字符集契约](client-character-sets.md)记录当前边界。
-**当前验证：** JSON模块完整单测7543、专项111、受影响消费者570通过，均零失败/跳过；串行Release构建零警告/错误，格式验证通过（workspace-load warning），独立源码/测试/文档走查无剩余可操作问题。此前字符集模块7491/166/560及其原始失败、CLOB模块7507/26/455/1000保留于各自历史台账，不覆盖本轮实库握手失败。
+**当前验证：** FLOAT模块完整单测7578、专项204、受影响消费者229通过，均零失败/跳过；串行Release构建零警告/错误，格式验证通过（workspace-load warning），独立源码/测试/文档走查无剩余可操作问题。此前JSON、字符集及CLOB结果与原始失败保留于各自历史台账，不覆盖本轮实库握手失败。
 **历史限制：** 前一模块构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，八次独立及后续完整运行未复现；没有修改TNS或添加绕过。
 **剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向及文本REF CURSOR、复杂LOB/游标成员、压缩OB20/代理reroute、多发送/独立bulk及六项验收占位等，逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
-本轮10项JSON实库及2项默认编码对照连接尝试均止于初始greeting，未完成认证或JSON SQL，服务器/网络根因未明；后续仍需其他资源指标、负载及完整部署验收。历史TNS及本轮握手失败均保留原记录。
+本轮2项Oracle FLOAT实库及2项既有NUMBER对照连接尝试均止于初始greeting，未完成认证或SQL，服务器/网络根因未明；后续仍需其他资源指标、负载及完整部署验收。历史JSON/TNS及本轮握手失败均保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
 **文档性质：** 能力审计、公共目标契约与验收基线；已实现、部分实现、明确缺失、未验证和开发检查点分开记录。23 项及八工作包尚未整体完成。
@@ -2818,6 +2819,30 @@ greeting bytes. Underlying server/network cause is unknown; storage/proxy compat
 Original evidence is retained in the
 [module ledger](obconnector-dotnet-progress.md#2026-10-27-json-parameters-with-client-character-sets).
 All23 IDs/eight work packages remain open.
+
+### 15.83 2026-10-27 Oracle NUMBER_FLOAT results
+
+P1-08/W5, developed from b94a421 on master. Oracle result206 now uses exact
+OceanBaseDecimal/Decimal provider identity with FLOAT type name in both row protocols.
+Schema precision1..126 is binary digits, unknown0/255 is null and variable scale is
+null; only unknown wire scale-85/-1 is accepted. Fixed decimal constraints are skipped
+while existing Oracle NUMBER range validation remains. DataTypes and CommandBuilder
+honor this distinction; generated parameters/rebinding use existing NUMBER246 without
+copying binary precision. Scalar PL and existing NUMBER-array outputs retain exact
+values, NULL handling and atomic publication. No new enum/value type/dependency is added.
+
+Fixed source evidence, complete scope and test outcomes are in the
+[contract](obconnector-dotnet-architecture-design.md#oracle-float-results-with-binary-precision)
+and [module ledger](obconnector-dotnet-progress.md#2026-10-27-oracle-float-results).
+Independent review found and verified the CommandBuilder precision-copy fix.
+Complete units7578, focused204 and affected consumers229 passed, zero failures/skips;
+serial Release build has zero warnings/errors and changed-file format passed with
+a workspace-load warning. Final independent review has no remaining actionable issue.
+New real Oracle cases and existing NUMBER controls all failed at the initial greeting,
+before authentication or SQL; no real FLOAT storage/version/proxy success is claimed.
+FLOAT routine derivation, new complex member codecs and other missing shapes remain;
+all23 IDs/eight packages remain open. Earlier NUMBER_FLOAT-open statements are historical
+to their recorded candidates, including15.69.
 
 ## 16. 剩余交付工作包
 

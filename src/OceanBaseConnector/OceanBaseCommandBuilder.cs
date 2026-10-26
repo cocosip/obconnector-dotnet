@@ -105,6 +105,8 @@ namespace OceanBaseConnector
             if (type == OceanBaseDbType.Struct || type == OceanBaseDbType.Array || type == OceanBaseDbType.RefCursor || type == OceanBaseDbType.Blob || type == OceanBaseDbType.Clob)
                 throw new NotSupportedException("This column requires an explicit command and binding context.");
             target.OceanBaseDbType = type;
+            // FLOAT schema precision is binary digits; bind the exact value as an unconstrained NUMBER.
+            if (type == OceanBaseDbType.Decimal && row["DataTypeName"] as string == "FLOAT") return;
             if (type == OceanBaseDbType.Decimal)
             {
                 if (!row.IsNull(SchemaTableColumn.NumericPrecision)) target.Precision = Convert.ToByte(row[SchemaTableColumn.NumericPrecision], CultureInfo.InvariantCulture);

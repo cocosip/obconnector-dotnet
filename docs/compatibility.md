@@ -1,5 +1,17 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Oracle NUMBER_FLOAT results
+
+Oracle result206 now uses exact OceanBaseDecimal in both row protocols. FLOAT schema
+precision is binary1..126, and its variable scale is reported as null; it does not
+become a fixed decimal constraint. CommandBuilder and rebinding use NUMBER parameters
+without copying binary precision. MySQL206 and unsupported metadata remain rejected.
+The [contract and fixed source evidence](obconnector-dotnet-architecture-design.md#oracle-float-results-with-binary-precision)
+and [module ledger](obconnector-dotnet-progress.md#2026-10-27-oracle-float-results)
+record scope and verification. New opt-in Oracle tests exercise FLOAT columns/CAST,
+exact binding, NULL and both row protocols; real execution results are recorded in
+that ledger. Other national/type/resource shapes and all23 gap IDs remain open.
+
 ## 2026-10-27 Client encodings and JSON parameters
 
 The [client charset contract](client-character-sets.md) covers configured SQL/string encodings,

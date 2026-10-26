@@ -7,7 +7,16 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 ## Current checkpoint
 
 - Development stays on `master`. No new branch/worktree and no implicit push.
-- Latest local delivery: explicit MySQL JSON parameters use the configured strict client encoding
+- Latest local delivery: Oracle NUMBER_FLOAT206 results preserve exact OceanBaseDecimal,
+  binary precision metadata and variable scale. CommandBuilder binds FLOAT through existing
+  NUMBER246 without copying binary precision. Complete units7578, focused204 and affected
+  consumers229 passed, zero failures/skips. Serial Release build has zero warnings/errors;
+  format passed with a workspace-load warning and independent source/tests/docs review has
+  no remaining actionable issue. Both new real Oracle cases and both existing NUMBER controls
+  failed reading the initial greeting, before authentication or SQL; real FLOAT storage,
+  server rounding, version and OBProxy compatibility remain unverified. See the
+  [module record](obconnector-dotnet-progress.md#2026-10-27-oracle-float-results).
+- Previous local delivery: explicit MySQL JSON parameters (`b94a421`) use the configured strict client encoding
   through the existing type253 string binding. Complete units7543, focused111 and affected
   consumers570 passed, zero failures/skips; independent source/tests/docs review found no actionable issue.
   Release build has zero warnings/errors and format verification passed with a workspace-load warning.

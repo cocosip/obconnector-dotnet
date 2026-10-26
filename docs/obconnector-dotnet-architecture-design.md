@@ -397,6 +397,7 @@ The encoded execution request is limited to 64 MiB; Oracle upload bytes count af
 | Database value | CLR / provider access |
 | --- | --- |
 | DECIMAL / NUMBER | `decimal` for reliable precision 1–28 and nonnegative scale within precision; otherwise `OceanBaseDecimal`. `GetProviderSpecificValue` preserves `OceanBaseDecimal` for either shape. |
+| Oracle FLOAT (NUMBER_FLOAT206) | Always `OceanBaseDecimal`, with Decimal provider identity; binary precision is distinct from decimal parameter Precision. |
 | Oracle DATE | `DateTime` with `Kind=Unspecified`, including time of day. |
 | Oracle TIMESTAMP | `DateTime` for declared precision <=7; `OceanBaseTimestamp` for 8/9. Provider-specific access preserves nanoseconds at every precision. |
 | Oracle TIMESTAMP WITH TIME ZONE | `OceanBaseTimestampWithTimeZone`; exact explicit conversion to `DateTimeOffset`. |
@@ -415,6 +416,43 @@ Oracle may report precision zero and scale -1 for both a bound expression and a 
 Schema reports the server metadata (`NumericPrecision=null` when unknown and the advertised `NumericScale`); it does not substitute the value's scale into the column definition. Unknown-precision results remain `OceanBaseDecimal`, and typed `decimal` conversions remain exact. The value representation can change: returned text `"40"` now has coefficient 40 and value scale 0 rather than being rescaled to coefficient 4/scale -1. `GetProviderSpecificValue`, `GetValue` and typed reads agree numerically. This does not undo server-side rounding of a declared column: a server-rounded value of 40 stays 40.
 
 Direct Oracle 4.4.2.2/Windows/.NET10/TLS-disabled evidence covers prepared integer/fractional bindings and declared/cast negative scales. It does not establish other versions, OBProxy, TLS or independent-runtime compatibility. See the [module record](obconnector-dotnet-completeness.md#1537-2026-10-25-oracle-未知精度-number-结果读取).
+
+### Oracle FLOAT results with binary precision
+
+Oracle result206 is FLOAT, a NUMBER subtype. Both row protocols carry length-encoded
+decimal text. `GetValue`, `GetFieldValue<OceanBaseDecimal>` and provider-specific access
+preserve its exact coefficient and value scale; `GetDecimal` converts exactly or throws.
+This is distinct from the IEEE BINARY_FLOAT/BINARY_DOUBLE result types4/5.
+
+`GetDataTypeName` reports `FLOAT`; the provider type is `OceanBaseDbType.Decimal`.
+Column schema exposes the server's **binary** NumericPrecision1..126 (null for0/255)
+and null NumericScale. Wire scale-85/-1 means variable scale; other206 scale shapes,
+precision127..254 and MySQL206 are rejected, including SQL NULL. Binary precision
+does not constrain decimal digits or rescale the value. Existing Oracle NUMBER
+significant-digit/exponent validation still applies; nondecimal/special tokens fail.
+
+DataTypes advertises `FLOAT({0})` with binary precision1..126, no fixed scale and
+OceanBaseDecimal. Rebinding and generated CommandBuilder CRUD parameters use existing
+NUMBER246 binding with no copied binary precision/scale. A manually supplied parameter
+Precision continues to mean decimal digits. There is no new FLOAT parameter enum,
+IEEE conversion, FLOAT routine-derivation support or new complex member codec.
+Scalar PL outputs and existing NUMBER-array output metadata can also receive206.
+
+Source contract is pinned to OceanBase
+[`5d6cb5c`](https://github.com/oceanbase/oceanbase/tree/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5):
+[`ObNumberFloatType`](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/common/object/ob_obj_type.h)
+belongs to ObNumberTC;
+[`ObSMUtils`](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/observer/mysql/obsm_utils.cpp)
+maps it to206 and calls
+[`number_cell_str`](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp),
+which formats decimal text and stores its length without a protocol branch.
+[`ob_define.h`](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/ob_define.h)
+defines precision1..126/unknown scale-85, and the
+[`resolver`](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/sql/resolver/ob_resolver_utils.cpp)
+sets the unknown scale.
+[`ObMySQLField`](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/rpc/obmysql/ob_mysql_field.cpp)
+serializes precision and scale into Oracle metadata bytes. These sources and local
+protocol fixtures do not establish a real deployment/version/proxy compatibility pass.
 
 ### Oracle floating special text results
 
