@@ -2941,6 +2941,13 @@ P1-06/W5：Oracle 纯 `Output`/`ReturnValue` 的 REF CURSOR 输出捕获现在�
 证明本地输出 framing，REF CURSOR Input/InputOutput、其他输出形状和真实 OceanBase/OBProxy
 互操作仍开放。
 
+### 15.90 2026-10-27 Oracle 输出行形状严格校验
+
+P1-06/W5：标量 Oracle 输出解码在索引 row 前校验 metadata 和 row 的长度都等于绑定输出参数数，
+畸形 framing 统一报告 `ProtocolException`，不再泄漏 `IndexOutOfRangeException`。新增一项
+REF CURSOR 直接计划回归；这只证明本地协议边界，REF CURSOR Input/InputOutput、其他输出形状
+和真实 OceanBase/OBProxy 互操作仍开放。
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。

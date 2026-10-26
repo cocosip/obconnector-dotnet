@@ -779,6 +779,9 @@ Pure output and return-value rows must carry exactly one four-byte little-endian
 output capture path validates the width before consulting the originating cursor owner, so trailing or
 truncated identifiers fail as malformed protocol data.
 
+Scalar Oracle output rows must also contain exactly one value per bound output parameter. A mismatched
+metadata or row shape is rejected as malformed protocol data before value decoding.
+
 ### REF CURSOR result limits
 
 GetDataReader/GetDataReaderAsync accept SingleRow and SingleResult together with SequentialAccess

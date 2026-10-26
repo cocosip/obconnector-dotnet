@@ -122,6 +122,18 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal("A cursor identifier requires four bytes.", error.Message);
         }
 
+        [Fact]
+        public void RefCursorOutputCaptureRejectsMismatchedRowShape()
+        {
+            var parameters = new OceanBaseParameterCollection();
+            parameters.Add(new OceanBaseParameter { ParameterName = "c", Direction = ParameterDirection.Output, OceanBaseDbType = OceanBaseDbType.RefCursor });
+            var plan = OracleCommandPlan.Create("pkg.open_cursor", CommandType.StoredProcedure, parameters);
+            var column = ResultColumn.Parse(Column("c", 163), OceanBaseCompatibilityMode.Oracle);
+
+            var error = Assert.Throws<ProtocolException>(() => plan.CaptureOutput(new[] { column }, Array.Empty<byte[]?>()));
+            Assert.Equal("Oracle output metadata and row do not match the bound output parameters.", error.Message);
+        }
+
         [Theory]
         [InlineData(false, false)]
         [InlineData(true, false)]

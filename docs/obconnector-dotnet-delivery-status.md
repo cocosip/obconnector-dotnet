@@ -18,6 +18,10 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   family passes 426/426 and no-TLS affected consumers pass 220/220; TLS/PFX consumer
   and full unit failures are environment-bound. Real OceanBase/OBProxy complex-Lob interoperability
   is unverified. See the [module record](obconnector-dotnet-progress.md#2026-10-27-oracle-complex-lob-result-members).
+- Current local delivery: Oracle REF CURSOR output framing now validates exact four-byte identifiers
+  and metadata/row shape before decoding. The focused REF CURSOR selection passes 143/143; this is
+  local protocol evidence only, while Input/InputOutput directions and real OceanBase/OBProxy
+  interoperability remain open. See the [module record](obconnector-dotnet-progress.md#2026-10-27-oracle-output-row-shape-validation).
 - Latest local delivery, developed from184a767: Oracle FLOAT/NUMBER_FLOAT routine derivation keeps
   binary precision out of Decimal constraints, normalizes INOUT and exposes raw numeric
   metadata. Numeric signatures omit CHAR_LENGTH; character signatures require a matching

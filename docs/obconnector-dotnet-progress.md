@@ -19,6 +19,14 @@ The focused complex-result selection passes with zero failures or skips, includi
 four malformed-identifier cases plus anonymous type163 metadata. These fixtures prove local framing
 and ownership only; they do not establish server SQL, proxy, version or deployment compatibility.
 
+## 2026-10-27 Oracle output row-shape validation
+
+P1-06/W5 adds an explicit protocol guard before scalar Oracle output decoding. Metadata and row arrays
+must both match the bound output parameter count; malformed framing now raises `ProtocolException`
+instead of leaking an index exception. The REF CURSOR output selection passes 143/143 after adding
+the mismatched-row regression. This remains local protocol evidence only and does not add new cursor
+directions or real OceanBase/OBProxy interoperability.
+
 ## 2026-10-27 Oracle output cursor identifier validation
 
 P1-06/W5 closes a local validation hole in the Oracle output capture path. Pure output/return-value

@@ -69,6 +69,8 @@ namespace OceanBaseConnector.Internal.Sql
         internal void CaptureOutput(ResultColumn[] columns, byte[]?[] row)
         {
             if (ArrayBinding != null) { ArrayBinding.Capture(columns, row); return; }
+            if (columns.Length != Outputs.Length || row.Length != Outputs.Length)
+                throw new ProtocolException("Oracle output metadata and row do not match the bound output parameters.");
             if (_values != null) throw new NotSupportedException("Scalar Oracle output parameters cannot contain multiple rows.");
             var values = new object[Outputs.Length];
             for (var i = 0; i < values.Length; i++)
