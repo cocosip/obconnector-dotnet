@@ -1,5 +1,6 @@
 using System;
 using System.Data.Common;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -16,6 +17,66 @@ namespace OceanBaseConnector.ConsumerTests
     public sealed class BatchConsumerTests
     {
         [Theory]
+        [InlineData("net8.0", false, false)]
+        [InlineData("net8.0", true, false)]
+        [InlineData("net8.0", false, true)]
+        [InlineData("net8.0", true, true)]
+        [InlineData("net9.0", false, false)]
+        [InlineData("net9.0", true, false)]
+        [InlineData("net9.0", false, true)]
+        [InlineData("net9.0", true, true)]
+        [InlineData("net10.0", false, false)]
+        [InlineData("net10.0", true, false)]
+        [InlineData("net10.0", false, true)]
+        [InlineData("net10.0", true, true)]
+        public async Task ModernAssetsConsumeRewrittenBatchCountsAndFailureGroups(string target, bool asynchronous, bool dataSource)
+        {
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
+            using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
+            var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
+            var serving = Task.Run(async () =>
+            {
+                for (var attempt = 0; attempt < (dataSource ? 2 : 1); attempt++)
+                {
+                    using var peer = await listener.AcceptTcpClientAsync(budget.Token); var channel = new PacketChannel(peer.GetStream());
+                    await channel.WritePacketAsync(greeting, budget.Token); await channel.ReadPacketAsync(budget.Token);
+                    await channel.WritePacketAsync(new byte[] { 0, 0, 0, 2, 0, 0, 0 }, budget.Token);
+                    await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyAsync(channel, oracle: false, token: budget.Token);
+                    for (var execution = dataSource ? attempt : 0; execution < (dataSource ? attempt + 1 : 2); execution++)
+                    {
+                        channel.BeginCommand(); var request = await channel.ReadPacketAsync(budget.Token); Assert.Equal(3, request[0]);
+                        Assert.Equal("insert into t values (1),(1)", Encoding.UTF8.GetString(request, 1, request.Length - 1));
+                        await channel.WritePacketAsync(execution == 0 ? new byte[] { 0, 2, 0, 2, 0, 0, 0 } : new byte[] { 255, 40, 4, 35, 52, 50, 48, 48, 48 }, budget.Token);
+                    }
+                    Assert.Equal(0, await peer.GetStream().ReadAsync(new byte[1], budget.Token));
+                }
+            });
+            var context = new AssemblyLoadContext("batch-rewrite-" + target, true);
+            try
+            {
+                var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
+                var factory = (DbProviderFactory)assembly.GetType("OceanBaseConnector.OceanBaseProviderFactory")!.GetField("Instance")!.GetValue(null)!;
+                using var connection = factory.CreateConnection()!; connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;Password=secret;TLS Mode=Disabled";
+                await using var source = factory.CreateDataSource(connection.ConnectionString);
+                using var batch = dataSource ? source.CreateBatch() : connection.CreateBatch();
+                if (!dataSource) await connection.OpenAsync(budget.Token);
+                var option = batch.GetType().GetProperty("RewriteBatchedInserts")!; Assert.Equal(false, option.GetValue(batch)); option.SetValue(batch, true);
+                var one = batch.CreateBatchCommand(); one.CommandText = "insert into t values (1)"; batch.BatchCommands.Add(one);
+                var two = batch.CreateBatchCommand(); two.CommandText = one.CommandText; batch.BatchCommands.Add(two);
+                Assert.Equal(2, asynchronous ? await batch.ExecuteNonQueryAsync(budget.Token) : batch.ExecuteNonQuery());
+                Assert.Equal(1, one.RecordsAffected); Assert.Equal(1, two.RecordsAffected);
+                var failure = await Assert.ThrowsAnyAsync<DbException>(() => asynchronous ? batch.ExecuteNonQueryAsync(budget.Token) : Task.FromResult(batch.ExecuteNonQuery()));
+                Assert.Null(failure.BatchCommand);
+                var group = Assert.IsAssignableFrom<IReadOnlyList<DbBatchCommand>>(failure.GetType().GetProperty("BatchCommandGroup")!.GetValue(failure));
+                Assert.Equal(new[] { one, two }, group); Assert.Equal(-1, one.RecordsAffected); Assert.Equal(-1, two.RecordsAffected);
+                var list = Assert.IsAssignableFrom<IList<DbBatchCommand>>(group); Assert.Throws<NotSupportedException>(() => list[0] = two);
+                connection.Close(); await serving;
+            }
+            finally { context.Unload(); listener.Stop(); }
+        }
+
+        [Theory]
         [InlineData("netstandard2.0")]
         [InlineData("netstandard2.1")]
         public void StandardAssetsDoNotExposeModernBatchTypes(string target)
@@ -25,6 +86,7 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
                 foreach (var name in new[] { "OceanBaseBatch", "OceanBaseBatchCommand", "OceanBaseBatchCommandCollection", "OceanBaseBatchReader" }) Assert.Null(assembly.GetType("OceanBaseConnector." + name));
+                Assert.Null(assembly.GetType("OceanBaseConnector.OceanBaseException")!.GetProperty("BatchCommandGroup"));
                 using var connection = (DbConnection)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!)!;
                 Assert.False(connection.CanCreateBatch); Assert.Throws<NotSupportedException>(() => connection.CreateBatch());
             }

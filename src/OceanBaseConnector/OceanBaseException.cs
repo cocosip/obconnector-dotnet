@@ -46,6 +46,9 @@ namespace OceanBaseConnector
         /// <summary>True when a sent command's outcome cannot be determined.</summary>
         public bool IsExecutionOutcomeUnknown { get; }
 #if NET8_0_OR_GREATER
+        /// <summary>Original commands in a failed rewritten statement, in order; null for unmerged execution.
+        /// The collection is immutable; the command objects belong to the caller.</summary>
+        public System.Collections.Generic.IReadOnlyList<DbBatchCommand>? BatchCommandGroup { get; internal set; }
         internal DbBatchCommand? FailedBatchCommand { get; set; }
         protected override DbBatchCommand? DbBatchCommand => FailedBatchCommand;
 #endif

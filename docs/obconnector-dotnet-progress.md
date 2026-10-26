@@ -1,5 +1,50 @@
 # Verification status and remaining work
 
+## 2026-10-26 MySQL batch INSERT rewrite
+
+Developed from `7c1a602` for P2-03/W7. Modern OceanBaseBatch now exposes opt-in
+RewriteBatchedInserts for NonQuery sync/async. Adjacent identical single-tuple MySQL INSERT VALUES
+commands combine into bounded groups while retaining server-bound inputs. Stream rows are singleton
+boundaries, with no pre-read or caller disposal. Default, Oracle, Reader/Scalar/Prepare and unsupported
+syntax/directions retain sequential execution. The [contract](obconnector-dotnet-architecture-design.md#batch-insert-rewrite)
+defines mode-invariant parsing,65535 row/parameter and independent64MiB SQL/inline limits, transaction/
+reservation/session ownership and cancellation, group counts and read-only exact error attribution.
+Opting in changes statement/autocommit, default/expression/trigger/warning and timeout boundaries.
+
+New units78, new consumers12. Focused92 passed with no failures/skips, including14 retained legacy
+batch cases. Parser coverage includes comments, quoting/modes, unsupported suffixes and marker shapes.
+Loopback/fault checks include mixed bindings across NULL bitmap bytes, streams, transactions, SQL
+ordering, prepare errors/partial sends, cancellation/timeout, concurrent Dispose/Async, group count
+mismatch, immutable reference snapshots, no suffix replay, batch reuse and reopened-session isolation.
+Reflection planning checks cover65535 row/parameter thresholds and exact/over64MiB SQL and inline
+requests; these are not real large-packet transport/server evidence. The timer-based large-SQL caller
+cancellation case reproduced token loss and now passes; its timer does not synchronize a parser phase,
+so an individual passing run can include cancellation before scanning.
+
+Retained RED evidence: missing option1; public grouping2; missing parser18; premature failure callback
+release2; NUL in comments1; planning caller token1; deterministic fallback-singleton Dispose race1;
+null SQL validation1. The last race holds an earlier original item's Release while the active later
+singleton has not been released: original code sent SQL after reservation release, while the fix
+rejects Start as disposed before releasing ownership. Failure-only singleton cleanup remains reusable.
+Development peer sequence/queued-close, missing using and wrong MySQL isolation-default failures are
+retained separately. Independent source/tests/docs review identified the release races and checked
+the remaining connected paths; the reviewer ran no tests or real database operations.
+
+The superseded full-unit run was explicitly terminated after the final review fixes, with6876 passed,
+no reported failures/skips and no completed suite result; the resulting host-aborted/crash message
+records that intentional termination, not an unexplained driver crash. Its353 affected consumers had
+passed. Final candidate: solution Release build passed with zero warnings/errors,9.01seconds;
+full units6887 passed, no failures/skips,8minutes11seconds; affected Batch/transaction/ambient/cache
+consumers353 passed, no failures/skips,1minute4seconds. The consumer matrix runs five assets in one
+.NET10 host; the12 new rewrite cases use the three modern assets, sync/async, connection/data-source
+batches, success followed by trusted group failure and reuse. Standard assets additionally assert
+the modern group property is absent. Independent source/tests/docs review has no remaining blockers
+after regression fixes; git diff --check passed. No current-candidate package/runtime claim is made.
+No real database was accessed in this module. Actual SQL, triggers/defaults/warnings, server/proxy
+packet limits, OBProxy, TLS/compression and throughput/memory comparisons remain open. Multi-send/
+pipelining and a separate bulk protocol remain missing. All23 gap IDs/eight work packages remain open.
+Prior national/ROWID/package/runtime/live reports below are historical to their respective candidates.
+
 ## 2026-10-26 National Unicode collation mapping
 
 Developed from `f3c484d` for P1-08/W5. NationalCharacterSet previously accepted only six UTF-8 and

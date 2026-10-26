@@ -8,8 +8,9 @@ using OceanBaseConnector.Internal.Session;
 
 namespace OceanBaseConnector
 {
-    /// <summary>Executes commands sequentially without an implicit transaction or automatic replay.</summary>
-    public sealed class OceanBaseBatch : DbBatch
+    /// <summary>Executes commands sequentially by default, with optional MySQL INSERT rewriting.
+    /// No implicit transaction or automatic replay is added.</summary>
+    public sealed partial class OceanBaseBatch : DbBatch
     {
         internal object Gate { get; } = new object();
         private readonly OceanBaseBatchCommandCollection _commands;
@@ -17,12 +18,16 @@ namespace OceanBaseConnector
         private OceanBaseTransaction? _transaction;
         private int _timeout = OceanBaseConnectionStringBuilder.DefaultCommandTimeoutSeconds;
         private bool _disposed;
+        private bool _rewriteBatchedInserts;
         private readonly bool _ownsConnection;
         private Operation? _operation;
         public OceanBaseBatch() => _commands = new OceanBaseBatchCommandCollection(this);
         internal OceanBaseBatch(OceanBaseConnection connection) : this() { _connection = connection; _ownsConnection = true; }
         protected override DbBatchCommandCollection DbBatchCommands => _commands;
         public override int Timeout { get => _timeout; set { lock (Gate) { CheckMutable(); if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _timeout = value; } } }
+        /// <summary>Combine eligible adjacent MySQL INSERT VALUES commands during ExecuteNonQuery.
+        /// Disabled by default; merged rows share one statement's execution and failure semantics.</summary>
+        public bool RewriteBatchedInserts { get => _rewriteBatchedInserts; set { lock (Gate) { CheckMutable(); _rewriteBatchedInserts = value; } } }
         protected override DbConnection? DbConnection
         {
             get => _ownsConnection ? throw new NotSupportedException("A data source batch owns its connection.") : _connection;
@@ -101,10 +106,12 @@ namespace OceanBaseConnector
         }
         public override int ExecuteNonQuery()
         {
+            if (_rewriteBatchedInserts) return ExecuteRewrittenNonQuery(false, CancellationToken.None).GetAwaiter().GetResult();
             using var reader = ExecuteReader(); do { while (reader.Read()) { } } while (reader.NextResult()); return reader.RecordsAffected;
         }
         public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken = default)
         {
+            if (_rewriteBatchedInserts) return await ExecuteRewrittenNonQuery(true, cancellationToken).ConfigureAwait(false);
             await using var reader = await ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             do { while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) { } } while (await reader.NextResultAsync(cancellationToken).ConfigureAwait(false)); return reader.RecordsAffected;
         }
@@ -165,6 +172,8 @@ namespace OceanBaseConnector
             private readonly OceanBaseBatch _batch;
             private readonly CancellationTokenSource _cancel;
             private bool _ended;
+            private OceanBaseCommand? _active;
+            private bool _ownsActive;
             internal Operation(OceanBaseBatch batch, OceanBaseConnection connection, CancellationToken token, CommandBehavior behavior)
             { _batch = batch; Connection = connection; Behavior = behavior; CallerToken = token; _cancel = CancellationTokenSource.CreateLinkedTokenSource(token); Token = _cancel.Token; }
             internal OceanBaseConnection Connection { get; }
@@ -185,22 +194,42 @@ namespace OceanBaseConnector
             internal OceanBaseCommand[] Commands { get; set; } = Array.Empty<OceanBaseCommand>();
             internal int[] Counts { get; set; } = Array.Empty<int>();
             internal OceanBaseBatchReader? Reader { get; set; }
+            internal void Activate(OceanBaseCommand command, bool owned)
+            {
+                lock (_batch.Gate)
+                {
+                    if (_ended) throw new ObjectDisposedException(nameof(OceanBaseBatch));
+                    _active = command; _ownsActive = owned;
+                }
+            }
+            internal void Deactivate(OceanBaseCommand command)
+            { lock (_batch.Gate) { if (ReferenceEquals(_active, command)) _active = null; } }
             internal void Fail() { Reader?.Abort(); Dispose(); }
             internal void Cancel() { try { _cancel.Cancel(); } catch (ObjectDisposedException) { } }
             public void Dispose()
             {
+                OceanBaseCommand? active; bool owned;
                 lock (_batch.Gate)
                 {
                     if (_ended) return; _ended = true;
-                    Session?.ReleaseReservation(this);
-                    foreach (var command in Commands)
+                    active = _active; owned = _ownsActive || _batch._disposed; _active = null;
+                }
+                // Cancel the reachable command before releasing its reservation or linked token source.
+                try { if (owned) active?.Dispose(); else active?.Cancel(); }
+                finally
+                {
+                    lock (_batch.Gate)
                     {
-                        if (command == null || !ReferenceEquals(command.SessionOwner, this)) continue;
-                        command.SessionOwner = null; command.RequiredSession = null; command.CancellationOrigin = null;
-                        command.BatchFailed = null; command.BatchCommand = null;
+                        Session?.ReleaseReservation(this);
+                        foreach (var command in Commands)
+                        {
+                            if (command == null || !ReferenceEquals(command.SessionOwner, this)) continue;
+                            command.SessionOwner = null; command.RequiredSession = null; command.CancellationOrigin = null;
+                            command.BatchFailed = null; command.BatchCommand = null;
+                        }
+                        if (ReferenceEquals(_batch._operation, this)) _batch._operation = null;
+                        _cancel.Dispose();
                     }
-                    if (ReferenceEquals(_batch._operation, this)) _batch._operation = null;
-                    _cancel.Dispose();
                 }
             }
         }

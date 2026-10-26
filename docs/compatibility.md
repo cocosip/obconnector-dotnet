@@ -1,5 +1,20 @@
 # Compatibility and known gaps
 
+## 2026-10-26 MySQL batch INSERT rewrite
+
+Modern batches expose opt-in RewriteBatchedInserts for NonQuery only. Eligible adjacent identical
+single-tuple MySQL INSERT VALUES commands share a bounded statement with server-bound inputs.
+Unsupported syntax, Oracle, streams, reader/scalar/Prepare retain sequential execution. Merged
+failures expose an immutable exact BatchCommandGroup; individual counts are unknown if the successful
+server total differs from the row count. Rewriting changes statement/autocommit, default/expression/
+trigger/warning and timeout boundaries; no replay or implicit transaction is introduced.
+See the [public contract](obconnector-dotnet-architecture-design.md#batch-insert-rewrite) and
+[local delivery evidence](obconnector-dotnet-progress.md#2026-10-26-mysql-batch-insert-rewrite).
+
+Local protocol and target-asset checks do not establish actual SQL semantics or faster throughput.
+Real server limits, direct/OBProxy, transactions/triggers/defaults, TLS/compression, load/memory and
+deployment validation remain open. Multi-send/pipelining and a separate bulk protocol are still missing.
+
 ## 2026-10-26 National Unicode collation mapping
 
 Oracle national fallback and charset-name discovery now recognize the same118 UTF-8 and29 UTF-16BE

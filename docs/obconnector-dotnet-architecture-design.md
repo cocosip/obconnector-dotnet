@@ -269,11 +269,49 @@ is added. Batch-wide SingleRow/SingleResult limits are described [below](#batch-
 
 OceanBaseDataSource.CreateBatch returns a provider batch with an owned connection and supports direct
 CreateBatchCommand. Each execution opens its connection; reader closure closes or returns that lease.
-Scalar/nonquery executions drain and dispose their reader. Failure and disposal also clean up the owned
+Scalar/nonquery executions drain their results. Failure and disposal also clean up the owned
 connection. Connection/Transaction getters/setters and standalone Prepare remain unsupported. Open may
 join the ambient single-resource transaction. The source command timeout is the batch default. Normal
 connection batches keep caller-owned connection behavior. Standard assets expose no modern batch API.
 See [local evidence and remaining acceptance](obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
+
+### Batch INSERT rewrite
+
+Modern `OceanBaseBatch.RewriteBatchedInserts` defaults to false. When enabled, only ExecuteNonQuery
+and ExecuteNonQueryAsync combine adjacent ordinal-identical MySQL Text commands containing one
+`INSERT INTO ... VALUES (tuple)`. Parameters remain server-bound in original row/parameter order;
+values are never interpolated into SQL. Quoted identifiers, ordinary comments and nested expressions
+are retained; one trailing semicolon is removed. Tuple boundaries and every marker position must agree
+with/without backslash escapes and ANSI_QUOTES. IGNORE, duplicate-key updates, RETURNING, SELECT/SET,
+multiple tuples/statements, executable comments and ambiguous/unsupported syntax fall back sequentially.
+The conservative parser also falls back above262144 lexical tokens. Oracle, reader/scalar/Prepare
+and default batches retain their sequential paths. Only Input parameters are eligible. Every row
+containing a Stream is a singleton boundary: planning never reads or disposes caller streams.
+
+Chunks contain at most65535 rows/parameters, with independent64MiB budgets for UTF-8 SQL including
+its command byte and inline EXECUTE including its10-byte header, combined NULL bitmap, types and
+encoded values. Planning validates/encodes one row at a time; it does not retain all encoded rows.
+Actual server/proxy max_allowed_packet may be smaller. Original batch snapshots still retain the
+whole batch; these limits do not promise bounded overall batch memory or a throughput improvement.
+One reservation, the captured physical session/Open generation, explicit or ambient transaction and
+caller cancellation origin remain in force. The active temporary command is reachable by Dispose/
+DisposeAsync before its reader is available. No implicit transaction or automatic replay is added.
+
+On successful group total==rows, each original RecordsAffected is1. Otherwise individual counts
+remain-1 and ExecuteNonQuery retains the independent server total, including zero. Confirmed prefix
+counts survive a failure; failed group and unstarted suffix counts remain-1. A merged OceanBaseException
+has BatchCommand=null and BatchCommandGroup containing a read-only snapshot of the exact original
+command references in order. Commands themselves remain caller-owned/mutable after execution.
+For unmerged errors BatchCommand retains its existing attribution and BatchCommandGroup is null.
+Sent cancellation/timeout/transport failure preserves the existing unknown-outcome rule; no group
+index or count is a safe restart position. Failure callbacks retain the merged group's reservation
+until outer cleanup; SQL/binds/credentials are omitted from error messages.
+
+Opting in changes statement atomicity and autocommit boundaries, default/expression/trigger/warning
+behavior, and timeout granularity (one command budget per merged group). Per-entry semantic equivalence
+is not promised. Applications needing whole-batch atomicity must supply a transaction. Local protocol,
+fault and target-asset tests do not establish real SQL semantics, performance, proxy or deployment
+compatibility. Multi-send/pipelining and a separate bulk protocol remain unimplemented.
 
 ### Batch result limits
 
@@ -458,7 +496,7 @@ Assign the active transaction to each business command. MySQL supports ReadUncom
 
 On .NET 8/9/10, `Save(name)` and `Rollback(name)` operate on the active transaction; `Release(name)` is MySQL-only. Names must contain 1–30 ASCII letters/digits/underscores and start with a letter. Leading underscores, including `__EFSavePoint`, are rejected. Reacquire LOBs, cursors and complex-type values after savepoint rollback.
 
-Batches execute sequentially. A later failure does not undo earlier entries; use an explicit transaction for transactional writes. `RecordsAffected` cannot identify a safe restart position.
+Batches execute sequentially by default; the [opt-in MySQL INSERT rewrite](#batch-insert-rewrite) combines eligible entries into statements. A later failure does not undo earlier statements; use an explicit transaction for transactional writes. `RecordsAffected` cannot identify a safe restart position.
 
 | Result | Application action |
 | --- | --- |
