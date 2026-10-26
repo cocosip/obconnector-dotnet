@@ -17,8 +17,8 @@ namespace OceanBaseConnector.Internal.Protocol
         internal void BindCursorResult(bool binary, OceanBaseConnector.Internal.Session.OracleCursorOwner? owner)
         {
             if (TypeCode != 163) return;
-            if (!binary || Mode != OceanBaseCompatibilityMode.Oracle || owner?.HasParent != true)
-                throw new NotSupportedException("Cursor columns require a binary Oracle result and its originating statement or cursor.");
+            if (Mode != OceanBaseCompatibilityMode.Oracle || owner == null || binary && !owner.HasParent)
+                throw new NotSupportedException("Cursor columns require an Oracle result and their originating execution.");
             _cursors = owner;
         }
         internal void TrackCursor(byte[]? value)
@@ -366,7 +366,7 @@ namespace OceanBaseConnector.Internal.Protocol
             RequireComplexResult(false);
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
-            if (TypeCode == 163) throw new NotSupportedException("REF CURSOR columns require the binary Oracle result protocol.");
+            if (TypeCode == 163) return (_cursors ?? throw new NotSupportedException("A REF CURSOR requires its originating execution.")).Publish(CursorId(value));
             if (TypeCode == 210 || TypeCode == 211) return new OceanBaseLob(Lobs!, value, TypeCode == 211);
             if (TypeCode == 13) return YearCodec.Decode(value, false);
             if (TypeCode == 16) return BitCodec.Decode(value, (int)Length);

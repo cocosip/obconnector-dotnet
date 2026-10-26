@@ -735,12 +735,14 @@ independent. UseCursorOffset rejects this shape after final prepare metadata, be
 or target execution; this also applies to KeyInfo rewriting. SchemaOnly ignores these hints as before.
 This follows the fixed Java source policy and does not prove real-server support for SELECT CURSOR.
 
-Ordinary Oracle cursor columns use the binary result protocol: call `Prepare()`/`PrepareAsync()` for a
-plain parameterless command, or use an existing binary path such as KeyInfo, positive FetchSize or
+Prepared ordinary Oracle cursor columns use the binary result protocol: call `Prepare()`/`PrepareAsync()`
+for a plain parameterless command, or use an existing binary path such as KeyInfo, positive FetchSize or
 server-prepared input parameters. Ordinary COM_STMT_EXECUTE cursor columns must declare type163 during
 preparation; unowned unexpected cursor metadata is rejected and its session retired. Nested fetches and
-procedure-owned ordinary results use their existing execution owner. Text cursor values remain unsupported. `Use Oracle Prepare Execute=true` is required for OUT
-parameters, not for an ordinary binary cursor column.
+procedure-owned ordinary results use their existing execution owner. Text ordinary results may also carry a cursor
+column: the value must be exactly the same four-byte little-endian cursor identifier used by binary rows,
+and the execution owner remains responsible for publication and cleanup. Other text shapes are rejected.
+`Use Oracle Prepare Execute=true` is required for OUT parameters, not for an ordinary binary cursor column.
 
 `GetValue`, provider-specific getters and compatible `GetFieldValue<T>` calls return the same single-use
 `OceanBaseRefCursor` for aliases of an ID within an execution. NULL returns `DBNull.Value`. Consume the
@@ -761,9 +763,10 @@ the command/idle statement cache; later execution prepares again. KeyInfo transf
 statement when applicable; SchemaOnly only returns metadata and allocates no cursor handles.
 
 Fixed Connector/J6adc311 has public JDBC4ResultSet.getObject -> getComplexCursor -> four-byte binary
-decoding, which supports the wire design. This is source/local-fixture evidence, not actual SQL acceptance.
-The ordinary cursor-column integration case remains unverified: current oracle-direct attempts fail before
-the greeting and do not execute SQL. REF CURSOR Input/InputOutput, text columns, other output/complex
+decoding, which supports the identifier wire design; its text row implementation still returns no cursor.
+The .NET text path is therefore a local protocol extension and remains unverified against actual SQL.
+Current oracle-direct attempts fail before the greeting and do not execute SQL. REF CURSOR Input/InputOutput,
+other output/complex
 shapes and real database/OBProxy/TLS/platform/runtime acceptance remain open.
 
 ### Procedures and REF CURSOR
@@ -787,8 +790,8 @@ Close/Dispose before exhaustion keeps the existing rule: the unfinished physical
 it does not silently fetch all rows. CloseConnection still closes only the original logical lease.
 Parent-command disposal, cursor single use and transaction/session ownership are unchanged. SchemaOnly,
 KeyInfo and unknown flags reject before taking the cursor; a corrected call can still open it once.
-These flags apply to output and binary result-column cursors through the same public object. They do
-not add cursor Input/InputOutput or text cursor columns. See [evidence and open acceptance](obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制).
+These flags apply to output and binary or text result-column cursors through the same public object.
+They do not add cursor Input/InputOutput. See [evidence and open acceptance](obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制).
 
 <a id="oracle-standalone-prepare"></a>
 ### Oracle standalone preparation

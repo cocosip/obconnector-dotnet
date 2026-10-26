@@ -19,6 +19,23 @@ PFX fixture before the pool or metric path runs. No real database, proxy or load
 Release build, complete-suite and performance/overhead gates remain separate; additional resource
 waits beyond the pool semaphore and sustained deployment limits remain open.
 
+## 2026-10-27 Oracle text cursor-valued columns
+
+P1-06/W5 extends Oracle type163 result handling to text rows. A non-NULL text value must be exactly
+the existing four-byte little-endian cursor identifier; it is published through the same
+`OracleCursorOwner` and `OceanBaseRefCursor` lifecycle used by binary cursor columns. Text execution
+owners are bound at result parsing, while binary metadata still requires its prepared statement or
+parent cursor ownership. REF CURSOR Input/InputOutput remains rejected.
+
+The new synchronous/asynchronous buffered/SequentialAccess loopback regression is 4/4: a text
+`SELECT` returns a cursor, the parent reader and command are disposed, the child page is fetched,
+and a subsequent command reuses the connection. The existing cursor-column selection remains 76/76. This is local framing and
+ownership evidence only; the pinned Connector/J text row implementation does not expose cursor values,
+and the configured Oracle endpoint still fails before greeting. The focused cursor selection is 80/80;
+the complete unit suite is 7533 passed, 139 failed on the existing Windows TLS/PFX/SSPI fixture
+environment, 0 skipped, 7672 total. Release build and targeted format verification pass. No real SQL,
+OBProxy, version or deployment compatibility is claimed.
+
 ## 2026-10-27 Oracle complex LOB result members
 
 P1-07/W5, developed from `103509c` on `master`. Complex member type codes 210/211 (BLOB/CLOB)

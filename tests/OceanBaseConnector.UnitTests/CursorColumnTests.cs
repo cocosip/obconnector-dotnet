@@ -26,6 +26,50 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public async Task TextCursorColumnPublishesFourByteIdentifier(bool asynchronous, bool sequential)
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "SELECT text_cursor");
+                await channel.WritePacketAsync(new byte[] { 1 });
+                await channel.WritePacketAsync(Column("c", 163));
+                await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 4, 91, 0, 0, 0 });
+                await channel.WritePacketAsync(Eof());
+                Assert.Equal(new byte[] { 28, 91, 0, 0, 0, 2, 0, 0, 0 }, await StatementCommand(channel, 28));
+                await CursorMetadata(channel, 2);
+                await channel.WritePacketAsync(CursorRow(7));
+                await channel.WritePacketAsync(CursorTerminator(130, false));
+                Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await StatementCommand(channel, 25));
+                channel.BeginCommand(); await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                using var command = connection.CreateCommand(); command.CommandText = "SELECT text_cursor";
+                var behavior = sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default;
+                using var parent = asynchronous ? await command.ExecuteReaderAsync(behavior) : command.ExecuteReader(behavior);
+                Assert.True(asynchronous ? await parent.ReadAsync() : parent.Read());
+                using var cursor = asynchronous ? await parent.GetFieldValueAsync<OceanBaseRefCursor>(0) : parent.GetFieldValue<OceanBaseRefCursor>(0);
+                Assert.False(asynchronous ? await parent.ReadAsync() : parent.Read());
+                parent.Close(); command.Dispose();
+                using var child = asynchronous ? await cursor.GetDataReaderAsync(2) : cursor.GetDataReader(2);
+                Assert.True(asynchronous ? await child.ReadAsync() : child.Read()); Assert.Equal(7L, child.GetInt64(0));
+                Assert.False(asynchronous ? await child.ReadAsync() : child.Read());
+                cursor.Dispose();
+                using var after = connection.CreateCommand(); after.CommandText = "after";
+                Assert.Equal(1, asynchronous ? await after.ExecuteNonQueryAsync() : after.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData(false, false, false, false)]
         [InlineData(true, false, false, false)]
         [InlineData(false, true, false, false)]
