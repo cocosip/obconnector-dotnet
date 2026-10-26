@@ -478,6 +478,24 @@ Enable `Use Oracle Prepare Execute=true`. Procedures use `CommandType.StoredProc
 
 For cursor outputs, set `OceanBaseDbType.RefCursor` with Output or ReturnValue. Read the returned `OceanBaseRefCursor` once through `GetDataReader()` / `GetDataReaderAsync()`; default page size is 128. The cursor belongs to its original connection and transaction. An unconsumed cursor causes a pooled physical session to be discarded when its logical connection closes; release the cursor before expecting that session to be reused.
 
+### REF CURSOR result limits
+
+GetDataReader/GetDataReaderAsync accept SingleRow and SingleResult together with SequentialAccess
+and CloseConnection. SingleRow returns only the cursor's first row; an empty cursor stays empty.
+SingleResult leaves all rows visible because a REF CURSOR has one result. The requested fetchSize
+(default128) remains the page size; neither flag changes the wire protocol or server-side row count.
+After the first SingleRow row, another Read drains all remaining pages and returns false. NextResult
+also drains unread pages and returns false on success. Hidden errors, malformed pages, caller cancellation
+and the original command timeout still propagate; these independent fetches do not make an already
+completed parent SQL outcome unknown. Paging can therefore continue after the last exposed row.
+
+Close/Dispose before exhaustion keeps the existing rule: the unfinished physical session is destroyed;
+it does not silently fetch all rows. CloseConnection still closes only the original logical lease.
+Parent-command disposal, cursor single use and transaction/session ownership are unchanged. SchemaOnly,
+KeyInfo and unknown flags reject before taking the cursor; a corrected call can still open it once.
+These flags apply to output and binary result-column cursors through the same public object. They do
+not add cursor Input/InputOutput or text cursor columns. See [evidence and open acceptance](obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制).
+
 <a id="oracle-standalone-prepare"></a>
 ### Oracle standalone preparation
 

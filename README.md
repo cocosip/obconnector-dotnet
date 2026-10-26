@@ -1,5 +1,7 @@
 # OceanBaseConnector for .NET
 
+Oracle REF CURSOR readers support [SingleRow/SingleResult](docs/obconnector-dotnet-architecture-design.md#ref-cursor-result-limits); advance or finish reads to consume hidden pages, and dispose unread readers to retire their session.
+
 Modern `DbBatch` supports [SingleRow/SingleResult across the batch](docs/obconnector-dotnet-architecture-design.md#batch-result-limits) and [SchemaOnly/KeyInfo metadata](docs/obconnector-dotnet-architecture-design.md#batch-metadata). Advance entries with NextResult and dispose the reader to release its reservation. Data-source batches support direct CreateBatchCommand and own their connection lifetime.
 
 Observe [protocol frame diagnostics](docs/protocol-diagnostics.md) through the standard .NET

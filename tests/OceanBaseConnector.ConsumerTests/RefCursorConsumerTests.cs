@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.IO;
@@ -38,12 +39,25 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetPreparesRefCursorAndKeepsParentAfterDisposalOverTls(string target, bool async, string kind)
             => EveryAssetReadsRefCursorAfterParentCommandDisposalCore(target, async, kind, encrypted: true, prepared: true);
 
-        private static async Task EveryAssetReadsRefCursorAfterParentCommandDisposalCore(string target, bool async, string kind, bool encrypted, bool prepared = false)
+        public static IEnumerable<object[]> LimitedCursorAssets()
+        {
+            foreach (var row in OracleAssets())
+                foreach (var behavior in new[] { CommandBehavior.SingleRow, CommandBehavior.SingleResult, CommandBehavior.SingleRow | CommandBehavior.SingleResult })
+                    yield return new object[] { row[0], row[1], row[2], behavior };
+        }
+
+        [Theory]
+        [MemberData(nameof(LimitedCursorAssets))]
+        public Task EveryAssetLimitsRefCursorAcrossPagesAndValidatesFinalBoundary(string target, bool async, string kind, CommandBehavior behavior)
+            => EveryAssetReadsRefCursorAfterParentCommandDisposalCore(target, async, kind, encrypted: false, behavior: behavior);
+
+        private static async Task EveryAssetReadsRefCursorAfterParentCommandDisposalCore(string target, bool async, string kind, bool encrypted, bool prepared = false, CommandBehavior behavior = CommandBehavior.Default)
         {
             using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             var ob20 = kind != "standard";
+            var limited = behavior != CommandBehavior.Default;
             var serving = Task.Run(async () =>
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token);
@@ -77,6 +91,17 @@ namespace OceanBaseConnector.ConsumerTests
                 var last = Report(false, 0); last[0] = 254; last[3] |= 128;
                 var response = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(8)))
                     .Concat(Frame(3, new byte[] { 0, 0, 42, 0, 0, 0, 0, 0, 0, 0 })).Concat(Frame(4, last)).ToArray();
+                if (limited)
+                {
+                    var more = Report(false, 0); more[0] = 254; more[3] |= 64;
+                    await Reply(1 + offset, Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(8)))
+                        .Concat(Frame(3, new byte[] { 0, 0, 42, 0, 0, 0, 0, 0, 0, 0 }))
+                        .Concat(Frame(4, new byte[] { 0, 0, 43, 0, 0, 0, 0, 0, 0, 0 })).Concat(Frame(5, more)).ToArray());
+                    Assert.Equal(new byte[] { 28, 92, 0, 0, 0, 2, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 3 + offset + 1, budget.Token));
+                    offset++;
+                    response = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(8)))
+                        .Concat(Frame(3, new byte[] { 0, 0, 44, 0, 0, 0, 0, 0, 0, 0 })).Concat(Frame(4, last)).ToArray();
+                }
                 if (kind == "trailing") response = response.Concat(Frame(5, new byte[] { 0 })).ToArray();
                 await Reply(1 + offset, response);
                 if (kind != "trailing")
@@ -112,14 +137,19 @@ namespace OceanBaseConnector.ConsumerTests
                     DbDataReader reader;
                     if (async)
                     {
-                        var opening = (Task)cursor.GetType().GetMethod("GetDataReaderAsync")!.Invoke(cursor, new object[] { 2, CommandBehavior.SequentialAccess, budget.Token })!;
+                        var opening = (Task)cursor.GetType().GetMethod("GetDataReaderAsync")!.Invoke(cursor, new object[] { 2, behavior | CommandBehavior.SequentialAccess, budget.Token })!;
                         await opening; reader = (DbDataReader)opening.GetType().GetProperty("Result")!.GetValue(opening)!;
                     }
-                    else reader = (DbDataReader)cursor.GetType().GetMethod("GetDataReader")!.Invoke(cursor, new object[] { 2, CommandBehavior.Default })!;
+                    else reader = (DbDataReader)cursor.GetType().GetMethod("GetDataReader")!.Invoke(cursor, new object[] { 2, behavior })!;
                     using (reader)
                     {
-                        Assert.True(async ? await reader.ReadAsync(budget.Token) : reader.Read()); Assert.Equal(42L, reader.GetInt64(0));
+                        var rows = limited && (behavior & CommandBehavior.SingleRow) == 0 ? 3 : 1;
+                        for (var row = 0; row < rows; row++)
+                        {
+                            Assert.True(async ? await reader.ReadAsync(budget.Token) : reader.Read()); Assert.Equal(42L + row, reader.GetInt64(0));
+                        }
                         Assert.False(async ? await reader.ReadAsync(budget.Token) : reader.Read());
+                        Assert.False(async ? await reader.NextResultAsync(budget.Token) : reader.NextResult());
                     }
                 }
                 if (kind == "trailing")
@@ -135,7 +165,8 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 budget.Cancel(); listener.Stop();
                 try { await serving; }
-                catch when (failure != null) { }
+                catch (OperationCanceledException) when (budget.IsCancellationRequested) { }
+                catch (Exception serverError) { if (failure != null && !ReferenceEquals(failure, serverError)) throw new AggregateException(failure, serverError); throw; }
                 finally { context.Unload(); }
             }
         }

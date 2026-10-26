@@ -35,7 +35,7 @@ namespace OceanBaseConnector.UnitTests
         public Task RefCursorPositiveCommandFetchHintKeepsIndependentPageSize(bool async, bool deprecated, bool sequential)
             => ReadRefCursorPagesAndRelease(async, deprecated, sequential, commandFetchSize: 1);
 
-        internal static async Task ReadRefCursorPagesAndRelease(bool async, bool deprecated, bool sequential, int slowThreshold = 0, int commandFetchSize = 0)
+        internal static async Task ReadRefCursorPagesAndRelease(bool async, bool deprecated, bool sequential, int slowThreshold = 0, int commandFetchSize = 0, CommandBehavior behavior = CommandBehavior.Default, bool advanceWithoutRead = false)
         {
             var server = Server(async channel =>
             {
@@ -82,12 +82,18 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Throws<NotSupportedException>(() => { cursor.GetDataReader(2, CommandBehavior.SchemaOnly); });
                 using var canceled = new CancellationTokenSource(); canceled.Cancel();
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cursor.GetDataReaderAsync(cancellationToken: canceled.Token));
-                using var reader = async ? await cursor.GetDataReaderAsync(2, sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default)
-                    : cursor.GetDataReader(2, sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default);
+                using var reader = async ? await cursor.GetDataReaderAsync(2, behavior | (sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default))
+                    : cursor.GetDataReader(2, behavior | (sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default));
                 if (slowThreshold > 0) await Task.Delay(30);
                 Assert.Equal("n", reader.GetName(0)); Assert.Equal(typeof(long), reader.GetFieldType(0));
-                for (var i = 1L; i <= 3; i++) { Assert.True(async ? await reader.ReadAsync() : reader.Read()); Assert.Equal(i, reader.GetInt64(0)); }
-                Assert.False(async ? await reader.ReadAsync() : reader.Read()); Assert.False(reader.NextResult());
+                if (!advanceWithoutRead)
+                {
+                    var rows = (behavior & CommandBehavior.SingleRow) != 0 ? 1 : 3;
+                    for (var i = 1L; i <= rows; i++) { Assert.True(async ? await reader.ReadAsync() : reader.Read()); Assert.Equal(i, reader.GetInt64(0)); }
+                    Assert.False(async ? await reader.ReadAsync() : reader.Read());
+                }
+                Assert.False(async ? await reader.NextResultAsync() : reader.NextResult());
+                Assert.False(await reader.ReadAsync()); Assert.False(reader.NextResult());
                 Assert.Throws<InvalidOperationException>(() => cursor.GetDataReader());
                 cursor.Dispose();
                 using var after = connection.CreateCommand(); after.CommandText = "after";
@@ -361,7 +367,10 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public async Task RefCursorEarlyReaderOrCursorCloseDestroysUnreadSession(bool disposeCursor)
+        public Task RefCursorEarlyReaderOrCursorCloseDestroysUnreadSession(bool disposeCursor)
+            => RefCursorEarlyReaderOrCursorCloseDestroysUnreadSessionCore(disposeCursor);
+
+        private static async Task RefCursorEarlyReaderOrCursorCloseDestroysUnreadSessionCore(bool disposeCursor, CommandBehavior behavior = CommandBehavior.Default)
         {
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var server = Server(async channel =>
@@ -374,7 +383,7 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await connection.OpenAsync(); using var command = RefCursorCall(connection); await command.ExecuteNonQueryAsync();
-                using var cursor = Assert.IsType<OceanBaseRefCursor>(command.Parameters[0].Value); using var reader = await cursor.GetDataReaderAsync();
+                using var cursor = Assert.IsType<OceanBaseRefCursor>(command.Parameters[0].Value); using var reader = await cursor.GetDataReaderAsync(behavior: behavior);
                 await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)); Assert.True(await reader.ReadAsync());
                 if (disposeCursor) cursor.Dispose(); else reader.Close();
                 Assert.Equal(ConnectionState.Broken, connection.State); await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
@@ -387,7 +396,10 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(true, false)]
         [InlineData(false, true)]
         [InlineData(true, true)]
-        public async Task RefCursorFetchCancellationOrTimeoutDoesNotReclassifyCompletedSql(bool timeout, bool nextPage)
+        public Task RefCursorFetchCancellationOrTimeoutDoesNotReclassifyCompletedSql(bool timeout, bool nextPage)
+            => RefCursorFetchCancellationOrTimeoutDoesNotReclassifyCompletedSqlCore(timeout, nextPage);
+
+        private static async Task RefCursorFetchCancellationOrTimeoutDoesNotReclassifyCompletedSqlCore(bool timeout, bool nextPage, CommandBehavior behavior = CommandBehavior.Default)
         {
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var server = Server(async channel =>
@@ -409,7 +421,7 @@ namespace OceanBaseConnector.UnitTests
                 using var cursor = Assert.IsType<OceanBaseRefCursor>(command.Parameters[0].Value);
                 async Task Fetch()
                 {
-                    using var reader = await cursor.GetDataReaderAsync(1, cancellationToken: cancellation.Token);
+                    using var reader = await cursor.GetDataReaderAsync(1, behavior, cancellation.Token);
                     Assert.True(await reader.ReadAsync()); await reader.ReadAsync(cancellation.Token);
                 }
                 var fetching = Fetch(); await ready.Task.WaitAsync(TimeSpan.FromSeconds(10)); if (!timeout) cancellation.Cancel();
@@ -426,13 +438,24 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("no-progress")]
         [InlineData("extra-row")]
         [InlineData("changed-metadata")]
-        public async Task RefCursorBadFetchBreaksSessionWithoutClaimingSqlOutcomeUnknown(string kind)
+        public Task RefCursorBadFetchBreaksSessionWithoutClaimingSqlOutcomeUnknown(string kind)
+            => RefCursorBadFetchBreaksSessionWithoutClaimingSqlOutcomeUnknownCore(kind);
+
+        private static async Task RefCursorBadFetchBreaksSessionWithoutClaimingSqlOutcomeUnknownCore(string kind, CommandBehavior behavior = CommandBehavior.Default)
         {
             var server = Server(async channel =>
             {
                 await StatementCommand(channel, 0xa1); await RefCursorOutput(channel);
                 await StatementCommand(channel, 28);
-                if (kind == "error") await channel.WritePacketAsync(Error());
+                if (kind == "error")
+                {
+                    if (behavior != CommandBehavior.Default)
+                    {
+                        await CursorMetadata(channel, 2); await channel.WritePacketAsync(CursorRow(1)); await channel.WritePacketAsync(CursorTerminator(66, false));
+                        await StatementCommand(channel, 28);
+                    }
+                    await channel.WritePacketAsync(Error());
+                }
                 else
                 {
                     await CursorMetadata(channel, 2);
@@ -453,7 +476,7 @@ namespace OceanBaseConnector.UnitTests
                 using var cursor = Assert.IsType<OceanBaseRefCursor>(command.Parameters[0].Value);
                 var error = await Assert.ThrowsAsync<OceanBaseException>(async () =>
                 {
-                    using var reader = await cursor.GetDataReaderAsync(1); while (await reader.ReadAsync()) { }
+                    using var reader = await cursor.GetDataReaderAsync(1, behavior); while (await reader.ReadAsync()) { }
                 });
                 Assert.False(error.IsExecutionOutcomeUnknown); Assert.Equal(ConnectionState.Broken, connection.State);
                 await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));

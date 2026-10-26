@@ -1,5 +1,30 @@
 # Verification status and remaining work
 
+## 2026-10-26 REF CURSOR result limits
+
+Developed from master/7976fb3 for P1-05/W5. OceanBaseRefCursor now accepts SingleRow and SingleResult,
+including their combination with SequentialAccess/CloseConnection. It reuses the ordinary reader's
+limits and cursor paging: SingleRow exposes one row, later Read/NextResult drains remaining pages;
+SingleResult retains every row. Fetch size, parent ownership, original timeout/token, validation,
+nonunknown fetch failures and early-close session destruction remain unchanged. SchemaOnly, KeyInfo
+and unknown bits still reject before consuming the single-use cursor. Input/InputOutput remains open.
+See [contract](obconnector-dotnet-architecture-design.md#ref-cursor-result-limits) and
+[full evidence/history](obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制).
+
+New units84; related220 pass. Related consumers370 pass (prior280 retained plus90),0fail/skip.
+Full units6344 pass (prior6260 retained plus84,8m26),0fail/skip. Final Release solution0warnings/errors,2.71s; five-file scoped format exits0 with the
+existing workspace-load warning. Frozen source/project527 and active src/tests ReleaseDLL1069 exclude
+historical probe/saved-build copies. Incremental independent source/fixture review has no blockers;
+final independent read-only review confirmed raw reports, retained cases, hashes, history and scope
+with no blockers. The reviewer did not run builds/tests. First84fail include6 fixture-gate timeouts after unsupported flags;
+78 fail with unsupported flags/type mismatches. Final GREEN102 and affected220 retain these cases.
+
+Real12 initially failed during profile lookup because the fixture indexed the profile name to one character;
+that enumeration is corrected. Corrected12 all fail in initial Open/HandshakeFlow70 before greeting,
+so no new real cursor SQL/fetch evidence exists. No-opt configuration9pass/cursor5NotExecuted; skips
+are not passes. Five assets share one Windows/.NET10host. No new real OBProxy/enterprise TLS,
+independent-runtime/platform/load acceptance. All23IDs/eight packages stay open; local master only.
+
 ## 2026-10-26 Batch result limits and standard SingleRow semantics
 
 Developed from master/27bd176 for P1-05/W5. Ordinary command SingleRow now exposes only the first row

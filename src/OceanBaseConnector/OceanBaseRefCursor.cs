@@ -60,7 +60,7 @@ namespace OceanBaseConnector
         private CommandExchange Start(int fetchSize, CommandBehavior behavior, CancellationToken token)
         {
             if (fetchSize <= 0) throw new ArgumentOutOfRangeException(nameof(fetchSize));
-            if ((behavior & ~(CommandBehavior.SequentialAccess | CommandBehavior.CloseConnection)) != 0)
+            if ((behavior & ~(CommandBehavior.SequentialAccess | CommandBehavior.CloseConnection | CommandBehavior.SingleRow | CommandBehavior.SingleResult)) != 0)
                 throw new NotSupportedException("This cursor CommandBehavior is not supported.");
             token.ThrowIfCancellationRequested();
             lock (_gate)

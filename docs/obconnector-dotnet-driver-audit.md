@@ -1,11 +1,10 @@
 # OceanBase .NET 驱动完整性走查报告
 
-**最近复核：** 2026-10-26；基于master/27bd176的跨批次结果限制及共享SingleRow修正；全部23项及八工作包仍开放。
-**当前模块：** P1-05/W5；完整性第15.61节、报告第56节。
-**当前验证：** 完整单位6260通过（新增62），受影响单位218、消费者294通过（新增132），均零失败/跳过。
-**本次修复：** SingleRow按标准只暴露首结果首行；Batch支持整批SingleRow/SingleResult，NextResult处理隐藏条目。
-保留counts/outputs、隐藏错误/unknown、精确取消、元数据不执行目标、提前关闭跳过后缀及源连接/原租约。
-首批24RED及一次测试import构建失败保留；当前无新增实库/OBProxy、企业TLS、跨平台或独立运行时验收。
+**最近复核：** 2026-10-26；基于master/7976fb3的REF CURSOR结果限制；全部23项及八工作包仍开放。
+**当前模块：** P1-05/W5；完整性第15.62节、报告第57节。
+**当前验证：** 完整单测6344通过（新增84）；相关单测220、消费者370通过（新增90），均无失败/跳过。
+**本次补充：** REF CURSOR支持SingleRow/SingleResult，复用共享reader跨页排空，保留错误、取消及资源归属。
+修正后的12实库用例均在Open握手读取greeting前失败，没有新增真实SQL/fetch验收。
 **仓库：** `D:\dotnet-code\obconnector-dotnet`。
 **初次走查：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **目标和结论级别：** 为 MySQL/Oracle 双模式定义可执行的完整驱动清单；源码、本地 fixture、包消费和真实互操作分别记载，不互相替代。
@@ -1050,3 +1049,18 @@ SchemaOnly只准备元数据，CloseConnection原租约及数据源自有连接�
 详细场景、原始结果及剩余验收见[完整性15.61](obconnector-dotnet-completeness.md#1561-2026-10-26-singlerowsingleresult-跨批次结果限制)。
 五资产仍只一个Windows/.NET10host，未新增实库/OBProxy/企业TLS、独立运行时、跨平台或生产负载证据。
 其他Command/Batch/游标组合、全部23ID及八包仍开放；本地master提交，不推送。
+
+## 57. 2026-10-26 REF CURSOR 结果限制
+
+基于master/7976fb3，补P1-05/W5。OceanBaseRefCursor只增加SingleRow/SingleResult入口允许位，复用共享reader
+与QueryResult分页；fetchSize不变，SingleRow后续Read/NextResult排空全部页，SingleResult全行可见。
+非法位在单次领取前拒绝；原token/timeout、父所有权、独立fetch非unknown及提前关闭销毁未读session保留。
+
+新增单位84，相关220通过；相关消费者370通过（保留原280、新增90，1分14秒），无失败/跳过。故障12中no-progress可在首次Start失败，不全是首行后隐藏错误。
+初始84fail含6取消夹具ready超时，后六项非独立产品RED；修后GREEN102保留。消费者五资产/双同步/三传输/三flags，
+两页42/43/44、OB20请求ID/完成边界和关闭顺序均断言，原TLS/prepare/hint case不删。
+真实12首次是测试profile首字母枚举错误；修正后12均在Open读取greeting前失败，没有执行SQL，不能计真实验收。
+noopt配置9pass/cursor5NotExecuted。Release0警告/错误2.71秒、五文件格式退出0并保留workspace警告；
+527源码/项目和1069活动src/tests ReleaseDLL冻结，排除历史副本。最终完整单测6344通过（保留原6260、新增84，8分26秒），无失败/跳过；最终独立只读复核已确认原始TRX、保留用例、冻结hash、文件/历史/链接及文档边界，无剩余阻断项；reviewer未构建或测试。
+增量独立只读走查无阻断，reviewer未构建测试。详细[实现与证据](obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制)
+及[契约](obconnector-dotnet-architecture-design.md#ref-cursor-result-limits)已同步；全部23ID/八包及部署/发布门槛开放，不推送。

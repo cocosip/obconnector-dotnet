@@ -24,6 +24,17 @@ Open/HandshakeFlow70 before greeting, before SQL execution. The initial project 
 tests due to restored package-import paths pointing at the restricted account; it is not passing evidence. Binary fixtures/consumers are separate evidence. Text cursor columns and cursor input
 directions remain unsupported; the whole Oracle result-shape matrix remains open.
 
+## REF CURSOR result limits
+
+Filter `FullyQualifiedName~ResultLimitsDrainCursorPagesAfterCommandDisposal` with an Oracle
+prepare-execute profile. Twelve read-only cases per profile cover sync/async, SingleRow/SingleResult/
+combined flags, empty/multiple rows, fetchSize1, parent disposal, drain then connection reuse, and
+CloseConnection for empty cursors. No database objects or global configuration are changed.
+The corrected run currently has12failed/0skipped in initial Open/HandshakeFlow70 before greeting;
+none reached SQL or FETCH. The initial12 profile-lookup failures were a corrected test-data enumeration
+error, not server evidence. Local fixture/consumer passes remain separate from real interoperability.
+See [full evidence](../../docs/obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制).
+
 ## Running
 
 1. Opt in: set `OB_REQUIRE_INTEGRATION=1`. Anything else (or unset) skips database tests.
