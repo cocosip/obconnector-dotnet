@@ -5,6 +5,7 @@ using System.Threading;
 using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.Internal;
 using OceanBaseConnector.Internal.Session;
+using OceanBaseConnector.Internal.Sql;
 using Xunit;
 
 namespace OceanBaseConnector.UnitTests
@@ -107,6 +108,18 @@ namespace OceanBaseConnector.UnitTests
             var command = connection.CreateCommand(); command.CommandType = CommandType.StoredProcedure; command.CommandText = "pkg.open_cursor";
             for (var i = 0; i < count; i++) command.Parameters.Add(new OceanBaseParameter { ParameterName = "c" + i, Direction = ParameterDirection.Output, OceanBaseDbType = OceanBaseDbType.RefCursor, Value = "old" });
             return (OceanBaseCommand)command;
+        }
+
+        [Fact]
+        public void RefCursorOutputCaptureRejectsTrailingIdentifierBytes()
+        {
+            var parameters = new OceanBaseParameterCollection();
+            parameters.Add(new OceanBaseParameter { ParameterName = "c", Direction = ParameterDirection.Output, OceanBaseDbType = OceanBaseDbType.RefCursor });
+            var plan = OracleCommandPlan.Create("pkg.open_cursor", CommandType.StoredProcedure, parameters);
+            var column = ResultColumn.Parse(Column("c", 163), OceanBaseCompatibilityMode.Oracle);
+
+            var error = Assert.Throws<ProtocolException>(() => plan.CaptureOutput(new[] { column }, new byte[]?[] { new byte[] { 91, 0, 0, 0, 7 } }));
+            Assert.Equal("A cursor identifier requires four bytes.", error.Message);
         }
 
         [Theory]

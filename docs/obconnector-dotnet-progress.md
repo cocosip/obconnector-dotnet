@@ -19,6 +19,15 @@ The focused complex-result selection passes with zero failures or skips, includi
 four malformed-identifier cases plus anonymous type163 metadata. These fixtures prove local framing
 and ownership only; they do not establish server SQL, proxy, version or deployment compatibility.
 
+## 2026-10-27 Oracle output cursor identifier validation
+
+P1-06/W5 closes a local validation hole in the Oracle output capture path. Pure output/return-value
+REF CURSOR identifiers now use the same exact four-byte little-endian validator as ordinary and complex
+cursor results before the execution owner is consulted. Trailing bytes therefore fail as malformed
+protocol data instead of being silently ignored or being reported as a missing owner. The new direct plan
+regression passes; this remains local framing evidence only and does not add REF CURSOR Input/InputOutput
+support or real OceanBase/OBProxy interoperability.
+
 ## 2026-10-27 P2-04 pool wait outcome diagnostics
 
 P2-04/W7 extends the existing `oceanbase.client.pool.wait.duration` histogram with the standard

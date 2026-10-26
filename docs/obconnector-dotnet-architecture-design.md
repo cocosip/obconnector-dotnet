@@ -775,6 +775,10 @@ Enable `Use Oracle Prepare Execute=true`. Procedures use `CommandType.StoredProc
 
 For cursor outputs, set `OceanBaseDbType.RefCursor` with Output or ReturnValue. Read the returned `OceanBaseRefCursor` once through `GetDataReader()` / `GetDataReaderAsync()`; default page size is 128. The cursor belongs to its original connection and transaction. An unconsumed cursor causes a pooled physical session to be discarded when its logical connection closes; release the cursor before expecting that session to be reused.
 
+Pure output and return-value rows must carry exactly one four-byte little-endian cursor identifier. The
+output capture path validates the width before consulting the originating cursor owner, so trailing or
+truncated identifiers fail as malformed protocol data.
+
 ### REF CURSOR result limits
 
 GetDataReader/GetDataReaderAsync accept SingleRow and SingleResult together with SequentialAccess

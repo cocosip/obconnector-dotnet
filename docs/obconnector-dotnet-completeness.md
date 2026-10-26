@@ -2933,6 +2933,14 @@ P1-07/W5：复杂 object/collection 描述现在接受成员类型 163。二进�
 
 新增同步/异步、缓冲/`SequentialAccess` 正向回归 4 项及四字节以外标识的会话失效 4 项；另外覆盖了匿名集合的 type163 布局元数据。复杂 cursor 参数、文本复杂结果、真实 OceanBase/OBProxy 互操作与其他 Oracle 结果形状仍未验证。
 
+### 15.89 2026-10-27 Oracle 输出游标标识严格校验
+
+P1-06/W5：Oracle 纯 `Output`/`ReturnValue` 的 REF CURSOR 输出捕获现在复用普通列和复杂成员的
+四字节小端标识校验。校验在查找 `OracleCursorOwner` 之前执行，尾随字节不会被静默丢弃，也不会
+被错误归类为“没有 originating command”。新增直接 `OracleCommandPlan` 回归 1 项通过；该项只
+证明本地输出 framing，REF CURSOR Input/InputOutput、其他输出形状和真实 OceanBase/OBProxy
+互操作仍开放。
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。

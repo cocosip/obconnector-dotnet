@@ -30,9 +30,9 @@ namespace OceanBaseConnector.Internal.Protocol
         }
         internal void TrackCursor(byte[]? value)
         {
-            if (TypeCode == 163 && value != null && _cursors != null) _cursors.Create(CursorId(value));
+            if (TypeCode == 163 && value != null && _cursors != null) _cursors.Create(ReadCursorId(value));
         }
-        private static uint CursorId(byte[] value)
+        internal static uint ReadCursorId(byte[] value)
         {
             if (value.Length != 4) throw new ProtocolException("A cursor identifier requires four bytes.");
             return new ByteCursor(value).ReadUInt32();
@@ -373,7 +373,7 @@ namespace OceanBaseConnector.Internal.Protocol
             RequireComplexResult(false);
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
-            if (TypeCode == 163) return (_cursors ?? throw new NotSupportedException("A REF CURSOR requires its originating execution.")).Publish(CursorId(value));
+            if (TypeCode == 163) return (_cursors ?? throw new NotSupportedException("A REF CURSOR requires its originating execution.")).Publish(ReadCursorId(value));
             if (TypeCode == 210 || TypeCode == 211) return new OceanBaseLob(Lobs!, value, TypeCode == 211);
             if (TypeCode == 13) return YearCodec.Decode(value, false);
             if (TypeCode == 16) return BitCodec.Decode(value, (int)Length);
@@ -462,7 +462,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (complex.HasRemaining) throw new ProtocolException("Trailing complex value bytes.");
                 return OceanBaseComplexValue.FromResult(ComplexType, values);
             }
-            if (TypeCode == 163) return (_cursors ?? throw new NotSupportedException("A REF CURSOR requires its originating execution.")).Publish(CursorId(value));
+            if (TypeCode == 163) return (_cursors ?? throw new NotSupportedException("A REF CURSOR requires its originating execution.")).Publish(ReadCursorId(value));
             if (TypeCode == 13) return YearCodec.Decode(value, true);
             if (TypeCode == 16) return BitCodec.Decode(value, (int)Length);
             if (IsDecimal)
