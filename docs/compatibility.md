@@ -1,5 +1,20 @@
 # Compatibility and known gaps
 
+## 2026-10-26 Discovery address blacklist and group ceilings
+
+ADDRESS blacklists now replace inherited ADDRESS_LIST/DESCRIPTION blocks; group TCP ceilings count
+actual attempts across phases/cycles per physical establishment. Ordering preserves each occurrence's
+policy. Shared budgets, generation-scoped feedback and healthy idle reuse remain intact. These are
+local driver capabilities, not Java runtime or real discovery interoperability evidence.
+See [current delivery evidence](obconnector-dotnet-progress.md#2026-10-26-discovery-address-blacklist-overrides)
+and [public contract](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling).
+
+The candidate packages passed the repository's actual nupkg API/configuration/dependency smoke on
+.NET8.0.32/9.0.21/10.0.13, netstandard2.0/2.1 on .NET10.0.13 and netstandard2.0 on .NET Framework4.8.
+Fresh-cache package hashes, asset selection and dependency groups were checked. This advances local
+package/runtime evidence only; database/OBProxy/TLS/transaction interoperability on these hosts is open.
+Historical server failures and skipped deployment gates below remain visible; nothing was published.
+
 ## 2026-10-26 Discovery group blacklist overrides
 
 Developed from master/fa5d47f for P1-09/W4. ADDRESS_LIST.OBLB_BLACKLIST replaces the entire
@@ -475,7 +490,7 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 | Oracle outputs/cursors | REF CURSOR Input/InputOutput and text cursor-valued columns; binary columns have local ownership support but await real SQL acceptance; output offset and ExecuteArray positive FetchSize. Standalone Prepare and positive command hints for ordinary output plans are supported; internal output rows do not use cursor paging. |
 | Complex types | Text-protocol complex results, cyclic layouts and LOB/cursor members; other national storage encodings than queried AL16UTF16, anonymous ordinary national members without trusted storage context, complex whole-column RETURNING with unresolved source identity, and undeclared or stale type identities. |
 | Array execution | SELECT, DDL and FetchSize; execution does not commit or roll back automatically. |
-| Discovery and recovery | TCP TNS/OCP discovery with groups, rotation/random/weighted selection, global/group blacklist policies and shared TCP-attempt ceilings is implemented; address-level blacklists, group-local ceilings, other discovery policies, transparent migration of active sessions/transactions and automatic SQL replay remain unsupported. |
+| Discovery and recovery | TCP TNS/OCP discovery with groups, rotation/random/weighted selection, global/group/address blacklist policies and shared/group TCP-attempt ceilings is implemented; other discovery policies, transparent migration of active sessions/transactions and automatic SQL replay remain unsupported. |
 
 For supported alternatives and binding rules, see the [API reference](obconnector-dotnet-architecture-design.md).
 

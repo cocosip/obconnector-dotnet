@@ -1,5 +1,36 @@
 # Verification status and remaining work
 
+## 2026-10-26 Discovery address blacklist overrides
+
+Developed from `414b7cc` for P1-09/W4. ADDRESS.OBLB_BLACKLIST replaces the entire inherited group/root
+policy. Its immutable endpoint occurrence retains the explicit block through all ordering paths.
+Equal effective policies share exact-endpoint history; differing policies and success feedback remain
+isolated. Address-only blocks default the shared ceiling to120 and add no policy to other addresses.
+Group ceilings, deadlines, idle reuse and no-SQL-replay behavior remain unchanged.
+See [contract](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling) and
+[evidence](obconnector-dotnet-completeness.md#1565-2026-10-26-发现地址级黑名单覆盖).
+
+New units39: initial RED4pass/35fail; related309pass, zero failures/skips. Release solution build:
+zero warnings/errors,39.04seconds. Full units6461pass (6422 retained plus39), zero failures/skips,
+8minutes11seconds. Affected consumers512pass, zero failures/skips.
+Each netstandard asset passed64 cases and each modern asset128, split by mode. Existing384
+consumer branches retain equivalent expectations; new128 cover both modes, sync/async, TNS/OCP,
+ordinary/private pooled/unpooled paths, prewarm, zero-budget idle reuse and Clear/restored policy.
+Independent source/fixture/consumer review found no blockers; reviewer did not build/test. README and
+the current compatibility table were synchronized after review; older historical checkpoints remain.
+
+Local nupkg verification used `eng/Verify-Packages.ps1 -VerifyNetFramework`: both packages passed
+identity/license/readme/dependency checks and fresh-cache SHA512/asset-selection checks. Actual modern
+hosts8.0.32/9.0.21/10.0.13 passed; netstandard2.0/2.1 ran on10.0.13, and netstandard2.0 additionally on
+.NET Framework4.8.10008.0 (CLR4.0.30319.42000,Release534296). This is an API/configuration/dependency
+smoke, not a real database or cross-platform compatibility test. Retained artifacts are under
+`TestResults/package-validation/c6dd89427a9040cab9924760ebad358c` and
+`TestResults/local-completeness/address-blacklist-*`; they are ignored, not published.
+
+No real database accessed. Discovery loopback cases still share one Windows/.NET10host; real OCP,
+OBProxy, enterprise TLS/plugin, other platforms and load acceptance remain open. All23IDs/eight work
+packages and the remaining development remain open. Local commits only; no push.
+
 ## 2026-10-26 Discovery group TCP attempt ceilings
 
 Developed from `2a2e139` on `codex/local-driver-completeness` for P1-09/W4.

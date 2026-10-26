@@ -26,6 +26,7 @@ namespace OceanBaseConnector.Internal
                 _ordered = snapshot.Order(selector, options.LoadBalance, options.HostRecheckSeconds, health: health);
                 _policies = snapshot.CopyGroupPolicies();
                 foreach (var policy in _policies) _hasBlacklist |= policy != null;
+                foreach (var endpoint in _ordered) _hasBlacklist |= endpoint.BlacklistPolicy != null;
                 _sizes = snapshot.CopyGroupSizes();
                 _groupLimits = snapshot.CopyGroupLimits();
                 _ceiling = snapshot.RetryAllDowns ?? endpoints.Count * (options.ConnectRetryCount + 1);
@@ -59,7 +60,7 @@ namespace OceanBaseConnector.Internal
                     if (_groupLimits[_group].HasValue && _groupAttempts[_group] >= _groupLimits[_group]!.Value)
                     { _pending.Clear(); break; }
                     var index = _pending.Dequeue(); var candidate = _ordered[index];
-                    var policy = _policies[_group];
+                    var policy = candidate.BlacklistPolicy ?? _policies[_group];
                     if (_fallback && policy == null) continue;
                     if (policy != null && !_fallback && _blacklist.IsBlocked(candidate, policy)) continue;
                     _lastPolicy = policy;

@@ -7,10 +7,12 @@ namespace OceanBaseConnector.Internal
 {
     internal sealed class OceanBaseEndpoint
     {
-        private OceanBaseEndpoint(string host, int port) { Host = host; Port = port; }
+        private OceanBaseEndpoint(string host, int port, DiscoveryBlacklistPolicy? blacklist = null) { Host = host; Port = port; BlacklistPolicy = blacklist; }
 
         internal string Host { get; }
         internal int Port { get; }
+        internal DiscoveryBlacklistPolicy? BlacklistPolicy { get; }
+        internal OceanBaseEndpoint WithBlacklist(DiscoveryBlacklistPolicy policy) => new OceanBaseEndpoint(Host, Port, policy);
         public override string ToString() => (Host.IndexOf(':') >= 0 ? "[" + Host + "]" : Host) +
             ":" + Port.ToString(CultureInfo.InvariantCulture);
 

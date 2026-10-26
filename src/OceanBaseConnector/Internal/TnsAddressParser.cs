@@ -120,12 +120,18 @@ namespace OceanBaseConnector.Internal
             {
                 token.ThrowIfCancellationRequested();
                 string? host = null, port = null, protocol = null, weight = null;
+                Node? localBlacklist = null;
                 foreach (var child in Children(address))
                 {
                     if (Is(child.Key, "HOST")) { if (host != null) throw Invalid(); host = Value(child); }
                     else if (Is(child.Key, "PORT")) { if (port != null) throw Invalid(); port = Value(child); }
                     else if (Is(child.Key, "PROTOCOL")) { if (protocol != null) throw Invalid(); protocol = Value(child); }
                     else if (Is(child.Key, "WEIGHT")) { if (weight != null) throw Invalid(); weight = Value(child); }
+                    else if (Is(child.Key, "OBLB_BLACKLIST"))
+                    {
+                        if (localBlacklist != null) throw Invalid();
+                        localBlacklist = child;
+                    }
                     else throw Unsupported();
                 }
                 if (host == null || port == null || protocol == null) throw Invalid();
@@ -142,7 +148,8 @@ namespace OceanBaseConnector.Internal
                     if (strategy != DiscoveryStrategy.ServerAffinity) throw Unsupported();
                     if (!int.TryParse(weight, NumberStyles.None, CultureInfo.InvariantCulture, out amount)) throw Invalid();
                 }
-                endpoints.Add(parsed[0]); weights.Add(amount); total += amount;
+                endpoints.Add(localBlacklist == null ? parsed[0] : parsed[0].WithBlacklist(ReadBlacklist(localBlacklist)));
+                weights.Add(amount); total += amount;
             }
             if (strategy == DiscoveryStrategy.ServerAffinity && total == 0) throw Invalid();
             return new DiscoveryGroup(endpoints, weights, strategy, blacklist, retryAllDowns);

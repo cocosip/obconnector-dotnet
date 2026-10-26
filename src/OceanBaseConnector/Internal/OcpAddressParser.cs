@@ -44,11 +44,12 @@ namespace OceanBaseConnector.Internal
                 if (group.TryGetValue("OBLB_RETRY_ALL_DOWNS", out var groupRetry)) tns.Append("(OBLB_RETRY_ALL_DOWNS=").Append(Quote(Integer(groupRetry))).Append(')');
                 foreach (var address in addresses)
                 {
-                    var fields = Object(address, "PROTOCOL", "HOST", "PORT", "WEIGHT");
+                    var fields = Object(address, "PROTOCOL", "HOST", "PORT", "WEIGHT", "OBLB_BLACKLIST");
                     tns.Append("(ADDRESS=(PROTOCOL=").Append(Quote(String(Required(fields, "PROTOCOL"))))
                         .Append(")(HOST=").Append(Quote(String(Required(fields, "HOST")))).Append(")(PORT=")
                         .Append(Quote(Integer(Required(fields, "PORT")))).Append(')');
                     if (fields.TryGetValue("WEIGHT", out var weight)) tns.Append("(WEIGHT=").Append(Quote(Integer(weight))).Append(')');
+                    if (fields.TryGetValue("OBLB_BLACKLIST", out var addressBlacklist)) AppendBlacklist(tns, addressBlacklist);
                     tns.Append(')');
                 }
                 tns.Append(')');

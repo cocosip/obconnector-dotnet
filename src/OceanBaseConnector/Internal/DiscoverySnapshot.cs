@@ -49,6 +49,7 @@ namespace OceanBaseConnector.Internal
                 for (var i = 0; i < group.Count; i++)
                 {
                     var endpoint = group.Endpoint(i);
+                    hasBlacklist |= endpoint.BlacklistPolicy != null;
                     if (canonical.Length != 0) canonical.Append(',');
                     canonical.Append(endpoint.ToString()); endpoints.Add(endpoint);
                     if (endpoints.Count > 256 || canonical.Length > 65536) throw new FormatException("Excessive discovery address configuration.");
