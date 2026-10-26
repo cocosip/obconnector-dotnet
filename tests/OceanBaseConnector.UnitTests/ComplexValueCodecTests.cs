@@ -155,7 +155,7 @@ namespace OceanBaseConnector.UnitTests
             => Assert.Throws<DecoderFallbackException>(() => Decode(Object(Text), hex));
 
         [Theory]
-        [InlineData(1)] [InlineData(160)] [InlineData(163)] [InlineData(210)] [InlineData(255)]
+        [InlineData(1)] [InlineData(160)] [InlineData(163)] [InlineData(255)]
         public void UnsupportedScalarLayoutsAreRejected(byte code) => Assert.Throws<NotSupportedException>(() => new ComplexType(code));
 
         [Fact]

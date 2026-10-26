@@ -247,6 +247,8 @@ namespace OceanBaseConnector
                             case "RAW": code = 203; break;
                             case "DATE": code = 12; break;
                             case "TIMESTAMP": code = 202; break;
+                            case "BLOB": code = 210; break;
+                            case "CLOB": code = 211; break;
                             default: throw new NotSupportedException("The complex dictionary member type is not supported.");
                         }
                         layout = new ComplexType(code);

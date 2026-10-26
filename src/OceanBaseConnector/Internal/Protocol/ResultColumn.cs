@@ -449,7 +449,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 var encoding = ComplexType!.Layout.HasNationalMembers && _complexOutput
                     ? (NationalCharacterSet ?? throw new NotSupportedException("The complex output has no trusted national character set.")).ResultEncoding(Charset)
                     : ComplexType.Context?.StoredNationalEncoding;
-                var values = ComplexValueCodec.DecodeResult(complex, ComplexType.Layout, Mode, encoding);
+                var values = ComplexValueCodec.DecodeResult(complex, ComplexType.Layout, Mode, encoding, Lobs);
                 if (complex.HasRemaining) throw new ProtocolException("Trailing complex value bytes.");
                 return OceanBaseComplexValue.FromResult(ComplexType, values);
             }

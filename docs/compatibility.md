@@ -1,5 +1,17 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Oracle complex BLOB/CLOB result members
+
+Binary Oracle named and anonymous complex results now decode non-NULL BLOB/CLOB members as
+`OceanBaseLob` handles bound to the active physical session, transaction and reader epoch. The
+connection must negotiate `Use Lob Locators=true`; synchronous/asynchronous materialization and
+locator ownership are covered by loopback fixtures. NULL members and skip/materialize-false paths
+do not allocate handles. Non-empty complex LOB input and InputOutput values remain rejected because
+their parameter wire contract is not established. This is local protocol evidence, not real
+OceanBase/OBProxy interoperability or server DDL acceptance; cursor members, whole-complex
+RETURNING and additional anonymous shapes remain open. See the [architecture contract](obconnector-dotnet-architecture-design.md#complex-types)
+and [module ledger](obconnector-dotnet-progress.md#2026-10-27-oracle-complex-lob-result-members).
+
 ## 2026-10-27 Oracle FLOAT routine derivation
 
 Oracle FLOAT/NUMBER_FLOAT directory signatures now derive Decimal parameters without

@@ -4,6 +4,28 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Oracle complex LOB result members
+
+P1-07/W5, developed from `103509c` on `master`. Complex member type codes 210/211 (BLOB/CLOB)
+are now accepted in named descriptors and anonymous collection metadata. Binary result decoding
+reads each member's length-encoded locator and creates an `OceanBaseLob` bound to the current
+`LobSession`; NULL members and `materialize:false` skip paths consume no locator handle. The
+connection must negotiate `Use Lob Locators=true`. Non-empty complex LOB input and InputOutput
+parameters remain rejected because no trustworthy parameter wire contract was found. Cursor members,
+whole-complex RETURNING and further anonymous/national shapes remain open.
+
+The new regressions cover BLOB/CLOB dictionary loading with input rejection, synchronous and
+asynchronous named result materialization, and anonymous BLOB/CLOB element metadata. The initial
+RED run failed on the old unsupported-member guard; the focused GREEN run passes 8/8, and the full
+complex unit family passes 421/421 with zero failures/skips. The no-TLS affected consumer selection
+passes 220/220; the broader Complex/Lob consumer filter passes 680 and has 260 TLS/PFX environment
+failures. A complete unit attempt passes 7521 and has 143 failures, including the pre-fix stale
+BLOB assertions and the same TLS/SSPI certificate environment failures; the stale assertions are
+fixed and the feature-focused rerun is green. Release build passes with zero warnings/errors and
+production-source format verification passes with only the existing workspace-load warning.
+These loopback fixtures prove local framing, ownership and metadata behavior only; they do not
+establish real OceanBase/OBProxy interoperability, server DDL support or external LOB read behavior.
+
 ## 2026-10-27 Oracle FLOAT routine derivation
 
 Developed from184a767 on master for P1-08/P1-10, W5/W6. Oracle FLOAT and NUMBER_FLOAT

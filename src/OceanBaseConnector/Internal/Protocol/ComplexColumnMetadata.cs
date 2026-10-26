@@ -26,6 +26,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 case 203: code = 203; name = "RAW"; break;
                 case 12: code = 12; name = "DATE"; break;
                 case 202: code = 202; name = "TIMESTAMP"; break;
+                case 210: code = 210; name = "BLOB"; break;
+                case 211: code = 211; name = "CLOB"; break;
                 default: return null;
             }
             return new OceanBaseComplexType(null, Schema, "", true,

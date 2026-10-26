@@ -7,6 +7,12 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 ## Current checkpoint
 
 - Development stays on `master`. No new branch/worktree and no implicit push.
+- Current local delivery: Oracle complex BLOB/CLOB members decode from binary named and anonymous
+  results into session-bound `OceanBaseLob` handles when `Use Lob Locators=true`; NULL and skipped
+  members do not allocate handles, and complex LOB input remains rejected. The complete complex
+  unit family passes 421/421 and no-TLS affected consumers pass 220/220; TLS/PFX consumer and full
+  unit failures are environment-bound. Real OceanBase/OBProxy complex-Lob interoperability is
+  unverified. See the [module record](obconnector-dotnet-progress.md#2026-10-27-oracle-complex-lob-result-members).
 - Latest local delivery, developed from184a767: Oracle FLOAT/NUMBER_FLOAT routine derivation keeps
   binary precision out of Decimal constraints, normalizes INOUT and exposes raw numeric
   metadata. Numeric signatures omit CHAR_LENGTH; character signatures require a matching
@@ -144,7 +150,7 @@ approved wire contract or can be implemented without protocol research.
 | P1-04 TLS/mTLS | Server validation callback, client certificate identity isolation, data-source snapshots, revocation options | Additional rotation/platform regression where needed | Enterprise CA/mTLS, negative handshakes, expiry/rotation and platform revocation |
 | P1-05 Command/Batch behavior | SchemaOnly Prepare-only, bounded KeyInfo/hidden keys, SingleRow/SingleResult; MySQL procedure parameters/output/multi-results; Batch metadata/data-source creation/result limits; REF CURSOR limits | Complete behavior/shape matrix; existing explicit restrictions remain | Real metadata/permissions, prepare side effects/locks, procedure and cursor behavior |
 | P1-06 Oracle output/cursors | Independent Prepare, output ownership, positive ordinary-output FetchSize hints, binary cursor-valued columns and nested ownership | **Input/InputOutput REF CURSOR, text cursor-valued columns and additional shapes**; output offset and positive array FetchSize remain rejected | Real direction/shape/pagination and resource matrix |
-| P1-07 Complex types | Nested objects/collections, directional national members, explicit descriptor clear and invalidation after observed DDL | **LOB/cursor members, further national storage/anonymous shapes, whole-complex RETURNING identity** | Real DDL invalidation, resource behavior and server-supported shapes; retained server failures remain visible |
+| P1-07 Complex types | Nested objects/collections, directional national members, explicit descriptor clear and invalidation after observed DDL, binary result BLOB/CLOB members with session-bound locators | **Cursor members, further national storage/anonymous shapes, whole-complex RETURNING identity, non-empty complex LOB input** | Real DDL invalidation, complex LOB resource behavior/interoperability and server-supported shapes; retained server failures remain visible |
 | P1-08 Types/charsets | Signed DecimalScale, faithful unknown-precision Oracle NUMBER and exact FLOAT results/binding, strict result decoding/widths; tiny/medium/long BLOB, ENUM/SET/raw GEOMETRY, ROWID, Oracle Inf/NaN; national Unicode fallback IDs; trusted MySQL string prepare fallback; GB18030-2022, DEC8/TIS620, SJIS, Big5 and HKSCS/HKSCS31; configured client SQL/ordinary and JSON parameter encodings; CLOB input prevalidation | Further national/JSON/CLOB scope and extended metadata/types still need work | Real emission/storage/coercibility, all promised collation/mode/version profiles |
 | P1-09 Discovery/HA | TCP retry rounds/backoff/shared budget, endpoint TCP reachability cache, TNS/OCP adapters, groups/weights/selection, global/group/address blacklist controls and attempt ceilings | Further discovery/policy boundaries; TCP reachability does not prove database/tenant health | Real discovery services, node/proxy failure and route changes |
 | P1-10 Schema | Mode-aware catalog collections/DataTypes and atomic routine-parameter derivation | Boundary regressions as actual dictionary differences are found; local core APIs exist | Real catalogs, permissions, case, overloads, versions and proxies |

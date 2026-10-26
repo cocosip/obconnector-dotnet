@@ -128,7 +128,7 @@ namespace OceanBaseConnector.UnitTests
                 {
                     await ComplexDictionaryReply(channel, 66, "Owner", "Thing", false,
                         new[] { "A", kind == "position" ? "2" : "1", kind == "cycle" ? "Owner" : null,
-                            kind == "cycle" ? "Thing" : "BLOB", kind == "cycle" ? "OBJECT" : "BLOB" });
+                            kind == "cycle" ? "Thing" : "CURSOR", kind == "cycle" ? "OBJECT" : "CURSOR" });
                     await StatementCommand(channel, 25);
                 }
                 await StatementCommand(channel, 3); await channel.WritePacketAsync(Ok(1));
@@ -440,7 +440,7 @@ namespace OceanBaseConnector.UnitTests
                     new[] { "GOOD", "1", "Owner", "Good_Type", "COLLECTION" }, new[] { "BAD", "2", "Owner", "Bad_Type", "OBJECT" });
                 await StatementCommand(channel, 25);
                 await ComplexScalarType(channel, name: "Good_Type");
-                await ComplexScalarType(channel, name: "Bad_Type", scalar: "BLOB", collection: false);
+                await ComplexScalarType(channel, name: "Bad_Type", scalar: "CURSOR", collection: false);
                 await ComplexScalarType(channel, name: "Good_Type");
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port));
@@ -473,6 +473,25 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(value, type.CreateValue(value).GetValues()[0]); Assert.Null(type.CreateValue(DBNull.Value).GetValues()[0]);
                 Assert.Empty(type.CreateValue().GetValues());
                 Assert.Throws<ArgumentException>(() => type.CreateValue(new object()));
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData("BLOB", OceanBaseDbType.Blob)]
+        [InlineData("CLOB", OceanBaseDbType.Clob)]
+        public async Task ComplexDictionaryLoadsLobMembersButDoesNotCreateLobParameters(string scalar, OceanBaseDbType dbType)
+        {
+            var server = Server(async channel => await ComplexScalarType(channel, scalar: scalar, collection: false));
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                var type = await connection.GetComplexTypeAsync("Owner", "Thing");
+                Assert.Equal(scalar, type.Members[0].TypeName);
+                Assert.Throws<NotSupportedException>(() => type.CreateValue(new object()));
+                Assert.Equal(dbType, new OceanBaseParameter { OceanBaseDbType = dbType }.OceanBaseDbType);
             }
             finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));

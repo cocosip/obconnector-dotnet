@@ -8,7 +8,7 @@ namespace OceanBaseConnector.Internal.Values
     {
         internal ComplexType(byte scalarType)
         {
-            if (scalarType != 0 && scalarType != 253 && scalarType != 254 && scalarType != 203 && scalarType != 12 && scalarType != 202 && scalarType != 207 && scalarType != 208)
+            if (scalarType != 0 && scalarType != 253 && scalarType != 254 && scalarType != 203 && scalarType != 12 && scalarType != 202 && scalarType != 207 && scalarType != 208 && scalarType != 210 && scalarType != 211)
                 throw new NotSupportedException("The complex member type is not supported.");
             HasNationalMembers = scalarType == 207 || scalarType == 208;
             TypeCode = scalarType; Members = System.Array.AsReadOnly(System.Array.Empty<ComplexType>());

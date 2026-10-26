@@ -67,6 +67,17 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
+        [InlineData((byte)210, "BLOB")]
+        [InlineData((byte)211, "CLOB")]
+        public void AnonymousComplexLobMetadataExposesTheDeclaredElement(byte element, string name)
+        {
+            var column = ResultColumn.Parse(ComplexColumn(name: "", element: element), OceanBaseCompatibilityMode.Oracle);
+            Assert.Equal("ARRAY", column.DataTypeName);
+            Assert.Equal(name, column.ComplexType!.Members[0].TypeName);
+            Assert.Equal(typeof(OceanBaseComplexValue), column.FieldType);
+        }
+
+        [Theory]
         [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
         public async Task ComplexResultsReadOrSkipExactlyOneFieldAndKeepSessionReusable(bool async, bool sequential)
         {
@@ -365,6 +376,38 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(9L, reader.GetInt64(1));
                 Assert.True(async ? await reader.ReadAsync() : reader.Read()); Assert.Equal(9L, reader.GetInt64(1));
                 Assert.False(async ? await reader.ReadAsync() : reader.Read());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData("BLOB", false)] [InlineData("BLOB", true)]
+        [InlineData("CLOB", false)] [InlineData("CLOB", true)]
+        public async Task ComplexLobMembersPublishBoundHandlesFromBinaryResults(string scalar, bool async)
+        {
+            var locator = InlineLob(Encoding.UTF8.GetBytes(scalar == "CLOB" ? "患者" : "blob"));
+            var server = Server(async channel =>
+            {
+                await ComplexScalarType(channel, scalar: scalar, collection: false);
+                await StatementCommand(channel, 22); await Prepared(channel, 241, 0); await StatementCommand(channel, 23);
+                await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 0, 0, 0 }.Concat(WithLength(locator)).ToArray()); await channel.WritePacketAsync(Eof());
+                await StatementCommand(channel, 25);
+            }, lobLocators: true);
+            using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
+            try
+            {
+                await connection.OpenAsync(); await connection.GetComplexTypeAsync("Owner", "Thing");
+                using var command = connection.CreateCommand(); command.CommandText = "complex"; await command.PrepareAsync();
+                using (var reader = async ? await command.ExecuteReaderAsync() : command.ExecuteReader())
+                {
+                    Assert.True(async ? await reader.ReadAsync() : reader.Read());
+                    var value = Assert.IsType<OceanBaseComplexValue>(reader.GetValue(0));
+                    using var lob = Assert.IsType<OceanBaseLob>(Assert.Single(value.GetValues()));
+                    Assert.Equal(scalar == "CLOB", lob.IsCharacter); Assert.Equal(scalar == "CLOB" ? 6 : 4, lob.ByteLength);
+                    Assert.False(async ? await reader.ReadAsync() : reader.Read());
+                }
             }
             finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));

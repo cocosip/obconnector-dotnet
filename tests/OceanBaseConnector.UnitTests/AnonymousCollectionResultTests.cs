@@ -77,8 +77,6 @@ namespace OceanBaseConnector.UnitTests
         [InlineData((byte)163)]
         [InlineData((byte)200)]
         [InlineData((byte)201)]
-        [InlineData((byte)210)]
-        [InlineData((byte)211)]
         [InlineData((byte)4)]
         [InlineData((byte)255)]
         public void AnonymousCollectionUnsupportedElementsRejectEvenNullResults(byte element)
