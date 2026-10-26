@@ -1,5 +1,29 @@
 # Verification status and remaining work
 
+## 2026-10-26 Batch metadata and data-source batch command creation
+
+Developed from master/d7a5354 for P1-05/W5. Modern batches now accept SchemaOnly and KeyInfo through
+the existing command metadata planner and same-session catalog exchange. The batch retains its reserved
+session until reader close; early close skips unstarted entries. SchemaOnly never executes the target or
+reads input values. Hidden columns, failure attribution, cancellation and original-lease CloseConnection
+are covered. SingleRow/SingleResult and procedure/output/multi-statement metadata remain unsupported.
+
+Public consumers exposed another concrete gap: source.CreateBatch().CreateBatchCommand threw from the
+runtime's private DbBatchWrapper. The source now returns the provider batch owning its connection.
+All execution forms open/close the owned lease; source timeout/ambient behavior and unsupported external
+Connection/Transaction/Prepare remain. No new public type, package or runtime configuration.
+See [contract](obconnector-dotnet-architecture-design.md#batch-metadata) and
+[full evidence/history](obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
+
+New unit coverage51 and public consumers72; affected units269 and consumers162 pass,0fail/skip.
+Full units6198 pass (prior6147 retained plus51,8m7),0fail/skip. Final Release solution0warnings/errors,2.39s;
+four-file scoped whitespace verification exits0 with existing workspace warning. Source/project524 and
+ReleaseDLL1266 frozen hashes are unchanged. First12 metadata RED, first public36pass/36source-creation
+failures and later fixture failures remain recorded. Final read-only evidence/contract review independently checked reports, retained names and frozen hashes; no blockers remain. The reviewer did not run builds/tests. Three modern assets share one
+Windows/.NET10host; no new real database/OBProxy/enterprise TLS/platform/load acceptance. All23IDs/eight
+work packages remain open. Local master commit only, no push/publication.
+
+
 ## 2026-10-26 collectible protocol diagnostic state repair
 
 The pool-handoff default gate led to a separate confirmed diagnostic unloading defect. Serial test

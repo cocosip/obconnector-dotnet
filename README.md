@@ -1,5 +1,7 @@
 # OceanBaseConnector for .NET
 
+Modern `DbBatch` supports [SchemaOnly/KeyInfo metadata](docs/obconnector-dotnet-architecture-design.md#batch-metadata). Advance entries with NextResult and dispose the reader to release its reservation. Data-source batches support direct CreateBatchCommand and own their connection lifetime.
+
 Observe [protocol frame diagnostics](docs/protocol-diagnostics.md) through the standard .NET
 DiagnosticListener named `OceanBaseConnector.Protocol`. Fixed frame/boundary/error metadata spans
 MySQL, compression and OB20; SQL, authentication, parameters and payloads are omitted.
@@ -22,7 +24,7 @@ A managed ADO.NET provider for OceanBase MySQL and Oracle compatibility modes.
 
 The driver is experimental. Recorded database runs cover direct OceanBase 4.4.2.2 with TLS disabled; the Oracle suite still has a failed case and cleanup failure. OBProxy and other deployment profiles remain unverified. See [failed tests, unsupported behavior and compatibility gaps](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/compatibility.md).
 
-The affected Windows/.NET10.0.12 consumer matrix now passes642 cases with default runtime settings after
+At the diagnostic-repair checkpoint, the affected Windows/.NET10.0.12 consumer matrix passed642 cases with default runtime settings after
 [a diagnostic unloading fix](docs/compatibility.md#2026-10-26-collectible-diagnostic-unloading-repair).
 Historical crashes and remaining independent-runtime/release acceptance are retained in that record.
 

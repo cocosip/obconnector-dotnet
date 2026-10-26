@@ -40,6 +40,7 @@ namespace OceanBaseConnector
         /// <summary>Close idle pooled sessions and discard borrowed sessions on return.
         /// The data source and its configuration remain available for new connections.</summary>
         public void Clear() { EnsureAvailable(); Pool.Clear(); }
+        protected override DbBatch CreateDbBatch() => new OceanBaseBatch((OceanBaseConnection)CreateDbConnection()) { Timeout = _options.CommandTimeoutSeconds };
         protected override DbConnection CreateDbConnection()
         {
             lock (_gate)

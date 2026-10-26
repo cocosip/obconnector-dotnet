@@ -17,19 +17,21 @@ namespace OceanBaseConnector
         private OceanBaseTransaction? _transaction;
         private int _timeout = OceanBaseConnectionStringBuilder.DefaultCommandTimeoutSeconds;
         private bool _disposed;
+        private readonly bool _ownsConnection;
         private Operation? _operation;
         public OceanBaseBatch() => _commands = new OceanBaseBatchCommandCollection(this);
+        internal OceanBaseBatch(OceanBaseConnection connection) : this() { _connection = connection; _ownsConnection = true; }
         protected override DbBatchCommandCollection DbBatchCommands => _commands;
         public override int Timeout { get => _timeout; set { lock (Gate) { CheckMutable(); if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _timeout = value; } } }
         protected override DbConnection? DbConnection
         {
-            get => _connection;
-            set { lock (Gate) { CheckMutable(); _connection = value == null ? null : value as OceanBaseConnection ?? throw new ArgumentException("An OceanBaseConnection is required.", nameof(value)); } }
+            get => _ownsConnection ? throw new NotSupportedException("A data source batch owns its connection.") : _connection;
+            set { lock (Gate) { CheckMutable(); if (_ownsConnection) throw new NotSupportedException("A data source batch owns its connection."); _connection = value == null ? null : value as OceanBaseConnection ?? throw new ArgumentException("An OceanBaseConnection is required.", nameof(value)); } }
         }
         protected override DbTransaction? DbTransaction
         {
-            get => _transaction;
-            set { lock (Gate) { CheckMutable(); _transaction = value == null ? null : value as OceanBaseTransaction ?? throw new ArgumentException("An OceanBaseTransaction is required.", nameof(value)); } }
+            get => _ownsConnection ? throw new NotSupportedException("A data source batch owns its transaction context.") : _transaction;
+            set { lock (Gate) { CheckMutable(); if (_ownsConnection) throw new NotSupportedException("A data source batch owns its transaction context."); _transaction = value == null ? null : value as OceanBaseTransaction ?? throw new ArgumentException("An OceanBaseTransaction is required.", nameof(value)); } }
         }
         protected override DbBatchCommand CreateDbBatchCommand() { lock (Gate) { if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseBatch)); return new OceanBaseBatchCommand(); } }
         internal void CheckMutable()
@@ -45,7 +47,7 @@ namespace OceanBaseConnector
             lock (Gate)
             {
                 CheckMutable(); token.ThrowIfCancellationRequested();
-                if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess)) != 0) throw new NotSupportedException("This CommandBehavior is not supported.");
+                if ((behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess | CommandBehavior.SchemaOnly | CommandBehavior.KeyInfo)) != 0) throw new NotSupportedException("This CommandBehavior is not supported.");
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
                 connection.EnsureAmbientTransaction();
                 var transaction = connection.ResolveCommandTransaction(_transaction);
@@ -67,13 +69,35 @@ namespace OceanBaseConnector
         }
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
         {
-            var operation = Start(behavior, CancellationToken.None); var reader = new OceanBaseBatchReader(operation); operation.Reader = reader;
-            try { reader.Start(); return reader; } catch { reader.Close(); throw; }
+            if (_ownsConnection) _connection!.Open();
+            try
+            {
+                var operation = Start(_ownsConnection ? behavior | CommandBehavior.CloseConnection : behavior, CancellationToken.None);
+                var reader = new OceanBaseBatchReader(operation); operation.Reader = reader;
+                try { reader.Start(); return reader; } catch { reader.Close(); throw; }
+            }
+            catch
+            {
+                // Preserve the execution failure if owned-connection cleanup also fails.
+                try { if (_ownsConnection) _connection!.Close(); } catch { }
+                throw;
+            }
         }
         protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
         {
-            var operation = Start(behavior, cancellationToken); var reader = new OceanBaseBatchReader(operation); operation.Reader = reader;
-            try { await reader.StartAsync().ConfigureAwait(false); return reader; } catch { await reader.CloseAsync().ConfigureAwait(false); throw; }
+            if (_ownsConnection) await _connection!.OpenAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var operation = Start(_ownsConnection ? behavior | CommandBehavior.CloseConnection : behavior, cancellationToken);
+                var reader = new OceanBaseBatchReader(operation); operation.Reader = reader;
+                try { await reader.StartAsync().ConfigureAwait(false); return reader; } catch { await reader.CloseAsync().ConfigureAwait(false); throw; }
+            }
+            catch
+            {
+                // Preserve the execution failure if owned-connection cleanup also fails.
+                try { if (_ownsConnection) await _connection!.CloseAsync().ConfigureAwait(false); } catch { }
+                throw;
+            }
         }
         public override int ExecuteNonQuery()
         {
@@ -99,11 +123,13 @@ namespace OceanBaseConnector
         }
         public override void Prepare()
         {
+            if (_ownsConnection) throw new NotSupportedException("A data source batch cannot be prepared independently of a connection.");
             using var operation = Start(CommandBehavior.Default, CancellationToken.None);
             foreach (var command in operation.Commands) { operation.ThrowIfCanceled(); command.PrepareCore(operation.Token); }
         }
         public override async Task PrepareAsync(CancellationToken cancellationToken = default)
         {
+            if (_ownsConnection) throw new NotSupportedException("A data source batch cannot be prepared independently of a connection.");
             using var operation = Start(CommandBehavior.Default, cancellationToken);
             foreach (var command in operation.Commands) { operation.ThrowIfCanceled(); await command.PrepareAsync(operation.Token).ConfigureAwait(false); }
         }
@@ -112,17 +138,25 @@ namespace OceanBaseConnector
         {
             Operation? operation;
             lock (Gate) { if (_disposed) return; _disposed = true; operation = _operation; }
-            operation?.Reader?.Close(); operation?.Dispose();
-            foreach (OceanBaseBatchCommand command in _commands) command.Release();
+            try
+            {
+                operation?.Reader?.Close(); operation?.Dispose();
+                foreach (OceanBaseBatchCommand command in _commands) command.Release();
+            }
+            finally { if (_ownsConnection) _connection!.Dispose(); }
             GC.SuppressFinalize(this);
         }
         public override async ValueTask DisposeAsync()
         {
             Operation? operation;
             lock (Gate) { if (_disposed) return; _disposed = true; operation = _operation; }
-            if (operation?.Reader != null) await operation.Reader.CloseAsync().ConfigureAwait(false);
-            operation?.Dispose();
-            foreach (OceanBaseBatchCommand command in _commands) await command.ReleaseAsync().ConfigureAwait(false);
+            try
+            {
+                if (operation?.Reader != null) await operation.Reader.CloseAsync().ConfigureAwait(false);
+                operation?.Dispose();
+                foreach (OceanBaseBatchCommand command in _commands) await command.ReleaseAsync().ConfigureAwait(false);
+            }
+            finally { if (_ownsConnection) await _connection!.DisposeAsync().ConfigureAwait(false); }
             GC.SuppressFinalize(this);
         }
 

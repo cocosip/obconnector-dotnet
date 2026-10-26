@@ -231,7 +231,7 @@ External DDL and arbitrary stored-function/trigger side effects have no client-s
 
 ### Key information and hidden columns
 
-`CommandBehavior.KeyInfo` requires a single text statement with input parameters and server preparation; it never uses client prepare fallback. Procedure/output/array and multi-statement combinations are rejected before sending the target. It can be combined with SchemaOnly, SequentialAccess, SingleRow, SingleResult and CloseConnection. Batch retains its narrower behavior set.
+`CommandBehavior.KeyInfo` requires a single text statement with input parameters and server preparation; it never uses client prepare fallback. Procedure/output/array and multi-statement combinations are rejected before sending the target. It can be combined with SchemaOnly, SequentialAccess, SingleRow, SingleResult and CloseConnection. Batch supports KeyInfo with SchemaOnly, SequentialAccess and CloseConnection; SingleRow/SingleResult remain unsupported for batches. See the [batch metadata contract](#batch-metadata).
 
 For a provably row-preserving single-base-table SELECT, the driver reads the key catalog on the same reserved physical session and transaction before target execution or long-data upload. Catalog filters are parameters. It chooses the complete primary key, otherwise a deterministic complete nonnullable unique key. A nullable single-column unique constraint sets IsUnique=true and may keep AllowDBNull=true, but is not selected as IsKey; composite members are not individually unique. Oracle effective P/U constraints use ALL_CONS_COLUMNS, independently of their backing index, with disabled/unvalidated/deferrable constraints excluded. Eligible standalone normal valid unique indexes are separate candidates. MySQL prefix/functional index members disqualify that entire candidate.
 
@@ -240,6 +240,30 @@ Missing members of the selected row key are appended as hidden columns at the en
 The recognizer supports a single named source, optional schema/alias, simple projection expressions without parentheses, WHERE (including nested filters), ORDER BY without functions, LIMIT/OFFSET/FETCH and FOR clauses. It handles quoted identifiers, comments and Oracle Q/NQ literals. DISTINCT/UNIQUE, grouping/aggregation, joins, set operations, CTEs, derived sources and other ambiguous shapes keep their original SQL/result shape and unknown IsKey/IsUnique. Views, synonyms, unavailable directory identities and ambiguous MySQL SQL_MODE-dependent quoting likewise receive no invented row key or hidden additions. Missing provenance alone does not prove IsExpression; updateability remains unknown. Normal execution uses actual result metadata for unenhanced queries, including parameter expressions whose execution-time types differ from preparation.
 
 Directory parsing is bounded to 4096 rows / 4 MiB of string content; hidden additions respect the 4096-column and command packet limits. Errors or cancellation during preparation or directory lookup propagate before executing the target; directory lookups do not set HasSentSql or an unknown target outcome. Cancellation after sending the target retains the ordinary unknown-outcome rules. SchemaOnly still performs no target execution/fetch/parameter upload, although preparation and directory queries can check permissions and take metadata locks. This bounded provider contract has local fixture coverage; actual OceanBase/OBProxy dictionary SQL, DDL/lock races and supported-version/permission matrices still require real acceptance.
+
+### Batch metadata
+
+Modern DbBatch assets (net8.0/net9.0/net10.0) accept SchemaOnly and KeyInfo, individually or combined
+with SequentialAccess/CloseConnection. Each entry retains the command text/input-only, single-statement
+and server-prepare restrictions. SchemaOnly prepares the target without executing it, uploading/encoding
+input values or client fallback. KeyInfo directory queries and optional hidden-key preparation use the
+batch's reserved physical session. SchemaOnly may still require directory reads; server parsing,
+permissions and metadata locks remain possible. KeyInfo without SchemaOnly executes the target normally.
+Hidden columns and VisibleFieldCount follow the command's bounded key contract.
+
+NextResult advances lazily to the next entry. The reservation persists even after metadata is exhausted,
+until the batch reader closes. Early close skips unstarted entries. Metadata failure releases the
+reservation; server errors identify BatchCommand. Preparation/catalog failure does not imply target
+execution. Pending-metadata cancellation/timeout can break the session. No replay or implicit transaction
+is added. Batch SingleRow and SingleResult remain unsupported.
+
+OceanBaseDataSource.CreateBatch returns a provider batch with an owned connection and supports direct
+CreateBatchCommand. Each execution opens its connection; reader closure closes or returns that lease.
+Scalar/nonquery executions drain and dispose their reader. Failure and disposal also clean up the owned
+connection. Connection/Transaction getters/setters and standalone Prepare remain unsupported. Open may
+join the ambient single-resource transaction. The source command timeout is the batch default. Normal
+connection batches keep caller-owned connection behavior. Standard assets expose no modern batch API.
+See [local evidence and remaining acceptance](obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
 
 ### Data adapters and command generation
 
