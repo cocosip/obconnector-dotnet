@@ -1,9 +1,9 @@
 # OceanBaseConnector .NET 完整驱动能力与缺口基线
 
-**最近复核：** 2026-10-26；基于0484943的真实nupkg本地协议消费者；全部23项及八工作包仍开放。
-**当前模块：** P2-05/W8；完整性第15.74节；上一模块字符串prepare降级保留第15.73节。
-**当前验证：** 六资产/运行时配置共48项协议场景通过，无失败/跳过；消费者构建零警告/错误，独立走查无遗留阻断。
-**本次补充：** 双模式参数执行、结果/NULL、已知ERR恢复、事务、池reset及不同逻辑借用者的物理复用。
+**最近复核：** 2026-10-26；基于3196a45的GB18030-2022普通结果；全部23项及八工作包仍开放。
+**当前模块：** P1-08/W5；完整性第15.75节；上一模块包消费者保留第15.74节。
+**当前验证：** 原RED20失败；GREEN20、专项498、完整单测7042及受影响消费者420通过，Release构建零警告/错误，独立走查无遗留阻断。
+**本次补充：** 固定OceanBase源码的18组映射及全部十个collation ID，独立OpenJDK BMP编码/解码摘要一致。
 本模块无新增实库兼容性证据；历史12项greeting前失败保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
@@ -474,7 +474,7 @@ MySQL `CommandType.StoredProcedure` 已有独立执行计划：集合顺序绑�
 
 当前类型映射覆盖大量常用值，但遇到未识别 type code、扩展 metadata、非支持字符集或超出精度边界时会失败。
 
-普通结果字符集已有共享严格映射与流式 decoder，覆盖 ASCII、MySQL latin1/CP1252、GBK、GB18030-2005、UTF-16/LE 和列明的 UTF-8 collation；完整 ID、宽度、非法字节拒绝及客户端/national/JSON/CLOB 边界见[结果字符集契约](obconnector-dotnet-architecture-design.md#result-character-sets)。MySQL ColumnSize 使用 charset 最大宽度，Oracle 长度语义保持不变。六字符集实库专项仅覆盖 4.4.2.2 MySQL 直连；UTF16/LE 使用 NULL 保留表达式原编码，直接 SET 的 1231/42000 失败保留，详见第 15.32 节。其他编码、GB18030-2022、全部 collation/模式/版本/代理矩阵继续开放。
+普通结果字符集已有共享严格映射与流式 decoder，覆盖 ASCII、MySQL latin1/CP1252、GBK、GB18030-2005、UTF-16/LE 和列明的 UTF-8 collation；GB18030-2022本地开发/验证见第15.75节。完整 ID、宽度、非法字节拒绝及客户端/national/JSON/CLOB 边界见[结果字符集契约](obconnector-dotnet-architecture-design.md#result-character-sets)。MySQL ColumnSize 使用 charset 最大宽度，Oracle 长度语义保持不变。六字符集历史实库专项仅覆盖 4.4.2.2 MySQL 直连；UTF16/LE 使用 NULL 保留表达式原编码，直接 SET 的 1231/42000 失败保留，详见第 15.32 节。2022实库、其他编码及全部 collation/模式/版本/代理矩阵继续开放。
 
 Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持 byte 契约，现通过 `int? OceanBaseParameter.DecimalScale` 显式声明有符号 scale。Oracle -84..127、MySQL 0..30 及精度/无舍入约束已有本地回归，赋值优先级见[参数契约](obconnector-dotnet-architecture-design.md#decimal-parameter-scale)，交付记录见第 15.16 节。自动参数推导沿用该表示，本地回归覆盖负值的保留及精度约束；真实目录/声明矩阵仍须验收。
 
@@ -702,7 +702,7 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 | P1-05 | MySQL `CommandType.StoredProcedure` 已有有序参数/输出与关闭排空实现，仍有限定方向/capability/行为和真实部署验收（第 15.30 节），目录/参数推导不证明执行兼容性；`KeyInfo` 已有主键/唯一键与单基表隐藏列实现，复杂形状保留 unknown；Batch已支持SchemaOnly/KeyInfo及源条目创建（第15.60节），SingleRow/SingleResult跨批次限制及共享SingleRow修正见第15.61节；REF CURSOR支持SingleRow/SingleResult（第15.62节）；`SchemaOnly` 已改为 Prepare-only 并禁止目标执行/fallback/参数上传；真实准备行为及结果形状矩阵仍缺。 | `OceanBaseCommand.cs`；`OceanBaseDataReader.cs`；`OceanBaseBatch.cs`；`KeyInfoTests.cs`、`KeyInfoPlanningTests.cs`、`MySqlProcedureTests.cs`、`MySqlProcedureLifecycleTests.cs`、`SchemaOnlyTests.cs`、`BehaviorOptionsTests.cs`、`ReaderSchemaTests.cs`、`BatchSurfaceTests.cs`、`BatchMetadataTests.cs`、`LimitedResultBehaviorTests.cs`、`LimitedCursorBehaviorTests.cs`、`RefCursorTests.cs`；消费者 `KeyInfoConsumerTests.cs`、`SchemaOnlyConsumerTests.cs`、`BatchMetadataConsumerTests.cs`、`LimitedResultConsumerTests.cs`、`RefCursorConsumerTests.cs` | MySQL 过程名、参数方向/输出、多结果及取消/错误/池复用的执行回归与实库报告；命令/Batch/REF CURSOR 行为表、主键/唯一键元数据、SchemaOnly 副作用/锁/大结果用例；按实际实现公开限制，不把 SQL 前缀当成只读证明。 |
 | P1-06 | REF CURSOR Input/InputOutput与文本cursor列仍拒绝；普通二进制列/嵌套所有权已有本地实现（第15.56节），实库仍待验收；独立Prepare及正命令FetchSize提示已有实现，内部输出不分页（第15.46节）。输出offset与ExecuteArray正FetchSize仍拒绝，其余方向/结果形状与部署矩阵继续开放。 | `Internal/Sql/OracleCommandPlan.cs`；`OceanBaseCommand.cs`；`RefCursorTests.cs`、`OraclePrepareExecuteResponseTests.cs` | 参数方向 × NULL × 输出行数 × 多结果 × 取消/关闭矩阵；输入/输出游标明确所有权；服务端不支持的形状单列，不伪造通过。 |
 | P1-07 | 嵌套 object/collection 已可编解码，NCHAR/NVARCHAR2已有有界支持；LOB/cursor、其他national存储/匿名结果和复杂整列RETURNING身份仍受限。可观察 DDL 发送时已自动失效，外部/不透明 DDL 须显式清理；真实 DDL/锁/隐式提交仍未验证。 | `OceanBaseConnection.ComplexTypes.cs`；`Internal/Values/ComplexType.cs`、`ComplexValueCodec.cs`；`ComplexTypeDictionaryTests.cs`、`ComplexResultTests.cs` | 保留既有嵌套回归，扩展成员类型与 NULL；DDL 后旧描述失效、跨 session/transaction 不误用；深度/成员/字节限制和循环定义继续拒绝。 |
-| P1-08 | 普通结果字符集已有严格映射/宽度及流式解码；其他/2022 编码、扩展 metadata/未知类型码仍拒绝；national 限已支持编码；MySQL 客户端字符串降级已有可信UTF-8会话子集（第15.73节），非UTF-8及无反斜杠模式NUL仍拒绝。 | `Internal/Protocol/ResultCharacterSet.cs`、`ChineseEncoding.cs`、`ResultColumn.cs`、`ResultDbColumn.cs`、`NationalCharacterSet.cs`；`Internal/Sql/ClientPreparedSql.cs`、`MySqlLiteralContext.cs`；`CharacterSetTests.cs`、`CharacterSetReaderTests.cs`、`CharacterSetConsumerTests.cs`、`NationalCharacterTests.cs`、`ClientPrepareFallbackTests.cs`、`MySqlClientStringPrepareTests.cs`、`WideDecimalTests.cs` | 每种类型的参数/结果/NULL/精度/溢出表；编码不可表示时不静默替换；字符串降级的真实collation/coercibility及SQL mode/代理验收继续开放；不把禁止降级误称server prepare缺失。 |
+| P1-08 | 普通结果字符集已有严格映射/宽度及流式解码；2022本地开发/验证见第15.75节；其他编码、扩展 metadata/未知类型码仍拒绝；national 限已支持编码；MySQL 客户端字符串降级已有可信UTF-8会话子集（第15.73节），非UTF-8及无反斜杠模式NUL仍拒绝。 | `Internal/Protocol/ResultCharacterSet.cs`、`ChineseEncoding.cs`、`ResultColumn.cs`、`ResultDbColumn.cs`、`NationalCharacterSet.cs`；`Internal/Sql/ClientPreparedSql.cs`、`MySqlLiteralContext.cs`；`Gb180302022Tests.cs`、`CharacterSetTests.cs`、`CharacterSetReaderTests.cs`、`CharacterSetConsumerTests.cs`、`NationalCharacterTests.cs`、`ClientPrepareFallbackTests.cs`、`MySqlClientStringPrepareTests.cs`、`WideDecimalTests.cs` | 每种类型的参数/结果/NULL/精度/溢出表；编码不可表示时不静默替换；字符串降级的真实collation/coercibility及SQL mode/代理验收继续开放；不把禁止降级误称server prepare缺失。 |
 | P1-09 | 整轮TCP重试/预算、端点TCP健康缓存、TNS/OCP适配、分组/策略/权重及分组黑名单覆盖已有本地实现（第15.63节）；其他发现策略边界、代理拓扑及真实健康/故障验收仍缺；只注入resolver不能证明HA。 | `IOceanBaseAddressResolver.cs`；`Internal/EndpointSelector.cs`；`MultiAddressTests.cs`、`TopologyExecutionTests.cs`、`ConnectRetryTests.cs`、`EndpointHealthTests.cs`、`EndpointHealthCacheTests.cs`、`OceanBaseTnsAddressResolver.cs`、`TnsAddressResolverTests.cs`、`OceanBaseOcpAddressResolver.cs`、`OcpAddressResolverTests.cs`、`DiscoverySnapshot.cs`、`DiscoveryPolicyTests.cs`、`GroupBlacklistTests.cs` | 地址更新、旧会话失效、错误身份/TLS 不重试、预算/退避、代理 reroute 和节点故障报告；与 P0-06 共同冻结池路由契约。 |
 | P1-10 | 常用目录已本地实现；Types/Synonyms 为 Oracle-only，Users/Sequences 可能需要额外权限；真实字典/版本/代理矩阵未验证。DataTypes 及自动参数推导已有本地实现；真实目录互操作未验证。 | `OceanBaseConnection.Schema.cs`、`OceanBaseConnection.Schema.Routines.cs`、`OceanBaseConnection.Schema.Catalog.cs`、`OceanBaseConnection.Schema.DataTypes.cs`；`DataTypeSchemaTests.cs`、`CatalogSchemaTests.cs`、`ConnectionSchemaTests.cs`、`RoutineSchemaTests.cs`；另有 `OceanBaseCommand.Parameters.cs`、`OceanBaseConnection.Parameters.cs`、`Internal/Sql/RoutineParameterDerivation.cs`、`DeriveParameters*Tests.cs`，见第 15.18 节 | 保留 DataTypes 实际 codec/可信字符集正向与拒绝、五资产和完整形状、限制参数、精度、空目录、权限错误回归；完成集合/大小写/权限 × 双模式实库和代理矩阵；保留自动参数推导本地回归，并按第 5.10.1 节完成实库验收。 |
 | P1-11 | 应用需要短期口令/token 或密钥轮换；本地实现已完成，真实过期/拒绝/轮换服务与插件矩阵仍未验证。 | `IOceanBaseCredentialProvider.cs`；`OceanBaseConnection.Credentials.cs`；`Internal/CredentialAcquisition.cs`；`Internal/Session/PhysicalSessionPool.Credentials.cs`；`CredentialProviderTests.cs`、`CredentialProviderLifecycleTests.cs`、`CredentialProviderDiagnosticsTests.cs`；消费者 `CredentialProviderConsumerTests.cs` | API 获取时点、取消、过期/刷新失败、并发刷新和旧会话失效测试；日志/trace/指标不包含凭据；本地插件测试外还需真实 plugin/KDC 成功及拒绝矩阵。 |
@@ -2627,6 +2627,30 @@ the [progress record](obconnector-dotnet-progress.md#2026-10-26-packaged-protoco
 This adds local Windows packaged protocol evidence only. No real database was accessed; complete
 feature/runtime/platform/real server/OBProxy/TLS/auth/fault/load/publication matrices remain open.
 All23 gap IDs/eight work packages and further offline implementation remain open.
+
+### 15.75 2026-10-26 GB18030-2022 ordinary results
+
+P1-08/W5, developed from3196a45. All ten2022 ordinary-result collations in the pinned v4.3.5_CE map
+(216–222/330/345/360) select a separate strict encoding using the existing ChineseEncoding decoder
+and18 reversible PUA/assigned-scalar swaps.2005 IDs/mappings and the prior U+1E3F correction are
+preserved. Width4 metadata, text/prepared and buffered/sequential reads share the same path. No new
+dependency/public option or client/national/JSON/CLOB encoding contract is introduced. See the
+[fixed sources and public contract](obconnector-dotnet-architecture-design.md#result-character-sets).
+
+InitialRED20 demonstrated explicit unsupported collations; GREEN20 and affected498 passed, no
+failures/skips. Fresh OpenJDK21.0.12.1+1 output matches all63,488 BMP scalar encoding and23,940
+two-byte/39,420 BMP four-byte decoding digest expectations. Every remap pair tests both directions,
+legacy mappings and all incremental split/count/reset boundaries. Unsupported216/222 fixtures were
+replaced with unknown223/324 holes; strict malformed/truncated/out-of-range checks remain. Release
+solution build passed with zero warnings/errors. Complete units7042 and affected consumers420 passed
+without failures/skips,8minutes11seconds and1minute56seconds respectively. Independent source/tests/
+contracts review found no remaining blockers. Five-asset consumers add20 MySQL async four-shape cases
+on one.NET10host; dual-mode sync/async ordinary-column fixtures run in the unit suite. Pure codec cases
+cover ordinary string/BLOB families; no new public2022 BLOB or tiny-buffer/endpoint-specific matrix.
+
+No real database was accessed. Historical2005 real reports do not validate2022; actual emission,
+storage, complete collation/mode/version/proxy/TLS/runtime/platform and remaining offline functionality
+stay open. All23 IDs/eight work packages remain open.
 
 ## 16. 剩余交付工作包
 

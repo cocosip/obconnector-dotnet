@@ -1,5 +1,44 @@
 # Verification status and remaining work
 
+## 2026-10-26 GB18030-2022 ordinary results
+
+Developed from3196a45 for P1-08/W5. Ordinary result collations216–222/330/345/360 now select a distinct
+GB18030-2022 encoding. Existing ChineseEncoding framing/stateful decoder and2005 correction are
+reused, with18 reversible BMP PUA/assigned-scalar swaps. No public option, dependency, global encoding
+registration or client-charset negotiation was added. Existing2005 IDs and mappings are preserved;
+national/JSON/CLOB contracts keep their scope. Both modes share ordinary result mapping and width4
+metadata. The [public contract](obconnector-dotnet-architecture-design.md#result-character-sets)
+contains fixed source links and an optional independent reference regeneration command.
+
+Release v4.3.5_CE resolves to5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5. The pinned ob_charset.h confirms
+all ten IDs and ob_ctype_gb18030.cc:init_gb18030_2022 confirms all18 swaps. Sources were fetched over
+certificate-verified HTTPS; sandbox TLS failure was resolved through authorized execution without
+insecure fallback. Source snapshots/hashes remain under ignored TestResults/local-completeness/
+gb18030-baseline*. The earlier Go codec helped locate references; product changes were checked
+against the pinned OceanBase sources and fresh independent OpenJDK output.
+
+Initial RED20 failed on the previous explicit collation refusal; GREEN20 passed. Fresh Temurin
+OpenJDK21.0.12.1+1 reference generation matched the committed expected SHA256 values for63,488 BMP
+scalar encodings and23,940 legal two-byte plus39,420 BMP four-byte decode positions. All18 mapping
+pairs verify both directions, both revisions and every byte split/count/reset. Malformed/truncated
+and out-of-range bytes remain strict failures. The former216/222 unsupported cases now use enum holes
+223/324; rejection coverage is retained for unsupported IDs. Affected498 unit cases passed without
+failures/skips. Release solution build passed with zero warnings/errors,5.92seconds.
+
+Complete units7042 passed without failures/skips in8minutes11seconds.
+Affected five-asset consumers passed420 without failures/skips in1minute56seconds; new20 cases
+cover MySQL async text/prepared buffered/sequential reads in one.NET10host. New dual-mode sync/async
+ordinary-column paths are covered by unit peers. Pure codec/schema cases cover all ten IDs and the
+existing ordinary string/BLOB wire families; no new2022 public BLOB, tiny-output-buffer or supplementary
+endpoint-specific matrix was added. Independent initial source/test review found no blockers.
+Final independent source/tests/contracts review found no remaining blockers after correcting a stale
+unsupported2022 sentence and the completed consumer-gate status. The reviewer did not execute tests,
+Java or database operations. Final diff whitespace check passed. Net unit-case increase89:91new names
+and two replaced refusal names. The old216/222 cases now use223/324 and retain unknown-ID rejection.
+No real database was accessed. Full mode/version/collation/OBProxy/TLS/runtime/platform/storage,
+client/national encoding and other missing capabilities remain open; all23 IDs/eight work packages
+remain open. Historical real reports and previous modules below retain their original scope.
+
 ## 2026-10-26 Packaged protocol runtime verification
 
 Developed from0484943 for P2-05/W8. The existing Verify-Packages.ps1 consumer now copies one portable

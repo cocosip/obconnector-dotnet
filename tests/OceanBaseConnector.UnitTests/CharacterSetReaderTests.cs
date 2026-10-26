@@ -35,6 +35,8 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(28, "81")]
         [InlineData(248, "8431A530")]
         [InlineData(248, "A8BC8135F4")]
+        [InlineData(216, "FE59823590")]
+        [InlineData(222, "E3329A36")]
         [InlineData(54, "D800")]
         [InlineData(56, "00D8")]
         public async Task CharacterSetSequentialTextRejectsInvalidOrTruncatedBytes(ushort collation, string hex)

@@ -8,11 +8,14 @@ namespace OceanBaseConnector.Internal.Protocol
     {
         private readonly Encoding _inner;
         private readonly bool _fourBytes;
-        internal ChineseEncoding(int codePage) : base(codePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback)
+        private readonly bool _revision2022;
+        internal ChineseEncoding(int codePage, bool revision2022 = false) : base(codePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback)
         {
+            if (revision2022 && codePage != 54936) throw new ArgumentException("The 2022 revision requires GB18030.", nameof(codePage));
             _inner = CodePagesEncodingProvider.Instance.GetEncoding(codePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback)
                 ?? throw new NotSupportedException("The required character encoding is unavailable.");
             _fourBytes = codePage == 54936;
+            _revision2022 = revision2022;
         }
 
         private int Validate(byte[] bytes, int index, int count, int state, bool flush)
@@ -59,8 +62,33 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             if (!_fourBytes) return;
             for (var i = index; i < index + count; i++)
+            {
                 if (chars[i] == '\u1e3f') chars[i] = '\ue7c7';
                 else if (chars[i] == '\ue7c7') chars[i] = '\u1e3f';
+                // OceanBase v4.3.5_CE init_gb18030_2022 swaps both scalar assignments in18 pairs.
+                else if (_revision2022) chars[i] = chars[i] switch
+                {
+                    '\ue81e' => '\u9fb4', '\u9fb4' => '\ue81e',
+                    '\ue826' => '\u9fb5', '\u9fb5' => '\ue826',
+                    '\ue82b' => '\u9fb6', '\u9fb6' => '\ue82b',
+                    '\ue82c' => '\u9fb7', '\u9fb7' => '\ue82c',
+                    '\ue832' => '\u9fb8', '\u9fb8' => '\ue832',
+                    '\ue843' => '\u9fb9', '\u9fb9' => '\ue843',
+                    '\ue854' => '\u9fba', '\u9fba' => '\ue854',
+                    '\ue864' => '\u9fbb', '\u9fbb' => '\ue864',
+                    '\ue78d' => '\ufe10', '\ufe10' => '\ue78d',
+                    '\ue78e' => '\ufe12', '\ufe12' => '\ue78e',
+                    '\ue78f' => '\ufe11', '\ufe11' => '\ue78f',
+                    '\ue790' => '\ufe13', '\ufe13' => '\ue790',
+                    '\ue791' => '\ufe14', '\ufe14' => '\ue791',
+                    '\ue792' => '\ufe15', '\ufe15' => '\ue792',
+                    '\ue793' => '\ufe16', '\ufe16' => '\ue793',
+                    '\ue794' => '\ufe17', '\ufe17' => '\ue794',
+                    '\ue795' => '\ufe18', '\ufe18' => '\ue795',
+                    '\ue796' => '\ufe19', '\ufe19' => '\ue796',
+                    _ => chars[i],
+                };
+            }
         }
         public override int GetByteCount(char[] chars, int index, int count)
         {

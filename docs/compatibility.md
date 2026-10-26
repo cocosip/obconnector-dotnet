@@ -1,5 +1,21 @@
 # Compatibility and known gaps
 
+## 2026-10-26 GB18030-2022 ordinary results
+
+Ordinary string/TEXT results now accept all ten GB18030-2022 collations in the driver's pinned
+OceanBase v4.3.5_CE map:216–222/330/345/360, maximum width4. A distinct strict encoding adds the18
+reversible PUA/assigned-scalar swaps; old2005 IDs and mappings remain unchanged. Text/prepared and
+buffered/sequential readers share this path. There is no new dependency, public option, client
+charset negotiation or expansion of the national/JSON/CLOB contracts. See the
+[result charset contract](obconnector-dotnet-architecture-design.md#result-character-sets).
+
+Fresh OpenJDK21.0.12.1+1 reference digests match all63,488 BMP scalar encodings and all23,940 legal
+two-byte positions plus39,420 BMP four-byte positions. Local protocol/consumer evidence is recorded
+in the [module record](obconnector-dotnet-progress.md#2026-10-26-gb18030-2022-ordinary-results).
+No real database was accessed for this module. Actual server emission/storage, complete collation/
+mode/version/proxy/TLS/platform/runtime matrices remain open; historical2005 real evidence does not
+validate2022. P1-08 and all23 gap IDs/eight work packages remain open.
+
 ## 2026-10-26 Packaged protocol runtime verification
 
 The existing exact nupkg consumer now additionally exercises eight synthetic loopback scenarios per
@@ -477,7 +493,7 @@ The direct Oracle4.4.2.2 profile passed ten sync/async block/RETURNING/procedure
 
 ## Result character sets
 
-Ordinary result strings now use the [explicit strict collation map](obconnector-dotnet-architecture-design.md#result-character-sets): ASCII, MySQL latin1/CP1252, GBK, GB18030-2005, UTF-16/LE and mapped UTF-8 families. The result decoder and MySQL width metadata share one map; binary63, JSON/CLOB and trusted Oracle national rules keep their own contracts. Unknown/2022 families are rejected, not guessed. Client command/parameter encoding remains UTF-8; this is not general charset negotiation.
+Ordinary result strings use the [explicit strict collation map](obconnector-dotnet-architecture-design.md#result-character-sets): ASCII, MySQL latin1/CP1252, GBK, GB18030-2005/2022, UTF-16/LE and mapped UTF-8 families. The result decoder and MySQL width metadata share one map; binary63, JSON/CLOB and trusted Oracle national rules keep their own contracts. Unknown and other unimplemented families are rejected. Client command/parameter encoding remains UTF-8; this is not general charset negotiation. The2022 module has local evidence only, as recorded above.
 
 The real direct OceanBase4.4.2.2 MySQL test passes six charset cases, each covering eight text/prepared × buffered/sequential × sync/async combinations, including exact GB18030 corrected characters, NULL and connection reuse. UTF16/LE direct SET attempts remain recorded as server1231/42000 failures; the final cases use `character_set_results=NULL` to preserve expression encoding and assert string FieldType. The initial Int32-versus-Int64 literal assertion and an intermediate test-source compilation failure are retained as fixture/development failures. Local dual-mode reader tests and five-asset consumers cover additional paths; they do not establish Oracle/proxy/TLS compatibility. Full evidence and environment limitations are in [the module record](obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
 

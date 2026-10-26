@@ -10,6 +10,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private static readonly Encoding Latin1 = CodePage(1252);
         private static readonly Encoding Gbk = new ChineseEncoding(936);
         private static readonly Encoding Gb18030 = new ChineseEncoding(54936);
+        private static readonly Encoding Gb180302022 = new ChineseEncoding(54936, revision2022: true);
         private static readonly Encoding Ascii = Encoding.GetEncoding(20127, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
         private static readonly Encoding Utf16Le = new UnicodeEncoding(false, false, true);
 
@@ -64,6 +65,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 case 356:
                     maximumBytesPerCharacter = 2; return Gbk;
                 case 248: case 249: case 251: case 328: case 343: case 358: return Gb18030;
+                case 216: case 217: case 218: case 219: case 220: case 221: case 222:
+                case 330: case 345: case 360: return Gb180302022;
                 case 56: case 62: case 333: case 348: case 363: return Utf16Le;
                 default: throw new NotSupportedException("Unsupported result collation ID " + collation.ToString(CultureInfo.InvariantCulture) + ".");
             }

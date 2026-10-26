@@ -16,6 +16,7 @@ namespace OceanBaseConnector.UnitTests
                 (new ushort[] { 5, 8, 15, 31, 47, 48, 49, 94, 329, 344, 359 }, "é€‘Ÿ\0  ", "E980919F002020", 1),
                 (new ushort[] { 28, 87, 326, 341, 356 }, "中文\0  ", "D6D0CEC4002020", 2),
                 (new ushort[] { 248, 249, 251, 328, 343, 358 }, "中文😀\0  ", "D6D0CEC49439FC36002020", 4),
+                (new ushort[] { 216, 217, 218, 219, 220, 221, 222, 330, 345, 360 }, "ḿ\ue7c7龴\ue81e\ufe10\ue78d中😀\0  ", "A8BC8135F437FE5982359037A6D984318236D6D09439FC36002020", 4),
                 (new ushort[] { 54, 55, 101, 102, 124, 327, 342, 357 }, "\ufeff中😀\0  ", "FEFF4E2DD83DDE00000000200020", 4),
                 (new ushort[] { 56, 62, 333, 348, 363 }, "\ufeff中😀\0  ", "FFFE2D4E3DD800DE000020002000", 4),
                 (new ushort[] { 33, 83, 192, 215 }, "中é  ", "E4B8ADC3A92020", 3),
@@ -56,6 +57,17 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(248, "8431A530")]
         [InlineData(248, "8F39FE39")]
         [InlineData(248, "E3329A36")]
+        [InlineData(216, "80")]
+        [InlineData(217, "FF")]
+        [InlineData(218, "81")]
+        [InlineData(219, "8130")]
+        [InlineData(220, "813081")]
+        [InlineData(221, "813A8130")]
+        [InlineData(222, "81308030")]
+        [InlineData(330, "8130813A")]
+        [InlineData(345, "8431A530")]
+        [InlineData(360, "E3329A36")]
+        [InlineData(216, "8F39FE39")]
         [InlineData(54, "D800")]
         [InlineData(56, "00D8")]
         [InlineData(101, "00")]
@@ -77,8 +89,8 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(0)]
         [InlineData(100)]
-        [InlineData(216)]
-        [InlineData(222)]
+        [InlineData(223)]
+        [InlineData(324)]
         [InlineData(250)]
         [InlineData(272)]
         [InlineData(276)]

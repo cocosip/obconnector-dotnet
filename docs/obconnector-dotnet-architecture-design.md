@@ -458,6 +458,7 @@ ROWID SQL/parameter behavior and deployment compatibility require real validatio
 | MySQL latin1 (Windows-1252) | 5, 8, 15, 31, 47, 48, 49, 94, 329, 344, 359 | 1 |
 | GBK | 28, 87, 326, 341, 356 | 2 |
 | GB18030-2005 | 248, 249, 251, 328, 343, 358 | 4 |
+| GB18030-2022 | 216–222, 330, 345, 360 | 4 |
 | UTF-16 big endian | 54, 55, 101–124, 327, 342, 357 | 4 |
 | UTF-16 little endian | 56, 62, 333, 348, 363 | 4 |
 | UTF8MB3 | 33, 83, 192–215 | 3 |
@@ -465,7 +466,21 @@ ROWID SQL/parameter behavior and deployment compatibility require real validatio
 
 OceanBase IDs follow `v4.3.5_CE` charset definitions; legacy UTF8MB3 IDs additionally follow MySQL's [33/83 definitions](https://github.com/mysql/mysql-server/blob/mysql-8.0.44/strings/ctype-utf8.cc) and [192–215 definitions](https://github.com/mysql/mysql-server/blob/mysql-8.0.40/strings/ctype-uca.cc#L6085). The official `System.Text.Encoding.CodePages` dependency supplies CP1252/936/54936 without process-global `Encoding.RegisterProvider`. MySQL latin1 includes CP1252 C1 mappings; it is not ISO-8859-1. GBK/GB18030 reject illegal single bytes 80/FF and malformed/truncated multibyte input. GB18030 corrects CP54936's older mapping: A8BC decodes U+1E3F and 8135F437 decodes U+E7C7, including streamed reads. A BOM is a returned character, not stripped as a transport marker.
 
-Unknown collation IDs, enum holes, GB18030-2022 and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON and existing CLOB paths retain their UTF-8 restriction; trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope.
+GB18030-2022 applies the18 reversible PUA/assigned-scalar swaps specified by
+[OceanBase init_gb18030_2022](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_ctype_gb18030.cc#L1427),
+in addition to the2005 U+1E3F correction. Its ten IDs follow the same pinned
+[v4.3.5_CE header](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_charset.h#L139).
+The existing2005 encoding remains separate. Whole fields and incremental text readers share the
+strict decoder and reversible mapping; no process-global registration or new option is needed.
+Independent exhaustive BMP encoding and two-byte/BMP four-byte decoding digests are reproducible
+with `java tests/fixtures/character-sets/Gb180302022Reference.java` on OpenJDK21 with2022 defaults.
+Tests do not require Java at runtime. This result-only addition does not negotiate a client charset,
+change SQL/parameter encoding or expand national/JSON/CLOB rules. Actual server emission, storage and
+version/OBProxy/TLS/runtime interoperability require separate real acceptance.
+The strict decoder rejects malformed/reserved sequences; it does not reproduce the server's lenient
+replacement behavior for otherwise unassigned byte ranges.
+
+Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON and existing CLOB paths retain their UTF-8 restriction; trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope.
 
 Real evidence is limited to direct OceanBase 4.4.2.2 MySQL mode, Windows/.NET10 with TLS disabled: six charset cases, each exercising eight text/prepared × buffered/sequential × sync/async combinations. That server rejects `SET character_set_results=utf16` and `utf16le` with 1231/42000; those two cases instead use `character_set_results=NULL` and `CONVERT` expressions, asserting string metadata and exact decoded text. This does not establish Oracle, proxy, TLS, all collation IDs, other server versions or independent-runtime compatibility. See [verification and retained failures](obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
 
