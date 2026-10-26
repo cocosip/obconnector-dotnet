@@ -1,5 +1,28 @@
 # Verification status and remaining work
 
+## 2026-10-26 Development checkpoint after f71a979
+
+当前功能代码已本地提交至 `master/f71a979`，没有待提交的功能代码；本次只更新进度文档。
+从2026-10-24目标开始至该提交，累计68次本地提交：44项功能、17项修复、4项专项验收、3项文档。
+这是提交数量，不是完整驱动完成率；23个大缺口和八个工作包仍未整体关闭，本次进度提交不计入上述快照。
+
+| 状态 | 当前结果 |
+| --- | --- |
+| 最近已交付 | `f71a979`：TNS/OCP分组黑名单整块覆盖/继承、有效策略历史隔离及共享TCP尝试上限；此前REF CURSOR结果限制见`fa5d47f`，批次结果限制见`7976fb3` |
+| 已验证 | 上述功能提交的完整单测6382通过（原6344全部保留、新增38），相关单测230通过；公共消费者256通过（原128保留、新增128），均无失败/跳过；Release构建0警告/错误，独立源码及最终证据复核无剩余阻断 |
+| 当前停止点 | 下一模块仅完成只读源码核对，尚未编写实现或新增测试；不能记为已开发、已验证或已提交的新能力 |
+| 明确待开发 | REF CURSOR的Input/InputOutput和其余结果形状、复杂类型LOB/cursor成员、批处理rewrite/multi-send/bulk等仍未补齐；具体范围沿用完整性文档各ID/工作包 |
+| 仍欠验收 | 完整池/事务隔离和故障矩阵、真实OCP/OBProxy/企业TLS、独立运行时/跨平台、长期负载及发布门槛；五资产同一Windows/.NET10host的通过不能替代这些验收 |
+
+只读核对确认：OracleCommandPlan仍明确拒绝输入/输入输出REF CURSOR；ComplexType布局和字典映射
+仍未接入BLOB/CLOB成员。Java参考的复杂LOB读取存在路径，但不能据此推定.NET双向绑定/所有权
+已经实现，或推定全部服务器形状可用。后续需要完成协议、会话/事务归属、取消及资源释放的整条路径。
+此前原始TCP探测只证明已配置实库端点在首握手头前关闭；具体服务端/端点/中间网络原因未确定，
+不计SQL、游标或真实互操作通过。详细已交付证据见[完整性15.63](obconnector-dotnet-completeness.md#1563-2026-10-26-发现分组黑名单覆盖)。
+
+本次为文档更新，不重跑构建或测试；检查文档差异、链接/锚点、23ID/八工作包和历史保留后本地提交，
+不推送。完整驱动目标尚未完成。
+
 ## 2026-10-26 Discovery group blacklist overrides
 
 Developed from master/fa5d47f for P1-09/W4. ADDRESS_LIST.OBLB_BLACKLIST replaces the entire
