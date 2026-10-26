@@ -13,10 +13,10 @@ namespace OceanBaseConnector.Internal.Values
         private const int MaximumDepth = 32;
         private const long MaximumBytes = PacketChannel.DefaultMaxPacketSize - 10;
 
-        internal static object?[] DecodeResult(ByteCursor cursor, ComplexType type, OceanBaseCompatibilityMode mode, Encoding? nationalEncoding = null, LobSession? lobs = null)
+        internal static object?[] DecodeResult(ByteCursor cursor, ComplexType type, OceanBaseCompatibilityMode mode, Encoding? nationalEncoding = null, LobSession? lobs = null, OracleCursorOwner? cursors = null)
         {
             ValidateRoot(type, mode); var budget = MaximumMembers;
-            return Read(cursor, type, 0, ref budget, cursor.Remaining, nationalEncoding: nationalEncoding, lobs: lobs);
+            return Read(cursor, type, 0, ref budget, cursor.Remaining, nationalEncoding: nationalEncoding, lobs: lobs, cursors: cursors);
         }
         internal static byte[] ReadResultField(ByteCursor cursor, ComplexType type, OceanBaseCompatibilityMode mode)
         {
@@ -44,7 +44,7 @@ namespace OceanBaseConnector.Internal.Values
             if (type.TypeCode != 160) throw new ArgumentException("A complex value requires an object or collection layout.", nameof(type));
         }
 
-        private static object?[] Read(ByteCursor cursor, ComplexType type, int depth, ref int budget, int start, bool materialize = true, Encoding? nationalEncoding = null, LobSession? lobs = null)
+        private static object?[] Read(ByteCursor cursor, ComplexType type, int depth, ref int budget, int start, bool materialize = true, Encoding? nationalEncoding = null, LobSession? lobs = null, OracleCursorOwner? cursors = null)
         {
             if (depth >= MaximumDepth) throw new ProtocolException("Complex nesting exceeds the supported depth.");
             var count = type.IsCollection ? cursor.ReadLengthEncodedInteger() : type.Members.Count;
@@ -59,7 +59,7 @@ namespace OceanBaseConnector.Internal.Values
                 var member = type.Members[type.IsCollection ? 0 : i];
                 if (member.TypeCode == 160)
                 {
-                    var nested = Read(cursor, member, depth + 1, ref budget, start, materialize, nationalEncoding, lobs);
+                    var nested = Read(cursor, member, depth + 1, ref budget, start, materialize, nationalEncoding, lobs, cursors);
                     if (materialize) values[i] = nested;
                 }
                 else
@@ -90,6 +90,10 @@ namespace OceanBaseConnector.Internal.Values
                         case 210:
                         case 211:
                             values[i] = new OceanBaseLob(lobs ?? throw new NotSupportedException("Complex LOB members require negotiated Oracle LOB locators."), bytes, member.TypeCode == 211); break;
+                        case 163:
+                            if (cursors == null) throw new NotSupportedException("Complex cursor members require their originating execution.");
+                            if (bytes.Length != 4) throw new ProtocolException("A cursor identifier requires four bytes.");
+                            values[i] = cursors.Publish(new ByteCursor(bytes).ReadUInt32()); break;
                         default: throw new NotSupportedException("The complex scalar type is not supported.");
                     }
                 }

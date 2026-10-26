@@ -78,6 +78,15 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
+        public void AnonymousComplexCursorMetadataExposesTheDeclaredElement()
+        {
+            var column = ResultColumn.Parse(ComplexColumn(name: "", element: 163), OceanBaseCompatibilityMode.Oracle);
+            Assert.Equal("ARRAY", column.DataTypeName);
+            Assert.True(column.ComplexType!.Layout.HasCursorMembers);
+            Assert.Equal(typeof(OceanBaseComplexValue), column.FieldType);
+        }
+
+        [Fact]
         public void ComplexLobMetadataRequiresNegotiatedLocators()
         {
             var type = ComplexResultType(false, ComplexResultScalar("A", 210));
@@ -417,6 +426,95 @@ namespace OceanBaseConnector.UnitTests
                     Assert.Equal(scalar == "CLOB", lob.IsCharacter); Assert.Equal(scalar == "CLOB" ? 6 : 4, lob.ByteLength);
                     Assert.False(async ? await reader.ReadAsync() : reader.Read());
                 }
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false, false, false)]
+        [InlineData(true, false, false)]
+        [InlineData(false, true, false)]
+        [InlineData(true, true, false)]
+        [InlineData(false, false, true)]
+        [InlineData(true, false, true)]
+        [InlineData(false, true, true)]
+        [InlineData(true, true, true)]
+        public async Task ComplexCursorMembersPublishOwnedCursorsFromBinaryResults(bool asynchronous, bool sequential, bool anonymous)
+        {
+            var server = Server(async channel =>
+            {
+                if (!anonymous) await ComplexScalarType(channel, scalar: "CURSOR", collection: true);
+                var metadata = anonymous ? ComplexColumn(name: "", element: 163) : ComplexColumn();
+                await StatementCommand(channel, 22);
+                await channel.WritePacketAsync(new byte[] { 0, 243, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 });
+                await channel.WritePacketAsync(metadata); await channel.WritePacketAsync(Eof());
+                await StatementCommand(channel, 23);
+                await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(metadata); await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 0, 0, 1, 0, 4, 91, 0, 0, 0 }); await channel.WritePacketAsync(Eof());
+                Assert.Equal(new byte[] { 28, 91, 0, 0, 0, 2, 0, 0, 0 }, await StatementCommand(channel, 28));
+                await CursorMetadata(channel, 2); await channel.WritePacketAsync(CursorRow(7)); await channel.WritePacketAsync(CursorTerminator(130, false));
+                Assert.Equal(new byte[] { 25, 91, 0, 0, 0 }, await StatementCommand(channel, 25));
+                Assert.Equal(new byte[] { 25, 243, 0, 0, 0 }, await StatementCommand(channel, 25));
+                channel.BeginCommand(); await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync(); if (!anonymous) await connection.GetComplexTypeAsync("Owner", "Thing");
+                using var command = connection.CreateCommand(); command.CommandText = "complex";
+                if (asynchronous) await command.PrepareAsync(); else command.Prepare();
+                var behavior = sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default;
+                using var reader = asynchronous ? await command.ExecuteReaderAsync(behavior) : command.ExecuteReader(behavior);
+                Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                var value = asynchronous ? await reader.GetFieldValueAsync<OceanBaseComplexValue>(0) : reader.GetFieldValue<OceanBaseComplexValue>(0);
+                var cursor = Assert.IsType<OceanBaseRefCursor>(Assert.Single(value.GetValues()));
+                Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read()); reader.Close(); command.Dispose();
+                using (cursor)
+                using (var child = asynchronous ? await cursor.GetDataReaderAsync(2) : cursor.GetDataReader(2))
+                {
+                    Assert.True(asynchronous ? await child.ReadAsync() : child.Read()); Assert.Equal(7L, child.GetInt64(0));
+                    Assert.False(asynchronous ? await child.ReadAsync() : child.Read());
+                }
+                using var after = connection.CreateCommand(); after.CommandText = "after";
+                Assert.Equal(1, asynchronous ? await after.ExecuteNonQueryAsync() : after.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public async Task ComplexCursorMembersRejectMalformedIdentifiers(bool asynchronous, bool sequential)
+        {
+            var server = Server(async channel =>
+            {
+                await ComplexScalarType(channel, scalar: "CURSOR", collection: true);
+                await StatementCommand(channel, 22);
+                await channel.WritePacketAsync(new byte[] { 0, 244, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 });
+                await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof()); await StatementCommand(channel, 23);
+                await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof());
+                var value = new byte[] { 0, 0, 1, 0, 3, 91, 0, 0 };
+                await channel.WritePacketAsync(value); await channel.WritePacketAsync(Eof());
+                Assert.Equal(0, await channelStreamRead(channel));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync(); await connection.GetComplexTypeAsync("Owner", "Thing");
+                using var command = connection.CreateCommand(); command.CommandText = "complex";
+                if (asynchronous) await command.PrepareAsync(); else command.Prepare();
+                var behavior = sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default;
+                var error = await Assert.ThrowsAsync<OceanBaseException>(async () =>
+                {
+                    using var reader = asynchronous ? await command.ExecuteReaderAsync(behavior) : command.ExecuteReader(behavior);
+                    Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                    _ = asynchronous ? await reader.GetFieldValueAsync<OceanBaseComplexValue>(0) : reader.GetFieldValue<OceanBaseComplexValue>(0);
+                });
+                Assert.True(error.IsExecutionOutcomeUnknown); Assert.Equal(ConnectionState.Broken, connection.State);
             }
             finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));

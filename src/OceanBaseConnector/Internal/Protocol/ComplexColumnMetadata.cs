@@ -28,6 +28,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 case 202: code = 202; name = "TIMESTAMP"; break;
                 case 210: code = 210; name = "BLOB"; break;
                 case 211: code = 211; name = "CLOB"; break;
+                case 163: code = 163; name = "REF CURSOR"; break;
                 default: return null;
             }
             return new OceanBaseComplexType(null, Schema, "", true,

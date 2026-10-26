@@ -8,10 +8,11 @@ namespace OceanBaseConnector.Internal.Values
     {
         internal ComplexType(byte scalarType)
         {
-            if (scalarType != 0 && scalarType != 253 && scalarType != 254 && scalarType != 203 && scalarType != 12 && scalarType != 202 && scalarType != 207 && scalarType != 208 && scalarType != 210 && scalarType != 211)
+            if (scalarType != 0 && scalarType != 253 && scalarType != 254 && scalarType != 203 && scalarType != 12 && scalarType != 202 && scalarType != 207 && scalarType != 208 && scalarType != 210 && scalarType != 211 && scalarType != 163)
                 throw new NotSupportedException("The complex member type is not supported.");
             HasNationalMembers = scalarType == 207 || scalarType == 208;
             HasLobMembers = scalarType == 210 || scalarType == 211;
+            HasCursorMembers = scalarType == 163;
             TypeCode = scalarType; Members = System.Array.AsReadOnly(System.Array.Empty<ComplexType>());
         }
 
@@ -26,6 +27,7 @@ namespace OceanBaseConnector.Internal.Values
                 if (member == null) throw new ArgumentException("Complex member types cannot be null.", nameof(members));
                 HasNationalMembers |= member.HasNationalMembers;
                 HasLobMembers |= member.HasLobMembers;
+                HasCursorMembers |= member.HasCursorMembers;
             }
             TypeCode = 160; IsCollection = collection; Members = System.Array.AsReadOnly(snapshot);
         }
@@ -33,6 +35,7 @@ namespace OceanBaseConnector.Internal.Values
         internal byte TypeCode { get; }
         internal bool HasNationalMembers { get; }
         internal bool HasLobMembers { get; }
+        internal bool HasCursorMembers { get; }
         internal bool IsCollection { get; }
         internal IReadOnlyList<ComplexType> Members { get; }
     }

@@ -3,16 +3,16 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27，基于184a767开发；保持master，全部23项及八工作包仍开放。
-**当前开发模块：** P1-06/W5 Oracle 文本游标值列；文本结果 type163 现在接受恰为四字节小端游标标识，并复用已有会话绑定的 `OceanBaseRefCursor` 所有权。同步/异步、缓冲/SequentialAccess 本地回归4项通过，真实 SQL/代理兼容性仍未验证，见第15.87节。
-**上一开发模块：** P1-07 Oracle复杂类型 BLOB/CLOB 结果成员；二进制命名及匿名集合结果在协商 `Use Lob Locators=true` 时生成绑定当前会话的 `OceanBaseLob`，非空复杂 LOB 输入仍拒绝。专项13项、复杂单元426项及无TLS受影响消费者220项通过；完整全量门禁受当前TLS/证书环境失败影响，见第15.85节。
+**最近复核：** 2026-10-27，基于master当前工作区开发；保持master，全部23项及八工作包仍开放。
+**当前开发模块：** P1-07/W5 Oracle 复杂类型 cursor 结果成员；二进制 object/collection 中的 type163 现在接受恰为四字节小端游标标识，并复用当前执行的 `OracleCursorOwner`。同步/异步、缓冲/SequentialAccess 本地正向4项及畸形4项通过；复杂 cursor 输入、文本复杂结果和真实 SQL/代理兼容性仍未验证，见第15.88节。
+**上一开发模块：** P1-06/W5 Oracle 文本游标值列；文本结果 type163 现在接受恰为四字节小端游标标识，并复用已有会话绑定的 `OceanBaseRefCursor` 所有权。同步/异步、缓冲/SequentialAccess 本地回归4项通过，见第15.87节。
 **最近完成模块：** P1-08/P1-10 Oracle FLOAT/NUMBER_FLOAT参数派生、INOUT目录归一及按需字符长度补查；完整单测7656、专项189及受影响消费者168通过，独立最终走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation)及第15.84节。新增实库过程/函数用例仅编译，未运行。
 **此前完成模块：** Oracle NUMBER_FLOAT206精确结果、binary precision元数据及CommandBuilder绑定（184a767）；完整单测7578、专项204及受影响消费者229通过，独立走查无遗留问题，见第15.83节。2项实库和2项既有NUMBER对照均在初始握手失败，未完成认证或SQL，不能声称FLOAT存储成功。
 此前JSON客户端字符集（b94a421）完整单测7543、专项111、消费者570通过；其10项实库与2项默认字符集对照握手失败保留在第15.82节。
 此前CLOB整输入预校验（1da3ea8）、客户端SQL/参数字符集（b66cda1）、会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录；[输入字符集契约](client-character-sets.md)记录当前边界。
-**当前验证：** 参数派生完整单测7656、专项189、受影响消费者168通过，均零失败/跳过；串行Release构建零警告/错误，格式验证通过（workspace-load warning），独立最终源码/测试/文档/报告走查无遗留问题。此前FLOAT结果、JSON、字符集及CLOB结果与原始失败保留于各自历史台账。
+**当前验证：** 复杂结果专项439项通过，包含同步/异步、缓冲/SequentialAccess、匿名类型和畸形游标回归，均零失败/跳过；串行Release解决方案构建零警告/错误，产品源码格式验证通过（workspace-load warning）。完整单测已有一次7544通过/141失败（总计7685），其中包含本次更新前的匿名 type163 旧断言；该断言已按现新契约移除，未重跑全套。真实 OceanBase/OBProxy 互操作与其他工作包仍未验证。
 **历史限制：** 前一模块构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，八次独立及后续完整运行未复现；没有修改TNS或添加绕过。
-**剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向及文本REF CURSOR、复杂LOB/游标成员、压缩OB20/代理reroute、多发送/独立bulk及六项验收占位等，逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
+**剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向及复杂 cursor 参数、复杂整列 RETURNING、压缩OB20/代理reroute、多发送/独立bulk及六项验收占位等，逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
 前一模块2项Oracle FLOAT实库及2项既有NUMBER对照连接尝试均止于初始greeting，未完成认证或SQL，服务器/网络根因未明；后续仍需其他资源指标、负载及完整部署验收。历史JSON/TNS及握手失败均保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
@@ -161,7 +161,7 @@ The overview separates remaining development from real-environment validation; h
 | P1-04 | P1 | TLS/mTLS | 部分实现 | 自定义服务器证书回调、客户端证书池化身份隔离和数据源证书快照已有本地实现（第 15.4 节）；真实企业 CA/mTLS、轮换和跨平台撤销矩阵仍缺 |
 | P1-05 | P1 | ADO.NET 命令行为 | 部分实现 | MySQL StoredProcedure 已有集合顺序参数/输出/多结果本地实现（第 15.30 节），保留方向、capability 和提前关闭限制；补真实 TLS/代理/版本矩阵；`SchemaOnly` Prepare-only、`SingleRow`/`SingleResult` 已有本地实现；`KeyInfo` 已有有界键元数据/隐藏列实现；Batch元数据/源条目创建见第15.60节，跨批次结果限制见第15.61节；REF CURSOR结果限制见第15.62节；其余 Command/Batch/游标行为矩阵及真实目录/准备/锁/结果形状验收仍缺 |
 | P1-06 | P1 | Oracle 输出和游标 | 部分实现；独立 Prepare、输出 FetchSize 提示及文本/二进制 cursor 列已有本地实现 | 保留准备与所有权转移、正提示不对内部输出发FETCH（第15.46节）；二进制cursor列/嵌套所有权及文本四字节标识列已有本地实现（第15.56/15.87节）；补完整参数方向、其余结果形状和部署矩阵；输出offset/数组正FetchSize仍拒绝 |
-| P1-07 | P1 | 复杂类型 | 部分实现 | 已有嵌套 object/collection、显式清理及可观察 DDL 自动失效本地实现；第15.85节补齐BLOB/CLOB命名及匿名集合结果物化；保留第15.47节national实现及限定直连证据，继续补cursor、其他national边界及复杂整列RETURNING身份和真实DDL/资源验收，外部或不透明 DDL 需显式清理 |
+| P1-07 | P1 | 复杂类型 | 部分实现 | 已有嵌套 object/collection、BLOB/CLOB、cursor结果成员、显式清理及可观察 DDL 自动失效本地实现；保留第15.47节national实现及限定直连证据，继续补复杂 cursor 参数、其他national边界及复杂整列RETURNING身份和真实DDL/资源验收，外部或不透明 DDL 需显式清理 |
 | P1-08 | P1 | 类型和字符集 | 部分实现；DecimalScale、普通结果字符集及客户端编码子模块已有实现，输入编码见第15.80节 | 有符号 scale、严格结果解码/宽度及 Oracle 未知精度 NUMBER 保真已有回归；其余national/JSON/CLOB边界、其他字符集、扩展元数据/类型码及完整实库矩阵仍缺 |
 | P1-09 | P1 | HA/发现 | 部分实现 | TCP重试预算/退避、端点TCP健康缓存、TNS/OCP适配、分组/策略/权重及全局黑名单/尝试上限已有本地实现（第15.50—15.55节），分组黑名单、组尝试上限及地址覆盖见第15.63—15.65节；其他发现策略边界、proxy拓扑及真实健康/故障验收仍缺 |
 | P1-10 | P1 | Schema 元数据 | 部分实现；参数推导已有本地实现 | 常用目录、DataTypes 及自动参数推导有本地实现；真实目录/权限/版本/代理验收仍缺 |
@@ -187,7 +187,7 @@ The overview separates remaining development from real-environment validation; h
 | MySQL 过程本地实现，部署验收开放 | 已有按集合顺序绑定、私有变量输出及关闭排空实现和回归；默认策略直连用例通过，仍须真实 TLS/代理/版本/资源和独立运行时验收，见第 15.30 节 | P1-05 |
 | 协议扩展缺失 | OB20 压缩与 proxy reroute；先确认目标链路、版本和协商契约，不能根据服务器内部路径猜测客户端支持 | P1-02 |
 | 发现与恢复不足 | 保留TCP重试预算/退避及端点TCP健康缓存，TNS文件及OCP HTTP适配已本地实现（第15.52/15.53节），补其他发现策略边界与真实节点/代理健康验收；活动连接故障后的状态/重建契约；无透明迁移和自动重连 | P1-09、P0-05 |
-| Oracle 形状不足 | REF CURSOR Input/InputOutput、文本及二进制 cursor-valued column 的真实验收、输出offset/数组正FetchSize组合；独立Prepare及普通输出正提示已有实现；复杂类型的LOB/cursor、其他national存储/匿名结果及复杂整列RETURNING身份；可观察 DDL 自动失效已有本地实现，外部/不透明 DDL 须显式清理，真实 DDL 验收仍缺 | P1-06、P1-07 |
+| Oracle 形状不足 | REF CURSOR Input/InputOutput、文本及二进制 cursor-valued column 的真实验收、输出offset/数组正FetchSize组合；独立Prepare及普通输出正提示已有实现；复杂 cursor 结果已具本地二进制路径，仍缺复杂 cursor 参数、其他national存储/匿名结果及复杂整列RETURNING身份；可观察 DDL 自动失效已有本地实现，外部/不透明 DDL 须显式清理，真实 DDL 验收仍缺 | P1-06、P1-07 |
 | 类型与命令契约不足 | 扩展类型码、metadata、字符集和精度矩阵；SchemaOnly 元数据专用路径已有本地回归，真实边界仍需验收；Command/Batch/游标的行为范围不同 | P1-08、P1-05 |
 | 事务与结果不确定性 | 保留单资源/终态/身份/取消及失败清理本地回归，补真实超时/in-doubt/关闭/响应丢失矩阵、XA 外部协调器恢复；写入不自动 replay | P0-03、P0-04、P2-06 |
 | 性能与运维不足 | opt-in MySQL INSERT rewrite已有本地路径，multi-send/bulk及真实负载仍缺；建连/探活分段、慢命令阈值报告和协议帧诊断已有；补资源上限报告。Oracle array binding 与池指标已有 | P2-03、P2-04 |
@@ -2926,6 +2926,12 @@ Connector/J 固定参考的文本行实现仍不发布游标对象，因此该�
 7533通过、139项因既有 Windows TLS/PFX/SSPI 夹具失败，0跳过，总计7672项。Release
 构建和限定格式检查通过。REF CURSOR Input/InputOutput、
 复杂 cursor 成员及其他 Oracle 输出形状仍开放。
+
+### 15.88 2026-10-27 Oracle 复杂类型 cursor 结果成员
+
+P1-07/W5：复杂 object/collection 描述现在接受成员类型 163。二进制结果中的非 NULL 成员必须是四字节小端游标识，并通过当前执行的 `OracleCursorOwner` 发布为 `OceanBaseRefCursor`。父 reader 或 command 关闭后，子游标仍保持原会话、事务和代际所有权；缓冲和 `SequentialAccess` 均沿用同一生命周期。普通复杂列只在布局确实包含 cursor 成员时才进入 cursor owner 路径，保留原有 prepared statement 复用。
+
+新增同步/异步、缓冲/`SequentialAccess` 正向回归 4 项及四字节以外标识的会话失效 4 项；另外覆盖了匿名集合的 type163 布局元数据。复杂 cursor 参数、文本复杂结果、真实 OceanBase/OBProxy 互操作与其他 Oracle 结果形状仍未验证。
 
 ## 16. 剩余交付工作包
 

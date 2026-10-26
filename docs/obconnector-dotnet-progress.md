@@ -4,6 +4,21 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Oracle complex cursor result members
+
+P1-07/W5 adds binary REF CURSOR members to complex object and collection result layouts. A non-NULL
+member must contain exactly one four-byte little-endian cursor identifier; the current execution's
+`OracleCursorOwner` publishes it as an `OceanBaseRefCursor`, preserving the parent statement and
+session until the child cursor is consumed or disposed. Synchronous/asynchronous buffered and
+`SequentialAccess` loopback cases cover parent disposal, child paging and connection reuse. The
+owner check is based on the resolved layout, so ordinary complex columns keep their prepared
+statement reuse behavior. Complex cursor input, text complex results and real OceanBase/OBProxy
+interoperability remain open.
+
+The focused complex-result selection passes with zero failures or skips, including four positive and
+four malformed-identifier cases plus anonymous type163 metadata. These fixtures prove local framing
+and ownership only; they do not establish server SQL, proxy, version or deployment compatibility.
+
 ## 2026-10-27 P2-04 pool wait outcome diagnostics
 
 P2-04/W7 extends the existing `oceanbase.client.pool.wait.duration` histogram with the standard

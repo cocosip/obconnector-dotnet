@@ -16,6 +16,13 @@ namespace OceanBaseConnector.Internal.Protocol
         private OceanBaseConnector.Internal.Session.OracleCursorOwner? _cursors;
         internal void BindCursorResult(bool binary, OceanBaseConnector.Internal.Session.OracleCursorOwner? owner)
         {
+            if (TypeCode == 160 && ComplexType?.Layout.HasCursorMembers == true)
+            {
+                if (Mode != OceanBaseCompatibilityMode.Oracle || !binary || owner == null || !owner.HasParent)
+                    throw new NotSupportedException("Complex cursor members require their originating execution.");
+                _cursors = owner;
+                return;
+            }
             if (TypeCode != 163) return;
             if (Mode != OceanBaseCompatibilityMode.Oracle || owner == null || binary && !owner.HasParent)
                 throw new NotSupportedException("Cursor columns require an Oracle result and their originating execution.");
@@ -451,7 +458,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 var encoding = ComplexType!.Layout.HasNationalMembers && _complexOutput
                     ? (NationalCharacterSet ?? throw new NotSupportedException("The complex output has no trusted national character set.")).ResultEncoding(Charset)
                     : ComplexType.Context?.StoredNationalEncoding;
-                var values = ComplexValueCodec.DecodeResult(complex, ComplexType.Layout, Mode, encoding, Lobs);
+                var values = ComplexValueCodec.DecodeResult(complex, ComplexType.Layout, Mode, encoding, Lobs, _cursors);
                 if (complex.HasRemaining) throw new ProtocolException("Trailing complex value bytes.");
                 return OceanBaseComplexValue.FromResult(ComplexType, values);
             }

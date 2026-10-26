@@ -11,6 +11,24 @@ namespace OceanBaseConnector.Internal.Session
         private const string ComplexColumnSql = "SELECT DISTINCT NVL(C.DATA_TYPE_OWNER, D.REFERENCED_OWNER) AS DATA_TYPE_OWNER, C.DATA_TYPE FROM ALL_TAB_COLUMNS C LEFT JOIN ALL_DEPENDENCIES D ON C.DATA_TYPE_OWNER IS NULL AND D.OWNER = C.OWNER AND D.NAME = C.TABLE_NAME AND D.TYPE = 'TABLE' AND D.REFERENCED_TYPE = 'TYPE' AND D.REFERENCED_NAME = C.DATA_TYPE AND D.REFERENCED_LINK_NAME IS NULL WHERE C.OWNER = ? AND C.TABLE_NAME = ? AND C.COLUMN_NAME = ?";
         internal Dictionary<(string, string, string, string), OceanBaseComplexType>? SourceComplexTypes { get; private set; }
 
+        internal bool HasCursorColumns(PreparedStatement statement)
+        {
+            foreach (var column in statement.Columns)
+            {
+                if (column.TypeCode == 163) return true;
+                if (column.ComplexType?.Layout.HasCursorMembers == true) return true;
+                var metadata = column.ComplexMetadata;
+                if (column.TypeCode != 160 || metadata == null) continue;
+                if (metadata.Name.Length != 0 && ComplexTypes != null && ComplexTypes.TryGetValue((metadata.Schema, metadata.Name), out var named) && named.Layout.HasCursorMembers)
+                    return true;
+                if (SourceComplexTypes != null)
+                    foreach (var entry in SourceComplexTypes)
+                        if (entry.Key.Item1 == column.Database && entry.Key.Item2 == column.OriginalTable && entry.Key.Item3 == column.OriginalName && entry.Value.Layout.HasCursorMembers)
+                            return true;
+            }
+            return false;
+        }
+
         internal void ResolveComplexColumns(PreparedStatement statement)
         {
             foreach (var column in statement.Columns)

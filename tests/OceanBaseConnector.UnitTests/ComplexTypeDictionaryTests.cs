@@ -128,7 +128,7 @@ namespace OceanBaseConnector.UnitTests
                 {
                     await ComplexDictionaryReply(channel, 66, "Owner", "Thing", false,
                         new[] { "A", kind == "position" ? "2" : "1", kind == "cycle" ? "Owner" : null,
-                            kind == "cycle" ? "Thing" : "CURSOR", kind == "cycle" ? "OBJECT" : "CURSOR" });
+                            kind == "cycle" ? "Thing" : "OPAQUE", kind == "cycle" ? "OBJECT" : "OPAQUE" });
                     await StatementCommand(channel, 25);
                 }
                 await StatementCommand(channel, 3); await channel.WritePacketAsync(Ok(1));
@@ -440,7 +440,7 @@ namespace OceanBaseConnector.UnitTests
                     new[] { "GOOD", "1", "Owner", "Good_Type", "COLLECTION" }, new[] { "BAD", "2", "Owner", "Bad_Type", "OBJECT" });
                 await StatementCommand(channel, 25);
                 await ComplexScalarType(channel, name: "Good_Type");
-                await ComplexScalarType(channel, name: "Bad_Type", scalar: "CURSOR", collection: false);
+                await ComplexScalarType(channel, name: "Bad_Type", scalar: "OPAQUE", collection: false);
                 await ComplexScalarType(channel, name: "Good_Type");
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port));

@@ -104,9 +104,10 @@ namespace OceanBaseConnector
                 var text = operation.Binary && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode,
                         ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? execution.ReadMySqlLiteralContext() : null, execution.ClientEncoding) : operation.Bindings.CommandText;
-                ValidateCursorStatement(operation.FetchSize, statement);
-                var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement);
                 if (statement != null && operation.Oracle == null) execution.ResolveComplexColumns(statement);
+                var hasCursorColumns = statement != null && operation.Oracle == null && execution.HasCursorColumns(statement);
+                ValidateCursorStatement(operation.FetchSize, statement);
+                var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement, hasCursorColumns);
                 if (statement != null && operation.Oracle == null) TransferCursorColumns(statement, execution);
                 if (execution.SourceComplexTypes != null)
                 {
@@ -183,9 +184,10 @@ namespace OceanBaseConnector
                 var text = operation.Binary && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode,
                         ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? await execution.ReadMySqlLiteralContextAsync(cancellationToken).ConfigureAwait(false) : null, execution.ClientEncoding) : operation.Bindings.CommandText;
-                ValidateCursorStatement(operation.FetchSize, statement);
-                var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement);
                 if (statement != null && operation.Oracle == null) await execution.ResolveComplexColumnsAsync(statement, cancellationToken).ConfigureAwait(false);
+                var hasCursorColumns = statement != null && operation.Oracle == null && execution.HasCursorColumns(statement);
+                ValidateCursorStatement(operation.FetchSize, statement);
+                var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement, hasCursorColumns);
                 if (statement != null && operation.Oracle == null) TransferCursorColumns(statement, execution);
                 if (execution.SourceComplexTypes != null)
                 {
@@ -362,7 +364,7 @@ namespace OceanBaseConnector
 
         private void TransferCursorColumns(PreparedStatement statement, CommandExchange execution)
         {
-            if (!statement.HasCursorColumns) return;
+            if (!execution.HasCursorColumns(statement)) return;
             lock (_gate)
             {
                 if (_disposed) throw new ObjectDisposedException(nameof(OceanBaseCommand));
@@ -470,9 +472,9 @@ namespace OceanBaseConnector
                 throw new NotSupportedException("Server cursors require a prepared statement with result columns.");
         }
 
-        private static int ResultFetchSize(int requested, bool cursorOffset, PreparedStatement? statement)
+        private static int ResultFetchSize(int requested, bool cursorOffset, PreparedStatement? statement, bool hasCursorColumns = false)
         {
-            if (statement?.HasCursorColumns != true) return requested;
+            if (!hasCursorColumns && statement?.HasCursorColumns != true) return requested;
             if (cursorOffset) throw new NotSupportedException("Offset fetch is not supported for cursor-valued result columns.");
             return 0;
         }

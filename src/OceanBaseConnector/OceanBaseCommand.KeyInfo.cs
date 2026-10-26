@@ -22,7 +22,8 @@ namespace OceanBaseConnector
                 else execution.ResolveComplexColumns(statement);
                 if ((behavior & CommandBehavior.SchemaOnly) != 0)
                     return new OceanBaseDataReader(execution, QueryResult.FromPrepared(execution, statement), operation.Connection, operation.Session, behavior, resolved.Metadata);
-                var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement);
+                var hasCursorColumns = execution.HasCursorColumns(statement);
+                var fetchSize = ResultFetchSize(operation.FetchSize, operation.CursorOffset, statement, hasCursorColumns);
                 TransferCursorColumns(statement, execution);
                 if (operation.CursorOffset)
                 {

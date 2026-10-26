@@ -169,7 +169,7 @@ namespace OceanBaseConnector
 
         private object DecodeValue(ResultColumn column, byte[]? bytes, bool provider)
         {
-            if (column.TypeCode == 210 || column.TypeCode == 211)
+            if (column.TypeCode == 160 || column.TypeCode == 210 || column.TypeCode == 211)
             {
                 try { return _result.IsBinary ? column.DecodeBinary(bytes) : column.Decode(bytes); }
                 catch (ProtocolException error) { throw _query.Fail(error); }

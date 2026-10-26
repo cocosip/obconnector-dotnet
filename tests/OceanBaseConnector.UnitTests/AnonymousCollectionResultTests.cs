@@ -74,7 +74,6 @@ namespace OceanBaseConnector.UnitTests
 
         [Theory]
         [InlineData((byte)160)]
-        [InlineData((byte)163)]
         [InlineData((byte)200)]
         [InlineData((byte)201)]
         [InlineData((byte)4)]

@@ -155,8 +155,16 @@ namespace OceanBaseConnector.UnitTests
             => Assert.Throws<DecoderFallbackException>(() => Decode(Object(Text), hex));
 
         [Theory]
-        [InlineData(1)] [InlineData(160)] [InlineData(163)] [InlineData(255)]
+        [InlineData(1)] [InlineData(160)] [InlineData(255)]
         public void UnsupportedScalarLayoutsAreRejected(byte code) => Assert.Throws<NotSupportedException>(() => new ComplexType(code));
+
+        [Fact]
+        public void ComplexCursorLayoutRequiresAnOriginatingResultOwner()
+        {
+            var type = Object(new ComplexType(163));
+            Assert.Throws<NotSupportedException>(() => ComplexValueCodec.DecodeResult(
+                new ByteCursor(Convert.FromHexString("00045B000000")), type, OceanBaseCompatibilityMode.Oracle));
+        }
 
         [Fact]
         public void TypeLayoutsAreSnapshotsAndCollectionsRequireExactlyOneElementType()
