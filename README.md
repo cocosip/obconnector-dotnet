@@ -58,7 +58,9 @@ Oracle [complex-type DDL invalidation](docs/obconnector-dotnet-architecture-desi
 
 `OceanBaseDataAdapter` fills DataTables/DataSets and applies row changes; `OceanBaseCommandBuilder` generates parameterized single-table CRUD with original-value concurrency checks. Automatic updates/deletes require a complete visible row key. See the [adapter and generation contract](docs/obconnector-dotnet-architecture-design.md#data-adapters-and-command-generation) for mappings, transactions, ownership and limits.
 
-Ordinary string results support strict ASCII, DEC8, TIS620, SJIS, Big5, MySQL latin1, GBK, GB18030-2005/2022, UTF-16/LE and mapped UTF-8 collations, including streamed reads. Unknown collations and malformed bytes fail explicitly. Client SQL/parameter encoding and Oracle national-character rules retain their existing scope. See the [result charset contract](docs/obconnector-dotnet-architecture-design.md#result-character-sets) for exact IDs and real-server limits.
+Ordinary string results support strict ASCII, DEC8, TIS620, SJIS, Big5, HKSCS/HKSCS31, MySQL latin1, GBK, GB18030-2005/2022, UTF-16/LE and mapped UTF-8 collations, including streamed reads. Unknown collations and malformed bytes fail explicitly. Client SQL/parameter encoding and Oracle national-character rules retain their existing scope. See the [result charset contract](docs/obconnector-dotnet-architecture-design.md#result-character-sets) for exact IDs and real-server limits.
+
+Development progress: [implemented features, all 23 gaps and remaining work](docs/obconnector-dotnet-delivery-status.md).
 
 ## Packages
 

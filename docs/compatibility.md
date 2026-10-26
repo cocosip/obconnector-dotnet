@@ -1,5 +1,17 @@
 # Compatibility and known gaps
 
+## 2026-10-26 HKSCS and HKSCS31 ordinary results
+
+Ordinary strings/TEXT accept all eight pinned HKSCS/HKSCS31 collations with wire width2 metadata.
+Separate lazy CP950-derived lookups preserve old private-use and revised Plane2 assignments, source
+canonical reverse choices and the explicit U+2593-to-F9FE/U+FFED asymmetry. Undefined/malformed input
+fails; incremental decoding counts surrogate pairs correctly and preserves state after overflow.
+See the [contract](obconnector-dotnet-architecture-design.md#result-character-sets) and
+[module evidence](obconnector-dotnet-progress.md#2026-10-26-hkscs-and-hkscs31-ordinary-results).
+No real database was accessed. Client/parameter/national/JSON/CLOB charset expansion and other missing
+functionality remain open. The [delivery overview](obconnector-dotnet-delivery-status.md) distinguishes
+implemented subfeatures from remaining code and external gates; all23 gap IDs/eight packages remain open.
+
 ## 2026-10-26 Big5 ordinary results
 
 Ordinary strings/TEXT now accept all five pinned Big5 collations with width2 metadata. A lazy strict
@@ -526,7 +538,7 @@ The direct Oracle4.4.2.2 profile passed ten sync/async block/RETURNING/procedure
 
 ## Result character sets
 
-Ordinary result strings use the [explicit strict collation map](obconnector-dotnet-architecture-design.md#result-character-sets): ASCII, DEC8, TIS620, SJIS, Big5, MySQL latin1/CP1252, GBK, GB18030-2005/2022, UTF-16/LE and mapped UTF-8 families. The result decoder and MySQL width metadata share one map; binary63, JSON/CLOB and trusted Oracle national rules keep their own contracts. Unknown and other unimplemented families are rejected. Client command/parameter encoding remains UTF-8; this is not general charset negotiation. The2022, DEC8/TIS620, SJIS and Big5 modules have local evidence only, as recorded above.
+Ordinary result strings use the [explicit strict collation map](obconnector-dotnet-architecture-design.md#result-character-sets): ASCII, DEC8, TIS620, SJIS, Big5, HKSCS/HKSCS31, MySQL latin1/CP1252, GBK, GB18030-2005/2022, UTF-16/LE and mapped UTF-8 families. The result decoder and MySQL width metadata share one map; binary63, JSON/CLOB and trusted Oracle national rules keep their own contracts. Unknown and other unimplemented families are rejected. Client command/parameter encoding remains UTF-8; this is not general charset negotiation. The2022, DEC8/TIS620, SJIS, Big5 and HKSCS/HKSCS31 modules have local evidence only, as recorded above.
 
 The real direct OceanBase4.4.2.2 MySQL test passes six charset cases, each covering eight text/prepared × buffered/sequential × sync/async combinations, including exact GB18030 corrected characters, NULL and connection reuse. UTF16/LE direct SET attempts remain recorded as server1231/42000 failures; the final cases use `character_set_results=NULL` to preserve expression encoding and assert string FieldType. The initial Int32-versus-Int64 literal assertion and an intermediate test-source compilation failure are retained as fixture/development failures. Local dual-mode reader tests and five-asset consumers cover additional paths; they do not establish Oracle/proxy/TLS compatibility. Full evidence and environment limitations are in [the module record](obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
 

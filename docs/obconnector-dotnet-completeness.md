@@ -1,9 +1,12 @@
 # OceanBaseConnector .NET 完整驱动能力与缺口基线
 
-**最近复核：** 2026-10-26；基于3196a45的GB18030-2022普通结果；全部23项及八工作包仍开放。
-**当前模块：** P1-08/W5；完整性第15.75节；上一模块包消费者保留第15.74节。
-**当前验证：** 原RED20失败；GREEN20、专项498、完整单测7042及受影响消费者420通过，Release构建零警告/错误，独立走查无遗留阻断。
-**本次补充：** 固定OceanBase源码的18组映射及全部十个collation ID，独立OpenJDK BMP编码/解码摘要一致。
+**Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
+The overview separates remaining development from real-environment validation; historical records below retain their original scope.
+
+**最近复核：** 2026-10-26；基于4ce3a35的HKSCS/HKSCS31普通结果；全部23项及八工作包仍开放，已交付子功能单列于进度总览。
+**当前模块：** P1-08/W5；完整性第15.79节；此前GB18030-2022、DEC8/TIS620、SJIS、Big5见第15.75—15.78节。
+**当前验证：** 原RED14失败；GREEN14、完整单测7353及受影响消费者540通过，均零失败/跳过；Release构建零警告/错误，独立走查无遗留阻断。
+**本次补充：** 全部八个HKSCS/HKSCS31 collation ID、固定源码映射摘要、补充平面增量解码；新增全部23项交付总览，分开标记剩余开发和外部验收。
 本模块无新增实库兼容性证据；历史12项greeting前失败保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
@@ -2724,6 +2727,30 @@ final staged diff whitespace checks passed. Full results belong in the
 No real database was accessed. HKSCS/HKSCS31 and other missing capabilities, actual server emission/
 storage and complete deployment matrices remain open. All23 IDs/eight work packages remain open;
 earlier reports retain their historical scope.
+
+### 15.79 2026-10-26 HKSCS and HKSCS31 ordinary results
+
+P1-08/W5, developed from4ce3a35 on master. All eight pinned HKSCS/HKSCS31 IDs now select distinct
+strict scalar lookups with width2 metadata.3186 BMP corrections/62 undefined-slot removals adapt CP950;
+1651 revised Plane2 replacements distinguish HKSCS31. Each family supports19848 defined positions,
+decoding to19754 distinct scalars;66 source reverse preferences and U+2593-to-F9FE/U+FFED asymmetry
+are retained. Malformed/unrepresentable values fail; supplementary counts and decoder retries retain
+pending state. Ordinary-result support does not expand client/parameter/national/JSON/CLOB encoding.
+
+RED14 captured unsupported collations; GREEN14 passed after strict CP950 duplicate refusals were
+handled before applying source corrections. Independent source-table regeneration matches exhaustive
+decode/BMP/Plane2 digests. All-ID codec/schema coverage and32 new dual-mode readers accompany strict
+malformed/state/bounds tests. Release solution build passed with zero warnings/errors; affected
+five-asset consumers540 passed without failures/skips on one.NET10host. Independent source/tests
+review found no blockers; documentation review's current-summary omission was corrected.
+Complete units7353 passed without failures/skips in8minutes15seconds; final diff whitespace checks
+passed. The
+[module record](obconnector-dotnet-progress.md#2026-10-26-hkscs-and-hkscs31-ordinary-results) retains
+commands, results and limitations. No real database was accessed.
+
+The [delivery overview](obconnector-dotnet-delivery-status.md) now tracks all23 original IDs, separates
+implemented subfeatures from remaining code and external gates, and gives commit evidence. All23 IDs/
+eight packages remain open because whole-gap closure criteria are broader than these local modules.
 
 ## 16. 剩余交付工作包
 

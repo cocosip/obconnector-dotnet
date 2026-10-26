@@ -1,5 +1,50 @@
 # Verification status and remaining work
 
+Current overview: [all 23 gaps, implemented subfeatures and remaining work](obconnector-dotnet-delivery-status.md).
+The records below are chronological feature evidence; their historical “remaining” statements apply
+to the candidate recorded in each section.
+
+## 2026-10-26 HKSCS and HKSCS31 ordinary results
+
+Developed from4ce3a35 on master for P1-08/W5. HKSCS IDs152/336/351/366 and HKSCS31
+IDs153/337/352/367 use distinct lazy strict scalar lookups with wire width2 metadata. Existing CP950
+plus3186 BMP corrections/62 undefined-slot removals provides the old family;1651 Plane2 replacements
+provide the revised family. Each has19848 defined positions including128 ASCII, decoding to19754
+distinct scalars. Reverse mapping preserves66 nonminimal source choices and U+2593-to-F9FE, which
+decodes to U+FFED. Decoder count/flush/overflow/reset and supplementary two-slot retry preserve state.
+No client/parameter/national/JSON/CLOB encoding expansion, new dependency or resource is introduced.
+
+Optional HkscsReference.py freshly regenerated independent fixed-source decode/BMP/Plane2 SHA256
+expectations from the two complete source table headers; optional ExportWindows950.ps1 produced the strict
+CP950 dump used to regenerate compact product deltas. Source snapshots and research remain under
+ignored TestResults/local-completeness/. Tests require no Python, source download or database.
+
+Initial RED14 failed on unsupported collations. The first implementation candidate failed14 because
+strict CP950 rejects some duplicate byte pairs; the existing sparse corrections already represent
+those source assignments. Keeping rejected baseline slots undefined before applying deltas fixed
+initialization; GREEN14 passed. Exhaustive source digests cover256 singles/32768 pairs per family,
+all65536 BMP scalars and all65536 Plane2 scalars. Valid pairs additionally test incremental counts,
+each-byte splits and reverse results. Every split/reset/tiny Convert, canonical/alias, pending state,
+invalid flush/overflow retry and bounds/invalid-surrogate cases are covered. All eight IDs have pure
+codec/schema tests across nine ordinary string/BLOB wire codes. Two appended shared samples add32
+dual-mode sync/async text/prepared buffered/sequential reader cases with exact text, NULL and reuse;
+four malformed sequential cases verify the consumed connection stays Open.
+
+Release solution build passed with zero warnings/errors in8.10seconds. Affected five-asset consumers
+passed540 without failures/skips in2minutes49seconds;40 new cases exercise MySQL async four-shape
+readers on one.NET10host, not five independent runtimes. No new family-specific public BLOB reader
+matrix was added. Independent source/tests review found no blockers. Documentation review found one
+current compatibility-summary omission, now corrected; provenance facts and all23 delivery rows were
+also checked independently. Complete units passed7353 without failures/skips in8minutes15seconds,
+a net increase of91 cases. Final diff whitespace checks passed. The source/tests/docs reviewer
+did not run tests/builds/Python or access a real database; all execution gates were run by the implementer.
+Verification logs/TRX remain under ignored TestResults/local-completeness/hkscs-*.
+
+No real database was accessed. Actual emission/storage, client charset expansion, remaining Oracle/
+protocol/diagnostic features and full deployment matrices remain open. The new
+[delivery overview](obconnector-dotnet-delivery-status.md) maps all23 IDs to committed implementation,
+remaining code/scope and external gates; historical evidence below retains its original scope.
+
 ## 2026-10-26 Big5 ordinary results
 
 Developed from4821d54 on master for P1-08/W5. Big5 IDs1/84/335/350/365 now use a distinct lazy codec

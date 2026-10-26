@@ -459,6 +459,8 @@ ROWID SQL/parameter behavior and deployment compatibility require real validatio
 | TIS620 | 18, 89, 332, 347, 362 | 1 |
 | SJIS | 13, 88, 334, 349, 364 | 2 |
 | Big5 | 1, 84, 335, 350, 365 | 2 |
+| HKSCS | 152, 336, 351, 366 | 2 |
+| HKSCS31 | 153, 337, 352, 367 | 2 |
 | MySQL latin1 (Windows-1252) | 5, 8, 15, 31, 47, 48, 49, 94, 329, 344, 359 | 1 |
 | GBK | 28, 87, 326, 341, 356 | 2 |
 | GB18030-2005 | 248, 249, 251, 328, 343, 358 | 4 |
@@ -536,7 +538,33 @@ independent fixed-source SHA256 expectations for256 singles,32768 high-byte pair
 encoding/refusal positions. Digest serialization follows the SJIS description above, with all leads
 80–FF and explicit FFFD refusal. Tests do not require Python or source downloads. This ordinary-result
 addition does not negotiate a client charset or expand national/JSON/CLOB encoding. Actual server
-emission/storage and deployment interoperability remain unverified; HKSCS/HKSCS31 remain separate.
+emission/storage and deployment interoperability remain unverified.
+
+HKSCS and HKSCS31 use distinct lazy scalar lookups derived from strict CP950 and compact numeric deltas
+from the pinned [converter](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_ctype_hkscs.cc),
+[HKSCS table](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_ctype_hkscs_tab.h)
+and [HKSCS31 table](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_ctype_hkscs31_tab.h).
+The old family needs3186 BMP corrections and62 undefined-slot removals. The revised family replaces
+1651 old BMP private-use assignments with Plane2 scalars. Each supports19848 defined wire positions,
+including128 ASCII positions, decoding to19754 distinct scalars. Source FFFD placeholders, invalid
+single bytes80/FF, malformed pairs and incomplete leads fail explicitly. The source's66 nonminimal
+canonical reverse choices and asymmetric U+2593-to-F9FE alias are preserved: F9FE decodes to U+FFED.
+Only represented scalars encode; isolated surrogates and unrepresentable characters fail.
+
+Incremental decoding counts UTF-16 units and emits surrogate pairs for revised supplementary scalars.
+Count probes, invalid flush and output overflow preserve the pending lead; Reset clears it. A
+supplementary scalar requires two output slots; a one-slot Convert refusal permits retry. The revised
+GetMaxCharCount includes one extra UTF-16 unit for a saved lead plus one new trail. Wire width remains2
+in both families, independently of UTF-16 output length.
+
+`python tests/fixtures/character-sets/HkscsReference.py ob_ctype_hkscs_tab.h ob_ctype_hkscs31_tab.h`
+independently regenerates both families' decode/BMP/Plane2 SHA256 expectations from full source tables.
+Decoding uses the Big5 digest serialization above; Plane2 encoding hashes a four-byte scalar then
+four-byte wire code/failure for20000–2FFFF. Optional `ExportWindows950.ps1 -Path windows950.bin` plus
+`--windows950 windows950.bin --output HkscsMappings.cs` regenerates compact product deltas. Neither
+Python nor source files are runtime/test dependencies. This remains ordinary-result support; client
+SQL/parameter, national, JSON and CLOB contracts retain their scope. Actual emission/storage and
+deployment interoperability require real-server evidence.
 
 Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON and existing CLOB paths retain their UTF-8 restriction; trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope.
 
