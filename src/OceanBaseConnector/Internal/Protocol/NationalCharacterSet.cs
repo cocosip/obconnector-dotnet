@@ -24,12 +24,9 @@ namespace OceanBaseConnector.Internal.Protocol
         }
         internal static Encoding EncodingForCollation(ushort collation)
         {
-            switch (collation)
-            {
-                case 33: case 45: case 46: case 83: case 224: case 255: return ResultColumn.Utf8;
-                case 54: case 55: case 101: return Utf16;
-                default: throw new NotSupportedException("The national column's source character set is not supported.");
-            }
+            if (ResultCharacterSet.IsUtf8(collation)) return ResultColumn.Utf8;
+            if (ResultCharacterSet.IsUtf16Be(collation)) return Utf16;
+            throw new NotSupportedException("The national column's source character set is not supported.");
         }
         private static Encoding Resolve(string? name)
         {

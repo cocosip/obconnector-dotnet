@@ -1,5 +1,14 @@
 # Compatibility and known gaps
 
+## 2026-10-26 National Unicode collation mapping
+
+Oracle national fallback and charset-name discovery now recognize the same118 UTF-8 and29 UTF-16BE
+collation IDs already supported by ordinary results. Strict decoding, trusted National/Results
+precedence and parameter encoding remain unchanged. Other families, UTF16LE, binary63 and unknown
+IDs remain rejected by fallback. New local codec and sync/async discovery tests cover the missing
+IDs; real national storage, negotiated collation selection and deployment behavior remain unverified.
+See [delivery evidence](obconnector-dotnet-progress.md#2026-10-26-national-unicode-collation-mapping).
+
 ## 2026-10-26 Oracle floating special text results
 
 Oracle BINARY_FLOAT/BINARY_DOUBLE text results now additionally recognize exact case-insensitive

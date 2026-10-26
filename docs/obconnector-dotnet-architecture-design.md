@@ -393,6 +393,17 @@ Unknown collation IDs, enum holes, GB18030-2022 and other unimplemented families
 
 Real evidence is limited to direct OceanBase 4.4.2.2 MySQL mode, Windows/.NET10 with TLS disabled: six charset cases, each exercising eight text/prepared × buffered/sequential × sync/async combinations. That server rejects `SET character_set_results=utf16` and `utf16le` with 1231/42000; those two cases instead use `character_set_results=NULL` and `CONVERT` expressions, asserting string metadata and exact decoded text. This does not establish Oracle, proxy, TLS, all collation IDs, other server versions or independent-runtime compatibility. See [verification and retained failures](obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
 
+### National collation fallback
+
+When trusted national and result character-set names are absent or `binary`, Oracle national
+results accept all known UTF-8 and UTF-16 big-endian collation IDs from the table above. The same
+family selection decodes the three charset-name columns during session discovery. It retains strict
+decoders and content BOMs. Other families, UTF-16 little endian, binary63 and unknown IDs are rejected
+on this fallback path. A trusted National name takes precedence over Results, which takes precedence
+over collation; explicit session names can therefore override these fallback restrictions. Parameter
+and complex-member input encoding choices retain their existing rules. Local mapping and bootstrap
+regressions do not establish server national storage, negotiation or deployment compatibility.
+
 ### Decimal parameter scale
 
 `OceanBaseParameter.DecimalScale` is an optional signed `int?` declaration for decimal parameters, including Oracle NUMBER negative scale. The setter accepts -84..127; encoding validates Oracle precision <=38/scale -84..127 or MySQL precision <=65/scale 0..30, with scale <= nonzero Precision in MySQL mode. A declaration on a non-decimal parameter is rejected, including typed NULL, complex values and LOB/cursor parameters. SQL NULL retains metadata validation.

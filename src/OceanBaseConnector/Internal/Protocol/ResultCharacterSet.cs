@@ -25,6 +25,9 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private static bool IsUtf8Mb3(ushort collation) => collation == 33 || collation == 83 || collation >= 192 && collation <= 215;
 
+        internal static bool IsUtf16Be(ushort collation) => collation == 54 || collation == 55 ||
+            collation >= 101 && collation <= 124 || collation == 327 || collation == 342 || collation == 357;
+
         internal static Encoding Resolve(ushort collation, out uint maximumBytesPerCharacter)
         {
             maximumBytesPerCharacter = 4;
@@ -33,7 +36,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (IsUtf8Mb3(collation)) maximumBytesPerCharacter = 3;
                 return ResultColumn.Utf8;
             }
-            if (collation >= 101 && collation <= 124) return NationalCharacterSet.Utf16;
+            if (IsUtf16Be(collation)) return NationalCharacterSet.Utf16;
             switch (collation)
             {
                 case 11:
@@ -61,7 +64,6 @@ namespace OceanBaseConnector.Internal.Protocol
                 case 356:
                     maximumBytesPerCharacter = 2; return Gbk;
                 case 248: case 249: case 251: case 328: case 343: case 358: return Gb18030;
-                case 54: case 55: case 327: case 342: case 357: return NationalCharacterSet.Utf16;
                 case 56: case 62: case 333: case 348: case 363: return Utf16Le;
                 default: throw new NotSupportedException("Unsupported result collation ID " + collation.ToString(CultureInfo.InvariantCulture) + ".");
             }

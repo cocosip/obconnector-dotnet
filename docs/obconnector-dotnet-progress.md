@@ -1,5 +1,33 @@
 # Verification status and remaining work
 
+## 2026-10-26 National Unicode collation mapping
+
+Developed from `f3c484d` for P1-08/W5. NationalCharacterSet previously accepted only six UTF-8 and
+three UTF-16BE collation IDs, rejecting other known IDs during fallback and charset-name discovery.
+It now shares the existing UTF-8 family and a common UTF-16BE predicate with ResultCharacterSet:
+118 UTF-8 and29 UTF-16BE IDs. Ordinary result mappings and maximum widths are unchanged. Fallback
+still rejects other families, UTF16LE, binary63 and unknown IDs; trusted National > Results >
+collation precedence and parameter/complex input encodings retain their existing contracts.
+
+Net new units33:two family tests iterate147 IDs with NCHAR/NVARCHAR2 text/binary fallback, NULL,
+metadata and both absent/binary names; four strict byte/incremental decoder cases;23 rejected IDs
+and explicit trusted-session overrides; four new sync/async309/342 discovery cases alongside the
+retained54 pair. Discovery continues checking NChar UTF16 versus ordinary UTF8 parameter bytes.
+RED35 had10fail/25pass, including the two retained54 cases. Focused GREEN371 passed, no failures/
+skips. Solution Release build passed with zero warnings/errors,3.16seconds. Independent source/
+caller/test review found no blockers; reviewer did not run tests. Affected existing national/
+ordinary charset consumers480 passed, no failures/skips,17minutes3seconds; five assets in one
+.NET10 host. These retain reader/parameter regressions; new discovery IDs are directly exercised
+by unit public paths, not new five-asset discovery peers. Full units6809 passed, no failures/skips,
+23minutes6seconds. Independent source/caller/test/documentation review found no blockers and
+`git diff --check` passed. A host clock jump was observed during the gates; its cause was not
+established and original reports are retained.
+
+No real database accessed. This is mapping/bootstrap evidence, not server national storage,
+negotiation, SQL or deployment acceptance. Existing package/independent-runtime evidence remains
+historical. All23IDs/eight packages and other local work remain open. Artifacts are retained under
+ignored `TestResults/local-completeness/national-collation-*`. No push.
+
 ## 2026-10-26 Oracle floating special text results
 
 Developed from `7d05ce4` for P1-08/W5. Oracle type4/5 text additionally accepts complete,

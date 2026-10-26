@@ -365,19 +365,24 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public async Task NationalCharacterProbeReadsUtf16NamesAndLeavesOrdinaryParametersUnchanged(bool asynchronous)
+        [InlineData(false, 54)]
+        [InlineData(true, 54)]
+        [InlineData(false, 309)]
+        [InlineData(true, 309)]
+        [InlineData(false, 342)]
+        [InlineData(true, 342)]
+        public async Task NationalCharacterProbeReadsUnicodeNamesAndLeavesOrdinaryParametersUnchanged(bool asynchronous, ushort collation)
         {
+            var encoding = collation == 309 ? ResultColumn.Utf8 : NationalCharacterSet.Utf16;
             var server = Server(async channel =>
             {
                 var request = await channel.ReadPacketAsync(); Assert.Equal(SessionTimeZoneSql, Encoding.UTF8.GetString(request, 1, request.Length - 1));
                 await TimeZoneReply(channel); channel.BeginCommand(); request = await channel.ReadPacketAsync();
                 Assert.Equal(NationalCharacterSetSql, Encoding.UTF8.GetString(request, 1, request.Length - 1));
                 await channel.WritePacketAsync(new byte[] { 3 });
-                for (var i = 0; i < 3; i++) await channel.WritePacketAsync(Column("charset", 253, charset: 54));
+                for (var i = 0; i < 3; i++) await channel.WritePacketAsync(Column("charset", 253, charset: collation));
                 await channel.WritePacketAsync(Eof());
-                await channel.WritePacketAsync(new[] { "utf16", "utf16", "utf8mb4" }.SelectMany(s => WithLength(NationalCharacterSet.Utf16.GetBytes(s))).ToArray());
+                await channel.WritePacketAsync(new[] { "utf16", "utf16", "utf8mb4" }.SelectMany(s => WithLength(encoding.GetBytes(s))).ToArray());
                 await channel.WritePacketAsync(Eof());
                 request = await ReadNationalClientCommand(channel, "utf16"); Assert.Equal(22, request[0]); await Prepared(channel, 136, 2);
                 request = await ReadNationalClientCommand(channel, "utf16");
