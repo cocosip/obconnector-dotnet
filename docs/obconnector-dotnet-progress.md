@@ -1,5 +1,30 @@
 # Verification status and remaining work
 
+## 2026-10-26 Oracle floating special text results
+
+Developed from `7d05ce4` for P1-08/W5. Oracle type4/5 text additionally accepts complete,
+case-insensitive `Inf`, `-Inf` and `NaN` tokens as IEEE special values. Type4 remains boxed Single;
+type5 remains Double. Finite values retain their existing per-type parsers, including Single
+precision and signed zero. Existing CLR floating formats remain available. MySQL text acceptance,
+IEEE binary decoding, parameter encoding and metadata identities retain their contracts. Fixed Java
+TextRowProtocol.getNanAndInfForOracle supplies source precedent; its permissive prefix matching is
+not copied.
+
+New units20:16 public type/sync/async/text/prepared/buffered/sequential cases, two exact-token/MySQL
+boundary cases and two finite Single double-rounding regressions. Initial RED20 had8fail/12pass;
+text Inf failed while existing binary paths passed. Focused GREEN77 passed, no failures/skips.
+Final solution Release build passed with zero warnings/errors,6.28seconds, including the last typed
+getter assertions. New five-asset Oracle async consumers40 passed, no failures/skips,12seconds,
+covering special values, exact CLR/provider/schema identities, finite/signed-zero, NULL, following
+int42 and command reuse. Consumers load all assets in one .NET10 host. Full units6776 passed,
+no failures/skips,7minutes58seconds. Independent source/caller/fixture/documentation review found
+no blockers; reviewer did not build/test. `git diff --check` passed.
+
+No real database accessed. Actual server emission/SQL and deployment acceptance remain open.
+Preceding ROWID package/runtime results below remain historical and do not verify this candidate.
+All23IDs/eight packages and other local work remain open. Artifacts are retained under ignored
+`TestResults/local-completeness/oracle-float-*`. No push.
+
 ## 2026-10-26 Oracle ROWID results
 
 Developed from `94fcd85` for P1-08/W5. Oracle result209 now reports ROWID/String and returns unchanged

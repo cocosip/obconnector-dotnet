@@ -339,6 +339,15 @@ Schema reports the server metadata (`NumericPrecision=null` when unknown and the
 
 Direct Oracle 4.4.2.2/Windows/.NET10/TLS-disabled evidence covers prepared integer/fractional bindings and declared/cast negative scales. It does not establish other versions, OBProxy, TLS or independent-runtime compatibility. See the [module record](obconnector-dotnet-completeness.md#1537-2026-10-25-oracle-未知精度-number-结果读取).
 
+### Oracle floating special text results
+
+Oracle BINARY_FLOAT/BINARY_DOUBLE text results additionally accept the complete case-insensitive
+tokens `Inf`, `-Inf` and `NaN`, returning IEEE positive infinity, negative infinity and NaN. Type4
+remains Single and type5 Double, including typed getters and provider metadata. Finite Single values
+still parse directly as Single to avoid double rounding; signed zero is preserved. Existing CLR
+floating parsing formats remain available. MySQL text parsing, IEEE binary rows and parameter
+encoding keep their existing contracts. Real server emission and SQL interoperability remain unverified.
+
 ### Result character sets
 
 Ordinary string result columns select a strict decoder from their reported collation ID. The same decoder serves text/binary results, buffered/sequential reads, `GetString`, `GetChars` and `GetTextReader`; SQL NULL remains DBNull and binary collation 63 remains bytes. Metadata names and client SQL/string parameters retain their existing UTF-8 encoding. This adds result decoding, not a connection-string charset option or a general client-encoding negotiation API.

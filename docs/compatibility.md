@@ -1,5 +1,14 @@
 # Compatibility and known gaps
 
+## 2026-10-26 Oracle floating special text results
+
+Oracle BINARY_FLOAT/BINARY_DOUBLE text results now additionally recognize exact case-insensitive
+`Inf`, `-Inf` and `NaN` tokens. Existing CLR floating formats remain accepted, finite Single parsing
+does not round through Double, and IEEE binary/MySQL/parameter behavior is unchanged. Local public
+readers cover sync/async, text/prepared and buffered/sequential paths; five-asset consumers use Oracle
+async. No real database was accessed. Actual server emission, SQL and deployment acceptance remain
+open. See [delivery evidence](obconnector-dotnet-progress.md#2026-10-26-oracle-floating-special-text-results).
+
 ## 2026-10-26 Oracle ROWID results
 
 Oracle wire209 now reads as unchanged strict session UTF-8 text with ROWID/String metadata,

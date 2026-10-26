@@ -378,6 +378,13 @@ namespace OceanBaseConnector.Internal.Protocol
             if (IsTemporal) return TemporalCodec.DecodeText(TypeCode, Mode, Utf8.GetString(value));
             if (fieldType == typeof(byte[])) return (byte[])value.Clone();
             var text = TextEncoding.GetString(value);
+            if (Mode == OceanBaseCompatibilityMode.Oracle && (TypeCode == 4 || TypeCode == 5))
+            {
+                double? special = text.Equals("Inf", StringComparison.OrdinalIgnoreCase) ? double.PositiveInfinity
+                    : text.Equals("-Inf", StringComparison.OrdinalIgnoreCase) ? double.NegativeInfinity
+                    : text.Equals("NaN", StringComparison.OrdinalIgnoreCase) ? double.NaN : (double?)null;
+                if (special.HasValue) return TypeCode == 4 ? (object)(float)special.Value : special.Value;
+            }
             switch (TypeCode)
             {
                 case 1:

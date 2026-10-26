@@ -1,9 +1,9 @@
 # OceanBaseConnector .NET 完整驱动能力与缺口基线
 
-**最近复核：** 2026-10-26；基于94fcd85的Oracle ROWID结果码扩展；全部23项及八工作包仍开放。
-**当前模块：** P1-08/W5；完整性第15.69节。
-**当前验证：** 完整单测6756、相关消费者400通过，无失败/跳过；Release构建零警告/错误，候选包及实际8/9/10本地运行通过。
-**本次补充：** Oracle ROWID复用严格session UTF-8和既有length编码，保留标识符文本。
+**最近复核：** 2026-10-26；基于7d05ce4的Oracle浮点特殊文本修复；全部23项及八工作包仍开放。
+**当前模块：** P1-08/W5；完整性第15.70节。
+**当前验证：** 完整单测6776、相关消费者40通过，无失败/跳过；Release构建零警告/错误，独立走查无阻断。
+**本次补充：** Oracle浮点文本新增精确Inf/-Inf/NaN短token；有限Single保持直接解析。
 本模块无新增实库兼容性证据；历史12项greeting前失败保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
@@ -2517,6 +2517,20 @@ collation在内均保留字符串，不解析、不归一化标识符。MySQL明
 实际8/9/10的六次既有本地样例运行通过，Framework4.8仅API/配置烟测。独立走查无阻塞。
 未访问实库，不证明真实ROWID发出、SQL/参数或部署
 行为。NUMBER_FLOAT206的精度/scale契约及其他Oracle资源形状继续开放，全部ID不因此关闭。
+
+### 15.70 2026-10-26 Oracle 浮点特殊文本结果
+
+P1-08/W5，基于7d05ce4：Oracle type4/5文本结果新增完整、大小写不敏感的`Inf`、`-Inf`、
+`NaN`短token，保留Single/Double的CLR及provider身份。有限Single继续直接解析，避免先转
+Double再转换造成二次舍入；保留负零。既有CLR可解析格式仍可用；MySQL文本、IEEE二进制
+行及参数编码保持原契约。固定Java TextRowProtocol.getNanAndInfForOracle提供源码依据，
+不照搬其前缀匹配。
+
+新增20单测及40项Oracle异步五资产消费者。RED为8失败/12通过；相关GREEN77通过。
+最终Release构建零警告/错误，完整单测6776及消费者40通过、无失败/跳过，独立源码/文档
+走查无阻断，git diff --check通过。覆盖特殊/有限值、负零、NULL、类型/schema、
+后续字段及命令复用；五资产消费者同一.NET10host。未访问实库，真实发出格式、SQL及部署
+互操作仍开放。上一模块包/独立运行时结果属于历史证据，全部23项及八工作包继续开放。
 
 ## 16. 剩余交付工作包
 

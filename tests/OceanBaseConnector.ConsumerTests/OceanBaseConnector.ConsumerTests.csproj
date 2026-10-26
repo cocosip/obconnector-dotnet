@@ -16,6 +16,7 @@
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/TnsFileFixture.cs" Link="TestInfrastructure/TnsFileFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/TcpAttemptCapture.cs" Link="TestInfrastructure/TcpAttemptCapture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/CharacterSetFixture.cs" Link="TestInfrastructure/CharacterSetFixture.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/FloatingPointFixture.cs" Link="TestInfrastructure/FloatingPointFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/PoolConfigurationFixture.cs" Link="TestInfrastructure/PoolConfigurationFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/CatalogSamples.cs" Link="TestInfrastructure/CatalogSamples.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/ServerIdentity.cs" Link="TestInfrastructure/ServerIdentity.cs" />
