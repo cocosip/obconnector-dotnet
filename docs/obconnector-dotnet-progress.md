@@ -1,5 +1,31 @@
 # Verification status and remaining work
 
+## 2026-10-26 Discovery group blacklist overrides
+
+Developed from master/fa5d47f for P1-09/W4. ADDRESS_LIST.OBLB_BLACKLIST replaces the entire
+DESCRIPTION policy; omitted fields use NORMAL/TIMEOUT50 defaults, including an empty block.
+Omitted blocks inherit. Local-only policies default the shared TCP ceiling to120 while other groups
+remain policy-free; an explicit root ceiling alone still enables the default global policy.
+Only groups with an effective blacklist participate in fallback. Threshold requeues stay inside
+the current group; frozen ordering, shared actual-TCP cap/backoff/deadline and generation isolation
+remain. Equal policy values plus exact endpoint share history, different policies isolate it,
+and success clears only its effective policy. No new API/dependency or SQL replay.
+Fixed Java6adc311 explicitly leaves local blacklist parsing disabled; this is a .NET-defined capability.
+See [contract](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling),
+[full evidence/history](obconnector-dotnet-completeness.md#1563-2026-10-26-发现分组黑名单覆盖) and
+[audit](obconnector-dotnet-driver-audit.md#58-2026-10-26-发现分组黑名单覆盖).
+
+New units38, related230 pass; final consumers256pass (prior128 retained plus128), full units6382pass
+(prior6344 retained plus38), all0fail/skip. Final Release0warnings/errors,00:00:04.90; seven-file scoped
+format exits0 with existing workspace-load warnings. Frozen529source/project and1069active src/tests
+ReleaseDLL hashes exclude historical copies. Original14RED,88pass/6missing-User-ID test failures and
+corrected24pass remain. Independent read-only source/fixture review found no blockers; the reviewer
+did not build/test. Final independent read-only review confirmed raw TRX, retained cases, frozen hashes, file/history/ID/link scope and real-acceptance limits; no blockers remain. One evidence-link minor was corrected.
+Five assets run on one Windows/.NET10host; controlled HTTP and loopback peers do not prove real
+OCP/network HTTP, database/OBProxy/enterprise TLS, independent runtimes, platform or load acceptance.
+Address-level blacklists/group-local ceilings, other discovery/fault/release gates and all23IDs/eight
+packages stay open. Earlier entries preserve their original historical boundaries. Local master only.
+
 ## 2026-10-26 REF CURSOR result limits
 
 Developed from master/7976fb3 for P1-05/W5. OceanBaseRefCursor now accepts SingleRow and SingleResult,

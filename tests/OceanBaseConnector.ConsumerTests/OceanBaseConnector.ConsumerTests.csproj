@@ -9,6 +9,7 @@
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/PoolWaitHandoffCapture.cs" Link="TestInfrastructure/PoolWaitHandoffCapture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/PoolWaitHandoffFixture.cs" Link="TestInfrastructure/PoolWaitHandoffFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/DiscoveryBlacklistFixture.cs" Link="TestInfrastructure/DiscoveryBlacklistFixture.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/GroupBlacklistFixture.cs" Link="TestInfrastructure/GroupBlacklistFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/DiscoveryPolicyFixture.cs" Link="TestInfrastructure/DiscoveryPolicyFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/OcpHttpFixture.cs" Link="TestInfrastructure/OcpHttpFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/TnsFileFixture.cs" Link="TestInfrastructure/TnsFileFixture.cs" />

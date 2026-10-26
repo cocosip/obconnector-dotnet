@@ -1,6 +1,6 @@
 # Unknown outcome 与应用核对
 
-内置TNS/OCP的全局黑名单和TCP尝试上限只作用于新物理连接；cap0可复用已验证idle并跳过最低池补建，无idle则零TCP失败。TCP成功后不因TLS/认证/身份错误继续候选，更不重放已发送业务或恢复旧事务。策略与池代数隔离、一次fallback和共享上限见[契约](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling)及[本次证据](obconnector-dotnet-completeness.md#1555-2026-10-26-发现黑名单与tcp尝试上限)。
+内置TNS/OCP的全局/分组黑名单和共享TCP尝试上限只作用于新物理连接；cap0可复用已验证idle并跳过最低池补建，无idle则零TCP失败。TCP成功后不因TLS/认证/身份错误继续候选，更不重放已发送业务或恢复旧事务。策略与池代数隔离、一次fallback和共享上限见[契约](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling)及[本次证据](obconnector-dotnet-completeness.md#1563-2026-10-26-发现分组黑名单覆盖)。
 
 内置TNS/OCP发现现保留组、策略与权重，仅在新建物理连接时选择候选；顺序跨本次TCP重试冻结，健康偏好不跨组。权重/组序变更不会主动重分配仍符合地址membership的idle会话，需Clear后重新建连。它不恢复旧事务或重放未知写入；发现失败仍不得回退旧快照。见[分组选择契约](obconnector-dotnet-architecture-design.md#discovery-group-selection)与[本次验证](obconnector-dotnet-completeness.md#1554-2026-10-26-发现分组策略与权重)。
 

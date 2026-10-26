@@ -36,10 +36,11 @@ namespace OceanBaseConnector.Internal
             if (description.TryGetValue("OBLB_BLACKLIST", out var blacklist)) AppendBlacklist(tns, blacklist);
             foreach (var groupNode in groups)
             {
-                var group = Object(groupNode, "ADDRESS", "OBLB", "LOAD_BALANCE", "OBLB_STRATEGY", "LOAD_BALANCE_STRATEGY");
+                var group = Object(groupNode, "ADDRESS", "OBLB", "LOAD_BALANCE", "OBLB_STRATEGY", "LOAD_BALANCE_STRATEGY", "OBLB_BLACKLIST");
                 var addresses = Array(Required(group, "ADDRESS"));
                 if (addresses.Count == 0 || addresses.Count > 256) throw Invalid();
                 tns.Append("(ADDRESS_LIST="); AppendPolicies(tns, group);
+                if (group.TryGetValue("OBLB_BLACKLIST", out var groupBlacklist)) AppendBlacklist(tns, groupBlacklist);
                 foreach (var address in addresses)
                 {
                     var fields = Object(address, "PROTOCOL", "HOST", "PORT", "WEIGHT");

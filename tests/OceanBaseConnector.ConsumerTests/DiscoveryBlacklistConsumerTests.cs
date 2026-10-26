@@ -25,15 +25,26 @@ namespace OceanBaseConnector.ConsumerTests
 
         [Theory]
         [MemberData(nameof(Assets))]
-        public async Task EveryAssetAppliesBlacklistAndZeroBudgetAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
+        public Task EveryAssetAppliesBlacklistAndZeroBudgetAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
+            => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: false);
+
+        [Theory]
+        [MemberData(nameof(Assets))]
+        public Task EveryAssetAppliesGroupBlacklistAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
+            => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: true);
+
+        private static async Task VerifyBlacklist(string target, bool oracle, bool asynchronous, int path, bool ocp, bool group)
         {
             using var greeting = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var bytes = Convert.FromBase64String(greeting.RootElement.GetProperty("payloadBase64").GetString()!);
             await using var server = new CredentialServer(bytes, oracle: oracle, sessionStateOk: oracle ? SessionTimeZoneFixture.Report : null);
             using var refused = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             refused.Bind(new IPEndPoint(IPAddress.Loopback, 0)); var port = ((IPEndPoint)refused.LocalEndPoint!).Port;
-            using var http = new OcpHttpFixture(DiscoveryBlacklistFixture.Json(port, server.Port, 2));
-            using var file = new TnsFileFixture(DiscoveryBlacklistFixture.Tns(port, server.Port, 2));
+            string Tns(int cap) => group ? GroupBlacklistFixture.Tns(port, server.Port, cap) : DiscoveryBlacklistFixture.Tns(port, server.Port, cap);
+            string Json(int cap) => group ? GroupBlacklistFixture.Json(port, server.Port, cap) : DiscoveryBlacklistFixture.Json(port, server.Port, cap);
+            var physicalBudget = group ? 3 : 2;
+            using var http = new OcpHttpFixture(Json(physicalBudget));
+            using var file = new TnsFileFixture(Tns(physicalBudget));
             var context = new AssemblyLoadContext("discovery-blacklist-" + target, isCollectible: true);
             var pooled = path == 1 || path == 2;
             DbConnection? connection = null; DbDataSource? source = null;
@@ -64,19 +75,21 @@ namespace OceanBaseConnector.ConsumerTests
                     Assert.Equal(0, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
                 }
                 connection.Close(); Assert.Equal(pooled ? 2 : 1, server.Accepted);
-                file.Write(DiscoveryBlacklistFixture.Tns(port, server.Port, 0)); http.Body = DiscoveryBlacklistFixture.Json(port, server.Port, 0);
+                file.Write(Tns(0)); http.Body = Json(0);
                 if (pooled) { await Open(connection, asynchronous); connection.Close(); }
                 else
                 {
                     var error = await Assert.ThrowsAnyAsync<DbException>(() => Open(connection, asynchronous));
                     Assert.Equal("OceanBaseException", error.GetType().Name);
                 }
-                Assert.Equal(pooled ? new[] { "error", "success", "success" } : new[] { "error", "success" }, capture.Outcomes);
+                Assert.Equal(group ? pooled ? new[] { "error", "error", "success", "success" } : new[] { "error", "error", "success" }
+                    : pooled ? new[] { "error", "success", "success" } : new[] { "error", "success" }, capture.Outcomes);
                 if (pooled) Clear(connection, source);
-                file.Write(DiscoveryBlacklistFixture.Tns(port, server.Port, 2)); http.Body = DiscoveryBlacklistFixture.Json(port, server.Port, 2);
+                file.Write(Tns(physicalBudget)); http.Body = Json(physicalBudget);
                 await Open(connection, asynchronous);
                 using (var command = connection.CreateCommand()) { command.CommandText = "select after policy change"; Assert.Equal(0, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery()); }
-                Assert.Equal(pooled ? new[] { "error", "success", "success", "error", "success", "success" } : new[] { "error", "success", "success" }, capture.Outcomes);
+                Assert.Equal(group ? pooled ? new[] { "error", "error", "success", "success", "error", "error", "success", "success" } : new[] { "error", "error", "success", "success" }
+                    : pooled ? new[] { "error", "success", "success", "error", "success", "success" } : new[] { "error", "success", "success" }, capture.Outcomes);
                 Assert.Equal(pooled ? 4 : 2, server.Accepted); Assert.Equal(ocp ? 3 : 0, http.Requests.Count);
             }
             finally

@@ -19,11 +19,12 @@ namespace OceanBaseConnector.Internal
     {
         private readonly OceanBaseEndpoint[] _endpoints;
         private readonly int[] _weights;
-        internal DiscoveryGroup(List<OceanBaseEndpoint> endpoints, List<int> weights, DiscoveryStrategy strategy)
+        internal DiscoveryGroup(List<OceanBaseEndpoint> endpoints, List<int> weights, DiscoveryStrategy strategy, DiscoveryBlacklistPolicy? blacklist = null)
         {
-            _endpoints = endpoints.ToArray(); _weights = weights.ToArray(); Strategy = strategy;
+            _endpoints = endpoints.ToArray(); _weights = weights.ToArray(); Strategy = strategy; BlacklistPolicy = blacklist;
         }
         internal DiscoveryStrategy Strategy { get; }
+        internal DiscoveryBlacklistPolicy? BlacklistPolicy { get; }
         internal int Count => _endpoints.Length;
         internal OceanBaseEndpoint Endpoint(int index) => _endpoints[index];
         internal int Weight(int index) => _weights[index];
@@ -37,11 +38,13 @@ namespace OceanBaseConnector.Internal
         internal DiscoverySnapshot(List<DiscoveryGroup> groups, DiscoveryBlacklistPolicy? blacklist = null, int? retryAllDowns = null)
         {
             BlacklistPolicy = blacklist ?? (retryAllDowns.HasValue ? new DiscoveryBlacklistPolicy() : null);
-            RetryAllDowns = retryAllDowns ?? (BlacklistPolicy != null ? 120 : (int?)null);
             _groups = groups.ToArray();
             var endpoints = new List<OceanBaseEndpoint>();
             var canonical = new StringBuilder();
+            var hasBlacklist = BlacklistPolicy != null;
             foreach (var group in _groups)
+            {
+                hasBlacklist |= group.BlacklistPolicy != null;
                 for (var i = 0; i < group.Count; i++)
                 {
                     var endpoint = group.Endpoint(i);
@@ -49,6 +52,8 @@ namespace OceanBaseConnector.Internal
                     canonical.Append(endpoint.ToString()); endpoints.Add(endpoint);
                     if (endpoints.Count > 256 || canonical.Length > 65536) throw new FormatException("Excessive discovery address configuration.");
                 }
+            }
+            RetryAllDowns = retryAllDowns ?? (hasBlacklist ? 120 : (int?)null);
             if (endpoints.Count == 0) throw new FormatException("Discovery requires addresses.");
             _endpoints = endpoints.ToArray(); CanonicalAddresses = canonical.ToString();
         }
@@ -61,6 +66,12 @@ namespace OceanBaseConnector.Internal
             var sizes = new int[_groups.Length];
             for (var i = 0; i < sizes.Length; i++) sizes[i] = _groups[i].Count;
             return sizes;
+        }
+        internal DiscoveryBlacklistPolicy?[] CopyGroupPolicies()
+        {
+            var policies = new DiscoveryBlacklistPolicy?[_groups.Length];
+            for (var i = 0; i < policies.Length; i++) policies[i] = _groups[i].BlacklistPolicy ?? BlacklistPolicy;
+            return policies;
         }
         public int Count => _endpoints.Length;
         public OceanBaseEndpoint this[int index] => _endpoints[index];
