@@ -404,7 +404,7 @@ The encoded execution request is limited to 64 MiB; Oracle upload bytes count af
 | Oracle INTERVAL | `OceanBaseIntervalYearToMonth` / `OceanBaseIntervalDayToSecond`. |
 | Oracle NCHAR / NVARCHAR2 | `string`; explicit `OceanBaseDbType.NChar` / `NVarchar2` for binding. |
 | MySQL DATE / DATETIME / TIMESTAMP | Normal values use `DateTime`. Provider-specific `OceanBaseDate` / `OceanBaseDateTime` preserves zero components; conversion to `DateTime` rejects them. |
-| MySQL YEAR / BIT / JSON | `ushort` / `ulong` / UTF-8 JSON text as `string`. SQL NULL remains distinct from JSON text `null`. |
+| MySQL YEAR / BIT / JSON | `ushort` / `ulong` / JSON text as `string` (UTF-8 results; selected client encoding for string parameters). SQL NULL remains distinct from JSON text `null`. |
 
 Conversions requiring rounding or loss of precision throw. Timezone-free values do not acquire the client's local timezone.
 
@@ -567,7 +567,7 @@ Python nor source files are runtime/test dependencies. This remains ordinary-res
 SQL/parameter, national, JSON and CLOB contracts retain their scope. Actual emission/storage and
 deployment interoperability require real-server evidence.
 
-Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON results and CLOB reads retain their UTF-8 scope. Explicit JSON parameters require default utf8mb4 input. CLOB write buffers inherit the selected client parameter encoding and its representability checks; storage interoperability is not expanded. Trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope. See [client charset and cached session trust](client-character-sets.md).
+Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON results and CLOB reads retain their UTF-8 scope. Explicit MySQL JSON parameters use the selected strict client encoding and ordinary string binding; the server owns JSON conversion, syntax and storage. CLOB write buffers inherit the selected client parameter encoding and its representability checks; storage interoperability is not expanded. Trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope. See [client charset and cached session trust](client-character-sets.md).
 
 Real evidence is limited to direct OceanBase 4.4.2.2 MySQL mode, Windows/.NET10 with TLS disabled: six charset cases, each exercising eight text/prepared × buffered/sequential × sync/async combinations. That server rejects `SET character_set_results=utf16` and `utf16le` with 1231/42000; those two cases instead use `character_set_results=NULL` and `CONVERT` expressions, asserting string metadata and exact decoded text. This does not establish Oracle, proxy, TLS, all collation IDs, other server versions or independent-runtime compatibility. See [verification and retained failures](obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
 

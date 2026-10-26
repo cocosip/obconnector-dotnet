@@ -27,9 +27,11 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
         private const string StateSql = "SELECT @@character_set_client, @@character_set_connection, @@character_set_results, @@collation_connection";
         private const string Result = "患者😀";
 
-        internal static async Task Verify(Type connectionType, byte[] greeting, int sample, bool oracle, bool asynchronous, bool pooling = false, bool deprecated = false)
+        internal static async Task Verify(Type connectionType, byte[] greeting, int sample, bool oracle, bool asynchronous, bool pooling = false, bool deprecated = false, bool json = false)
         {
             var (name, text, hex) = Samples[sample]; var bytes = Convert.FromHexString(hex);
+            if (json) { text = "{\"x\":\"" + text + "\"}"; bytes = Join("{\"x\":\"", bytes, "\"}"); }
+            var result = json ? "{\"x\":\"" + Result + "\"}" : Result;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             using var connection = (DbConnection)Activator.CreateInstance(connectionType)!;
@@ -46,15 +48,16 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                 await Initialize(channel, name, oracle, deprecated, budget.Token);
                 var request = await Read(channel, oracle, name, deprecated, budget.Token);
                 Assert.Equal(3, request[0]); Assert.Equal(Join("SELECT '", bytes, "'"), request.AsSpan(1).ToArray());
-                await Row(channel, oracle, deprecated, binary: false, budget.Token);
+                await Row(channel, oracle, deprecated, binary: false, budget.Token, json);
                 request = await Read(channel, oracle, name, deprecated, budget.Token);
                 Assert.Equal(22, request[0]); Assert.Equal(Join("SELECT ? /* ", bytes, " */"), request.AsSpan(1).ToArray());
                 await channel.WritePacketAsync(new byte[] { 0, 71, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0 }, budget.Token);
                 await channel.WritePacketAsync(Column(), budget.Token);
                 if (!deprecated) await channel.WritePacketAsync(End(oracle, false), budget.Token);
                 request = await Read(channel, oracle, name, deprecated, budget.Token);
-                Assert.Equal(23, request[0]); Assert.Equal(bytes, request.AsSpan(15).ToArray()); Assert.Equal(bytes.Length, request[14]);
-                await Row(channel, oracle, deprecated, binary: true, budget.Token);
+                Assert.Equal(23, request[0]); Assert.Equal(new byte[] { 0, 1, 253, 0 }, request.AsSpan(10, 4).ToArray());
+                Assert.Equal(bytes, request.AsSpan(15).ToArray()); Assert.Equal(bytes.Length, request[14]);
+                await Row(channel, oracle, deprecated, binary: true, budget.Token, json);
                 if (pooling)
                 {
                     for (var round = 0; round < 2; round++)
@@ -83,10 +86,15 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                 using (var command = connection.CreateCommand())
                 {
                     command.CommandText = "SELECT '" + text + "'";
-                    Assert.Equal(Result, asynchronous ? await command.ExecuteScalarAsync(budget.Token) : command.ExecuteScalar());
+                    Assert.Equal(result, asynchronous ? await command.ExecuteScalarAsync(budget.Token) : command.ExecuteScalar());
                     command.CommandText = "SELECT " + (oracle ? ":p" : "?") + " /* " + text + " */";
                     var p = command.CreateParameter(); p.ParameterName = "p"; p.Value = text; command.Parameters.Add(p);
-                    Assert.Equal(Result, asynchronous ? await command.ExecuteScalarAsync(budget.Token) : command.ExecuteScalar());
+                    if (json)
+                    {
+                        var property = p.GetType().GetProperty("OceanBaseDbType")!;
+                        property.SetValue(p, Enum.Parse(Nullable.GetUnderlyingType(property.PropertyType)!, "Json"));
+                    }
+                    Assert.Equal(result, asynchronous ? await command.ExecuteScalarAsync(budget.Token) : command.ExecuteScalar());
                 }
                 if (asynchronous) await connection.CloseAsync(); else connection.Close();
                 if (pooling)
@@ -153,11 +161,11 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             else await channel.WritePacketAsync(End(oracle, deprecated), token);
         }
 
-        private static async Task Row(PacketChannel channel, bool oracle, bool deprecated, bool binary, CancellationToken token)
+        private static async Task Row(PacketChannel channel, bool oracle, bool deprecated, bool binary, CancellationToken token, bool json = false)
         {
-            await channel.WritePacketAsync(new byte[] { 1 }, token); await channel.WritePacketAsync(Column(), token);
+            await channel.WritePacketAsync(new byte[] { 1 }, token); await channel.WritePacketAsync(Column(json), token);
             if (!deprecated) await channel.WritePacketAsync(End(oracle, false), token);
-            var bytes = Encoding.UTF8.GetBytes(Result); var row = new byte[bytes.Length + (binary ? 3 : 1)];
+            var bytes = Encoding.UTF8.GetBytes(json ? "{\"x\":\"" + Result + "\"}" : Result); var row = new byte[bytes.Length + (binary ? 3 : 1)];
             row[binary ? 2 : 0] = (byte)bytes.Length; Buffer.BlockCopy(bytes, 0, row, binary ? 3 : 1, bytes.Length);
             await channel.WritePacketAsync(row, token); await channel.WritePacketAsync(End(oracle, deprecated), token);
         }
@@ -165,12 +173,12 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
         { using var s = new MemoryStream(); s.Write(Encoding.ASCII.GetBytes(prefix)); s.Write(bytes); s.Write(Encoding.ASCII.GetBytes(suffix)); return s.ToArray(); }
         internal static byte[] Ok(bool oracle) => new byte[] { 0, 0, 0, oracle ? (byte)6 : (byte)2, 0, 0, 0 };
         private static byte[] End(bool oracle, bool deprecated) => deprecated ? new byte[] { 254, 0, 0, oracle ? (byte)6 : (byte)2, 0, 0, 0 } : new byte[] { 254, 0, 0, oracle ? (byte)6 : (byte)2, 0 };
-        internal static byte[] Column()
+        internal static byte[] Column(bool json = false)
         {
             using var s = new MemoryStream();
             foreach (var value in new[] { "def", "", "", "", "患者", "患者" })
             { var bytes = Encoding.UTF8.GetBytes(value); s.WriteByte((byte)bytes.Length); s.Write(bytes); }
-            s.Write(new byte[] { 12, 45, 0, 255, 0, 0, 0, 253, 0, 0, 0, 0, 0 }); return s.ToArray();
+            s.Write(new byte[] { 12, json ? (byte)63 : (byte)45, 0, 255, 0, 0, 0, json ? (byte)245 : (byte)253, 0, 0, 0, 0, 0 }); return s.ToArray();
         }
     }
 }

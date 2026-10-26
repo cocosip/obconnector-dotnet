@@ -85,9 +85,18 @@ fallback must match the configured input family and rejects supplementary text. 
 literal fallback uses the selected encoding for its 4000-byte limit. This module does not extend
 DBCS string literal fallback escaping.
 
-Explicit JSON parameters remain limited to default utf8mb4 input; managed non-default names reject
-them during prevalidation. Their existing wire type is ordinary string, so sending UTF-8 bytes under
-a different connection charset would not establish correct JSON semantics. Standalone NCHAR/NVARCHAR2
+Explicit MySQL JSON parameters use the selected strict client encoding and the existing ordinary
+string wire type253. Unrepresentable text fails prevalidation before target preparation/execution;
+ASCII JSON escapes can represent characters outside the selected charset. The driver preserves
+JSON text rather than parsing or serializing it. SQL NULL remains distinct from JSON text `null`.
+Oracle mode and nonzero Precision/Scale remain rejected, including for SQL NULL. JSON results
+retain strict UTF-8 decoding. Server preparation/fallback restrictions above still apply.
+
+The fixed OceanBase source's
+[is_valid_for_json](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/sql/engine/expr/ob_expr_json_func_helper.cpp#L1263)
+requests UTF8MB4 calculation collation for nonbinary strings from other charsets. This is source
+evidence for server-side conversion, not a completed deployment/storage matrix.
+Standalone NCHAR/NVARCHAR2
 parameters retain the independently verified national encoding. Complex national members already depend on connection charset and
 remain limited to the existing UTF8/UTF16 names; non-UTF8 managed names and the explicit utf8mb3
 name are rejected by that path. CLOB write buffers use ordinary string parameters and therefore
@@ -107,6 +116,13 @@ Additional local regressions cover trust invalidation, procedure outputs, staged
 controls, nested complex/array encodings, byte budgets and strict alias rejection. Five product assets
 are consumed in one .NET10 process; this does not establish five independent runtimes.
 
-No real OceanBase or OBProxy was accessed for this module. Accepted server names, collations,
-storage/coercibility, national/JSON/CLOB combinations and version/proxy/reset support still require
-the corresponding real-server matrix. This delivers a local client-encoding module, not all P1-08.
+The initial client-encoding module used local fixtures only. The JSON extension adds exact bytes
+for all twelve non-default names, both row protocols and sync/async, plus five-asset consumption.
+Its opt-in MySQL tests check JSON storage, escaped supplementary values, SQL NULL versus JSON null,
+invalid input and subsequent command reuse. The current real attempt failed all ten cases while
+reading the initial greeting, before authentication or JSON SQL; both existing default-charset
+connection controls failed there too and a raw TCP probe received zero greeting bytes. The underlying
+server/network cause is unknown. No real JSON storage or OBProxy success is claimed.
+Accepted server names, collations, storage/coercibility, national/JSON/CLOB combinations and
+version/proxy/reset support still require the corresponding real-server matrix. This delivers
+local client-encoding behavior, not all P1-08.

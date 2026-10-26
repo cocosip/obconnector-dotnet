@@ -125,10 +125,11 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await connection.OpenAsync(); using var command = connection.CreateCommand();
-                foreach (var parameterized in new[] { false, true })
+                foreach (var kind in new[] { 0, 1, 2 })
                 {
-                    command.CommandText = parameterized ? "SELECT ?" : "SELECT '€'";
-                    if (parameterized) command.Parameters.Add(new OceanBaseParameter { Value = "€" });
+                    command.Parameters.Clear(); command.CommandText = kind == 0 ? "SELECT '€'" : "SELECT ?";
+                    if (kind != 0) command.Parameters.Add(new OceanBaseParameter
+                    { Value = kind == 1 ? "€" : "{\"x\":\"€\"}", OceanBaseDbType = kind == 2 ? OceanBaseDbType.Json : null });
                     await Assert.ThrowsAsync<EncoderFallbackException>(() => asynchronous ? command.ExecuteNonQueryAsync() : Task.FromResult(command.ExecuteNonQuery()));
                 }
                 command.Parameters.Clear(); command.CommandText = "SELECT 1";

@@ -111,10 +111,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public void ClientEncodingKeepsJsonBoundedAndStandaloneNationalPayloadsIndependent()
+        public void ClientEncodingKeepsDefaultJsonAndStandaloneNationalPayloadsIndependent()
         {
             var parameters = new[] { new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Value = "{\"x\":\"中😀\"}" } };
-            Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(parameters, clientEncoding: ClientCharacterSet.Parse("ascii")));
+            Assert.Throws<EncoderFallbackException>(() => PreparedParameters.Encode(parameters, clientEncoding: ClientCharacterSet.Parse("ascii")));
             Assert.Equal(PreparedParameters.Encode(parameters), PreparedParameters.Encode(parameters, clientEncoding: ClientCharacterSet.Parse("utf8mb4")));
             parameters = new[] { new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.NVarchar2, Value = "中😀" } };
             var national = new NationalCharacterSet("utf16", "utf8mb4", "gbk");

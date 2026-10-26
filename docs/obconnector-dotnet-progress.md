@@ -4,6 +4,44 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 JSON parameters with client character sets
+
+Developed from1da3ea8 on master for P1-08/W5. Explicit MySQL JSON parameters already use
+ordinary string wire type253, but rejected all managed non-default client encodings before that
+shared binding path. Twelve new pure codec cases all failed on this guard. Removing only this
+two-line prohibition lets the selected strict client codec handle JSON too; no UTF8 byte fallback,
+JSON parser, dependency, public API or output-decoding change is introduced.
+
+Source evidence: fixed OceanBase5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5
+ob_expr_json_func_helper.cpp is_valid_for_json requests UTF8MB4 calculation collation for
+nonbinary strings from other charsets. The [contract](client-character-sets.md) links the exact
+source. Syntax/conversion/storage remain server responsibilities. Oracle/Precision/Scale restrictions
+including SQL NULL, strict unrepresentability checks and server-preparation/fallback limits remain.
+ASCII JSON escapes can express characters outside the selected input family; results stay UTF8.
+
+Twelve codec tests check exact payloads, validation-only encoding, JSON escapes/literal null,
+SQL NULL metadata and malformed surrogate rejection. Twenty-four sync/async wire units reuse
+the existing charset fixture with an optional JSON branch: exact type253/client bytes and UTF8
+JSON results in both row protocols. Existing non-JSON branches remain covered. Ten new five-asset
+consumer cases each exercise all twelve names with deprecated EOF; they run in one.NET10host.
+Existing pre-send rejection tests now include unrepresentable explicit JSON and subsequent reuse.
+
+Serial Release solution build passed with zero warnings/errors in17.23s. Focused units111 and
+affected consumers570 passed, zero failures/skips; consumers took3minutes2seconds. Whitespace
+format verification exited0 with a workspace-load warning. Complete units7543 passed, zero
+failures/skips, in8minutes30seconds. Independent source/callers/tests/contracts review found no
+actionable issue; final ledger consistency was checked before commit.
+
+New opt-in MySQL storage tests cover five input families, sync/async, actual JSON conversion,
+escaped supplementary values, SQL NULL versus JSON null, both read protocols and invalid-input
+recovery. All ten real attempts failed reading the initial greeting, before authentication or JSON.
+Both existing default-charset sync/async connection controls also failed there. An independent
+TcpClient connected and read zero initial header bytes. The underlying server/network cause is
+unknown; no table was created and no JSON/storage/server-version success is claimed. No OBProxy
+was tested. Original RED and all failed real/control TRX/logs remain under ignored
+TestResults/local-completeness/json-client-*; the raw source snapshot and probe note are retained.
+All23 IDs/eight work packages retain their remaining implementation and deployment criteria.
+
 ## 2026-10-27 CLOB input charset validation before writes
 
 Developed fromb66cda1 on master for P1-08/W5. WriteText/WriteTextAsync previously validated

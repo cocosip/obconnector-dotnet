@@ -7,7 +7,15 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 ## Current checkpoint
 
 - Development stays on `master`. No new branch/worktree and no implicit push.
-- Latest local delivery: CLOB WriteText validates every client-encoding chunk before any write,
+- Latest local delivery: explicit MySQL JSON parameters use the configured strict client encoding
+  through the existing type253 string binding. Complete units7543, focused111 and affected
+  consumers570 passed, zero failures/skips; independent source/tests/docs review found no actionable issue.
+  Release build has zero warnings/errors and format verification passed with a workspace-load warning.
+  The ten real JSON attempts and two controls using the default charset failed reading the initial
+  greeting; a raw TCP probe received zero greeting bytes.
+  No actual JSON conversion/storage success is claimed. See the
+  [module record](obconnector-dotnet-progress.md#2026-10-27-json-parameters-with-client-character-sets).
+- Previous local delivery: CLOB WriteText (`1da3ea8`) validates every client-encoding chunk before any write,
   preventing a late unrepresentable suffix from leaving a written prefix or invalidating the
   handle. Prevalidation shares the8191-scalar write boundary and uses bounded encoding buffers.
   Complete units7507, focused26, affected units455 and consumers1000 passed, zero failures/skips.
@@ -32,8 +40,8 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 - Previous completed module: session protocol I/O durations (`f0edabf`), with7,375 complete units,
   89 focused units and279 affected consumers, all passing. See its [contract](session-io-diagnostics.md).
 - Further work: remaining national/JSON/CLOB and extended type boundaries, resource waits,
-  Oracle cursor/complex shapes and the other priorities below. The charset module keeps JSON
-  parameters default-utf8mb4-only and MySQL string literal fallback UTF-8-only; managed charset
+  Oracle cursor/complex shapes and the other priorities below. JSON parameters use strict client
+  bytes; MySQL string literal fallback retains its UTF-8-only restrictions. Managed charset
   rechecks can change session diagnostic functions after conservatively classified SQL.
 - The historical TNS File.Replace failure remains cause-unconfirmed. Eight isolated runs and both
   fresh complete runs passed; no TNS source change, retry workaround or skipped assertion was made.

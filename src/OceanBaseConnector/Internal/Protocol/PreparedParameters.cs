@@ -19,8 +19,6 @@ namespace OceanBaseConnector.Internal.Protocol
             var nulls = new byte[nullBytes];
             for (var i = 0; i < parameters.Length; i++)
             {
-                if (parameters[i].OceanBaseDbType == OceanBaseDbType.Json && clientEncoding is ClientCharacterSet charset && charset.Managed)
-                    throw new NotSupportedException("Explicit JSON parameters require the default UTF8MB4 client encoding.");
                 complexTypes[i] = GetComplexType(parameters[i]);
                 if (complexTypes[i] != null && mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Complex parameters require Oracle mode.");
                 types[i] = complexTypes[i] != null ? (ushort)160 : TypeCode(parameters[i], mode);

@@ -3,13 +3,13 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27，基于b66cda1开发；保持master，全部23项及八工作包仍开放。
-**最近完成模块：** P1-08 CLOB首次写入前按实际输入编码逐块验证全部文本，完整单测7507、专项26、受影响单测455及消费者1000通过，独立走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-clob-input-charset-validation-before-writes)及第15.81节。
-此前客户端SQL/参数字符集（b66cda1）、会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录；[输入字符集契约](client-character-sets.md)记录当前边界。
-**当前验证：** 字符集模块最终完整单测7491、专项166、受影响消费者560通过，均零失败/跳过；串行Release构建零警告/错误，格式验证通过（workspace-load warning），独立源码/测试/文档走查无剩余可操作问题。首次完整运行7484通过/2失败及后续专项164通过/2失败的原因和修正均保留于台账，不删除原报告。
+**最近复核：** 2026-10-27，基于1da3ea8开发；保持master，全部23项及八工作包仍开放。
+**最近完成模块：** P1-08显式MySQL JSON参数沿用选定客户端编码及type253绑定，完整单测7543、专项111及受影响消费者570通过，独立走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-json-parameters-with-client-character-sets)及第15.82节。10项实库及2项默认编码对照均在初始握手失败，不能声称JSON存储成功。
+此前CLOB整输入预校验（1da3ea8）、客户端SQL/参数字符集（b66cda1）、会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录；[输入字符集契约](client-character-sets.md)记录当前边界。
+**当前验证：** JSON模块完整单测7543、专项111、受影响消费者570通过，均零失败/跳过；串行Release构建零警告/错误，格式验证通过（workspace-load warning），独立源码/测试/文档走查无剩余可操作问题。此前字符集模块7491/166/560及其原始失败、CLOB模块7507/26/455/1000保留于各自历史台账，不覆盖本轮实库握手失败。
 **历史限制：** 前一模块构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，八次独立及后续完整运行未复现；没有修改TNS或添加绕过。
 **剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向及文本REF CURSOR、复杂LOB/游标成员、压缩OB20/代理reroute、多发送/独立bulk及六项验收占位等，逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
-当前模块未访问真实数据库；后续仍需其他资源指标、负载及完整部署验收。历史TNS及12项greeting前失败保留原记录。
+本轮10项JSON实库及2项默认编码对照连接尝试均止于初始greeting，未完成认证或JSON SQL，服务器/网络根因未明；后续仍需其他资源指标、负载及完整部署验收。历史TNS及本轮握手失败均保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
 **文档性质：** 能力审计、公共目标契约与验收基线；已实现、部分实现、明确缺失、未验证和开发检查点分开记录。23 项及八工作包尚未整体完成。
@@ -2799,6 +2799,25 @@ The [module ledger](obconnector-dotnet-progress.md#2026-10-27-clob-input-charset
 retains initial RED, the stopped earlier full run, invalid-response fixture race, assertion
 correction and review findings. No real-server claim or broader JSON/national/CLOB storage support
 is introduced; all23 gaps/eight work packages retain their remaining criteria.
+
+### 15.82 2026-10-27 JSON parameters with client character sets
+
+P1-08/W5, developed from1da3ea8 on master. Explicit MySQL JSON input now uses its existing
+type253 string binding and the selected strict client codec. Only the redundant managed-charset
+prohibition is removed; JSON results remain UTF8, SQL NULL differs from JSON text null, and
+Oracle/precision/scale restrictions and client-literal fallback limits remain. Source-backed
+server JSON-expression conversion is documented in the [contract](client-character-sets.md).
+
+Twelve codec RED cases reproduced the old prohibition; focused111 and five-asset affected
+consumers570 now pass without failures/skips. Release solution build has zero warnings/errors;
+format verification passed with a workspace-load warning. Complete units7543 passed without failures/
+skips in8minutes30seconds; independent source/callers/tests/contracts review found no actionable issue.
+All ten new real-storage cases failed at the initial greeting before authentication
+or JSON; both existing default-charset controls failed there too and a raw TCP probe received no
+greeting bytes. Underlying server/network cause is unknown; storage/proxy compatibility is unproved.
+Original evidence is retained in the
+[module ledger](obconnector-dotnet-progress.md#2026-10-27-json-parameters-with-client-character-sets).
+All23 IDs/eight work packages remain open.
 
 ## 16. 剩余交付工作包
 
