@@ -32,6 +32,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             int sample, bool oracle, bool asynchronous, bool binary, bool sequential, byte type = 253, bool raw = false)
         {
             var (collation, part, hex, width) = Samples[sample];
+            var extended = type >= 247 && type <= 251 || type == 255;
             var repetitions = type == 249 ? 10 : 400;
             var expected = string.Concat(Enumerable.Repeat(part, repetitions));
             var field = Enumerable.Range(0, repetitions).SelectMany(_ => Convert.FromHexString(hex)).ToArray();
@@ -66,7 +67,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                 if (!binary) row.WriteByte(251);
                 if (binary) row.Write(new byte[] { 42, 0, 0, 0 }); else row.Write(new byte[] { 2, 52, 50 });
                 await channel.WritePacketAsync(row.ToArray(), budget.Token);
-                if (type >= 249 && type <= 251)
+                if (extended)
                     await channel.WritePacketAsync(binary ? new byte[] { 0, 32, 0, 0, 0, 42, 0, 0, 0 } : new byte[] { 0, 0, 0, 251, 2, 52, 50 }, budget.Token);
                 await channel.WritePacketAsync(eof, budget.Token);
                 channel.BeginCommand();
@@ -87,10 +88,11 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                         : command.ExecuteReader(sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default);
                     Assert.Equal(oracle || raw ? 120 : 120 / width, reader.GetColumnSchema()[0].ColumnSize);
                     Assert.Equal(raw ? typeof(byte[]) : typeof(string), reader.GetFieldType(0)); Assert.Equal("字符列", reader.GetName(0));
-                    if (type >= 249 && type <= 251)
+                    if (extended)
                     {
-                        Assert.Equal((type == 249 ? "TINY" : type == 250 ? "MEDIUM" : "LONG") + (raw ? "BLOB" : "TEXT"), reader.GetDataTypeName(0));
-                        Assert.True(reader.GetColumnSchema()[0].IsLong);
+                        Assert.Equal(type == 247 ? "ENUM" : type == 248 ? "SET" : type == 255 ? "GEOMETRY"
+                            : (type == 249 ? "TINY" : type == 250 ? "MEDIUM" : "LONG") + (raw ? "BLOB" : "TEXT"), reader.GetDataTypeName(0));
+                        Assert.Equal(type >= 249 && type <= 251, reader.GetColumnSchema()[0].IsLong);
                         Assert.Equal((int)(raw ? OceanBaseDbType.Binary : OceanBaseDbType.String), reader.GetColumnSchema()[0]["ProviderType"]);
                     }
                     Assert.True(asynchronous ? await reader.ReadAsync(budget.Token) : reader.Read());
@@ -117,7 +119,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                     }
                     Assert.True(reader.IsDBNull(3)); Assert.Equal(DBNull.Value, reader.GetValue(3));
                     Assert.Equal(42, reader.GetInt32(4));
-                    if (type >= 249 && type <= 251)
+                    if (extended)
                     {
                         Assert.True(asynchronous ? await reader.ReadAsync(budget.Token) : reader.Read());
                         for (var i = 0; i < 3; i++)

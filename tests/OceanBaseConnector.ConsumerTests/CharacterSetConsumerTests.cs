@@ -40,6 +40,21 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetReadsBlobFamilyResults(string target, byte type, bool raw, bool binary, bool sequential)
             => Verify(target, type == 249 ? 2 : type == 250 ? 4 : 7, binary, sequential, type, raw);
 
+        public static IEnumerable<object[]> ExtendedStringAssets()
+        {
+            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+                foreach (byte type in new byte[] { 247, 248, 255 })
+                    foreach (var raw in type == 255 ? new[] { true } : new[] { false, true })
+                        foreach (var binary in new[] { false, true })
+                            foreach (var sequential in new[] { false, true })
+                                yield return new object[] { target, type, raw, binary, sequential };
+        }
+
+        [Theory]
+        [MemberData(nameof(ExtendedStringAssets))]
+        public Task EveryAssetReadsEnumSetAndGeometryResults(string target, byte type, bool raw, bool binary, bool sequential)
+            => Verify(target, type == 247 ? 2 : 7, binary, sequential, type, raw);
+
         private static async Task Verify(string target, int sample, bool binary, bool sequential, byte type = 253, bool raw = false)
         {
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));

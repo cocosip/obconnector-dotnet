@@ -1,5 +1,15 @@
 # Compatibility and known gaps
 
+## 2026-10-26 ENUM, SET and GEOMETRY result codes
+
+Wire247/248 use the existing strict text/binary-collation result contract; SET remains an unsplit
+string. MySQL-only255 returns complete opaque bytes, with no spatial conversion or parameter API.
+MySQL DataTypes adds ENUM/SET label-list templates; Oracle declarations and geometry SQL support
+are not inferred from wire acceptance. Units cover both modes where applicable and sync/async;
+five-asset consumers cover MySQL async text/prepared buffered/sequential reads. No real database
+was accessed. See [current contract](obconnector-dotnet-architecture-design.md#result-character-sets)
+and [delivery evidence](obconnector-dotnet-progress.md#2026-10-26-enum-set-and-geometry-result-codes).
+
 ## 2026-10-26 Close transaction logger reentry
 
 Captured Close cleanup now publishes transaction ILogger notifications after releasing its physical

@@ -1,5 +1,29 @@
 # Verification status and remaining work
 
+## 2026-10-26 ENUM, SET and GEOMETRY result codes
+
+Developed from `a3532fc` for P1-08/W5 and P1-10/W6. Codes247/248 return strict text or collation63
+bytes with ENUM/SET names and String/Binary provider identities; SET labels remain unsplit. Code255
+is MySQL-only opaque bytes for any collation, preserving all prefixes/payload. Existing framing and
+buffered/sequential paths apply. MySQL DataTypes adds ENUM/SET label-list creation templates using
+String. Oracle SQL declarations, spatial APIs/parameters and geometry SQL inventory are not added.
+
+New units81:72 public reader combinations, seven boundaries and two DataTypes mapping cases.
+Existing charset cases also exercise247/248 across supported collations. Initial RED99:19pass/80fail;
+focused GREEN480pass, no failures/skips. Final Release solution build passed with zero warnings/
+errors,9.98seconds. Affected consumers380pass (280 retained plus100), no failures/skips,
+1minute48seconds; existing catalog consumers16pass, zero failures/skips,3seconds. The first catalog
+filter used the file name instead of its partial-class method name and matched zero tests; that
+report is retained separately from the corrected16-case run. Full units6741pass (6660 retained plus81),
+no failures/skips,8minutes11seconds.
+New consumers100 cover five assets, MySQL async text/prepared buffered/sequential reads; units cover
+both modes where applicable and sync/async. Independent source/caller/fixture review found no
+blockers; reviewer did not build/test. No real database accessed.
+
+This does not prove server type emission, ENUM/SET SQL deployment behavior or spatial support.
+Other local development and all23IDs/eight work packages remain open. Retain original RED and final
+artifacts under ignored `TestResults/local-completeness/extended-string-*`. No push.
+
 ## 2026-10-26 Close transaction logger reentry
 
 Developed from `6e2197c` for P0-01/W1. Transaction ILogger records from captured Close cleanup now

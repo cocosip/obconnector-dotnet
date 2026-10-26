@@ -351,6 +351,15 @@ paths, including empty and NULL values. MySQL DataTypes lists the six additional
 Oracle's SQL inventory retains its separate locator-based BLOB/CLOB contract. Accepting these shared
 wire codes in either mode does not establish that a particular server emits them.
 
+Wire codes 247/248 report ENUM/SET. Collation 63 returns bytes; other supported collations use the
+same strict string decoder, without splitting label lists, trimming or CLR enum conversion. These
+shared wire mappings do not add Oracle ENUM/SET SQL declarations. MySQL DataTypes uses String and
+`ENUM({0})`/`SET({0})` with a caller-supplied SQL label list. Wire code 255 is MySQL-only GEOMETRY:
+readers return complete opaque bytes for any collation, preserving prefixes and payload without
+SRID/WKB conversion. It adds no spatial API, geometry parameter code or GEOMETRY SQL inventory row.
+Empty/NULL and buffered/sequential text/prepared results reuse existing framing. Server emission and
+SQL/spatial interoperability require real acceptance; local fixtures do not establish them.
+
 | Result family | Accepted collation IDs | Maximum bytes per character |
 | --- | --- | ---: |
 | ASCII | 11, 65, 331, 346, 361 | 1 |

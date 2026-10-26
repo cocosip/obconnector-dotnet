@@ -31,7 +31,7 @@ namespace OceanBaseConnector.UnitTests
         public void ResultCharsetPreservesExactBytesAndSchema(ushort collation, string text, string hex, int width, OceanBaseCompatibilityMode mode)
         {
             var bytes = Convert.FromHexString(hex);
-            foreach (var type in new byte[] { 15, 253, 254, 249, 250, 251, 252 })
+            foreach (var type in new byte[] { 15, 253, 254, 247, 248, 249, 250, 251, 252 })
             {
                 var column = ResultColumn.Parse(SchemaColumn("字符列", type, 120, charset: collation), mode);
                 Assert.Equal(typeof(string), column.FieldType);

@@ -89,6 +89,12 @@ namespace OceanBaseConnector
                 Number("DOUBLE", OceanBaseDbType.Double, typeof(double), 15, minScale: null, maxScale: null);
                 Text("CHAR", OceanBaseDbType.String, fixedLength: true);
                 Text("VARCHAR", OceanBaseDbType.String)["IsBestMatch"] = true;
+                foreach (var name in new[] { "ENUM", "SET" })
+                {
+                    var row = TypeRow(name, OceanBaseDbType.String, typeof(string), name + "({0})", "labels");
+                    row["RequiredFeatures"] = "Supported result collation; binary collation returns bytes";
+                    row["LiteralPrefix"] = "'"; row["LiteralSuffix"] = "'"; row["IsLiteralSupported"] = true;
+                }
                 Text("TEXT", OceanBaseDbType.String, longValue: true);
                 Text("BINARY", OceanBaseDbType.Binary, binary: true, fixedLength: true);
                 Text("VARBINARY", OceanBaseDbType.Binary, binary: true)["IsBestMatch"] = true;

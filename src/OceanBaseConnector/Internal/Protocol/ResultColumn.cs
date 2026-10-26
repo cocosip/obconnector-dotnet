@@ -66,7 +66,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private NationalCharacterSet? NationalCharacterSet { get; set; }
         internal Encoding TextEncoding => TypeCode == 207 || TypeCode == 208
             ? (NationalCharacterSet ?? throw new NotSupportedException("The result has no trusted national character set.")).ResultEncoding(Charset)
-            : Charset != 63 && (TypeCode == 15 || TypeCode == 253 || TypeCode == 254 || TypeCode >= 249 && TypeCode <= 252)
+            : Charset != 63 && (TypeCode == 15 || TypeCode == 253 || TypeCode == 254 || TypeCode >= 247 && TypeCode <= 252)
                 ? ResultCharacterSet.Resolve(Charset, out _) : Utf8;
         internal string Name { get; }
         internal string Database { get; }
@@ -176,6 +176,9 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 13: return "YEAR";
                     case 16: return "BIT";
                     case 245: return "JSON";
+                    case 247: return "ENUM";
+                    case 248: return "SET";
+                    case 255: return "GEOMETRY";
                     case 200: return "TIMESTAMP WITH TIME ZONE";
                     case 201: return "TIMESTAMP WITH LOCAL TIME ZONE";
                     case 203: return "RAW";
@@ -262,6 +265,9 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 203:
                         if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("RAW is only defined in Oracle mode.");
                         return typeof(byte[]);
+                    case 255:
+                        if (Mode != OceanBaseCompatibilityMode.MySql) throw new NotSupportedException("GEOMETRY is only defined in MySQL mode.");
+                        return typeof(byte[]);
                     case 204:
                     case 205:
                         if (Mode != OceanBaseCompatibilityMode.Oracle || Scale < 0 || Scale > (TypeCode == 204 ? 9 : 99))
@@ -278,6 +284,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 15:
                     case 253:
                     case 254:
+                    case 247:
+                    case 248:
                     case 249:
                     case 250:
                     case 251:
@@ -316,6 +324,7 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 200: return OceanBaseDbType.TimestampWithTimeZone;
                     case 201: return OceanBaseDbType.TimestampLocalTimeZone;
                     case 203: return OceanBaseDbType.Binary;
+                    case 255: return OceanBaseDbType.Binary;
                     case 163: return OceanBaseDbType.RefCursor;
                     case 160: return ComplexType?.IsCollection == true ? OceanBaseDbType.Array : OceanBaseDbType.Struct;
                     case 210: return OceanBaseDbType.Blob;
@@ -327,6 +336,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     case 15:
                     case 253:
                     case 254:
+                    case 247:
+                    case 248:
                     case 249:
                     case 250:
                     case 251:

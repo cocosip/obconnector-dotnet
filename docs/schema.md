@@ -72,6 +72,13 @@ Canonical MySQL declarations include signed/unsigned TINYINT, SMALLINT, MEDIUMIN
 
 Oracle declarations include NUMBER, BINARY_FLOAT/BINARY_DOUBLE, DATE, TIMESTAMP and its timezone variants, CHAR/VARCHAR2/NCHAR/NVARCHAR2, RAW, BLOB/CLOB, both interval families, OBJECT, ARRAY and REF CURSOR. OBJECT/ARRAY rows describe supported complex codecs: obtain an OceanBaseComplexType descriptor before binding, and use the supported binary protocol/member layouts. OBJECT needs a named type; ARRAY can use a named collection or the existing supported anonymous scalar-array descriptor. They do not provide generic CREATE TYPE DDL.
 
+MySQL also lists ENUM/SET using the existing String provider identity and label-list creation
+templates `ENUM({0})`/`SET({0})`; the argument is SQL-quoted labels, not a length. Reported result
+codes247/248 retain binary-collation bytes or strict text without parsing label lists. Accepting these
+wire codes in either mode does not add Oracle SQL declarations. MySQL GEOMETRY result code255 returns
+opaque bytes regardless of collation; it does not add a GEOMETRY inventory row, spatial parameter
+type or SQL-support claim. These result-code extensions have local evidence only.
+
 NUMBER/DECIMAL each have two rows with the same SQL name and provider identity. The System.Decimal row covers precision 1..28 with 0 <= scale <= precision; otherwise an unknown/nonpositive precision, precision above 28, negative scale or scale above precision selects OceanBaseDecimal. The wide rows retain mode codec limits: Oracle precision <=38, metadata scale -84..127; MySQL precision <=65, scale 0..30 and scale <= precision. Overlapping bounds are intentional; ResultTypeCondition selects the normal reader representation, while ProviderSpecificDataType always reports the exact provider representation. Oracle TIMESTAMP similarly has DateTime for scale 0..7 and OceanBaseTimestamp for scale 8..9. MySQL zero-date shapes require provider-specific date access; ordinary DateTime conversion retains its existing checks.
 
 REF CURSOR is Output/ReturnValue only with Use Oracle Prepare Execute and IsSupportedForResults=false; this does not add cursor-valued columns or input cursors. Oracle LOBs require negotiated Use Lob Locators, session-bound handles and a supported UTF-8 character set for CLOB. National strings require trusted national-character-set state; ordinary text and JSON still enforce their supported collations. YEAR values remain zero or 1901..2155, BIT widths 1..64 and interval precision/scale retain existing codec validation.

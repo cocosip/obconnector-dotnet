@@ -64,6 +64,13 @@ namespace OceanBaseConnector.UnitTests
                     Assert.DoesNotContain("NUMBER", names); Assert.DoesNotContain("REF CURSOR", names);
                     Assert.Equal(tinyBoolean, names.Contains("TINYINT(1)"));
                     Assert.Equal((int)OceanBaseDbType.Binary, DataTypeRow(table, "BLOB", typeof(byte[]))["ProviderDbType"]);
+                    foreach (var name in new[] { "ENUM", "SET" })
+                    {
+                        var labels = DataTypeRow(table, name, typeof(string));
+                        Assert.Equal(name + "({0})", labels["CreateFormat"]); Assert.Equal("labels", labels["CreateParameters"]);
+                        Assert.Equal((int)OceanBaseDbType.String, labels["ProviderDbType"]); Assert.False((bool)labels["IsLong"]);
+                    }
+                    Assert.DoesNotContain("GEOMETRY", names);
                     foreach (var prefix in new[] { "TINY", "MEDIUM", "LONG" })
                         foreach (var raw in new[] { false, true })
                         {
@@ -76,6 +83,7 @@ namespace OceanBaseConnector.UnitTests
                 {
                     Assert.Contains("NVARCHAR2", names); Assert.Contains("ARRAY", names); Assert.Contains("OBJECT", names);
                     Assert.DoesNotContain("JSON", names); Assert.DoesNotContain("BIT", names);
+                    Assert.DoesNotContain("ENUM", names); Assert.DoesNotContain("SET", names); Assert.DoesNotContain("GEOMETRY", names);
                     var cursor = DataTypeRow(table, "REF CURSOR", typeof(OceanBaseRefCursor));
                     Assert.False((bool)cursor["IsSupportedForResults"]); Assert.Equal("Output,ReturnValue", cursor["ParameterDirections"]);
                     Assert.Equal(DBNull.Value, cursor["CreateFormat"]); Assert.Equal(DBNull.Value, cursor["LiteralPrefix"]);
@@ -166,6 +174,8 @@ namespace OceanBaseConnector.UnitTests
             yield return new object[] { true, "BIT", (byte)16, 64U, (byte)0, (byte)0, (ushort)0, (ushort)63, typeof(ulong) };
             yield return new object[] { true, "YEAR", (byte)13, 4U, (byte)0, (byte)0, (ushort)0, (ushort)45, typeof(ushort) };
             yield return new object[] { true, "JSON", (byte)245, 1024U, (byte)0, (byte)0, (ushort)0, (ushort)63, typeof(string) };
+            yield return new object[] { true, "ENUM", (byte)247, 120U, (byte)0, (byte)0, (ushort)0, (ushort)45, typeof(string) };
+            yield return new object[] { true, "SET", (byte)248, 120U, (byte)0, (byte)0, (ushort)0, (ushort)45, typeof(string) };
             yield return new object[] { true, "DECIMAL", (byte)246, 30U, (byte)28, (byte)4, (ushort)0, (ushort)45, typeof(decimal) };
             yield return new object[] { true, "DECIMAL", (byte)246, 67U, (byte)65, (byte)30, (ushort)0, (ushort)45, typeof(OceanBaseDecimal) };
             yield return new object[] { true, "DATE", (byte)10, 10U, (byte)0, (byte)0, (ushort)0, (ushort)45, typeof(DateTime) };
