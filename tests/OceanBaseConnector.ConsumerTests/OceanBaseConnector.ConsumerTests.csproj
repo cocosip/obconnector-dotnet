@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/RecordingLoggerFactory.cs" Link="TestInfrastructure/RecordingLoggerFactory.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/PoolWaitHandoffCapture.cs" Link="TestInfrastructure/PoolWaitHandoffCapture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/PoolWaitHandoffFixture.cs" Link="TestInfrastructure/PoolWaitHandoffFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/DiscoveryBlacklistFixture.cs" Link="TestInfrastructure/DiscoveryBlacklistFixture.cs" />

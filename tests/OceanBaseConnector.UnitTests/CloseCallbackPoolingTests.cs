@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -155,8 +156,12 @@ namespace OceanBaseConnector.UnitTests
             }
         }
 
-        private static LoopbackServer CallbackPoolServer(bool oracle, CancellationToken token, List<string> commands, Action? reset = null, Action? ping = null)
-            => LoopbackServer.Start(async client =>
+        private static LoopbackServer CallbackPoolServer(bool oracle, CancellationToken token, List<string> commands, Action? reset = null, Action? ping = null, Func<string, byte[]?>? response = null)
+            => LoopbackServer.Start(client => CallbackPoolSession(client, oracle, token, commands, reset, ping, response));
+
+        private static async Task CallbackPoolSession(TcpClient client, bool oracle, CancellationToken token, List<string> commands, Action? reset = null, Action? ping = null, Func<string, byte[]?>? response = null)
+        {
+            using (client)
             {
                 var channel = new PacketChannel(client.GetStream());
                 await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload, token);
@@ -184,9 +189,10 @@ namespace OceanBaseConnector.UnitTests
                     {
                         Assert.Equal(3, packet[0]);
                         var sql = Encoding.UTF8.GetString(packet, 1, packet.Length - 1); commands.Add(sql);
-                        await channel.WritePacketAsync(sql == "set autocommit = 0" || sql == "ROLLBACK" ? Ok(status: 4) : Ok(1, 2), token);
+                        await channel.WritePacketAsync(response?.Invoke(sql) ?? (sql == "set autocommit = 0" || sql == "ROLLBACK" ? Ok(status: 4) : Ok(1, 2)), token);
                     }
                 }
-            });
+            }
+        }
     }
 }

@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
+using OceanBaseConnector.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
@@ -27,6 +28,14 @@ namespace OceanBaseConnector.ConsumerTests
         [Theory]
         [MemberData(nameof(CloseCallbackAssets))]
         public async Task EveryAssetReopensTheSameCapacityOnePoolInsideClosedCallback(string target, bool mysql, bool closeAsync, bool openAsync)
+            => await VerifyCloseCallback(target, mysql, closeAsync, openAsync, transactionLogger: false);
+
+        [Theory]
+        [MemberData(nameof(CloseCallbackAssets))]
+        public Task EveryAssetReopensTheSameCapacityOnePoolInsideClosingTransactionLogger(string target, bool mysql, bool closeAsync, bool openAsync)
+            => VerifyCloseCallback(target, mysql, closeAsync, openAsync, transactionLogger: true);
+
+        private static async Task VerifyCloseCallback(string target, bool mysql, bool closeAsync, bool openAsync, bool transactionLogger)
         {
             using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
@@ -35,6 +44,14 @@ namespace OceanBaseConnector.ConsumerTests
                 using var client = await listener.AcceptTcpClientAsync(stop.Token);
                 var stream = client.GetStream(); var channel = new PacketChannel(stream);
                 await Handshake(channel, stream, "unrequested", stop.Token, mysql: mysql);
+                if (transactionLogger)
+                    foreach (var sql in new[] { "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED", "set autocommit = 0", "ROLLBACK", "set autocommit = 1" })
+                    {
+                        channel.BeginCommand();
+                        var request = mysql ? await channel.ReadPacketAsync(stop.Token) : await SessionTimeZoneFixture.ReadCommand(channel, stop.Token, expectProbe: false);
+                        Assert.Equal(3, request[0]); Assert.Equal(sql, Encoding.UTF8.GetString(request, 1, request.Length - 1));
+                        await channel.WritePacketAsync(new byte[] { 0, 0, 0, sql == "set autocommit = 0" || sql == "ROLLBACK" ? (byte)4 : (byte)2, 0, 0, 0 }, stop.Token);
+                    }
                 channel.BeginCommand(); Assert.Equal(new byte[] { 31 }, await channel.ReadPacketAsync(stop.Token));
                 await channel.WritePacketAsync(new byte[] { 0, 0, 0, 2, 0, 0, 0 }, stop.Token);
                 if (!mysql) await OceanBaseConnector.UnitTests.TestInfrastructure.ServerIdentity.ReplyOracleAutocommitAsync(channel, stop.Token);
@@ -54,7 +71,8 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
                 var type = assembly.GetType("OceanBaseConnector.OceanBaseConnection")!;
-                using var connection = (DbConnection)Activator.CreateInstance(type)!;
+                var logs = new RecordingLoggerFactory();
+                using var connection = transactionLogger ? (DbConnection)Activator.CreateInstance(type, "", logs)! : (DbConnection)Activator.CreateInstance(type)!;
                 connection.ConnectionString = new DbConnectionStringBuilder
                 {
                     ["Server"] = "127.0.0.1",
@@ -66,17 +84,25 @@ namespace OceanBaseConnector.ConsumerTests
                     ["Pool Wait Timeout"] = 0,
                 }.ConnectionString;
                 var reopen = true;
-                connection.StateChange += (_, args) =>
+                Exception? logError = null;
+                void Reopen()
                 {
-                    if (args.CurrentState != ConnectionState.Closed || !reopen) return;
+                    if (!reopen) return;
                     reopen = false;
                     if (openAsync) connection.OpenAsync(stop.Token).GetAwaiter().GetResult(); else connection.Open();
                     using var command = connection.CreateCommand(); command.CommandText = "inside callback"; Assert.Equal(1, command.ExecuteNonQuery());
+                }
+                connection.StateChange += (_, args) =>
+                {
+                    if (!transactionLogger && args.CurrentState == ConnectionState.Closed) Reopen();
                 };
+                logs.OnLog = id => { if (id.Name == "TransactionRollbackCompleted") logError = Record.Exception(Reopen); };
                 try
                 {
                     await connection.OpenAsync(stop.Token);
+                    using var transaction = transactionLogger ? connection.BeginTransaction(IsolationLevel.ReadCommitted) : null;
                     await Task.Run(async () => { if (closeAsync) await connection.CloseAsync(); else connection.Close(); }).WaitAsync(stop.Token);
+                    Assert.Null(logError); Assert.False(reopen); if (transaction != null) Assert.Null(transaction.Connection);
                     Assert.Equal(ConnectionState.Open, connection.State);
                     using var after = connection.CreateCommand(); after.CommandText = "after callback"; Assert.Equal(1, after.ExecuteNonQuery());
                 }

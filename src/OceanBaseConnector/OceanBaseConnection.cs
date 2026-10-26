@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
@@ -620,27 +621,35 @@ namespace OceanBaseConnector
         private static bool SameTransaction(Transaction? left, Transaction? right) =>
             left != null && right != null && left.Equals(right);
 
-        private void FinishClose(PhysicalSession? session, string? endpoint, PhysicalSessionPool? pool, string poolKey, int timeout)
+        private void FinishClose(PhysicalSession? session, string? endpoint, PhysicalSessionPool? pool, string poolKey, int timeout, List<Action>? deferredLogs)
         {
             if (session == null) return;
-            if (pool != null)
+            try
             {
-                try { pool.Return(session, _log, timeout); }
-                finally { ReleasePoolIfEmpty(pool, poolKey); }
+                if (pool != null)
+                {
+                    try { pool.Return(session, _log, timeout); }
+                    finally { ReleasePoolIfEmpty(pool, poolKey); }
+                }
+                else session.Dispose();
             }
-            else session.Dispose();
+            finally { if (deferredLogs != null) foreach (var write in deferredLogs) write(); }
             _log.Closed(endpoint!);
         }
 
-        private async Task FinishCloseAsync(PhysicalSession? session, string? endpoint, PhysicalSessionPool? pool, string poolKey, int timeout)
+        private async Task FinishCloseAsync(PhysicalSession? session, string? endpoint, PhysicalSessionPool? pool, string poolKey, int timeout, List<Action>? deferredLogs)
         {
             if (session == null) return;
-            if (pool != null)
+            try
             {
-                try { await pool.ReturnAsync(session, _log, timeout).ConfigureAwait(false); }
-                finally { ReleasePoolIfEmpty(pool, poolKey); }
+                if (pool != null)
+                {
+                    try { await pool.ReturnAsync(session, _log, timeout).ConfigureAwait(false); }
+                    finally { ReleasePoolIfEmpty(pool, poolKey); }
+                }
+                else session.Dispose();
             }
-            else session.Dispose();
+            finally { if (deferredLogs != null) foreach (var write in deferredLogs) write(); }
             _log.Closed(endpoint!);
         }
 

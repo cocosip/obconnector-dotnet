@@ -1,5 +1,16 @@
 # Compatibility and known gaps
 
+## 2026-10-26 Close transaction logger reentry
+
+Captured Close cleanup now publishes transaction ILogger notifications after releasing its physical
+session and pool registration. Field snapshots and warning/completion order are preserved, before the
+Closed log. A callback can reopen a capacity-one pool; a throwing logger can start a new transaction
+without the old Close detaching it. Explicit transaction operations keep immediate logging.
+Local tests cover both modes, sync/async Close/Open, original/other borrowers, finite/infinite pool
+wait and rollback/restore failures. Other listener reentry and real deployment acceptance remain open.
+See [contract](obconnector-dotnet-architecture-design.md#pooled-close-callbacks) and
+[delivery evidence](obconnector-dotnet-progress.md#2026-10-26-close-transaction-logger-reentry).
+
 ## 2026-10-26 BLOB family result codes
 
 The reader accepts wire codes 249/250/251 alongside 252. TINY/MEDIUM/LONG BLOB and TEXT names,
@@ -381,7 +392,7 @@ The real direct OceanBase4.4.2.2 MySQL test passes six charset cases, each cover
 
 ## Ordinary pool configuration identity
 
-Internal [pool configuration normalization](obconnector-dotnet-architecture-design.md#ordinary-pool-configuration-identity) now unifies equivalent option order, typed spelling and effective defaults for ordinary pool reuse, capacity, failure cleanup and clearing. Parsed empty PAM factors remain distinct from absent factors across Open/Close/Clear; text values, policy/certificate references and private sources retain their isolation. Public ConnectionString serialization is unchanged. Pooled Open inside a Closed state handler now completes the captured cleanup before borrowing; see [the current callback contract](obconnector-dotnet-architecture-design.md#pooled-close-callbacks). Other transaction-log reentry can still wait on its own full pool. Full reset, arbitrary reentry/concurrency, long-running load, proxy/platform and independent-runtime acceptance remain open; see [the module record](obconnector-dotnet-completeness.md#1531-2026-10-25-普通池配置归一化).
+Internal [pool configuration normalization](obconnector-dotnet-architecture-design.md#ordinary-pool-configuration-identity) now unifies equivalent option order, typed spelling and effective defaults for ordinary pool reuse, capacity, failure cleanup and clearing. Parsed empty PAM factors remain distinct from absent factors across Open/Close/Clear; text values, policy/certificate references and private sources retain their isolation. Public ConnectionString serialization is unchanged. Pooled Open inside a Closed state handler completes captured cleanup before borrowing; Close-cleanup transaction ILogger notifications follow session/pool release, as described in [the current callback contract](obconnector-dotnet-architecture-design.md#pooled-close-callbacks). Full reset, other listener reentry/concurrency, long-running load, proxy/platform and independent-runtime database acceptance remain open; see [the original module record](obconnector-dotnet-completeness.md#1531-2026-10-25-普通池配置归一化).
 
 ## MySQL stored-procedure execution
 

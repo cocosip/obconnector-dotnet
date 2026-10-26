@@ -1,5 +1,31 @@
 # Verification status and remaining work
 
+## 2026-10-26 Close transaction logger reentry
+
+Developed from `6e2197c` for P0-01/W1. Transaction ILogger records from captured Close cleanup now
+hold completion-field snapshots and publish after exchange disposal, session return/destruction and
+registry release, before Closed logging. The buffer belongs to that close operation. Normal explicit
+Commit/Rollback/Dispose and state events retain their existing behavior. A callback can reopen the
+pool and start a new transaction without old cleanup touching the new lease afterward.
+
+New units100:96 both-mode sync/async Close/Open, original/other borrower, rollback/restore failure and
+finite/infinite-wait combinations; four more cover a logger starting a new transaction then throwing.
+Initial RED48 finite-wait cases all fail on pool timeout. The first GREEN was stopped after86pass/
+18fail because its single-peer fixture could not accept replacement sessions; this is a fixture
+failure, retained with its aborted report. The corrected related run passed368, zero failures/skips,
+19seconds, before the last four cases were added. An initial build caught a test variable incorrectly
+typed as OceanBaseTransaction instead of the public DbTransaction return; corrected final Release
+build passed with zero warnings/errors,15.05seconds. Affected consumers227pass (187 retained plus40),
+zero failures/skips,51seconds. Full units6660pass (6560 retained plus100), zero failures/skips,
+8minutes2seconds.
+New consumers40 cover five assets, both modes and sync/async Close/Open; failure branches are local
+units. Source/fixture/consumer independent review found no blockers; reviewer did not build/test.
+
+No real database accessed. This fixes Close-cleanup transaction ILogger reentry only; Activity/Meter,
+command logging, other callback/concurrency/long-running boundaries and real deployment evidence
+remain open. All23IDs/eight packages and other local development remain open. Retain original and
+final artifacts under ignored `TestResults/local-completeness/close-transaction-log-*`. No push.
+
 ## 2026-10-26 BLOB family result codes
 
 Developed from `aab2755` for P1-08/W5 and P1-10/W6. Result codes249/250/251 now distinguish

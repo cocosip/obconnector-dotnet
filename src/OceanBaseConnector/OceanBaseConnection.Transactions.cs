@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
@@ -235,7 +236,7 @@ namespace OceanBaseConnector
         internal Task EndTransactionAsync(OceanBaseTransaction transaction, bool commit, CancellationToken token) =>
             FinishTransactionAsync(transaction, StartTransactionEnd(transaction, token), commit);
 
-        private void FinishTransaction(OceanBaseTransaction transaction, CommandExchange exchange, bool commit)
+        private void FinishTransaction(OceanBaseTransaction transaction, CommandExchange exchange, bool commit, List<Action>? deferredLogs = null)
         {
             var timer = Stopwatch.StartNew();
             var diagnostics = DriverDiagnostics.Start(commit ? "transaction.commit" : "transaction.rollback");
@@ -245,17 +246,17 @@ namespace OceanBaseConnector
             {
                 Control(exchange, commit ? "COMMIT" : "ROLLBACK", transactionEnded: true);
             }
-            catch (Exception error) { var mapped = EndFailed(transaction, exchange, timer, commit, error); diagnostics?.Finish(transaction.Session.Info!.Mode, mapped); throw mapped; }
+            catch (Exception error) { var mapped = EndFailed(transaction, exchange, timer, commit, error, deferredLogs); diagnostics?.Finish(transaction.Session.Info!.Mode, mapped); throw mapped; }
             try { Control(exchange, "set autocommit = 1", true, true); }
             catch (Exception error) { restoreError = error; transaction.Session.Break(); }
             DetachTransaction(transaction);
             exchange.Complete();
             diagnostics?.Finish(transaction.Session.Info!.Mode, null);
-            if (restoreError != null) LogTransaction("RestoreAutocommit", transaction, timer, restoreError);
-            LogTransaction(commit ? "Commit" : "Rollback", transaction, timer, null);
+            if (restoreError != null) LogTransaction("RestoreAutocommit", transaction, timer, restoreError, deferredLogs);
+            LogTransaction(commit ? "Commit" : "Rollback", transaction, timer, null, deferredLogs);
         }
 
-        private async Task FinishTransactionAsync(OceanBaseTransaction transaction, CommandExchange exchange, bool commit)
+        private async Task FinishTransactionAsync(OceanBaseTransaction transaction, CommandExchange exchange, bool commit, List<Action>? deferredLogs = null)
         {
             var timer = Stopwatch.StartNew();
             var diagnostics = DriverDiagnostics.Start(commit ? "transaction.commit" : "transaction.rollback");
@@ -265,17 +266,17 @@ namespace OceanBaseConnector
             {
                 await ControlAsync(exchange, commit ? "COMMIT" : "ROLLBACK", transactionEnded: true).ConfigureAwait(false);
             }
-            catch (Exception error) { var mapped = EndFailed(transaction, exchange, timer, commit, error); diagnostics?.Finish(transaction.Session.Info!.Mode, mapped); throw mapped; }
+            catch (Exception error) { var mapped = EndFailed(transaction, exchange, timer, commit, error, deferredLogs); diagnostics?.Finish(transaction.Session.Info!.Mode, mapped); throw mapped; }
             try { await ControlAsync(exchange, "set autocommit = 1", true, true).ConfigureAwait(false); }
             catch (Exception error) { restoreError = error; transaction.Session.Break(); }
             DetachTransaction(transaction);
             exchange.Complete();
             diagnostics?.Finish(transaction.Session.Info!.Mode, null);
-            if (restoreError != null) LogTransaction("RestoreAutocommit", transaction, timer, restoreError);
-            LogTransaction(commit ? "Commit" : "Rollback", transaction, timer, null);
+            if (restoreError != null) LogTransaction("RestoreAutocommit", transaction, timer, restoreError, deferredLogs);
+            LogTransaction(commit ? "Commit" : "Rollback", transaction, timer, null, deferredLogs);
         }
 
-        private Exception EndFailed(OceanBaseTransaction transaction, CommandExchange exchange, Stopwatch timer, bool commit, Exception error)
+        private Exception EndFailed(OceanBaseTransaction transaction, CommandExchange exchange, Stopwatch timer, bool commit, Exception error, List<Action>? deferredLogs = null)
         {
             var mapped = exchange.Fail(error);
             lock (_gate)
@@ -283,7 +284,7 @@ namespace OceanBaseConnector
                 transaction.InProgress = false;
                 if (transaction.Session.State != SessionState.Open) DetachTransaction(transaction);
             }
-            LogTransaction(commit ? "Commit" : "Rollback", transaction, timer, mapped);
+            LogTransaction(commit ? "Commit" : "Rollback", transaction, timer, mapped, deferredLogs);
             return mapped;
         }
 
@@ -328,8 +329,18 @@ namespace OceanBaseConnector
             exchange.ResponseComplete();
         }
 
-        private void LogTransaction(string operation, OceanBaseTransaction transaction, Stopwatch timer, Exception? error) =>
-            _log.TransactionFinished(operation, transaction.Session.Endpoint, transaction.Session.Info!.Mode, timer.ElapsedMilliseconds, error);
+        private void LogTransaction(string operation, OceanBaseTransaction transaction, Stopwatch timer, Exception? error, List<Action>? deferredLogs = null)
+        {
+            if (deferredLogs == null)
+                _log.TransactionFinished(operation, transaction.Session.Endpoint, transaction.Session.Info!.Mode, timer.ElapsedMilliseconds, error);
+            else
+            {
+                // A close logger can borrow this pool only after its captured session has been released.
+                var log = _log; var endpoint = transaction.Session.Endpoint;
+                var mode = transaction.Session.Info!.Mode; var elapsed = timer.ElapsedMilliseconds;
+                deferredLogs.Add(() => log.TransactionFinished(operation, endpoint, mode, elapsed, error));
+            }
+        }
 
         private CommandExchange? StartTransactionCleanup(OceanBaseTransaction transaction)
         {
@@ -362,15 +373,15 @@ namespace OceanBaseConnector
             if (exchange != null) await CleanupTransactionAsync(transaction, exchange).ConfigureAwait(false);
         }
 
-        private void CleanupTransaction(OceanBaseTransaction transaction, CommandExchange exchange)
+        private void CleanupTransaction(OceanBaseTransaction transaction, CommandExchange exchange, List<Action>? deferredLogs = null)
         {
-            try { FinishTransaction(transaction, exchange, false); }
+            try { FinishTransaction(transaction, exchange, false, deferredLogs); }
             catch { DetachTransaction(transaction); transaction.Session.Break(); }
         }
 
-        private async Task CleanupTransactionAsync(OceanBaseTransaction transaction, CommandExchange exchange)
+        private async Task CleanupTransactionAsync(OceanBaseTransaction transaction, CommandExchange exchange, List<Action>? deferredLogs = null)
         {
-            try { await FinishTransactionAsync(transaction, exchange, false).ConfigureAwait(false); }
+            try { await FinishTransactionAsync(transaction, exchange, false, deferredLogs).ConfigureAwait(false); }
             catch { DetachTransaction(transaction); transaction.Session.Break(); }
         }
 
@@ -399,21 +410,22 @@ namespace OceanBaseConnector
                 var poolKey = _options?.Pooling == true ? _builder.ToPoolConfiguration() : _connectionString;
                 var timeout = _builder.CommandTimeout;
                 var endpoint = session.Endpoint;
+                var deferredLogs = exchange == null ? null : new List<Action>(2);
                 return (new CloseCallbackScope(() =>
                 {
-                    try { if (exchange != null) CleanupTransaction(transaction!, exchange); }
+                    try { if (exchange != null) CleanupTransaction(transaction!, exchange, deferredLogs); }
                     finally
                     {
                         try { exchange?.Dispose(); }
-                        finally { FinishClose(session, endpoint, pool, poolKey, timeout); }
+                        finally { FinishClose(session, endpoint, pool, poolKey, timeout, deferredLogs); }
                     }
                 }, async () =>
                 {
-                    try { if (exchange != null) await CleanupTransactionAsync(transaction!, exchange).ConfigureAwait(false); }
+                    try { if (exchange != null) await CleanupTransactionAsync(transaction!, exchange, deferredLogs).ConfigureAwait(false); }
                     finally
                     {
                         try { exchange?.Dispose(); }
-                        finally { await FinishCloseAsync(session, endpoint, pool, poolKey, timeout).ConfigureAwait(false); }
+                        finally { await FinishCloseAsync(session, endpoint, pool, poolKey, timeout, deferredLogs).ConfigureAwait(false); }
                     }
                 }), previous, openCancellation);
             }

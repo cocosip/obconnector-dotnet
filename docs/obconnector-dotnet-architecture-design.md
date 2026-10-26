@@ -180,7 +180,17 @@ Cleanup runs exactly once using the old session, transaction, exchange, endpoint
 
 The logical Open reservation is established before cleanup. A Closed log callback cannot take over that same opening logical connection. Without an Open from the state handler, Closed log callbacks retain their existing order after the old resources are released. Throwing state handlers still finish the captured cleanup, and the outer Close cannot close a new lease opened by a handler. Tasks that inherit the event context observe the same completed operation rather than repeating disposal. The winning cleanup releases both captured delegates; asynchronous cleanup also releases its lifted local delegate before publishing shared completion, so a completed event scope does not retain the old resource graph through those delegates.
 
-Outside the state-handler context, an external Open during pending asynchronous rollback retains the existing detached-session and event ordering. Old CloseConnection readers retain their session and logical-open generation checks. This contract removes waiting on the Closed event's own deferred cleanup; it does not establish general reentry from every logging callback. A transaction-log callback that synchronously opens another connection in its own full pool can still wait on that unfinished transaction cleanup. Complete concurrency, reset and deployment acceptance remain open.
+Outside the state-handler context, an external Open during pending asynchronous rollback retains the existing detached-session and event ordering. Old CloseConnection readers retain their session and logical-open generation checks.
+
+Transaction ILogger notifications produced by captured Close cleanup are deferred until the exchange
+is disposed, the session is returned or destroyed, and the ordinary registry entry is released when
+empty. They retain operation, endpoint, mode, elapsed time and error snapshots from completion,
+including autocommit-restore warnings and rollback success/failure order, and precede the Closed log.
+A transaction logger can reopen the same full pool and start a new transaction without the old Close
+touching that new lease afterward. Logger exceptions retain the existing isolation behavior. Explicit
+Commit/Rollback and transaction disposal keep immediate logging. This scope does not establish
+general reentry from Activity/Meter, command loggers or other callbacks; complete concurrency, reset
+and deployment acceptance remain open.
 
 ### Explicit pool clearing
 
