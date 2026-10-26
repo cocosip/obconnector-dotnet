@@ -1,5 +1,31 @@
 # Verification status and remaining work
 
+## 2026-10-26 Discovery group TCP attempt ceilings
+
+Developed from `2a2e139` on `codex/local-driver-completeness` for P1-09/W4.
+ADDRESS_LIST.OBLB_RETRY_ALL_DOWNS counts actual TCP attempts per group and physical establishment,
+across eligible/fallback phases and retry cycles. It cannot exceed the shared ceiling or logical Open
+deadline. Omitted limits preserve existing behavior; a local limit alone adds no blacklist or cycles.
+All-zero group budgets suppress prewarm replenishment but still permit valid idle reuse below minimum.
+No public API, dependency, automatic SQL replay or active-connection migration is added.
+See [contract](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling) and
+[implementation evidence](obconnector-dotnet-completeness.md#1564-2026-10-26-发现分组-tcp-尝试上限).
+
+Full units: 6422 pass (6382 retained, 40 new), zero failures/skips. Release build: zero warnings/errors,
+52.02 seconds. The initial 34 cases had 1 pass/33 failures; independent review found the all-zero idle
+prewarm defect, reproduced by four additional RED cases and repaired in both warmup paths.
+Final affected consumers: 384 pass (256 retained, 128 new), zero failures/skips, split by asset:
+netstandard2.0/2.1 each 48; net8/9/10 each 96. Original expectation failures and the isolated test-output
+missing-dependency setup failure remain in ignored `TestResults/local-completeness/group-limit-*` logs.
+Two expectation corrections account for independent prewarm counters and persistent nonpooled blacklist
+history. The obsolete serial run was canceled after diagnosis; corrected cases run by asset.
+Independent source/fixture review approved the final behavior and assertions; reviewer ran no tests.
+
+All five consumer assets use one Windows/.NET10 host; they do not establish independent runtime,
+platform, real database, OCP/OBProxy, TLS/plugin or load compatibility. No real database was accessed.
+Address-level blacklist overrides and the other work packages remain open; all 23 IDs/eight packages
+remain open. Local commits only, no push.
+
 ## 2026-10-26 Development checkpoint after f71a979
 
 当前功能代码已本地提交至 `master/f71a979`，没有待提交的功能代码；本次只更新进度文档。

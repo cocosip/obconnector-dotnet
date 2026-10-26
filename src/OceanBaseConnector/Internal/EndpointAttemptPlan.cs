@@ -7,6 +7,8 @@ namespace OceanBaseConnector.Internal
     {
         private readonly IReadOnlyList<OceanBaseEndpoint> _ordered;
         private readonly int[] _sizes;
+        private readonly int?[] _groupLimits;
+        private readonly int[] _groupAttempts;
         private readonly DiscoveryBlacklistPolicy?[] _policies;
         private readonly bool _hasBlacklist;
         private DiscoveryBlacklistPolicy? _lastPolicy;
@@ -25,6 +27,7 @@ namespace OceanBaseConnector.Internal
                 _policies = snapshot.CopyGroupPolicies();
                 foreach (var policy in _policies) _hasBlacklist |= policy != null;
                 _sizes = snapshot.CopyGroupSizes();
+                _groupLimits = snapshot.CopyGroupLimits();
                 _ceiling = snapshot.RetryAllDowns ?? endpoints.Count * (options.ConnectRetryCount + 1);
             }
             else
@@ -38,9 +41,11 @@ namespace OceanBaseConnector.Internal
                     _ordered = ordered;
                 }
                 _policies = new DiscoveryBlacklistPolicy?[1];
+                _groupLimits = new int?[1];
                 _sizes = new[] { endpoints.Count }; _ceiling = endpoints.Count * (options.ConnectRetryCount + 1);
             }
             _rounds = options.ConnectRetryCount + 1; _blacklist = health.Blacklist;
+            _groupAttempts = new int[_sizes.Length];
             FillGroup();
         }
 
@@ -51,12 +56,14 @@ namespace OceanBaseConnector.Internal
             {
                 while (_pending.Count != 0)
                 {
+                    if (_groupLimits[_group].HasValue && _groupAttempts[_group] >= _groupLimits[_group]!.Value)
+                    { _pending.Clear(); break; }
                     var index = _pending.Dequeue(); var candidate = _ordered[index];
                     var policy = _policies[_group];
                     if (_fallback && policy == null) continue;
                     if (policy != null && !_fallback && _blacklist.IsBlocked(candidate, policy)) continue;
                     _lastPolicy = policy;
-                    _attempts++; _lastIndex = index; _passAttempted = true; endpoint = candidate; return true;
+                    _attempts++; _groupAttempts[_group]++; _lastIndex = index; _passAttempted = true; endpoint = candidate; return true;
                 }
                 _offset += _sizes[_group]; _group++;
                 if (_group < _sizes.Length) { FillGroup(); continue; }

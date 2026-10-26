@@ -409,8 +409,8 @@ namespace OceanBaseConnector.Internal.Session
         private void WarmUp(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
             EndpointSelector selector, IReadOnlyList<OceanBaseEndpoint>? endpoints, CancellationToken cancellationToken)
         {
-            // An explicit zero discovery ceiling permits idle reuse, but forbids replenishment.
-            if (endpoints is DiscoverySnapshot snapshot && snapshot.RetryAllDowns == 0) return;
+            // Zero discovery ceilings permit idle reuse, but forbid replenishment.
+            if (endpoints is DiscoverySnapshot snapshot && !snapshot.HasTcpBudget) return;
             var warmed = new List<PhysicalSession>();
             try
             {
@@ -445,7 +445,7 @@ namespace OceanBaseConnector.Internal.Session
         private async Task WarmUpAsync(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,
             EndpointSelector selector, IReadOnlyList<OceanBaseEndpoint>? endpoints, CancellationToken cancellationToken)
         {
-            if (endpoints is DiscoverySnapshot snapshot && snapshot.RetryAllDowns == 0) return;
+            if (endpoints is DiscoverySnapshot snapshot && !snapshot.HasTcpBudget) return;
             var warmed = new List<PhysicalSession>();
             try
             {

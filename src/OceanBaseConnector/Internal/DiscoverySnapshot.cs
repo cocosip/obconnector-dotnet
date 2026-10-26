@@ -19,12 +19,13 @@ namespace OceanBaseConnector.Internal
     {
         private readonly OceanBaseEndpoint[] _endpoints;
         private readonly int[] _weights;
-        internal DiscoveryGroup(List<OceanBaseEndpoint> endpoints, List<int> weights, DiscoveryStrategy strategy, DiscoveryBlacklistPolicy? blacklist = null)
+        internal DiscoveryGroup(List<OceanBaseEndpoint> endpoints, List<int> weights, DiscoveryStrategy strategy, DiscoveryBlacklistPolicy? blacklist = null, int? retryAllDowns = null)
         {
-            _endpoints = endpoints.ToArray(); _weights = weights.ToArray(); Strategy = strategy; BlacklistPolicy = blacklist;
+            _endpoints = endpoints.ToArray(); _weights = weights.ToArray(); Strategy = strategy; BlacklistPolicy = blacklist; RetryAllDowns = retryAllDowns;
         }
         internal DiscoveryStrategy Strategy { get; }
         internal DiscoveryBlacklistPolicy? BlacklistPolicy { get; }
+        internal int? RetryAllDowns { get; }
         internal int Count => _endpoints.Length;
         internal OceanBaseEndpoint Endpoint(int index) => _endpoints[index];
         internal int Weight(int index) => _weights[index];
@@ -61,6 +62,15 @@ namespace OceanBaseConnector.Internal
         internal string CanonicalAddresses { get; }
         internal DiscoveryBlacklistPolicy? BlacklistPolicy { get; }
         internal int? RetryAllDowns { get; }
+        internal bool HasTcpBudget
+        {
+            get
+            {
+                if (RetryAllDowns == 0) return false;
+                foreach (var group in _groups) if (group.RetryAllDowns != 0) return true;
+                return false;
+            }
+        }
         internal int[] CopyGroupSizes()
         {
             var sizes = new int[_groups.Length];
@@ -72,6 +82,12 @@ namespace OceanBaseConnector.Internal
             var policies = new DiscoveryBlacklistPolicy?[_groups.Length];
             for (var i = 0; i < policies.Length; i++) policies[i] = _groups[i].BlacklistPolicy ?? BlacklistPolicy;
             return policies;
+        }
+        internal int?[] CopyGroupLimits()
+        {
+            var limits = new int?[_groups.Length];
+            for (var i = 0; i < limits.Length; i++) limits[i] = _groups[i].RetryAllDowns;
+            return limits;
         }
         public int Count => _endpoints.Length;
         public OceanBaseEndpoint this[int index] => _endpoints[index];

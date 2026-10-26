@@ -33,16 +33,30 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetAppliesGroupBlacklistAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
             => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: true);
 
-        private static async Task VerifyBlacklist(string target, bool oracle, bool asynchronous, int path, bool ocp, bool group)
+        [Theory]
+        [MemberData(nameof(Assets))]
+        public Task EveryAssetAppliesGroupAttemptLimitAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
+            => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: true, limited: true);
+
+        private static async Task VerifyBlacklist(string target, bool oracle, bool asynchronous, int path, bool ocp, bool group, bool limited = false)
         {
             using var greeting = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var bytes = Convert.FromBase64String(greeting.RootElement.GetProperty("payloadBase64").GetString()!);
             await using var server = new CredentialServer(bytes, oracle: oracle, sessionStateOk: oracle ? SessionTimeZoneFixture.Report : null);
             using var refused = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             refused.Bind(new IPEndPoint(IPAddress.Loopback, 0)); var port = ((IPEndPoint)refused.LocalEndPoint!).Port;
-            string Tns(int cap) => group ? GroupBlacklistFixture.Tns(port, server.Port, cap) : DiscoveryBlacklistFixture.Tns(port, server.Port, cap);
-            string Json(int cap) => group ? GroupBlacklistFixture.Json(port, server.Port, cap) : DiscoveryBlacklistFixture.Json(port, server.Port, cap);
-            var physicalBudget = group ? 3 : 2;
+            string Tns(int cap)
+            {
+                var text = group ? GroupBlacklistFixture.Tns(port, server.Port, limited && cap == 0 ? 2 : cap) : DiscoveryBlacklistFixture.Tns(port, server.Port, cap);
+                return limited ? text.Replace("(ADDRESS_LIST=", "(ADDRESS_LIST=(OBLB_RETRY_ALL_DOWNS=" + (cap == 0 ? 0 : 1) + ")") : text;
+            }
+            string Json(int cap)
+            {
+                var text = group ? GroupBlacklistFixture.Json(port, server.Port, limited && cap == 0 ? 2 : cap) : DiscoveryBlacklistFixture.Json(port, server.Port, cap);
+                return limited ? text.Replace("\"ADDRESS\":[", "\"OBLB_RETRY_ALL_DOWNS\":" + (cap == 0 ? 0 : 1) + ",\"ADDRESS\":[") : text;
+            }
+            var repeatedFailures = group && !limited;
+            var physicalBudget = repeatedFailures ? 3 : 2;
             using var http = new OcpHttpFixture(Json(physicalBudget));
             using var file = new TnsFileFixture(Tns(physicalBudget));
             var context = new AssemblyLoadContext("discovery-blacklist-" + target, isCollectible: true);
@@ -82,13 +96,15 @@ namespace OceanBaseConnector.ConsumerTests
                     var error = await Assert.ThrowsAnyAsync<DbException>(() => Open(connection, asynchronous));
                     Assert.Equal("OceanBaseException", error.GetType().Name);
                 }
-                Assert.Equal(group ? pooled ? new[] { "error", "error", "success", "success" } : new[] { "error", "error", "success" }
+                Assert.Equal(limited ? pooled ? new[] { "error", "success", "error", "success" } : new[] { "error", "success" }
+                    : repeatedFailures ? pooled ? new[] { "error", "error", "success", "success" } : new[] { "error", "error", "success" }
                     : pooled ? new[] { "error", "success", "success" } : new[] { "error", "success" }, capture.Outcomes);
                 if (pooled) Clear(connection, source);
                 file.Write(Tns(physicalBudget)); http.Body = Json(physicalBudget);
                 await Open(connection, asynchronous);
                 using (var command = connection.CreateCommand()) { command.CommandText = "select after policy change"; Assert.Equal(0, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery()); }
-                Assert.Equal(group ? pooled ? new[] { "error", "error", "success", "success", "error", "error", "success", "success" } : new[] { "error", "error", "success", "success" }
+                Assert.Equal(limited ? pooled ? new[] { "error", "success", "error", "success", "error", "success", "error", "success" } : new[] { "error", "success", "error", "success" }
+                    : repeatedFailures ? pooled ? new[] { "error", "error", "success", "success", "error", "error", "success", "success" } : new[] { "error", "error", "success", "success" }
                     : pooled ? new[] { "error", "success", "success", "error", "success", "success" } : new[] { "error", "success", "success" }, capture.Outcomes);
                 Assert.Equal(pooled ? 4 : 2, server.Accepted); Assert.Equal(ocp ? 3 : 0, http.Requests.Count);
             }

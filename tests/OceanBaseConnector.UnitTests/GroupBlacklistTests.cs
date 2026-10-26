@@ -91,7 +91,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("(OBLB_BLACKLIST=(REMOVE_STRATEGY=(NAME=TIMEOUT)(TIMEOUT=-1)))", true)]
         [InlineData("(OBLB_BLACKLIST=(APPEND_STRATEGY=(NAME=RETRYDURATION)(RETRYTIMES=2)))", true)]
         [InlineData("(OBLB_BLACKLIST=(UNKNOWN=1))", false)]
-        [InlineData("(OBLB_RETRY_ALL_DOWNS=1)", false)]
+        [InlineData("(OBLB_RETRY_ALL_DOWNS=-1)", true)]
         public void InvalidGroupPoliciesAndLocalAttemptCeilingsFailExplicitly(string policy, bool malformed)
         {
             var text = "APP=(DESCRIPTION=(ADDRESS_LIST=" + policy + "(ADDRESS=(PROTOCOL=TCP)(HOST=one)(PORT=1))))";
@@ -105,7 +105,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("\"OBLB_BLACKLIST\":{\"REMOVE_STRATEGY\":{\"NAME\":\"TIMEOUT\",\"TIMEOUT\":-1}}", true)]
         [InlineData("\"OBLB_BLACKLIST\":{\"APPEND_STRATEGY\":{\"NAME\":\"RETRYDURATION\",\"RETRYTIMES\":2}}", true)]
         [InlineData("\"OBLB_BLACKLIST\":{\"UNKNOWN\":1}", false)]
-        [InlineData("\"OBLB_RETRY_ALL_DOWNS\":1", false)]
+        [InlineData("\"OBLB_RETRY_ALL_DOWNS\":-1", true)]
         public void InvalidOcpGroupPoliciesAndLocalAttemptCeilingsFailExplicitly(string policy, bool malformed)
         {
             var text = "{\"data\":{\"NET_SERVICE_NAME\":\"APP\",\"DESCRIPTION\":{\"ADDRESS_LIST\":[{" + policy + ",\"ADDRESS\":[{\"PROTOCOL\":\"TCP\",\"HOST\":\"one\",\"PORT\":1}]}]}}}";

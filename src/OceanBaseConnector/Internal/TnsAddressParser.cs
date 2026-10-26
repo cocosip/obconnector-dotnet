@@ -54,7 +54,7 @@ namespace OceanBaseConnector.Internal
             if (lists.Count == 0) groups.Add(ReadGroup(addresses, strategy, token));
             else foreach (var list in lists)
             {
-                var fields = Children(list); var members = new List<Node>(); Node? localBlacklist = null;
+                var fields = Children(list); var members = new List<Node>(); Node? localBlacklist = null; int? localRetry = null;
                 foreach (var child in fields)
                     if (Is(child.Key, "ADDRESS")) members.Add(child);
                     else if (Is(child.Key, "OBLB_BLACKLIST"))
@@ -62,8 +62,13 @@ namespace OceanBaseConnector.Internal
                         if (localBlacklist != null) throw Invalid();
                         localBlacklist = child;
                     }
+                    else if (Is(child.Key, "OBLB_RETRY_ALL_DOWNS"))
+                    {
+                        if (localRetry.HasValue) throw Invalid();
+                        localRetry = Unsigned(child);
+                    }
                     else if (!IsPolicy(child.Key, false)) throw Unsupported();
-                groups.Add(ReadGroup(members, Policy(fields, strategy, false), token, localBlacklist == null ? null : ReadBlacklist(localBlacklist)));
+                groups.Add(ReadGroup(members, Policy(fields, strategy, false), token, localBlacklist == null ? null : ReadBlacklist(localBlacklist), localRetry));
             }
             token.ThrowIfCancellationRequested();
             return new DiscoverySnapshot(groups, blacklist, retry);
@@ -107,7 +112,7 @@ namespace OceanBaseConnector.Internal
         private static Node Required(Dictionary<string, Node> fields, string key) => fields.TryGetValue(key, out var value) ? value : throw Invalid();
         private static int Unsigned(Node node) => int.TryParse(Value(node), NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : throw Invalid();
 
-        private static DiscoveryGroup ReadGroup(List<Node> addresses, DiscoveryStrategy strategy, CancellationToken token, DiscoveryBlacklistPolicy? blacklist = null)
+        private static DiscoveryGroup ReadGroup(List<Node> addresses, DiscoveryStrategy strategy, CancellationToken token, DiscoveryBlacklistPolicy? blacklist = null, int? retryAllDowns = null)
         {
             if (addresses.Count == 0 || addresses.Count > 256) throw Invalid();
             var endpoints = new List<OceanBaseEndpoint>(); var weights = new List<int>(); long total = 0;
@@ -140,7 +145,7 @@ namespace OceanBaseConnector.Internal
                 endpoints.Add(parsed[0]); weights.Add(amount); total += amount;
             }
             if (strategy == DiscoveryStrategy.ServerAffinity && total == 0) throw Invalid();
-            return new DiscoveryGroup(endpoints, weights, strategy, blacklist);
+            return new DiscoveryGroup(endpoints, weights, strategy, blacklist, retryAllDowns);
         }
 
         private static bool IsPolicy(string key, bool description) => Is(key, "OBLB") || Is(key, "LOAD_BALANCE") ||
