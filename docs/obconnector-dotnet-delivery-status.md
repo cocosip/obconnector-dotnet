@@ -7,6 +7,11 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 ## Current checkpoint
 
 - Development stays on `master`. No new branch/worktree and no implicit push.
+- Current local delivery: `oceanbase.client.pool.wait.duration` now carries the standard
+  `oceanbase.outcome` tag (`acquired`, `timeout`, `canceled` or `error`) for sync and async pool
+  waits. The focused regression passes 2/2; the affected diagnostics selection passes 228/230,
+  with two pre-existing TLS/PFX fixture failures before the pool path. This is local diagnostics
+  evidence only; additional resource waits, workload/overhead and real deployment limits remain open.
 - Current local delivery: Oracle complex BLOB/CLOB members decode from binary named results into
   session-bound `OceanBaseLob` handles when `Use Lob Locators=true`; anonymous collection metadata
   and synchronous/asynchronous BLOB/CLOB materialization are covered. The complete complex unit
@@ -64,7 +69,7 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   log is retained, and serial retry passed without a source workaround.
 - Previous completed module: session protocol I/O durations (`f0edabf`), with7,375 complete units,
   89 focused units and279 affected consumers, all passing. See its [contract](session-io-diagnostics.md).
-- Further work: remaining national/JSON/CLOB and extended type boundaries, resource waits,
+- Further work: remaining national/JSON/CLOB and extended type boundaries, additional resource waits,
   Oracle cursor/complex shapes and the other priorities below. JSON parameters use strict client
   bytes; MySQL string literal fallback retains its UTF-8-only restrictions. Managed charset
   rechecks can change session diagnostic functions after conservatively classified SQL.

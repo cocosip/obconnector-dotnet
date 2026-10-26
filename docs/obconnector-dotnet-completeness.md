@@ -4,7 +4,8 @@
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
 **最近复核：** 2026-10-27，基于184a767开发；保持master，全部23项及八工作包仍开放。
-**当前开发模块：** P1-07 Oracle复杂类型 BLOB/CLOB 结果成员；二进制命名及匿名集合结果在协商 `Use Lob Locators=true` 时生成绑定当前会话的 `OceanBaseLob`，非空复杂 LOB 输入仍拒绝。专项13项、复杂单元426项及无TLS受影响消费者220项通过；完整全量门禁受当前TLS/证书环境失败影响，见第15.85节。
+**当前开发模块：** P2-04/W7 池等待结果诊断；既有 `oceanbase.client.pool.wait.duration` 现在携带 `oceanbase.outcome`（`acquired`/`timeout`/`canceled`/`error`），同步与异步池等待行为不变。专项2项通过，受影响诊断选择228/230通过，2项TLS/PFX夹具在进入池路径前失败，见第15.86节。
+**上一开发模块：** P1-07 Oracle复杂类型 BLOB/CLOB 结果成员；二进制命名及匿名集合结果在协商 `Use Lob Locators=true` 时生成绑定当前会话的 `OceanBaseLob`，非空复杂 LOB 输入仍拒绝。专项13项、复杂单元426项及无TLS受影响消费者220项通过；完整全量门禁受当前TLS/证书环境失败影响，见第15.85节。
 **最近完成模块：** P1-08/P1-10 Oracle FLOAT/NUMBER_FLOAT参数派生、INOUT目录归一及按需字符长度补查；完整单测7656、专项189及受影响消费者168通过，独立最终走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation)及第15.84节。新增实库过程/函数用例仅编译，未运行。
 **此前完成模块：** Oracle NUMBER_FLOAT206精确结果、binary precision元数据及CommandBuilder绑定（184a767）；完整单测7578、专项204及受影响消费者229通过，独立走查无遗留问题，见第15.83节。2项实库和2项既有NUMBER对照均在初始握手失败，未完成认证或SQL，不能声称FLOAT存储成功。
 此前JSON客户端字符集（b94a421）完整单测7543、专项111、消费者570通过；其10项实库与2项默认字符集对照握手失败保留在第15.82节。
@@ -18,7 +19,7 @@ The overview separates remaining development from real-environment validation; h
 **文档性质：** 能力审计、公共目标契约与验收基线；已实现、部分实现、明确缺失、未验证和开发检查点分开记录。23 项及八工作包尚未整体完成。
 
 
-**阅读入口：** 地址级覆盖见第15.65节、组上限见第15.64节、分组黑名单覆盖见第15.63节；REF CURSOR结果限制见第15.62节；批次结果限制及共享SingleRow修正见第15.61节；Batch元数据及源条目创建见第15.60节；诊断卸载修复见第15.59节；池通知交接见第15.58节，协议帧诊断保留于第15.57节，二进制游标列保留于第15.56节，黑名单/尝试上限保留于第15.55节，分组/策略/权重保留于第15.54节，OCP HTTP地址发现保留于第15.53节，TNS文件发现保留于第15.52节，端点TCP健康缓存保留于第15.51节，TCP重试保留于第15.50节，连接级ERR保留于第15.49节，Closed回调修复保留于第15.48节，complex national保留于第15.47节，Oracle输出提示见第15.46节，事务响应丢失及核对示例见第15.45节，外置 LOB 验收见第 15.44 节，内联资源验收见第 15.43 节，原文档检查点见第 15.42 节；第 4 节列全部 23 项缺口；第 5 节定义契约；第 14 节逐项列触发场景、源码/测试入口及关闭证据；第 16 节拆为八工作包。[完整走查报告](obconnector-dotnet-driver-audit.md)第 1.1/1.2 节汇总欠项，第 36 节记录当前 reader 租约修复，第 35 节保留 XA 池隔离验收，第 34 节保留 Oracle 自动提交模块，第 33 节保留文档及 RED 检查点，第 32 节保留已提交 NUMBER 修复，第 31 节保留慢命令诊断；第 30/29 节保留阶段诊断与 Oracle Prepare 交付；第 28 节保留开发前文档检查点，第 8 节是发布门槛。
+**阅读入口：** 池等待结果诊断见第15.86节；地址级覆盖见第15.65节、组上限见第15.64节、分组黑名单覆盖见第15.63节；REF CURSOR结果限制见第15.62节；批次结果限制及共享SingleRow修正见第15.61节；Batch元数据及源条目创建见第15.60节；诊断卸载修复见第15.59节；池通知交接见第15.58节，协议帧诊断保留于第15.57节，二进制游标列保留于第15.56节，黑名单/尝试上限保留于第15.55节，分组/策略/权重保留于第15.54节，OCP HTTP地址发现保留于第15.53节，TNS文件发现保留于第15.52节，端点TCP健康缓存保留于第15.51节，TCP重试保留于第15.50节，连接级ERR保留于第15.49节，Closed回调修复保留于第15.48节，complex national保留于第15.47节，Oracle输出提示见第15.46节，事务响应丢失及核对示例见第15.45节，外置 LOB 验收见第 15.44 节，内联资源验收见第 15.43 节，原文档检查点见第 15.42 节；第 4 节列全部 23 项缺口；第 5 节定义契约；第 14 节逐项列触发场景、源码/测试入口及关闭证据；第 16 节拆为八工作包。[完整走查报告](obconnector-dotnet-driver-audit.md)第 1.1/1.2 节汇总欠项，第 36 节记录当前 reader 租约修复，第 35 节保留 XA 池隔离验收，第 34 节保留 Oracle 自动提交模块，第 33 节保留文档及 RED 检查点，第 32 节保留已提交 NUMBER 修复，第 31 节保留慢命令诊断；第 30/29 节保留阶段诊断与 Oracle Prepare 交付；第 28 节保留开发前文档检查点，第 8 节是发布门槛。
 
 **历史边界：** 第 5.1.3 节及走查报告第 25 节保留归一化修复前发现；第 5.1.1/15.19/15.21 节及报告第 17 节保留早期会话识别状态，后续识别契约见第 5.1.2/15.24 节。第 15.1—15.40 节保留此前实现、开发检查点、原始失败与跳过；它们不覆盖当前状态，源码存在、本地通过与真实验收分别判断。
 
@@ -2896,6 +2897,18 @@ Release solution build has zero warnings/errors, production-source format verifi
 the existing workspace-load warning, and independent source/tests/docs review has no actionable
 finding. All evidence is local loopback; no real OceanBase/OBProxy complex LOB interoperability,
 DDL support or external locator read is claimed.
+
+### 15.86 2026-10-27 P2-04 池等待结果诊断
+
+P2-04/W7：既有 `oceanbase.client.pool.wait.duration` 直方图现在增加标准
+`oceanbase.outcome` 标签，值为 `acquired`、`timeout`、`canceled` 或 `error`。
+同步和异步等待在信号量边界分类；原有从本次 Rent 开始累计的耗时、容量、取消和超时行为不变。
+标签在等待者记账完成、phase finish 回调前发布，因此不包含监听器回调耗时。
+
+回归先在旧无标签实现上复现取消和超时结果缺失，随后同步/异步 2 项通过。受影响诊断选择
+228/230 通过；2 项 TLS phase 用例在导入 Windows PFX 夹具时失败，尚未进入池等待路径。
+本模块没有访问真实 OceanBase/OBProxy，也没有给出负载或监听器开销结论。池信号量之外的其他
+资源等待、持续运行和部署性能验收继续开放。
 
 ## 16. 剩余交付工作包
 

@@ -46,7 +46,7 @@ namespace OceanBaseConnector.Internal
         internal static void PoolWaiterRemoved() => Add(PoolWaiters, -1);
         internal static void PoolDiscarded() => Add(PoolDiscards, 1);
         internal static void PoolResetFailed() => Add(PoolResetFailures, 1);
-        internal static void PoolWaitDuration(double seconds) => Record(PoolWait, seconds);
+        internal static void PoolWaitDuration(double seconds, string outcome) => Record(PoolWait, seconds, new TagList { { "oceanbase.outcome", outcome } });
 
         private static void Add(Counter<long>? instrument, long value)
         {
@@ -68,6 +68,14 @@ namespace OceanBaseConnector.Internal
         {
             var previous = Activity.Current;
             try { instrument?.Record(value); }
+            catch { }
+            finally { Restore(previous); }
+        }
+
+        private static void Record(Histogram<double>? instrument, double value, in TagList tags)
+        {
+            var previous = Activity.Current;
+            try { instrument?.Record(value, tags); }
             catch { }
             finally { Restore(previous); }
         }

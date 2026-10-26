@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using System.IO;
 using System.Linq;
@@ -64,6 +65,24 @@ namespace OceanBaseConnector.UnitTests
                 other.Discard(session); Assert.Equal(1, capture.Current);
                 pool.Discard(session); Assert.Equal(0, capture.Current);
                 capture.AssertMetadata();
+            }
+            finally { pool.Discard(session); }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task PoolWaitDurationClassifiesCancellationAndTimeout(bool asynchronous)
+        {
+            using var capture = new LeaseCapture(); using var pool = new PhysicalSessionPool();
+            var session = await Rent(pool, Options(1, maximum: 1), asynchronous);
+            try
+            {
+                using (var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100)))
+                    await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Rent(pool, Options(1, maximum: 1), asynchronous, cancellation.Token));
+                await Assert.ThrowsAsync<TimeoutException>(() => Rent(pool, Options(1, maximum: 1), asynchronous));
+                Assert.Contains("canceled", capture.WaitOutcomes);
+                Assert.Contains("timeout", capture.WaitOutcomes);
             }
             finally { pool.Discard(session); }
         }
@@ -198,6 +217,7 @@ namespace OceanBaseConnector.UnitTests
             private readonly MeterListener _listener = new MeterListener();
             private long _current, _borrows;
             private int _invalidMetadata;
+            internal readonly ConcurrentBag<string> WaitOutcomes = new ConcurrentBag<string>();
             internal long Current => Interlocked.Read(ref _current);
             internal long Borrows => Interlocked.Read(ref _borrows);
             internal Action<long>? OnLease;
@@ -206,7 +226,7 @@ namespace OceanBaseConnector.UnitTests
                 _listener.InstrumentPublished = (instrument, listener) =>
                 {
                     if (instrument.Meter.Name == "OceanBaseConnector" &&
-                        (instrument.Name == "oceanbase.client.pool.leased" || instrument.Name == "oceanbase.client.pool.borrowed"))
+                        (instrument.Name == "oceanbase.client.pool.leased" || instrument.Name == "oceanbase.client.pool.borrowed" || instrument.Name == "oceanbase.client.pool.wait.duration"))
                         listener.EnableMeasurementEvents(instrument);
                 };
                 _listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
@@ -219,6 +239,12 @@ namespace OceanBaseConnector.UnitTests
                         OnLease?.Invoke(value);
                     }
                     else Interlocked.Add(ref _borrows, value);
+                });
+                _listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
+                {
+                    if (instrument.Name != "oceanbase.client.pool.wait.duration") return;
+                    foreach (var tag in tags)
+                        if (tag.Key == "oceanbase.outcome") WaitOutcomes.Add(Convert.ToString(tag.Value, System.Globalization.CultureInfo.InvariantCulture)!);
                 });
                 _listener.Start();
             }

@@ -4,6 +4,21 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 P2-04 pool wait outcome diagnostics
+
+P2-04/W7 extends the existing `oceanbase.client.pool.wait.duration` histogram with the standard
+`oceanbase.outcome` tag. Synchronous and asynchronous pool waits now classify `acquired`, `timeout`,
+`canceled` and `error` at the semaphore boundary; the existing elapsed-since-rent duration and
+pool behavior are unchanged. The tag is emitted after waiter bookkeeping and before phase-finish
+callbacks, so listener work is excluded from the recorded wait.
+
+The RED regression failed to find the cancellation and timeout outcomes on the old untagged meter.
+The GREEN regression covers both sync and async waits and passes 2/2. The affected diagnostics
+selection passes 228/230: 228 pass and the two TLS phase cases fail while importing the Windows
+PFX fixture before the pool or metric path runs. No real database, proxy or load test was used.
+Release build, complete-suite and performance/overhead gates remain separate; additional resource
+waits beyond the pool semaphore and sustained deployment limits remain open.
+
 ## 2026-10-27 Oracle complex LOB result members
 
 P1-07/W5, developed from `103509c` on `master`. Complex member type codes 210/211 (BLOB/CLOB)

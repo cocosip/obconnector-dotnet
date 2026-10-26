@@ -571,7 +571,7 @@ namespace OceanBaseConnector.Internal.Session
             {
                 phase?.Stop();
                 DecrementWaiter();
-                DriverDiagnostics.PoolWaitDuration(started.Elapsed.TotalSeconds);
+                DriverDiagnostics.PoolWaitDuration(started.Elapsed.TotalSeconds, error is OperationCanceledException ? "canceled" : error != null ? "error" : !signaled ? "timeout" : "acquired");
                 phase?.Finish(error, elapsed: !signaled);
             }
         }
@@ -587,7 +587,7 @@ namespace OceanBaseConnector.Internal.Session
             {
                 phase?.Stop();
                 DecrementWaiter();
-                DriverDiagnostics.PoolWaitDuration(started.Elapsed.TotalSeconds);
+                DriverDiagnostics.PoolWaitDuration(started.Elapsed.TotalSeconds, error is OperationCanceledException ? "canceled" : error != null ? "error" : !signaled ? "timeout" : "acquired");
                 phase?.Finish(error, elapsed: !signaled);
             }
         }

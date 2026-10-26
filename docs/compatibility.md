@@ -1,5 +1,15 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Pool wait outcome diagnostics
+
+The existing `oceanbase.client.pool.wait.duration` histogram now includes the standard
+`oceanbase.outcome` tag with `acquired`, `timeout`, `canceled` or `error`. It applies to both
+synchronous and asynchronous waits and records the same elapsed-since-rent duration as before;
+pool capacity, cancellation and timeout behavior are unchanged. Local unit coverage passes the
+two sync/async classification cases. The affected diagnostics run has two TLS/PFX fixture failures
+before this path, and no real OceanBase/OBProxy or load evidence is claimed. Other resource waits,
+listener overhead and deployment limits remain open.
+
 ## 2026-10-27 Oracle complex BLOB/CLOB result members
 
 Binary Oracle named complex results now decode non-NULL BLOB/CLOB members as `OceanBaseLob`
