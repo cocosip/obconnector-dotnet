@@ -7,7 +7,14 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 ## Current checkpoint
 
 - Development stays on `master`. No new branch/worktree and no implicit push.
-- Latest local delivery: client SQL/parameter character sets, based on `33c052b`.
+- Latest local delivery: CLOB WriteText validates every client-encoding chunk before any write,
+  preventing a late unrepresentable suffix from leaving a written prefix or invalidating the
+  handle. Prevalidation shares the8191-scalar write boundary and uses bounded encoding buffers.
+  Complete units7507, focused26, affected units455 and consumers1000 passed, zero failures/skips.
+  Final Release build has zero warnings/errors; format verification passed with a workspace-load
+  warning and independent source/tests/docs review has no remaining actionable finding. See its
+  [module record](obconnector-dotnet-progress.md#2026-10-27-clob-input-charset-validation-before-writes).
+- Previous local delivery: client SQL/parameter character sets (`b66cda1`), based on `33c052b`.
   The [input-encoding contract](client-character-sets.md) describes twelve non-default names,
   strict round-trip validation, managed initialization/reset and cached session trust. Text/prepare,
   ordinary scalar/complex/array inputs, procedures, metadata parameters and byte budgets use the

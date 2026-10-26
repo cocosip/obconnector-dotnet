@@ -148,8 +148,9 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             foreach (var value in values)
             { var bytes = Encoding.UTF8.GetBytes(value); row.WriteByte((byte)bytes.Length); row.Write(bytes); }
             await channel.WritePacketAsync(row.ToArray(), token);
+            // The extra row makes the client abort immediately, so do not race that close with EOF.
             if (extra) await channel.WritePacketAsync(row.ToArray(), token);
-            await channel.WritePacketAsync(End(oracle, deprecated), token);
+            else await channel.WritePacketAsync(End(oracle, deprecated), token);
         }
 
         private static async Task Row(PacketChannel channel, bool oracle, bool deprecated, bool binary, CancellationToken token)

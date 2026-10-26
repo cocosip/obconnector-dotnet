@@ -38,6 +38,12 @@ namespace OceanBaseConnector.UnitTests
                 command.CommandText = "SELECT '中'";
                 var error = await Assert.ThrowsAnyAsync<Exception>(() => asynchronous ? command.ExecuteNonQueryAsync() : Task.FromResult(command.ExecuteNonQuery()));
                 Assert.False(command.HasSentSql); Assert.False((error as OceanBaseException)?.IsExecutionOutcomeUnknown ?? false);
+                if (extra)
+                {
+                    var protocol = Assert.IsType<ProtocolException>(Assert.IsType<OceanBaseException>(error).InnerException);
+                    Assert.Equal("Extra client character set state row.", protocol.Message);
+                }
+                else Assert.IsType<NotSupportedException>(error);
                 Assert.Equal(ConnectionState.Broken, connection.State);
             }
             finally { connection.Close(); server.Stop(); }

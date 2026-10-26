@@ -3,8 +3,9 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27，基于33c052b开发；保持master，全部23项及八工作包仍开放。
-**最近完成模块：** P1-08客户端SQL/参数字符集，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-client-sql-and-parameter-character-sets)和[输入字符集契约](client-character-sets.md)。此前会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录。
+**最近复核：** 2026-10-27，基于b66cda1开发；保持master，全部23项及八工作包仍开放。
+**最近完成模块：** P1-08 CLOB首次写入前按实际输入编码逐块验证全部文本，完整单测7507、专项26、受影响单测455及消费者1000通过，独立走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-clob-input-charset-validation-before-writes)及第15.81节。
+此前客户端SQL/参数字符集（b66cda1）、会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录；[输入字符集契约](client-character-sets.md)记录当前边界。
 **当前验证：** 字符集模块最终完整单测7491、专项166、受影响消费者560通过，均零失败/跳过；串行Release构建零警告/错误，格式验证通过（workspace-load warning），独立源码/测试/文档走查无剩余可操作问题。首次完整运行7484通过/2失败及后续专项164通过/2失败的原因和修正均保留于台账，不删除原报告。
 **历史限制：** 前一模块构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，八次独立及后续完整运行未复现；没有修改TNS或添加绕过。
 **剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向及文本REF CURSOR、复杂LOB/游标成员、压缩OB20/代理reroute、多发送/独立bulk及六项验收占位等，逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
@@ -2778,6 +2779,26 @@ independent final source/tests/docs review has no remaining actionable finding. 
 [module ledger](obconnector-dotnet-progress.md#2026-10-27-client-sql-and-parameter-character-sets)
 retains initial RED, the first full-run failures and their corrections. No real database was
 accessed; all23 IDs/eight packages retain their complete closure requirements.
+
+### 15.81 2026-10-27 CLOB input charset validation before writes
+
+P1-08/W5, developed fromb66cda1 on master. Whole-input UTF-8 validation alone did not prevent
+an unrepresentable suffix under a configured client charset from failing after a completed
+DBMS_LOB.WRITE prefix. Twelve sync/async protocol regressions across six charsets reproduced
+one write when none should occur. Non-default input is now validated in the same8191-scalar
+chunks as writes, all before ownership/I/O, preserving bounded encoding temporaries. Default
+UTF-8, scalar offsets, locator replacement and later server/network partial-failure semantics
+retain their existing contracts. Rejected input leaves the original handle usable.
+
+Four positive boundary cases check supplementary scalars, exact default/GB18030-2022 wire bytes,
+amounts/offsets and returned locator reuse. Focused26, serial Release build and format verification
+passed. Final complete units7507 passed in8minutes39seconds; affected units455 and consumers1000
+passed, all with zero failures/skips. Independent final source/tests/docs review has no remaining
+actionable finding. Consumers load five assets in one.NET10host.
+The [module ledger](obconnector-dotnet-progress.md#2026-10-27-clob-input-charset-validation-before-writes)
+retains initial RED, the stopped earlier full run, invalid-response fixture race, assertion
+correction and review findings. No real-server claim or broader JSON/national/CLOB storage support
+is introduced; all23 gaps/eight work packages retain their remaining criteria.
 
 ## 16. 剩余交付工作包
 

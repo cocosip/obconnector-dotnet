@@ -45,7 +45,14 @@ namespace OceanBaseConnector
             if (!IsCharacter) throw new InvalidOperationException("WriteText requires a CLOB.");
             if (text == null) throw new ArgumentNullException(nameof(text));
             _ = ResultColumn.Utf8.GetByteCount(text); var total = 0;
-            for (var i = 0; i < text.Length; i++) { if (char.IsHighSurrogate(text[i])) i++; total++; }
+            var encoding = Context.Session.ClientEncoding;
+            // Prevalidate every write-sized chunk without allocating an encoded copy of the whole CLOB.
+            for (var start = 0; start < text.Length;)
+            {
+                var end = TextChunkEnd(text, start, out var amount);
+                if (!ReferenceEquals(encoding, ResultColumn.Utf8)) _ = encoding.GetByteCount(text.Substring(start, end - start));
+                total += amount; start = end;
+            }
             ValidateWriteOffset(characterOffset, total); token.ThrowIfCancellationRequested();
             var operation = BeginMutation();
             try
@@ -54,13 +61,19 @@ namespace OceanBaseConnector
                 var start = 0;
                 while (start < text.Length)
                 {
-                    var end = start; var amount = 0;
-                    while (end < text.Length && amount < 8191) { if (char.IsHighSurrogate(text[end])) end++; end++; amount++; }
+                    var end = TextChunkEnd(text, start, out var amount);
                     await operation.Write(text.Substring(start, end - start), amount, characterOffset, async, linked.Token, token).ConfigureAwait(false);
                     characterOffset += amount; start = end;
                 }
             }
             finally { await EndMutation(operation, async).ConfigureAwait(false); }
+        }
+
+        private static int TextChunkEnd(string text, int start, out int amount)
+        {
+            var end = start; amount = 0;
+            while (end < text.Length && amount < 8191) { if (char.IsHighSurrogate(text[end])) end++; end++; amount++; }
+            return end;
         }
 
         /// <summary>Trims a BLOB to bytes, or a CLOB to Unicode scalars. This does not commit the transaction.</summary>

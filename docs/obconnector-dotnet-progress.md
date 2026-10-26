@@ -4,6 +4,44 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 CLOB input charset validation before writes
+
+Developed fromb66cda1 on master for P1-08/W5. WriteText/WriteTextAsync previously validated
+only UTF-8 for the whole input, but ordinary DBMS_LOB.WRITE parameters use the selected client
+encoding. A representable8191-scalar prefix could complete before an unrepresentable suffix failed;
+the failed mutation also invalidated the handle. Twelve sync/async loopback regressions across
+ascii, latin1, gbk, utf8mb3, sjis and hkscs reproduced exactly one observed write instead of zero.
+
+The complete Unicode input is still validated first. The existing8191-scalar boundary is now
+shared by prevalidation and writing. Before acquiring mutation/session ownership, every non-default
+encoding chunk is checked; no whole-CLOB encoded buffer is retained. Default UTF-8 avoids those
+extra encoding copies. Rejection preserves the locator and handle; the same handle then performs
+a successful byte-exact write. Four further default/GB18030-2022 sync/async tests place a
+supplementary scalar at the first chunk's end, checking both chunks' bytes, amounts, one-based
+offsets and returned-locator reuse. Existing server/network partial-write semantics are unchanged.
+See the updated [client charset contract](client-character-sets.md).
+
+An initial one-line whole-input codec check passed18 focused tests and1000 affected consumers, but
+independent review identified proportional temporary encoding allocations. That candidate's full
+unit run was deliberately stopped before completion so the bounded implementation could replace
+it; no full-run aggregate/pass is claimed. The initial affected unit run passed450 and failed1:
+ClientCharsetRejectsMismatchedOrExtraStateAfterOpaqueSql (sync/extra-row/deprecated-EOF) raced the
+client's intentional abort with the fixture's later EOF write. The invalid-response fixture now
+ends after its second row; normal responses still terminate normally. Exact outer OceanBaseException,
+inner ProtocolException and extra-row reason assertions prove the intended validation branch,
+rather than accepting a generic truncated response. Product charset error mapping is unchanged.
+
+The first strengthened assertion incorrectly expected an unwrapped ProtocolException, producing
+24 passes/2 failures. It was corrected against CommandExchange.Fail's existing wrapping contract.
+Final focused26 passed, zero failures/skips. Final serial Release solution build passed with zero
+warnings/errors in7.82s; whitespace format verification exited0 with a workspace-load warning.
+Final complete units7507 passed, zero failures/skips, in8minutes39seconds (TRX wall time8minutes45seconds).
+Final affected units455 and consumers1000 passed, zero failures/skips; consumers took3minutes40seconds
+and load five assets in one.NET10host. Independent final source/tests/docs review has no remaining
+actionable finding; bounded-allocation and exception-shape findings have been addressed.
+Logs/TRX are under ignored TestResults/local-completeness/clob-charset-*; original failures and
+the stopped candidate's log remain. No real database was accessed or compatibility scope expanded.
+
 ## 2026-10-27 Client SQL and parameter character sets
 
 Developed from33c052b on master for P1-08/W5. The new `Character Set` / `CharacterSet`

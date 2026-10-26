@@ -91,7 +91,11 @@ a different connection charset would not establish correct JSON semantics. Stand
 parameters retain the independently verified national encoding. Complex national members already depend on connection charset and
 remain limited to the existing UTF8/UTF16 names; non-UTF8 managed names and the explicit utf8mb3
 name are rejected by that path. CLOB write buffers use ordinary string parameters and therefore
-inherit the selected client encoding and its representability checks. CLOB reads retain the existing
+inherit the selected client encoding. The complete WriteText input is checked for representability
+before its first write chunk, using bounded chunks for encoding checks; a rejected suffix leaves
+the locator and handle usable. Later
+server/network failures can still leave a completed prefix, as documented by the LOB mutation API.
+CLOB reads retain the existing
 UTF-8 contract. LOB locator bytes, binary streams, CLOB storage rules, LOCAL INFILE filename rules
 and remaining extended metadata are not expanded by this option.
 
