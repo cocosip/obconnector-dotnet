@@ -4,6 +4,35 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-26 Session I/O diagnostics completed after checkpoint
+
+Resumed from8291ca6 on master after fetching origin (no remote difference). The saved implementation
+now has a [public metric contract](session-io-diagnostics.md), architecture/README links and two more
+regressions. Parallel pending read/write completions publish exactly once after Finish. A split
+loopback row keeps a sequential TextReader body read blocked: the histogram includes this transport
+wait, while total lifetime minus timed I/O excludes the measured application gap. This tests one
+streaming path, not every wrapper or concurrent transport-disposal interleaving.
+
+Fresh Release solution builds passed with zero warnings/errors (final23.68s). Baseline complete units
+passed7373; final complete units including both additions passed7375 in8m56s. Focused session-I/O/TNS
+units passed89 and affected diagnostics/TNS consumers passed279 in1m50s. All had zero failures/skips.
+Eight isolated runs of the original TNS concurrent-replacement test also passed. Consumer results
+cover five assets in one.NET10host, not independent runtimes. Format verification exited0 with a
+workspace-load warning; final whitespace checks passed. Logs/TRX: ignored
+TestResults/local-completeness/resume-session-io-* and resume-tns-repeat-*.
+
+The historical File.Replace failure below remains unresolved, not retrospectively repaired.
+Readers already allow read/write/delete sharing; .NET forwards the native replacement error.
+Neither missing resolver sharing nor another process/filesystem condition has been established.
+No TNS implementation/assertion change, retry workaround or skipped case was introduced.
+
+Independent read-only source/tests/docs review found no remaining blocker. It corrected an initial
+documentation overclaim: exchange publication follows physical lease release and its registered
+release callback, while higher-level XA/transaction/LOB guards may still prohibit connection reentry.
+The reviewer did not execute tests; the implementer ran the gates above. No real database was accessed.
+Other resource metrics, workload/overhead and external compatibility gates remain open; all23 IDs
+and eight work packages retain their full closure requirements.
+
 ## 2026-10-26 End-of-day development checkpoint: session I/O diagnostics
 
 Saved on master at the user's explicit request to update progress and commit before leaving.

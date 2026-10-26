@@ -89,6 +89,50 @@ namespace OceanBaseConnector.UnitTests
             });
         }
 
+        [Fact]
+        public async Task SessionIoSequentialPayloadIncludesTransportWaitAndExcludesApplicationGap()
+        {
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var server = LoopbackServer.Start(async peer =>
+            {
+                var stream = peer.GetStream(); var channel = new PacketChannel(stream);
+                await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
+                await channel.ReadPacketAsync(); await channel.WritePacketAsync(TimeZone());
+                await ServerIdentity.ReplyAsync(channel); channel.BeginCommand(); await Request(channel, "row");
+                await channel.WritePacketAsync(new byte[] { 1 });
+                await channel.WritePacketAsync(new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 118, 1, 118, 12, 45, 0, 255, 0, 0, 0, 253, 0, 0, 0, 0, 0 });
+                await channel.WritePacketAsync(new byte[] { 254, 0, 0, 2, 0 });
+                // Send the row header and field length, holding only the field's payload.
+                await stream.WriteAsync(new byte[] { 4, 0, 0, 4, 3 });
+                await release.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                await stream.WriteAsync(new byte[] { 65, 66, 67, 5, 0, 0, 5, 254, 0, 0, 2, 0 });
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync(); using var capture = new IoCapture();
+                using var command = connection.CreateCommand(); command.CommandText = "row";
+                var lifetime = Stopwatch.StartNew();
+                using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess);
+                Assert.True(await reader.ReadAsync()); Assert.Empty(capture.Samples);
+                var idle = Stopwatch.StartNew(); await Task.Delay(100); idle.Stop();
+                using (var text = reader.GetTextReader(0))
+                {
+                    var reading = text.ReadToEndAsync();
+                    var blocked = Stopwatch.StartNew(); await Task.Delay(100); blocked.Stop();
+                    Assert.False(reading.IsCompleted); release.TrySetResult();
+                    Assert.Equal("ABC", await reading.WaitAsync(TimeSpan.FromSeconds(5)));
+                    Assert.False(await reader.ReadAsync()); lifetime.Stop();
+                    AssertIo(capture, "success");
+                    var sample = Assert.Single(capture.Samples, value => Equals(value.Tags["oceanbase.protocol.direction"], "read"));
+                    Assert.True(sample.Seconds >= blocked.Elapsed.TotalSeconds);
+                    Assert.True(lifetime.Elapsed.TotalSeconds - capture.Samples.Sum(value => value.Seconds) >= idle.Elapsed.TotalSeconds);
+                }
+            }
+            finally { release.TrySetResult(); connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
@@ -198,6 +242,32 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(mode == OceanBaseCompatibilityMode.Oracle ? "oracle" : "mysql", value.Tags["oceanbase.compatibility_mode"]);
             });
             measurement.Finish(null); Assert.Equal(2, capture.Samples.Length);
+        }
+
+        [Fact]
+        public async Task SessionIoParallelStopsPublishExactlyOnceAfterFinish()
+        {
+            using var capture = new IoCapture();
+            var measurement = DriverDiagnostics.StartSessionIo(OceanBaseCompatibilityMode.Oracle)!;
+            var read = measurement.Start(); var write = measurement.Start();
+            using var ready = new CountdownEvent(2);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            async Task Stop(long started, bool writing)
+            {
+                ready.Signal(); await release.Task;
+                measurement.Stop(started, writing);
+            }
+            var reading = Task.Run(() => Stop(read, false));
+            var writing = Task.Run(() => Stop(write, true));
+            try
+            {
+                Assert.True(ready.Wait(TimeSpan.FromSeconds(5)));
+                measurement.Finish(null); Assert.Empty(capture.Samples);
+            }
+            finally { release.TrySetResult(); }
+            await Task.WhenAll(reading, writing).WaitAsync(TimeSpan.FromSeconds(5));
+            AssertIo(capture, "success");
+            measurement.Finish(new TimeoutException()); Assert.Equal(2, capture.Samples.Length);
         }
 
         [Fact]

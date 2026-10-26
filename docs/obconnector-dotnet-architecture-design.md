@@ -886,6 +886,19 @@ Outcomes are `success`, `error`, `canceled` and `timeout`. `elapsed` specificall
 
 Labels contain no endpoint, username, credential version, SQL, authentication bytes or exception text. Disabled phase instruments create no phase stopwatch object. Listener callbacks execute synchronously and must return promptly; exceptions are isolated and `Activity.Current` is restored. No new configuration switch, Activity span or dependency is required. These local diagnostics do not establish real TLS/OBProxy interoperability or performance limits; slow client profiling has its separate contract above, while protocol diagnostics follow their separate contract above and other resource waits remain open P2-04 work.
 
+### Session protocol I/O durations
+
+The `OceanBaseConnector` meter exposes `oceanbase.client.protocol.io.duration` in
+seconds. One sample accumulates actual packet/payload calls for one direction in one
+command exchange, including internal framing/codec work and protocol observers.
+Application consumption gaps and upload-source reads are excluded. Fixed labels
+are direction, compatibility mode and final exchange outcome; publication follows
+physical lease release, the registered release callback and pending timed calls.
+Higher-level reservation guards may remain active. Listener failures cannot change the
+operation result. See the [full metric contract](session-io-diagnostics.md) for
+scope, enablement, error interpretation and callback/allocation limits. Other
+resource waits and deployment overhead acceptance remain open.
+
 ## MySQL compression
 
 `OceanBaseConnectionStringBuilder.UseCompression` / `Use Compression=true` requests CLIENT_COMPRESS. The default remains false, even when the server advertises compression. A requested capability missing from the greeting fails before the TLS/authentication response; authentication switches and the final authentication OK remain uncompressed. Compression starts after that OK and before OceanBase identity queries, above TLS when TLS is enabled. Both compatibility modes and all five target assets use the same implementation. The option is preserved when selecting an endpoint and is part of the connection configuration used for pool identity.

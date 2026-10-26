@@ -7,10 +7,14 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 ## Current checkpoint
 
 - Development stays on `master`. No new branch/worktree and no implicit push.
-- Last completed delivery: `e0498e9`, HKSCS/HKSCS31 ordinary results.
-- Current work: session protocol I/O duration diagnostics, based on `e0498e9`, saved as a development
-  checkpoint at the user's end-of-day request. Implementation and tests exist; it is not a completed
-  feature delivery. The full unit run has reported a TNS file-replacement failure (see below).
+- Latest local delivery: session protocol I/O duration diagnostics, resumed from `8291ca6`.
+  Its [public contract](session-io-diagnostics.md) and two additional concurrency/streaming regressions
+  are complete. Final complete units passed7,375, focused units89 and affected consumers279, all with
+  zero failures/skips; Release build has zero warnings/errors and independent review has no blocker.
+- Next work: current borrowed-session metrics. Existing `pool.borrowed` counts cumulative borrows;
+  it cannot report current outstanding leases. Other remaining priorities follow below.
+- The historical TNS File.Replace failure remains cause-unconfirmed. Eight isolated runs and both
+  fresh complete runs passed; no TNS source change, retry workaround or skipped assertion was made.
 - At `e0498e9`, there were 67 commits since audit baseline `06d58e1`, including implementation, fixes,
   tests and documentation. This is a commit count, not a count of completed capabilities.
 - HKSCS/HKSCS31 passes 14 core tests, 7,353 complete units and 540 affected consumers, with zero
@@ -21,7 +25,10 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   This does not mean their implemented subfeatures are missing. No honest overall completion
   percentage is available because the IDs combine implementation, scope decisions and deployment gates.
 
-## End-of-day checkpoint: session I/O diagnostics
+## Historical end-of-day checkpoint: session I/O diagnostics
+
+This retains the earlier failed/pending run. The fresh completed delivery is recorded above and in
+the [module ledger](obconnector-dotnet-progress.md#2026-10-26-session-io-diagnostics-completed-after-checkpoint).
 
 - P2-04/W7 implementation adds `oceanbase.client.protocol.io.duration` in seconds, with direction
   (`read`/`write`), mode (`mysql`/`oracle`) and final exchange outcome
@@ -51,7 +58,7 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 
 These are concrete code/scope gaps, not merely missing real-database reports:
 
-1. Finish the current diagnostics module and remaining resource-wait instrumentation (P2-04).
+1. Current borrowed-session metrics and remaining resource-wait instrumentation (P0-01/P2-04).
 2. Client SQL/parameter charset contract and remaining national/JSON/CLOB/extended metadata (P1-08).
 3. Input/InputOutput REF CURSOR, text cursor-valued columns and additional output shapes (P1-06).
 4. Complex LOB/cursor members, additional national/anonymous shapes and whole-complex RETURNING
@@ -95,7 +102,7 @@ approved wire contract or can be implemented without protocol research.
 | P2-01 DataAdapter | Fill/mappings/events, explicit CRUD and bounded automatic CommandBuilder SQL with original-value/NULL/concurrency handling | Query/key/generated-value restrictions remain; EF Core provider is separate scope | Real generated SQL/catalog/locks/concurrency and independent runtimes |
 | P2-02 Statement cache | Opt-in idle LRU, capacity/close, context/schema/reset generation invalidation | Further reprepare/resource/load regressions | Real DDL/reprepare, prepare-count/latency/resource/proxy reports |
 | P2-03 Batch optimization | Sequential Batch, existing Oracle array binding, opt-in bounded MySQL INSERT rewrite with group error attribution | **Multi-send/pipelining and separate bulk protocol are missing** | Actual counts/partial failure, transaction/default/trigger/warning behavior, packet limits and throughput/memory |
-| P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics, connection/ping phase timing, slow-query/cursor thresholds, safe protocol frame events and collectible-load fixes | **Additional resource-wait instrumentation** and workload/overhead validation | Real load, resource curves and listener overhead |
+| P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O durations and collectible-load fixes | **Current borrowed-session metrics and additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
 | P2-05 Runtimes/ecosystem | Five product assets; Windows nupkg protocol subset on actual .NET 8/9/10 and Framework host, plus Standard assets on .NET 10 | Complete promised platform/runtime/API matrix; Framework/ORM support scope; existing savepoint identifier limitations | Non-Windows and full feature/real-database reports on promised runtimes |
 | P2-06 Real compatibility | Acceptance tooling and historical direct-server reports | **Six `matrix.*` cases are still deferred placeholders**; replace with controlled fixtures/assertions; source/license/package/publication review remains | OBProxy, TLS/auth profiles, topology faults, pool reset and external-coordinator XA crash recovery |
 
@@ -129,7 +136,8 @@ These are representative commits, not a replacement for the complete Git log or 
 - Last completed HKSCS/HKSCS31 delivery: full units 7,353 in 8m15s, affected consumers 540 in 2m49s,
   solution build 8.10s; independent review and final whitespace checks pass. The consumers load five
   assets in one .NET 10 host; they do not establish five independently tested runtimes or real storage.
-- Resume the session I/O checkpoint above before another feature. Then tackle remaining offline
+- Session I/O checkpoint completion passed7,375 full units and279 affected consumers; these are
+  local results, with the historical TNS replacement cause still unresolved. Continue offline
   work in reviewable feature commits. Client charset work must reach SQL/parameters/escaping and
   trusted session rules together; a result decoder alone does not implement it.
 - OB20 compression/reroute requires the documented client-link protocol evidence; real proxy testing
