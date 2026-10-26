@@ -110,7 +110,7 @@ namespace OceanBaseConnector.Internal.Session
                     {
                         var session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback, endpointHealth: HealthForGeneration(generation));
                         RegisterCreated(session, generation);
-                        DriverDiagnostics.PoolBorrowed();
+                        TrackBorrowed(session);
                         return session;
                     }
                     catch (ObjectDisposedException)
@@ -131,7 +131,7 @@ namespace OceanBaseConnector.Internal.Session
                         candidate!.Probe(new ConnectionLog(null), options.CommandTimeoutSeconds, cancellationToken);
                         options.Credential?.EnsureValid();
                         reused = true;
-                        DriverDiagnostics.PoolBorrowed();
+                        TrackBorrowed(candidate);
                         return candidate;
                     }
                     catch
@@ -186,7 +186,7 @@ namespace OceanBaseConnector.Internal.Session
                     {
                         var session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback, endpointHealth: HealthForGeneration(generation));
                         RegisterCreated(session, generation);
-                        DriverDiagnostics.PoolBorrowed();
+                        TrackBorrowed(session);
                         return session;
                     }
                     catch (ObjectDisposedException)
@@ -207,7 +207,7 @@ namespace OceanBaseConnector.Internal.Session
                         await candidate!.ProbeAsync(new ConnectionLog(null), options.CommandTimeoutSeconds, cancellationToken)
                             .ConfigureAwait(false);
                         options.Credential?.EnsureValid();
-                        DriverDiagnostics.PoolBorrowed();
+                        TrackBorrowed(candidate);
                         return candidate;
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -260,7 +260,7 @@ namespace OceanBaseConnector.Internal.Session
             foreach (var candidate in disposed) candidate.Dispose();
             if (borrowed)
             {
-                DriverDiagnostics.PoolBorrowed();
+                TrackBorrowed(session!);
                 return true;
             }
             for (var i = 0; i < removed; i++)
@@ -273,6 +273,7 @@ namespace OceanBaseConnector.Internal.Session
 
         internal bool Return(PhysicalSession session, ConnectionLog log, int timeout = 0)
         {
+            EndBorrow(session);
             if (CannotReturn(session))
             {
                 Destroy(session);
@@ -316,6 +317,7 @@ namespace OceanBaseConnector.Internal.Session
         internal async Task<bool> ReturnAsync(PhysicalSession session, ConnectionLog log, int timeout = 0,
             CancellationToken cancellationToken = default)
         {
+            EndBorrow(session);
             if (CannotReturn(session))
             {
                 Destroy(session);
@@ -632,10 +634,12 @@ namespace OceanBaseConnector.Internal.Session
         private void Destroy(PhysicalSession session, bool idleOnly = false)
         {
             var owned = false;
+            var borrowed = false;
             lock (_gate)
             {
                 if (idleOnly && !_idle.Contains(session)) return;
                 owned = _sessions.Remove(session);
+                borrowed = _borrowed.Remove(session);
                 _retiredSessions.Remove(session);
                 if (owned)
                 {
@@ -650,6 +654,7 @@ namespace OceanBaseConnector.Internal.Session
                     ReleaseWaiterSignal();
                 }
             }
+            if (borrowed) DriverDiagnostics.PoolLeaseEnded();
             if (owned)
             {
                 session.Dispose();

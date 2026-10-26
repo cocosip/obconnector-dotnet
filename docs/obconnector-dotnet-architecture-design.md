@@ -886,6 +886,16 @@ Outcomes are `success`, `error`, `canceled` and `timeout`. `elapsed` specificall
 
 Labels contain no endpoint, username, credential version, SQL, authentication bytes or exception text. Disabled phase instruments create no phase stopwatch object. Listener callbacks execute synchronously and must return promptly; exceptions are isolated and `Activity.Current` is restored. No new configuration switch, Activity span or dependency is required. These local diagnostics do not establish real TLS/OBProxy interoperability or performance limits; slow client profiling has its separate contract above, while protocol diagnostics follow their separate contract above and other resource waits remain open P2-04 work.
 
+### Current pool leases
+
+`oceanbase.client.pool.leased` is an untagged UpDownCounter with unit `{session}`.
+Successful pool Rent/TryRent adds one; Return entry or Discard removes it once.
+Reset and idle/prewarm/probe work are excluded; newly rented sessions may still
+be authenticating. Clear/disposal preserves outstanding leases until cleanup.
+The existing `pool.borrowed` remains a cumulative counter. Collection started late
+does not reconstruct an absolute count. See the [pool metric contract](pool-metrics.md)
+for lifecycle, callback, capacity and aggregation limits.
+
 ### Session protocol I/O durations
 
 The `OceanBaseConnector` meter exposes `oceanbase.client.protocol.io.duration` in

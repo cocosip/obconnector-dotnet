@@ -7,12 +7,16 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 ## Current checkpoint
 
 - Development stays on `master`. No new branch/worktree and no implicit push.
-- Latest local delivery: session protocol I/O duration diagnostics, resumed from `8291ca6`.
-  Its [public contract](session-io-diagnostics.md) and two additional concurrency/streaming regressions
-  are complete. Final complete units passed7,375, focused units89 and affected consumers279, all with
-  zero failures/skips; Release build has zero warnings/errors and independent review has no blocker.
-- Next work: current borrowed-session metrics. Existing `pool.borrowed` counts cumulative borrows;
-  it cannot report current outstanding leases. Other remaining priorities follow below.
+- Latest local delivery: current borrowed physical-session metrics, based on `f0edabf`.
+  The [pool contract](pool-metrics.md) distinguishes `leased` deltas from cumulative `borrowed`.
+  Complete units passed7,391, focused units16 and affected consumers140, zero failures/skips;
+  final serial Release build has zero warnings/errors and independent source/tests/docs review has
+  no remaining actionable finding. An earlier parallel build hit a testhost DLL lock; its failure
+  log is retained, and serial retry passed without a source workaround.
+- Previous completed module: session protocol I/O durations (`f0edabf`), with7,375 complete units,
+  89 focused units and279 affected consumers, all passing. See its [contract](session-io-diagnostics.md).
+- Next work: client SQL/parameter charset contract, including trusted session state and escaping.
+  Only initial caller inspection has begun; no expanded client-encoding support is delivered yet.
 - The historical TNS File.Replace failure remains cause-unconfirmed. Eight isolated runs and both
   fresh complete runs passed; no TNS source change, retry workaround or skipped assertion was made.
 - At `e0498e9`, there were 67 commits since audit baseline `06d58e1`, including implementation, fixes,
@@ -58,8 +62,8 @@ the [module ledger](obconnector-dotnet-progress.md#2026-10-26-session-io-diagnos
 
 These are concrete code/scope gaps, not merely missing real-database reports:
 
-1. Current borrowed-session metrics and remaining resource-wait instrumentation (P0-01/P2-04).
-2. Client SQL/parameter charset contract and remaining national/JSON/CLOB/extended metadata (P1-08).
+1. Client SQL/parameter charset contract and remaining national/JSON/CLOB/extended metadata (P1-08).
+2. Remaining resource-wait instrumentation and workload/overhead validation (P2-04).
 3. Input/InputOutput REF CURSOR, text cursor-valued columns and additional output shapes (P1-06).
 4. Complex LOB/cursor members, additional national/anonymous shapes and whole-complex RETURNING
    identity (P1-07).
@@ -102,7 +106,7 @@ approved wire contract or can be implemented without protocol research.
 | P2-01 DataAdapter | Fill/mappings/events, explicit CRUD and bounded automatic CommandBuilder SQL with original-value/NULL/concurrency handling | Query/key/generated-value restrictions remain; EF Core provider is separate scope | Real generated SQL/catalog/locks/concurrency and independent runtimes |
 | P2-02 Statement cache | Opt-in idle LRU, capacity/close, context/schema/reset generation invalidation | Further reprepare/resource/load regressions | Real DDL/reprepare, prepare-count/latency/resource/proxy reports |
 | P2-03 Batch optimization | Sequential Batch, existing Oracle array binding, opt-in bounded MySQL INSERT rewrite with group error attribution | **Multi-send/pipelining and separate bulk protocol are missing** | Actual counts/partial failure, transaction/default/trigger/warning behavior, packet limits and throughput/memory |
-| P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O durations and collectible-load fixes | **Current borrowed-session metrics and additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
+| P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics including current leases, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O durations and collectible-load fixes | **Additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
 | P2-05 Runtimes/ecosystem | Five product assets; Windows nupkg protocol subset on actual .NET 8/9/10 and Framework host, plus Standard assets on .NET 10 | Complete promised platform/runtime/API matrix; Framework/ORM support scope; existing savepoint identifier limitations | Non-Windows and full feature/real-database reports on promised runtimes |
 | P2-06 Real compatibility | Acceptance tooling and historical direct-server reports | **Six `matrix.*` cases are still deferred placeholders**; replace with controlled fixtures/assertions; source/license/package/publication review remains | OBProxy, TLS/auth profiles, topology faults, pool reset and external-coordinator XA crash recovery |
 

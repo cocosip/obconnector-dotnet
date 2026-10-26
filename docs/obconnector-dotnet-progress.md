@@ -4,6 +4,39 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-26 Current borrowed physical-session metrics
+
+Developed fromf0edabf on master for P0-01/P2-04. The existing untagged pool meter adds
+`oceanbase.client.pool.leased`, an UpDownCounter with unit `{session}`. The cumulative `borrowed`
+counter is preserved. Per-pool membership tracks Rent/RentAsync/TryRent and ends each lease once at
+Return entry or Discard; reset, idle/prewarm/probe work are excluded. Clear/disposal keeps outstanding
+leases counted until cleanup. Newly rented sessions can still be authenticating during logical Open.
+See the [complete pool metric contract](pool-metrics.md), including late-listener deltas and capacity
+limits. No new dependency, setting or product callback registration was introduced.
+
+Initial RED10 failed with expected1/actual0, proving the missing metric. GREEN10 then expanded16
+passed without failures/skips: creation/reuse, clear/disposal, warmup/TryRent, canceled waits, foreign/
+duplicate discard, reset success/failure, rejected public authentication, greeting/identity cancellation,
+concurrent duplicate cleanup and a metric callback clearing the pool on another thread. The affected
+pool subset passed63; complete units passed7391 in8m48s, zero failures/skips. Affected consumers
+passed76 plus64 distinct handoff cases (140 total), no failures/skips;40 new cases cover five assets,
+both modes, sync/async and observer exceptions/Activity mutation in one.NET10host. This does not
+independently verify five runtimes or prove eventual ALC collection; source review found no new static
+pool-retention callback. Format verification exited0 with a workspace-load warning; whitespace passes.
+
+Release solution build initially passed with zero warnings/errors in15.94s. A later build was
+incorrectly run alongside the full unit host and failed MSB3027/MSB3021 after10 file-copy retries for
+locked xunit.abstractions.dll. This was a verification scheduling error; its log is retained.
+After the test host exited, the final serial Release solution build passed in1.82s with zero
+warnings/errors. No source workaround or change to build policy was introduced.
+Logs/TRX are under ignored TestResults/local-completeness/pool-leases-*; original RED and locked-build
+outputs remain. Independent read-only source/tests/docs review has no remaining actionable finding;
+its two missing-regression findings were addressed by cancellation-after-borrow and cross-thread
+pool-management callback tests. The reviewer did not run builds/tests; execution gates were run here.
+
+No real database was accessed. Other resource waits, workload/overhead, sustained limits and full
+deployment matrices remain open; none of the23 gap IDs or eight work packages is closed by this metric.
+
 ## 2026-10-26 Session I/O diagnostics completed after checkpoint
 
 Resumed from8291ca6 on master after fetching origin (no remote difference). The saved implementation

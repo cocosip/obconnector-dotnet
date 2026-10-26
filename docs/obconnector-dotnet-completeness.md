@@ -4,9 +4,9 @@
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
 **最近复核：** 2026-10-26，恢复8291ca6检查点；保持master，全部23项及八工作包仍开放。
-**最近已完成模块：** P2-04/W7会话协议I/O耗时指标及公共契约，见[交付记录](obconnector-dotnet-progress.md#2026-10-26-session-io-diagnostics-completed-after-checkpoint)和[指标文档](session-io-diagnostics.md)。
-**当前开发中：** 当前借出物理会话指标；已有borrowed只表示累计借用次数，不能替代当前租约数。
-**当前验证：** 最终完整单测7375、专项89、受影响消费者279通过，均零失败/跳过；Release构建零警告/错误，源码/测试/文档独立走查无剩余阻断。历史TNS文件替换失败根因仍未确认，本次八次独立及两次完整运行均未复现；没有修改TNS或添加绕过。
+**最近完成模块：** 会话协议I/O耗时（f0edabf）及当前借出物理会话指标，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-26-current-borrowed-physical-session-metrics)和[池指标契约](pool-metrics.md)。
+**下一项：** P1-08客户端SQL/参数字符集；已初查SqlPacket、PreparedParameters及可信literal状态路径，尚未新增编码配置或扩大输入字符集承诺。
+**当前验证：** 当前借出会话指标最终完整单测7391、专项16、受影响消费者140通过，均零失败/跳过；最终串行Release构建零警告/错误，独立走查无剩余阻断。构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，前一模块八次独立及两次完整运行均未复现；没有修改TNS或添加绕过。
 **剩余开发：** 客户端SQL/参数字符集、输入/双向及文本REF CURSOR、复杂LOB/游标成员、压缩OB20/代理reroute、多发送/独立bulk及六项验收占位等，逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
 当前模块未访问真实数据库；后续仍需其他资源指标、负载及完整部署验收。历史TNS及12项greeting前失败保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
@@ -117,7 +117,7 @@ The overview separates remaining development from real-environment validation; h
 | 复杂类型 | 部分实现 | 标量及嵌套 object/collection 有路径；NCHAR/NVARCHAR2成员已有有界实现；LOB/cursor、其他national存储/匿名结果及复杂整列RETURNING身份、循环和文本结果仍受限；可观察 DDL 发送时自动失效已有本地实现，外部/不透明 DDL 须显式清理，真实 DDL 验收仍缺 |
 | Schema 元数据 | 部分实现 | Oracle 20/MySQL 18 个集合、静态 DataTypes 及自动参数推导已有本地实现；后者只读目录，不扩大过程执行范围。真实目录/权限矩阵仍缺，见 [Schema 契约](schema.md)及第 15.18 节 |
 | 批处理和准备缓存 | 部分实现 | `DbBatch` 默认顺序；opt-in MySQL INSERT rewrite见第15.72节，multi-send/bulk仍缺；已有有限物理会话缓存，真实缓存/负载验收仍缺 |
-| 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter`、池生命周期指标及建连/探活分段已有本地实现；慢命令阈值、协议帧诊断及[会话I/O耗时](session-io-diagnostics.md)已有本地实现；当前借出会话数、其他资源等待和完整部署性能验收仍缺 |
+| 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter`、含当前租约数的[池指标](pool-metrics.md)及建连/探活分段已有本地实现；慢命令阈值、协议帧诊断及[会话I/O耗时](session-io-diagnostics.md)已有本地实现；其他资源等待和完整部署性能验收仍缺 |
 | 真实兼容性 | 部分验证 | 当前记录主要是 Windows/.NET 10、直连 OceanBase 4.4.2.2、TLS disabled；Oracle 失败及未覆盖矩阵仍须闭合 |
 
 ## 3. 完整驱动的目标边界
@@ -164,7 +164,7 @@ The overview separates remaining development from real-environment validation; h
 | P2-01 | P2 | DataAdapter | 部分实现；本地模块 | 同步填充、映射/事件、显式或自动参数化 CRUD；保留可见行键、生成值回填、复杂形状限制，补真实 CRUD/并发/运行时验收 |
 | P2-02 | P2 | Statement cache | 部分实现 | 有限 idle LRU、上下文/reset 失效和关闭已有本地实现；真实 DDL/reprepare、资源/负载/代理与运行时验收仍缺 |
 | P2-03 | P2 | 批处理优化 | 部分实现 | opt-in INSERT rewrite及合并组失败归属已有本地路径；multi-send/bulk及真实负载验收仍缺 |
-| P2-04 | P2 | 诊断 | 部分实现 | 建连/探活分段、慢命令阈值、协议帧及会话I/O耗时已有本地实现；补当前借出会话指标、其他资源等待及性能验收 |
+| P2-04 | P2 | 诊断 | 部分实现 | 建连/探活分段、慢命令阈值、协议帧、会话I/O耗时及当前池租约指标已有本地实现；补其他资源等待及性能验收 |
 | P2-05 | P2 | TFM/生态 | 部分验证；诊断卸载缺陷已修复 | 每个TFM的正式支持矩阵和package consumer验收；第15.58节保留原默认CLR崩溃与条件通过；第15.59节保留诊断卸载修复；第15.74节新增Windows六配置nupkg协议子集，完整运行时/平台/实库矩阵仍缺 |
 | P2-06 | P2（扩展矩阵）/ 发布阻塞（承诺范围） | 真实兼容性 | 部分验证 | 承诺范围必须有真实版本、OBProxy、TLS、认证、平台和故障报告，扩展范围再分期 |
 
@@ -196,7 +196,7 @@ The overview separates remaining development from real-environment validation; h
 
 当前 `Pooling=true` 已由 [PhysicalSessionPool.cs](../src/OceanBaseConnector/Internal/Session/PhysicalSessionPool.cs) 管理物理会话；逻辑连接关闭时通过 `COM_RESET_CONNECTION` 清理服务端状态，MySQL 模式再用 `COM_INIT_DB` 恢复非空初始 database；Oracle 模式不发送 `COM_INIT_DB`，而在 reset 成功后显式设置并验证自动提交（第 5.1.5 节）。MySQL 模式的 reset 和借用探活都会要求服务端明确返回 `Autocommit` 状态位；缺失该状态时物理会话立即销毁。池已支持最大容量、等待超时、等待取消、最小池预热及失败回滚、借用前 `COM_PING` 存活探测、连接空闲/总生命周期回收、最小空闲保留规则、空池 registry 清理和池生命周期指标；每次 Open 使用独立的取消和 generation，过期的 Open 完成会被拒绝。可识别的用户 `SET`、`ALTER SESSION` 和临时对象语句会让物理会话归还时销毁，避免把无法由当前 reset 证据覆盖的状态交给下一借用者；旧池已 Dispose 时，同一逻辑连接会重新取得 registry 中的新池。Closed 回调更换配置并重开的池归属已由 `06d58e1` 修复并有回归；真正多线程 Close/Open 和等待取消交错仍需压力验证。完整资源 reset 和真实 OceanBase/OBProxy reset 兼容性仍需验证。
 
-当前已接入的指标名称为 `oceanbase.client.pool.sessions`、`borrowed`、`waiters`、`discarded`、`reset.failures` 和 `wait.duration`，分别记录物理会话数、借用次数、等待者数、销毁次数、reset 失败次数和池等待耗时。它们证明本地生命周期可观测，不证明真实服务器兼容性。
+当前已接入的指标名称为 `oceanbase.client.pool.sessions`、`leased`、`borrowed`、`waiters`、`discarded`、`reset.failures` 和 `wait.duration`，分别记录注册物理会话数、当前借出物理租约增减、累计借用次数、等待者数、销毁次数、reset 失败次数和池等待耗时。`leased`在归还入口即减少，不计reset；迟接入监听器只得到后续增减量，不能重建绝对值。完整边界见[池指标契约](pool-metrics.md)。它们证明本地生命周期可观测，不证明真实服务器兼容性。
 
 显式清理入口为所有资产的 `OceanBaseConnection.ClearPool(connection)` / `ClearAllPools()`，以及现代 `OceanBaseDataSource.Clear()`。清池关闭闲置会话，借出会话不被中断、归还时销毁；清理前在途建连/预热也不能把旧代次会话留作后续复用。ClearAllPools 只处理普通 registry 池，私有源需显式 Clear。详见 [清池 API 契约](obconnector-dotnet-architecture-design.md#explicit-pool-clearing)。
 

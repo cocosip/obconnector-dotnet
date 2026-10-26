@@ -14,6 +14,7 @@ namespace OceanBaseConnector.Internal
         private static readonly Histogram<double>? Duration = Create(() => Meter?.CreateHistogram<double>("oceanbase.client.operation.duration", "s"));
         private static readonly UpDownCounter<long>? PoolSessions = Create(() => Meter?.CreateUpDownCounter<long>("oceanbase.client.pool.sessions", "{session}"));
         private static readonly Counter<long>? PoolBorrows = Create(() => Meter?.CreateCounter<long>("oceanbase.client.pool.borrowed", "{borrow}"));
+        private static readonly UpDownCounter<long>? PoolLeases = Create(() => Meter?.CreateUpDownCounter<long>("oceanbase.client.pool.leased", "{session}"));
         private static readonly UpDownCounter<long>? PoolWaiters = Create(() => Meter?.CreateUpDownCounter<long>("oceanbase.client.pool.waiters", "{waiter}"));
         private static readonly Counter<long>? PoolDiscards = Create(() => Meter?.CreateCounter<long>("oceanbase.client.pool.discarded", "{session}"));
         private static readonly Counter<long>? PoolResetFailures = Create(() => Meter?.CreateCounter<long>("oceanbase.client.pool.reset.failures", "{failure}"));
@@ -39,6 +40,8 @@ namespace OceanBaseConnector.Internal
         internal static void PoolSessionAdded() => Add(PoolSessions, 1);
         internal static void PoolSessionRemoved() => Add(PoolSessions, -1);
         internal static void PoolBorrowed() => Add(PoolBorrows, 1);
+        internal static void PoolLeaseStarted() => Add(PoolLeases, 1);
+        internal static void PoolLeaseEnded() => Add(PoolLeases, -1);
         internal static void PoolWaiterAdded() => Add(PoolWaiters, 1);
         internal static void PoolWaiterRemoved() => Add(PoolWaiters, -1);
         internal static void PoolDiscarded() => Add(PoolDiscards, 1);
