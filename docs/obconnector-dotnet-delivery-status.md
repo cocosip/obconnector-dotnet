@@ -7,9 +7,11 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 ## Current checkpoint
 
 - Development stays on `master`. No new branch/worktree and no implicit push.
-- Current delivery: HKSCS/HKSCS31 ordinary results, developed from `4ce3a35` (Big5).
-  This overview is delivered with that feature; its commit is identifiable in the Git log.
-- At `4ce3a35`, there were 66 commits since audit baseline `06d58e1`, including implementation, fixes,
+- Last completed delivery: `e0498e9`, HKSCS/HKSCS31 ordinary results.
+- Current work: session protocol I/O duration diagnostics, based on `e0498e9`, saved as a development
+  checkpoint at the user's end-of-day request. Implementation and tests exist; it is not a completed
+  feature delivery. The full unit run has reported a TNS file-replacement failure (see below).
+- At `e0498e9`, there were 67 commits since audit baseline `06d58e1`, including implementation, fixes,
   tests and documentation. This is a commit count, not a count of completed capabilities.
 - HKSCS/HKSCS31 passes 14 core tests, 7,353 complete units and 540 affected consumers, with zero
   failures/skips. Release solution build has zero warnings/errors; independent source/tests/docs
@@ -18,6 +20,52 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 - None of the 23 original gap IDs or eight work packages has met its complete closure criteria.
   This does not mean their implemented subfeatures are missing. No honest overall completion
   percentage is available because the IDs combine implementation, scope decisions and deployment gates.
+
+## End-of-day checkpoint: session I/O diagnostics
+
+- P2-04/W7 implementation adds `oceanbase.client.protocol.io.duration` in seconds, with direction
+  (`read`/`write`), mode (`mysql`/`oracle`) and final exchange outcome
+  (`success`/`error`/`canceled`/`timeout`). Packet/payload calls are accumulated per exchange and
+  published after ownership release; pending timed I/O delays publication. Disabled async wrappers
+  return the original tasks. No new dependency or public setting is introduced.
+- This includes framing/copy/codec work and existing synchronous protocol observers inside those
+  calls. Application consumption gaps, LOCAL INFILE source-stream reads and the new histogram
+  callbacks are excluded. Enabled async wrappers may allocate state machines; this is not a
+  socket-only timer or a measured overhead guarantee.
+- Observed verification: initial RED 8 failures, focused GREEN 20 passed, affected consumers 215
+  passed, all with zero skips; Release solution build has zero warnings/errors. Consumers load five
+  assets in one .NET 10 host. Independent source/tests review found no blocking findings; timing and
+  allocation wording was corrected. Logical pending-I/O interleaving is covered, not parallel stress.
+- The full unit run is not green: it reported
+  `TnsAddressResolverTests.ConcurrentReadersUseCompleteSnapshotsAndMissingFilesHaveNoFallback`
+  failing at the publisher's `File.Replace` with `IOException` (cannot delete the replaced file).
+  Its isolated recheck passed 1/1 on the same built artifact. Root cause is unresolved; the isolated
+  pass does not erase the full-run failure. No TNS source/test changes or retry workaround were made.
+- At this checkpoint the full run has not returned a terminal result, so no final aggregate is
+  claimed. Logs/TRX are under ignored `TestResults/local-completeness/session-io-*`.
+- Resume by collecting the terminal full-run result, investigating the exact file-replacement
+  failure, completing diagnostics API/architecture documentation, rerunning affected gates as needed
+  and reviewing before calling this module delivered. No real database was accessed for this module.
+
+## Remaining implementation priorities
+
+These are concrete code/scope gaps, not merely missing real-database reports:
+
+1. Finish the current diagnostics module and remaining resource-wait instrumentation (P2-04).
+2. Client SQL/parameter charset contract and remaining national/JSON/CLOB/extended metadata (P1-08).
+3. Input/InputOutput REF CURSOR, text cursor-valued columns and additional output shapes (P1-06).
+4. Complex LOB/cursor members, additional national/anonymous shapes and whole-complex RETURNING
+   identity (P1-07).
+5. Compressed OB20/proxy reroute, after establishing the client-link wire contract (P1-02).
+6. Multi-send/pipelining or a separate bulk protocol, after establishing supported semantics (P2-03).
+7. Replace the six deferred acceptance placeholders with controlled fixtures/assertions (P2-06):
+   TLS/authentication, OB20/trace negotiation, topology failover, unknown network outcome, pool reset
+   and XA crash recovery. These need their corresponding environments or fault controls.
+
+Pool/session/transaction concurrency and resource boundaries, complete command/adapter restrictions,
+runtime/platform coverage and deployment gates also remain, as mapped individually below. Distributed
+ambient promotion and transparent active-session replay are unsupported and need explicit scope
+decisions; they are not promised by existing single-resource or reconnect APIs.
 
 ## All 23 gaps: implementation versus remaining work
 
@@ -70,6 +118,7 @@ These are representative commits, not a replacement for the complete Git log or 
 | Batch metadata/result limits/rewrite and statement cache | `27bd176`, `7976fb3`, `6fc1891`, `f15716e` |
 | Core type/charset corrections and result families | `2bbecac`, `6b357f0`, `4810907`, `6e2197c`, `94fcd85`, `7d05ce4`, `f3c484d`, `7c1a602` |
 | MySQL string fallback and further result charsets | `0484943`, `d842fee`, `37a0aba`, `4821d54`, `4ce3a35` |
+| HKSCS/HKSCS31 ordinary result decoding | `e0498e9` |
 | Diagnostics and packaged runtime protocol verification | `b2fce9d`, `5ea71b2`, `ffceec8`, `d7a5354`, `e3a07a2` |
 
 ## Verification boundary and next work
@@ -77,11 +126,11 @@ These are representative commits, not a replacement for the complete Git log or 
 - Previous completed feature, Big5: 7 core tests, 698 focused units, 7,262 complete units and 500 affected
   consumers passed with no failures/skips; Release solution build and independent review passed.
   These are that commit's results, not a fresh verification of every subsequent candidate.
-- Current HKSCS/HKSCS31 delivery: full units 7,353 in 8m15s, affected consumers 540 in 2m49s,
+- Last completed HKSCS/HKSCS31 delivery: full units 7,353 in 8m15s, affected consumers 540 in 2m49s,
   solution build 8.10s; independent review and final whitespace checks pass. The consumers load five
   assets in one .NET 10 host; they do not establish five independently tested runtimes or real storage.
-- Next enumerate the remaining pinned collation/type/metadata cases and tackle the remaining offline
-  work above in reviewable feature commits. Client charset work must reach SQL/parameters/escaping and
+- Resume the session I/O checkpoint above before another feature. Then tackle remaining offline
+  work in reviewable feature commits. Client charset work must reach SQL/parameters/escaping and
   trusted session rules together; a result decoder alone does not implement it.
 - OB20 compression/reroute requires the documented client-link protocol evidence; real proxy testing
   cannot be replaced with a direct database connection.

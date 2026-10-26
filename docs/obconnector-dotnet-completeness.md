@@ -3,11 +3,12 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-26；基于4ce3a35的HKSCS/HKSCS31普通结果；全部23项及八工作包仍开放，已交付子功能单列于进度总览。
-**当前模块：** P1-08/W5；完整性第15.79节；此前GB18030-2022、DEC8/TIS620、SJIS、Big5见第15.75—15.78节。
-**当前验证：** 原RED14失败；GREEN14、完整单测7353及受影响消费者540通过，均零失败/跳过；Release构建零警告/错误，独立走查无遗留阻断。
-**本次补充：** 全部八个HKSCS/HKSCS31 collation ID、固定源码映射摘要、补充平面增量解码；新增全部23项交付总览，分开标记剩余开发和外部验收。
-本模块无新增实库兼容性证据；历史12项greeting前失败保留原记录。
+**最近复核：** 2026-10-26下班检查点；保持master，按用户要求保存开发中代码及进度；全部23项及八工作包仍开放。
+**最近已完成模块：** e0498e9，P1-08/W5 HKSCS/HKSCS31普通结果，第15.79节；其完整单测7353及受影响消费者540通过，均零失败/跳过。
+**当前开发中：** 基于e0498e9的P2-04/W7会话协议I/O耗时指标；代码及测试已写，尚未达到功能交付门槛。详见[下班检查点](obconnector-dotnet-progress.md#2026-10-26-end-of-day-development-checkpoint-session-io-diagnostics)。
+**当前验证：** 专项20及受影响消费者215通过，均零失败/跳过；Release构建零警告/错误，源码/测试独立走查无阻断。完整单测已报告TNS并发文件发布File.Replace失败，单项复跑1/1通过；根因未定，完整运行尚无最终汇总，不算全绿。
+**剩余开发：** 客户端SQL/参数字符集、输入/双向及文本REF CURSOR、复杂LOB/游标成员、压缩OB20/代理reroute、多发送/独立bulk及六项验收占位等，逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
+当前模块未访问真实数据库；后续需收集完整测试终态、定位TNS失败并补齐诊断契约文档及交付验证。历史12项greeting前失败保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
 **文档性质：** 能力审计、公共目标契约与验收基线；已实现、部分实现、明确缺失、未验证和开发检查点分开记录。23 项及八工作包尚未整体完成。

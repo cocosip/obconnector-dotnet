@@ -4,6 +4,45 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-26 End-of-day development checkpoint: session I/O diagnostics
+
+Saved on master at the user's explicit request to update progress and commit before leaving.
+Base is e0498e9, the last completed HKSCS/HKSCS31 feature. This checkpoint includes in-progress
+source/tests; it does not satisfy the normal completed-feature gate. No push, branch/worktree or
+real database operation was performed for this checkpoint. The
+[delivery overview](obconnector-dotnet-delivery-status.md) lists all23 gap IDs and remaining work.
+
+P2-04/W7 now has optional per-exchange read/write accumulation and the histogram
+`oceanbase.client.protocol.io.duration` (seconds), bounded mode/direction/final-outcome labels,
+deferred publication until ownership release and pending I/O completion, observer exception isolation
+and Activity.Current restoration. Buffered/sequential reads, queued statement closes and LOCAL INFILE
+packet writes use the wrappers; application upload-source reads are excluded. Timing includes the
+framing/copy/codec and existing synchronous protocol observers inside each timed call. Enabled async
+wrappers may allocate state machines; disabled wrappers directly return the underlying tasks.
+
+Initial RED8 failed because the metric was absent. Focused20 passed with no failures/skips, including
+sync/async success, SQL ERR, streaming completion, listener reentry/throwing/restoration, transport
+faults, cancellation/timeout and logical pending-Finish/empty/disabled cases. Release solution build
+passed in5.46seconds with zero warnings/errors. Affected consumers215 passed with no failures/skips
+in47seconds; the10 added cases load five assets on one.NET10host. Independent source/tests review
+found no blocking code findings, and the two timing/allocation wording findings were resolved.
+This is not true parallel stress or independently timed coverage of every path.
+
+The full unit run reported a failure in
+TnsAddressResolverTests.ConcurrentReadersUseCompleteSnapshotsAndMissingFilesHaveNoFallback,
+at TnsAddressResolverTests.cs:206: File.Replace threw IOException because the replaced file could not
+be deleted. The resolver already shares read/write/delete access. The isolated recheck passed1/1
+in200ms on the same built artifact. Root cause remains unresolved; neither an environmental cause
+nor a diagnostics regression has been established. No publisher/resolver workaround was added.
+At this checkpoint the full run has not returned a terminal result; no final full-suite count is
+claimed. Keep the original failure visible rather than treating the isolated pass as full success.
+Evidence logs/TRX remain under ignored TestResults/local-completeness/session-io-*.
+
+Resume with the terminal full-suite result and exact file-replacement investigation, then finish
+diagnostics API/architecture documentation and applicable test/review gates. Further resource-wait
+metrics/load evidence and the other23-gap requirements remain open; this checkpoint is not acceptance
+or release approval. The previous HKSCS record below remains the latest completed local module.
+
 ## 2026-10-26 HKSCS and HKSCS31 ordinary results
 
 Developed from4ce3a35 on master for P1-08/W5. HKSCS IDs152/336/351/366 and HKSCS31

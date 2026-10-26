@@ -13,7 +13,7 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 EnsureReading();
-                var raw = _channel.OpenPayload();
+                var raw = OpenPayload();
                 var payload = new CommandPayload(this, raw);
                 payload.Start(); CountPacket();
                 if (payload.FirstByte == 255) CheckPacket(payload.ReadAll(), count: false);
@@ -28,7 +28,7 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 EnsureReading();
-                var raw = await _channel.OpenPayloadAsync(_budget.Token).ConfigureAwait(false);
+                var raw = await OpenPayloadAsync().ConfigureAwait(false);
                 var payload = new CommandPayload(this, raw);
                 await payload.StartAsync(token).ConfigureAwait(false); CountPacket();
                 if (payload.FirstByte == 255) CheckPacket(await payload.ReadAllAsync(token).ConfigureAwait(false), count: false);
@@ -69,12 +69,12 @@ namespace OceanBaseConnector.Internal.Session
 
             internal void Start()
             {
-                if (_raw.Read(_one, 0, 1) != 1) throw new ProtocolException("Empty command response packet.");
+                if (ReadRaw(_one, 0, 1) != 1) throw new ProtocolException("Empty command response packet.");
             }
 
             internal async Task StartAsync(CancellationToken token)
             {
-                if (await _raw.ReadAsync(_one, 0, 1, _exchange._budget.Token).ConfigureAwait(false) != 1)
+                if (await ReadRawAsync(_one, 0, 1).ConfigureAwait(false) != 1)
                     throw new ProtocolException("Empty command response packet.");
             }
 
@@ -87,7 +87,7 @@ namespace OceanBaseConnector.Internal.Session
                     if (count == 0) return 0;
                     if (_prefixPending) { buffer[offset] = FirstByte; _prefixPending = false; _consumed++; return 1; }
                     if (_raw.IsComplete) return 0;
-                    var read = _raw.Read(buffer, offset, count); _consumed += read; return read;
+                    var read = ReadRaw(buffer, offset, count); _consumed += read; return read;
                 }
                 catch (Exception error) { throw _exchange.Fail(error); }
             }
@@ -101,7 +101,7 @@ namespace OceanBaseConnector.Internal.Session
                     if (count == 0) return 0;
                     if (_prefixPending) { buffer[offset] = FirstByte; _prefixPending = false; _consumed++; return 1; }
                     if (_raw.IsComplete) return 0;
-                    var read = await _raw.ReadAsync(buffer, offset, count, _exchange._budget.Token).ConfigureAwait(false);
+                    var read = await ReadRawAsync(buffer, offset, count).ConfigureAwait(false);
                     _consumed += read; return read;
                 }
                 catch (Exception error) { throw _exchange.Fail(_exchange.ReaderCanceled(error, token)); }
@@ -111,6 +111,21 @@ namespace OceanBaseConnector.Internal.Session
             {
                 if (Read(_one, 0, 1) != 1) throw _exchange.Fail(new ProtocolException("Truncated row field."));
                 return _one[0];
+            }
+
+            private int ReadRaw(byte[] buffer, int offset, int count)
+            {
+                var started = _exchange._io?.Start() ?? 0;
+                try { return _raw.Read(buffer, offset, count); }
+                finally { _exchange._io?.Stop(started, write: false); }
+            }
+            private Task<int> ReadRawAsync(byte[] buffer, int offset, int count) => _exchange._io == null
+                ? _raw.ReadAsync(buffer, offset, count, _exchange._budget.Token) : TimedReadRawAsync(buffer, offset, count);
+            private async Task<int> TimedReadRawAsync(byte[] buffer, int offset, int count)
+            {
+                var started = _exchange._io?.Start() ?? 0;
+                try { return await _raw.ReadAsync(buffer, offset, count, _exchange._budget.Token).ConfigureAwait(false); }
+                finally { _exchange._io?.Stop(started, write: false); }
             }
 
             internal async Task<int> ReadByteAsync(CancellationToken token)

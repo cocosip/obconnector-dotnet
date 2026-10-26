@@ -48,6 +48,7 @@ namespace OceanBaseConnector.Internal.Session
         internal CommandExchange(PhysicalSession session, ConnectionLog log, int timeout, CancellationToken caller, Action release, bool logCommand = true, object? owner = null, Func<CancellationToken>? cancellationOrigin = null, Func<string, Stream?>? localInfileStreamFactory = null, long openGeneration = 0)
         {
             _session = session;
+            _io = DriverDiagnostics.StartSessionIo(session.Info!.Mode);
             OpenGeneration = openGeneration;
             _log = log;
             _release = release;
@@ -175,10 +176,10 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 foreach (var id in _statementCloses)
-                { BeginSend(false); _channel.WritePacket(PreparedStatement.ClosePacket(id)); ResponseComplete(expectsResponse: false); }
+                { BeginSend(false); WritePacket(PreparedStatement.ClosePacket(id)); ResponseComplete(expectsResponse: false); }
                 _statementCloses = Array.Empty<uint>();
                 BeginSend(executesSql);
-                _channel.WritePacket(request, 0, count ?? request.Length);
+                WritePacket(request, count);
             }
             catch (Exception error) { throw Fail(error); }
         }
@@ -189,24 +190,24 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 foreach (var id in _statementCloses)
-                { BeginSend(false); await _channel.WritePacketAsync(PreparedStatement.ClosePacket(id), _budget.Token).ConfigureAwait(false); ResponseComplete(expectsResponse: false); }
+                { BeginSend(false); await WritePacketAsync(PreparedStatement.ClosePacket(id)).ConfigureAwait(false); ResponseComplete(expectsResponse: false); }
                 _statementCloses = Array.Empty<uint>();
                 BeginSend(executesSql);
-                await _channel.WritePacketAsync(request, 0, count ?? request.Length, _budget.Token).ConfigureAwait(false);
+                await WritePacketAsync(request, count).ConfigureAwait(false);
             }
             catch (Exception error) { throw Fail(ReaderCanceled(error, readerToken)); }
         }
 
         internal byte[] Receive(bool allowUnsupportedPrepare = false)
         {
-            try { return CheckPacket(_channel.ReadPacket(), allowUnsupportedPrepare: allowUnsupportedPrepare); }
+            try { return CheckPacket(ReadPacket(), allowUnsupportedPrepare: allowUnsupportedPrepare); }
             catch (Exception error) { throw Fail(error); }
         }
 
         internal async Task<byte[]> ReceiveAsync(CancellationToken cancellationToken, bool allowUnsupportedPrepare = false)
         {
             using var registration = cancellationToken.Register(Cancel);
-            try { return CheckPacket(await _channel.ReadPacketAsync(_budget.Token).ConfigureAwait(false), allowUnsupportedPrepare: allowUnsupportedPrepare); }
+            try { return CheckPacket(await ReadPacketAsync().ConfigureAwait(false), allowUnsupportedPrepare: allowUnsupportedPrepare); }
             catch (Exception error)
             {
                 throw Fail(!_terminal && cancellationToken.IsCancellationRequested
@@ -251,9 +252,9 @@ namespace OceanBaseConnector.Internal.Session
                 if (read == 0) break;
                 total = checked(total + read);
                 if (total > _channel.MaxPacketSize) throw new ProtocolException("LOCAL INFILE payload exceeds the maximum packet size.");
-                _channel.WritePacket(buffer, 0, read);
+                WritePacket(buffer, read);
             }
-            _channel.WritePacket(Array.Empty<byte>());
+            WritePacket(Array.Empty<byte>());
         }
 
         private async Task UploadLocalInfileAsync(byte[] request, CancellationToken readerToken)
@@ -269,9 +270,9 @@ namespace OceanBaseConnector.Internal.Session
                 if (read == 0) break;
                 total = checked(total + read);
                 if (total > _channel.MaxPacketSize) throw new ProtocolException("LOCAL INFILE payload exceeds the maximum packet size.");
-                await _channel.WritePacketAsync(buffer, 0, read, _budget.Token).ConfigureAwait(false);
+                await WritePacketAsync(buffer, read).ConfigureAwait(false);
             }
-            await _channel.WritePacketAsync(Array.Empty<byte>(), _budget.Token).ConfigureAwait(false);
+            await WritePacketAsync(Array.Empty<byte>()).ConfigureAwait(false);
         }
 
         private Stream OpenLocalInfileStream(string filename)
@@ -401,6 +402,7 @@ namespace OceanBaseConnector.Internal.Session
 #if NET8_0_OR_GREATER
             if (error != null) BatchFailed?.Invoke();
 #endif
+            _io?.Finish(error);
             _diagnostics?.Finish(_session.Info!.Mode, error, slow);
             if (slow)
             {

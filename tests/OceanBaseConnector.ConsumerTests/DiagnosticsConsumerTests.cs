@@ -48,6 +48,16 @@ namespace OceanBaseConnector.ConsumerTests
         [InlineData("net8.0", "slow.throw")]
         [InlineData("net9.0", "slow.throw")]
         [InlineData("net10.0", "slow.throw")]
+        [InlineData("netstandard2.0", "io")]
+        [InlineData("netstandard2.1", "io")]
+        [InlineData("net8.0", "io")]
+        [InlineData("net9.0", "io")]
+        [InlineData("net10.0", "io")]
+        [InlineData("netstandard2.0", "io.throw")]
+        [InlineData("netstandard2.1", "io.throw")]
+        [InlineData("net8.0", "io.throw")]
+        [InlineData("net9.0", "io.throw")]
+        [InlineData("net10.0", "io.throw")]
         public async Task EveryAssetPublishesSafeDiagnosticsWithoutInitializationPoisoning(string target, string failure)
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -67,6 +77,7 @@ namespace OceanBaseConnector.ConsumerTests
             var context = new AssemblyLoadContext("diagnostics-" + target, true);
             var armed = false; var spans = new List<Activity>(); var counts = new List<KeyValuePair<string, object?>[]>();
             var phases = new List<(double Value, string? Unit, KeyValuePair<string, object?>[] Tags)>();
+            var io = new List<(double Value, string? Unit, KeyValuePair<string, object?>[] Tags)>();
             var slow = new List<(long Value, string? Unit, KeyValuePair<string, object?>[] Tags)>();
             using var activities = new ActivityListener
             {
@@ -92,6 +103,12 @@ namespace OceanBaseConnector.ConsumerTests
             });
             metrics.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
             {
+                if (instrument.Name == "oceanbase.client.protocol.io.duration")
+                {
+                    io.Add((value, instrument.Unit, tags.ToArray()));
+                    if (failure == "io.throw") throw new InvalidOperationException("private-io-listener-token");
+                    return;
+                }
                 if (instrument.Name != "oceanbase.client.connection.phase.duration") return;
                 phases.Add((value, instrument.Unit, tags.ToArray()));
                 if (failure == "phase") throw new InvalidOperationException("private-phase-listener-token");
@@ -101,8 +118,21 @@ namespace OceanBaseConnector.ConsumerTests
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
                 using var connection = (DbConnection)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!)!;
                 connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;Password=secret;TLS Mode=Disabled;Slow Query Threshold={(profile ? 1 : 0)}";
-                await connection.OpenAsync(budget.Token); using var command = connection.CreateCommand(); command.CommandText = "secret sql";
+                await connection.OpenAsync(budget.Token); io.Clear(); using var command = connection.CreateCommand(); command.CommandText = "secret sql";
                 Assert.Equal(0, await command.ExecuteNonQueryAsync(budget.Token));
+                if (failure.StartsWith("io", StringComparison.Ordinal))
+                {
+                    Assert.Equal(2, io.Count);
+                    Assert.Equal(new object?[] { "read", "write" }, io.Select(sample => sample.Tags.Single(tag => tag.Key == "oceanbase.protocol.direction").Value));
+                    Assert.All(io, sample =>
+                    {
+                        Assert.Equal("s", sample.Unit); Assert.True(double.IsFinite(sample.Value) && sample.Value >= 0);
+                        Assert.Equal(3, sample.Tags.Length);
+                        Assert.Contains(sample.Tags, tag => tag.Key == "oceanbase.compatibility_mode" && Equals(tag.Value, "oracle"));
+                        Assert.Contains(sample.Tags, tag => tag.Key == "oceanbase.outcome" && Equals(tag.Value, "success"));
+                        Assert.DoesNotContain("secret", string.Join(";", sample.Tags));
+                    });
+                }
                 if (failure == "normal" || failure == "phase" || profile)
                 {
                     Assert.Equal(new[] { "oceanbase.open", "oceanbase.execute" }, spans.Select(x => x.OperationName)); Assert.Equal(2, counts.Count);

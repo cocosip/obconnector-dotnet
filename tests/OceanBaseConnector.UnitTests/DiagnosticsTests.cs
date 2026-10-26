@@ -19,7 +19,7 @@ namespace OceanBaseConnector.UnitTests
     public sealed class DiagnosticsCollection { }
 
     [Collection("Driver diagnostics")]
-    public sealed class DiagnosticsTests
+    public sealed partial class DiagnosticsTests
     {
         private readonly ITestOutputHelper _output;
         public DiagnosticsTests(ITestOutputHelper output) => _output = output;
