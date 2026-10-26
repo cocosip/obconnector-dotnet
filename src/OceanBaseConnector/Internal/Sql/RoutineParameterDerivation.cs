@@ -97,6 +97,14 @@ namespace OceanBaseConnector.Internal.Sql
             return rows.ToArray();
         }
 
+        internal static bool RequiresCharacterLength(DataRow row)
+        {
+            var raw = RequiredText(row, "DATA_TYPE").Trim().ToUpperInvariant();
+            if (raw.Length > 512) throw Invalid("Invalid argument type length.");
+            var type = Dimensions.Replace(raw, "");
+            return type == "VARCHAR2" || type == "VARCHAR" || type == "CHAR" || type == "NCHAR" || type == "NVARCHAR2";
+        }
+
         internal static OceanBaseParameter Map(DataRow row, bool mysql, bool tinyAsBoolean, OceanBaseComplexType? complex = null)
         {
             var rawType = RequiredText(row, "DATA_TYPE").Trim().ToUpperInvariant();
@@ -169,6 +177,14 @@ namespace OceanBaseConnector.Internal.Sql
                 switch (type)
                 {
                     case "NUMBER": case "DECIMAL": case "NUMERIC": case "INTEGER": parameter.OceanBaseDbType = OceanBaseDbType.Decimal; break;
+                    case "FLOAT":
+                    case "NUMBER_FLOAT":
+                        var binaryPrecision = Integer(row, "NUMERIC_PRECISION"); var floatingScale = Integer(row, "NUMERIC_SCALE");
+                        if (rawType != type || binaryPrecision.HasValue && binaryPrecision != -1 && (binaryPrecision < 1 || binaryPrecision > 126) ||
+                            floatingScale.HasValue && floatingScale != -85 && floatingScale != -1)
+                            throw Invalid("Oracle FLOAT requires binary precision 1 through 126 or unknown, and variable scale.");
+                        // Binary precision is not a decimal parameter constraint; the server applies the FLOAT declaration.
+                        parameter.OceanBaseDbType = OceanBaseDbType.Decimal; return parameter;
                     case "BINARY_FLOAT": parameter.OceanBaseDbType = OceanBaseDbType.Single; break;
                     case "BINARY_DOUBLE": parameter.OceanBaseDbType = OceanBaseDbType.Double; break;
                     case "PLS_INTEGER": case "BINARY_INTEGER": parameter.OceanBaseDbType = OceanBaseDbType.Int32; break;

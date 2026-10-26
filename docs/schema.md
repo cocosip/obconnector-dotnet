@@ -45,10 +45,18 @@ Derivation requires CommandType.StoredProcedure and an open idle connection, res
 | MySQL FLOAT/DOUBLE/REAL, YEAR, BIT | Plain floating types map to Single/Double; unsigned and dimensioned floating declarations fail because the current API/codec cannot preserve their constraints. YEAR accepts the ordinary declaration or (4); other dimensions/attributes fail. BIT(1..64) retains its width in Size. |
 | MySQL strings/binary/temporal | Character lengths use character count; binary lengths use octets and must fit Size. JSON, DATE, DATETIME/TIMESTAMP and TIME use existing provider types; fractional seconds are limited to 6. |
 | Oracle numeric/temporal | NUMBER/DECIMAL/NUMERIC/INTEGER use Decimal and nullable precision/DecimalScale; NUMBER retains scale -84..127. BINARY_FLOAT/DOUBLE, PLS_INTEGER/BINARY_INTEGER, DATE, TIMESTAMP/TZ/LTZ and intervals use existing mappings and precision limits. Unsupported variants fail. |
+| Oracle FLOAT/NUMBER_FLOAT | Plain directory names accept binary precision1..126 or NULL/-1, and variable scale NULL/-85/-1. Derived Decimal parameters retain Precision0 and undeclared scale, binding through NUMBER246; server FLOAT declarations apply coercion/rounding. Dimensioned DATA_TYPE strings and other precision/fixed-scale shapes fail. |
 | Oracle text/binary/LOB/cursor | VARCHAR2/VARCHAR/CHAR, NCHAR/NVARCHAR2, RAW, BLOB/CLOB and output/return REF CURSOR map to existing provider types. Character length and binary octet length remain distinct. Input/InputOutput cursor remains unsupported. |
 | Oracle named types | OBJECT/TABLE/VARRAY load the existing descriptor on the same reserved session/transaction. Incomplete TYPE_OWNER/TYPE_NAME pairs, package-local types and existing unsupported complex members fail. |
 
 NULL DATA_TYPE rows are retained for validation; they cannot silently become an empty signature. Missing or duplicate argument positions, inconsistent identity and unsupported attributes fail with original parameters retained. Permission errors propagate with their server code/SQL state. This uses INFORMATION_SCHEMA.ROUTINES/PARAMETERS or ALL_PROCEDURES/ALL_ARGUMENTS plus existing named-type queries. Local protocol and consumer evidence does not establish actual directory privileges, server parsing, version differences or OBProxy compatibility.
+
+Oracle IN/OUT and INOUT normalize to INOUT. Public ProcedureParameters retains raw
+FLOAT/NUMBER_FLOAT names and numeric metadata. Derivation first omits CHAR_LENGTH;
+only the five Oracle character families query it separately, requiring an otherwise
+identical signature. Character Size never falls back to DATA_LENGTH bytes. Servers
+without CHAR_LENGTH can therefore derive numeric signatures, while character
+signatures still fail with the original server error and preserve existing parameters.
 
 ## DataTypes and CLR mappings
 

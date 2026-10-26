@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.IO;
@@ -20,7 +21,23 @@ namespace OceanBaseConnector.ConsumerTests
     {
         [Theory]
         [MemberData(nameof(DecimalScaleAssets))]
-        public async Task EveryAssetDerivesRoutineParametersWithSignedScaleAndAtomicFailure(string target, bool asynchronous, bool mysql)
+        public Task EveryAssetDerivesRoutineParametersWithSignedScaleAndAtomicFailure(string target, bool asynchronous, bool mysql)
+            => VerifyRoutineDerivation(target, asynchronous, mysql);
+
+        public static IEnumerable<object[]> OracleFloatDerivationAssets()
+        {
+            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+                foreach (var asynchronous in new[] { false, true })
+                    foreach (var type in new[] { "FLOAT", "NUMBER_FLOAT" })
+                        yield return new object[] { target, asynchronous, type };
+        }
+
+        [Theory]
+        [MemberData(nameof(OracleFloatDerivationAssets))]
+        public Task EveryAssetDerivesAndExecutesOracleFloatWithoutDecimalPrecision(string target, bool asynchronous, string type)
+            => VerifyRoutineDerivation(target, asynchronous, mysql: false, type);
+
+        private static async Task VerifyRoutineDerivation(string target, bool asynchronous, bool mysql, string? floatType = null)
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
@@ -47,6 +64,12 @@ namespace OceanBaseConnector.ConsumerTests
                     var request = await Read(); Assert.Equal(22, request[0]);
                     var sql = Encoding.UTF8.GetString(request, 1, request.Length - 1);
                     Assert.Contains(mysql ? arguments ? "INFORMATION_SCHEMA.PARAMETERS" : "INFORMATION_SCHEMA.ROUTINES" : arguments ? "ALL_ARGUMENTS" : "ALL_PROCEDURES", sql);
+                    if (!mysql && arguments)
+                    {
+                        Assert.Contains("WHEN IN_OUT IN ('IN/OUT', 'INOUT') THEN 'INOUT'", sql);
+                        Assert.Contains("DATA_TYPE IN ('NUMBER', 'FLOAT', 'NUMBER_FLOAT') THEN DATA_PRECISION", sql);
+                        Assert.Contains("NULL AS CHARACTER_LENGTH", sql);
+                    }
                     var values = mysql ? arguments ? new object[] { "PROCEDURE", "db", "proc" } : new object[] { "db", "proc" }
                         : arguments ? new object[] { 1, "OWNER", "PROC" } : new object[] { "OWNER", "OWNER", "PROC" };
                     await channel.WritePacketAsync(new byte[] { 0, id, 0, 0, 0, 0, 0, (byte)values.Length, 0, 0, 0, 0 }, budget.Token);
@@ -58,7 +81,8 @@ namespace OceanBaseConnector.ConsumerTests
                     if (arguments)
                     {
                         names = names.Concat(new[] { "PARAMETER_NAME", "ORDINAL_POSITION", "PARAMETER_MODE", "DATA_TYPE", "DATA_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION", "TYPE_OWNER", "TYPE_NAME", "TYPE_SUBNAME", "TYPE_DECLARATION", "CHARACTER_LENGTH", "DECLARED_PRECISION", "DECLARED_SCALE" }).ToArray();
-                        row = row.Concat(new[] { "amount", "1", "INOUT", mysql ? "decimal" : "NUMBER", null, "3", mysql ? "1" : "-2", null, null, null, null, mysql ? "decimal(3,1)" : null, null, null, null }).ToArray();
+                        row = row.Concat(new[] { "amount", "1", "INOUT", floatType ?? (mysql ? "decimal" : "NUMBER"), null, floatType != null ? "126" : "3",
+                            floatType != null ? "-85" : mysql ? "1" : "-2", null, null, null, null, mysql ? "decimal(3,1)" : null, null, null, null }).ToArray();
                     }
                     await channel.WritePacketAsync(new[] { (byte)names.Length }, budget.Token);
                     foreach (var name in names) await channel.WritePacketAsync(Column(name), budget.Token);
@@ -74,6 +98,20 @@ namespace OceanBaseConnector.ConsumerTests
                         await channel.WritePacketAsync(payload.ToArray(), budget.Token);
                     }
                     await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);
+                    if (arguments && floatType != null)
+                    {
+                        var encoded = PreparedParameters.Encode(new[] { new OceanBaseParameter { Value = 7.2500m } }, OceanBaseCompatibilityMode.Oracle);
+                        Assert.Equal(OraclePrepareExecutePacket.Build(0, "BEGIN owner.proc(?); END;", 1, encoded), await Read());
+                        await channel.WritePacketAsync(new byte[] { 0, 91, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 1 }, budget.Token);
+                        var number = Column("amount"); number[^6] = 206; number[^3] = 171; number[^2] = 126;
+                        await channel.WritePacketAsync(number, budget.Token);
+                        await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);
+                        await channel.WritePacketAsync(number, budget.Token);
+                        await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);
+                        await channel.WritePacketAsync(new byte[] { 0, 0, 6, 56, 46, 53, 48, 48, 48 }, budget.Token);
+                        await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);
+                        await channel.WritePacketAsync(new byte[] { 0, 0, 0, 6, 0, 0, 0 }, budget.Token);
+                    }
                 }
                 channel.BeginCommand();
                 Assert.Equal(new byte[] { 25, 73, 0, 0, 0 }, await channel.ReadPacketAsync(budget.Token));
@@ -84,7 +122,7 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target)); var connectionType = assembly.GetType("OceanBaseConnector.OceanBaseConnection")!;
                 using var connection = (DbConnection)Activator.CreateInstance(connectionType)!;
-                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled";
+                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Use Oracle Prepare Execute={floatType != null}";
                 if (asynchronous) await connection.OpenAsync(budget.Token); else connection.Open();
                 if (mysql)
                 {
@@ -108,7 +146,15 @@ namespace OceanBaseConnector.ConsumerTests
                 }
                 await Derive(); var parameter = Assert.IsAssignableFrom<DbParameter>(command.Parameters[0]);
                 Assert.NotSame(original, parameter); Assert.Equal("amount", parameter.ParameterName); Assert.Equal(ParameterDirection.InputOutput, parameter.Direction);
-                Assert.Equal(3, parameter.Precision); Assert.Equal(mysql ? 1 : -2, parameter.GetType().GetProperty("DecimalScale")!.GetValue(parameter)); Assert.Equal(DBNull.Value, parameter.Value);
+                Assert.Equal(floatType != null ? 0 : 3, parameter.Precision);
+                Assert.Equal(floatType != null ? (int?)null : mysql ? 1 : -2, parameter.GetType().GetProperty("DecimalScale")!.GetValue(parameter)); Assert.Equal(DBNull.Value, parameter.Value);
+                if (floatType != null)
+                {
+                    parameter.Value = 7.2500m;
+                    Assert.Equal(0, asynchronous ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
+                    Assert.Equal("OceanBaseConnector.OceanBaseDecimal", parameter.Value!.GetType().FullName);
+                    Assert.Equal("8.5000", parameter.Value.ToString());
+                }
                 await Assert.ThrowsAsync<NotSupportedException>(Derive);
                 Assert.Same(parameter, Assert.Single(command.Parameters.Cast<DbParameter>())); Assert.Equal(ConnectionState.Open, connection.State);
                 connection.Close(); await serving.WaitAsync(budget.Token);

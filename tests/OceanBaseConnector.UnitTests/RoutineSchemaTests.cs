@@ -67,7 +67,13 @@ namespace OceanBaseConnector.UnitTests
                 if (!mysql)
                 {
                     Assert.Contains("CAST(OVERLOAD AS VARCHAR2(40)) AS OVERLOAD", sql);
-                    if (parameters) { Assert.Contains("DATA_LEVEL = 0", sql); Assert.Contains("DATA_TYPE IS NOT NULL", sql); Assert.Contains("POSITION = 0", sql); Assert.Contains("'IN/OUT'", sql); }
+                    if (parameters)
+                    {
+                        Assert.Contains("DATA_LEVEL = 0", sql); Assert.Contains("DATA_TYPE IS NOT NULL", sql); Assert.Contains("POSITION = 0", sql);
+                        Assert.Contains("WHEN IN_OUT IN ('IN/OUT', 'INOUT') THEN 'INOUT'", sql);
+                        Assert.Contains("DATA_TYPE IN ('NUMBER', 'FLOAT', 'NUMBER_FLOAT') THEN DATA_PRECISION", sql);
+                        Assert.Contains("DATA_TYPE IN ('NUMBER', 'FLOAT', 'NUMBER_FLOAT') THEN DATA_SCALE", sql);
+                    }
                     else { Assert.Contains("PROCEDURE_NAME IS NOT NULL", sql); Assert.Contains("'PACKAGE'", sql); }
                 }
                 foreach (var packet in RoutinePackets(parameters, mysql)) await channel.WritePacketAsync(packet);

@@ -1,5 +1,19 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Oracle FLOAT routine derivation
+
+Oracle FLOAT/NUMBER_FLOAT directory signatures now derive Decimal parameters without
+copying binary precision into decimal constraints. Both IN/OUT and INOUT normalize
+correctly, and public ProcedureParameters retains raw numeric metadata. Numeric
+derivation no longer queries CHAR_LENGTH; character signatures still require actual
+character lengths and an unchanged signature. Missing CHAR_LENGTH remains an explicit
+character-derivation failure, preserving the server error and original parameters.
+See the [contract](obconnector-dotnet-architecture-design.md#routine-parameter-derivation)
+and [module ledger](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation).
+New real procedure/function tests are compiled only. The preceding module's initial
+greeting failures remain separate evidence; actual DDL/derive/INOUT and old-server
+compatibility are unverified. All23 IDs/eight packages remain open.
+
 ## 2026-10-27 Oracle NUMBER_FLOAT results
 
 Oracle result206 now uses exact OceanBaseDecimal in both row protocols. FLOAT schema

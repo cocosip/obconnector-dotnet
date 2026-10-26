@@ -3,14 +3,15 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27，基于b94a421开发；保持master，全部23项及八工作包仍开放。
-**最近完成模块：** P1-08 Oracle NUMBER_FLOAT206精确结果、binary precision元数据及CommandBuilder绑定；完整单测7578、专项204及受影响消费者229通过，独立走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-results)及第15.83节。2项实库和2项既有NUMBER对照均在初始握手失败，未完成认证或SQL，不能声称FLOAT存储成功。
+**最近复核：** 2026-10-27，基于184a767开发；保持master，全部23项及八工作包仍开放。
+**最近完成模块：** P1-08/P1-10 Oracle FLOAT/NUMBER_FLOAT参数派生、INOUT目录归一及按需字符长度补查；完整单测7656、专项189及受影响消费者168通过，独立最终走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation)及第15.84节。新增实库过程/函数用例仅编译，未运行。
+**此前完成模块：** Oracle NUMBER_FLOAT206精确结果、binary precision元数据及CommandBuilder绑定（184a767）；完整单测7578、专项204及受影响消费者229通过，独立走查无遗留问题，见第15.83节。2项实库和2项既有NUMBER对照均在初始握手失败，未完成认证或SQL，不能声称FLOAT存储成功。
 此前JSON客户端字符集（b94a421）完整单测7543、专项111、消费者570通过；其10项实库与2项默认字符集对照握手失败保留在第15.82节。
 此前CLOB整输入预校验（1da3ea8）、客户端SQL/参数字符集（b66cda1）、会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录；[输入字符集契约](client-character-sets.md)记录当前边界。
-**当前验证：** FLOAT模块完整单测7578、专项204、受影响消费者229通过，均零失败/跳过；串行Release构建零警告/错误，格式验证通过（workspace-load warning），独立源码/测试/文档走查无剩余可操作问题。此前JSON、字符集及CLOB结果与原始失败保留于各自历史台账，不覆盖本轮实库握手失败。
+**当前验证：** 参数派生完整单测7656、专项189、受影响消费者168通过，均零失败/跳过；串行Release构建零警告/错误，格式验证通过（workspace-load warning），独立最终源码/测试/文档/报告走查无遗留问题。此前FLOAT结果、JSON、字符集及CLOB结果与原始失败保留于各自历史台账。
 **历史限制：** 前一模块构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，八次独立及后续完整运行未复现；没有修改TNS或添加绕过。
 **剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向及文本REF CURSOR、复杂LOB/游标成员、压缩OB20/代理reroute、多发送/独立bulk及六项验收占位等，逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
-本轮2项Oracle FLOAT实库及2项既有NUMBER对照连接尝试均止于初始greeting，未完成认证或SQL，服务器/网络根因未明；后续仍需其他资源指标、负载及完整部署验收。历史JSON/TNS及本轮握手失败均保留原记录。
+前一模块2项Oracle FLOAT实库及2项既有NUMBER对照连接尝试均止于初始greeting，未完成认证或SQL，服务器/网络根因未明；后续仍需其他资源指标、负载及完整部署验收。历史JSON/TNS及握手失败均保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\dotnet-code\obconnector-dotnet`；参考本仓库源码/测试及 `D:\java-code\obconnector-j` 固定源码。
 **文档性质：** 能力审计、公共目标契约与验收基线；已实现、部分实现、明确缺失、未验证和开发检查点分开记录。23 项及八工作包尚未整体完成。
@@ -92,8 +93,8 @@ The overview separates remaining development from real-environment validation; h
 | 类型/性能 | 嵌套complex/DDL失效、字符集/NUMBER/scale、idle cache、分段/慢命令诊断 | 扩展成员/其余形状、批量优化、其他资源等待诊断及负载 |
 | 发布 | 五资产本地消费和部分直连报告 | 承诺版本/平台/独立运行时/OBProxy/TLS/认证/故障及包发布验收 |
 
-当前开发点：客户端SQL/参数编码见第15.80节；组TCP上限及地址级覆盖保留第15.64/15.65节。
-具体已交付、验证结果和仍欠功能见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-client-sql-and-parameter-character-sets)及[交付总览](obconnector-dotnet-delivery-status.md)。
+当前开发点：Oracle FLOAT参数派生见第15.84节；客户端SQL/参数编码保留第15.80节，组TCP上限及地址级覆盖保留第15.64/15.65节。
+具体已交付、验证结果和仍欠功能见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation)及[交付总览](obconnector-dotnet-delivery-status.md)。
 
 ## 2. 当前能力基线
 
@@ -2843,6 +2844,34 @@ before authentication or SQL; no real FLOAT storage/version/proxy success is cla
 FLOAT routine derivation, new complex member codecs and other missing shapes remain;
 all23 IDs/eight packages remain open. Earlier NUMBER_FLOAT-open statements are historical
 to their recorded candidates, including15.69.
+
+### 15.84 2026-10-27 Oracle FLOAT routine derivation
+
+P1-08/P1-10, W5/W6, developed from184a767 on master. FLOAT/NUMBER_FLOAT signatures
+derive existing Decimal parameters with Precision0 and undeclared scale. Binary
+precision1..126 or NULL/-1 and variable scale NULL/-85/-1 are accepted; dimensioned
+DATA_TYPE/fixed-scale/other precision shapes fail. Exact NUMBER246 binding leaves
+server FLOAT coercion/rounding intact. MySQL FLOAT remains Single. Shared directory
+SQL recognizes IN/OUT and INOUT and exposes raw NUMBER_FLOAT numeric metadata.
+
+The pinned ALL_ARGUMENTS view lacks CHAR_LENGTH. Oracle argument discovery now omits
+it first and only queries it for five character families, with unchanged bound
+criteria/session/transaction and full other-column signature comparison. Character
+Size still uses character count, never byte length. Missing CHAR_LENGTH preserves
+the server error and original parameters; old-server character derivation remains
+unsupported when this metadata is absent. No API/enum/dependency was added.
+
+The [contract](obconnector-dotnet-architecture-design.md#routine-parameter-derivation)
+and [module ledger](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation)
+record fixed sources,78 new units,20 new five-asset consumers, original RED/stopped
+fixture evidence and review corrections. Focused189 and affected consumers168 passed,
+zero failures/skips; Release build has zero warnings/errors, format exited0 with a
+workspace-load warning. Complete units7656 passed in8m49s, zero failures/skips;
+final independent source/tests/docs/report review has no remaining actionable issue. New real
+procedure/function cases compile only; no real DDL/derive/INOUT/rounding/version/proxy
+success is claimed. Previous greeting failures retain their independent records.
+All23 IDs/eight packages remain open;15.83's FLOAT-derivation-open statement describes
+its earlier candidate rather than this implementation.
 
 ## 16. 剩余交付工作包
 

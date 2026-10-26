@@ -35,7 +35,7 @@ namespace OceanBaseConnector.UnitTests
             table.Rows.Add(row); return table;
         }
 
-        private static async Task ServeDerivationTable(PacketChannel channel, byte id, DataTable table, bool mysql, bool arguments, object[] values, Func<Task<bool>>? beforeReply = null, string? package = null)
+        private static async Task ServeDerivationTable(PacketChannel channel, byte id, DataTable table, bool mysql, bool arguments, object[] values, Func<Task<bool>>? beforeReply = null, string? package = null, bool characterLengths = false)
         {
             byte[] prepare;
             do { channel.BeginCommand(); prepare = await ReadClientCommand(channel); } while (prepare[0] == 25);
@@ -45,8 +45,14 @@ namespace OceanBaseConnector.UnitTests
             Assert.DoesNotContain("LIKE", sql);
             if (arguments)
             {
-                Assert.Contains(mysql ? "DTD_IDENTIFIER AS TYPE_DECLARATION" : "CHAR_LENGTH AS CHARACTER_LENGTH", sql);
-                if (!mysql) { Assert.DoesNotContain("DATA_TYPE IS NOT NULL", sql); Assert.Contains(package == null ? "PACKAGE_NAME IS NULL" : "PACKAGE_NAME = ?", sql); Assert.Contains("SUBPROGRAM_ID = ?", sql); }
+                Assert.Contains(mysql ? "DTD_IDENTIFIER AS TYPE_DECLARATION" : characterLengths ? "CHAR_LENGTH AS CHARACTER_LENGTH" : "NULL AS CHARACTER_LENGTH", sql);
+                if (!mysql)
+                {
+                    Assert.DoesNotContain("DATA_TYPE IS NOT NULL", sql); Assert.Contains(package == null ? "PACKAGE_NAME IS NULL" : "PACKAGE_NAME = ?", sql); Assert.Contains("SUBPROGRAM_ID = ?", sql);
+                    Assert.Contains("WHEN IN_OUT IN ('IN/OUT', 'INOUT') THEN 'INOUT'", sql);
+                    Assert.Contains("DATA_TYPE IN ('NUMBER', 'FLOAT', 'NUMBER_FLOAT') THEN DATA_PRECISION", sql);
+                    Assert.Contains("DATA_TYPE IN ('NUMBER', 'FLOAT', 'NUMBER_FLOAT') THEN DATA_SCALE", sql);
+                }
             }
             await Prepared(channel, id, (ushort)values.Length);
             var bound = values.Select(v => new OceanBaseParameter { Value = v }).ToArray();

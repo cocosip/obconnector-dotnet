@@ -4,6 +4,58 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Oracle FLOAT routine derivation
+
+Developed from184a767 on master for P1-08/P1-10, W5/W6. Oracle FLOAT and NUMBER_FLOAT
+directory signatures now map to existing Decimal parameters with Precision0 and no
+declared scale. Binary precision1..126 or NULL/-1 and variable scale NULL/-85/-1 are
+accepted; dimensioned DATA_TYPE strings and other metadata shapes fail. Exact NUMBER246
+binding leaves FLOAT coercion/rounding to the server. MySQL FLOAT remains Single.
+Shared routine SQL recognizes IN/OUT and INOUT and retains NUMBER_FLOAT numeric
+metadata for public ProcedureParameters. No public API/enum/dependency was added.
+The [contract](obconnector-dotnet-architecture-design.md#routine-parameter-derivation)
+links fixed OceanBase5d6cb5c directory/type sources; these establish NUMBER_FLOAT,
+raw precision/scale and INOUT, not real deployment success.
+
+Independent review found that the pinned ALL_ARGUMENTS view has no CHAR_LENGTH,
+while derivation previously requested it even for numeric signatures. Oracle arguments
+now first query NULL for that field. Only VARCHAR2/VARCHAR/CHAR/NCHAR/NVARCHAR2 require
+a second query using the same reserved session/transaction and bound criteria; every
+other signature column must match before accepting character lengths. Size never uses
+DATA_LENGTH bytes as character count. A missing column or changing signature preserves
+original parameters; older servers without CHAR_LENGTH still reject character signatures
+with the original server error. This does not claim general old-server derivation support.
+
+Seventy-eight new units cover metadata boundaries, all directions and function return,
+actual derived function execution with exact NUMBER input/206 outputs, failed publication,
+and character-length success/mismatch/error with connection reuse. Twenty new consumer
+cases derive and execute INOUT for both aliases, sync/async, across five assets in one
+.NET10 host. Existing NUMBER/MySQL fixture branches remain; this is not five independent
+runtime validations. New opt-in procedure/function cases (four per Oracle createObjects
+profile) compile in the solution but were not run live. The preceding module's two
+FLOAT and two NUMBER-control initial-greeting failures remain historical, with unknown
+server/network cause; no new real DDL/derive/INOUT/rounding/version/proxy success is claimed.
+
+Verification: final serial Release solution build3 passed, zero warnings/errors,15.42s.
+Focused units189 passed in3s and affected consumers168 passed in1m5s, zero failures/skips;
+this is a filtered consumer run. Changed-file format verification exited0 with the
+workspace-load warning. Complete units7656 passed, zero failures/skips, in8m49s;
+comparison with the preceding7578 report confirms78 additions and no removed cases.
+
+Original reports are retained under ignored TestResults/local-completeness/float-derive-*.
+The first test-source build failed on two compile typos; corrected RED60 had54 failures/
+6 passes, then GREEN72 and expanded focused175 passed. The initial broad consumer run
+was intentionally stopped after review found its fixture waiting for execution before
+completing directory rows/EOF; its terminal exit1 and stopped reason remain, with no
+passing result claimed. Moving execution after the full directory response produced
+the20-case smoke pass. CHAR_LENGTH RED4/4 failed before the two-stage fix; final focused189
+and consumers168 use the final source. Independent source/test review also corrected
+function cleanup registration and verified atomic publication with no remaining actionable
+finding. Final independent source/tests/docs/report review passed with no remaining
+actionable issue; the reviewer read evidence and did not execute the gates.
+All23 audit IDs and eight work packages remain open; full consumers/DI, packages,
+independent runtimes, real servers and deployment acceptance were not rerun.
+
 ## 2026-10-27 Oracle FLOAT results
 
 Developed from b94a421 on master for P1-08/W5. Oracle result206 now reports FLOAT

@@ -435,7 +435,8 @@ DataTypes advertises `FLOAT({0})` with binary precision1..126, no fixed scale an
 OceanBaseDecimal. Rebinding and generated CommandBuilder CRUD parameters use existing
 NUMBER246 binding with no copied binary precision/scale. A manually supplied parameter
 Precision continues to mean decimal digits. There is no new FLOAT parameter enum,
-IEEE conversion, FLOAT routine-derivation support or new complex member codec.
+IEEE conversion or new complex member codec. Routine derivation accepts FLOAT and
+NUMBER_FLOAT using the existing Decimal binding described below.
 Scalar PL outputs and existing NUMBER-array output metadata can also receive206.
 
 Source contract is pinned to OceanBase
@@ -651,6 +652,29 @@ Success replaces the parameter collection with fresh DBNull-valued parameters or
 The operation reserves one physical session across routine, argument and named-type queries. It uses CommandTimeout for each query, with no total-duration guarantee. CancellationToken, Cancel and Dispose cover the operation and query gaps; a canceled in-flight request follows the existing connection-break/unknown-outcome rules. Directory permission errors retain the server error code and SQL state. Each routine/argument directory table is bounded to 1024 rows and 4 MiB of UTF-8 string content; named descriptors retain the existing complex-type member/depth/cache bounds.
 
 Supported mappings and rejection boundaries are listed in the [Schema contract](schema.md#parameter-derivation). Directory, privilege, server-version and OBProxy interoperability require separate real-server validation.
+
+Oracle FLOAT/NUMBER_FLOAT directory declarations accept binary precision1..126 or
+SQL NULL/-1 (unknown), and scale SQL NULL/-85/-1 (variable). Dimensioned DATA_TYPE
+strings and other precision/fixed-scale shapes fail. Derived Decimal parameters keep
+Precision0 and undeclared scale, using exact NUMBER246 binding; the server's FLOAT
+declaration applies coercion/rounding. MySQL FLOAT retains its existing Single mapping.
+ProcedureParameters retains the directory type spelling and raw numeric metadata;
+both IN/OUT and INOUT directory spellings normalize to INOUT.
+
+Oracle argument discovery first omits CHAR_LENGTH. Only VARCHAR2/VARCHAR/CHAR/NCHAR/
+NVARCHAR2 signatures require a second query for actual character lengths, on the same
+reserved session/transaction and bound criteria. Every other signature field must
+match before lengths are accepted. Size uses characters, never DATA_LENGTH bytes.
+If CHAR_LENGTH is unavailable, character derivation retains the server error and
+original parameter collection; numeric signatures do not require that column.
+
+The pinned OceanBase5d6cb5c
+[ALL_ARGUMENTS view](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/share/inner_table/ob_inner_table_schema.25051_25100.cpp)
+exposes raw parameter precision/scale and INOUT, with no CHAR_LENGTH. Its virtual
+type table uses
+[inner_obj_type_str](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/common/object/ob_obj_type.cpp),
+which names ObNumberFloatType NUMBER_FLOAT. These source contracts and local tests
+do not establish real DDL, derivation, rounding or old-server compatibility success.
 
 <a id="mysql-stored-procedures-development-checkpoint"></a>
 

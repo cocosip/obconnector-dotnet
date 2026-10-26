@@ -84,9 +84,26 @@ namespace OceanBaseConnector
                 }
             }
             using var arguments = CreateRoutineDirectoryTable(true, true);
-            command.CommandText = RoutineDirectorySql(true, mysql, filters, command, derivation: true, predicate: predicate);
+            var argumentSql = RoutineDirectorySql(true, mysql, filters, command, derivation: true, predicate: predicate);
+            // Older ALL_ARGUMENTS views lack CHAR_LENGTH; numeric signatures must not require it.
+            command.CommandText = mysql ? argumentSql : argumentSql.Replace("CHAR_LENGTH AS CHARACTER_LENGTH", "NULL AS CHARACTER_LENGTH");
             await ReadDerivationTable(command, arguments, asynchronous, token).ConfigureAwait(false);
             var rows = RoutineParameterDerivation.OrderParameters(arguments, routine, mysql);
+            if (!mysql && Array.Exists(rows, RoutineParameterDerivation.RequiresCharacterLength))
+            {
+                using var lengths = CreateRoutineDirectoryTable(true, true);
+                command.CommandText = argumentSql;
+                await ReadDerivationTable(command, lengths, asynchronous, token).ConfigureAwait(false);
+                var characterRows = RoutineParameterDerivation.OrderParameters(lengths, routine, false);
+                if (rows.Length != characterRows.Length) throw new NotSupportedException("The routine signature changed while reading character lengths.");
+                for (var i = 0; i < rows.Length; i++)
+                {
+                    foreach (DataColumn column in arguments.Columns)
+                        if (column.ColumnName != "CHARACTER_LENGTH" && !Equals(rows[i][column], characterRows[i][column.ColumnName]))
+                            throw new NotSupportedException("The routine signature changed while reading character lengths.");
+                    rows[i]["CHARACTER_LENGTH"] = characterRows[i]["CHARACTER_LENGTH"];
+                }
+            }
             var parameters = new OceanBaseParameter[rows.Length];
             for (var i = 0; i < rows.Length; i++)
             {
