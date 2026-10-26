@@ -11,6 +11,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private static readonly Encoding Gbk = new ChineseEncoding(936);
         private static readonly Encoding Gb18030 = new ChineseEncoding(54936);
         private static readonly Encoding Gb180302022 = new ChineseEncoding(54936, revision2022: true);
+        private static readonly Encoding Sjis = new SjisEncoding();
         private static readonly Encoding Ascii = Encoding.GetEncoding(20127, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
         private static readonly Encoding Utf16Le = new UnicodeEncoding(false, false, true);
 
@@ -40,6 +41,8 @@ namespace OceanBaseConnector.Internal.Protocol
             if (IsUtf16Be(collation)) return NationalCharacterSet.Utf16;
             switch (collation)
             {
+                case 13: case 88: case 334: case 349: case 364:
+                    maximumBytesPerCharacter = 2; return Sjis;
                 case 3: case 69: case 338: case 353: case 368:
                     maximumBytesPerCharacter = 1; return SingleByteResultEncoding.Dec8;
                 case 18: case 89: case 332: case 347: case 362:

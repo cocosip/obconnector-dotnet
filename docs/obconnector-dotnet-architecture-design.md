@@ -457,6 +457,7 @@ ROWID SQL/parameter behavior and deployment compatibility require real validatio
 | ASCII | 11, 65, 331, 346, 361 | 1 |
 | DEC8 | 3, 69, 338, 353, 368 | 1 |
 | TIS620 | 18, 89, 332, 347, 362 | 1 |
+| SJIS | 13, 88, 334, 349, 364 | 2 |
 | MySQL latin1 (Windows-1252) | 5, 8, 15, 31, 47, 48, 49, 94, 329, 344, 359 | 1 |
 | GBK | 28, 87, 326, 341, 356 | 2 |
 | GB18030-2005 | 248, 249, 251, 328, 343, 358 | 4 |
@@ -496,6 +497,25 @@ command regenerates independent all256-byte SHA256 expectations from downloaded 
 each position contributes a two-byte big-endian scalar, or FFFF for an undefined position. Python and
 server sources are not test/runtime dependencies. Client encoding and national/JSON/CLOB rules retain
 their separate scope. Real emission/storage and deployment compatibility remain unverified.
+
+SJIS uses CP932 with the fixed server's seven corrections from
+[ob_mb_wc_sjis and its table](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_ctype_sjis.cc#L1438).
+Bytes815F/8160/8161/817C/8191/8192/81CA decode U+005C/U+301C/U+2016/U+2212/U+00A2/U+00A3/U+00AC.
+ASCII00–7F and halfwidthA1–DF remain single bytes; all6879 assigned double-byte positions are supported.
+Windows extensions under lead87 or EB–FC, invalid singles/trails, unassigned pairs and incomplete leads
+throw DecoderFallbackException. The incremental decoder retains its lead across reads; count probes
+do not consume state and Reset clears it. Both byte5C and pair815F decode to backslash; the server's
+canonical reverse encoding of U+005C is815F. Reverse encoding rejects Windows-only scalars/aliases
+and unrepresentable characters instead of changing their meaning. This internal result codec does
+not change client SQL/parameter encoding or add general SJIS client negotiation.
+
+The optional `python tests/fixtures/character-sets/SjisReference.py ob_ctype_sjis.cc` command regenerates
+independent fixed-source SHA256 expectations. Decoding covers all256 singles and16640 possible lead/
+trail positions (leads80–A0/E0–FF), hashing input bytes followed by a four-byte big-endian scalar or
+FFFFFFFF for failure. Encoding covers all65536 BMP positions, hashing a two-byte scalar then four-byte
+canonical wire code or FFFFFFFF for failure. Unit tests require neither Python nor downloaded sources.
+These local mappings and reader tests do not establish actual server emission/storage or deployment
+compatibility; national/JSON/CLOB contracts retain their scope.
 
 Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON and existing CLOB paths retain their UTF-8 restriction; trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope.
 

@@ -2676,6 +2676,30 @@ No real database was accessed. SJIS/Big5/HKSCS/HKSCS31 and other missing capabil
 emission/storage and complete deployment matrices remain open. All23 IDs/eight work packages remain
 open; historical real reports do not validate this module.
 
+### 15.77 2026-10-26 SJIS ordinary results
+
+P1-08/W5, developed from37a0aba. All five SJIS IDs in the fixed v4.3.5_CE map now use a strict
+CP932 adapter with seven source-specific mapping corrections and width2 metadata. It supports all
+6879 assigned pairs plus ASCII/halfwidth, rejects Windows extensions/unassigned/malformed bytes,
+preserves pending decoder state and rejects reverse Windows aliases. Both5C/815F decode backslash;
+the server's canonical reverse encoding is815F. No client charset option, parameter encoding,
+dependency or national/JSON/CLOB expansion is introduced.
+
+RED11 showed explicit unsupported-collation errors; GREEN11 and expanded focused637 passed without
+failures/skips. Fresh independent source-table regeneration matches exhaustive256-single/16640-pair
+decode and65536-BMP encode/refusal digests. Count/reset/split/tiny-output/overflow-retry tests and
+all-ID pure codec/schema coverage accompany16 new dual-mode reader cases. Valid readers verify
+NULL/exact values/reuse SQL; two malformed sequential cases verify the consumed connection stays Open.
+Release solution build passed with zero warnings/errors. Affected five-asset consumers480 passed
+without failures/skips, adding20 MySQL async four-shape cases on one.NET10host. Independent source/
+tests/contracts review found no blockers. Full units7201 passed without failures/skips in8minutes12seconds;
+README lists the current result families. Final documentation and diff checks passed. Full results belong in the
+[module record](obconnector-dotnet-progress.md#2026-10-26-sjis-ordinary-results).
+
+No real database was accessed. Big5/HKSCS/HKSCS31 and other missing capabilities, actual server
+emission/storage and complete deployment matrices remain open. All23 IDs/eight work packages remain
+open; earlier reports retain their historical scope.
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。

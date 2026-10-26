@@ -32,6 +32,8 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(11, "80")]
         [InlineData(3, "41A4")]
         [InlineData(18, "A1DB")]
+        [InlineData(13, "815F81")]
+        [InlineData(88, "8740")]
         [InlineData(28, "80")]
         [InlineData(28, "FF")]
         [InlineData(28, "81")]

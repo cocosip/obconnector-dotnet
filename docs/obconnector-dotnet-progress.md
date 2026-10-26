@@ -1,5 +1,46 @@
 # Verification status and remaining work
 
+## 2026-10-26 SJIS ordinary results
+
+Developed from37a0aba for P1-08/W5. SJIS IDs13/88/334/349/364 select a distinct strict CP932 adapter
+with width2. Seven double-byte mapping corrections follow fixed OceanBase v4.3.5_CE commit
+5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5 ob_ctype_sjis.cc. ASCII and halfwidth remain single bytes;
+6879 double-byte assignments are supported. Windows-only leads87/EB–FC, invalid singles/trails,
+unassigned pairs and incomplete leads fail. The decoder preserves pending leads, nonconsuming count
+probes and Reset semantics. Source canonical U+005C encodes815F, while both815F and5C decode backslash.
+Reverse round-trip validation rejects Windows aliases/scalars and unrepresentable characters.
+ChineseEncoding and prior mappings are unchanged. No client option, dependency or SQL/parameter/
+national/JSON/CLOB encoding expansion is introduced; see the
+[fixed-source contract](obconnector-dotnet-architecture-design.md#result-character-sets).
+
+Ignored source snapshots and initial research remain under TestResults/local-completeness/.
+All6879 source-defined pairs match CP932 after seven corrections. Restricting CP932 leads/trails
+matches all16640 candidate positions exactly. The optional Python source-table generator freshly
+regenerated both committed SHA256 expectations:256 singles plus16640 lead/trail decode positions,
+and65536 BMP encoding/refusal positions. It requires no live database and is not a test dependency.
+
+Initial RED11 failed on explicit unsupported-collation errors; GREEN11 passed. Expanded focused637
+passed without failures/skips. The exhaustive decoding test additionally verifies counts and each-byte
+decoder splits; the exhaustive encoding test verifies count consistency, canonical bytes, round-trips
+and supplementary refusal. Eight explicit mapping/sample cases cover every split/count/reset and
+tiny output Convert. Pending-lead count/flush refusal and output-overflow/retry preserve state.
+All five IDs have ordinary codec/schema coverage across nine string/BLOB wire types; the appended
+shared sample adds16 dual-mode sync/async text/prepared buffered/sequential cases with exact values,
+NULL and reuse SQL. Two malformed sequential cases leave the fully consumed connection Open.
+Release solution build passed with zero warnings/errors in8.24seconds. Affected five-asset consumers
+passed480 without failures/skips in2minutes9seconds. New20 consumers cover MySQL async text/prepared
+buffered/sequential reads on one.NET10host; other modes/sync run in unit peers. No new family-specific
+public BLOB reader matrix was added. Independent source/tests/contracts review found no blockers;
+the reviewer ran only the diff whitespace check, with no test/build/Python/network/database operations.
+Full units passed7201 without failures/skips in8minutes12seconds, a net increase of61 cases.
+README now includes SJIS and the previously delivered DEC8/TIS620/GB18030-2022 result families.
+Final documentation follow-up and staged diff whitespace checks passed. Verification logs and TRX
+results remain under ignored TestResults/local-completeness/sjis-*.
+
+No real database was accessed. Actual emission/storage, full collation/mode/version/OBProxy/TLS/
+runtime/platform and remaining offline implementation remain open; all23 IDs/eight work packages
+remain open. Historical reports below retain their original scope.
+
 ## 2026-10-26 DEC8 and TIS620 ordinary results
 
 Developed fromd842fee for P1-08/W5. DEC8 IDs3/69/338/353/368 and TIS62018/89/332/347/362 now
