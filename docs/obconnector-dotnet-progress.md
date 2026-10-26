@@ -4,6 +4,19 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Pool reset acceptance case
+
+P2-06/W8 adds an executable `matrix.pool-reset` Acceptance case. It derives a one-session pooled
+connection from the configured profile, records the initial session time zone, changes it through
+the public SQL API, closes the borrower, and requires the next MySQL or Oracle borrower to recover
+the original value. This exercises the existing reset/session-state isolation path against a real
+configured server without changing driver protocol code.
+
+The Acceptance project builds cleanly and `--list` shows the case as executable. The live case was
+not run because no OceanBase profile was configured in this workspace. OBProxy, other server
+versions, TLS/authentication, long-running load and XA crash recovery remain outside this case;
+the other five `matrix.*` entries remain deferred.
+
 ## 2026-10-27 Oracle complex cursor result members
 
 P1-07/W5 adds binary REF CURSOR members to complex object and collection result layouts. A non-NULL

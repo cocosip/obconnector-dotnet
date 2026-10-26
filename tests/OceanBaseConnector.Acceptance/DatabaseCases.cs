@@ -39,6 +39,7 @@ internal static partial class DatabaseCases
         cases.Add(new("faults.server-error-reuse", "faults", ServerError));
         cases.Add(new("faults.cancellation", "faults", (c, t) => SlowQuery(c, true, t), RequiresSlowQuery: true));
         cases.Add(new("faults.timeout", "faults", (c, t) => SlowQuery(c, false, t), RequiresSlowQuery: true));
+        cases.Add(new("matrix.pool-reset", "faults", PoolReset));
         AddTypes(cases); AddOracle(cases);
         foreach (var item in new[]
         {
@@ -46,7 +47,6 @@ internal static partial class DatabaseCases
             ("matrix.ob20-trace-negotiation", "Public API does not expose negotiated OB20/trace capabilities; normal SQL success alone is insufficient."),
             ("matrix.topology-failover", "Requires controlled endpoint discovery and connection-failure injection."),
             ("matrix.network-outcome-unknown", "Requires controlled mid-request/response network fault injection."),
-            ("matrix.pool-reset", "Local pooling/reset fixtures pass; real OceanBase and OBProxy reset behavior still requires validation."),
             ("matrix.xa-crash-recovery", "Requires an external coordinator and process/server failure injection."),
         }) cases.Add(new(item.Item1, "faults", (_, _) => Task.CompletedTask, DeferredReason: item.Item2));
         return cases;
@@ -277,6 +277,40 @@ internal static partial class DatabaseCases
         catch (OceanBaseException error) { rejected = error.ServerErrorCode != 0 && !error.IsExecutionOutcomeUnknown; }
         c.Check(rejected, "Missing test object must return a known server error.");
         c.EqualNumber(await c.ScalarAsync(connection, c.SelectOne, token), 1, "Connection must remain reusable after a known server error.");
+    }
+
+    private static async Task PoolReset(CaseContext c, CancellationToken token)
+    {
+        using var source = c.CreateConnection();
+        var builder = new OceanBaseConnectionStringBuilder(source.ConnectionString)
+        {
+            Pooling = true,
+            MaxPoolSize = 1,
+            MinPoolSize = 0,
+        };
+        await using var first = new OceanBaseConnection(builder.ConnectionString);
+        await first.OpenAsync(token);
+        var baseline = c.Oracle
+            ? Convert.ToString(await c.ScalarAsync(first, "SELECT SESSIONTIMEZONE FROM DUAL", token), System.Globalization.CultureInfo.InvariantCulture)
+            : Convert.ToString(await c.ScalarAsync(first, "SELECT @@session.time_zone", token), System.Globalization.CultureInfo.InvariantCulture);
+        c.Check(!string.IsNullOrWhiteSpace(baseline), "The initial session time zone must be observable.");
+
+        var changed = c.Oracle
+            ? string.Equals(baseline, "UTC", StringComparison.OrdinalIgnoreCase) ? "+00:00" : "UTC"
+            : string.Equals(baseline, "+00:00", StringComparison.Ordinal) ? "+01:00" : "+00:00";
+        await c.ExecuteAsync(first, c.Oracle ? "ALTER SESSION SET TIME_ZONE = '" + changed + "'" : "SET SESSION time_zone = '" + changed + "'", token);
+        var observed = c.Oracle
+            ? Convert.ToString(await c.ScalarAsync(first, "SELECT SESSIONTIMEZONE FROM DUAL", token), System.Globalization.CultureInfo.InvariantCulture)
+            : Convert.ToString(await c.ScalarAsync(first, "SELECT @@session.time_zone", token), System.Globalization.CultureInfo.InvariantCulture);
+        c.Check(string.Equals(observed, changed, StringComparison.OrdinalIgnoreCase), "The session time zone change must be visible before close.");
+        await first.CloseAsync();
+
+        await using var second = new OceanBaseConnection(builder.ConnectionString);
+        await second.OpenAsync(token);
+        var reset = c.Oracle
+            ? Convert.ToString(await c.ScalarAsync(second, "SELECT SESSIONTIMEZONE FROM DUAL", token), System.Globalization.CultureInfo.InvariantCulture)
+            : Convert.ToString(await c.ScalarAsync(second, "SELECT @@session.time_zone", token), System.Globalization.CultureInfo.InvariantCulture);
+        c.Check(string.Equals(reset, baseline, StringComparison.OrdinalIgnoreCase), "A pooled borrower must not inherit the previous session time zone.");
     }
 
     internal static bool IsExpectedInterruption(Exception error, bool cancel, CancellationToken caller)

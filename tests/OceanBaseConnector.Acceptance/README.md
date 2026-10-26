@@ -50,7 +50,7 @@ Connection cases compare `ServerVersion` and schema product-version metadata wit
 `types.mysql-client-behavior` checks both TINYINT Boolean/integer mappings and both UPDATE
 row-count settings through real text/prepared sequential readers, including NULL and negative values.
 
-Six `matrix.*` entries are explicitly deferred and report skips: TLS/authentication, OB20/tracing negotiation, topology failover, interrupted network outcomes, pool reset and XA crash recovery. Mode/configuration skips are separate. See [Compatibility](../../docs/compatibility.md) for the failed Oracle case and server-version restrictions, and [verification status](../../docs/obconnector-dotnet-progress.md) for the four separate skipped integration gates.
+Five `matrix.*` entries are explicitly deferred and report skips: TLS/authentication, OB20/tracing negotiation, topology failover, interrupted network outcomes and XA crash recovery. `matrix.pool-reset` now runs a real MySQL/Oracle pooled session-time-zone reset check. Mode/configuration skips are separate. See [Compatibility](../../docs/compatibility.md) for the failed Oracle case and server-version restrictions, and [verification status](../../docs/obconnector-dotnet-progress.md) for the four separate skipped integration gates.
 
 The console writes data and commits some transactions. Schema objects use random `OBA_` names. Cleanup targets exact owned object names and XA identities; failures remain in the report. Disabling schema-object creation does not disable temporary LOB mutations. Forced termination can leave objects or prepared XA branches requiring manual cleanup.
 

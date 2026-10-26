@@ -689,7 +689,7 @@ The cleanup failure was an attempted DROP of the table whose CREATE failed. The 
 
 ## Deferred acceptance cases
 
-These six entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs) have explicit `DeferredReason` values. They report skips, not successful validation.
+These five entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs) have explicit `DeferredReason` values. They report skips, not successful validation. `matrix.pool-reset` is an executable case and is listed separately below.
 
 | Case | Missing validation / implementation |
 | --- | --- |
@@ -697,8 +697,12 @@ These six entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/D
 | `matrix.ob20-trace-negotiation` | Actual server OB20/full-link-trace negotiation and trace output. Ordinary SQL success does not prove either was negotiated. |
 | `matrix.topology-failover` | Controlled discovery, endpoint failures and routing on real deployments. |
 | `matrix.network-outcome-unknown` | Mid-request/response failures, cancellation ordering and interrupted commit/rollback on real deployments. |
-| `matrix.pool-reset` | Local pooling/reset fixtures pass; real OceanBase/OBProxy reset behavior and cross-version validation remain open. |
 | `matrix.xa-crash-recovery` | External coordinator recovery under client/server process failure. Basic XA phase tests do not cover this. |
+
+`matrix.pool-reset` forces a one-session pool, changes the session time zone, closes the
+borrower, and requires the next MySQL or Oracle borrower to observe the original time zone.
+It validates the public reset/session-state path against the configured server. OBProxy,
+other server versions, TLS profiles, long-running load and failure injection remain open.
 
 Further skips depend on selected groups, compatibility mode, `slowQuery`, `alternateDatabase`, DDL permissions and Oracle extension options. If a connection prerequisite fails, dependent cases are skipped. See [AcceptanceSuite.SkipReason](../tests/OceanBaseConnector.Acceptance/AcceptanceSuite.cs); a zero exit code can still include skips.
 

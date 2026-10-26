@@ -130,9 +130,10 @@ These are concrete code/scope gaps, not merely missing real-database reports:
    identity (P1-07).
 5. Compressed OB20/proxy reroute, after establishing the client-link wire contract (P1-02).
 6. Multi-send/pipelining or a separate bulk protocol, after establishing supported semantics (P2-03).
-7. Replace the six deferred acceptance placeholders with controlled fixtures/assertions (P2-06):
-   TLS/authentication, OB20/trace negotiation, topology failover, unknown network outcome, pool reset
-   and XA crash recovery. These need their corresponding environments or fault controls.
+7. Replace the five remaining deferred acceptance placeholders with controlled fixtures/assertions
+   (P2-06): TLS/authentication, OB20/trace negotiation, topology failover, unknown network outcome
+   and XA crash recovery. `matrix.pool-reset` now has a real public-API reset case; the remaining
+   cases need their corresponding environments or fault controls.
 
 Pool/session/transaction concurrency and resource boundaries, complete command/adapter restrictions,
 runtime/platform coverage and deployment gates also remain, as mapped individually below. Distributed
@@ -169,7 +170,7 @@ approved wire contract or can be implemented without protocol research.
 | P2-03 Batch optimization | Sequential Batch, existing Oracle array binding, opt-in bounded MySQL INSERT rewrite with group error attribution | **Multi-send/pipelining and separate bulk protocol are missing** | Actual counts/partial failure, transaction/default/trigger/warning behavior, packet limits and throughput/memory |
 | P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics including current leases, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O durations and collectible-load fixes | **Additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
 | P2-05 Runtimes/ecosystem | Five product assets; Windows nupkg protocol subset on actual .NET 8/9/10 and Framework host, plus Standard assets on .NET 10 | Complete promised platform/runtime/API matrix; Framework/ORM support scope; existing savepoint identifier limitations | Non-Windows and full feature/real-database reports on promised runtimes |
-| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports | **Six `matrix.*` cases are still deferred placeholders**; replace with controlled fixtures/assertions; source/license/package/publication review remains | OBProxy, TLS/auth profiles, topology faults, pool reset and external-coordinator XA crash recovery |
+| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports | **Five `matrix.*` cases remain deferred placeholders**; `matrix.pool-reset` now runs a public-API reset check; replace the remaining cases with controlled fixtures/assertions; source/license/package/publication review remains | OBProxy, TLS/auth profiles, topology faults, unknown network outcomes and external-coordinator XA crash recovery |
 
 ## Committed delivery evidence
 
