@@ -179,14 +179,14 @@ ASCII aliases, preserving values, HEX, collation and coercibility4 under the ser
 SQL_MODE. No objects or SQL_MODE were changed. These generated-literal checks do not exercise a
 real 1295-triggered automatic fallback, DBCS, other mode/collation/version profiles or OBProxy.
 Retained failures and exact local verification are in the
-[module record](obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback).
+[module record](history/obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback).
 
 The subsequent DBCS extension adds all seven strict mappings with trail5C-adjacent quote/backslash
 samples, GB18030 four-byte values and HKSCS supplementary values. Explicit direct MySQL checks
 pass14/14 generated-literal cases plus a connection control, with ASCII aliases and unchanged
 SQL_MODE. This extends local automatic-fallback support, not actual server1295/proxy or every
 SQL_MODE/collation/version profile. See its
-[module record](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback).
+[module record](history/obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback).
 
 The complex-national extension adds exact synthetic input bytes for all twelve non-default names,
 both prepare paths, sync/async and five-asset consumption. Explicit Oracle4.4.2.2 array-input
@@ -197,4 +197,4 @@ UTF8MB3/UTF8 assignments, violating strict configured-state matching; SJIS/Big5 
 makes subsequent fixed ASCII statements fail900. No permissive alias/remapping workaround is added.
 These observations do not establish other versions, proxies, stored complex output, standalone
 national or live pool-reset compatibility. Retained initialization failures and final local gates
-are in the [module record](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding).
+are in the [module record](history/obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding).

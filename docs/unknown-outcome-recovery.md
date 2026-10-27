@@ -1,8 +1,8 @@
 # Unknown outcome 与应用核对
 
-内置TNS/OCP的全局/分组黑名单和共享TCP尝试上限只作用于新物理连接；cap0可复用已验证idle并跳过最低池补建，无idle则零TCP失败。TCP成功后不因TLS/认证/身份错误继续候选，更不重放已发送业务或恢复旧事务。策略与池代数隔离、一次fallback和共享上限见[契约](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling)及[本次证据](obconnector-dotnet-completeness.md#1563-2026-10-26-发现分组黑名单覆盖)。
+内置TNS/OCP的全局/分组黑名单和共享TCP尝试上限只作用于新物理连接；cap0可复用已验证idle并跳过最低池补建，无idle则零TCP失败。TCP成功后不因TLS/认证/身份错误继续候选，更不重放已发送业务或恢复旧事务。策略与池代数隔离、一次fallback和共享上限见[契约](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling)及[本次证据](history/obconnector-dotnet-completeness.md#1563-2026-10-26-发现分组黑名单覆盖)。
 
-内置TNS/OCP发现现保留组、策略与权重，仅在新建物理连接时选择候选；顺序跨本次TCP重试冻结，健康偏好不跨组。权重/组序变更不会主动重分配仍符合地址membership的idle会话，需Clear后重新建连。它不恢复旧事务或重放未知写入；发现失败仍不得回退旧快照。见[分组选择契约](obconnector-dotnet-architecture-design.md#discovery-group-selection)与[本次验证](obconnector-dotnet-completeness.md#1554-2026-10-26-发现分组策略与权重)。
+内置TNS/OCP发现现保留组、策略与权重，仅在新建物理连接时选择候选；顺序跨本次TCP重试冻结，健康偏好不跨组。权重/组序变更不会主动重分配仍符合地址membership的idle会话，需Clear后重新建连。它不恢复旧事务或重放未知写入；发现失败仍不得回退旧快照。见[分组选择契约](obconnector-dotnet-architecture-design.md#discovery-group-selection)与[本次验证](history/obconnector-dotnet-completeness.md#1554-2026-10-26-发现分组策略与权重)。
 
 
 `OceanBaseException.IsExecutionOutcomeUnknown=true` 表示请求可能已经执行，客户端没有得到足够的最终确认。它不表示执行失败或已回滚。网络断开、超时、取消，以及 COMMIT/ROLLBACK 回包丢失都可能进入该状态；取消调用者的令牌也不能撤销已经完成的服务器操作。
@@ -23,7 +23,7 @@
 
 可信SQLSTATE以08开头，或精确1927/70100时，驱动将物理会话置为Broken并销毁。已发送执行的unknown标志保守为true，不表示服务器一定执行或一定回滚；业务前Prepare/目录/piece确认保持当前非执行标记。普通查询取消1317/70100不属于该分类。错误码和SQLSTATE不替代业务核对依据。
 
-对同一个逻辑连接须先Close再Open；Open才重新获取凭据、发现地址和新租约，旧事务不能恢复或迁移。完整裸协议ERR在解析前取消时仍可保留身份；已关闭OB20/压缩传输无法补足边界证据，仍保守失败，不绕过校验。[精确边界与本地证据](obconnector-dotnet-completeness.md#1549-2026-10-25-连接级服务器错误与显式连接重建)不代表真实节点/代理故障已经验收。
+对同一个逻辑连接须先Close再Open；Open才重新获取凭据、发现地址和新租约，旧事务不能恢复或迁移。完整裸协议ERR在解析前取消时仍可保留身份；已关闭OB20/压缩传输无法补足边界证据，仍保守失败，不绕过校验。[精确边界与本地证据](history/obconnector-dotnet-completeness.md#1549-2026-10-25-连接级服务器错误与显式连接重建)不代表真实节点/代理故障已经验收。
 
 ## 在第一次发送前建立核对依据
 

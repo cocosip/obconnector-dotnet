@@ -6,7 +6,7 @@ Developed from master/37cf788. The existing protocol listener now distinguishes 
 actual framing plus enabled trace/active modern format after authentication, identity and charset
 setup. It does not claim logical Open, later framed I/O, remote sampling/export or real OBProxy
 compatibility. Both deferred acceptance placeholders remain. The [contract](protocol-diagnostics.md)
-and [module record](obconnector-dotnet-progress.md#2026-10-27-authenticated-protocol-negotiation-diagnostics)
+and [module record](history/obconnector-dotnet-progress.md#2026-10-27-authenticated-protocol-negotiation-diagnostics)
 retain synthetic verification and deployment limits; this module accesses no real database.
 
 ## 2026-10-27 Controlled topology acceptance
@@ -25,7 +25,7 @@ Final evidence: complete units8066/8066, focused94/94, serial Release zero warni
 opt-out15 pass/116 skip, scoped format/docs/privacy checks pass. Each real mode passes7/7
 on direct4.4.2.2 Windows/.NET10.0.13 TLSdisabled with no objects created. The sole Minor from
 one independent final review (concurrent cleanup errors) is corrected with RED/GREEN; no
-Critical/Important finding. Exact gates are recorded in the [module record](obconnector-dotnet-progress.md#2026-10-27-controlled-topology-acceptance). Actual independent cluster/discovery/proxy/TLS/platform/load matrices remain open; two DeferredReason placeholders and all23 gaps/eight packages remain.
+Critical/Important finding. Exact gates are recorded in the [module record](history/obconnector-dotnet-progress.md#2026-10-27-controlled-topology-acceptance). Actual independent cluster/discovery/proxy/TLS/platform/load matrices remain open; two DeferredReason placeholders and all23 gaps/eight packages remain.
 
 ## 2026-10-27 XA coordinator process recovery
 
@@ -36,7 +36,7 @@ recorded decision. Direct OceanBase4.4.2.2, Windows/.NET10.0.13, TLS disabled: b
 including connection control; all8 owned tables/branches/journals removed. Focused56/56 and
 opt-out15 pass/116 skip; serial Release builds with zero warnings/errors. Complete units8044/8044
 and scoped format/docs/privacy checks pass. One independent final review has no Critical/Important
-finding; its sole Minor documentation count is corrected. See the [module record](obconnector-dotnet-progress.md#2026-10-27-xa-coordinator-process-recovery).
+finding; its sole Minor documentation count is corrected. See the [module record](history/obconnector-dotnet-progress.md#2026-10-27-xa-coordinator-process-recovery).
 
 Ordinary tests use synthetic loopback and real profiles require xaCrashProfile plus object
 permission and Oracle PrepareExecute. No credentials enter journals/arguments/new environment
@@ -52,7 +52,7 @@ COMMIT/ROLLBACK whole/partial response loss, sync/async. Oracle and MySQL direct
 pass17/17 including connection control; Windows/.NET10.0.13, TLS disabled. All32 owned tables
 were removed. Complete units8018/8018 pass with zero failures/skips; ordinary opt-out integration
 has15 pass/116 skip/zero failures. Final serial Release builds with zero warnings/errors; scoped
-format verification exits0 and independent review has no actionable finding. See the [module record](obconnector-dotnet-progress.md#2026-10-27-controlled-network-outcome-acceptance).
+format verification exits0 and independent review has no actionable finding. See the [module record](history/obconnector-dotnet-progress.md#2026-10-27-controlled-network-outcome-acceptance).
 
 Faults require a separate networkFaultProfile, object creation permission, a plain DNS/IPv4
 host plus separate Port, no TLS/compression/OB20; incompatible profiles skip without downgrade.
@@ -68,7 +68,7 @@ Oracle piece-data and LOCAL INFILE source Read/ReadAsync calls independently of 
 Focused synthetic tests pass156/156, complete units7977/7977 and affected consumers315/315,
 with zero failures/skips. Serial Release builds with zero warnings/errors and independent final
 review has no actionable finding. Opt-out integration has13 pass/116 skip/zero failures. See the
-[module record](obconnector-dotnet-progress.md#2026-10-27-upload-source-read-diagnostics).
+[module record](history/obconnector-dotnet-progress.md#2026-10-27-upload-source-read-diagnostics).
 No live database is accessed and no new server/runtime compatibility is claimed.
 This does not close other resource waits or deployment/load/overhead acceptance.
 
@@ -88,7 +88,7 @@ external and its complete UTF-8 content is checked. This does not establish comp
 older backports, other server/proxy builds or the entire charset/runtime/TLS matrix. Complete units
 pass7938/7938, affected consumers1240/1240 and the serial Release build has zero warnings/errors.
 Independent review findings were corrected with12 lifecycle RED/GREEN regressions and existing
-uncertain-mutation controls; no finding remains deferred. See the [module record](obconnector-dotnet-progress.md#2026-10-27-clob-locator-client-encoding).
+uncertain-mutation controls; no finding remains deferred. See the [module record](history/obconnector-dotnet-progress.md#2026-10-27-clob-locator-client-encoding).
 
 ## 2026-10-27 Complex LOB content and locator inputs
 
@@ -104,7 +104,7 @@ Explicit default-charset Oracle checks pass12/12: BLOB/CLOB object, collection a
 inputs, sync/async, exact payloads, SQL NULL collection/array members, rollback, temporary LOB free
 and generated-object cleanup. The initial locator-for-all candidate passed only4/12; named BLOB
 length mismatches and named CLOB decode/cleanup errors are retained in the
-[module record](obconnector-dotnet-progress.md#2026-10-27-complex-lob-inputs).
+[module record](history/obconnector-dotnet-progress.md#2026-10-27-complex-lob-inputs).
 Final GB18030 checks pass10/12: all BLOBs and named CLOB content inputs pass; anonymous CLOB
 array readbacks still mismatch in that candidate; the later module above traces this to input conversion. Named CLOB
 LONG_BLOB payloads bypass server client-charset conversion and therefore use strict UTF-8;
@@ -133,7 +133,7 @@ The latter server/session cause remains unresolved. No state validation is weake
 
 The original all48 initialization failures and a later local runner keyword error remain recorded;
 they are not overwritten by successful reruns. Final local gates and exact reports are in the
-[module record](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding).
+[module record](history/obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding).
 Ordinary units and CI use synthetic peers; the integration theory requires explicit Oracle
 PrepareExecute/object-creation opt-in. Other versions, proxies, independent runtimes, live pool
 restoration and further national/JSON/CLOB shapes remain unverified.
@@ -146,7 +146,7 @@ client/connection/collation state remain required. Escaping is unchanged and pre
 preserving DBCS trail5C characters. Complete units pass7774/7774, focused units290/290 and affected
 consumers160/160; Release solution build has zero warnings/errors. Independent review found no
 remaining actionable issue; retained failures and exact results are in the
-[module record](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback).
+[module record](history/obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback).
 
 Explicit read-only direct MySQL4.4.2.2 checks on Windows/.NET10.0.13, TLS disabled, pass14/14
 generated-literal cases plus connection control. Samples combine every DBCS mapping with a
@@ -168,7 +168,7 @@ escaping/parser/packet guards remain required. DBCS remains refused. Local focus
 234/234, affected consumers pass 90/90 across five assets in one .NET10 host, and the serial
 Release solution build has zero warnings/errors. Complete units pass7742/7742 and independent
 source/test/integration/docs review has no actionable issue. Exact results are in the
-[module record](obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback).
+[module record](history/obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback).
 
 Explicit direct MySQL 4.4.2.2 checks on Windows/.NET10.0.13, TLS disabled, pass a connection
 control and 8/8 read-only generated-literal cases. Fixed synthetic values with ASCII aliases
@@ -194,7 +194,7 @@ An explicit direct MySQL 4.4.2.2 run on Windows/.NET 10.0.13, TLS disabled, pass
 control and fails the SQL_MODE precondition before DDL. No objects were created and no SQL_MODE
 was changed. Real zero-date storage, other SQL_MODE/version profiles and OBProxy remain unverified.
 Commands, retained failures and safe report are in the
-[module record](obconnector-dotnet-progress.md#2026-10-27-opt-in-zero-date-storage-acceptance).
+[module record](history/obconnector-dotnet-progress.md#2026-10-27-opt-in-zero-date-storage-acceptance).
 
 ## 2026-10-27 Same-channel pool reset and reuse acceptance
 
@@ -208,7 +208,7 @@ Oracle run failed with code 1882 for UTC; numeric offsets +05:45/+06:45 remove t
 dependency. The failure report is retained. Final direct 4.4.2.2 checks pass 4/4 per mode on
 Windows/.NET 10.0.13 with TLS disabled, zero cleanup failures. Focused units pass 40/40 and the
 Release solution build has zero warnings/errors; complete units and exact evidence are in the
-[module record](obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance).
+[module record](history/obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance).
 
 ChannelId is not a server/backend session ID. These results do not establish proxy backend reuse,
 the complete resource/transaction/fault matrix or other versions/platforms/TLS. At this checkpoint
@@ -223,7 +223,7 @@ Binary complex BLOB/CLOB and cursor result members and text/binary top-level cur
 are locally implemented. Non-empty complex LOB/cursor input, Input/InputOutput REF CURSOR,
 text complex results and unresolved whole-complex RETURNING identity remain unsupported.
 No full-suite, package-consumer or real-server rerun was performed; historical failures remain.
-See the [source-review commands and evidence](obconnector-dotnet-progress.md#2026-10-27-source-review-and-progress-alignment).
+See the [source-review commands and evidence](history/obconnector-dotnet-progress.md#2026-10-27-source-review-and-progress-alignment).
 
 Acceptance has five deferred `matrix.*` cases plus the separate deferred `types.zero-date-policy`
 case. The executable `matrix.pool-reset` case checks isolation by retiring the changed session;
@@ -249,7 +249,7 @@ InputOutput values remain rejected because their parameter wire contract is not 
 protocol evidence, not real OceanBase/OBProxy interoperability or server DDL acceptance; cursor
 members, whole-complex RETURNING and additional anonymous shapes remain open. See the
 [architecture contract](obconnector-dotnet-architecture-design.md#complex-types) and [module
-ledger](obconnector-dotnet-progress.md#2026-10-27-oracle-complex-lob-result-members).
+ledger](history/obconnector-dotnet-progress.md#2026-10-27-oracle-complex-lob-result-members).
 
 ## 2026-10-27 Oracle FLOAT routine derivation
 
@@ -260,7 +260,7 @@ derivation no longer queries CHAR_LENGTH; character signatures still require act
 character lengths and an unchanged signature. Missing CHAR_LENGTH remains an explicit
 character-derivation failure, preserving the server error and original parameters.
 See the [contract](obconnector-dotnet-architecture-design.md#routine-parameter-derivation)
-and [module ledger](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation).
+and [module ledger](history/obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation).
 New real procedure/function tests are compiled only. The preceding module's initial
 greeting failures remain separate evidence; actual DDL/derive/INOUT and old-server
 compatibility are unverified. All23 IDs/eight packages remain open.
@@ -272,7 +272,7 @@ precision is binary1..126, and its variable scale is reported as null; it does n
 become a fixed decimal constraint. CommandBuilder and rebinding use NUMBER parameters
 without copying binary precision. MySQL206 and unsupported metadata remain rejected.
 The [contract and fixed source evidence](obconnector-dotnet-architecture-design.md#oracle-float-results-with-binary-precision)
-and [module ledger](obconnector-dotnet-progress.md#2026-10-27-oracle-float-results)
+and [module ledger](history/obconnector-dotnet-progress.md#2026-10-27-oracle-float-results)
 record scope and verification. New opt-in Oracle tests exercise FLOAT columns/CAST,
 exact binding, NULL and both row protocols; real execution results are recorded in
 that ledger. Other national/type/resource shapes and all23 gap IDs remain open.
@@ -284,7 +284,7 @@ whole-input CLOB write prevalidation and explicit MySQL JSON string parameters. 
 the strict selected client encoding with type253; results keep strict UTF-8. Oracle and scalar
 metadata restrictions, SQL NULL versus JSON null and client-literal fallback limits remain.
 Current module verification and original failures are in the
-[module ledger](obconnector-dotnet-progress.md#2026-10-27-json-parameters-with-client-character-sets).
+[module ledger](history/obconnector-dotnet-progress.md#2026-10-27-json-parameters-with-client-character-sets).
 The ten opt-in JSON storage attempts failed while reading the initial greeting, before authentication
 or JSON SQL. Both default-charset controls failed there too and a raw TCP probe received no greeting
 bytes. The underlying server/network cause is unknown; no real JSON conversion/storage or proxy
@@ -297,7 +297,7 @@ Separate lazy CP950-derived lookups preserve old private-use and revised Plane2 
 canonical reverse choices and the explicit U+2593-to-F9FE/U+FFED asymmetry. Undefined/malformed input
 fails; incremental decoding counts surrogate pairs correctly and preserves state after overflow.
 See the [contract](obconnector-dotnet-architecture-design.md#result-character-sets) and
-[module evidence](obconnector-dotnet-progress.md#2026-10-26-hkscs-and-hkscs31-ordinary-results).
+[module evidence](history/obconnector-dotnet-progress.md#2026-10-26-hkscs-and-hkscs31-ordinary-results).
 No real database was accessed. Client/parameter/national/JSON/CLOB charset expansion and other missing
 functionality remain open. The [delivery overview](obconnector-dotnet-delivery-status.md) distinguishes
 implemented subfeatures from remaining code and external gates; all23 gap IDs/eight packages remain open.
@@ -310,7 +310,7 @@ forms. It supports all13710 defined double-byte positions, rejects seven server 
 zero holes and Windows extensions, and preserves incremental lead/count/reset/overflow behavior.
 No client charset option, parameter/national/JSON/CLOB change or dependency is introduced. See the
 [contract](obconnector-dotnet-architecture-design.md#result-character-sets) and
-[local module evidence](obconnector-dotnet-progress.md#2026-10-26-big5-ordinary-results).
+[local module evidence](history/obconnector-dotnet-progress.md#2026-10-26-big5-ordinary-results).
 No real database was accessed. HKSCS/HKSCS31 and other missing functionality remain open;
 all23 gap IDs/eight work packages remain open.
 
@@ -321,7 +321,7 @@ corrects seven CP932 mappings, rejects Windows extensions/aliases and preserves 
 backslash mapping. Stateful strict decoding serves whole fields and streamed reads. No client charset
 option, SQL/parameter/national/JSON/CLOB change or dependency is introduced. See the
 [contract](obconnector-dotnet-architecture-design.md#result-character-sets) and
-[local module evidence](obconnector-dotnet-progress.md#2026-10-26-sjis-ordinary-results).
+[local module evidence](history/obconnector-dotnet-progress.md#2026-10-26-sjis-ordinary-results).
 No real database was accessed for this module. Big5/HKSCS/HKSCS31 and other missing functionality
 remain open; all23 gap IDs/eight work packages remain open.
 
@@ -331,7 +331,7 @@ Ordinary strings/TEXT now accept all five DEC8 and all five TIS620 IDs in the pi
 using strict byte tables and width1 metadata. C1 controls remain controls; Windows1252/874 aliases
 are not used. Undefined DEC8 zero slots and TIS620 replacement slots fail explicitly. No client
 charset negotiation, national/JSON/CLOB change or new dependency is introduced. Local test/review
-evidence and limits are in the [module record](obconnector-dotnet-progress.md#2026-10-26-dec8-and-tis620-ordinary-results).
+evidence and limits are in the [module record](history/obconnector-dotnet-progress.md#2026-10-26-dec8-and-tis620-ordinary-results).
 No real database was accessed for this module. SJIS/Big5/HKSCS/HKSCS31 and other missing functionality
 remain open; all23 gap IDs/eight work packages remain open.
 
@@ -346,7 +346,7 @@ charset negotiation or expansion of the national/JSON/CLOB contracts. See the
 
 Fresh OpenJDK21.0.12.1+1 reference digests match all63,488 BMP scalar encodings and all23,940 legal
 two-byte positions plus39,420 BMP four-byte positions. Local protocol/consumer evidence is recorded
-in the [module record](obconnector-dotnet-progress.md#2026-10-26-gb18030-2022-ordinary-results).
+in the [module record](history/obconnector-dotnet-progress.md#2026-10-26-gb18030-2022-ordinary-results).
 No real database was accessed for this module. Actual server emission/storage, complete collation/
 mode/version/proxy/TLS/platform/runtime matrices remain open; historical2005 real evidence does not
 validate2022. P1-08 and all23 gap IDs/eight work packages remain open.
@@ -368,7 +368,7 @@ Modern hosts assert their expected runtime major. Four isolated negative control
 row value, bound request, server-error code and major roll-forward from the net8 host.
 This is a limited public protocol subset, not full feature, server, OBProxy, TLS, Linux, load or
 publication acceptance. P2-05/W8 and all23 gap IDs/eight work packages remain open. See
-[delivery evidence](obconnector-dotnet-progress.md#2026-10-26-packaged-protocol-runtime-verification).
+[delivery evidence](history/obconnector-dotnet-progress.md#2026-10-26-packaged-protocol-runtime-verification).
 
 ## 2026-10-26 MySQL client string preparation
 
@@ -394,7 +394,7 @@ failures expose an immutable exact BatchCommandGroup; individual counts are unkn
 server total differs from the row count. Rewriting changes statement/autocommit, default/expression/
 trigger/warning and timeout boundaries; no replay or implicit transaction is introduced.
 See the [public contract](obconnector-dotnet-architecture-design.md#batch-insert-rewrite) and
-[local delivery evidence](obconnector-dotnet-progress.md#2026-10-26-mysql-batch-insert-rewrite).
+[local delivery evidence](history/obconnector-dotnet-progress.md#2026-10-26-mysql-batch-insert-rewrite).
 
 Local protocol and target-asset checks do not establish actual SQL semantics or faster throughput.
 Real server limits, direct/OBProxy, transactions/triggers/defaults, TLS/compression, load/memory and
@@ -407,7 +407,7 @@ collation IDs already supported by ordinary results. Strict decoding, trusted Na
 precedence and parameter encoding remain unchanged. Other families, UTF16LE, binary63 and unknown
 IDs remain rejected by fallback. New local codec and sync/async discovery tests cover the missing
 IDs; real national storage, negotiated collation selection and deployment behavior remain unverified.
-See [delivery evidence](obconnector-dotnet-progress.md#2026-10-26-national-unicode-collation-mapping).
+See [delivery evidence](history/obconnector-dotnet-progress.md#2026-10-26-national-unicode-collation-mapping).
 
 ## 2026-10-26 Oracle floating special text results
 
@@ -416,7 +416,7 @@ Oracle BINARY_FLOAT/BINARY_DOUBLE text results now additionally recognize exact 
 does not round through Double, and IEEE binary/MySQL/parameter behavior is unchanged. Local public
 readers cover sync/async, text/prepared and buffered/sequential paths; five-asset consumers use Oracle
 async. No real database was accessed. Actual server emission, SQL and deployment acceptance remain
-open. See [delivery evidence](obconnector-dotnet-progress.md#2026-10-26-oracle-floating-special-text-results).
+open. See [delivery evidence](history/obconnector-dotnet-progress.md#2026-10-26-oracle-floating-special-text-results).
 
 ## 2026-10-26 Oracle ROWID results
 
@@ -425,7 +425,7 @@ independently of collation. MySQL rejects it. No identifier conversion, new CLR 
 wire code or SQL inventory declaration is added. Local units cover sync/async text/prepared
 buffered/sequential reads, empty/NULL, metadata and malformed UTF-8; five-asset consumers use Oracle
 async. No real database was accessed, so actual emission and SQL/deployment behavior remain open.
-See [delivery evidence](obconnector-dotnet-progress.md#2026-10-26-oracle-rowid-results).
+See [delivery evidence](history/obconnector-dotnet-progress.md#2026-10-26-oracle-rowid-results).
 
 The candidate nupkgs passed actual .NET8.0.32/9.0.21/10.0.13 and Framework4.8 package API/configuration
 smoke with fresh-cache hashes and asset selection. Existing basic protocol and Batch/diagnostics
@@ -440,7 +440,7 @@ MySQL DataTypes adds ENUM/SET label-list templates; Oracle declarations and geom
 are not inferred from wire acceptance. Units cover both modes where applicable and sync/async;
 five-asset consumers cover MySQL async text/prepared buffered/sequential reads. No real database
 was accessed. See [current contract](obconnector-dotnet-architecture-design.md#result-character-sets)
-and [delivery evidence](obconnector-dotnet-progress.md#2026-10-26-enum-set-and-geometry-result-codes).
+and [delivery evidence](history/obconnector-dotnet-progress.md#2026-10-26-enum-set-and-geometry-result-codes).
 
 ## 2026-10-26 Close transaction logger reentry
 
@@ -451,7 +451,7 @@ without the old Close detaching it. Explicit transaction operations keep immedia
 Local tests cover both modes, sync/async Close/Open, original/other borrowers, finite/infinite pool
 wait and rollback/restore failures. Other listener reentry and real deployment acceptance remain open.
 See [contract](obconnector-dotnet-architecture-design.md#pooled-close-callbacks) and
-[delivery evidence](obconnector-dotnet-progress.md#2026-10-26-close-transaction-logger-reentry).
+[delivery evidence](history/obconnector-dotnet-progress.md#2026-10-26-close-transaction-logger-reentry).
 
 ## 2026-10-26 BLOB family result codes
 
@@ -460,7 +460,7 @@ Binary/String provider identity, strict collation decoding, IsLong/size metadata
 empty values and NULL use the existing result framing. MySQL DataTypes lists all six declarations.
 Local dual-mode sync/async unit fixtures and MySQL async consumers cover buffered/sequential and
 text/prepared results. These tests do not prove real server emission, large-packet boundaries or
-deployment interoperability. See [delivery evidence](obconnector-dotnet-progress.md#2026-10-26-blob-family-result-codes).
+deployment interoperability. See [delivery evidence](history/obconnector-dotnet-progress.md#2026-10-26-blob-family-result-codes).
 
 ## 2026-10-26 Discovery address blacklist and group ceilings
 
@@ -468,7 +468,7 @@ ADDRESS blacklists now replace inherited ADDRESS_LIST/DESCRIPTION blocks; group 
 actual attempts across phases/cycles per physical establishment. Ordering preserves each occurrence's
 policy. Shared budgets, generation-scoped feedback and healthy idle reuse remain intact. These are
 local driver capabilities, not Java runtime or real discovery interoperability evidence.
-See [current delivery evidence](obconnector-dotnet-progress.md#2026-10-26-discovery-address-blacklist-overrides)
+See [current delivery evidence](history/obconnector-dotnet-progress.md#2026-10-26-discovery-address-blacklist-overrides)
 and [public contract](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling).
 
 The candidate packages passed the repository's actual nupkg API/configuration/dependency smoke on
@@ -489,7 +489,7 @@ remain. Equal policy values plus exact endpoint share history, different policie
 and success clears only its effective policy. No new API/dependency or SQL replay.
 Fixed Java6adc311 explicitly leaves local blacklist parsing disabled; this is a .NET-defined capability.
 See [contract](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling),
-[full evidence/history](obconnector-dotnet-completeness.md#1563-2026-10-26-发现分组黑名单覆盖) and
+[full evidence/history](history/obconnector-dotnet-completeness.md#1563-2026-10-26-发现分组黑名单覆盖) and
 [audit](obconnector-dotnet-driver-audit.md#58-2026-10-26-发现分组黑名单覆盖).
 
 New units38, related230 pass; final consumers256pass (prior128 retained plus128), full units6382pass
@@ -512,7 +512,7 @@ SingleResult retains every row. Fetch size, parent ownership, original timeout/t
 nonunknown fetch failures and early-close session destruction remain unchanged. SchemaOnly, KeyInfo
 and unknown bits still reject before consuming the single-use cursor. Input/InputOutput remains open.
 See [contract](obconnector-dotnet-architecture-design.md#ref-cursor-result-limits) and
-[full evidence/history](obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制).
+[full evidence/history](history/obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制).
 
 New units84; related220 pass. Related consumers370 pass (prior280 retained plus90),0fail/skip.
 Full units6344 pass (prior6260 retained plus84,8m26),0fail/skip. Final Release solution0warnings/errors,2.71s; five-file scoped format exits0 with the
@@ -542,7 +542,7 @@ call NextResult to process remaining entries. Early Close still skips unstarted 
 never execute targets; source-owned connections and CloseConnection lease checks remain. No implicit
 transaction, SQL rewrite, replay, dependency or public API addition.
 See [contract](obconnector-dotnet-architecture-design.md#batch-result-limits) and
-[full evidence/history](obconnector-dotnet-completeness.md#1561-2026-10-26-singlerowsingleresult-跨批次结果限制).
+[full evidence/history](history/obconnector-dotnet-completeness.md#1561-2026-10-26-singlerowsingleresult-跨批次结果限制).
 
 New units62; focused218 pass. New public consumers132 pass; combined294 retain previous162,0fail/skip.
 Metadata8 simultaneously set both limits, varying sync/mode/KeyInfo rather than separately enumerating
@@ -568,7 +568,7 @@ runtime's private DbBatchWrapper. The source now returns the provider batch owni
 All execution forms open/close the owned lease; source timeout/ambient behavior and unsupported external
 Connection/Transaction/Prepare remain. No new public type, package or runtime configuration.
 See [contract](obconnector-dotnet-architecture-design.md#batch-metadata) and
-[full evidence/history](obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
+[full evidence/history](history/obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
 
 New unit coverage51 and public consumers72; affected units269 and consumers162 pass,0fail/skip.
 Full units6198 pass (prior6147 retained plus51,8m7),0fail/skip. Final Release solution0warnings/errors,2.39s;
@@ -590,7 +590,7 @@ The original632 affected consumers plus new10 pass642 under default Windows/.NET
 without disabling tiering/PGO/OSR. Full units:6147 passed,0failed/skipped,8m11. This advances the earlier failure
 checkpoint below; historical native faults are not individually attributed. Five assets on one host do
 not prove independent runtimes/platforms, real servers/OBProxy/TLS, or release acceptance. See the
-[full record](obconnector-dotnet-completeness.md#1559-2026-10-26-可卸载诊断线程状态损坏与默认回归恢复).
+[full record](history/obconnector-dotnet-completeness.md#1559-2026-10-26-可卸载诊断线程状态损坏与默认回归恢复).
 
 ## 2026-10-26 combined consumer host crash remains open
 
@@ -601,7 +601,7 @@ CLR errors/access violations. Default full units6147 and isolated new pool-hando
 the full632 consumer selection passes only when tiered compilation is disabled in the diagnostic
 test child process. This is a conditional result, not a product workaround or default-runtime acceptance.
 The root cause is unknown; P2-05/W8 and release gates remain open. See the
-[original failures, dump and controlled comparisons](obconnector-dotnet-completeness.md#1558-2026-10-26-连接池通知后的取消交接).
+[original failures, dump and controlled comparisons](history/obconnector-dotnet-completeness.md#1558-2026-10-26-连接池通知后的取消交接).
 
 ## 2026-10-26 P2-04 protocol frame diagnostics
 
@@ -611,7 +611,7 @@ reuse. ChannelId is scoped to the listener instance. Read headers are observed b
 write events mean next-stream acceptance, not delivery. No raw bytes, SQL, authentication, user/endpoint
 or exception objects/messages are emitted. Observer failures are isolated, Activity.Current restored,
 same-thread recursion suppressed; disabled events allocate no dictionary. See the
-[public contract](protocol-diagnostics.md) and [module evidence](obconnector-dotnet-completeness.md#1557-2026-10-26-协议帧诊断).
+[public contract](protocol-diagnostics.md) and [module evidence](history/obconnector-dotnet-completeness.md#1557-2026-10-26-协议帧诊断).
 
 首轮最终全量6122通过/1失败，失败为LOB夹具把30位小数的NUMBER声明成scale0；输出行解码提前拒绝，
 客户端销毁连接与server尾部EOF/OK写入竞态。原始失败及同产物4项调查通过均保留，后者不证明路径正确。
@@ -650,7 +650,7 @@ nested ancestors until published descendants finish. All descendants share4096 d
 original/rewritten statements transfer ownership; SchemaOnly stays metadata-only. Wrong typed access
 and covariant arrays do not publish a handle before failing. Full parent response consumption is required
 before child fetch; disposing an active command preserves cancellation. See [contract](obconnector-dotnet-architecture-design.md#oracle-cursor-valued-columns)
-and [module evidence](obconnector-dotnet-completeness.md#1556-2026-10-26-oracle-二进制游标列与嵌套资源所有权).
+and [module evidence](history/obconnector-dotnet-completeness.md#1556-2026-10-26-oracle-二进制游标列与嵌套资源所有权).
 
 A positive parent command FetchSize is accepted as a hint, but prepared cursor-valued columns
 use cursorFlag=0 and stream the parent response without parent FETCH. Child cursor page sizes remain
@@ -672,7 +672,7 @@ all23IDs/eightpackages stay open. Localmaster only, no push/publication. Earlier
 
 ## 2026-10-26 P1-09 discovery blacklist and TCP ceiling
 
-Developed from master/888bd1c. Built-in TNS/OCP DESCRIPTION accepts explicit global OBLB_BLACKLIST and OBLB_RETRY_ALL_DOWNS. NORMAL/RETRYDURATION count individual failures with millisecond windows; TIMEOUT uses seconds. Either field defaults absent ceiling120 and NORMAL/TIMEOUT50; with neither field supplied, prior behavior is preserved. One frozen group order, threshold requeue inside its group, one unfiltered fallback and optional additional cycles share an actual-TCP ceiling and total logical Open deadline. Skipped blocked entries do not consume this .NET cap; exact Java candidate-counter parity is not claimed. See [contract](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling), [full evidence](obconnector-dotnet-completeness.md#1555-2026-10-26-发现黑名单与tcp尝试上限) and [audit](obconnector-dotnet-driver-audit.md#50-发现黑名单与tcp尝试上限2026-10-26).
+Developed from master/888bd1c. Built-in TNS/OCP DESCRIPTION accepts explicit global OBLB_BLACKLIST and OBLB_RETRY_ALL_DOWNS. NORMAL/RETRYDURATION count individual failures with millisecond windows; TIMEOUT uses seconds. Either field defaults absent ceiling120 and NORMAL/TIMEOUT50; with neither field supplied, prior behavior is preserved. One frozen group order, threshold requeue inside its group, one unfiltered fallback and optional additional cycles share an actual-TCP ceiling and total logical Open deadline. Skipped blocked entries do not consume this .NET cap; exact Java candidate-counter parity is not claimed. See [contract](obconnector-dotnet-architecture-design.md#discovery-blacklist-and-attempt-ceiling), [full evidence](history/obconnector-dotnet-completeness.md#1555-2026-10-26-发现黑名单与tcp尝试上限) and [audit](obconnector-dotnet-driver-audit.md#50-发现黑名单与tcp尝试上限2026-10-26).
 
 Cap0 skips minimum-pool replenishment but still validates/probes and can reuse an existing valid idle session below minimum; no idle means zero-TCP failure. A later nonzero cap restores normal replenishment. Independent review identified this priority conflict; depleted-prewarm regressions retain its RED. Cache ownership isolates policy/pool generations and late feedback, with1024 entries/16384 failure events; eviction forgets whole-entry history and may permit extra probes. TCP success clears matching history before terminal greeting/TLS/auth/identity. No active migration or SQL replay.
 
@@ -682,7 +682,7 @@ Original44RED/44GREEN/state33 and expanded reports are retained; intentional leg
 
 ## 2026-10-26 P1-09 discovery groups and selection
 
-Developed from master/1416c55. Built-in TNS/OCP snapshots now preserve declared groups, ROTATION/RANDOM/SERVERAFFINITY, per-group overrides, ON defaults, aliases and bounded weights through actual physical connection selection and pool prewarm. Public Resolve strings remain declaration membership; idle pool reuse is based on membership, not rebalancing. Health is scoped within groups and to the current pool generation; TCP retries reuse one frozen selection. See [contract](obconnector-dotnet-architecture-design.md#discovery-group-selection), [evidence](obconnector-dotnet-completeness.md#1554-2026-10-26-发现分组策略与权重) and [audit](obconnector-dotnet-driver-audit.md#49-发现分组策略与权重2026-10-26).
+Developed from master/1416c55. Built-in TNS/OCP snapshots now preserve declared groups, ROTATION/RANDOM/SERVERAFFINITY, per-group overrides, ON defaults, aliases and bounded weights through actual physical connection selection and pool prewarm. Public Resolve strings remain declaration membership; idle pool reuse is based on membership, not rebalancing. Health is scoped within groups and to the current pool generation; TCP retries reuse one frozen selection. See [contract](obconnector-dotnet-architecture-design.md#discovery-group-selection), [evidence](history/obconnector-dotnet-completeness.md#1554-2026-10-26-发现分组策略与权重) and [audit](obconnector-dotnet-driver-audit.md#49-发现分组策略与权重2026-10-26).
 
 最终完整单测5879通过（新增91），相关五资产消费者610通过（新增256），均零失败/跳过；Release全解决方案0警告/错误（12.86秒），12C#限定格式验证退出0，保留既有workspace加载警告。单测9分40秒，精确消费者8分15秒；五资产同一.NET10host运行，没有新增真实OCP/网络HTTP、数据库或独立运行时验收。
 
@@ -693,7 +693,7 @@ RED32/health4/alias2 and the252pass/2timeout retry-fixture report are retained. 
 
 ## 2026-10-26 P1-09 OCP HTTP discovery
 
-Developed from master/5cbe5c9, P1-09/W4. All five assets expose OceanBaseOcpAddressResolver with a caller-owned HttpClient, explicit HTTP(S) origin, net service name and optional expected SERVICE_NAME. Each logical Open fetches a fresh fixed-route OCP snapshot before idle reuse. The request escapes appName and carries no database credentials. See [contract](obconnector-dotnet-architecture-design.md#ocp-http-discovery), [full evidence](obconnector-dotnet-completeness.md#1553-2026-10-26-ocp-http地址发现) and [audit](obconnector-dotnet-driver-audit.md#48-ocp-http地址发现2026-10-26).
+Developed from master/5cbe5c9, P1-09/W4. All five assets expose OceanBaseOcpAddressResolver with a caller-owned HttpClient, explicit HTTP(S) origin, net service name and optional expected SERVICE_NAME. Each logical Open fetches a fresh fixed-route OCP snapshot before idle reuse. The request escapes appName and carries no database credentials. See [contract](obconnector-dotnet-architecture-design.md#ocp-http-discovery), [full evidence](history/obconnector-dotnet-completeness.md#1553-2026-10-26-ocp-http地址发现) and [audit](obconnector-dotnet-driver-audit.md#48-ocp-http地址发现2026-10-26).
 
 HTTP200, UTF-8 JSON, 1MiB actual bytes, 16 value levels/4096 value nodes, exact NET_SERVICE_NAME and optional exact SERVICE_NAME metadata are enforced. One TCP address group preserves order/duplicates and existing256/65536 limits; explicit policies/weights/blacklists/multiple groups fail. The driver has no HTTP retry/cache/stale fallback. The caller controls HTTP authentication/TLS/proxy/handlers and must disable automatic redirects; final-URI rejection cannot undo a followed redirect. Send/body cancellation is passed through, but arbitrary handlers and long bounded CPU scans are not forcibly interrupted. HttpClient.Timeout with ResponseHeadersRead does not alone bound body consumption.
 
@@ -703,7 +703,7 @@ Original platform-reader failures (__type mapping, numeric syntax, truncated JSO
 
 ## 2026-10-26 P1-09 TNS file discovery
 
-Developed from master/9dc3f06, P1-09/W4. All five assets expose the immutable OceanBaseTnsAddressResolver for explicit UTF-8 file/alias discovery through the existing address-resolver API. Each logical Open reloads the file before idle pool reuse. Standard/wrapped descriptions, aliases/comments/quotes, TCP IPv4/IPv6 and optional exact SERVICE_NAME file-metadata binding are supported. Unsupported policy/group/weight/include/protocol options fail explicitly. See [contract and examples](obconnector-dotnet-architecture-design.md#tns-file-discovery), [complete evidence](obconnector-dotnet-completeness.md#1552-2026-10-26-tns文件地址发现) and [audit](obconnector-dotnet-driver-audit.md#47-tns文件地址发现2026-10-26).
+Developed from master/9dc3f06, P1-09/W4. All five assets expose the immutable OceanBaseTnsAddressResolver for explicit UTF-8 file/alias discovery through the existing address-resolver API. Each logical Open reloads the file before idle pool reuse. Standard/wrapped descriptions, aliases/comments/quotes, TCP IPv4/IPv6 and optional exact SERVICE_NAME file-metadata binding are supported. Unsupported policy/group/weight/include/protocol options fail explicitly. See [contract and examples](obconnector-dotnet-architecture-design.md#tns-file-discovery), [complete evidence](history/obconnector-dotnet-completeness.md#1552-2026-10-26-tns文件地址发现) and [audit](obconnector-dotnet-driver-audit.md#47-tns文件地址发现2026-10-26).
 
 Limits are 1MiB actual UTF-8 bytes, 16 descriptor levels, 4096 combined nodes/aliases, 256 addresses and 65536 canonical output characters. Publish complete replacements; in-place writes have no snapshot guarantee. Only file-open FileNotFound or Win32 sharing/lock conflicts retry, at most five attempts with four cancelable 25ms waits. Persistent conflicts still fail; no stale fallback. The 100ms configured waits do not bound blocked native IO. Pre-cancel/wait-cancel tests do not prove comprehensive mid-read cancellation. Windows sharing tests do not establish Linux acceptance.
 
@@ -713,7 +713,7 @@ Original missing-type, PORT injection, oversized-alias allocation, blank quoted-
 
 ## 2026-10-26 P1-09 endpoint TCP health cache
 
-Developed from master/bc84ba1. Host Recheck Seconds (default0,0..3600seconds) propagates through every asset's builder/copies/serialization/pool identity. A bounded1024 monotonic failure cache stably puts recent TCP failures last, retaining all candidates and duplicates as fallback. Selection is frozen across each physical Open's retry rounds. Only pre-Attach IOException/SocketException with an uncanceled budget records a failure, including final attempts; TCP success clears it before handshake. Greeting/TLS/auth/identity/SQL/cancellation do not poison reachability. See [contract](obconnector-dotnet-architecture-design.md#endpoint-tcp-health), [complete evidence](obconnector-dotnet-completeness.md#1551-2026-10-26-端点tcp健康缓存) and [audit](obconnector-dotnet-driver-audit.md#46-端点tcp健康缓存2026-10-26).
+Developed from master/bc84ba1. Host Recheck Seconds (default0,0..3600seconds) propagates through every asset's builder/copies/serialization/pool identity. A bounded1024 monotonic failure cache stably puts recent TCP failures last, retaining all candidates and duplicates as fallback. Selection is frozen across each physical Open's retry rounds. Only pre-Attach IOException/SocketException with an uncanceled budget records a failure, including final attempts; TCP success clears it before handshake. Greeting/TLS/auth/identity/SQL/cancellation do not poison reachability. See [contract](obconnector-dotnet-architecture-design.md#endpoint-tcp-health), [complete evidence](history/obconnector-dotnet-completeness.md#1551-2026-10-26-端点tcp健康缓存) and [audit](obconnector-dotnet-driver-audit.md#46-端点tcp健康缓存2026-10-26).
 
 Pool/private-source/unpooled-selector lifetimes own their caches; ordinary matching borrowers and prewarm sessions share pool state. Pool Clear, credential retirement and Dispose replace pool-owned caches so late old feedback cannot affect a new generation, including reserve-to-constructor races. Pool APIs do not clear unpooled selector-owned hints, which follow selector lifetime. Empty ordinary pool removal also removes health state. There is no global map or active migration/replay.
 
@@ -726,7 +726,7 @@ Initial18unknown-keyRED,2pass/16preferenceRED,84/126GREEN and6expected epoch-mut
 
 ## 2026-10-25 P1-09 bounded TCP connection retry
 
-Developed from master/0ec3e1c. Connect Retry Count (default0,0..10 additional complete candidate rounds) and Connect Retry Interval (default1,1..60seconds) propagate through builder/copies/pool identity. Full-round TCP failures alone wait/retry; TCP success makes greeting/TLS/auth/identity/command failures terminal. Positive count shares the logical Open deadline across pool wait/prewarm, attempts and backoff; zero retains existing waiting semantics. Resolve/credential snapshot once per logical Open. Caller cancellation/Close interrupt backoff, and subsequent explicit Open can reclaim capacity. No active-session reconnect, transaction migration or SQL replay. See [contract](obconnector-dotnet-architecture-design.md#connect-retry-policy) and [retained evidence](obconnector-dotnet-completeness.md#1550-2026-10-25-tcp-建连重试预算与退避).
+Developed from master/0ec3e1c. Connect Retry Count (default0,0..10 additional complete candidate rounds) and Connect Retry Interval (default1,1..60seconds) propagate through builder/copies/pool identity. Full-round TCP failures alone wait/retry; TCP success makes greeting/TLS/auth/identity/command failures terminal. Positive count shares the logical Open deadline across pool wait/prewarm, attempts and backoff; zero retains existing waiting semantics. Resolve/credential snapshot once per logical Open. Caller cancellation/Close interrupt backoff, and subsequent explicit Open can reclaim capacity. No active-session reconnect, transaction migration or SQL replay. See [contract](obconnector-dotnet-architecture-design.md#connect-retry-policy) and [retained evidence](history/obconnector-dotnet-completeness.md#1550-2026-10-25-tcp-建连重试预算与退避).
 
 最终完整单测5549通过（新增64：重试61、池身份3），相关五资产消费者174通过（新增52）；Release全解决方案及修正后消费者构建0警告/错误，7C#限定格式验证通过并保留既有workspace警告。五资产在同一.NET10host消费；无凭据/无SQL探针5022ms读0greeting，本模块没有新增实库互操作验收。
 
@@ -735,7 +735,7 @@ Original6unknown-keyRED,2pass/4TCPRED,70/113GREEN,4warmupRED,125focused121pass/4
 
 ## Connection-level server errors
 
-Developed from `master/917e9cc`, P0-05/W2 with P0-02/P0-04 boundaries. Connection-level ERR handling now retires failed sessions and preserves the current request's outcome semantics. See the [error and recovery contract](obconnector-dotnet-architecture-design.md#connection-level-server-errors) and [full module record](obconnector-dotnet-completeness.md#1549-2026-10-25-连接级服务器错误与显式连接重建).
+Developed from `master/917e9cc`, P0-05/W2 with P0-02/P0-04 boundaries. Connection-level ERR handling now retires failed sessions and preserves the current request's outcome semantics. See the [error and recovery contract](obconnector-dotnet-architecture-design.md#connection-level-server-errors) and [full module record](history/obconnector-dotnet-completeness.md#1549-2026-10-25-连接级服务器错误与显式连接重建).
 
 Final complete units: 5,485 passed, including 67 new cases. Affected consumers: 172 passed, including 80 new cases across five assets on one .NET10 host. Release build: zero warnings/errors; six changed C# files pass scoped format verification with the retained workspace-load warning. Without integration opt-in, nine configuration cases passed and two transaction cases were not executed.
 
@@ -746,7 +746,7 @@ The four selected real transaction regressions all failed before the initial gre
 
 ## Closed callback pool cleanup
 
-Developed from `master/80ddfbe` for P0-01/W1. A pooled Open or OpenAsync inside a Closed state handler completes the captured close chain before borrowing, including nested callbacks and another logical borrower. Pool capacity, captured ownership, early Closed events, external asynchronous rollback interleaving and old-reader generation guards remain in force. Completed scopes release their captured delegates; asynchronous cleanup also releases its lifted local delegate before publishing completion. See the [contract](obconnector-dotnet-architecture-design.md#pooled-close-callbacks) and [full evidence](obconnector-dotnet-completeness.md#1548-2026-10-25-closed-回调中的满池重开与清理资源释放).
+Developed from `master/80ddfbe` for P0-01/W1. A pooled Open or OpenAsync inside a Closed state handler completes the captured close chain before borrowing, including nested callbacks and another logical borrower. Pool capacity, captured ownership, early Closed events, external asynchronous rollback interleaving and old-reader generation guards remain in force. Completed scopes release their captured delegates; asynchronous cleanup also releases its lifted local delegate before publishing completion. See the [contract](obconnector-dotnet-architecture-design.md#pooled-close-callbacks) and [full evidence](history/obconnector-dotnet-completeness.md#1548-2026-10-25-closed-回调中的满池重开与清理资源释放).
 
 The final full unit run passed 5,418 cases, and all 233 selected consumer cases passed. The consumer selection includes the original 173 cases, 40 new callback cases and 20 existing reader lease cases. The earlier 173-case selection omitted those last two groups. There are 92 new unit cases; two existing TLS timeout cases intentionally migrate to successful reuse of the same capacity-one pool. Release build: zero warnings and errors. Scoped formatting and verification of nine changed C# files passed with the existing workspace-load warning. Without integration opt-in, nine configuration cases passed and 12 cases were not executed.
 
@@ -758,7 +758,7 @@ Other transaction-log callbacks opening their own full pool, complete reset, con
 
 ## Complex national member encoding
 
-Developed from `master/a1dddde`, P1-07/W5. Named and nested NCHAR/NVARCHAR2 members, scalar factory arrays and PL outputs use strict encoding according to direction: connection encoding for inputs, queried AL16UTF16 for stored members, and the result snapshot's session national encoding for PL outputs. See the [contract](obconnector-dotnet-architecture-design.md#complex-national-members) and [complete evidence](obconnector-dotnet-completeness.md#1547-2026-10-25-复杂类型-national-成员与方向编码). No public API, configuration or dependencies were added.
+Developed from `master/a1dddde`, P1-07/W5. Named and nested NCHAR/NVARCHAR2 members, scalar factory arrays and PL outputs use strict encoding according to direction: connection encoding for inputs, queried AL16UTF16 for stored members, and the result snapshot's session national encoding for PL outputs. See the [contract](obconnector-dotnet-architecture-design.md#complex-national-members) and [complete evidence](history/obconnector-dotnet-completeness.md#1547-2026-10-25-复杂类型-national-成员与方向编码). No public API, configuration or dependencies were added.
 
 Other database national encodings, anonymous ordinary non-NULL national results without trusted storage context, and complex whole-column RETURNING with unresolved identity remain unsupported. Such RETURNING failures preserve prior output values, report an unknown execution outcome and break the session; the application must reconcile the write.
 
@@ -772,35 +772,35 @@ The five consumer assets share one .NET 10 host. Real-server evidence is limited
 
 Oracle OUT/RETURNING and procedure/function execution now accept a positive command [FetchSize hint](obconnector-dotnet-architecture-design.md#oracle-output-fetch-hint) with explicit or implicit preparation. Internal output rows stay in the execution response with cursorFlag0 and no FETCH; returned REF CURSOR readers use their own page size. This does not add output-result pagination. Output offset and ExecuteArray positive FetchSize remain unsupported; ordinary query cursors keep their existing behavior.
 
-[Module evidence](obconnector-dotnet-completeness.md#1546-2026-10-25-oracle-输出执行与-fetchsize-提示): original24RED, final5280unit, affected510consumer (30added), expanded58real (20added), noopt13pass/101NotExecuted. New real cases cover Oracle4.4.2.2 direct/Windows/.NET10/TLSdisabled and five command shapes; consumers load five assets on one.NET10host. Source review found no actionable findings. No full consumer/DI/package/independent-runtime/full-database rerun or proxy/trust/platform acceptance; REF CURSOR IN/INOUT/columns and all23gap IDs remain open. Historical module snapshots below retain their original boundaries.
+[Module evidence](history/obconnector-dotnet-completeness.md#1546-2026-10-25-oracle-输出执行与-fetchsize-提示): original24RED, final5280unit, affected510consumer (30added), expanded58real (20added), noopt13pass/101NotExecuted. New real cases cover Oracle4.4.2.2 direct/Windows/.NET10/TLSdisabled and five command shapes; consumers load five assets on one.NET10host. Source review found no actionable findings. No full consumer/DI/package/independent-runtime/full-database rerun or proxy/trust/platform acceptance; REF CURSOR IN/INOUT/columns and all23gap IDs remain open. Historical module snapshots below retain their original boundaries.
 
 ## Lost transaction acknowledgement
 
-Commit/rollback response loss now has sixteen controlled real-server cases and sixteen local lifecycle cases. The local relay first receives a real server reply, then drops/truncates it. The driver reports unknown outcome and discards the session; independent committed-data reconciliation and a fresh same-endpoint Max1 lease work before clearing. This is existing behavior acceptance, with no product/API change. [Application reconciliation guide](unknown-outcome-recovery.md), [full evidence/limits](obconnector-dotnet-completeness.md#1545-2026-10-25-事务响应丢失与池恢复验收).
+Commit/rollback response loss now has sixteen controlled real-server cases and sixteen local lifecycle cases. The local relay first receives a real server reply, then drops/truncates it. The driver reports unknown outcome and discards the session; independent committed-data reconciliation and a fresh same-endpoint Max1 lease work before clearing. This is existing behavior acceptance, with no product/API change. [Application reconciliation guide](unknown-outcome-recovery.md), [full evidence/limits](history/obconnector-dotnet-completeness.md#1545-2026-10-25-事务响应丢失与池恢复验收).
 
 Final full units5234pass; expanded related suite160pass/4configskips includes4local fixture cases; noopt13pass/100NotExecuted. Original fixture failures retained and stop/Accept race addressed. Direct4.4.2.2 dual-mode/Windows/.NET10/TLSdisabled only, fault after a real response. Server/coordinator crash, other send boundaries and complete proxy/TLS/platform acceptance remain open. Consumers/DI/packages/runtimes/full database suites were not rerun.
 
 ## External persistent LOB acceptance
 
-Four direct Oracle cases now prove actual external BLOB/CLOB locators, exact full data and healthy same-session pool reuse after disposal (100000/220000 UTF8 bytes, sync/async). Eighteen local controlled in-flight chunk cases cover cancellation/Close/disposal/timeout and same-endpoint single-capacity replacement before clearing; these local cases do not prove real-server in-flight cancellation. [Full evidence and limits](obconnector-dotnet-completeness.md#1544-2026-10-25-外置持久-lob-读取与池生命周期验收).
+Four direct Oracle cases now prove actual external BLOB/CLOB locators, exact full data and healthy same-session pool reuse after disposal (100000/220000 UTF8 bytes, sync/async). Eighteen local controlled in-flight chunk cases cover cancellation/Close/disposal/timeout and same-endpoint single-capacity replacement before clearing; these local cases do not prove real-server in-flight cancellation. [Full evidence and limits](history/obconnector-dotnet-completeness.md#1544-2026-10-25-外置持久-lob-读取与池生命周期验收).
 
 Tests/docs only. Final units5218pass; scoped real119pass/4configuration skips; noopt9pass/99NotExecuted. Review diagnostics/budget suggestions addressed; original Close-assertion failures retained. Direct OceanBase4.4.2.2/Windows/.NET10/TLSdisabled only, new real casesOracle only. Full fault/concurrency/load/reset/other-deployment acceptance remains open; consumers/DI/packages/independent runtimes/full database suites were not rerun. The next section retains the earlier inline-only module's evidence and limits.
 
 ## Persistent LOB and REF CURSOR pool isolation acceptance
 
-Same-endpoint single-capacity pool tests now cover twenty persistent BLOB/CLOB and eight Oracle output-cursor lifecycle cases, both locally and on the configured direct Oracle server. Active LOB handles discard the old physical session; fully disposed read-only LOBs allow reset/reuse. Stale reads, writes, truncation, binding and disposal preserve the new lease, and an independent unpooled observer verifies the stored value's exact text/bytes. REF cursor phases additionally retain conservative opaque-call session retirement; they do not prove reuse after cursor release. [Contract and limits](obconnector-dotnet-completeness.md#518-readerlob-与-ref-cursor-的剩余验收), [original failures and final evidence](obconnector-dotnet-completeness.md#1543-2026-10-25-持久-lob-与-ref-cursor-的同端点池隔离验收).
+Same-endpoint single-capacity pool tests now cover twenty persistent BLOB/CLOB and eight Oracle output-cursor lifecycle cases, both locally and on the configured direct Oracle server. Active LOB handles discard the old physical session; fully disposed read-only LOBs allow reset/reuse. Stale reads, writes, truncation, binding and disposal preserve the new lease, and an independent unpooled observer verifies the stored value's exact text/bytes. REF cursor phases additionally retain conservative opaque-call session retirement; they do not prove reuse after cursor release. [Contract and limits](history/obconnector-dotnet-completeness.md#518-readerlob-与-ref-cursor-的剩余验收), [original failures and final evidence](history/obconnector-dotnet-completeness.md#1543-2026-10-25-持久-lob-与-ref-cursor-的同端点池隔离验收).
 
 This is acceptance of existing behavior, with no production change. Full units pass5198; scoped real Connections/XA/REF CURSOR/LOB pass115 with4configuration skips; no-opt-in Integration9pass/98NotExecuted. All twenty real persistent locators report inline=True: external LOB network reads/cancellation, full concurrency/load and complete reset matrices remain open. Real scope remains direct OceanBase4.4.2.2, Windows/.NET10, TLSdisabled; new resource cases are Oracle-only. Consumers, DI, packages, independent runtimes, OBProxy, enterprise trust and full database suites were not rerun. Original fixture failures and historical server failures remain recorded.
 
 ## Pooled reader CloseConnection ownership
 
-A completed reader's CloseConnection callback now checks the original logical Open lease, so it cannot close a later lease that reuses the same pooled physical session. Batch captures that lease with its reservation and guards the release-to-close window. Current-lease reader closure and public Close retain their behavior. [Contract](obconnector-dotnet-architecture-design.md#closeconnection-reader-ownership) and [original failures/final evidence](obconnector-dotnet-completeness.md#1541-2026-10-25-旧-reader-延迟关闭与池租约隔离).
+A completed reader's CloseConnection callback now checks the original logical Open lease, so it cannot close a later lease that reuses the same pooled physical session. Batch captures that lease with its reservation and guards the release-to-close window. Current-lease reader closure and public Close retain their behavior. [Contract](obconnector-dotnet-architecture-design.md#closeconnection-reader-ownership) and [original failures/final evidence](history/obconnector-dotnet-completeness.md#1541-2026-10-25-旧-reader-延迟关闭与池租约隔离).
 
 Final full units pass 5,170, five-asset consumers pass 2,918, DI passes14; direct Connections+XA+REF CURSOR+LOB passes87 with4configuration skips. New same-physical-session tests pass both MySQL/Oracle sync/async. Consumers run in one .NET10 host; real evidence is limited to OceanBase4.4.2.2 direct, Windows/.NET10, TLS disabled. This does not close the complete reader/resource/reset, arbitrary concurrency/load, OBProxy, trust, independent-runtime or release matrix; prior failures and skips remain historical.
 
 ## Pooled XA isolation acceptance
 
-New local tests cover seven XA phases, both modes and sync/async Close: dedicated sessions close without reset or implicit XA completion; a single-capacity pool authenticates a replacement before clearing, and stale resource APIs reject after logical reopen. Twenty new direct cases cover idle/completed dedication and prepared-branch recovery after Close. Final full units pass 5,162; Connections + XA passes 76 with 4 configuration skips. These are existing behavior acceptance results, with no production code changes. They apply only to OceanBase 4.4.2.2 direct MySQL/Oracle on Windows/.NET 10 with TLS disabled. Real active/suspended disconnect recovery, response loss, coordinator crash and the complete deployment matrix remain open. [Full evidence and retained limits](obconnector-dotnet-completeness.md#1540-2026-10-25-xa-池隔离与-prepared-分支恢复验收).
+New local tests cover seven XA phases, both modes and sync/async Close: dedicated sessions close without reset or implicit XA completion; a single-capacity pool authenticates a replacement before clearing, and stale resource APIs reject after logical reopen. Twenty new direct cases cover idle/completed dedication and prepared-branch recovery after Close. Final full units pass 5,162; Connections + XA passes 76 with 4 configuration skips. These are existing behavior acceptance results, with no production code changes. They apply only to OceanBase 4.4.2.2 direct MySQL/Oracle on Windows/.NET 10 with TLS disabled. Real active/suspended disconnect recovery, response loss, coordinator crash and the complete deployment matrix remain open. [Full evidence and retained limits](history/obconnector-dotnet-completeness.md#1540-2026-10-25-xa-池隔离与-prepared-分支恢复验收).
 
 ## Oracle unknown-precision NUMBER results
 
@@ -810,7 +810,7 @@ The [result contract](obconnector-dotnet-architecture-design.md#oracle-number-re
 
 ## Oracle autocommit verification scope
 
-The final full unit suite passes 5,134 cases, full five-asset consumers pass 2,898 cases, and the final direct Connections + OracleNumber suite passes 52 with 4 configuration skips. Full consumers use one .NET 10 host. Separately, the two standalone raw-wire samples compile and run on installed Windows .NET 8.0.31 / 9.0.20 / 10.0.12 (6 smoke checks); these limited samples do not establish full suites or database acceptance on those runtimes. Original failures and exact limits remain in [the module record](obconnector-dotnet-completeness.md#1539-2026-10-25-oracle-自动提交与真实池隔离). Full OBProxy, trusted TLS, resource, XA and concurrency acceptance remain open.
+The final full unit suite passes 5,134 cases, full five-asset consumers pass 2,898 cases, and the final direct Connections + OracleNumber suite passes 52 with 4 configuration skips. Full consumers use one .NET 10 host. Separately, the two standalone raw-wire samples compile and run on installed Windows .NET 8.0.31 / 9.0.20 / 10.0.12 (6 smoke checks); these limited samples do not establish full suites or database acceptance on those runtimes. Original failures and exact limits remain in [the module record](history/obconnector-dotnet-completeness.md#1539-2026-10-25-oracle-自动提交与真实池隔离). Full OBProxy, trusted TLS, resource, XA and concurrency acceptance remain open.
 
 ## Slow client operation diagnostics
 
@@ -824,27 +824,27 @@ The [phase-duration histogram](obconnector-dotnet-architecture-design.md#connect
 
 [Standalone preparation](obconnector-dotnet-architecture-design.md#oracle-standalone-prepare) now supports Oracle text OUT/RETURNING, stored procedures and function returns. It neither executes the target nor consumes input values; server parse/privilege/metadata-lock costs remain possible. The command retains a statement only until the next execution transfers ownership to its cursor owner. Full parameter metadata and the exact pure-OUT DML split layout are validated separately; other mismatches reject. At that preparation-module checkpoint, positive FetchSize for output execution was unsupported; the later output-hint module above accepts the hint without paging internal outputs. Prepare still ignores execution FetchSize; REF CURSOR IN/INOUT remains unsupported, while binary and text cursor-valued result columns use the current four-byte identifier contract.
 
-The direct Oracle4.4.2.2 profile passed ten sync/async block/RETURNING/procedure/function/cursor cases and twenty final cases including existing procedure/cursor and prepared array regressions. Preparation left the test table empty and outputs unchanged; REF CURSORs remained consumable after command disposal. The initial two RETURNING count failures (one wire input plus one output column), profile-data fixture error and all original reports remain in [the module record](obconnector-dotnet-completeness.md#1534-2026-10-25-oracle-独立-prepare). This profile uses TLS disabled on Windows/.NET10; real proxy/TLS, other versions and metadata-lock/fault matrices remain open.
+The direct Oracle4.4.2.2 profile passed ten sync/async block/RETURNING/procedure/function/cursor cases and twenty final cases including existing procedure/cursor and prepared array regressions. Preparation left the test table empty and outputs unchanged; REF CURSORs remained consumable after command disposal. The initial two RETURNING count failures (one wire input plus one output column), profile-data fixture error and all original reports remain in [the module record](history/obconnector-dotnet-completeness.md#1534-2026-10-25-oracle-独立-prepare). This profile uses TLS disabled on Windows/.NET10; real proxy/TLS, other versions and metadata-lock/fault matrices remain open.
 
 ## Result character sets
 
 Ordinary result strings use the [explicit strict collation map](obconnector-dotnet-architecture-design.md#result-character-sets): ASCII, DEC8, TIS620, SJIS, Big5, HKSCS/HKSCS31, MySQL latin1/CP1252, GBK, GB18030-2005/2022, UTF-16/LE and mapped UTF-8 families. The result decoder and MySQL width metadata share one map; binary63, JSON/CLOB and trusted Oracle national rules keep their own contracts. Unknown and other unimplemented families are rejected. Client SQL/string parameters have a separate [configured input-encoding contract](client-character-sets.md). The2022, DEC8/TIS620, SJIS, Big5 and HKSCS/HKSCS31 modules have local evidence only, as recorded above.
 
-The real direct OceanBase4.4.2.2 MySQL test passes six charset cases, each covering eight text/prepared × buffered/sequential × sync/async combinations, including exact GB18030 corrected characters, NULL and connection reuse. UTF16/LE direct SET attempts remain recorded as server1231/42000 failures; the final cases use `character_set_results=NULL` to preserve expression encoding and assert string FieldType. The initial Int32-versus-Int64 literal assertion and an intermediate test-source compilation failure are retained as fixture/development failures. Local dual-mode reader tests and five-asset consumers cover additional paths; they do not establish Oracle/proxy/TLS compatibility. Full evidence and environment limitations are in [the module record](obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
+The real direct OceanBase4.4.2.2 MySQL test passes six charset cases, each covering eight text/prepared × buffered/sequential × sync/async combinations, including exact GB18030 corrected characters, NULL and connection reuse. UTF16/LE direct SET attempts remain recorded as server1231/42000 failures; the final cases use `character_set_results=NULL` to preserve expression encoding and assert string FieldType. The initial Int32-versus-Int64 literal assertion and an intermediate test-source compilation failure are retained as fixture/development failures. Local dual-mode reader tests and five-asset consumers cover additional paths; they do not establish Oracle/proxy/TLS compatibility. Full evidence and environment limitations are in [the module record](history/obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
 
 ## Ordinary pool configuration identity
 
-Internal [pool configuration normalization](obconnector-dotnet-architecture-design.md#ordinary-pool-configuration-identity) now unifies equivalent option order, typed spelling and effective defaults for ordinary pool reuse, capacity, failure cleanup and clearing. Parsed empty PAM factors remain distinct from absent factors across Open/Close/Clear; text values, policy/certificate references and private sources retain their isolation. Public ConnectionString serialization is unchanged. Pooled Open inside a Closed state handler completes captured cleanup before borrowing; Close-cleanup transaction ILogger notifications follow session/pool release, as described in [the current callback contract](obconnector-dotnet-architecture-design.md#pooled-close-callbacks). Full reset, other listener reentry/concurrency, long-running load, proxy/platform and independent-runtime database acceptance remain open; see [the original module record](obconnector-dotnet-completeness.md#1531-2026-10-25-普通池配置归一化).
+Internal [pool configuration normalization](obconnector-dotnet-architecture-design.md#ordinary-pool-configuration-identity) now unifies equivalent option order, typed spelling and effective defaults for ordinary pool reuse, capacity, failure cleanup and clearing. Parsed empty PAM factors remain distinct from absent factors across Open/Close/Clear; text values, policy/certificate references and private sources retain their isolation. Public ConnectionString serialization is unchanged. Pooled Open inside a Closed state handler completes captured cleanup before borrowing; Close-cleanup transaction ILogger notifications follow session/pool release, as described in [the current callback contract](obconnector-dotnet-architecture-design.md#pooled-close-callbacks). Full reset, other listener reentry/concurrency, long-running load, proxy/platform and independent-runtime database acceptance remain open; see [the original module record](history/obconnector-dotnet-completeness.md#1531-2026-10-25-普通池配置归一化).
 
 ## MySQL stored-procedure execution
 
-The module developed from `1bb13cb` adds MySQL CommandType.StoredProcedure with Input/Output/InputOutput in collection order. It requires effective PS multi-results, uses prepared SET/CALL plus a hidden output SELECT, and drains remaining results on reader close. Output values follow actual SELECT metadata rather than forced parameter DbType conversion. ReturnValue, FetchSize, SchemaOnly and KeyInfo are rejected; InputOutput streams are unsupported. Oracle execution keeps its PrepareExecute contract. See [API and lifecycle rules](obconnector-dotnet-architecture-design.md#mysql-stored-procedures) and [final module evidence](obconnector-dotnet-completeness.md#1530-2026-10-25-mysql-存储过程执行本地交付).
+The module developed from `1bb13cb` adds MySQL CommandType.StoredProcedure with Input/Output/InputOutput in collection order. It requires effective PS multi-results, uses prepared SET/CALL plus a hidden output SELECT, and drains remaining results on reader close. Output values follow actual SELECT metadata rather than forced parameter DbType conversion. ReturnValue, FetchSize, SchemaOnly and KeyInfo are rejected; InputOutput streams are unsupported. Oracle execution keeps its PrepareExecute contract. See [API and lifecycle rules](obconnector-dotnet-architecture-design.md#mysql-stored-procedures) and [final module evidence](history/obconnector-dotnet-completeness.md#1530-2026-10-25-mysql-存储过程执行本地交付).
 
-Final full regression records4414unit and2558consumer passes, zero failures/skips, plus14DI passes. Consumer count/name/ID multisets add80cases without removing existing ones; all11loaded DLL hashes/timestamps remain unchanged. These five assets execute on one .NET10host, not five independent runtimes. The earlier [development checkpoint](obconnector-dotnet-completeness.md#1529-2026-10-25-mysql-过程开发与完整文档检查点) retains local TLS certificate-loading failures and partial results. The same built80-case consumer selection passes under the normal user environment without changing certificates or the driver; sandbox failures occurred during PKCS#12 private-key import before TLS/procedure exchange. These are local transport fixtures, not real TLS interoperability. A default-policy direct-server run passed the four procedure cases and missing-routine1305 case; a broader applicable MySQL run passed74/skipped5, with9configuration cases included. The original unfiltered run retains19Oracle-only no-data failures and one stale null-enlistment assertion, corrected to ArgumentNullException. Historical suite totals, the Oracle nested-table-column failure and cleanup failure below remain unchanged.
+Final full regression records4414unit and2558consumer passes, zero failures/skips, plus14DI passes. Consumer count/name/ID multisets add80cases without removing existing ones; all11loaded DLL hashes/timestamps remain unchanged. These five assets execute on one .NET10host, not five independent runtimes. The earlier [development checkpoint](history/obconnector-dotnet-completeness.md#1529-2026-10-25-mysql-过程开发与完整文档检查点) retains local TLS certificate-loading failures and partial results. The same built80-case consumer selection passes under the normal user environment without changing certificates or the driver; sandbox failures occurred during PKCS#12 private-key import before TLS/procedure exchange. These are local transport fixtures, not real TLS interoperability. A default-policy direct-server run passed the four procedure cases and missing-routine1305 case; a broader applicable MySQL run passed74/skipped5, with9configuration cases included. The original unfiltered run retains19Oracle-only no-data failures and one stale null-enlistment assertion, corrected to ArgumentNullException. Historical suite totals, the Oracle nested-table-column failure and cleanup failure below remain unchanged.
 
 The tables distinguish recorded passes, failures, explicitly unsupported behavior and unverified combinations. Implemented APIs and passing local fixtures do not establish server compatibility.
 
-Routine parameter derivation has a local implementation on all five assets: [API contract](obconnector-dotnet-architecture-design.md#routine-parameter-derivation) and [mapping limits](schema.md#parameter-derivation). It uses a unique visible routine identity, one reserved session/current transaction, per-query timeout, cancellation and atomic collection-membership publication. It does not execute the target or add MySQL StoredProcedure execution. Actual directory parsing, permissions, declarations, version and OBProxy acceptance remain unverified; local fixtures cannot establish them. The [development checkpoint](obconnector-dotnet-completeness.md#1517-2026-10-25-参数推导开发与完整文档检查点) retains earlier failures and is not the final delivery state.
+Routine parameter derivation has a local implementation on all five assets: [API contract](obconnector-dotnet-architecture-design.md#routine-parameter-derivation) and [mapping limits](schema.md#parameter-derivation). It uses a unique visible routine identity, one reserved session/current transaction, per-query timeout, cancellation and atomic collection-membership publication. It does not execute the target or add MySQL StoredProcedure execution. Actual directory parsing, permissions, declarations, version and OBProxy acceptance remain unverified; local fixtures cannot establish them. The [development checkpoint](history/obconnector-dotnet-completeness.md#1517-2026-10-25-参数推导开发与完整文档检查点) retains earlier failures and is not the final delivery state.
 
 User-SQL pool state classification now has a shared mode-aware path and a target-send boundary: [contract](obconnector-dotnet-architecture-design.md#pooled-session-state-after-user-sql). Commented/later statements and opaque calls retire the session; preparation and local rejection do not mark it as executed. MySQL quoted backslash/SQL_MODE ambiguity is conservative and can reduce reuse. This does not close arbitrary function/trigger effects, resource/fault/concurrency matrices or real reset acceptance; see P0-02 in the completeness baseline.
 
@@ -951,7 +951,7 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 | LOCAL INFILE | Opt-in protocol path is implemented. `Allow Local Infile=true` advertises `CLIENT_LOCAL_FILES`; `LocalInfileStreamFactory` supplies the readable stream, and the driver never opens the server filename as a local path. Factory/read/cancel/final-response failures destroy the physical session. Real OceanBase/OBProxy `LOAD DATA LOCAL INFILE`, proxy policy, long-file and interruption behavior remain unverified. |
 | Compression and OB20 extensions | Standard MySQL zlib compression is opt-in with `Use Compression=true`, switches after authentication and requires server support; unsupported servers fail before credentials. All five assets share bounded block framing and strict zlib validation. `Use Compression=true` with `Use OB20=true` is rejected before networking. OB20 compressed frames and proxy reroute remain unsupported; real OceanBase/OBProxy compression interoperability is unverified. |
 | TLS/mTLS | `VerifyFull` uses platform validation by default; the optional `RemoteCertificateValidationCallback` replaces that decision and is supported on all assets, with a builder entry on modern data sources. Callbacks require VerifyFull and are isolated by reference identity in ordinary pools; they run only on new physical TLS sessions. `Required` encrypts without server identity validation. `ClientCertificate` supports pooled/direct connections; modern builder `UseClientCertificate` captures a source-owned snapshot even without pooling. Ordinary certificates must remain valid through Open, while source originals may be disposed after Build. `Check Certificate Revocation=true` enables platform revocation checks; the callback must enforce its intended handling of those errors. Local mTLS and policy isolation have loopback coverage; real enterprise CA/mTLS, rotation, revocation and cross-platform profiles remain unverified. See [client certificate contract](obconnector-dotnet-architecture-design.md#tls-client-certificates) and [server validation contract](obconnector-dotnet-architecture-design.md#tls-server-validation). |
-| Decimal parameter declarations | Nullable OceanBaseParameter.DecimalScale supports explicit Oracle -84..127 and MySQL 0..30, with per-mode precision bounds and scale <= nonzero precision for MySQL. Standard Scale clears the override; a non-null override clears the old Scale and clearing it does not restore that overwritten declaration. Exact constraints reject rounding, typed NULL retains metadata validation and non-decimal parameters reject the override. Supported server/client prepare paths share the declaration. Local unit/five-asset wire evidence is recorded in the [module record](obconnector-dotnet-completeness.md#1516-2026-10-25-有符号-decimal-scale-本地交付); real NUMBER/DECIMAL declarations and version/OBProxy matrices remain unverified. Parameter derivation retains the signed declaration. |
+| Decimal parameter declarations | Nullable OceanBaseParameter.DecimalScale supports explicit Oracle -84..127 and MySQL 0..30, with per-mode precision bounds and scale <= nonzero precision for MySQL. Standard Scale clears the override; a non-null override clears the old Scale and clearing it does not restore that overwritten declaration. Exact constraints reject rounding, typed NULL retains metadata validation and non-decimal parameters reject the override. Supported server/client prepare paths share the declaration. Local unit/five-asset wire evidence is recorded in the [module record](history/obconnector-dotnet-completeness.md#1516-2026-10-25-有符号-decimal-scale-本地交付); real NUMBER/DECIMAL declarations and version/OBProxy matrices remain unverified. Parameter derivation retains the signed declaration. |
 | ADO.NET adapters and key metadata | `OceanBaseDataAdapter` and `OceanBaseCommandBuilder` have a local [fill/CRUD generation implementation](obconnector-dotnet-architecture-design.md#data-adapters-and-command-generation) on all five assets: synchronous sequential updates, mappings/events, caller transactions and optimistic concurrency. Automatic UPDATE/DELETE require a complete visible chosen row key; unknown shapes and context-dependent locator/complex/cursor bindings require explicit commands. Generated identity/default refresh is not automatic; real CRUD/locking/version/OBProxy/runtime acceptance remains open. `KeyInfo` has a bounded [source-key/hidden-column contract](obconnector-dotnet-architecture-design.md#key-information-and-hidden-columns): same-session pre-execution catalog snapshots, primary/nonnullable unique row keys and hidden tail columns only for proven single-base-table SELECTs. Nullable single-column UNIQUE is distinct from a nonnullable row key; composite members are not individually unique. Complex/ambiguous queries preserve SQL and shape with unknown keys, and use actual execution metadata. Real dictionary/permissions/DDL/version/OBProxy acceptance remains open. `SchemaOnly` uses server-prepare metadata for a single accepted text query with input parameters, never executing the target, uploading/encoding values or using client fallback. It reuses valid prepared metadata and ignores fetch/offset hints. Server preparation errors propagate; prepare-time metadata can differ from the executed result, and server parsing/metadata locks remain possible. Named complex metadata may require directory lookup. Local sync/async/five-asset regressions exist; real side-effect/lock/large-result acceptance remains open. Modern `DbBatch` also accepts `SchemaOnly` and `KeyInfo`, combined with `CloseConnection`/`SequentialAccess`; batch `SingleRow`/`SingleResult` apply across all entries, with hidden results consumed by NextResult. Source batches support direct `CreateBatchCommand` and own their connection lifetime. See the [batch contract](obconnector-dotnet-architecture-design.md#batch-metadata). |
 | Disabled autocommit | MySQL-mode sessions whose `@@autocommit` is 0; Open fails because the provider cannot commit implicit transactions. Connector/J forces `SET autocommit=1` instead; this driver sets no session variables. |
 | Ambient transactions | Local TransactionScope/EnlistTransaction uses the coordinator single-resource slot on one physical session. Second database resources and promotion are rejected; unknown COMMIT reports InDoubt, confirmed commit survives failed cleanup, and late callbacks cannot affect a reopened/pooled session. After successful enlistment, reopening after Close inside the unfinished scope remains unsupported; an Open whose initialization failed can be retried after the failed resource is released. Distributed atomic commit/recovery and conflicting ambient/local/XA combinations remain unsupported. Initialization is synchronous even for OpenAsync but observes the opening token; cancellation during a pending control response closes the failed connection, discards the session and releases the enlistment/pool slot. The token does not affect commit/rollback after successful Open. CommandTimeout remains a separate exchange budget; scope timeout does not immediately cancel the wire wait. Local/five-asset evidence is recorded in the latest module checkpoint; real OceanBase/OBProxy/independent-runtime acceptance remains open. See the [ambient contract](obconnector-dotnet-architecture-design.md#ambient-transactions). Explicit XA remains separate. |
@@ -973,7 +973,7 @@ Live-source version history survives Clear; empty ordinary registry eviction res
 
 ## Catalog metadata
 
-`GetSchema` provides a local implementation for 20 Oracle / 18 MySQL collections, including static DataTypes with final local unit and five-asset consumer evidence; see the [module record](obconnector-dotnet-completeness.md#1514-2026-10-25-datatypes-本地交付); the full [Schema contract](schema.md) lists shapes, restrictions and permission requirements. Types/Synonyms are explicitly unsupported on MySQL. Static DataTypes now reports canonical codec-supported declarations and CLR/provider representation variants, with explicit precision/scale, session/encoding/negotiation requirements and parameter/result limitations. It does not validate server DDL or add KeyInfo or a DataAdapter implementation. Automatic parameter derivation is a separate command API with the mapping limits described above. The previously committed dictionary SQL is checked against pinned OceanBase source, with protocol fixtures and five-asset catalog consumers; the final affected consumer run also executes all 16 DataTypes catalog cases on the .NET 10 host; actual dictionary parsing, privileges, collation, older versions and OBProxy still require real-server reports. The historical 2026-10-24 database passes predate this extension and do not validate it.
+`GetSchema` provides a local implementation for 20 Oracle / 18 MySQL collections, including static DataTypes with final local unit and five-asset consumer evidence; see the [module record](history/obconnector-dotnet-completeness.md#1514-2026-10-25-datatypes-本地交付); the full [Schema contract](schema.md) lists shapes, restrictions and permission requirements. Types/Synonyms are explicitly unsupported on MySQL. Static DataTypes now reports canonical codec-supported declarations and CLR/provider representation variants, with explicit precision/scale, session/encoding/negotiation requirements and parameter/result limitations. It does not validate server DDL or add KeyInfo or a DataAdapter implementation. Automatic parameter derivation is a separate command API with the mapping limits described above. The previously committed dictionary SQL is checked against pinned OceanBase source, with protocol fixtures and five-asset catalog consumers; the final affected consumer run also executes all 16 DataTypes catalog cases on the .NET 10 host; actual dictionary parsing, privileges, collation, older versions and OBProxy still require real-server reports. The historical 2026-10-24 database passes predate this extension and do not validate it.
 
 ## Runtime and integration coverage
 

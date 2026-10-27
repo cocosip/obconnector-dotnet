@@ -11,7 +11,7 @@ another execution context. The guard does not declare a ThreadStatic field in a 
 An independent-process consumer checks old-context collection and the integrity of new-context static
 objects after the old thread exits. This addresses the reproduced diagnostic state corruption while
 preserving synchronous observer exception isolation, Activity restoration and metadata-only events.
-See the [protocol contract](protocol-diagnostics.md) and [local verification limits](obconnector-dotnet-completeness.md#1559-2026-10-26-可卸载诊断线程状态损坏与默认回归恢复).
+See the [protocol contract](protocol-diagnostics.md) and [local verification limits](history/obconnector-dotnet-completeness.md#1559-2026-10-26-可卸载诊断线程状态损坏与默认回归恢复).
 
 ## Connection-level server errors
 
@@ -155,7 +155,7 @@ PAM PasswordN factors are ordered numerically; a present empty factor differs fr
 
 Pools also retain resolver, credential-provider, validation-delegate and certificate reference identity, plus the certificate fingerprint. Equal delegates or objects are not interchangeable policy instances. Data sources keep separate private pools. ClearAll and empty-pool removal reuse the same canonical identity without merging private sources or reinterpreting credentials.
 
-Closed state notification starts before transaction/return cleanup. Pooled opens within that callback can complete the captured cleanup before borrowing, as described below. Complete reset, concurrency and long-running resource acceptance remain open; see [the remaining pool work](obconnector-dotnet-completeness.md#51-连接池和会话隔离).
+Closed state notification starts before transaction/return cleanup. Pooled opens within that callback can complete the captured cleanup before borrowing, as described below. Complete reset, concurrency and long-running resource acceptance remain open; see [the remaining pool work](history/obconnector-dotnet-completeness.md#51-连接池和会话隔离).
 
 <a id="pool-wait-handoff"></a>
 ### Pool wait notification handoff
@@ -226,7 +226,7 @@ This is local driver behavior, not proof of OceanBase/OBProxy reset compatibilit
 
 `CommandBehavior.CloseConnection` belongs to the logical Open lease that started the reader. Disposing a completed ordinary reader or closing a Batch reader must not close a later lease after explicit Close/Open, even when the pool reuses the same physical session object. Ordinary readers capture the connection Open generation at command start; batches capture it with the session reservation. The connection compares session identity and that generation atomically before conditional closure. Public Close/CloseAsync still close the current connection; disposal within the original lease retains its existing behavior.
 
-This rule also protects metadata-only readers and the Batch reservation-release/connection-close callback window. It does not promise arbitrary concurrent operations on one connection. Local regressions, five-asset consumers and direct OceanBase4.4.2.2 MySQL/Oracle tests cover this lease boundary; full resource, fault, load, proxy and platform acceptance remains open. See the [verification record](obconnector-dotnet-completeness.md#1541-2026-10-25-旧-reader-延迟关闭与池租约隔离).
+This rule also protects metadata-only readers and the Batch reservation-release/connection-close callback window. It does not promise arbitrary concurrent operations on one connection. Local regressions, five-asset consumers and direct OceanBase4.4.2.2 MySQL/Oracle tests cover this lease boundary; full resource, fault, load, proxy and platform acceptance remains open. See the [verification record](history/obconnector-dotnet-completeness.md#1541-2026-10-25-旧-reader-延迟关闭与池租约隔离).
 
 ### Prepared statement cache
 
@@ -274,7 +274,7 @@ Scalar/nonquery executions drain their results. Failure and disposal also clean 
 connection. Connection/Transaction getters/setters and standalone Prepare remain unsupported. Open may
 join the ambient single-resource transaction. The source command timeout is the batch default. Normal
 connection batches keep caller-owned connection behavior. Standard assets expose no modern batch API.
-See [local evidence and remaining acceptance](obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
+See [local evidence and remaining acceptance](history/obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
 
 ### MySQL client string preparation
 
@@ -379,7 +379,7 @@ NextResult even though it will not expose another result. Early Close keeps the 
 unstarted entries are skipped. An unread current response can destroy its session. CloseConnection
 still belongs to the original logical lease; data-source batches still own that connection.
 SchemaOnly with limits may prepare hidden entries and query their metadata catalogs, but executes no
-target SQL. The batch reservation remains until reader close. See [verification and open acceptance](obconnector-dotnet-completeness.md#1561-2026-10-26-singlerowsingleresult-跨批次结果限制).
+target SQL. The batch reservation remains until reader close. See [verification and open acceptance](history/obconnector-dotnet-completeness.md#1561-2026-10-26-singlerowsingleresult-跨批次结果限制).
 
 ### Data adapters and command generation
 
@@ -424,7 +424,7 @@ Oracle may report precision zero and scale -1 for both a bound expression and a 
 
 Schema reports the server metadata (`NumericPrecision=null` when unknown and the advertised `NumericScale`); it does not substitute the value's scale into the column definition. Unknown-precision results remain `OceanBaseDecimal`, and typed `decimal` conversions remain exact. The value representation can change: returned text `"40"` now has coefficient 40 and value scale 0 rather than being rescaled to coefficient 4/scale -1. `GetProviderSpecificValue`, `GetValue` and typed reads agree numerically. This does not undo server-side rounding of a declared column: a server-rounded value of 40 stays 40.
 
-Direct Oracle 4.4.2.2/Windows/.NET10/TLS-disabled evidence covers prepared integer/fractional bindings and declared/cast negative scales. It does not establish other versions, OBProxy, TLS or independent-runtime compatibility. See the [module record](obconnector-dotnet-completeness.md#1537-2026-10-25-oracle-未知精度-number-结果读取).
+Direct Oracle 4.4.2.2/Windows/.NET10/TLS-disabled evidence covers prepared integer/fractional bindings and declared/cast negative scales. It does not establish other versions, OBProxy, TLS or independent-runtime compatibility. See the [module record](history/obconnector-dotnet-completeness.md#1537-2026-10-25-oracle-未知精度-number-结果读取).
 
 ### Oracle FLOAT results with binary precision
 
@@ -617,7 +617,7 @@ deployment interoperability require real-server evidence.
 
 Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON results and CLOB reads retain their UTF-8 scope. Explicit MySQL JSON parameters use the selected strict client encoding and ordinary string binding; the server owns JSON conversion, syntax and storage. CLOB write buffers inherit the selected client parameter encoding and its representability checks; storage interoperability is not expanded. Trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope. See [client charset and cached session trust](client-character-sets.md).
 
-Real evidence is limited to direct OceanBase 4.4.2.2 MySQL mode, Windows/.NET10 with TLS disabled: six charset cases, each exercising eight text/prepared × buffered/sequential × sync/async combinations. That server rejects `SET character_set_results=utf16` and `utf16le` with 1231/42000; those two cases instead use `character_set_results=NULL` and `CONVERT` expressions, asserting string metadata and exact decoded text. This does not establish Oracle, proxy, TLS, all collation IDs, other server versions or independent-runtime compatibility. See [verification and retained failures](obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
+Real evidence is limited to direct OceanBase 4.4.2.2 MySQL mode, Windows/.NET10 with TLS disabled: six charset cases, each exercising eight text/prepared × buffered/sequential × sync/async combinations. That server rejects `SET character_set_results=utf16` and `utf16le` with 1231/42000; those two cases instead use `character_set_results=NULL` and `CONVERT` expressions, asserting string metadata and exact decoded text. This does not establish Oracle, proxy, TLS, all collation IDs, other server versions or independent-runtime compatibility. See [verification and retained failures](history/obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
 
 ### National collation fallback
 
@@ -689,7 +689,7 @@ do not establish real DDL, derivation, rounding or old-server compatibility succ
 
 ## MySQL stored procedures
 
-Implemented from `1bb13cb`. The [module evidence](obconnector-dotnet-completeness.md#1530-2026-10-25-mysql-存储过程执行本地交付) separates local regression, limited direct-server runs and open deployment acceptance; the earlier development checkpoint retains original failures.
+Implemented from `1bb13cb`. The [module evidence](history/obconnector-dotnet-completeness.md#1530-2026-10-25-mysql-存储过程执行本地交付) separates local regression, limited direct-server runs and open deployment acceptance; the earlier development checkpoint retains original failures.
 
 In MySQL mode, use CommandType.StoredProcedure with a one- or two-part routine identifier, parsed and quoted as identifiers. Parameters bind in collection order, irrespective of their names. Input, Output and InputOutput are accepted; ReturnValue is rejected because MySQL procedures have no function return. Call stored functions with a text SELECT. Effective CLIENT_PS_MULTI_RESULTS is required. FetchSize, SchemaOnly and KeyInfo are rejected; explicit Prepare is supported and client-side prepare fallback is disabled. Input streams use the long-data path; InputOutput streams are rejected. The plan accepts at most 65535 parameters and 4096 output parameters, subject to packet limits.
 
@@ -719,7 +719,7 @@ The driver never automatically replays sent SQL or moves an active transaction t
 
 ### Ambient transactions
 
-Local single-resource implementation and verification are recorded in the [module evidence](obconnector-dotnet-completeness.md#1527-2026-10-25-ambient-单资源事务与初始化取消本地交付). The earlier development checkpoint retains the original failures; real deployment acceptance remains open.
+Local single-resource implementation and verification are recorded in the [module evidence](history/obconnector-dotnet-completeness.md#1527-2026-10-25-ambient-单资源事务与初始化取消本地交付). The earlier development checkpoint retains the original failures; real deployment acceptance remains open.
 
 Open inside TransactionScope automatically enlists; EnlistTransaction explicitly enlists an already open, idle connection. EnlistTransaction(null), inactive transactions and conflicting local/XA/ambient contexts are rejected. Reenlisting the same logical transaction, including a clone, is idempotent on its active connection. A second database resource is rejected with NotSupportedException before its local transaction SQL, including when it names the same server. Failed automatic enlistment closes that logical connection; rejecting a second resource during explicit enlistment leaves that connection available outside the scope. An initialization error can instead break the physical session. Existing promotable or distributed resources cannot be joined, and subsequent promotion requests are rejected. This is local single-resource participation through IPromotableSinglePhaseNotification, with no durable prepare, multi-database atomic commit or distributed recovery.
 
@@ -807,7 +807,7 @@ it does not silently fetch all rows. CloseConnection still closes only the origi
 Parent-command disposal, cursor single use and transaction/session ownership are unchanged. SchemaOnly,
 KeyInfo and unknown flags reject before taking the cursor; a corrected call can still open it once.
 These flags apply to output and binary or text result-column cursors through the same public object.
-They do not add cursor Input/InputOutput. See [evidence and open acceptance](obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制).
+They do not add cursor Input/InputOutput. See [evidence and open acceptance](history/obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制).
 
 <a id="oracle-standalone-prepare"></a>
 ### Oracle standalone preparation
@@ -825,7 +825,7 @@ Local fixtures and five-asset consumers cover preparation, ownership and failure
 
 Oracle text OUT/RETURNING and stored procedure/function execution accept a positive command FetchSize with or without explicit Prepare. The property remains unchanged. FetchSize controls a server cursor's page size; the internal output row is returned in the execution response with cursorFlag=0, so the output plan does not issue COM_STMT_FETCH or page its internal outputs. Any ordinary additional result sets keep their existing streaming behavior. This does not add output-result pagination or new result shapes.
 
-Returned OceanBaseRefCursor objects retain their own GetDataReader(fetchSize) / GetDataReaderAsync(fetchSize) page size (default128), independently of the parent command hint; command disposal does not close an outstanding returned cursor. Output values still publish atomically only after validated completion of all responses; known errors, cancellation and early close retain their existing behavior and never replay the command. Ordinary query cursor paging is unchanged. UseCursorOffset on an Oracle output execution plan and a positive FetchSize on ExecuteArray remain unsupported and reject before version/target traffic. MySQL stored-procedure restrictions are unchanged. See [module evidence and limits](obconnector-dotnet-completeness.md#1546-2026-10-25-oracle-输出执行与-fetchsize-提示).
+Returned OceanBaseRefCursor objects retain their own GetDataReader(fetchSize) / GetDataReaderAsync(fetchSize) page size (default128), independently of the parent command hint; command disposal does not close an outstanding returned cursor. Output values still publish atomically only after validated completion of all responses; known errors, cancellation and early close retain their existing behavior and never replay the command. Ordinary query cursor paging is unchanged. UseCursorOffset on an Oracle output execution plan and a positive FetchSize on ExecuteArray remain unsupported and reject before version/target traffic. MySQL stored-procedure restrictions are unchanged. See [module evidence and limits](history/obconnector-dotnet-completeness.md#1546-2026-10-25-oracle-输出执行与-fetchsize-提示).
 
 ### LOBs
 
@@ -891,7 +891,7 @@ Inspect `ArrayBindingResult.Items` for zero-based Succeeded/Failed/Unknown resul
 
 Business commands require an active XA branch and no local `Transaction`. Local transactions and database switching are rejected in XA mode. Close does not complete a branch. XA return codes use `OceanBaseException.XaErrorCode`, separately from `ServerErrorCode`; coordinator recovery is the application's responsibility. A separate [opt-in process recovery harness](xa-process-recovery-acceptance.md) tests one prepared/recorded-decision coordinator crash point; it is not a product coordinator.
 
-With pooling enabled, XA dedication persists even before Start and after Commit/Rollback. Close destroys the dedicated physical session instead of resetting it into the ordinary pool. A reopened logical connection cannot reuse an old resource; all sync/async resource methods reject it. After Close, prepared branches require explicit recovery/completion by the application on a separate session; Close is not a confirmed business rollback. [Scoped pool acceptance and remaining failure matrix](obconnector-dotnet-completeness.md#516-xa-专用会话的池隔离).
+With pooling enabled, XA dedication persists even before Start and after Commit/Rollback. Close destroys the dedicated physical session instead of resetting it into the ordinary pool. A reopened logical connection cannot reuse an old resource; all sync/async resource methods reject it. After Close, prepared branches require explicit recovery/completion by the application on a separate session; Close is not a confirmed business rollback. [Scoped pool acceptance and remaining failure matrix](history/obconnector-dotnet-completeness.md#516-xa-专用会话的池隔离).
 
 ## Schema, address resolution and diagnostics
 
@@ -1108,7 +1108,7 @@ remains available when group limits are zero; malformed snapshots still fail bef
 
 A local block replaces the complete inherited blacklist; it does not merge fields. ADDRESS takes precedence over ADDRESS_LIST, then DESCRIPTION. Omitted fields use NORMAL/TIMEOUT50 defaults, including an empty local block. An omitted block inherits, or has no policy when no ancestor supplies one. The immutable address occurrence carries its explicit policy through weighted, rotation and health ordering, including repeated host/port occurrences. The DESCRIPTION attempt ceiling remains shared. Equal effective policy values and exact endpoints share history across occurrences and groups; different policies isolate history. A success clears only the successful attempt's effective policy. Reloading policies does not mutate an earlier Open snapshot or invalidate healthy idle membership by itself.
 
-This local-policy contract is defined by the .NET driver. Fixed Java reference6adc311 leaves local blacklist parsing disabled and its group configuration unused; it is not Java runtime parity evidence. See [implementation and evidence](obconnector-dotnet-completeness.md#1563-2026-10-26-发现分组黑名单覆盖).
+This local-policy contract is defined by the .NET driver. Fixed Java reference6adc311 leaves local blacklist parsing disabled and its group configuration unused; it is not Java runtime parity evidence. See [implementation and evidence](history/obconnector-dotnet-completeness.md#1563-2026-10-26-发现分组黑名单覆盖).
 
 ```text
 APP=(DESCRIPTION=(OBLB_STRATEGY=ROTATION)(OBLB_RETRY_ALL_DOWNS=6)
