@@ -3,7 +3,7 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27；本模块开发起点master/ed2fc84，保持master。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；源码核对见第15.91节，会话验收见第15.92节，零日期验收见第15.93节，单字节字符串fallback见第15.94节，DBCS见第15.95节。
+**最近复核：** 2026-10-27；当前已提交源码master/c09cf0a，工作区在复核开始时干净。最新功能从ed2fc84开发，保持master。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；本次源码/文档对齐见第15.97节，会话验收见第15.92节，零日期验收见第15.93节，单字节字符串fallback见第15.94节，DBCS见第15.95节，复杂national输入见第15.96节。
 **当前模块：** 复杂NCHAR/NVARCHAR2输入复用全部已配置客户端严格编码器；Oracle受管初始化已改为逐项quoted SET，新建连接、池reset及状态重验共用模式SQL，Oracle查询加FROM DUAL。完整单测7846/7846、专项267/267、受影响消费者350/350及Release构建通过，独立走查无遗留问题。显式Oracle数组输入36/48通过；UTF8MB3被服务器映射为UTF8MB4，严格校验拒绝，SJIS/Big5切换后固定ASCII语句报900，余12项止于Open。首次48项全部初始化失败及中止全量保留，三种编码的实库限制不计为完成，见第15.96节。
 **前一开发模块：** P1-08将MySQL字符串fallback扩展到配置的GBK、GB18030/2022、SJIS、Big5、HKSCS/HKSCS31；严格会话匹配、字符转义再编码保持多字节尾5C，兼顾四字节/补充字符。非UTF-8无别名表达式元数据仍有混合/歧义编码，保留ASCII别名限制；显式实库只验证生成字面量解析，不证明真实1295自动回退。
 **前一模块：** P1-08/P2-06将types.zero-date-policy从无条件Deferred改为显式zeroDateProfile及建表许可下执行；检查真实session SQL_MODE且不修改，覆盖DATE/DATETIME(6)正常/部分零/全零/NULL、文本/准备结果、转换拒绝及provider值回绑重读。MySQL直连连接通过，但零日期SQL_MODE前置条件失败，未建表；不能宣称真实零日期存储通过。
@@ -123,7 +123,7 @@ The overview separates remaining development from real-environment validation; h
 | Oracle 类型 | 部分实现 | DATE、TIMESTAMP、TZ/LTZ、INTERVAL、NCHAR、RAW、LOB、复杂类型已有部分实现 |
 | MySQL 过程 | 部分实现 | 集合顺序 Input/Output/InputOutput、显式 Prepare、多结果和隐藏输出；关闭排空；PS_MULTI_RESULTS 必需，ReturnValue、FetchSize、SchemaOnly/KeyInfo 和 INOUT stream 拒绝；实际部署矩阵仍缺 |
 | Oracle 输出 | 部分实现 | 过程、OUT、RETURNING、REF CURSOR 和数组绑定有路径；若干参数方向和结果形状不支持 |
-| 复杂类型 | 部分实现 | 标量及嵌套 object/collection 有路径；NCHAR/NVARCHAR2成员已有有界实现；BLOB/CLOB命名及匿名集合结果已有本地物化；cursor、其他national存储及复杂整列RETURNING身份、循环和文本结果仍受限；可观察 DDL 发送时自动失效已有本地实现，外部/不透明 DDL 须显式清理，真实 DDL 验收仍缺 |
+| 复杂类型 | 部分实现 | 标量及嵌套 object/collection 有路径；NCHAR/NVARCHAR2输入支持全部已配置客户端编码；二进制命名/匿名BLOB/CLOB及cursor结果已有本地物化和会话所有权；非空复杂LOB/cursor输入、其他national存储/输出、未解析身份的复杂整列RETURNING、循环和文本结果仍受限；可观察 DDL 发送时自动失效已有本地实现，外部/不透明 DDL 须显式清理，真实 DDL 验收仍缺 |
 | Schema 元数据 | 部分实现 | Oracle 20/MySQL 18 个集合、静态 DataTypes 及自动参数推导已有本地实现；后者只读目录，不扩大过程执行范围。真实目录/权限矩阵仍缺，见 [Schema 契约](schema.md)及第 15.18 节 |
 | 批处理和准备缓存 | 部分实现 | `DbBatch` 默认顺序；opt-in MySQL INSERT rewrite见第15.72节，multi-send/bulk仍缺；已有有限物理会话缓存，真实缓存/负载验收仍缺 |
 | 诊断 | 部分实现 | `ILogger`、`ActivitySource`、`Meter`、含当前租约数的[池指标](pool-metrics.md)及建连/探活分段已有本地实现；慢命令阈值、协议帧诊断及[会话I/O耗时](session-io-diagnostics.md)已有本地实现；其他资源等待和完整部署性能验收仍缺 |
@@ -165,7 +165,7 @@ The overview separates remaining development from real-environment validation; h
 | P1-04 | P1 | TLS/mTLS | 部分实现 | 自定义服务器证书回调、客户端证书池化身份隔离和数据源证书快照已有本地实现（第 15.4 节）；真实企业 CA/mTLS、轮换和跨平台撤销矩阵仍缺 |
 | P1-05 | P1 | ADO.NET 命令行为 | 部分实现 | MySQL StoredProcedure 已有集合顺序参数/输出/多结果本地实现（第 15.30 节），保留方向、capability 和提前关闭限制；补真实 TLS/代理/版本矩阵；`SchemaOnly` Prepare-only、`SingleRow`/`SingleResult` 已有本地实现；`KeyInfo` 已有有界键元数据/隐藏列实现；Batch元数据/源条目创建见第15.60节，跨批次结果限制见第15.61节；REF CURSOR结果限制见第15.62节；其余 Command/Batch/游标行为矩阵及真实目录/准备/锁/结果形状验收仍缺 |
 | P1-06 | P1 | Oracle 输出和游标 | 部分实现；独立 Prepare、输出 FetchSize 提示及文本/二进制 cursor 列已有本地实现 | 保留准备与所有权转移、正提示不对内部输出发FETCH（第15.46节）；二进制cursor列/嵌套所有权及文本四字节标识列已有本地实现（第15.56/15.87节）；补完整参数方向、其余结果形状和部署矩阵；输出offset/数组正FetchSize仍拒绝 |
-| P1-07 | P1 | 复杂类型 | 部分实现 | 已有嵌套 object/collection、BLOB/CLOB、cursor结果成员、显式清理及可观察 DDL 自动失效本地实现；保留第15.47节national实现及限定直连证据，继续补复杂 cursor 参数、其他national边界及复杂整列RETURNING身份和真实DDL/资源验收，外部或不透明 DDL 需显式清理 |
+| P1-07 | P1 | 复杂类型 | 部分实现 | 已有嵌套 object/collection、二进制BLOB/CLOB及cursor结果成员、显式清理及可观察 DDL 自动失效本地实现；复杂national客户端输入见第15.96节；继续补非空复杂LOB/cursor参数、文本复杂结果、其他national边界及复杂整列RETURNING身份和真实DDL/资源验收，外部或不透明 DDL 需显式清理 |
 | P1-08 | P1 | 类型和字符集 | 部分实现；DecimalScale、普通结果字符集及客户端编码子模块已有实现，输入编码见第15.80节 | 有符号 scale、严格结果解码/宽度及 Oracle 未知精度 NUMBER 保真已有回归；其余national/JSON/CLOB边界、其他字符集、扩展元数据/类型码及完整实库矩阵仍缺 |
 | P1-09 | P1 | HA/发现 | 部分实现 | TCP重试预算/退避、端点TCP健康缓存、TNS/OCP适配、分组/策略/权重及全局黑名单/尝试上限已有本地实现（第15.50—15.55节），分组黑名单、组尝试上限及地址覆盖见第15.63—15.65节；其他发现策略边界、proxy拓扑及真实健康/故障验收仍缺 |
 | P1-10 | P1 | Schema 元数据 | 部分实现；参数推导已有本地实现 | 常用目录、DataTypes 及自动参数推导有本地实现；真实目录/权限/版本/代理验收仍缺 |
@@ -3087,6 +3087,33 @@ UTF8MB3/UTF8赋值被服务器报告为UTF8MB4，严格匹配拒绝；SJIS/Big5�
 真实环境仅显式opt-in，连接信息不持久化；普通单测/CI使用合成loopback。
 普通prepare、命名复杂输入的真实互操作、live pool reset、其他版本/代理/运行时和其余类型矩阵仍缺。
 23项与八工作包整体仍开放。
+
+### 15.97 2026-10-27 已提交源码与文档再次对齐
+
+本次以干净的master/c09cf0a为源码基线，仅修改文档。核对当前编码/解码、参数方向、
+匿名数组工厂、客户端初始化、批处理、OB20拒绝路径和Acceptance注册；不是重新审计全部并发路径。
+第15.91节是6e64c7e的历史快照，其中“非UTF-8 fallback拒绝”“六个DeferredReason”及
+“pool-reset未实跑”已分别被第15.94/15.95、15.93和15.92节后续交付取代。
+
+| 能力 / ID | 当前源码进度 | 仍缺什么 / 直接入口 |
+| --- | --- | --- |
+| 复杂LOB/cursor成员，P1-07 | 二进制结果解码已有210/211/163分支；NULL输入成员可跳过，非空输入没有对应编码分支 | [ComplexValueCodec.Write/Read](../src/OceanBaseConnector/Internal/Values/ComplexValueCodec.cs)仍需非空输入编码及原连接/会话/事务/代际与资源校验；[CreateArrayType](../src/OceanBaseConnector/OceanBaseConnection.ComplexTypes.cs)标量工厂也不接受BLOB/CLOB/cursor。结果可读不等于可回绑 |
+| REF CURSOR，P1-06 | Output/ReturnValue及普通文本/二进制cursor列已有路径 | [OracleCommandPlan](../src/OceanBaseConnector/Internal/Sql/OracleCommandPlan.cs)仍明确拒绝Input/InputOutput；不能仅根据结果的四字节标识推定输入协议已支持 |
+| 复杂结果形状，P1-07 | 已加载类型身份的嵌套二进制object/collection已有路径 | [ResultColumn.RequireComplexResult](../src/OceanBaseConnector/Internal/Protocol/ResultColumn.cs)仍要求二进制结果；文本复杂结果、未解析来源身份的整列RETURNING及其他存储/匿名输出形状仍需实现或协议确认 |
+| 客户端/national输入，P1-07/08 | [ClientCharacterSet](../src/OceanBaseConnector/Internal/Protocol/ClientCharacterSet.cs)的配置编码已被复杂national输入复用；[Oracle初始化及状态查询](../src/OceanBaseConnector/Internal/Session/HandshakeFlow.ClientCharacterSet.cs)已有模式专用SQL | 普通national、存储复杂national与PL输出的编码规则没有因此扩大；UTF8MB3/SJIS/Big5在当前Oracle实库profile的12项Open失败仍未解决，其余national形状/版本/代理仍缺验收 |
+| JSON/CLOB/元数据，P1-08 | JSON参数与CLOB写入已有客户端编码路径；普通字符串结果已有多字符集支持 | [ResultColumn](../src/OceanBaseConnector/Internal/Protocol/ResultColumn.cs)的JSON结果仅支持UTF-8/binary collation，扩展列元数据仍拒绝；[LobTextReader](../src/OceanBaseConnector/Internal/Session/LobTextReader.cs)仍按UTF-8读CLOB；非UTF-8表达式元数据继续要求ASCII别名 |
+| MySQL字符串fallback，P1-08 | [MySqlLiteralContext](../src/OceanBaseConnector/Internal/Sql/MySqlLiteralContext.cs)已支持配置的单字节和DBCS编码、严格会话匹配及字符级转义 | 实库生成字面量通过不等于实际1295/HY000自动fallback已验收；其他SQL_MODE/collation/版本/代理仍缺证据 |
+| OB20/批量，P1-02、P2-03 | 标准MySQL压缩、普通OB20、顺序Batch、Oracle数组绑定和opt-in INSERT rewrite已有 | [Ob20Packet](../src/OceanBaseConnector/Internal/Protocol/Ob20Packet.cs)拒绝压缩帧，[Ob20Stream](../src/OceanBaseConnector/Internal/Protocol/Ob20Stream.cs)拒绝reroute；[Batch](../src/OceanBaseConnector/OceanBaseBatch.cs)没有multi-send/独立bulk。先补协议/语义依据，再补实现与代理/负载验收 |
+| 验收工具，P2-06 | 同客户端通道reset/reuse、销毁替换隔离和显式零日期断言已有 | [DatabaseCases](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs)只剩5个matrix.*占位：TLS/认证、OB20/trace、拓扑、网络unknown和XA crash recovery；[零日期](../tests/OceanBaseConnector.Acceptance/DatabaseCases.Types.cs)需允许零日期的实际SQL_MODE及建表授权，当前实库止于前置条件 |
+
+本次重新解析既有最终TRX：完整单测7846/7846、专项267/267、消费者270/270及80/80；
+未opt-in集成记录为1个未执行（0失败）。既有Release日志记录0警告/0错误。
+这些是c09cf0a模块保存的运行结果，不是本次重跑；路径见[最新功能记录](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding)。
+真实数组输入36/48及12项Open失败沿用第15.96节原始报告，不新增兼容结论。
+
+全部23项的已交付/剩余开发/外部验收仍以[逐项交付表](obconnector-dotnet-delivery-status.md#all-23-gaps-implementation-versus-remaining-work)
+为入口，W1—W8均未整体关闭；这不表示已有子功能需要重做，也不能据此给出完成百分比。
+本次未运行构建、单测、消费者或实库，不新增测试依赖或将真实profile放入CI；连接信息不进入文档。
 
 ## 16. 剩余交付工作包
 

@@ -4,6 +4,23 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Committed-source documentation alignment
+
+Documentation-only review of `master/c09cf0a`; the worktree was clean at entry. The latest
+complex-national/client-encoding module is committed, rather than pending on its `ed2fc84` base.
+Updated the completeness baseline, delivery overview and audit entry points to name the actual
+checkpoint and distinguish existing result decoding from unsupported non-empty complex inputs.
+Direct source findings and remaining development are in
+[completeness section 15.97](obconnector-dotnet-completeness.md#1597-2026-10-27-已提交源码与文档再次对齐).
+All23 gap IDs and eight work packages remain open under their full closure criteria.
+
+Reparsed existing final TRX counters: complete units7846/7846, focused267/267, consumers270/270
+plus80/80, all zero failures; integration without opt-in has one unexecuted case. The saved final
+Release build log records zero warnings/errors. These are retained execution results from the
+module below, not new test runs. No product/test code changed, and no build, unit, consumer or
+real-database run was performed for this alignment. Historical failures and live profile limits
+remain; database endpoints and credentials are excluded from documentation and ordinary CI.
+
 ## 2026-10-27 Complex national client encoding
 
 Developed from `master/ed2fc84`, P1-07/P1-08/W5. Complex NCHAR/NVARCHAR2 inputs now

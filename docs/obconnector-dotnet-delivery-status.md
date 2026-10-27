@@ -1,12 +1,12 @@
 # Driver delivery status
 
-Last checked: 2026-10-27. This is the current overview; the detailed
+Last checked: 2026-10-27, committed source `master/c09cf0a`. This is the current overview; the detailed
 [completeness baseline](obconnector-dotnet-completeness.md) retains requirements and historical evidence.
 The [module records](obconnector-dotnet-progress.md) retain individual test/review results.
 
 ## Current checkpoint
 
-- Latest implementation, developed from `master/ed2fc84`: configured client encodings for complex
+- Latest committed implementation, `c09cf0a`, developed from `master/ed2fc84`: configured client encodings for complex
   NCHAR/NVARCHAR2 inputs. Oracle fresh Open/reset now share individual quoted SET statements;
   verification/revalidation uses FROM DUAL. Complete units7846/7846, focused units267/267,
   affected consumers350/350 and the final Release build pass. Independent source/test/docs review
@@ -45,6 +45,9 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   ordinary mode/configuration skips are separate. See the
   [module record](obconnector-dotnet-progress.md#2026-10-27-opt-in-zero-date-storage-acceptance).
 - Development stays on `master`. No new branch/worktree and no implicit push.
+- Latest documentation alignment checks the committed source and saved module reports; it does
+  not rerun builds/tests or connect to a database. Current code limits and direct source links are
+  recorded in [completeness section 15.97](obconnector-dotnet-completeness.md#1597-2026-10-27-已提交源码与文档再次对齐).
 - Historical source review baseline: `master/6e64c7e`, 2026-10-27. The serial Release solution build
   passes with zero warnings/errors; 554 selected complex/cursor/session-isolation/compression
   unit cases pass with zero failures/skips. Acceptance `--list` confirms five deferred
@@ -263,12 +266,20 @@ These are representative commits, not a replacement for the complete Git log or 
 | Core type/charset corrections and result families | `2bbecac`, `6b357f0`, `4810907`, `6e2197c`, `94fcd85`, `7d05ce4`, `f3c484d`, `7c1a602` |
 | MySQL string fallback and further result charsets | `0484943`, `d842fee`, `37a0aba`, `4821d54`, `4ce3a35` |
 | HKSCS/HKSCS31 ordinary result decoding | `e0498e9` |
+| Same-channel pool reuse and executable opt-in zero-date acceptance | `7d777ae`, `da62285` |
+| Trusted single-byte and DBCS MySQL string fallback | `f03f235`, `ed2fc84` |
+| Complex national client input and Oracle managed charset initialization | `c09cf0a` |
 | Diagnostics and packaged runtime protocol verification | `b2fce9d`, `5ea71b2`, `ffceec8`, `d7a5354`, `e3a07a2` |
 
 ## Verification boundary and next work
 
-- Current DBCS fallback: complete units7774/7774, focused290/290, affected consumers160/160 and
-  direct generated-literal checks14/14 plus control pass; exact verification is in the latest module record.
+- Latest committed complex-national module: saved reports contain complete units7846/7846,
+  focused267/267 and affected consumers350/350; the Release build records zero warnings/errors.
+  Direct Oracle array-input evidence is36/48, with12 Open failures before DDL. These saved results
+  were rechecked during the documentation alignment, not rerun. Exact evidence is in the
+  [module record](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding).
+- Previous DBCS fallback: complete units7774/7774, focused290/290, affected consumers160/160 and
+  direct generated-literal checks14/14 plus control pass; exact verification is in its module record.
   Ambiguous metadata and actual server1295/mode/collation/proxy/version compatibility remain open.
 - Previous single-byte fallback: focused units234/234, complete units7742/7742 and affected
   consumers90/90 pass; Release solution build has zero warnings/errors. Independent review has no

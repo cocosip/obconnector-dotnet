@@ -1,11 +1,11 @@
 # OceanBase .NET 驱动完整性走查报告
 
-**最近复核：** 2026-10-27；最新DBCS字符串fallback模块开发起点master/f03f235。23项及八工作包仍未满足整体关闭标准，不能理解为所有子功能未实现。
-**当前检查点：** 配置的全部非UTF-8输入字符集现支持严格会话验证下的MySQL字符串fallback，含七种DBCS尾5C、四字节/补充字符。无别名表达式元数据仍有编码歧义。逐项状态以[交付概览](obconnector-dotnet-delivery-status.md)及完整性第15.95节为准；第18节以后保留各历史模块的原始证据。
+**最近复核：** 2026-10-27；当前已提交源码master/c09cf0a，本次仅同步文档及复核既有报告。23项及八工作包仍未满足整体关闭标准，不能理解为所有子功能未实现。
+**当前检查点：** 复杂national输入已复用全部配置客户端编码，Oracle受管Open/reset及状态重验已有模式专用SQL。MySQL单字节/DBCS字符串fallback亦已提交，无别名表达式元数据仍有编码歧义。当前源码限制及证据等级见[完整性第15.97节](obconnector-dotnet-completeness.md#1597-2026-10-27-已提交源码与文档再次对齐)及[交付概览](obconnector-dotnet-delivery-status.md)；第18节以后保留各历史模块的原始证据。
 **最新模块：** 复杂national输入扩展及Oracle受管初始化修复已通过完整单测7846/7846、专项267/267、消费者350/350和Release构建，独立走查无遗留问题；真实数组输入36/48通过，另12项因UTF8MB3重映射或SJIS/Big5切换失败止于Open，见完整性第15.96节。
-**当前验证：** 串行Release全解决方案构建零警告/错误，完整单测7774/7774、本模块专项290/290、受影响消费者160/160通过；独立源码/测试/文档走查无遗留问题，见[模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)。显式MySQL只读生成字面量带ASCII别名14/14及连接对照通过，未建表/改SQL_MODE；未证明真实1295自动回退。完整初跑两项旧GBK拒绝断言、此前元数据失败、零日期SQL_MODE前置失败保持原记录；5个matrix.*占位仍保留。
+**前一DBCS模块验证：** 串行Release全解决方案构建零警告/错误，完整单测7774/7774、本模块专项290/290、受影响消费者160/160通过；独立源码/测试/文档走查无遗留问题，见[模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)。显式MySQL只读生成字面量带ASCII别名14/14及连接对照通过，未建表/改SQL_MODE；未证明真实1295自动回退。完整初跑两项旧GBK拒绝断言、此前元数据失败、零日期SQL_MODE前置失败保持原记录；5个matrix.*占位仍保留。
 **此前验收：** matrix.pool-reset-reuse.sync/async按公开诊断listener引用及ChannelId拒绝重连；旧时区用例检查销毁替换并使用私有池，UTC区域名实跑1882失败后经RED/GREEN改数字偏移。完整7696/7696、专项40/40及双模式直连各4/4通过；仅证明同客户端通道，代理后端和完整资源矩阵仍缺；历史失败不删除。
-精确命令、脱敏报告及边界见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)；源码核对554项仍保留在此前记录。
+精确命令、脱敏报告及边界见[最新功能模块记录](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding)；源码核对554项仍保留在此前记录。本次未重新运行构建、测试或数据库操作。
 **仓库：** `D:\Code\dotnet\obconnector-dotnet`；历史记录使用的其他工作区路径保持原文。
 **初次走查：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **目标和结论级别：** 为 MySQL/Oracle 双模式定义可执行的完整驱动清单；源码、本地 fixture、包消费和真实互操作分别记载，不互相替代。
@@ -31,7 +31,7 @@
 
 ### 1.1 本次评审摘要与剩余交付清单
 
-**当前文档复核日期：2026-10-27；源码核对基线：`master/6e64c7e`，最新验收从`7d777ae`开发。** 当前开发/验收状态见[全部23项交付概览](obconnector-dotnet-delivery-status.md#all-23-gaps-implementation-versus-remaining-work)及[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-opt-in-zero-date-storage-acceptance)。二进制复杂LOB/cursor结果成员、文本cursor列、INSERT rewrite和会话I/O/池租约/池等待结果指标均已有本地实现；下面列剩余工作，第18节以后及能力基线第15节保留各候选的历史结果。Java固定参考仍沿用初次审计版本，本次仅核对ComplexUtil输入分支，不运行Java。
+**当前文档复核日期：2026-10-27；源码核对基线：`master/c09cf0a`。** 当前开发/验收状态见[全部23项交付概览](obconnector-dotnet-delivery-status.md#all-23-gaps-implementation-versus-remaining-work)及[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding)。复杂national客户端输入、MySQL单字节/DBCS fallback、二进制复杂LOB/cursor结果成员、文本cursor列、INSERT rewrite和会话I/O/池租约/池等待结果指标均已有本地实现；下面列剩余工作，第18节以后及能力基线第15节保留各候选的历史结果。Java固定参考仍沿用初次审计版本，本次没有重新运行或审计Java。
 
 **历史修复索引（保留原候选证据）：** `0ec3e1c`连接级ERR/unknown见第44节，`917e9cc`的Closed回调见第43节；旧CloseConnection reader租约保护见第36节；Oracle fresh/reset自动提交初始化及原实库失败回归见第34节和[基线第5.1.5节](obconnector-dotnet-completeness.md#515-oracle-自动提交基线已确认缺陷与待实现契约)。这些记录不代表6e64c7e的全套或实库重跑；完整资源/XA/并发隔离、OBProxy和其他部署矩阵仍开放。
 
