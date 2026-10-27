@@ -2829,3 +2829,16 @@ The [integration suite](../../tests/OceanBaseConnector.IntegrationTests/README.m
 - OB_ORACLE_PROXY_CONNECTION_STRING
 
 The legacy variables synthesize the four direct/proxy profiles for connection and identity suites; suites that create objects need a profiles file with capabilities.createObjects. Special endpoints (unsupported auth plugin, autocommit disabled) are declared as profile capabilities in the file. When integration is required, missing configuration fails instead of passing silently. See the [acceptance guide](../../tests/OceanBaseConnector.Acceptance/README.md) for the separate database console; it does not replace these suites.
+
+## 2026-10-28 W1 direct pool isolation acceptance
+
+Using the configured `mysql-direct,oracle-direct` profiles, the selected real-database pool matrix
+passed 94 cases with one configuration skip and no failures on OceanBase 4.4.2.2. The selected suites
+were `PoolIsolationTests`, `PoolReaderLeaseTests`, `PoolResourceIsolationTests`, `PoolXaIsolationTests`
+and `CloseCallbackPoolTests`. The skipped case was `ChangeDatabaseIsResetToTheConfiguredCatalog`,
+which requires an `alternateDatabase` capability.
+
+The test host ran Windows/.NET 10.0.14 from the `net10.0` output. The solution build used SDK
+11.0.100-rc.3 and completed with zero warnings and errors. This record covers direct connections only;
+OBProxy reset, long-running concurrency/resource limits, arbitrary implicit side effects and complete
+cancellation/interleaving combinations remain open.

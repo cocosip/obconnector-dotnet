@@ -1,6 +1,6 @@
 # 开发进度与功能矩阵
 
-更新：2026-10-28。范围审计基线：`89a304d`；最近功能模块提交为`da46a10`；当前范围审计移除了 DataAdapter/CommandBuilder；下表同步最新调整。
+更新：2026-10-28。范围审计基线：`89a304d`；最近功能模块提交为`7bf10e1`；当前范围审计移除了 DataAdapter/CommandBuilder；下表同步最新调整。
 
 **已实现**表示支持“已支持范围”一列且有本地回归，不等于所有部署均已验收。**部分实现**表示仍有明确缺口；**未实现**表示当前不支持；**开发中**不计交付。实库结果只覆盖记录的 profile。
 原清单的23个审计编号保留用于追溯，P2-01 已移出当前范围；其余工作包不能整体关闭，也不按提交数/单测数计算完成率。
@@ -11,7 +11,7 @@
 | --- | --- | --- | --- |
 | 双模式连接与基础SQL | 已实现 | 模式/产品身份确认、文本/准备执行、参数、多结果、同步/异步、取消/超时 | 其他版本、代理、故障组合仍需验收 |
 | 连接池基本生命周期 | 已实现 | 容量/等待/取消、预热、探活、空闲/总生命周期、清池、池指标 | 并发交错、长期负载和资源上限未完整验收 |
-| 池化会话隔离 | 部分实现 | reset代际、保守状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA保护；Oracle 直连资源生命周期矩阵 32/32 通过 | 任意隐式副作用、完整资源交错及代理reset；直连专项不能推及全部状态 |
+| 池化会话隔离 | 部分实现 | reset代际、保守状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA保护；双模式直连池隔离专项 94/95（94通过、1项因未配置 `alternateDatabase` 跳过），Oracle 直连资源生命周期矩阵 32/32 通过 | 任意隐式副作用、完整资源交错及代理reset；直连专项不能推及全部状态 |
 | 池路由身份隔离 | 已实现 | resolver身份、每次Open快照、旧闲置端点退休、借出连接保留 | 受控单上游路由验收已通过；真实集群/代理HA未验收 |
 | 本地事务 / savepoint | 已实现 | 模式相关事务、现代TFM异步API及保存点 | 保留隔离级别/标识符限制；跨版本故障组合待验收 |
 | 单资源TransactionScope | 已实现 | PSPE登记、所有权、取消/晚回调、终态清理 | 分布式提升/durable prepare不支持；真实事务管理器故障矩阵待验收 |
@@ -77,7 +77,7 @@
 | OB20/trace显式验收（P2-06） | **已提交，部分实库验收**：代码/文档见`bc020e2`、`c5b4c07`；专项/runner **88/88**，Release零警告/错误；直连4.4.2.2双模式 `declined-ob20` 各6通过 | 用户租户实际协商为 `Layer=mysql`，显式 `ob20` 各2项按契约失败；真实 OB20/trace、OBProxy、TLS/auth 和完整单测环境门禁仍未闭合。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |
 | 验收占位 | 已提交基线仅保留TLS/auth DeferredReason；OB20/trace已替换为可执行profile | 实际服务端未启用OB20时必须保留失败，不能用普通MySQL fallback关闭OB20门禁 |
 
-最新**已交付**模块是 P1-02 标准 MySQL 压缩协商修正：按 Connector/J 规则，在服务端未声明 `CLIENT_COMPRESS` 时降级普通协议；本地受影响压缩/诊断筛选 126/130 通过（4 个 TLS 用例受 Windows 测试证书环境影响），真实 MySQL/Oracle 直连同步/异步 4/4 通过；证据见[标准压缩记录](history/2026-10-28-standard-compression-fallback.md)。此前**已交付**模块是本次 P0-02/P1-06 Oracle 资源与 REF CURSOR 直连验收：资源生命周期矩阵 32/32 通过，REF CURSOR 输出矩阵 15/16 通过，唯一失败是服务端拒绝 `SELECT CURSOR(...)` 结果列；证据见[资源与游标记录](history/2026-10-28-oracle-resource-cursor-acceptance.md)。更早的 P1-05/P1-10 元数据直连补验、LOCAL INFILE 实库验收仍见对应历史台账。这些是历史证据，不是本次文档整理的新运行。
+最新**已交付**模块是 P1-08 客户端字符集修正：MySQL SJIS/Big5 Open 按 Connector/J 发送统一 `SET NAMES`，直连同步/异步 4/4 通过；Oracle 同类 Open 由当前租户返回 `900/42000`，保持失败边界；本地字符集/国民字符回归 227/227 通过，证据见[兼容性记录](compatibility.md#2026-10-28-dbcs-client-charset-open-behavior)。此前**已交付**模块是 P1-02 标准 MySQL 压缩协商修正：服务端未声明 `CLIENT_COMPRESS` 时按 Java 降级普通协议，真实 MySQL/Oracle 直连同步/异步 4/4 通过，证据见[标准压缩记录](history/2026-10-28-standard-compression-fallback.md)。更早的 P0-02/P1-06 Oracle 资源与 REF CURSOR、P1-05/P1-10 元数据及 LOCAL INFILE 实库验收仍见对应历史台账。这些是历史证据，不是本次文档整理的新运行。
 
 开发优先级：OB20/trace 草稿已提交，后续只推进有 Java/OceanBase 依据且纳入范围的验收。没有输入协议依据的 REF CURSOR/复杂形状和未定义批量/诊断扩展保持拒绝，不以诊断或文档交付替代核心功能支持。
 

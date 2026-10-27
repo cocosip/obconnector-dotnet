@@ -8,6 +8,18 @@ because the server negotiated `Layer=mysql`. This is real fallback evidence, not
 trace collector compatibility. Dated module records below retain their historical counts and
 limitations; the [current matrix](obconnector-dotnet-progress.md) tracks the latest gates.
 
+## 2026-10-28 Pool cross-borrower isolation acceptance
+
+The direct MySQL and Oracle profiles against OceanBase 4.4.2.2 passed the selected pool-isolation
+matrix on Windows with the .NET 10.0.14 runtime: 94 passed, 1 skipped, and 0 failed. The run covered
+prepared-statement generation/reset, recognized session-state discard, fresh implicit writes, reader
+leases, LOB and REF CURSOR lifetimes, XA pool isolation, and Close-callback pool reopening. The only
+skip was the optional `ChangeDatabase` case because `alternateDatabase` was not configured.
+
+The solution was built with SDK 11.0.100-rc.3 and produced zero warnings and errors. This direct
+evidence does not close arbitrary implicit side effects, long-running resource limits, OBProxy reset,
+or the full cancellation/interleaving matrix.
+
 ## 2026-10-28 Oracle complex acceptance correction
 
 The direct Oracle 4.4.2.2 run on Windows/.NET 10.0.14 now passes `complex.object` after the

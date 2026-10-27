@@ -1,6 +1,6 @@
 # 驱动完整性清单与剩余开发
 
-更新：2026-10-28。范围审计基线为`89a304d`，最近功能模块提交为`da46a10`；P2-01 DataAdapter/CommandBuilder 已按范围审计移除；当前OB20/trace验收是未提交草稿，专项88/88通过，尚未完成完整门禁。
+更新：2026-10-28。范围审计基线为`89a304d`，最近功能模块提交为`7bf10e1`；P2-01 DataAdapter/CommandBuilder 已按范围审计移除；OB20/trace验收已提交但仍有真实环境门禁，专项88/88通过。
 日常查看[具体功能矩阵](obconnector-dotnet-progress.md)；本文件保留原23项审计编号（其中P2-01已移除）和剩余工作包，不再重复交付流水。
 
 ## 23项缺口矩阵
@@ -10,7 +10,7 @@
 | ID | 模块 | 已实现范围 | 仍缺开发 / 明确不支持 | 仍欠验收 |
 | --- | --- | --- | --- | --- |
 | P0-01 | 连接池 | 容量/等待/预热/探活/回收/清池/指标、重入和通知取消修复 | 其他并发/Dispose交错、长期资源与shutdown范围 | 持续资源上限、完整部署矩阵 |
-| P0-02 | 会话隔离 | reset代际、状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA隔离；Oracle 直连资源生命周期矩阵 32/32 通过 | 任意隐式副作用、完整资源/中断/交错覆盖 | 代理reset、外置LOB真实中断、完整借用者隔离 |
+| P0-02 | 会话隔离 | reset代际、状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA隔离；双模式直连池隔离专项94通过/1跳过，Oracle直连资源生命周期矩阵32/32通过 | 任意隐式副作用、完整资源/中断/交错覆盖 | 代理reset、外置LOB真实中断、完整借用者隔离 |
 | P0-03 | Ambient | 单资源PSPE、取消/晚回调/终态保护 | 分布式提升和durable prepare不支持；完整失败覆盖待补 | 实际事务管理器、timeout/in-doubt和代理故障 |
 | P0-04 | Unknown outcome | 分类、销毁/新租约、16项受控网络断言、应用核对示例 | 完整发送/执行/取消故障边界；不重放未知写 | 服务器/代理/协调器全故障矩阵 |
 | P0-05 | 活动连接恢复 | 连接ERR置Broken、旧事务失效、显式Close/Open | 无透明迁移/自动重连/replay，先定契约；补完整重建 | 节点/代理断连和恢复 |
@@ -22,7 +22,7 @@
 | P1-05 | Command/Batch | SchemaOnly/KeyInfo/结果限制、MySQL过程、Batch元数据；双模式直连补验 16 项 SchemaOnly/KeyInfo 矩阵（含组合主键、别名投影、可空唯一键和实际隐藏值读取），并修复 MySQL 目录大小写匹配 | 完整行为/结果形状矩阵，现有拒绝组合保留 | 权限/目录/prepare副作用/锁/游标 |
 | P1-06 | Oracle输出/游标 | Prepare、OUT/RETURNING、输出提示、文本/二进制cursor列；Oracle 直连输出/分页/释放矩阵 15/16 通过 | Input/InputOutput REF CURSOR 没有 Java 输入绑定依据，当前发送前拒绝；输出offset/数组正FetchSize也拒绝；`SELECT CURSOR(...)` 结果列在当前租户执行阶段返回 `902/HY000` | 真实方向/分页/资源/版本/代理；结果列形状需服务端支持后复验 |
 | P1-07 | 复杂类型 | 嵌套二进制结果、LOB/cursor结果、命名LOB内容/匿名locator输入、DDL失效 | 命名LOB定位器回绑、复杂cursor输入、文本复杂结果及未解析RETURNING身份没有足够协议依据，当前拒绝；其他形状按服务端矩阵决定 | DDL、真实复杂SQL、资源生命周期和更多部署profile |
-| P1-08 | 类型/字符集 | NUMBER/FLOAT、scale、常见扩展类型、客户端编码、DBCS fallback、CLOB转码 | 其余national存储/输出、扩展类型/metadata；UTF8MB3/SJIS/Big5 Open失败待解决 | JSON/CLOB转换/存储、完整字符集/版本/代理；保留失败 |
+| P1-08 | 类型/字符集 | NUMBER/FLOAT、scale、常见扩展类型、客户端编码、MySQL DBCS fallback/Open、CLOB转码 | 其余national存储/输出、扩展类型/metadata；Oracle UTF8MB3/SJIS/Big5 Open失败待解决 | JSON/CLOB转换/存储、完整字符集/版本/代理；保留失败 |
 | P1-09 | HA/发现 | TCP重试/健康缓存、TNS/OCP、组/权重/黑名单/上限 | 其他发现/策略边界；TCP健康不等于数据库健康 | 实际发现服务/节点/代理故障 |
 | P1-10 | Schema | 双模式目录、DataTypes、原子参数派生、FLOAT/INOUT；本次直连 Schema 用例 10 项通过，CommandBehavior 元数据补验 16 项通过，过程参数推导再通过 MySQL 2 项和 Oracle 4 项 | 包内PL/SQL参数类型拒绝；当前 Oracle 租户 `CREATE VIEW`/`CREATE SYNONYM` 返回 `1031/HY000`，不增加客户端 workaround | 权限、大小写、重载、版本、代理及其他目录矩阵 |
 | P1-11 | 凭据轮换 | 每次Open取值、过期/取消、版本退休、脱敏 | 实际provider/plugin差异回归待补 | 凭据服务、plugin/KDC、拒绝/刷新/轮换 |
@@ -30,7 +30,7 @@
 | P2-03 | 批处理优化 | 顺序Batch、Oracle array binding、MySQL INSERT rewrite | multi-send/pipelining、独立bulk 没有当前 Java/OceanBase 契约，明确不列为待实现 | 部分失败/事务/触发器/警告/限额与吞吐 |
 | P2-04 | 诊断 | 日志/Activity/Meter、池/阶段/慢命令/协议/I/O/源流 | 其他资源等待不是已定义产品契约，不列为待实现 | 真实负载、资源曲线和监听开销 |
 | P2-05 | TFM/生态 | 五资产、Windows实际运行时nupkg协议子集 | 完整平台/API矩阵、Framework/ORM支持范围 | 非Windows、完整功能和实库消费者 |
-| P2-06 | 真实兼容性 | 验收工具、双模式直连和网络/XA/路由专项 | TLS/auth占位；OB20/trace替换占位仍在草稿；发布审查 | OBProxy、TLS/auth、允许零日期SQL_MODE、完整资源/故障/版本/平台 |
+| P2-06 | 真实兼容性 | 验收工具、双模式直连和网络/XA/路由专项 | TLS/auth占位；OB20/trace已提交但真实环境仍受限；发布审查 | OBProxy、TLS/auth、允许零日期SQL_MODE、完整资源/故障/版本/平台 |
 
 ## 八个工作包
 
