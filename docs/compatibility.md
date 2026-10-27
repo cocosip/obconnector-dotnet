@@ -1,5 +1,11 @@
 # Compatibility and known gaps
 
+Current acceptance tooling: [OB20/trace profiles](ob20-trace-acceptance.md) replace that deferred
+entry with ten executable sync/async cases, two per explicit selection. Only TLS/authentication
+remains unconditionally deferred. This adds local assertions, not real OB20/OBProxy/TLS or trace
+collector evidence. Dated module records below retain their historical counts and limitations;
+the [current matrix](obconnector-dotnet-progress.md) tracks the latest verification gates.
+
 ## 2026-10-27 Authenticated protocol negotiation diagnostics
 
 Developed from master/37cf788. The existing protocol listener now distinguishes requested and

@@ -44,6 +44,7 @@ copy them into repository files or shared logs/reports. Never print or commit re
 | `networkFaultProfile` | Default false. Explicitly enables 16 controlled write/transaction network fault cases, requiring `allowCreateObjects=true`, a single plain DNS/IPv4 host with separate Port, TLS disabled, no compression and no OB20. Incompatible profiles skip without downgrade. |
 | `xaCrashProfile` | Default false. Explicitly enables four XA coordinator process crash/restart cases. Requires `allowCreateObjects=true`, `dotnet` on PATH, and Oracle PrepareExecute in Oracle mode. Uses only owned branches/tables and a decision journal containing no credentials. |
 | `topologyFaultProfile` | Default false. Enables six read-only controlled client-route cases: idle refresh, borrowed-session isolation and refused-TCP fallback, sync/async. Single plain host, TLS disabled, no compression/OB20; no DDL. This does not prove real cluster HA. |
+| `ob20TraceProfile` | Default omitted. Selects `ob20`, `trace-legacy`, `trace-modern`, `declined-ob20` or `declined-trace`; only the matching sync/async cases run. Requires OB20, no compression, and Full Link Trace requested except for `ob20`. Keeps TLS settings; no DDL. See the [assertions and trace limits](../../docs/ob20-trace-acceptance.md). |
 | `largeValueBytes` | Binary round-trip size, default 65536; range 1–1048576. |
 | `slowQuery` | Optional read-only SQL taking over two seconds, for cancellation and timeout tests. Omitted means those cases are skipped. |
 | `alternateDatabase` | Optional MySQL database for change-and-restore testing. Omitted means skipped. |
@@ -58,7 +59,13 @@ Connection cases compare `ServerVersion` and schema product-version metadata wit
 `types.mysql-client-behavior` checks both TINYINT Boolean/integer mappings and both UPDATE
 row-count settings through real text/prepared sequential readers, including NULL and negative values.
 
-Two `matrix.*` entries are explicitly deferred: TLS/authentication and OB20/tracing negotiation.
+One `matrix.*` entry remains deferred: TLS/authentication.
+Ten `matrix.ob20-trace-negotiation.*` cases have explicit profiles (two execute per selection).
+They require one matching negotiation, successful read-only controls and actual bidirectional
+command frames; active trace profiles also require outgoing extra-info with the selected format.
+Missing server sampling/control fails an explicitly enabled trace profile. The cases use fresh
+unpooled connections, retain no payload/trace IDs and leave TLS unchanged. Local synthetic checks
+do not prove real proxy interoperability or collector delivery; see the [contract](../../docs/ob20-trace-acceptance.md).
 Six opt-in `matrix.topology-failover.*` cases use transparent loopback relays to one upstream,
 require a fresh resolver snapshot per Open, prove unchanged-route reuse, removed-idle retirement,
 borrowed-session isolation and TCP fallback after a refused-only negative control. Only fixed

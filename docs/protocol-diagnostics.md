@@ -61,6 +61,9 @@ private. A Negotiated event alone does not prove subsequent framed I/O or succes
 later physical-session/pool initialization can still fail. Correlate later Frame events and operation
 outcomes when verifying a complete connection or exchange.
 
+The opt-in [OB20/trace acceptance profiles](ob20-trace-acceptance.md) combine these observations
+with fixed read-only queries and outgoing extra-info assertions. They do not establish collector receipt.
+
 Negotiated is emitted once per successful physical authentication, including newly established pool
 sessions. Borrowing/resetting an existing channel does not emit it again. Observers subscribing after
 authentication receive no replay or cached snapshot; reopened physical channels have their own IDs.

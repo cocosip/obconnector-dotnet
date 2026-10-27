@@ -8,6 +8,8 @@ Observe [protocol diagnostics](docs/protocol-diagnostics.md) through the standar
 DiagnosticListener named `OceanBaseConnector.Protocol`. Fixed frame/boundary/error metadata spans
 MySQL, compression and OB20. Negotiated events distinguish requested and actual framing/trace
 selection after physical authentication; SQL, authentication data, parameters and payloads are omitted.
+Opt-in [OB20/trace acceptance profiles](docs/ob20-trace-acceptance.md) also assert actual command
+frames and trace extra-info emission; real proxy compatibility and collector receipt remain unverified.
 
 Read ordinary Oracle [binary cursor columns](docs/obconnector-dotnet-architecture-design.md#oracle-cursor-valued-columns)
 with `OceanBaseRefCursor`: prepare the query, obtain the value, consume all parent results, then open its
