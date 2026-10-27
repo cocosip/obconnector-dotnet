@@ -6,6 +6,27 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-28 Integration profile TLS option override
+
+The integration profile loader applies `options.tlsMode` after resolving the profile connection
+string. `OceanBaseConnectionStringBuilder` correctly rejects two different raw user spellings of
+one canonical keyword, but that guard also rejected the profile's explicit override when a real
+connection string used the common `SslMode` spelling. With the supplied direct profiles, 39 selected
+integration cases therefore failed during test discovery before opening a socket.
+
+The loader now removes the parsed canonical TLS key only while applying the explicit profile option,
+then writes the canonical value back. Public connection-string synonym conflict behavior is unchanged.
+The regression is covered by three configuration cases for `SslMode` and `TLS Mode`; the initial
+case was RED and the final three cases pass. The fix was built with the .NET 11 RC SDK and runs on
+the .NET 10 runtime.
+
+The real direct MySQL/Oracle targeted run reached the supplied OceanBase server and finished with
+140 passed, 4 configuration skips and 2 failures. MySQL connection, Batch and Schema cases passed.
+The two retained Oracle failures occur while creating a view and a synonym, where this tenant
+rejects the DDL; no client workaround or new Schema support claim is made. Credentials were held
+only in process-scoped variables and a deleted temporary profile; no secret entered source, logs or
+reports. This tooling fix does not close any of the 23 gap IDs or eight work packages.
+
 ## 2026-10-28 DBCS client charset Open behavior
 
 Developed from `master/41380e8` for P1-08/W5. MySQL managed initialization now sends the single

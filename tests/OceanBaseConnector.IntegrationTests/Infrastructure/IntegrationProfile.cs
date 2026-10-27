@@ -111,6 +111,10 @@ internal static class IntegrationProfileConfig
         {
             if (!Enum.TryParse<OceanBaseTlsMode>(options.TlsMode, ignoreCase: false, out var tls) || !Enum.IsDefined(tls))
                 throw new InvalidOperationException($"Profile '{item.Name}': 'tlsMode' must be VerifyFull, Required or Disabled.");
+            // Profile options are an explicit override layer. Remove a raw
+            // TLS/SslMode spelling before setting the canonical value so the
+            // builder's user-input synonym conflict guard does not reject it.
+            builder.Remove(OceanBaseConnectionStringBuilder.TlsModeKey);
             builder.TlsMode = tls;
         }
         if (builder.EnableFullLinkTrace && !builder.UseOb20)

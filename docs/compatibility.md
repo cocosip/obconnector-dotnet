@@ -20,6 +20,16 @@ The solution was built with SDK 11.0.100-rc.3 and produced zero warnings and err
 evidence does not close arbitrary implicit side effects, long-running resource limits, OBProxy reset,
 or the full cancellation/interleaving matrix.
 
+## 2026-10-28 Integration profile TLS override
+
+The integration profile loader now accepts a connection string using `SslMode` together with the
+documented `options.tlsMode` override. The previous loader treated the option as a second raw
+synonym and failed before networking; this was exposed by the supplied direct profiles. Three
+configuration regressions pass. A live targeted run reached both direct tenants with 140 passes,
+4 configuration skips and 2 retained Oracle DDL failures for `CREATE VIEW`/`CREATE SYNONYM`; those
+server restrictions remain separate from the loader fix. The run used the .NET 11 RC SDK and the
+.NET 10 runtime, and no credentials were recorded.
+
 ## 2026-10-28 MySQL stored-function ReturnValue
 
 MySQL `CommandType.StoredProcedure` now accepts one `ReturnValue` together with Input arguments for

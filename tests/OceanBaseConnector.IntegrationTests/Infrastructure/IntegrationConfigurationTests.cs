@@ -32,6 +32,19 @@ public sealed class IntegrationConfigurationTests
     }
 
     [Theory]
+    [InlineData("SslMode=Disabled", "Disabled")]
+    [InlineData("SslMode=Required", "Disabled")]
+    [InlineData("TLS Mode=Required", "Disabled")]
+    public void TlsOptionOverridesConnectionStringAlias(string connectionTls, string expected)
+    {
+        var json = "{\"profiles\":[{\"name\":\"direct\",\"mode\":\"MySql\",\"connectionString\":\"Server=localhost;User ID=test;" +
+            connectionTls + "\",\"options\":{\"tlsMode\":\"Disabled\"}}]}";
+
+        var profile = Assert.Single(IntegrationProfileConfig.Parse(json));
+        Assert.Equal(expected, new OceanBaseConnectionStringBuilder(profile.ConnectionString).TlsMode.ToString());
+    }
+
+    [Theory]
     [InlineData("\"name\":\"direct\",\"name\":\"other\",\"mode\":\"MySql\"")]
     [InlineData("\"name\":\"direct\",\"mode\":\"MySql\",\"Mode\":\"Oracle\"")]
     [InlineData("\"name\":\"direct\",\"mode\":\"MySql\",\"options\":{\"tlsMode\":\"Disabled\",\"tlsMode\":\"Required\"}")]
