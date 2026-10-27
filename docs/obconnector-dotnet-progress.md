@@ -60,7 +60,7 @@
 | --- | --- | --- | --- |
 | Command/Batch行为 | 部分实现 | Prepare-only SchemaOnly、有界KeyInfo、SingleRow/SingleResult、Batch元数据及结果限制；双模式直连已补 SchemaOnly 不上传流参数、KeyInfo 隐藏主键列回归，修复 MySQL 目录大小写匹配 | 完整游标/结果形状、目录权限、锁与副作用矩阵待补 |
 | MySQL存储过程 | 已实现 | 集合顺序Input/Output/InputOutput、多结果和隐藏输出 | ReturnValue、FetchSize、SchemaOnly/KeyInfo、INOUT stream等仍拒绝 |
-| Schema / 参数推导 | 已实现（直连验收部分完成） | 双模式目录、DataTypes、原子参数派生、FLOAT及INOUT归一化；本次双模式 Schema 实库用例 10 项通过，另有 4 项 CommandBehavior 元数据补验通过 | Oracle Views/Synonyms 建对象在当前租户返回 `1031/HY000`，不作为客户端 workaround；权限/大小写/重载/版本/代理目录待验收，见[直连验收记录](history/2026-10-28-schema-acceptance.md) |
+| Schema / 参数推导 | 已实现（直连验收部分完成） | 双模式目录、DataTypes、原子参数派生、FLOAT及INOUT归一化；本次双模式 Schema 实库用例 10 项通过，CommandBehavior 元数据补验 4 项通过，过程参数推导再通过 MySQL 2 项和 Oracle 4 项 | Oracle Views/Synonyms 建对象在当前租户返回 `1031/HY000`，不作为客户端 workaround；权限/大小写/重载/版本/代理目录待验收，见[Schema 记录](history/2026-10-28-schema-acceptance.md)和[参数推导记录](history/2026-10-28-routine-derivation-acceptance.md) |
 | DataAdapter / CommandBuilder | 已移出支持范围 | Connector/J 没有对应能力，当前 CRUD 使用显式 `OceanBaseCommand` | 不再提供 public 类型、factory 入口或自动 CRUD 生成 |
 | Statement cache | 已实现 | opt-in idle LRU、容量/关闭、上下文/DDL/reset代际失效 | 真实reprepare、资源和负载报告待验收 |
 | 顺序Batch / INSERT rewrite | 已实现 | 顺序执行、Oracle array binding、opt-in MySQL INSERT合并及失败归属 | 真实触发器/默认值/警告、性能和部分失败组合待验收 |
@@ -77,7 +77,7 @@
 | OB20/trace显式验收（P2-06） | **已提交，部分实库验收**：代码/文档见`bc020e2`、`c5b4c07`；专项/runner **88/88**，Release零警告/错误；直连4.4.2.2双模式 `declined-ob20` 各6通过 | 用户租户实际协商为 `Layer=mysql`，显式 `ob20` 各2项按契约失败；真实 OB20/trace、OBProxy、TLS/auth 和完整单测环境门禁仍未闭合。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |
 | 验收占位 | 已提交基线仅保留TLS/auth DeferredReason；OB20/trace已替换为可执行profile | 实际服务端未启用OB20时必须保留失败，不能用普通MySQL fallback关闭OB20门禁 |
 
-最新**已交付**模块是本次 LOCAL INFILE 实库验收；代码和证据见[模块台账](history/2026-10-28-local-infile-acceptance.md)。此前**已交付**模块是`85e6fe6`协议协商诊断：保存结果为完整单测8091/8091、消费者340/340、重建专项/runner488/488及Release零警告/错误，一次独立最终走查无遗留问题。这些是历史证据，不是本次文档整理的新运行。
+最新**已交付**模块是本次 P1-05/P1-10 元数据直连补验：KeyInfo 的 MySQL 大小写修复、双模式 SchemaOnly/KeyInfo 和 MySQL/Oracle 过程参数推导均有真实证据；代码和 Schema 证据见[Schema 记录](history/2026-10-28-schema-acceptance.md)，参数推导见[参数推导记录](history/2026-10-28-routine-derivation-acceptance.md)。此前**已交付**模块是 LOCAL INFILE 实库验收，见[模块台账](history/2026-10-28-local-infile-acceptance.md)。这些是历史证据，不是本次文档整理的新运行。
 
 开发优先级：OB20/trace 草稿已提交，后续只推进有 Java/OceanBase 依据且纳入范围的验收。没有输入协议依据的 REF CURSOR/复杂形状和未定义批量/诊断扩展保持拒绝，不以诊断或文档交付替代核心功能支持。
 

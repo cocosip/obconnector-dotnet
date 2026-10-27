@@ -24,7 +24,7 @@
 | P1-07 | 复杂类型 | 嵌套二进制结果、LOB/cursor结果、命名LOB内容/匿名locator输入、DDL失效 | 命名LOB定位器回绑、复杂cursor输入、文本复杂结果及未解析RETURNING身份没有足够协议依据，当前拒绝；其他形状按服务端矩阵决定 | DDL、真实复杂SQL、资源生命周期和更多部署profile |
 | P1-08 | 类型/字符集 | NUMBER/FLOAT、scale、常见扩展类型、客户端编码、DBCS fallback、CLOB转码 | 其余national存储/输出、扩展类型/metadata；UTF8MB3/SJIS/Big5 Open失败待解决 | JSON/CLOB转换/存储、完整字符集/版本/代理；保留失败 |
 | P1-09 | HA/发现 | TCP重试/健康缓存、TNS/OCP、组/权重/黑名单/上限 | 其他发现/策略边界；TCP健康不等于数据库健康 | 实际发现服务/节点/代理故障 |
-| P1-10 | Schema | 双模式目录、DataTypes、原子参数派生、FLOAT/INOUT；本次直连 Schema 用例 10 项通过，另有 4 项 CommandBehavior 元数据补验通过 | 包内PL/SQL参数类型拒绝；当前 Oracle 租户 `CREATE VIEW`/`CREATE SYNONYM` 返回 `1031/HY000`，不增加客户端 workaround | 权限、大小写、重载、版本、代理及其他目录矩阵 |
+| P1-10 | Schema | 双模式目录、DataTypes、原子参数派生、FLOAT/INOUT；本次直连 Schema 用例 10 项通过，CommandBehavior 元数据补验 4 项通过，过程参数推导再通过 MySQL 2 项和 Oracle 4 项 | 包内PL/SQL参数类型拒绝；当前 Oracle 租户 `CREATE VIEW`/`CREATE SYNONYM` 返回 `1031/HY000`，不增加客户端 workaround | 权限、大小写、重载、版本、代理及其他目录矩阵 |
 | P1-11 | 凭据轮换 | 每次Open取值、过期/取消、版本退休、脱敏 | 实际provider/plugin差异回归待补 | 凭据服务、plugin/KDC、拒绝/刷新/轮换 |
 | P2-02 | Statement cache | opt-in idle LRU、上下文/DDL/reset代际失效 | 更多reprepare/资源/负载回归 | DDL、资源/延迟和代理 |
 | P2-03 | 批处理优化 | 顺序Batch、Oracle array binding、MySQL INSERT rewrite | multi-send/pipelining、独立bulk 没有当前 Java/OceanBase 契约，明确不列为待实现 | 部分失败/事务/触发器/警告/限额与吞吐 |
