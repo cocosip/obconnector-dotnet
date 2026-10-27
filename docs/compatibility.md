@@ -56,6 +56,16 @@ the existing multiple-results control plus the new sync/async limited-result cas
 This covers result-limit behavior through the public batch API only; permissions, metadata locks,
 cursor result shapes, proxy behavior and long-running resource limits remain open.
 
+## 2026-10-28 P0-01 pool concurrency acceptance
+
+The acceptance console now runs four concurrent workers against a private data source with
+`MaxPoolSize=2`, repeating read-only `SELECT 1` through both synchronous and asynchronous logical
+connections. The direct OceanBase 4.4.2.2 MySQL and Oracle profiles passed the connection group
+5/5 each, including the new sync/async pool-concurrency cases; no cleanup failure occurred.
+
+This is a bounded capacity/wait/reuse check. It does not close long-running load, arbitrary
+Close/Open or Dispose/reset interleavings, proxy reset, resource ceilings or cross-platform behavior.
+
 ## 2026-10-28 Oracle complex acceptance correction
 
 The direct Oracle 4.4.2.2 run on Windows/.NET 10.0.14 now passes `complex.object` after the

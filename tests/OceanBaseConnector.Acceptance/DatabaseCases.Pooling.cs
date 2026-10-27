@@ -5,13 +5,59 @@ namespace OceanBaseConnector.Acceptance;
 
 internal static partial class DatabaseCases
 {
+    private static async Task PoolConcurrency(CaseContext c, bool asynchronous, CancellationToken token)
+    {
+        using var configuration = c.CreateConnection();
+        var builder = new OceanBaseConnectionStringBuilder(configuration.ConnectionString)
+        {
+            Pooling = true,
+            MinPoolSize = 0,
+            MaxPoolSize = 2,
+            PoolWaitTimeout = 10,
+            ConnectionLifetime = 0,
+            ConnectionIdleLifetime = 0,
+        };
+        await using var source = new OceanBaseDataSourceBuilder(builder.ConnectionString).Build();
+        var workers = new Task[4];
+        for (var i = 0; i < workers.Length; i++)
+            workers[i] = asynchronous ? RunAsyncWorker() : Task.Run(RunSyncWorker, token);
+        await Task.WhenAll(workers);
+
+        async Task RunAsyncWorker()
+        {
+            for (var round = 0; round < 3; round++)
+            {
+                await using var connection = (OceanBaseConnection)source.CreateConnection();
+                await connection.OpenAsync(token);
+                await using var command = c.Command(connection, c.SelectOne);
+                c.EqualNumber(await command.ExecuteScalarAsync(token), 1, "Concurrent async pool query mismatch.");
+                await connection.CloseAsync();
+            }
+        }
+
+        void RunSyncWorker()
+        {
+            for (var round = 0; round < 3; round++)
+            {
+                using var connection = (OceanBaseConnection)source.CreateConnection();
+                connection.Open();
+                using var command = c.Command(connection, c.SelectOne);
+                c.EqualNumber(command.ExecuteScalar(), 1, "Concurrent sync pool query mismatch.");
+                connection.Close();
+            }
+        }
+    }
+
     private static async Task PoolResetReuse(CaseContext c, bool asynchronous, CancellationToken token)
     {
         using var configuration = c.CreateConnection();
         var builder = new OceanBaseConnectionStringBuilder(configuration.ConnectionString)
         {
-            Pooling = true, MinPoolSize = 0, MaxPoolSize = 1,
-            ConnectionLifetime = 0, ConnectionIdleLifetime = 0,
+            Pooling = true,
+            MinPoolSize = 0,
+            MaxPoolSize = 1,
+            ConnectionLifetime = 0,
+            ConnectionIdleLifetime = 0,
         };
         await using var source = new OceanBaseDataSourceBuilder(builder.ConnectionString).Build();
         using var capture = new ProtocolChannelCapture();

@@ -30,6 +30,7 @@ internal static partial class DatabaseCases
             cases.Add(new("streams.local-infile." + suffix, "streams", (c, t) => LocalInfile(c, async, t),
                 Mode: "MySql", RequiresObjects: true, RequiresLocalInfileProfile: true));
             cases.Add(new("matrix.pool-reset-reuse." + suffix, "faults", (c, t) => PoolResetReuse(c, async, t)));
+            cases.Add(new("connection.pool-concurrency." + suffix, "connection", (c, t) => PoolConcurrency(c, async, t)));
         }
         cases.Add(new("connection.factory-data-source", "connection", Factory));
         cases.Add(new("connection.change-database", "connection", ChangeDatabase, Mode: "MySql", RequiresAlternateDatabase: true));

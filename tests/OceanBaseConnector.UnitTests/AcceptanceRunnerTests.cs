@@ -195,6 +195,7 @@ public sealed class AcceptanceRunnerTests
             Assert.Null(c.Mode);
             Assert.False(c.RequiresObjects);
         });
+        Assert.Equal(2, cases.Count(c => c.Name.StartsWith("connection.pool-concurrency.", StringComparison.Ordinal)));
     }
 
     [Fact]
