@@ -18,7 +18,7 @@ namespace OceanBaseConnector.ConsumerTests
     {
         public static IEnumerable<object[]> PoolRoutingAssets()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (var asynchronous in new[] { false, true }) yield return new object[] { target, asynchronous };
         }
 
@@ -109,7 +109,7 @@ namespace OceanBaseConnector.ConsumerTests
 
         public static IEnumerable<object[]> TopologyAssets()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (var asynchronous in new[] { false, true })
                     foreach (var ob20 in new[] { false, true })
                         foreach (var disconnect in new[] { false, true }) yield return new object[] { target, asynchronous, ob20, disconnect };

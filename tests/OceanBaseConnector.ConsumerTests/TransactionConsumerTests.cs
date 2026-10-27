@@ -20,8 +20,6 @@ namespace OceanBaseConnector.ConsumerTests
         [Theory]
         [InlineData("netstandard2.0", false, false)]
         [InlineData("netstandard2.1", true, false)]
-        [InlineData("net8.0", true, false)]
-        [InlineData("net9.0", true, false)]
         [InlineData("net10.0", true, false)]
         [InlineData("netstandard2.1", true, true)]
         [InlineData("net10.0", true, true)]

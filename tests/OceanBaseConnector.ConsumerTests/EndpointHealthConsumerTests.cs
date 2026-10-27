@@ -17,7 +17,7 @@ namespace OceanBaseConnector.ConsumerTests
     {
         public static IEnumerable<object[]> Assets()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (var oracle in new[] { false, true })
                     foreach (var asynchronous in new[] { false, true })
                         foreach (var path in target.StartsWith("netstandard", StringComparison.Ordinal) ? new[] { 0, 1 } : new[] { 0, 1, 2 })

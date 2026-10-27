@@ -20,7 +20,7 @@ namespace OceanBaseConnector.ConsumerTests
     {
         public static IEnumerable<object[]> Assets()
         {
-            foreach (var asset in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var asset in ConsumerTargetMatrix.Representative)
                 foreach (var national in new[] { "utf8mb4", "utf16" })
                     foreach (var binary in new[] { false, true })
                         foreach (var sequential in new[] { false, true }) yield return new object[] { asset, national, binary, sequential };
@@ -107,7 +107,7 @@ namespace OceanBaseConnector.ConsumerTests
 
         public static IEnumerable<object[]> ComplexAssets()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (var national in new[] { "utf8mb4", "utf16" })
                     foreach (var asynchronous in new[] { false, true })
                         foreach (var type in new[] { "NCHAR", "NVARCHAR2" }) yield return new object[] { target, national, asynchronous, type };

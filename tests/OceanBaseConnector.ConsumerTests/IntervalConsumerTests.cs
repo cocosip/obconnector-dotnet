@@ -19,7 +19,7 @@ namespace OceanBaseConnector.ConsumerTests
     {
         public static IEnumerable<object[]> Assets()
         {
-            foreach (var asset in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var asset in ConsumerTargetMatrix.Representative)
                 foreach (var binary in new[] { false, true })
                     foreach (var sequential in new[] { false, true }) yield return new object[] { asset, binary, sequential };
         }

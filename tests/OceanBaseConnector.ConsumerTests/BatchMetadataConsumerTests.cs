@@ -18,7 +18,7 @@ namespace OceanBaseConnector.ConsumerTests
     {
         public static IEnumerable<object[]> ModernBatchMetadataAssets()
         {
-            foreach (var target in new[] { "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.ModernOnly)
                 foreach (var asynchronous in new[] { false, true })
                     foreach (var dataSource in new[] { false, true })
                         foreach (var mysql in new[] { false, true })

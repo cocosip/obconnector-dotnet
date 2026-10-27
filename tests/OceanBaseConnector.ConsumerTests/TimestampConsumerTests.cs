@@ -22,16 +22,10 @@ namespace OceanBaseConnector.ConsumerTests
         [InlineData("netstandard2.0", true, false)]
         [InlineData("netstandard2.1", false, false)]
         [InlineData("netstandard2.1", true, false)]
-        [InlineData("net8.0", false, false)]
-        [InlineData("net8.0", true, false)]
-        [InlineData("net9.0", false, false)]
-        [InlineData("net9.0", true, false)]
         [InlineData("net10.0", false, false)]
         [InlineData("net10.0", true, false)]
         [InlineData("netstandard2.0", false, true)]
         [InlineData("netstandard2.1", false, true)]
-        [InlineData("net8.0", false, true)]
-        [InlineData("net9.0", false, true)]
         [InlineData("net10.0", false, true)]
         public async Task EachAssetPreservesPreciseTimestampsAndWritesProviderValuesBack(string target, bool zoned, bool local)
             => await VerifyTimestamps(target, zoned, local, false);
@@ -39,8 +33,6 @@ namespace OceanBaseConnector.ConsumerTests
         [Theory]
         [InlineData("netstandard2.0")]
         [InlineData("netstandard2.1")]
-        [InlineData("net8.0")]
-        [InlineData("net9.0")]
         [InlineData("net10.0")]
         public async Task SequentialAssetsKeepNanosecondsAndProviderWriteBack(string target)
             => await VerifyTimestamps(target, false, false, true);

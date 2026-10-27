@@ -20,8 +20,6 @@ namespace OceanBaseConnector.ConsumerTests
         [Theory]
         [InlineData("netstandard2.0", false)]
         [InlineData("netstandard2.1", false)]
-        [InlineData("net8.0", true)]
-        [InlineData("net9.0", true)]
         [InlineData("net10.0", true)]
         public void SavepointApisOnlyOverrideAvailablePlatformContracts(string target, bool modern)
         {
@@ -42,7 +40,7 @@ namespace OceanBaseConnector.ConsumerTests
 
         public static IEnumerable<object[]> SavepointAssets()
         {
-            foreach (var target in new[] { "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.ModernOnly)
                 foreach (var asynchronous in new[] { false, true })
                     foreach (var mysql in new[] { false, true })
                         foreach (var ob20 in new[] { false, true })

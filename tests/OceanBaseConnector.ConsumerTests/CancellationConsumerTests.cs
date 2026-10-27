@@ -19,8 +19,6 @@ namespace OceanBaseConnector.ConsumerTests
         [Theory]
         [InlineData("netstandard2.0")]
         [InlineData("netstandard2.1")]
-        [InlineData("net8.0")]
-        [InlineData("net9.0")]
         [InlineData("net10.0")]
         public async Task EachAssetDistinguishesPublicCommandTimeoutFromCancellation(string target)
         {

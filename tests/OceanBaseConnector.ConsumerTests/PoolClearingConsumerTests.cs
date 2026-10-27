@@ -19,7 +19,7 @@ namespace OceanBaseConnector.ConsumerTests
     {
         public static IEnumerable<object[]> Assets()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (var asynchronous in new[] { false, true })
                     foreach (var all in new[] { false, true }) yield return new object[] { target, asynchronous, all };
         }
@@ -58,10 +58,6 @@ namespace OceanBaseConnector.ConsumerTests
         }
 
         [Theory]
-        [InlineData("net8.0", false)]
-        [InlineData("net8.0", true)]
-        [InlineData("net9.0", false)]
-        [InlineData("net9.0", true)]
         [InlineData("net10.0", false)]
         [InlineData("net10.0", true)]
         public async Task ModernSourceClearsWithoutLosingItsCertificateSnapshot(string target, bool asynchronous)

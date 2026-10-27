@@ -17,14 +17,6 @@ namespace OceanBaseConnector.ConsumerTests
     public sealed class BatchConsumerTests
     {
         [Theory]
-        [InlineData("net8.0", false, false)]
-        [InlineData("net8.0", true, false)]
-        [InlineData("net8.0", false, true)]
-        [InlineData("net8.0", true, true)]
-        [InlineData("net9.0", false, false)]
-        [InlineData("net9.0", true, false)]
-        [InlineData("net9.0", false, true)]
-        [InlineData("net9.0", true, true)]
         [InlineData("net10.0", false, false)]
         [InlineData("net10.0", true, false)]
         [InlineData("net10.0", false, true)]
@@ -94,14 +86,6 @@ namespace OceanBaseConnector.ConsumerTests
         }
 
         [Theory]
-        [InlineData("net8.0", false, false)]
-        [InlineData("net8.0", false, true)]
-        [InlineData("net8.0", true, false)]
-        [InlineData("net8.0", true, true)]
-        [InlineData("net9.0", false, false)]
-        [InlineData("net9.0", false, true)]
-        [InlineData("net9.0", true, false)]
-        [InlineData("net9.0", true, true)]
         [InlineData("net10.0", false, false)]
         [InlineData("net10.0", false, true)]
         [InlineData("net10.0", true, false)]

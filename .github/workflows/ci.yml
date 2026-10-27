@@ -51,23 +51,30 @@ jobs:
       - name: Restore
         run: dotnet restore OceanBaseConnector.slnx
 
-      - name: Build
+      # Only the Windows push that packs a release needs every product asset.
+      # Other legs compile the runtime used by the unit/DI gates; the forced
+      # netstandard2.0 consumer reference still builds the baseline asset.
+      - name: Build all package assets
+        if: runner.os == 'Windows' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
         run: dotnet build OceanBaseConnector.slnx -c Release --no-restore
+
+      - name: Build CI targets
+        if: runner.os != 'Windows' || github.event_name != 'push' || (github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/'))
+        run: dotnet build OceanBaseConnector.slnx -c Release --no-restore -p:TargetFramework=net10.0
 
       - name: Unit tests (.NET 10)
         run: >-
           dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj
           -c Release --no-restore --no-build
 
-      # The full consumer matrix is a protocol/compatibility acceptance suite:
-      # it expands thousands of cases across five product assets and is run
-      # in local or dedicated acceptance runs. Keep the per-commit gate to fast
-      # package-consumer contracts.
-      - name: Consumer contract smoke tests (.NET 10)
+      # ConsumerTests is the compatibility acceptance suite. It runs once on
+      # the Windows tag leg after the representative target matrix is reduced
+      # to netstandard2.0, netstandard2.1 and net10.0.
+      - name: Consumer acceptance tests (tag only)
+        if: runner.os == 'Windows' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         run: >-
           dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj
           -c Release --no-restore --no-build
-          --filter "FullyQualifiedName~DependencyVersionTests|FullyQualifiedName~TargetSurfaceIsolationTests|FullyQualifiedName~XidConsumerTests"
 
       - name: Dependency injection tests (.NET 10)
         run: >-

@@ -26,7 +26,7 @@ namespace OceanBaseConnector.ConsumerTests
 
         public static IEnumerable<object[]> OracleFloatDerivationAssets()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (var asynchronous in new[] { false, true })
                     foreach (var type in new[] { "FLOAT", "NUMBER_FLOAT" })
                         yield return new object[] { target, asynchronous, type };

@@ -52,7 +52,7 @@ namespace OceanBaseConnector.ConsumerTests
 
         public static IEnumerable<object[]> TlsPartialCases()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (var async in new[] { false, true })
                     foreach (var kind in new[] { "crc", "cancel", "timeout", "close" })
                         yield return new object[] { target, async, kind };

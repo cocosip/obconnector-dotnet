@@ -13,7 +13,7 @@ namespace OceanBaseConnector.ConsumerTests
     {
         public static IEnumerable<object[]> Cases()
         {
-            foreach (var asset in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var asset in ConsumerTargetMatrix.Representative)
                 foreach (var (oracle, local) in new[] { (true, false), (false, false), (false, true) })
                     foreach (var asynchronous in new[] { false, true })
                         foreach (var outcome in new[] { "success", "error" })

@@ -21,10 +21,6 @@ namespace OceanBaseConnector.ConsumerTests
         [Theory]
         [InlineData("netstandard2.0", false)]
         [InlineData("netstandard2.1", false)]
-        [InlineData("net8.0", false)]
-        [InlineData("net8.0", true)]
-        [InlineData("net9.0", false)]
-        [InlineData("net9.0", true)]
         [InlineData("net10.0", false)]
         [InlineData("net10.0", true)]
         public async Task EachAssetExposesSchemaCollectionsAndReadsOracleDirectory(string target, bool asynchronous)

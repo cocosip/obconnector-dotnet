@@ -20,7 +20,7 @@ namespace OceanBaseConnector.ConsumerTests
     {
         public static IEnumerable<object[]> RoutineSchemaAssets()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (var asynchronous in target.StartsWith("netstandard", StringComparison.Ordinal) ? new[] { false } : new[] { false, true })
                     foreach (var mysql in new[] { false, true })
                         foreach (var parameters in new[] { false, true }) yield return new object[] { target, asynchronous, mysql, parameters };

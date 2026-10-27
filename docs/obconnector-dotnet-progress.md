@@ -73,6 +73,7 @@
 
 | 项目 | 当前进度 | 尚未完成 |
 | --- | --- | --- |
+| Consumer CI耗时优化 | **已调整**：普通 PR/分支 push 不执行 consumer；仅 tag 的 Windows 发布腿运行 acceptance；行为矩阵保留 `netstandard2.0`、`netstandard2.1`、`net10.0` 三类实现路径，五资产依赖/目标面契约仍保留 | 本地本轮列举用例由 5918 降至 3396；完整 TLS consumer 仍受 Windows PFX 凭据环境限制，需在 CI 或可用证书环境复跑 |
 | OB20/trace显式验收（P2-06） | **交付门禁中，未提交**：五profile/十case；专项/runner **88/88**，Release零警告/错误，一次独立最终走查无问题，opt-out集成15通过/116跳过 | 完整单测首轮重现历史TNS File.Replace失败，同产物隔离1/1通过；完整运行尚未收尾，仍需最终文档/隐私检查和提交；未跑实库。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |
 | 验收占位 | 已提交基线仍有TLS/auth与OB20/trace两个DeferredReason；当前草稿将后者替换为可执行case | 草稿专项通过不等于模块交付，暂不减少已交付清单的两个占位 |
 

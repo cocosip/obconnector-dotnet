@@ -13,7 +13,7 @@ namespace OceanBaseConnector.ConsumerTests
     {
         public static IEnumerable<object[]> Assets()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 for (var sample = 0; sample < CharacterSetFixture.Samples.Length; sample++)
                     foreach (var binary in new[] { false, true })
                         foreach (var sequential in new[] { false, true })
@@ -27,7 +27,7 @@ namespace OceanBaseConnector.ConsumerTests
 
         public static IEnumerable<object[]> BlobFamilyAssets()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (byte type in new byte[] { 249, 250, 251 })
                     foreach (var raw in new[] { false, true })
                         foreach (var binary in new[] { false, true })
@@ -42,7 +42,7 @@ namespace OceanBaseConnector.ConsumerTests
 
         public static IEnumerable<object[]> ExtendedStringAssets()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (byte type in new byte[] { 247, 248, 255 })
                     foreach (var raw in type == 255 ? new[] { true } : new[] { false, true })
                         foreach (var binary in new[] { false, true })
@@ -57,7 +57,7 @@ namespace OceanBaseConnector.ConsumerTests
 
         public static IEnumerable<object[]> RowIdAssets()
         {
-            foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
+            foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (var binary in new[] { false, true })
                     foreach (var sequential in new[] { false, true })
                         yield return new object[] { target, binary, sequential };
