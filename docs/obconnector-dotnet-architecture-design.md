@@ -51,7 +51,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `Connection Idle Lifetime` | 0 | Seconds an idle session may remain before lazy reaping; zero disables the limit. |
 | `Connection Lifetime` | 0 | Maximum physical-session age in seconds; zero disables the limit. |
 | `Statement Cache Size` | 0 | Idle server-prepared statements retained per physical session, 0..1024; zero disables sharing across commands. |
-| `Use Compression` | false | Requires standard MySQL zlib compression. Unsupported servers fail before credentials; cannot currently combine with Use OB20. |
+| `Use Compression` | false | Requests standard MySQL zlib compression. Servers without `CLIENT_COMPRESS` keep ordinary framing, matching Connector/J; cannot currently combine with Use OB20. |
 | `Character Set` | utf8mb4 | SQL/ordinary parameters; non-default names enable cached charset trust and UTF-8 results. See [input encoding and session limits](client-character-sets.md). |
 | `Use OB20` | false | Requests OB20 framing when negotiated by the server. |
 | `Enable Full Link Trace` | false | Requests server tracing; requires `Use OB20=true`. |
@@ -1023,7 +1023,7 @@ callback, allocation and verification limits. Other resource waits/load remain o
 
 ## MySQL compression
 
-`OceanBaseConnectionStringBuilder.UseCompression` / `Use Compression=true` requests CLIENT_COMPRESS. The default remains false, even when the server advertises compression. A requested capability missing from the greeting fails before the TLS/authentication response; authentication switches and the final authentication OK remain uncompressed. Compression starts after that OK and before OceanBase identity queries, above TLS when TLS is enabled. Both compatibility modes and all five target assets use the same implementation. The option is preserved when selecting an endpoint and is part of the connection configuration used for pool identity.
+`OceanBaseConnectionStringBuilder.UseCompression` / `Use Compression=true` requests CLIENT_COMPRESS. The default remains false, even when the server advertises compression. If the greeting lacks the capability, the client keeps ordinary framing, matching Connector/J; authentication switches and the final authentication OK remain uncompressed. When the capability is present, compression starts after that OK and before OceanBase identity queries, above TLS when TLS is enabled. Both compatibility modes and all five target assets use the same implementation. The option is preserved when selecting an endpoint and is part of the connection configuration used for pool identity.
 
 The seven-byte outer header wraps an ordinary MySQL framed byte stream. A block can hold several packets or part of a header/payload; original and zlib blocks may mix. Outer sequence numbers increment across reads and writes, wrap at 256, and reset for each new command. MySQL can renumber inner sequences when flushing compressed buffers, so compression validates the outer sequence rather than applying the ordinary inner counter. Multi-packet uploads preserve both protocol counters across direction changes. Complete writes flush compression, including no-response statement commands and LOCAL INFILE terminators.
 

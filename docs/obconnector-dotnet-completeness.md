@@ -1,6 +1,6 @@
 # 驱动完整性清单与剩余开发
 
-更新：2026-10-28。范围审计基线为`89a304d`，最近功能模块提交为`85e6fe6`；P2-01 DataAdapter/CommandBuilder 已按范围审计移除；当前OB20/trace验收是未提交草稿，专项88/88通过，尚未完成完整门禁。
+更新：2026-10-28。范围审计基线为`89a304d`，最近功能模块提交为`f5d4d76`；P2-01 DataAdapter/CommandBuilder 已按范围审计移除；当前OB20/trace验收是未提交草稿，专项88/88通过，尚未完成完整门禁。
 日常查看[具体功能矩阵](obconnector-dotnet-progress.md)；本文件保留原23项审计编号（其中P2-01已移除）和剩余工作包，不再重复交付流水。
 
 ## 23项缺口矩阵
@@ -16,7 +16,7 @@
 | P0-05 | 活动连接恢复 | 连接ERR置Broken、旧事务失效、显式Close/Open | 无透明迁移/自动重连/replay，先定契约；补完整重建 | 节点/代理断连和恢复 |
 | P0-06 | 池路由隔离 | resolver身份、Open快照、闲置退休和借出保留 | 其他边界/压力覆盖；无活动迁移/DNS-IP身份保证 | 单上游受控路由已通过，独立节点/代理HA仍缺 |
 | P1-01 | 多语句 | opt-in文本多结果 | 参数/Prepare/cursor/Oracle输出组合拒绝，扩展范围待定 | 中途错误/排空/版本/代理 |
-| P1-02 | 压缩/OB20 | 标准MySQL压缩、普通OB20及trace | 压缩OB20、proxy reroute 当前明确拒绝；除非取得客户端协议依据，不列为默认开发项 | 真实压缩/OB20/代理及损坏/取消 |
+| P1-02 | 压缩/OB20 | 标准MySQL压缩、普通OB20及trace；服务端未声明 `CLIENT_COMPRESS` 时按 Java 降级为普通协议，双模式直连验收通过 | 压缩OB20、proxy reroute 当前明确拒绝；除非取得客户端协议依据，不列为默认开发项 | 真实压缩帧/OBProxy、TLS、跨平台及损坏/取消矩阵 |
 | P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界；同步/异步 `LOAD DATA LOCAL INFILE` 已在直连 OceanBase MySQL 4.4.2.2 通过 | 大输入/取消组合不纳入本模块新增实库范围 | 代理策略、大文件及中断行为 |
 | P1-04 | TLS/mTLS | 服务器回调、客户端证书、池隔离、撤销选项 | 发现实际差异后补轮换/平台回归 | 企业CA、负向握手、过期/轮换、平台撤销 |
 | P1-05 | Command/Batch | SchemaOnly/KeyInfo/结果限制、MySQL过程、Batch元数据；双模式直连补验 16 项 SchemaOnly/KeyInfo 矩阵（含组合主键、别名投影、可空唯一键和实际隐藏值读取），并修复 MySQL 目录大小写匹配 | 完整行为/结果形状矩阵，现有拒绝组合保留 | 权限/目录/prepare副作用/锁/游标 |

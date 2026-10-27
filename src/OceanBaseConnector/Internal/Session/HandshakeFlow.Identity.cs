@@ -12,7 +12,7 @@ namespace OceanBaseConnector.Internal.Session
 
         private static void EnableFraming(PacketChannel channel, ConnectResult result, OceanBaseConnectionOptions options)
         {
-            if (options.UseCompression) channel.EnableCompression();
+            if (options.UseCompression && result.Capabilities.HasEffective(CapabilityFlags.ClientCompress)) channel.EnableCompression();
             else if (options.UseOb20 && result.Capabilities.HasEffective(CapabilityFlags.ClientConnectAttrs) &&
                 (result.ObCapabilityFlag & OceanBaseCapabilityFlags.ObCapObProtocolV2) != 0)
                 channel.EnableOb20(result.ConnectionId,

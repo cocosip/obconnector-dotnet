@@ -1,6 +1,6 @@
 # 开发进度与功能矩阵
 
-更新：2026-10-28。范围审计基线：`89a304d`；最近功能模块提交为`85e6fe6`；当前范围审计移除了 DataAdapter/CommandBuilder；下表同步最新调整。
+更新：2026-10-28。范围审计基线：`89a304d`；最近功能模块提交为`f5d4d76`；当前范围审计移除了 DataAdapter/CommandBuilder；下表同步最新调整。
 
 **已实现**表示支持“已支持范围”一列且有本地回归，不等于所有部署均已验收。**部分实现**表示仍有明确缺口；**未实现**表示当前不支持；**开发中**不计交付。实库结果只覆盖记录的 profile。
 原清单的23个审计编号保留用于追溯，P2-01 已移出当前范围；其余工作包不能整体关闭，也不按提交数/单测数计算完成率。
@@ -44,7 +44,7 @@
 
 | 功能 | 开发状态 | 已支持范围 | 还缺什么 / 验收边界 |
 | --- | --- | --- | --- |
-| 标准MySQL压缩 | 已实现 | 显式协商、有界编解码、校验、序列和取消保护 | 不能与OB20同时启用；真实压缩部署矩阵待验收 |
+| 标准MySQL压缩 | 已实现 | 显式请求、有界编解码、校验、序列和取消保护；服务端未声明 `CLIENT_COMPRESS` 时按 Java 降级为普通协议，双模式直连 `SELECT 1` 已通过 | 不能与OB20同时启用；当前租户未开启压缩，真实压缩帧、代理、TLS 和跨平台矩阵待验收 |
 | 普通OB20 / trace | 已实现 | 普通帧、校验、legacy/modern trace编解码及协商诊断；显式 profile 会拒绝服务端实际降级 | 用户租户实测协商为 MySQL，未提供实际 OB20/trace 帧；OBProxy、服务器策略和 trace 发送仍待专用环境 |
 | OB20压缩 | 明确不支持 | 非零uncompressed length仍拒绝 | 先取得客户端链路/版本/capability 依据，否则不实现 |
 | Proxy reroute | 明确不支持 | 当前拒绝相关响应标志 | 没有明确目标/TLS/租户及未知结果契约前不实现 |
@@ -77,7 +77,7 @@
 | OB20/trace显式验收（P2-06） | **已提交，部分实库验收**：代码/文档见`bc020e2`、`c5b4c07`；专项/runner **88/88**，Release零警告/错误；直连4.4.2.2双模式 `declined-ob20` 各6通过 | 用户租户实际协商为 `Layer=mysql`，显式 `ob20` 各2项按契约失败；真实 OB20/trace、OBProxy、TLS/auth 和完整单测环境门禁仍未闭合。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |
 | 验收占位 | 已提交基线仅保留TLS/auth DeferredReason；OB20/trace已替换为可执行profile | 实际服务端未启用OB20时必须保留失败，不能用普通MySQL fallback关闭OB20门禁 |
 
-最新**已交付**模块是本次 P0-02/P1-06 Oracle 资源与 REF CURSOR 直连验收：资源生命周期矩阵 32/32 通过，REF CURSOR 输出矩阵 15/16 通过，唯一失败是服务端拒绝 `SELECT CURSOR(...)` 结果列；证据见[资源与游标记录](history/2026-10-28-oracle-resource-cursor-acceptance.md)。此前**已交付**模块是 P1-05/P1-10 元数据直连补验：KeyInfo 的 MySQL 大小写修复、双模式 SchemaOnly/KeyInfo 和 MySQL/Oracle 过程参数推导均有真实证据；代码和 Schema 证据见[Schema 记录](history/2026-10-28-schema-acceptance.md)，参数推导见[参数推导记录](history/2026-10-28-routine-derivation-acceptance.md)。LOCAL INFILE 实库验收见[模块台账](history/2026-10-28-local-infile-acceptance.md)。这些是历史证据，不是本次文档整理的新运行。
+最新**已交付**模块是 P1-02 标准 MySQL 压缩协商修正：按 Connector/J 规则，在服务端未声明 `CLIENT_COMPRESS` 时降级普通协议；本地受影响压缩/诊断筛选 126/130 通过（4 个 TLS 用例受 Windows 测试证书环境影响），真实 MySQL/Oracle 直连同步/异步 4/4 通过；证据见[标准压缩记录](history/2026-10-28-standard-compression-fallback.md)。此前**已交付**模块是本次 P0-02/P1-06 Oracle 资源与 REF CURSOR 直连验收：资源生命周期矩阵 32/32 通过，REF CURSOR 输出矩阵 15/16 通过，唯一失败是服务端拒绝 `SELECT CURSOR(...)` 结果列；证据见[资源与游标记录](history/2026-10-28-oracle-resource-cursor-acceptance.md)。更早的 P1-05/P1-10 元数据直连补验、LOCAL INFILE 实库验收仍见对应历史台账。这些是历史证据，不是本次文档整理的新运行。
 
 开发优先级：OB20/trace 草稿已提交，后续只推进有 Java/OceanBase 依据且纳入范围的验收。没有输入协议依据的 REF CURSOR/复杂形状和未定义批量/诊断扩展保持拒绝，不以诊断或文档交付替代核心功能支持。
 

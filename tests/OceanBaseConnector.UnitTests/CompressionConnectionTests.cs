@@ -52,22 +52,24 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public async Task UnsupportedServerFailsBeforeCredentialsAreSent(bool asynchronous)
+        public async Task UnsupportedServerFallsBackToUncompressedAuthentication(bool asynchronous)
         {
             await using var server = new CompressionServer(ProtocolFixture.Load("initial-handshake-oceanbase").Payload, false, advertise: false);
             using var connection = new OceanBaseConnection($"Server=127.0.0.1;Port={server.Port};User ID=u;Password=secret;TLS Mode=Disabled;Use Compression=true");
-            var error = await Record.ExceptionAsync(async () => { if (asynchronous) await connection.OpenAsync(); else connection.Open(); });
-            Assert.NotNull(error); Assert.Equal(0, server.Authentications);
+            if (asynchronous) await connection.OpenAsync(); else connection.Open();
+            using var command = connection.CreateCommand(); command.CommandText = "select 'fallback'";
+            Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+            Assert.Equal(1, server.Authentications); Assert.False(server.Compressed); Assert.Equal(1, server.Queries);
         }
 
         [Fact]
-        public void CapabilityIsExplicitAndRequiresServerSupport()
+        public void CapabilityIsExplicitAndFallsBackWhenServerLacksSupport()
         {
             var builder = new OceanBaseConnectionStringBuilder("Server=ob;User ID=u");
             Assert.False(builder.UseCompression);
             Assert.Equal(0u, (uint)(ClientCapabilities.Build(CapabilityFlags.ClientCompress, builder.Build()) & CapabilityFlags.ClientCompress));
             builder.UseCompression = true;
-            Assert.Throws<ProtocolException>(() => ClientCapabilities.Build(CapabilityFlags.None, builder.Build()));
+            Assert.Equal(0u, (uint)(ClientCapabilities.Build(CapabilityFlags.None, builder.Build()) & CapabilityFlags.ClientCompress));
             Assert.NotEqual(0u, (uint)(ClientCapabilities.Build(CapabilityFlags.ClientCompress, builder.Build()) & CapabilityFlags.ClientCompress));
         }
 

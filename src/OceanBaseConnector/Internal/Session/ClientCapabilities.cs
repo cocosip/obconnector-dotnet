@@ -28,9 +28,8 @@ namespace OceanBaseConnector.Internal.Session
 
             if (options.UseCompression)
             {
-                if ((serverCapabilities & CapabilityFlags.ClientCompress) == 0)
-                    throw new ProtocolException("The server does not support requested MySQL compression.");
-                capabilities |= CapabilityFlags.ClientCompress;
+                if ((serverCapabilities & CapabilityFlags.ClientCompress) != 0)
+                    capabilities |= CapabilityFlags.ClientCompress;
             }
             if (!options.UseAffectedRows) capabilities |= CapabilityFlags.ClientFoundRows;
             if (options.AllowMultiStatements) capabilities |= CapabilityFlags.ClientMultiStatements;
