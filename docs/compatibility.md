@@ -1,5 +1,19 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Source review checkpoint
+
+At `master/6e64c7e`, the serial Release solution build passes with zero warnings/errors;
+554 selected complex/cursor/session-isolation/compression unit cases pass with zero failures/skips.
+Binary complex BLOB/CLOB and cursor result members and text/binary top-level cursor columns
+are locally implemented. Non-empty complex LOB/cursor input, Input/InputOutput REF CURSOR,
+text complex results and unresolved whole-complex RETURNING identity remain unsupported.
+No full-suite, package-consumer or real-server rerun was performed; historical failures remain.
+See the [source-review commands and evidence](obconnector-dotnet-progress.md#2026-10-27-source-review-and-progress-alignment).
+
+Acceptance has five deferred `matrix.*` cases plus the separate deferred `types.zero-date-policy`
+case. The executable `matrix.pool-reset` case checks isolation by retiring the changed session;
+it has not been live-run and does not prove COM_RESET_CONNECTION/reuse. Details are below.
+
 ## 2026-10-27 Pool wait outcome diagnostics
 
 The existing `oceanbase.client.pool.wait.duration` histogram now includes the standard
@@ -689,7 +703,10 @@ The cleanup failure was an attempted DROP of the table whose CREATE failed. The 
 
 ## Deferred acceptance cases
 
-These five entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs) have explicit `DeferredReason` values. They report skips, not successful validation. `matrix.pool-reset` is an executable case and is listed separately below.
+Five `matrix.*` entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs)
+and `types.zero-date-policy` in [DatabaseCases.Types.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.Types.cs)
+have explicit `DeferredReason` values: six deferred cases in total. They report skips, not
+successful validation. `matrix.pool-reset` is executable and is listed separately below.
 
 | Case | Missing validation / implementation |
 | --- | --- |
@@ -698,11 +715,16 @@ These five entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/
 | `matrix.topology-failover` | Controlled discovery, endpoint failures and routing on real deployments. |
 | `matrix.network-outcome-unknown` | Mid-request/response failures, cancellation ordering and interrupted commit/rollback on real deployments. |
 | `matrix.xa-crash-recovery` | External coordinator recovery under client/server process failure. Basic XA phase tests do not cover this. |
+| `types.zero-date-policy` | A separate MySQL SQL_MODE profile allowing zero dates and actual policy assertions; the current case is a deferred no-op. |
 
 `matrix.pool-reset` forces a one-session pool, changes the session time zone, closes the
 borrower, and requires the next MySQL or Oracle borrower to observe the original time zone.
-It validates the public reset/session-state path against the configured server. OBProxy,
-other server versions, TLS profiles, long-running load and failure injection remain open.
+The SET/ALTER SESSION change is classified for retirement by `SessionStateSql.RequiresDiscard`;
+`PhysicalSessionPool.Return/ReturnAsync` destroys that session before reset. This checks borrower
+isolation by replacement, not COM_RESET_CONNECTION on the same physical session. The case has
+not been run against a real server. Separate real reset/reuse evidence must distinguish physical
+session reuse from retirement, and prove the relevant reset behavior. OBProxy, other server
+versions, TLS profiles, long-running load and failure injection remain open.
 
 Further skips depend on selected groups, compatibility mode, `slowQuery`, `alternateDatabase`, DDL permissions and Oracle extension options. If a connection prerequisite fails, dependent cases are skipped. See [AcceptanceSuite.SkipReason](../tests/OceanBaseConnector.Acceptance/AcceptanceSuite.cs); a zero exit code can still include skips.
 

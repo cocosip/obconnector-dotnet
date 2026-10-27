@@ -6,6 +6,12 @@ xUnit suites that exercise the driver's public ADO.NET surface against **real, e
 - A plain `dotnet test` or an IDE "run all tests" skips every database case with a visible reason and opens no socket. Configuration regression tests run without a database.
 - Database cases run only after an explicit opt-in plus a configured database environment.
 
+Real environment access supplied for development belongs only in these opt-in integration tests
+or the acceptance console. Unit tests and CI must remain independent of those endpoints. Use
+local .NET User Secrets or process-scoped environment variables; keep actual hosts, tenant/user
+names, passwords and connection strings out of source, examples, documentation, commits and
+shared logs/reports. Review diagnostic output before sharing it; never print resolved secrets.
+
 This suite is the engineering counterpart of the [acceptance console](../OceanBaseConnector.Acceptance/README.md): the console produces curated release reports; these suites are what you filter, debug and re-run from an IDE or `dotnet test`.
 
 ## Ordinary Oracle cursor columns
@@ -21,8 +27,10 @@ prepare-execute profile. This new case explicitly prepares SELECT CURSOR, consum
 SequentialAccess response, disposes the parent command, then fetches the returned cursor. It currently
 has no passing real-server evidence: the built-DLL run recorded oracle-direct1failed/0skipped in
 Open/HandshakeFlow70 before greeting, before SQL execution. The initial project command executed no
-tests due to restored package-import paths pointing at the restricted account; it is not passing evidence. Binary fixtures/consumers are separate evidence. Text cursor columns and cursor input
-directions remain unsupported; the whole Oracle result-shape matrix remains open.
+tests due to restored package-import paths pointing at the restricted account; it is not passing evidence.
+Binary fixtures/consumers are separate evidence. Text cursor columns now have a local implementation;
+Input/InputOutput REF CURSOR remains unsupported. Real cursor-column interoperability and the
+whole Oracle result-shape matrix remain open.
 
 ## REF CURSOR result limits
 

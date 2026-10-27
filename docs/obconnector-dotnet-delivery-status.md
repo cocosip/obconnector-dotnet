@@ -7,6 +7,22 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 ## Current checkpoint
 
 - Development stays on `master`. No new branch/worktree and no implicit push.
+- Source review baseline: `master/6e64c7e`, 2026-10-27. The serial Release solution build
+  passes with zero warnings/errors; 554 selected complex/cursor/session-isolation/compression
+  unit cases pass with zero failures/skips. Acceptance `--list` confirms five deferred
+  `matrix.*` cases plus the separate deferred `types.zero-date-policy` case. This is a
+  focused local check, not a complete-suite, package-consumer or real-deployment run.
+  Reproducible commands and remaining limits are in the
+  [source-review record](obconnector-dotnet-progress.md#2026-10-27-source-review-and-progress-alignment).
+- Current local delivery: binary complex object/collection cursor members publish session-bound
+  `OceanBaseRefCursor` handles, including named/anonymous layouts and buffered/sequential reads.
+  Text and binary top-level cursor columns also exist. Non-empty complex LOB/cursor inputs,
+  Input/InputOutput REF CURSOR, text complex results and unresolved whole-complex RETURNING
+  remain unsupported; real interoperability is unverified.
+- Acceptance implementation: `matrix.pool-reset` is executable but has not been run against a
+  real server. Its SET/ALTER SESSION time-zone change marks the first session for retirement.
+  It checks borrower isolation by replacement, not COM_RESET_CONNECTION on a reused physical
+  session. A distinct real reset/reuse assertion remains required.
 - Current local delivery: `oceanbase.client.pool.wait.duration` now carries the standard
   `oceanbase.outcome` tag (`acquired`, `timeout`, `canceled` or `error`) for sync and async pool
   waits. The focused regression passes 2/2; the affected diagnostics selection passes 228/230,
@@ -22,7 +38,7 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   and metadata/row shape before decoding. The focused REF CURSOR selection passes 143/143; this is
   local protocol evidence only, while Input/InputOutput directions and real OceanBase/OBProxy
   interoperability remain open. See the [module record](obconnector-dotnet-progress.md#2026-10-27-oracle-output-row-shape-validation).
-- Latest local delivery, developed from184a767: Oracle FLOAT/NUMBER_FLOAT routine derivation keeps
+- Previous local delivery, developed from184a767: Oracle FLOAT/NUMBER_FLOAT routine derivation keeps
   binary precision out of Decimal constraints, normalizes INOUT and exposes raw numeric
   metadata. Numeric signatures omit CHAR_LENGTH; character signatures require a matching
   second query for actual character lengths, retaining original errors/parameters on failure.
@@ -122,18 +138,22 @@ the [module ledger](obconnector-dotnet-progress.md#2026-10-26-session-io-diagnos
 
 These are concrete code/scope gaps, not merely missing real-database reports:
 
-1. Remaining national/JSON/CLOB and extended metadata boundaries (P1-08), following the locally
-   completed client SQL/parameter charset module.
+1. Remaining national/JSON/CLOB and extended metadata boundaries (P1-08): JSON results and CLOB
+   reads retain UTF-8 restrictions, stored complex national members require AL16UTF16, non-UTF8
+   string client-prepare fallback is rejected, and unsupported type codes/extended metadata reject.
 2. Remaining resource-wait instrumentation and workload/overhead validation (P2-04).
 3. Input/InputOutput REF CURSOR and additional output shapes (P1-06).
-4. Complex LOB/cursor members, additional national/anonymous shapes and whole-complex RETURNING
-   identity (P1-07).
+4. Non-empty complex LOB/cursor input, additional national/anonymous output shapes, text complex
+   results and unresolved whole-complex RETURNING identity (P1-07). Binary LOB/cursor result
+   members already have local implementations and must not be counted as missing.
 5. Compressed OB20/proxy reroute, after establishing the client-link wire contract (P1-02).
 6. Multi-send/pipelining or a separate bulk protocol, after establishing supported semantics (P2-03).
-7. Replace the five remaining deferred acceptance placeholders with controlled fixtures/assertions
+7. Replace the five remaining deferred `matrix.*` placeholders with controlled fixtures/assertions
    (P2-06): TLS/authentication, OB20/trace negotiation, topology failover, unknown network outcome
-   and XA crash recovery. `matrix.pool-reset` now has a real public-API reset case; the remaining
-   cases need their corresponding environments or fault controls.
+   and XA crash recovery. The separate `types.zero-date-policy` placeholder needs a dedicated
+   SQL_MODE profile; there are six explicit DeferredReason cases in total.
+8. Add real physical-session reset/reuse evidence separately from the executable
+   `matrix.pool-reset` borrower-isolation-by-retirement case; that case has no live run yet.
 
 Pool/session/transaction concurrency and resource boundaries, complete command/adapter restrictions,
 runtime/platform coverage and deployment gates also remain, as mapped individually below. Distributed
@@ -160,17 +180,17 @@ approved wire contract or can be implemented without protocol research.
 | P1-04 TLS/mTLS | Server validation callback, client certificate identity isolation, data-source snapshots, revocation options | Additional rotation/platform regression where needed | Enterprise CA/mTLS, negative handshakes, expiry/rotation and platform revocation |
 | P1-05 Command/Batch behavior | SchemaOnly Prepare-only, bounded KeyInfo/hidden keys, SingleRow/SingleResult; MySQL procedure parameters/output/multi-results; Batch metadata/data-source creation/result limits; REF CURSOR limits | Complete behavior/shape matrix; existing explicit restrictions remain | Real metadata/permissions, prepare side effects/locks, procedure and cursor behavior |
 | P1-06 Oracle output/cursors | Independent Prepare, output ownership, positive ordinary-output FetchSize hints, binary and text cursor-valued columns (four-byte IDs) and nested ownership | **Input/InputOutput REF CURSOR and additional shapes**; output offset and positive array FetchSize remain rejected | Real direction/shape/pagination and resource matrix |
-| P1-07 Complex types | Nested objects/collections, directional national members, explicit descriptor clear and invalidation after observed DDL, binary result BLOB/CLOB members with session-bound locators | **Cursor members, further national storage/anonymous shapes, whole-complex RETURNING identity, non-empty complex LOB input** | Real DDL invalidation, complex LOB resource behavior/interoperability and server-supported shapes; retained server failures remain visible |
+| P1-07 Complex types | Nested objects/collections, directional national members, explicit descriptor clear and invalidation after observed DDL; binary named/anonymous BLOB/CLOB and cursor result members with session-bound ownership | **Non-empty complex LOB/cursor input, text complex results, further national storage/anonymous output shapes and unresolved whole-complex RETURNING identity** | Real DDL invalidation, complex LOB/cursor resource behavior/interoperability and server-supported shapes; retained server failures remain visible |
 | P1-08 Types/charsets | Signed DecimalScale, faithful unknown-precision Oracle NUMBER and exact FLOAT results/binding, strict result decoding/widths; tiny/medium/long BLOB, ENUM/SET/raw GEOMETRY, ROWID, Oracle Inf/NaN; national Unicode fallback IDs; trusted MySQL string prepare fallback; GB18030-2022, DEC8/TIS620, SJIS, Big5 and HKSCS/HKSCS31; configured client SQL/ordinary and JSON parameter encodings; CLOB input prevalidation | Further national/JSON/CLOB scope and extended metadata/types still need work | Real emission/storage/coercibility, all promised collation/mode/version profiles |
 | P1-09 Discovery/HA | TCP retry rounds/backoff/shared budget, endpoint TCP reachability cache, TNS/OCP adapters, groups/weights/selection, global/group/address blacklist controls and attempt ceilings | Further discovery/policy boundaries; TCP reachability does not prove database/tenant health | Real discovery services, node/proxy failure and route changes |
-| P1-10 Schema | Mode-aware catalog collections/DataTypes and atomic routine-parameter derivation | Boundary regressions as actual dictionary differences are found; local core APIs exist | Real catalogs, permissions, case, overloads, versions and proxies |
+| P1-10 Schema | Mode-aware catalog collections/DataTypes and atomic routine-parameter derivation, including FLOAT/NUMBER_FLOAT and INOUT normalization | Package-local PL/SQL argument types remain rejected; boundary regressions as actual dictionary differences are found | Real catalogs, permissions, case, overloads, versions and proxies |
 | P1-11 Credentials | Per-Open provider acquisition, expiry/cancel, versioned rotation and old-session retirement, redacted diagnostics | Boundary regressions as real provider/plugin differences are found; local core exists | Real credential service, authentication plugins/KDC, rejection/expiry/rotation |
 | P2-01 DataAdapter | Fill/mappings/events, explicit CRUD and bounded automatic CommandBuilder SQL with original-value/NULL/concurrency handling | Query/key/generated-value restrictions remain; EF Core provider is separate scope | Real generated SQL/catalog/locks/concurrency and independent runtimes |
 | P2-02 Statement cache | Opt-in idle LRU, capacity/close, context/schema/reset generation invalidation | Further reprepare/resource/load regressions | Real DDL/reprepare, prepare-count/latency/resource/proxy reports |
 | P2-03 Batch optimization | Sequential Batch, existing Oracle array binding, opt-in bounded MySQL INSERT rewrite with group error attribution | **Multi-send/pipelining and separate bulk protocol are missing** | Actual counts/partial failure, transaction/default/trigger/warning behavior, packet limits and throughput/memory |
 | P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics including current leases, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O durations and collectible-load fixes | **Additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
 | P2-05 Runtimes/ecosystem | Five product assets; Windows nupkg protocol subset on actual .NET 8/9/10 and Framework host, plus Standard assets on .NET 10 | Complete promised platform/runtime/API matrix; Framework/ORM support scope; existing savepoint identifier limitations | Non-Windows and full feature/real-database reports on promised runtimes |
-| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports | **Five `matrix.*` cases remain deferred placeholders**; `matrix.pool-reset` now runs a public-API reset check; replace the remaining cases with controlled fixtures/assertions; source/license/package/publication review remains | OBProxy, TLS/auth profiles, topology faults, unknown network outcomes and external-coordinator XA crash recovery |
+| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports; executable `matrix.pool-reset` borrower-isolation case, not live-run | **Five `matrix.*` plus one `types.zero-date-policy` deferred placeholders**; add physical-session reset/reuse evidence distinct from retirement; source/license/package/publication review remains | OBProxy, TLS/auth profiles, topology faults, unknown network outcomes, zero-date SQL_MODE and external-coordinator XA crash recovery |
 
 ## Committed delivery evidence
 
@@ -187,6 +207,8 @@ These are representative commits, not a replacement for the complete Git log or 
 | Schema, DataTypes and parameter derivation | `6fecad9`, `5146b62`, `557a05a` |
 | Credentials, adapter, KeyInfo and metadata-only prepare | `f815c16`, `4dd20a7`, `d7e8b5a`, `de15ec2` |
 | MySQL procedures and Oracle prepare/output/cursor behavior | `c2fe307`, `d6a9169`, `a1dddde`, `e0d1d30`, `fa5d47f` |
+| Text cursor columns, complex cursor results and output framing guards | `0dcd544`, `a0f789e`, `9d113ab`, `c3d2c83` |
+| Executable borrower-isolation acceptance case (not physical reset proof) | `6e64c7e` |
 | Complex DDL invalidation and national members | `1bb13cb`, `80ddfbe` |
 | Batch metadata/result limits/rewrite and statement cache | `27bd176`, `7976fb3`, `6fc1891`, `f15716e` |
 | Core type/charset corrections and result families | `2bbecac`, `6b357f0`, `4810907`, `6e2197c`, `94fcd85`, `7d05ce4`, `f3c484d`, `7c1a602` |
@@ -196,6 +218,9 @@ These are representative commits, not a replacement for the complete Git log or 
 
 ## Verification boundary and next work
 
+- Current `6e64c7e` source review: Release build has zero warnings/errors; the focused unit
+  selection passes 554/554, with no full-suite, consumer or real-server rerun. Original full-suite
+  failures, stale-assertion corrections and server greeting failures remain in their module records.
 - Previous completed feature, Big5: 7 core tests, 698 focused units, 7,262 complete units and 500 affected
   consumers passed with no failures/skips; Release solution build and independent review passed.
   These are that commit's results, not a fresh verification of every subsequent candidate.

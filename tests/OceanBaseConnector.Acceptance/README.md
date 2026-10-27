@@ -26,7 +26,11 @@ $env:OB_ACCEPTANCE_CONNECTION_STRING = 'Server=db.example;Port=2881;User ID=test
 dotnet run --project tests/OceanBaseConnector.Acceptance -c Release -- --config tests/OceanBaseConnector.Acceptance/mysql.example.json --report TestResults/mysql-acceptance.json
 ```
 
-The report path must be new. Omit `--report` to generate a unique path under `TestResults/`. Never commit credentials.
+The report path must be new. Omit `--report` to generate a unique path under `TestResults/`.
+Supply real development environments only to this explicit acceptance run or the opt-in integration
+suite, never to unit tests or CI. Keep actual endpoints, tenant/user names, credentials and resolved
+connection strings in local secret configuration or process-scoped environment variables; do not
+copy them into repository files or shared logs/reports. Never print or commit resolved secrets.
 
 ## Configuration
 
@@ -50,7 +54,15 @@ Connection cases compare `ServerVersion` and schema product-version metadata wit
 `types.mysql-client-behavior` checks both TINYINT Boolean/integer mappings and both UPDATE
 row-count settings through real text/prepared sequential readers, including NULL and negative values.
 
-Five `matrix.*` entries are explicitly deferred and report skips: TLS/authentication, OB20/tracing negotiation, topology failover, interrupted network outcomes and XA crash recovery. `matrix.pool-reset` now runs a real MySQL/Oracle pooled session-time-zone reset check. Mode/configuration skips are separate. See [Compatibility](../../docs/compatibility.md) for the failed Oracle case and server-version restrictions, and [verification status](../../docs/obconnector-dotnet-progress.md) for the four separate skipped integration gates.
+Five `matrix.*` entries are explicitly deferred: TLS/authentication, OB20/tracing negotiation,
+topology failover, interrupted network outcomes and XA crash recovery. The separate
+`types.zero-date-policy` case is also deferred, so six explicit placeholders report skips.
+`matrix.pool-reset` is executable but has no live-run evidence. It changes the session time zone
+through SET/ALTER SESSION, which retires the changed physical session; it checks isolation by
+replacement, not COM_RESET_CONNECTION/reuse. A real same-session reset check remains separate.
+Mode/configuration skips are additional. See [Compatibility](../../docs/compatibility.md) for the
+failed Oracle case and deployment restrictions, and [verification status](../../docs/obconnector-dotnet-progress.md)
+for retained test results and environment gates.
 
 The console writes data and commits some transactions. Schema objects use random `OBA_` names. Cleanup targets exact owned object names and XA identities; failures remain in the report. Disabling schema-object creation does not disable temporary LOB mutations. Forced termination can leave objects or prepared XA branches requiring manual cleanup.
 

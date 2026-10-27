@@ -4,18 +4,62 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Source review and progress alignment
+
+Reviewed `master/6e64c7e` against the completeness baseline, implementation, tests and Acceptance
+registration. Binary complex BLOB/CLOB and cursor result members, top-level text/binary cursor
+columns, MySQL INSERT rewrite, session I/O timing, current pool leases, pool-wait outcomes,
+redacted protocol-frame diagnostics and effective pool-configuration normalization already exist
+locally. Remaining development includes non-empty complex LOB/cursor input,
+Input/InputOutput REF CURSOR, text complex results, unresolved whole-complex RETURNING identity,
+extended type/encoding boundaries, compressed OB20/reroute and multi-send/bulk. Distributed
+ambient promotion and transparent active-session replay remain unsupported scope decisions.
+The 23 IDs/eight packages remain open under their closure criteria, not because every subfeature
+is missing. The delivery overview retains the per-ID implementation/external-validation split.
+
+The existing `matrix.pool-reset` case changes the time zone through SET/ALTER SESSION. The current
+`SessionStateSql.RequiresDiscard` classification marks that session for retirement; the pool
+destroys it before attempting reset. This checks borrower isolation by a fresh session, not
+COM_RESET_CONNECTION on a reused physical session. Real reset/reuse evidence remains separate.
+There are five deferred `matrix.*` cases and one deferred `types.zero-date-policy` case, six
+explicit DeferredReason registrations in total. The zero-date case needs its own SQL_MODE profile.
+
+Commands executed during the source review, before these documentation-only edits:
+
+```powershell
+dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -v minimal
+dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~Complex|FullyQualifiedName~RefCursorTests|FullyQualifiedName~CursorColumnTests|FullyQualifiedName~PoolSessionStateTests|FullyQualifiedName~Ob20PacketTests|FullyQualifiedName~MySqlCompressionTests' --logger 'trx;LogFileName=completeness-source-review.trx' --results-directory TestResults/completeness-source-review -v minimal
+dotnet tests/OceanBaseConnector.Acceptance/bin/Release/net10.0/OceanBaseConnector.Acceptance.dll --list
+```
+
+The serial Release solution build succeeds with zero warnings/errors (3m20s). Selected units pass
+554/554, zero failures/skips (7s); TRX is in ignored
+`TestResults/completeness-source-review/completeness-source-review.trx`. Acceptance listing succeeds
+and shows the executable isolation case and six deferred registrations. No full-suite, package
+consumer, real OceanBase/OBProxy or load run was performed. Historical full-suite failures and
+server greeting failures are retained; this selection does not establish a green full suite or
+real compatibility. Documentation synchronization changes no product or test behavior.
+
+Development access to real environments is reserved for explicit integration/acceptance runs.
+Unit tests and CI remain independent of those environments. Actual endpoints, tenant/user names,
+passwords and connection strings are excluded from these documents and repository configuration;
+use local secrets or process-scoped environment injection and review shared diagnostic output.
+
 ## 2026-10-27 Pool reset acceptance case
 
 P2-06/W8 adds an executable `matrix.pool-reset` Acceptance case. It derives a one-session pooled
 connection from the configured profile, records the initial session time zone, changes it through
 the public SQL API, closes the borrower, and requires the next MySQL or Oracle borrower to recover
-the original value. This exercises the existing reset/session-state isolation path against a real
-configured server without changing driver protocol code.
+the original value. Source review clarified that SET/ALTER SESSION retires the first physical
+session, so this is borrower isolation by replacement, not a physical reset/reuse assertion.
+It is intended to run against a configured server without changing driver protocol code.
 
 The Acceptance project builds cleanly and `--list` shows the case as executable. The live case was
 not run because no OceanBase profile was configured in this workspace. OBProxy, other server
 versions, TLS/authentication, long-running load and XA crash recovery remain outside this case;
-the other five `matrix.*` entries remain deferred.
+the other five `matrix.*` entries remain deferred. The separate `types.zero-date-policy` case is
+also deferred, making six explicit placeholders overall. A real same-session reset/reuse check
+still needs separate assertions and execution evidence.
 
 ## 2026-10-27 Oracle complex cursor result members
 
