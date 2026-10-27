@@ -1,5 +1,22 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Opt-in zero-date storage acceptance
+
+`types.zero-date-policy` now has executable MySQL assertions, requiring `zeroDateProfile=true`
+and `allowCreateObjects=true`. Before creating its owned random table it checks the actual
+session SQL_MODE, rejecting NO_ZERO_DATE/NO_ZERO_IN_DATE without changing session/server policy.
+DATE and DATETIME(6) cover normal, partial-zero, all-zero and NULL values, text/prepared results,
+standard DateTime conversion rejection and exact provider-value write-back plus reread.
+There are now five unconditional DeferredReason cases; the zero-date profile remains skipped
+by default. Focused units pass 103/103 and complete units pass 7708/7708; Release solution
+build has zero warnings/errors and independent source/test/docs review has no actionable issue.
+
+An explicit direct MySQL 4.4.2.2 run on Windows/.NET 10.0.13, TLS disabled, passes its connection
+control and fails the SQL_MODE precondition before DDL. No objects were created and no SQL_MODE
+was changed. Real zero-date storage, other SQL_MODE/version profiles and OBProxy remain unverified.
+Commands, retained failures and safe report are in the
+[module record](obconnector-dotnet-progress.md#2026-10-27-opt-in-zero-date-storage-acceptance).
+
 ## 2026-10-27 Same-channel pool reset and reuse acceptance
 
 `matrix.pool-reset-reuse.sync/async` now require one client protocol channel across two borrowers
@@ -15,8 +32,9 @@ Release solution build has zero warnings/errors; complete units and exact eviden
 [module record](obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance).
 
 ChannelId is not a server/backend session ID. These results do not establish proxy backend reuse,
-the complete resource/transaction/fault matrix or other versions/platforms/TLS. The six DeferredReason
-placeholders remain. Real access used private process input and was not added to unit tests or CI.
+the complete resource/transaction/fault matrix or other versions/platforms/TLS. At this checkpoint
+six DeferredReason placeholders remained; the later zero-date module above reduces this to five.
+Real access used private process input and was not added to unit tests or CI.
 
 ## 2026-10-27 Historical source review checkpoint
 
@@ -722,9 +740,9 @@ The cleanup failure was an attempted DROP of the table whose CREATE failed. The 
 ## Deferred acceptance cases
 
 Five `matrix.*` entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs)
-and `types.zero-date-policy` in [DatabaseCases.Types.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.Types.cs)
-have explicit `DeferredReason` values: six deferred cases in total. They report skips, not
-successful validation. `matrix.pool-reset` is executable and is listed separately below.
+have explicit `DeferredReason` values. They report skips, not successful validation.
+`types.zero-date-policy` is executable behind the separate opt-in described above;
+`matrix.pool-reset` is also executable and is listed separately below.
 
 | Case | Missing validation / implementation |
 | --- | --- |
@@ -733,7 +751,6 @@ successful validation. `matrix.pool-reset` is executable and is listed separatel
 | `matrix.topology-failover` | Controlled discovery, endpoint failures and routing on real deployments. |
 | `matrix.network-outcome-unknown` | Mid-request/response failures, cancellation ordering and interrupted commit/rollback on real deployments. |
 | `matrix.xa-crash-recovery` | External coordinator recovery under client/server process failure. Basic XA phase tests do not cover this. |
-| `types.zero-date-policy` | A separate MySQL SQL_MODE profile allowing zero dates and actual policy assertions; the current case is a deferred no-op. |
 
 `matrix.pool-reset` forces a one-session pool, changes the session time zone, closes the
 borrower, and requires the next MySQL or Oracle borrower to observe the original time zone.

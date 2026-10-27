@@ -40,6 +40,7 @@ copy them into repository files or shared logs/reports. Never print or commit re
 | `connectionString` / `connectionStringEnvironment` | Set exactly one: connection text or the name of an environment variable. |
 | `groups` | Empty or omitted selects all groups; use `--list` for names. |
 | `allowCreateObjects` | Default false. Enables tests that create and drop schema objects; both example files set true. |
+| `zeroDateProfile` | Default false. Explicitly enables MySQL `types.zero-date-policy`, also requiring `allowCreateObjects=true` and a session SQL_MODE without NO_ZERO_DATE/NO_ZERO_IN_DATE. The runner never changes SQL_MODE. |
 | `largeValueBytes` | Binary round-trip size, default 65536; range 1–1048576. |
 | `slowQuery` | Optional read-only SQL taking over two seconds, for cancellation and timeout tests. Omitted means those cases are skipped. |
 | `alternateDatabase` | Optional MySQL database for change-and-restore testing. Omitted means skipped. |
@@ -55,8 +56,15 @@ Connection cases compare `ServerVersion` and schema product-version metadata wit
 row-count settings through real text/prepared sequential readers, including NULL and negative values.
 
 Five `matrix.*` entries are explicitly deferred: TLS/authentication, OB20/tracing negotiation,
-topology failover, interrupted network outcomes and XA crash recovery. The separate
-`types.zero-date-policy` case is also deferred, so six explicit placeholders report skips.
+topology failover, interrupted network outcomes and XA crash recovery.
+`types.zero-date-policy` is executable with the explicit `zeroDateProfile` opt-in. It checks
+the actual session SQL_MODE before DDL; an enabled incompatible profile fails with no object
+creation. It stores normal/partial-zero/all-zero/NULL DATE and DATETIME(6), verifies text and
+prepared results, requires standard DateTime access to reject zero fields, and writes the
+provider-specific values back for another text/prepared check. It creates one owned random
+table and drops it through normal cleanup. Default/example configurations skip this case.
+The direct 4.4.2.2 profile checked on Windows/.NET 10.0.13, TLS disabled, rejected the SQL_MODE
+precondition; no table was created and real zero-date storage remains unverified.
 `matrix.pool-reset-reuse.sync/async` require the same client protocol channel across two borrowers
 and reopening the original prepared command. They observe public Frame events using listener
 identity plus local ChannelId, and reject successful reconnection as proof of reuse. No payloads

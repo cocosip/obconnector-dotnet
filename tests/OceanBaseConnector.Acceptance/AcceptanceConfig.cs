@@ -13,6 +13,7 @@ internal sealed class AcceptanceConfig
     public string? ConnectionStringEnvironment { get; set; }
     public string[] Groups { get; set; } = Array.Empty<string>();
     public bool AllowCreateObjects { get; set; }
+    public bool ZeroDateProfile { get; set; }
     public int LargeValueBytes { get; set; } = 65536;
     public string? SlowQuery { get; set; }
     public string? AlternateDatabase { get; set; }

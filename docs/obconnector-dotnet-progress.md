@@ -4,6 +4,73 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Opt-in zero-date storage acceptance
+
+Developed from `master/7d777ae` for P1-08/P2-06 (W5/W8). The former unconditional
+`types.zero-date-policy` placeholder now runs with `zeroDateProfile=true`, MySql mode and
+`allowCreateObjects=true`. Missing opt-in or object permission skips before a socket is opened.
+The case reads actual session SQL_MODE and rejects NO_ZERO_DATE/NO_ZERO_IN_DATE before DDL;
+it never weakens SQL_MODE. Static assertion text does not expose the mode value.
+
+One owned random table stores DATE and DATETIME(6) normal, partial-zero, all-zero and NULL
+values. Text/prepared reads require exact provider fields and metadata, valid DateTime
+conversion and rejection of standard access for zero fields. Provider values from the text
+read are bound into four new rows, then checked through both result protocols again.
+Exact-name cleanup uses the existing CaseContext path and preserves primary failures.
+There are five remaining DeferredReason registrations; ordinary configuration skips remain.
+
+Local evidence:
+
+- Initial RED: all 12 new cases fail because the opt-in profile is not implemented.
+- Intermediate runs retain fixture disconnect errors (5 failures), the erroneous untyped
+  `default` overload in the expected all-zero DATETIME (2 failures), and the fixture's wrong
+  NULL wire-type expectation (3 failures in the widened selection). These are corrected;
+  no driver decoder or parameter-writing workaround was added. Logs/TRX are retained under
+  `TestResults/zero-date-acceptance-{red,focused,fixture,diagnose,green}/` and matching `.log` files.
+- Final focused selection: 103/103 passed, zero failures/skips, including 12 new cases,
+  existing zero-date codec/read/write regressions and AcceptanceRunnerTests. The new wire
+  cases cover permissive/empty SQL_MODE, each no-zero flag, NULL mode and deliberately
+  normalized text/binary/write-back results. Successful cases require all four reads and
+  four exact prepared write packets; failure cases verify their intended assertion and cleanup.
+- Serial Release solution build: zero warnings/errors (26 seconds). Changed-file whitespace
+  verification passes with a workspace-load warning. Source/test independent review found no actionable issue.
+- Complete units: 7708/7708 passed, zero failures/skips (8m29s), at
+  `TestResults/zero-date-acceptance-full/full.trx`. Independent source/test and incremental
+  documentation reviews found no actionable issue. New documentation links resolve;
+  final `git diff --check` passes.
+
+Commands (unit fixtures are synthetic/local, never dependent on supplied real credentials):
+
+```powershell
+dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 --disable-build-servers -v minimal
+dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 --disable-build-servers --filter 'FullyQualifiedName~ZeroDateAcceptance|FullyQualifiedName~AcceptanceRunnerTests|FullyQualifiedName~ZeroDate' --logger 'trx;LogFileName=green.trx' --results-directory TestResults/zero-date-acceptance-final-focused -v minimal
+dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-build --no-restore --logger 'trx;LogFileName=full.trx' --results-directory TestResults/zero-date-acceptance-full -v minimal
+dotnet format whitespace OceanBaseConnector.slnx --include tests/OceanBaseConnector.Acceptance/AcceptanceConfig.cs tests/OceanBaseConnector.Acceptance/AcceptanceSuite.cs tests/OceanBaseConnector.Acceptance/DatabaseCases.Types.cs tests/OceanBaseConnector.Acceptance/DatabaseCases.ZeroDates.cs tests/OceanBaseConnector.UnitTests/AcceptanceRunnerTests.cs tests/OceanBaseConnector.UnitTests/AcceptanceZeroDateTests.cs --verify-no-changes --no-restore
+dotnet tests/OceanBaseConnector.Acceptance/bin/Release/net10.0/OceanBaseConnector.Acceptance.dll --list
+```
+
+Evidence: `TestResults/zero-date-acceptance-final-focused/green.trx`,
+`TestResults/zero-date-acceptance-build.log`, `TestResults/zero-date-acceptance-format.log`.
+The ignored private live harness build emitted two NU1900 warnings because vulnerability
+data could not be fetched; the product solution build above remains zero-warning.
+
+Explicit live check: direct MySQL OceanBase 4.4.2.2, Windows/.NET 10.0.13, TLS disabled,
+connection control passed but zero-date SQL_MODE prerequisite failed. Report: 1 passed,
+1 failed, 0 skips/cleanup failures, Objects empty; safe report
+`TestResults/zero-date-live-mysql-fd8f51c1.json`. The runner command is
+`dotnet TestResults/zero-date-live-runner/bin/Release/net10.0/LiveZeroDate.dll`.
+Real connection data arrived only through private stdin after echo was disabled and verified
+using a nonsecret sample. It was not written to commands, configuration, reports or CI.
+No SQL_MODE was changed and no table was created. Actual zero-date storage still requires
+a separately configured permissive profile; this failed precondition is retained as a failure.
+No real Oracle rerun was needed for a MySQL-only case. No package implementation/API changed,
+so package-consumer reruns were not required. P1-08/P2-06, all 23 IDs and eight packages remain open.
+
+Research boundary: fixed Connector/J `6adc311` ComplexUtil.storeComplexAttrData also lacks
+non-empty LOB/cursor input branches; type mappings alone do not establish the binding contract.
+The current credentials/discovery phases and pool waits already have timing. Neither path was
+duplicated or broadened by this acceptance module; other protocol/type/diagnostic gaps remain.
+
 ## 2026-10-27 Same-channel pool reset and reuse acceptance
 
 Developed from `master/fbcb694` for P0-02/P2-06 (W1/W8). The existing time-zone case only

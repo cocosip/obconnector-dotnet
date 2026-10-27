@@ -59,8 +59,8 @@ internal static partial class DatabaseCases
         Add("timestamp-time-zone", "", "TIMESTAMP(9) WITH TIME ZONE", zoned, OceanBaseDbType.TimestampWithTimeZone,
             v => v is OceanBaseTimestampWithTimeZone actual && actual.Timestamp.Equals(timestamp) && actual.Offset == zoned.Offset, "Oracle");
         cases.Add(new("types.timestamp-local-time-zone", "types", LocalTimeZone, Mode: "Oracle", RequiresObjects: true));
-        cases.Add(new("types.zero-date-policy", "types", (_, _) => Task.CompletedTask, Mode: "MySql",
-            DeferredReason: "Requires a separate SQL_MODE profile allowing zero dates; this runner does not weaken server SQL_MODE."));
+        cases.Add(new("types.zero-date-policy", "types", ZeroDatePolicy, Mode: "MySql",
+            RequiresObjects: true, RequiresZeroDateProfile: true));
     }
 
     private static decimal Number(object? value) => value is OceanBaseDecimal number ? number.ToDecimal() : Convert.ToDecimal(value, CultureInfo.InvariantCulture);

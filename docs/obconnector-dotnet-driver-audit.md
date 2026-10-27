@@ -1,10 +1,10 @@
 # OceanBase .NET 驱动完整性走查报告
 
-**最近复核：** 2026-10-27；最新会话验收模块开发起点master/fbcb694。23项及八工作包仍未满足整体关闭标准，不能理解为所有子功能未实现。
-**当前检查点：** 新增同客户端物理通道reset/reuse同步/异步验收；逐项状态以[交付概览](obconnector-dotnet-delivery-status.md)及完整性第15.92节为准；第18节以后保留各历史模块的原始证据。
-**当前验证：** 串行Release全解决方案构建零警告/错误；最终完整单测7696/7696及本模块专项40/40通过；双模式4.4.2.2直连、Windows/.NET10.0.13、TLS Disabled各4/4通过；命令/报告见模块记录。5个matrix.*加1个零日期Deferred占位仍保留。
-**本次补充：** matrix.pool-reset-reuse.sync/async按公开诊断listener引用及ChannelId拒绝重连；旧时区用例检查销毁替换并使用私有池，UTC区域名实跑1882失败后经RED/GREEN改数字偏移。仅证明同客户端通道，代理后端和完整资源矩阵仍缺；历史失败不删除。
-精确命令、脱敏报告及边界见[模块记录](obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance)；源码核对554项仍保留在此前记录。
+**最近复核：** 2026-10-27；最新零日期验收模块开发起点master/7d777ae。23项及八工作包仍未满足整体关闭标准，不能理解为所有子功能未实现。
+**当前检查点：** types.zero-date-policy已有独立opt-in、实际SQL_MODE校验与存储/读取/回绑断言；逐项状态以[交付概览](obconnector-dotnet-delivery-status.md)及完整性第15.93节为准；第18节以后保留各历史模块的原始证据。
+**当前验证：** 串行Release全解决方案构建零警告/错误，本模块专项103/103及完整单测7708/7708通过，独立代码/文档走查无遗留问题；显式MySQL直连连接通过，零日期SQL_MODE前置失败，未建表/改模式。5个matrix.* Deferred占位保留；真实零日期存储仍需允许的profile。
+**此前验收：** matrix.pool-reset-reuse.sync/async按公开诊断listener引用及ChannelId拒绝重连；旧时区用例检查销毁替换并使用私有池，UTC区域名实跑1882失败后经RED/GREEN改数字偏移。完整7696/7696、专项40/40及双模式直连各4/4通过；仅证明同客户端通道，代理后端和完整资源矩阵仍缺；历史失败不删除。
+精确命令、脱敏报告及边界见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-opt-in-zero-date-storage-acceptance)；源码核对554项仍保留在此前记录。
 **仓库：** `D:\Code\dotnet\obconnector-dotnet`；历史记录使用的其他工作区路径保持原文。
 **初次走查：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **目标和结论级别：** 为 MySQL/Oracle 双模式定义可执行的完整驱动清单；源码、本地 fixture、包消费和真实互操作分别记载，不互相替代。
@@ -30,7 +30,7 @@
 
 ### 1.1 本次评审摘要与剩余交付清单
 
-**当前文档复核日期：2026-10-27；源码核对基线：`master/6e64c7e`，最新验收从`fbcb694`开发。** 当前开发/验收状态见[全部23项交付概览](obconnector-dotnet-delivery-status.md#all-23-gaps-implementation-versus-remaining-work)及[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance)。二进制复杂LOB/cursor结果成员、文本cursor列、INSERT rewrite和会话I/O/池租约/池等待结果指标均已有本地实现；下面列剩余工作，第18节以后及能力基线第15节保留各候选的历史结果。Java固定参考仍沿用初次审计版本，本次未重新核对或运行Java。
+**当前文档复核日期：2026-10-27；源码核对基线：`master/6e64c7e`，最新验收从`7d777ae`开发。** 当前开发/验收状态见[全部23项交付概览](obconnector-dotnet-delivery-status.md#all-23-gaps-implementation-versus-remaining-work)及[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-opt-in-zero-date-storage-acceptance)。二进制复杂LOB/cursor结果成员、文本cursor列、INSERT rewrite和会话I/O/池租约/池等待结果指标均已有本地实现；下面列剩余工作，第18节以后及能力基线第15节保留各候选的历史结果。Java固定参考仍沿用初次审计版本，本次仅核对ComplexUtil输入分支，不运行Java。
 
 **历史修复索引（保留原候选证据）：** `0ec3e1c`连接级ERR/unknown见第44节，`917e9cc`的Closed回调见第43节；旧CloseConnection reader租约保护见第36节；Oracle fresh/reset自动提交初始化及原实库失败回归见第34节和[基线第5.1.5节](obconnector-dotnet-completeness.md#515-oracle-自动提交基线已确认缺陷与待实现契约)。这些记录不代表6e64c7e的全套或实库重跑；完整资源/XA/并发隔离、OBProxy和其他部署矩阵仍开放。
 
@@ -47,7 +47,7 @@ Java 和 .NET 的连接池都已存在；.NET 默认 `Pooling=false`。会话识
 | W5 命令与类型：P1-05、P1-06、P1-07、P1-08 | 保留SchemaOnly/KeyInfo、MySQL过程、Oracle Prepare/输出、文本及二进制cursor列、二进制复杂LOB/cursor结果成员、精确NUMBER/FLOAT、客户端SQL/参数编码和可观察DDL失效；补Input/InputOutput REF CURSOR、非空复杂LOB/cursor输入、文本复杂结果、其他national/匿名输出及未解析身份的复杂整列RETURNING；扩展类型/metadata与真实部署矩阵仍缺 | 结果成员可读不等于可绑定输入；目录/编码子模块完成不扩大其余执行形状 | Command/Batch/REF CURSOR行为表，方向/NULL/精度/编码/取消/释放及真实目录/准备/锁报告 |
 | W6 目录与生态：P1-10、P2-01 | 常用 Schema、DataTypes、参数推导、同步 adapter/有界命令生成已有；补真实目录/权限/版本和 CRUD/并发验收 | 生成 UPDATE/DELETE 要求完整可见行键；复杂形状需显式命令，推导不扩大过程执行支持 | 双模式目录/权限/重载/参数方向，实际 CRUD/乐观并发/事务/锁、独立运行时报告 |
 | W7 性能与诊断：P2-02、P2-03、P2-04 | idle statement cache、opt-in MySQL INSERT rewrite及合并组失败归属、阶段/慢命令/协议帧/会话I/O和池租约/等待结果指标已有；补multi-send/bulk、其他资源等待范围和真实负载验收 | 普通Batch仍顺序执行，rewrite不是pipelining；尚无吞吐或诊断开销承诺 | 缓存/DDL/资源、批量部分失败/取消/包限额、吞吐/延迟/峰值内存及监听开销报告 |
-| W8 平台与发布：P2-05、P2-06 | 明确服务器/代理/平台/TFM/ORM范围；补独立运行时及真实矩阵；5个matrix.*加1个零日期占位需环境和断言；保留新同客户端通道复用及旧销毁隔离的双模式直连报告，补代理后端及完整资源矩阵；包来源/许可/发布检查仍缺 | 五种TFM资产不等于五种独立运行时已完整验收，experimental仍须保留 | 每个承诺profile的包消费与实库/代理/TLS/认证/故障报告、协调器crash recovery和清理结果 |
+| W8 平台与发布：P2-05、P2-06 | 明确服务器/代理/平台/TFM/ORM范围；补独立运行时及真实矩阵；5个matrix.*占位需环境和断言，零日期已可显式执行但当前实库SQL_MODE前置失败，需允许的profile；保留同客户端通道复用及旧销毁隔离双模式报告，补代理后端及完整资源矩阵；包来源/许可/发布检查仍缺 | 五种TFM资产不等于五种独立运行时已完整验收，experimental仍须保留 | 每个承诺profile的包消费与实库/代理/TLS/认证/故障报告、协调器crash recovery和清理结果 |
 
 上述工作中，W1/W2 的隔离和失败处理优先；W3—W6 按实际部署与公共 API 承诺交付，W7 的优化以测量为依据，W8 随所有模块持续积累证据。依赖及关闭要求以详细基线第 16 节为准；负责人和日期尚未分配，本文不把建议写成排期承诺。
 
@@ -183,7 +183,7 @@ Java 和 .NET 的连接池都已存在；.NET 默认 `Pooling=false`。会话识
 | P2-03 | 批处理优化 | opt-in MySQL INSERT rewrite及合并组失败归属已本地实现；multi-send/pipelining、独立bulk及真实批量/资源/负载矩阵仍缺 |
 | P2-04 | 诊断 | 保留池/连接阶段、慢命令、协议帧、会话I/O、当前租约及等待结果指标；补其他资源等待范围与真实负载/监听开销验收 |
 | P2-05 | TFM/包生态 | 诊断卸载缺陷已修复并有历史默认消费者回归（第54节）；Windows实际8/9/10及Framework的nupkg协议子集已有记录；补每个承诺平台/运行时的完整功能、实库和包消费矩阵，原崩溃记录保留 |
-| P2-06 | 真实兼容矩阵 | 新同客户端通道复用与旧时区销毁隔离已有双模式直连各4/4；5个matrix.*加独立零日期占位仍需环境和断言；代理后端/完整资源、版本/TLS/认证/平台/故障/协调器恢复报告及发布检查仍缺 |
+| P2-06 | 真实兼容矩阵 | 同客户端通道复用与旧时区销毁隔离已有双模式直连各4/4；5个matrix.*占位需环境和断言；零日期已有独立opt-in及存储/回绑断言，但真实SQL_MODE前置失败；代理后端/完整资源、版本/TLS/认证/平台/故障/协调器恢复及发布检查仍缺 |
 
 ## 5. 连接池专项结论
 
