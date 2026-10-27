@@ -57,6 +57,10 @@ SQL classified as stateless keeps the cached baseline and introduces no charset 
 next command. Potentially stateful/opaque SQL invalidates trust when sent; a reported mismatching
 charset session variable also invalidates it. The next encoding-bearing request checks the four
 settings before transmitting its payload. A mismatch or malformed response breaks the session.
+For a managed client charset, the fallback's separate fresh-state query also invalidates cached
+trust when either input charset differs from the configured family. It rejects the target after
+draining the response; a subsequent payload must pass the ordinary four-setting verification
+before it can be sent.
 The existing conservative classifier includes CALL/SET/PLSQL, executable comments, user variables
 and MySQL quoted backslashes. Therefore some otherwise ordinary SQL also causes rechecking.
 
@@ -80,18 +84,24 @@ the encoding of the actual payload. Unrepresentable target SQL or ordinary param
 prevalidation before target preparation/execution.
 
 MySQL string client-prepare fallback accepts the existing UTF-8 families and explicitly configured
-`ascii`, `latin1`, `dec8` and `tis620`. Each fallback reads actual client/connection/collation/sql_mode
+non-UTF8 input names in the table above, including GBK, both GB18030 revisions, SJIS, Big5 and
+HKSCS/HKSCS31. Each fallback reads actual client/connection/collation/sql_mode
 state. Both non-UTF8 input names must match the configured family; the collation must belong to it.
-Strict single-byte encoding rejects unrepresentable text. Existing quote/backslash escaping, NUL
+Strict configured encoding rejects unrepresentable text. Existing quote/backslash escaping, NUL
 rejection under NO_BACKSLASH_ESCAPES, single-statement parsing, packet limits and the exact
-1295/HY000 fallback gate remain. UTF8MB3 rejects supplementary text. DBCS string fallback remains
-unsupported; use server preparation for those character sets. Oracle scalar literal fallback uses
-the selected encoding for its 4000-byte limit.
+1295/HY000 fallback gate remain. Escaping runs on Unicode characters before encoding: a DBCS
+trail byte `5C` stays inside its character and is never escaped as a standalone backslash.
+UTF8MB3 rejects supplementary text. Oracle scalar literal fallback uses the selected encoding
+for its 4000-byte limit.
 
 Use explicit ASCII result aliases for expressions containing non-UTF8 literals. A direct-server
 probe returned some unaliased expression names in client bytes despite UTF8MB4 result settings;
 the existing strict UTF-8 metadata decoder rejected them. This module does not change that
 metadata contract. An explicit `AS value` avoids relying on such derived column names.
+Further raw probes observed both UTF-8 and client bytes for unaliased text expressions across
+executions, while prepared and explicit-alias samples returned UTF-8. A client-encoded name may
+also be valid UTF-8, so trying another decoder only on failure would still silently misname columns.
+No heuristic metadata decoder change was made.
 
 Explicit MySQL JSON parameters use the selected strict client encoding and the existing ordinary
 string wire type253. Unrepresentable text fails prevalidation before target preparation/execution;
@@ -142,3 +152,10 @@ SQL_MODE. No objects or SQL_MODE were changed. These generated-literal checks do
 real 1295-triggered automatic fallback, DBCS, other mode/collation/version profiles or OBProxy.
 Retained failures and exact local verification are in the
 [module record](obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback).
+
+The subsequent DBCS extension adds all seven strict mappings with trail5C-adjacent quote/backslash
+samples, GB18030 four-byte values and HKSCS supplementary values. Explicit direct MySQL checks
+pass14/14 generated-literal cases plus a connection control, with ASCII aliases and unchanged
+SQL_MODE. This extends local automatic-fallback support, not actual server1295/proxy or every
+SQL_MODE/collation/version profile. See its
+[module record](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback).

@@ -4,6 +4,91 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 DBCS MySQL string fallback
+
+Developed from `master/f03f235`, P1-08/W5. Configured GBK, GB18030/2022, SJIS, Big5 and
+HKSCS/HKSCS31 now use the existing strict matching-session string fallback. MySqlLiteralContext
+reuses the strict configured encoder and unchanged character-level escaping. A DBCS trail5C
+byte remains inside its character; standalone ASCII syntax is escaped. No byte-level escaping,
+hex conversion, explicit collation, dependency or public option was added. The exact1295/HY000
+gate, fresh state query, UTF8/mb3 rules, packet/parser guards and SQL_MODE NUL policy remain.
+
+The shared test-only fallback fixture now accepts an explicit mapped sample. Existing single-byte
+assertions remain; GB18030's invalid supplementary sample becomes an unpaired low surrogate
+because valid emoji is now part of its positive four-byte data. New DBCS samples include every
+mapping, trail5C immediately before an apostrophe/backslash, GB18030 revision-specific/four-byte
+values and HKSCS supplementary values. No test-only code was added to the product.
+
+Local evidence:
+
+- RED:7 direct literal and28 public wire cases fail at the prior single-byte-only charset gate.
+- Final focused290/290 pass, zero failures/skips (2 seconds), after expanding the initial266-case
+  filter to include `ClientCharset` as well as `ClientCharacterSet`. These cover direct syntax/encoding assertions,
+  sync/async and both EOF styles, both escape modes, invalid input/reuse and existing regressions.
+- Final complete units:7774/7774 pass, zero failures/skips (8m25s), in
+  `TestResults/dbcs-fallback-final-full/full.trx`. Net32 cases are added to the previous7742:
+  28 new wire cases and4 new mismatch rows; seven prior DBCS refusal cases now assert exact
+  supported bytes, and the two stale public refusals now test mismatch/recheck behavior.
+- Final affected consumers160/160 pass, zero failures/skips (20 seconds):70 new DBCS,40 single-byte,
+  20 existing MySQL string and30 client-encoding cases. Five assets load in one .NET10 host;
+  they are not five independently tested runtimes.
+- Initial serial Release solution build has zero warnings/errors (25 seconds).
+- Initial complete units exposed two stale `ClientCharsetNonUtf8StringFallbackRemainsRejectedWithDrainedState`
+  assertions expecting matching GBK to remain unsupported (7772 passed/2 failed/0 skipped,
+  8m31s, `TestResults/dbcs-fallback-full/full.trx`). The original report is retained.
+  Their target-not-sent/reusable-connection checks are retained under a genuine charset mismatch;
+  the next payload must revalidate cached charset trust. Both replacement cases first failed
+  because a fresh mismatch left cached trust valid. The shared sync/async parser now clears
+  that trust before rejecting the target; the next payload uses the existing four-setting check.
+  Trust RED:0/2, GREEN:2/2, in `TestResults/dbcs-fallback-trust-{red,green}/`.
+- The first restricted trust build produced no output before interruption. A serial run with
+  normal Windows permissions passed; its separate log is
+  `TestResults/dbcs-fallback-trust-green-normal.log`. Final serial Release solution rebuild has
+  zero warnings/errors (12 seconds), in `TestResults/dbcs-fallback-final-build.log`.
+- Independent source/test review found no actionable issue in the DBCS extension or trust fix.
+  Ten changed C# files pass scoped whitespace verification (exit0), retaining the workspace-load
+  warning in `TestResults/dbcs-fallback-final-format.log`. Final documentation review required a
+  managed-charset qualifier on the cache invalidation contract; corrected. Added local document
+  links8/8 and `git diff --check` pass. The reviewer did not execute tests or access live databases.
+- With real integration disabled, the new DBCS and existing single-byte generated-literal
+  theories both skip (0 passed/0 failed/2 skipped); final report is
+  `TestResults/dbcs-fallback-final-integration-opt-out/opt-out.trx`. No profile or credentials
+  are added to source or CI configuration.
+
+Commands (synthetic units/consumers never use real database input):
+
+```powershell
+dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 --disable-build-servers -v minimal
+dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~DbcsClientPrepareTests|FullyQualifiedName~SingleByteClientPrepareTests|FullyQualifiedName~MySqlLiteralContextTests|FullyQualifiedName~MySqlClientStrings|FullyQualifiedName~ClientPreparedSqlTests|FullyQualifiedName~ClientCharacterSet|FullyQualifiedName~ClientCharset' --logger 'trx;LogFileName=focused.trx' --results-directory TestResults/dbcs-fallback-final-focused -v minimal
+dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-build --no-restore --logger 'trx;LogFileName=full.trx' --results-directory TestResults/dbcs-fallback-final-full -v minimal
+dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~DbcsClientPrepareConsumerTests|FullyQualifiedName~SingleByteClientPrepareConsumerTests|FullyQualifiedName~EveryAssetPreparesMySqlClientStringsFromTrustedState|FullyQualifiedName~ClientCharacterSetConsumerTests' --logger 'trx;LogFileName=consumer.trx' --results-directory TestResults/dbcs-fallback-final-consumer -v minimal
+```
+
+Explicit live check: direct MySQL4.4.2.2, Windows/.NET10.0.13, TLS disabled. All14 sync/async
+generated-literal cases plus a connection control pass with ASCII aliases, exact values/HEX,
+actual collation and coercibility4 under the existing SQL_MODE. No DDL or SQL_MODE changes.
+Safe report: `TestResults/dbcs-live-cfd1e321.json`; runner command:
+`dotnet TestResults/dbcs-live-runner/bin/Release/net10.0/LiveDbcs.dll`. Harness build has zero
+warnings/errors. Credentials arrived only through echo-disabled private stdin after a nonsecret
+sample verified no echo; no connection details enter files, commands, logs, reports or CI.
+The new IntegrationTheory remains explicitly gated and reads only fixed synthetic constants.
+
+Metadata research (not a decoder fix): raw constant-only probes on the same server inspect
+literal/function/explicit-alias/derived-table labels for latin1 (including an ambiguous sample),
+GBK and SJIS, text and prepare. The final run records96 column observations. Text unaliased names
+can be client-encoded or UTF-8 across executions, with no distinguishing column type/collation;
+prepared and explicit-alias samples returned UTF-8. A latin1 byte sequence can itself be valid
+UTF-8 and decode to a different name, so decoder fallback cannot establish correctness.
+Reports: `TestResults/metadata-encoding-probe-{e2874320,129dc7ee,dd00a23d,da24e4f5}.json`.
+The first probe also attempted Oracle but produced no Oracle metadata observations before four
+OceanBaseException failures; no Oracle metadata compatibility is inferred. Only generated
+synthetic label/table aliases are reported; real database/schema identifiers were discarded.
+
+Unaliased non-UTF8 expression metadata therefore retains the ASCII-alias restriction. Actual
+server1295 automatic fallback, other SQL_MODE/collation/version/proxy profiles, Oracle/CLOB and
+the complete deployment matrix remain open. The DBCS refusal is removed from current code-gap
+lists; all23 IDs/eight packages remain open. No push or package publication.
+
 ## 2026-10-27 Single-byte MySQL string fallback
 
 Developed from `master/da62285`, P1-08/W5. The existing opt-in automatic fallback after exact

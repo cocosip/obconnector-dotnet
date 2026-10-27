@@ -118,15 +118,29 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("gbk")]
-        [InlineData("gb18030")]
-        [InlineData("gb18030_2022")]
-        [InlineData("sjis")]
-        [InlineData("big5")]
-        [InlineData("hkscs")]
-        [InlineData("hkscs31")]
-        public void ConfiguredDbcsLiteralRemainsUnsupported(string name)
-            => Assert.Throws<NotSupportedException>(() => MySqlLiteralContext.Parse(name, name, name + "_bin", "", ClientCharacterSet.Parse(name)));
+        [InlineData("gbk", "乗", "815C")]
+        [InlineData("gb18030", "乗😀", "815C9439FC36")]
+        [InlineData("gb18030_2022", "乗龴", "815CFE59")]
+        [InlineData("sjis", "ソ", "835C")]
+        [InlineData("big5", "功", "A55C")]
+        [InlineData("hkscs", "功\uf308", "A55C8845")]
+        [InlineData("hkscs31", "功\U0002010c", "A55C8845")]
+        public void ConfiguredDbcsLiteralKeepsTrailBackslashesInsideCharacters(string name, string text, string hex)
+        {
+            var encoding = ClientCharacterSet.Parse(name);
+            foreach (var noBackslash in new[] { false, true })
+            {
+                var context = MySqlLiteralContext.Parse(name, name, name + "_bin", noBackslash ? "NO_BACKSLASH_ESCAPES" : "", encoding);
+                var value = text + "'\\'); SELECT 999;--";
+                var bindings = new ParameterBindingPlan("SELECT ? AS v", new[] { new OceanBaseParameter { Value = value } });
+                var sql = ClientPreparedSql.Build(bindings, OceanBaseCompatibilityMode.MySql, context, encoding);
+                var escaped = noBackslash ? "27275C2727293B2053454C454354203939393B2D2D" : "27275C5C2727293B2053454C454354203939393B2D2D";
+                Assert.Equal(Convert.FromHexString("53454C454354202827" + hex + escaped + "27292041532076"), encoding.GetBytes(sql));
+                Assert.Throws<EncoderFallbackException>(() => context.Literal("\ud800"));
+                if (noBackslash) Assert.Throws<NotSupportedException>(() => context.Literal("\0"));
+                else Assert.Equal("'\\0\\b\\t\\n\\r\\Z'", context.Literal("\0\b\t\n\r\u001a"));
+            }
+        }
 
         [Theory]
         [InlineData("ascii", "latin1", "ascii", "ascii_bin", "")]
@@ -135,6 +149,10 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("tis620", "tis620", "tis620", "tis620_bin';--", "")]
         [InlineData("latin1", "latin1", "latin1", "latin1_bin", "NO_BACKSLASH_ESCAPES,")]
         [InlineData("utf8mb4", "latin1", "latin1", "latin1_bin", "")]
+        [InlineData("gbk", "latin1", "gbk", "gbk_bin", "")]
+        [InlineData("gbk", "gbk", "gb18030", "gb18030_bin", "")]
+        [InlineData("sjis", "sjis", "sjis", "big5_bin", "")]
+        [InlineData("gb18030", "gb18030", "gb18030", "gb18030_2022_bin", "NO_BACKSLASH_ESCAPES;")]
         public void SingleByteLiteralRequiresConfiguredMatchingTrustedState(string configured, string client, string connection, string collation, string modes)
             => Assert.Throws<NotSupportedException>(() => MySqlLiteralContext.Parse(client, connection, collation, modes, ClientCharacterSet.Parse(configured)));
 

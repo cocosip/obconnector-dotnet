@@ -287,28 +287,37 @@ issue this query. Explicit Prepare, SchemaOnly, KeyInfo, procedure/output/array 
 cursors retain their existing exclusions. Supported ordinary string DbTypes retain their existing
 type validation; this is not a national/special type expansion.
 
-Both client and connection must report UTF8, UTF8MB3 or UTF8MB4, and the connection collation must
-belong to that UTF-8 family. Names and comma-separated SQL modes are validated as bounded identifiers.
+Default unmanaged UTF-8 accepts the existing UTF8/UTF8MB3/UTF8MB4 names. A managed client charset
+must match both fresh client and connection names; all supported non-UTF8 input encodings,
+including the seven DBCS families, now use their strict configured mapping. Connection collation
+must belong to that family. Names and comma-separated SQL modes are validated as bounded identifiers.
 Four ordinary string columns and exactly one row are required. Their supported reported source
 encoding decodes the state strictly. NULL, malformed/oversized values and extra rows/results fail
 closed. Valid but unsupported state is rejected after the result boundary is consumed, allowing
 another command on that session; an incomplete or corrupt response retires the session. Discovery
-uses the original command timeout/cancellation, transaction, physical session and frozen bindings.
+invalidates cached client-charset trust if either fresh input charset differs from the managed
+configuration, so a subsequent payload must first pass the ordinary four-setting verification.
+Discovery uses the original command timeout/cancellation, transaction, physical session and frozen bindings.
 Its failure does not claim unknown execution of the target, which has not yet been sent.
 
 Strings use ordinary parenthesized single-quoted literals, without introducers, binary conversion
 or explicit COLLATE, so session string collation and ordinary literal coercibility apply. Quotes
 are doubled. With backslash escapes active, backslash, NUL, backspace, tab, LF, CR and Ctrl-Z are
 escaped; with NO_BACKSLASH_ESCAPES, backslashes and controls are retained and quotes doubled. NUL
-in that mode is explicitly unsupported. UTF-8 encoding is strict; if either endpoint charset is
+in that mode is explicitly unsupported. Encoding is strict; escaping Unicode characters before
+encoding preserves DBCS trail5C bytes inside their multibyte character. If either endpoint charset is
 UTF8/UTF8MB3, supplementary characters in a parameter or the original SQL are rejected instead of
 replaced. A BOM and trailing spaces are preserved. No charset session mutation is introduced.
+Non-UTF8 unaliased expression names can arrive in mixed/ambiguous encodings on the observed
+server; the existing strict UTF-8 metadata contract remains, so use explicit ASCII result aliases.
+Local protocol fixtures exercise automatic fallback. Real generated-literal parsing reports are
+separate and do not prove actual server1295 fallback or all deployed mode/collation/proxy profiles.
 
 SQL marker positions must agree in all four backslash/ANSI_QUOTES combinations. String fallback
 allows one statement, with an optional terminal semicolon followed only by whitespace/comments;
 multiple statements, executable comments, NUL in SQL and ambiguous quoting are rejected. This
 prevents earlier statements from changing the snapshot's parsing/encoding assumptions. The existing
-64MiB request budget includes UTF-8 bytes, parentheses and escaping across every replacement.
+64MiB request budget includes the selected encoding's bytes, parentheses and escaping across every replacement.
 Ordinary query errors and known/unknown target execution boundaries retain their existing rules;
 there is no execute-error fallback or replay. This local implementation does not establish real
 server literal/parameter collation parity, all SQL modes, non-UTF-8 clients, proxy or performance

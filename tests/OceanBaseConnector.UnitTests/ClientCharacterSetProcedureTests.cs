@@ -44,13 +44,15 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public async Task ClientCharsetNonUtf8StringFallbackRemainsRejectedWithDrainedState(bool asynchronous)
+        public async Task ClientCharsetStringFallbackMismatchForcesRecheckBeforeNextPayload(bool asynchronous)
         {
             var server = MySqlProcedureServer(async channel =>
             {
                 await ClientCharacterSetFixture.Initialize(channel, "gbk", false, false, CancellationToken.None);
                 await StatementCommand(channel, 22); await channel.WritePacketAsync(UnsupportedPrepare());
-                await MySqlLiteralState(channel, client: "gbk", connection: "gbk", collation: "gbk_bin");
+                await MySqlLiteralState(channel, client: "latin1", connection: "gbk", collation: "gbk_bin");
+                channel.BeginCommand(); await Query(channel, ClientCharsetStateSql);
+                await ClientCharacterSetFixture.State(channel, "gbk", false, false, CancellationToken.None);
                 channel.BeginCommand(); await Query(channel, "SELECT 1"); await channel.WritePacketAsync(Ok(1, 2));
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Character Set=gbk");

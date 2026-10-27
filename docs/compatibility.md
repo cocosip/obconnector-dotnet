@@ -1,5 +1,27 @@
 # Compatibility and known gaps
 
+## 2026-10-27 DBCS MySQL string fallback
+
+Configured GBK, GB18030/2022, SJIS, Big5 and HKSCS/HKSCS31 now support trusted opt-in string
+fallback after exact1295/HY000. Strict configured encoding and matching freshly observed
+client/connection/collation state remain required. Escaping is unchanged and precedes encoding,
+preserving DBCS trail5C characters. Complete units pass7774/7774, focused units290/290 and affected
+consumers160/160; Release solution build has zero warnings/errors. Independent review found no
+remaining actionable issue; retained failures and exact results are in the
+[module record](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback).
+
+Explicit read-only direct MySQL4.4.2.2 checks on Windows/.NET10.0.13, TLS disabled, pass14/14
+generated-literal cases plus connection control. Samples combine every DBCS mapping with a
+trail5C character immediately before quotes/backslashes, hostile-looking text, controls and
+applicable supplementary/four-byte mappings. ASCII aliases, exact values/HEX, actual collation
+and coercibility4 are checked under existing SQL_MODE, without DDL or SQL_MODE changes.
+These are not actual server1295 automatic-fallback or all mode/collation/proxy/version checks.
+
+Further raw metadata probes found unaliased text-expression names in UTF-8 or client bytes
+across runs; prepared/explicit-alias samples returned UTF-8, including an ambiguous latin1
+sequence that is also valid UTF-8. The wire observations do not justify a decoder heuristic.
+The strict UTF-8 metadata contract and ASCII-alias limit remain; no broad metadata fix is claimed.
+
 ## 2026-10-27 Single-byte MySQL string fallback
 
 Configured ASCII, latin1, DEC8 and TIS620 now support opt-in string fallback after exact

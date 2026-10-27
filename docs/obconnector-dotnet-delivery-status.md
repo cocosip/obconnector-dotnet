@@ -6,9 +6,18 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 
 ## Current checkpoint
 
-- Latest implementation, developed from `da62285`: opt-in MySQL string fallback accepts configured
+- Latest implementation, developed from `f03f235`: configured GBK, GB18030/2022, SJIS, Big5 and
+  HKSCS/HKSCS31 now support the same opt-in MySQL string fallback, with strict matching session
+  encodings and unchanged character-level escaping. DBCS trail5C bytes are preserved inside
+  characters. Complete units pass7774/7774, focused units290/290 and affected consumers160/160;
+  independent source/test/docs review has no remaining actionable issue. Exact results and
+  retained failures are in the [module record](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback).
+  Release solution build has zero warnings/errors. Explicit direct MySQL generated-literal
+  checks pass14/14 plus a connection control, with ASCII aliases and existing SQL_MODE.
+  Actual server1295 automatic fallback and ambiguous expression metadata remain unverified.
+- Previous implementation, developed from `da62285`: opt-in MySQL string fallback accepts configured
   ASCII, latin1, DEC8 and TIS620 with matching fresh session state and strict encoding. The existing
-  escaping, statement/packet guards and exact 1295/HY000 gate remain; DBCS remains unsupported.
+  escaping, statement/packet guards and exact 1295/HY000 gate remain; that commit still refused DBCS.
   Focused units pass 234/234 and affected consumers pass 90/90 across five assets in one .NET10
   host. Complete units pass 7742/7742; Release solution build has zero warnings/errors and independent
   source/test/integration/docs review has no actionable issue. Exact evidence is in the
@@ -117,8 +126,8 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   89 focused units and279 affected consumers, all passing. See its [contract](session-io-diagnostics.md).
 - Further work: remaining national/JSON/CLOB and extended type boundaries, additional resource waits,
   Oracle cursor/complex shapes and the other priorities below. JSON parameters use strict client
-  bytes; MySQL string literal fallback now also supports the four configured single-byte families
-  above, while DBCS and unaliased non-UTF8 expression metadata remain limited. Managed charset
+  bytes; MySQL string literal fallback now also supports every configured non-UTF8 input family,
+  while unaliased non-UTF8 expression metadata remains limited. Managed charset
   rechecks can change session diagnostic functions after conservatively classified SQL.
 - The historical TNS File.Replace failure remains cause-unconfirmed. Eight isolated runs and both
   fresh complete runs passed; no TNS source change, retry workaround or skipped assertion was made.
@@ -166,8 +175,8 @@ the [module ledger](obconnector-dotnet-progress.md#2026-10-26-session-io-diagnos
 These are concrete code/scope gaps, not merely missing real-database reports:
 
 1. Remaining national/JSON/CLOB and extended metadata boundaries (P1-08): JSON results and CLOB
-   reads retain UTF-8 restrictions, stored complex national members require AL16UTF16, DBCS
-   string client-prepare fallback is rejected, and unsupported type codes/extended metadata reject.
+   reads retain UTF-8 restrictions, stored complex national members require AL16UTF16, and
+   unsupported type codes/extended metadata reject. Configured DBCS fallback is now locally implemented.
    Non-UTF8 expression results need ASCII aliases under the current metadata contract.
 2. Remaining resource-wait instrumentation and workload/overhead validation (P2-04).
 3. Input/InputOutput REF CURSOR and additional output shapes (P1-06).
@@ -210,7 +219,7 @@ approved wire contract or can be implemented without protocol research.
 | P1-05 Command/Batch behavior | SchemaOnly Prepare-only, bounded KeyInfo/hidden keys, SingleRow/SingleResult; MySQL procedure parameters/output/multi-results; Batch metadata/data-source creation/result limits; REF CURSOR limits | Complete behavior/shape matrix; existing explicit restrictions remain | Real metadata/permissions, prepare side effects/locks, procedure and cursor behavior |
 | P1-06 Oracle output/cursors | Independent Prepare, output ownership, positive ordinary-output FetchSize hints, binary and text cursor-valued columns (four-byte IDs) and nested ownership | **Input/InputOutput REF CURSOR and additional shapes**; output offset and positive array FetchSize remain rejected | Real direction/shape/pagination and resource matrix |
 | P1-07 Complex types | Nested objects/collections, directional national members, explicit descriptor clear and invalidation after observed DDL; binary named/anonymous BLOB/CLOB and cursor result members with session-bound ownership | **Non-empty complex LOB/cursor input, text complex results, further national storage/anonymous output shapes and unresolved whole-complex RETURNING identity** | Real DDL invalidation, complex LOB/cursor resource behavior/interoperability and server-supported shapes; retained server failures remain visible |
-| P1-08 Types/charsets | Signed DecimalScale, faithful unknown-precision Oracle NUMBER and exact FLOAT results/binding, strict result decoding/widths; tiny/medium/long BLOB, ENUM/SET/raw GEOMETRY, ROWID, Oracle Inf/NaN; national Unicode fallback IDs; trusted MySQL string prepare fallback; GB18030-2022, DEC8/TIS620, SJIS, Big5 and HKSCS/HKSCS31; configured client SQL/ordinary and JSON parameter encodings; CLOB input prevalidation | Further national/JSON/CLOB scope and extended metadata/types still need work | Real emission/storage/coercibility, all promised collation/mode/version profiles |
+| P1-08 Types/charsets | Signed DecimalScale, faithful unknown-precision Oracle NUMBER and exact FLOAT results/binding, strict result decoding/widths; tiny/medium/long BLOB, ENUM/SET/raw GEOMETRY, ROWID, Oracle Inf/NaN; national Unicode fallback IDs; trusted MySQL string prepare fallback for configured input charsets; GB18030-2022, DEC8/TIS620, SJIS, Big5 and HKSCS/HKSCS31; configured client SQL/ordinary and JSON parameter encodings; CLOB input prevalidation | Further national/JSON/CLOB scope and extended metadata/types still need work | Real emission/storage/coercibility, all promised collation/mode/version profiles |
 | P1-09 Discovery/HA | TCP retry rounds/backoff/shared budget, endpoint TCP reachability cache, TNS/OCP adapters, groups/weights/selection, global/group/address blacklist controls and attempt ceilings | Further discovery/policy boundaries; TCP reachability does not prove database/tenant health | Real discovery services, node/proxy failure and route changes |
 | P1-10 Schema | Mode-aware catalog collections/DataTypes and atomic routine-parameter derivation, including FLOAT/NUMBER_FLOAT and INOUT normalization | Package-local PL/SQL argument types remain rejected; boundary regressions as actual dictionary differences are found | Real catalogs, permissions, case, overloads, versions and proxies |
 | P1-11 Credentials | Per-Open provider acquisition, expiry/cancel, versioned rotation and old-session retirement, redacted diagnostics | Boundary regressions as real provider/plugin differences are found; local core exists | Real credential service, authentication plugins/KDC, rejection/expiry/rotation |
@@ -247,7 +256,10 @@ These are representative commits, not a replacement for the complete Git log or 
 
 ## Verification boundary and next work
 
-- Latest single-byte fallback: focused units234/234, complete units7742/7742 and affected
+- Current DBCS fallback: complete units7774/7774, focused290/290, affected consumers160/160 and
+  direct generated-literal checks14/14 plus control pass; exact verification is in the latest module record.
+  Ambiguous metadata and actual server1295/mode/collation/proxy/version compatibility remain open.
+- Previous single-byte fallback: focused units234/234, complete units7742/7742 and affected
   consumers90/90 pass; Release solution build has zero warnings/errors. Independent review has no
   actionable issue. Real generated-literal parsing with ASCII aliases passes8/8 plus control;
   actual server1295 automatic fallback and the metadata/DBCS/profile limits remain unverified.

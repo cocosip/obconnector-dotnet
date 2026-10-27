@@ -1,10 +1,10 @@
 # OceanBase .NET 驱动完整性走查报告
 
-**最近复核：** 2026-10-27；最新单字节字符串fallback模块开发起点master/da62285。23项及八工作包仍未满足整体关闭标准，不能理解为所有子功能未实现。
-**当前检查点：** 配置ASCII/latin1/DEC8/TIS620支持严格会话验证下的MySQL字符串fallback；DBCS仍拒绝，非UTF-8表达式列名仍受限。逐项状态以[交付概览](obconnector-dotnet-delivery-status.md)及完整性第15.94节为准；第18节以后保留各历史模块的原始证据。
-**当前验证：** 串行Release全解决方案构建零警告/错误，本模块专项234/234、完整单测7742/7742、受影响消费者90/90通过；独立源码/测试/集成验收/文档走查无遗留问题，见[模块记录](obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback)。显式MySQL只读生成字面量带ASCII别名8/8及连接对照通过，未建表/改SQL_MODE；未证明真实1295自动回退。此前零日期完整7708/7708及实库SQL_MODE前置失败保持原记录；5个matrix.*占位仍保留。
+**最近复核：** 2026-10-27；最新DBCS字符串fallback模块开发起点master/f03f235。23项及八工作包仍未满足整体关闭标准，不能理解为所有子功能未实现。
+**当前检查点：** 配置的全部非UTF-8输入字符集现支持严格会话验证下的MySQL字符串fallback，含七种DBCS尾5C、四字节/补充字符。无别名表达式元数据仍有编码歧义。逐项状态以[交付概览](obconnector-dotnet-delivery-status.md)及完整性第15.95节为准；第18节以后保留各历史模块的原始证据。
+**当前验证：** 串行Release全解决方案构建零警告/错误，完整单测7774/7774、本模块专项290/290、受影响消费者160/160通过；独立源码/测试/文档走查无遗留问题，见[模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)。显式MySQL只读生成字面量带ASCII别名14/14及连接对照通过，未建表/改SQL_MODE；未证明真实1295自动回退。完整初跑两项旧GBK拒绝断言、此前元数据失败、零日期SQL_MODE前置失败保持原记录；5个matrix.*占位仍保留。
 **此前验收：** matrix.pool-reset-reuse.sync/async按公开诊断listener引用及ChannelId拒绝重连；旧时区用例检查销毁替换并使用私有池，UTC区域名实跑1882失败后经RED/GREEN改数字偏移。完整7696/7696、专项40/40及双模式直连各4/4通过；仅证明同客户端通道，代理后端和完整资源矩阵仍缺；历史失败不删除。
-精确命令、脱敏报告及边界见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback)；源码核对554项仍保留在此前记录。
+精确命令、脱敏报告及边界见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)；源码核对554项仍保留在此前记录。
 **仓库：** `D:\Code\dotnet\obconnector-dotnet`；历史记录使用的其他工作区路径保持原文。
 **初次走查：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **目标和结论级别：** 为 MySQL/Oracle 双模式定义可执行的完整驱动清单；源码、本地 fixture、包消费和真实互操作分别记载，不互相替代。

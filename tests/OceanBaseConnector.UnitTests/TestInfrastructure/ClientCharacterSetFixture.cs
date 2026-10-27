@@ -27,9 +27,18 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
         private const string StateSql = "SELECT @@character_set_client, @@character_set_connection, @@character_set_results, @@collation_connection";
         private const string Result = "患者😀";
 
-        internal static async Task VerifySingleByteFallback(Type connectionType, byte[] greeting, int sample, bool asynchronous, bool deprecated)
+        internal static readonly (string Name, string Text, string Hex)[] DbcsFallbackSamples =
         {
-            var (name, text, hex) = Samples[sample];
+            ("gbk", "中文乗", "D6D0CEC4815C"),
+            ("gb18030", "ḿ\ue7c7😀乗", "A8BC8135F4379439FC36815C"),
+            ("gb18030_2022", "龴\ue81e\ufe10乗", "FE5982359037A6D9815C"),
+            ("sjis", "日本語ソ", "93FA967B8CEA835C"), ("big5", "中•∼功", "A4A4A145A1E3A55C"),
+            ("hkscs", "\uf308Ā中功", "88458856A4A4A55C"), ("hkscs31", "\U0002010cĀ中功", "88458856A4A4A55C"),
+        };
+
+        internal static async Task VerifyStringFallback(Type connectionType, byte[] greeting, (string Name, string Text, string Hex) sample, bool asynchronous, bool deprecated)
+        {
+            var (name, text, hex) = sample;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             using var connection = (DbConnection)Activator.CreateInstance(connectionType)!;
@@ -78,7 +87,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                 var parameter = command.CreateParameter(); parameter.Value = text + "'\\\n"; command.Parameters.Add(parameter);
                 for (var i = 0; i < 2; i++)
                     Assert.Equal(text + "'\\\n", asynchronous ? await command.ExecuteScalarAsync(budget.Token) : command.ExecuteScalar());
-                foreach (var invalid in new[] { "\ud800", "😀" })
+                foreach (var invalid in new[] { "\ud800", name == "gb18030" || name == "gb18030_2022" ? "\udfff" : "😀" })
                 {
                     parameter.Value = invalid;
                     await Assert.ThrowsAsync<EncoderFallbackException>(() => asynchronous ? command.ExecuteScalarAsync(budget.Token) : Task.FromResult(command.ExecuteScalar()));

@@ -3,8 +3,8 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27；当前模块开发起点master/da62285，保持master。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；源码核对见第15.91节，会话验收见第15.92节，零日期验收见第15.93节，单字节字符串fallback见第15.94节。
-**当前模块：** P1-08配置的ASCII/latin1/DEC8/TIS620支持MySQL字符串客户端Prepare fallback；实际会话字符集必须匹配，复用严格编码及原转义/SQL_MODE/单语句/包限制。DBCS仍拒绝；非UTF-8字面量表达式结果需ASCII别名，未扩展UTF-8元数据契约。显式实库仅验证生成字面量解析，未证明真实1295自动回退。
+**最近复核：** 2026-10-27；当前模块开发起点master/f03f235，保持master。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；源码核对见第15.91节，会话验收见第15.92节，零日期验收见第15.93节，单字节字符串fallback见第15.94节，DBCS见第15.95节。
+**当前模块：** P1-08将MySQL字符串fallback扩展到配置的GBK、GB18030/2022、SJIS、Big5、HKSCS/HKSCS31；严格会话匹配、字符转义再编码保持多字节尾5C，兼顾四字节/补充字符。非UTF-8无别名表达式元数据仍有混合/歧义编码，保留ASCII别名限制；显式实库只验证生成字面量解析，不证明真实1295自动回退。
 **前一模块：** P1-08/P2-06将types.zero-date-policy从无条件Deferred改为显式zeroDateProfile及建表许可下执行；检查真实session SQL_MODE且不修改，覆盖DATE/DATETIME(6)正常/部分零/全零/NULL、文本/准备结果、转换拒绝及provider值回绑重读。MySQL直连连接通过，但零日期SQL_MODE前置条件失败，未建表；不能宣称真实零日期存储通过。
 **上一验收模块：** 同步/异步同客户端物理通道reset/reuse与旧时区销毁替换隔离已分开验收；双模式直连4.4.2.2、Windows/.NET10.0.13、TLS Disabled各4/4通过；不证明OBProxy后端身份或完整资源矩阵。
 **最近已实现模块：** P1-07/W5 Oracle 复杂类型 cursor 结果成员；二进制 object/collection 中的 type163 接受恰为四字节小端游标标识，并复用当前执行的 `OracleCursorOwner`，含命名/匿名布局及缓冲/SequentialAccess 路径。复杂 BLOB/CLOB 结果成员也已本地实现；非空复杂 LOB/cursor 输入及文本复杂结果仍不支持，真实 SQL/代理兼容性未验证，见第15.85/15.88节。
@@ -13,7 +13,7 @@ The overview separates remaining development from real-environment validation; h
 **此前完成模块：** Oracle NUMBER_FLOAT206精确结果、binary precision元数据及CommandBuilder绑定（184a767）；完整单测7578、专项204及受影响消费者229通过，独立走查无遗留问题，见第15.83节。2项实库和2项既有NUMBER对照均在初始握手失败，未完成认证或SQL，不能声称FLOAT存储成功。
 此前JSON客户端字符集（b94a421）完整单测7543、专项111、消费者570通过；其10项实库与2项默认字符集对照握手失败保留在第15.82节。
 此前CLOB整输入预校验（1da3ea8）、客户端SQL/参数字符集（b66cda1）、会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录；[输入字符集契约](client-character-sets.md)记录当前边界。
-**当前验证：** 串行Release全解决方案构建零警告/错误；本模块专项234/234、完整单测7742/7742、受影响消费者90/90通过，独立源码/测试/集成验收/文档走查无遗留问题；见[本模块记录](obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback)。显式MySQL只读生成字面量8/8及连接对照通过，使用ASCII别名；保留原无别名元数据失败及验收数字getter错误。前一模块完整7708/7708、零日期SQL_MODE前置失败及其他历史报告保留。
+**当前验证：** 串行Release全解决方案构建零警告/错误；完整单测7774/7774、本模块专项290/290、受影响消费者160/160通过，独立源码/测试/文档走查无遗留问题，见[本模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)。显式MySQL只读生成字面量14/14及连接对照通过，使用ASCII别名。完整初跑两项旧GBK拒绝断言与此前元数据/零日期失败均保留，不用新结果抹去历史限制。
 **历史限制：** 前一模块构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，八次独立及后续完整运行未复现；没有修改TNS或添加绕过。
 **剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向REF CURSOR及非空复杂LOB/cursor参数、文本复杂结果、未解析身份的复杂整列RETURNING、压缩OB20/代理reroute、多发送/独立bulk；5个matrix.*占位仍需受控环境和断言，零日期断言已有但需允许零日期的真实SQL_MODE profile。代理后端身份、其他版本/平台/TLS及完整资源矩阵仍缺。逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
 前一模块2项Oracle FLOAT实库及2项既有NUMBER对照连接尝试均止于初始greeting，未完成认证或SQL，服务器/网络根因未明；后续仍需其他资源指标、负载及完整部署验收。历史JSON/TNS及握手失败均保留原记录。
@@ -3032,6 +3032,22 @@ P1-08/W5，基于master/da62285：配置ASCII、latin1、DEC8、TIS620时，MySq
 原始实库失败包括验收GetInt32不匹配服务器整数类型，以及非UTF-8无别名表达式列名触发
 UTF-8元数据解码拒绝。验收改通用整数转换并明确ASCII别名；该元数据限制仍存在。
 真实1295触发自动回退、DBCS、其他模式/collation/版本/代理及CLOB读取边界仍开放，不关闭整项。
+
+### 15.95 2026-10-27 DBCS MySQL字符串客户端Prepare fallback
+
+P1-08/W5，基于master/f03f235：配置的七种DBCS字符集复用MySqlLiteralContext严格会话匹配
+与原字符级转义，编码后尾5C字节留在多字节字符内，不按字节重复转义。支持GBK、GB18030/2022、
+SJIS、Big5、HKSCS/HKSCS31，保留UTF8/mb3、1295/HY000门禁、SQL_MODE NUL拒绝及解析/包预算。
+初始7项直接及28项协议RED均拒绝于原单字节限定；专项290/290、受影响消费者160/160通过，
+串行Release全解决方案构建零警告/错误。完整初跑7772通过/2项过时GBK拒绝断言失败，保留报告。
+替换为会话不匹配/缓存信任回归后2RED/2GREEN；共享解析器清除信任，下一payload须先复核。
+最终完整单测7774/7774、独立走查无遗留问题，见[模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)。
+
+显式MySQL直连4.4.2.2、Windows/.NET10.0.13、TLS Disabled只读生成字面量14/14及连接对照
+通过，覆盖尾5C紧邻引号/反斜杠、控制/疑似注入文本、四字节及补充字符，核对值/HEX/collation/
+coercibility4；不建表、不改SQL_MODE。真实1295自动回退及其他mode/collation/版本/代理仍缺。
+常量原始报文复核发现文本无别名名称在执行间可能UTF-8或client字节，准备/显式别名样本为UTF-8，
+且存在合法UTF-8歧义；不能据此扩展统一解码器，ASCII别名限制及Oracle/CLOB等欠项保持开放。
 
 ## 16. 剩余交付工作包
 

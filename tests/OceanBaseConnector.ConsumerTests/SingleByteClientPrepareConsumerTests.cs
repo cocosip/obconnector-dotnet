@@ -27,8 +27,8 @@ namespace OceanBaseConnector.ConsumerTests
             try
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
-                await ClientCharacterSetFixture.VerifySingleByteFallback(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!,
-                    Convert.FromBase64String(greeting.RootElement.GetProperty("payloadBase64").GetString()!), sample, asynchronous, deprecated: asynchronous);
+                await ClientCharacterSetFixture.VerifyStringFallback(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!,
+                    Convert.FromBase64String(greeting.RootElement.GetProperty("payloadBase64").GetString()!), ClientCharacterSetFixture.Samples[sample], asynchronous, deprecated: asynchronous);
             }
             finally { context.Unload(); }
         }

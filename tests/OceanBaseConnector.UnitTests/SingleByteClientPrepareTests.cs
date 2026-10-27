@@ -17,6 +17,6 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [MemberData(nameof(Cases))]
         public Task SingleByteFallbackUsesTrustedSessionAndStrictBytes(int sample, bool asynchronous, bool deprecated)
-            => ClientCharacterSetFixture.VerifySingleByteFallback(typeof(OceanBaseConnection), ProtocolFixture.Load("initial-handshake-oceanbase").Payload, sample, asynchronous, deprecated);
+            => ClientCharacterSetFixture.VerifyStringFallback(typeof(OceanBaseConnection), ProtocolFixture.Load("initial-handshake-oceanbase").Payload, ClientCharacterSetFixture.Samples[sample], asynchronous, deprecated);
     }
 }
