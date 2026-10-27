@@ -381,19 +381,12 @@ still belongs to the original logical lease; data-source batches still own that 
 SchemaOnly with limits may prepare hidden entries and query their metadata catalogs, but executes no
 target SQL. The batch reservation remains until reader close. See [verification and open acceptance](history/obconnector-dotnet-completeness.md#1561-2026-10-26-singlerowsingleresult-跨批次结果限制).
 
-### Data adapters and command generation
+### CRUD generation scope
 
-All five assets expose sealed `OceanBaseDataAdapter : DbDataAdapter` and `OceanBaseCommandBuilder : DbCommandBuilder`; the provider factory creates both. The adapter has default, OceanBaseCommand, `(string selectCommandText, OceanBaseConnection connection)` and `(string selectCommandText, string connectionString)` constructors. Its typed SelectCommand/InsertCommand/UpdateCommand/DeleteCommand properties retain caller objects. RowUpdating and RowUpdated use `EventHandler<RowUpdatingEventArgs>` and `EventHandler<RowUpdatedEventArgs>` with the framework event args. Handlers follow registration order; the builder subscribes to RowUpdating and detaches when reassigned/disposed.
-
-Fill/FillSchema, DataTable/DataSet table and column mappings, MissingSchemaAction.AddWithKey, row states, original/current values, AcceptChangesDuringUpdate, ContinueUpdateOnError and zero-row UPDATE/DELETE DBConcurrencyException use the framework implementation. Fill opens/closes a previously closed connection; an already open connection remains open. Update is synchronous and sequential, UpdateBatchSize=1; other sizes are rejected. It uses command transactions and never creates a transaction spanning all rows or retries writes. Use an explicit transaction for atomic changes across rows. Caller-supplied commands support the existing command contract. Adapter/command cloning is not a supported provider contract; retain explicit command/connection ownership.
-
-The builder has default and OceanBaseDataAdapter constructors, a typed DataAdapter property, and typed GetInsertCommand/GetUpdateCommand/GetDeleteCommand methods with default and bool useColumnsForParameterNames overloads. The framework currently falls back to ordinal pN names when maximum parameter-name metadata is unknown. Oracle placeholders are :pN; MySQL uses positional ?. Values, original values and null-test indicators remain parameters. Generated commands inherit the source connection, transaction and timeout and use UpdatedRowSource.None. They do not retrieve generated identities/defaults/RETURNING values; use explicit commands or refill for server-generated values.
-
-Generation requires proven single-base-table KeyInfo metadata, obtained on the existing session through SchemaOnly|KeyInfo. Views, joins, DISTINCT and other unknown shapes fail instead of generating writes from ambiguous provenance. A complete visible chosen row key is required for automatic UPDATE/DELETE; hidden/missing keys are rejected by the framework. Select every key member, or supply explicit commands. INSERT can be generated from known base columns without a usable row key. Autoincrement, hidden and non-source expression fields are omitted from insert/update sets. The builder suppresses standalone IsUnique in its local metadata so nullable UNIQUE cannot substitute for IsKey, and preserves all chosen composite key members. MySQL database qualification is preserved in builder-local schema metadata; public reader catalog/schema properties are unchanged. ConflictOption and optimistic concurrency follow the framework; by default original searchable values are compared.
-
-QuoteIdentifier/UnquoteIdentifier use backticks for MySQL and double quotes for Oracle, doubling embedded delimiters. Syntax is determined by the prepared source mode, an open attached connection or ExpectedMode; without mode information, an explicit matching supported QuotePrefix/QuoteSuffix pair is required for identifier-only operations. Generation rejects delimiters that do not match the actual server mode, including MySQL double quotes without an ANSI_QUOTES assumption. Framework generation can reject quoted table names containing its delimiter even when QuoteIdentifier itself can escape them.
-
-Parameter metadata preserves provider types, nullability and known signed decimal precision/scale. Unknown scale retains value inference; null-test indicators are Int32 without decimal declarations. Size stays zero, avoiding implicit truncation. Complex, REF CURSOR and locator LOB columns needing extra binding context require explicit commands. RefreshSchema invalidates metadata and disposes cached generated commands; the next generation request reacquires metadata; call it after changing source SQL, mode, transaction or database schema. Disposing the builder detaches its handler and disposes generated commands, while the source command/connection remain caller-owned. Local fixtures and five-asset consumers do not establish actual dictionary SQL, CRUD/locking or independent-runtime interoperability.
+DataAdapter/CommandBuilder generation is outside the supported OceanBase/Connector-J
+scope. Use explicit `OceanBaseCommand` instances for CRUD, transactions, generated values
+and complex bindings. `KeyInfo` remains available for bounded metadata inspection, but it
+does not imply automatic update/delete generation.
 
 ### Binary input streams
 
@@ -441,7 +434,7 @@ does not constrain decimal digits or rescale the value. Existing Oracle NUMBER
 significant-digit/exponent validation still applies; nondecimal/special tokens fail.
 
 DataTypes advertises `FLOAT({0})` with binary precision1..126, no fixed scale and
-OceanBaseDecimal. Rebinding and generated CommandBuilder CRUD parameters use existing
+OceanBaseDecimal. Explicit command rebinding uses existing
 NUMBER246 binding with no copied binary precision/scale. A manually supplied parameter
 Precision continues to mean decimal digits. There is no new FLOAT parameter enum,
 IEEE conversion or new complex member codec. Routine derivation accepts FLOAT and
@@ -774,9 +767,9 @@ statement when applicable; SchemaOnly only returns metadata and allocates no cur
 Fixed Connector/J6adc311 has public JDBC4ResultSet.getObject -> getComplexCursor -> four-byte binary
 decoding, which supports the identifier wire design; its text row implementation still returns no cursor.
 The .NET text path is therefore a local protocol extension and remains unverified against actual SQL.
-Current oracle-direct attempts fail before the greeting and do not execute SQL. REF CURSOR Input/InputOutput,
-other output/complex
-shapes and real database/OBProxy/TLS/platform/runtime acceptance remain open.
+Current oracle-direct attempts fail before the greeting and do not execute SQL. REF CURSOR Input/InputOutput and
+the unsupported complex input/text-result shapes remain explicitly rejected; other output shapes and real
+database/OBProxy/TLS/platform/runtime acceptance remain open.
 
 ### Procedures and REF CURSOR
 
@@ -816,7 +809,7 @@ With `Use Oracle Prepare Execute=true`, `Prepare()` / `PrepareAsync()` also prep
 
 Repeated Prepare before execution can reuse the same valid command-owned statement. The next Oracle execution transfers that ID to its cursor owner; returned REF CURSORs keep their parent statement alive after command disposal. Once transferred, later execution uses a fresh implicit PrepareExecute unless Prepare is called again. This is not persistent Oracle statement caching. Changed SQL, parameter-count/shape incompatibility, database, physical session, reset generation or statement epoch prevents stale reuse. Ordinary preparation retains its existing reuse rules.
 
-COM_STMT_PREPARE normally describes the full bind count. Oracle DML RETURNING can instead describe input binds as parameters and pure OUT binds as result columns. Only INSERT/UPDATE/DELETE/MERGE with exact output-column and combined counts may use this split; InputOutput and ReturnValue cannot use the split exception. PrepareExecute still sends every bind and validates its own output metadata. Stream uploads use the retained ID and occur only during execution; array execution also carries that ID. Preparation ignores FetchSize. REF CURSOR Input/InputOutput and complex cursor parameter values remain separate gaps; binary cursor columns and binary complex cursor members follow the ordinary cursor-column ownership contract above.
+COM_STMT_PREPARE normally describes the full bind count. Oracle DML RETURNING can instead describe input binds as parameters and pure OUT binds as result columns. Only INSERT/UPDATE/DELETE/MERGE with exact output-column and combined counts may use this split; InputOutput and ReturnValue cannot use the split exception. PrepareExecute still sends every bind and validates its own output metadata. Stream uploads use the retained ID and occur only during execution; array execution also carries that ID. Preparation ignores FetchSize. REF CURSOR Input/InputOutput and complex cursor parameter values remain explicitly rejected without an input protocol contract; binary cursor columns and binary complex cursor members follow the ordinary cursor-column ownership contract above.
 
 Local fixtures and five-asset consumers cover preparation, ownership and failure handling. Direct Oracle4.4.2.2 tests cover synchronous/asynchronous block, RETURNING, procedure, function and REF CURSOR preparation, including no DML before execution and cursor consumption after command disposal. These results do not establish real TLS/OBProxy, other server versions, independent runtimes, or general metadata-lock compatibility.
 

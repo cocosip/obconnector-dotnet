@@ -1,9 +1,9 @@
 # 开发进度与功能矩阵
 
-更新：2026-10-27。已提交产品基线：`85e6fe6`；文档核对提交：`953d993`。下表同时标出当前未提交工作。
+更新：2026-10-28。已提交产品基线：`85e6fe6`；当前范围审计移除了 DataAdapter/CommandBuilder；下表同时标出当前未提交工作。
 
 **已实现**表示支持“已支持范围”一列且有本地回归，不等于所有部署均已验收。**部分实现**表示仍有明确缺口；**未实现**表示当前不支持；**开发中**不计交付。实库结果只覆盖记录的 profile。
-原清单的23个大项、八个工作包均未整体关闭；不能据此说全部子功能未完成，也不按提交数/单测数计算完成率。
+原清单的23个审计编号保留用于追溯，P2-01 已移出当前范围；其余工作包不能整体关闭，也不按提交数/单测数计算完成率。
 
 ## 连接、池与事务
 
@@ -25,15 +25,15 @@
 | --- | --- | --- | --- |
 | Oracle Prepare和普通输出 | 部分实现 | 独立Prepare、OUT/RETURNING、普通输出正FetchSize提示、数组绑定 | 输出offset/数组正FetchSize仍拒绝；其余形状和部署组合待补 |
 | REF CURSOR输出和结果列 | 已实现 | 输出、文本/二进制四字节游标ID、二进制复杂cursor成员及执行所有权 | 真实方向/分页/资源/代理矩阵未完整验收 |
-| REF CURSOR Input/InputOutput | 未实现 | 当前OracleCommandPlan明确拒绝 | 输入编码和原连接/statement/事务/消费所有权契约，然后实现 |
+| REF CURSOR Input/InputOutput | 明确不支持 | Java 没有对应输入绑定路径，当前 OracleCommandPlan 在发送前拒绝 | 除非取得明确的 Java/OceanBase 输入协议依据，否则不实现 |
 | 复杂类型二进制结果 | 已实现 | 嵌套object/collection、命名/匿名布局、BLOB/CLOB/cursor成员 | 真实SQL形状、版本、资源生命周期仍待验收 |
 | 命名复杂LOB内容输入 | 已实现 | BLOB字节、严格UTF-8 CLOB文本、嵌套命名元素 | 接受内容不等于接受定位器；其他字符集/版本/代理待验收 |
 | 匿名标量LOB数组输入 | 已实现 | 同连接/会话/事务/代际的LOB定位器，执行时重验所有权 | 默认/GB18030已有直连专项；其他profile待验收 |
 | CLOB定位器输入转码 | 已实现 | 发送副本转码；V1支持，V2限已认证产品4.4.1+；原句柄不变 | 旧版/未知V2保持原字节；默认/GB18030含外置大CLOB通过，其余部署待验收 |
-| 命名复杂LOB定位器回绑 | 未实现 | 当前明确拒绝OceanBaseLob，使用内容输入替代 | 命名定位器协议，或有界物化的I/O/取消/所有权方案 |
-| 复杂cursor输入 | 未实现 | 非空type163成员无参数编码，匿名工厂也不支持 | 输入协议和游标所有权；不能照搬结果ID |
-| 文本复杂类型结果 | 未实现 | 当前ResultColumn要求二进制协议 | 按命名/匿名和SQL/PL形状确认文本语法、编码、身份和资源语义 |
-| 复杂整列RETURNING | 部分实现 | 已解析的类型身份及既有输出路径 | 未解析身份仍不支持；需补身份/布局推导和对应形状 |
+| 命名复杂LOB定位器回绑 | 明确不支持 | 当前拒绝OceanBaseLob，使用内容输入替代 | 没有明确定位器协议前不扩展 |
+| 复杂cursor输入 | 明确不支持 | 非空type163成员无参数编码，匿名工厂也不支持 | 没有明确输入协议前不扩展 |
+| 文本复杂类型结果 | 明确不支持 | 当前 ResultColumn 要求二进制协议 | 没有明确文本语法、编码、身份和资源语义前不扩展 |
+| 复杂整列RETURNING | 受限 | 已解析的类型身份及既有输出路径 | 未解析身份继续拒绝；不把它列为默认开发项 |
 | 类型描述缓存 | 已实现 | 显式清理、可观察DDL自动失效、嵌套与大小限制 | 外部/不透明DDL须显式清理；递归定义不支持，真实DDL矩阵待验收 |
 | 数值/时间及常见扩展类型 | 已实现 | NUMBER/FLOAT保真、signed scale、TZ/LTZ/INTERVAL、ROWID、Inf/NaN、MySQL BLOB族/ENUM/SET/原始GEOMETRY | 不代表所有类型码均支持；扩展元数据和未知类型仍拒绝 |
 | 客户端字符集 | 部分实现 | SQL/普通及JSON参数、复杂national输入、DBCS fallback、CLOB输入预校验 | Oracle UTF8MB3重映射、SJIS/Big5的Open失败仍在；非UTF8歧义表达式需ASCII别名 |
@@ -46,8 +46,8 @@
 | --- | --- | --- | --- |
 | 标准MySQL压缩 | 已实现 | 显式协商、有界编解码、校验、序列和取消保护 | 不能与OB20同时启用；真实压缩部署矩阵待验收 |
 | 普通OB20 / trace | 已实现 | 普通帧、校验、legacy/modern trace编解码及协商诊断 | 真实命令双向帧、服务器策略和trace发送尚未完成显式验收 |
-| OB20压缩 | 未实现 | 非零uncompressed length仍拒绝 | 先明确客户端链路/版本/capability，不能把服务器内部压缩路径直接当客户端契约 |
-| Proxy reroute | 未实现 | 当前拒绝相关响应标志 | 目标/TLS/租户验证、预算、池路由、事务与未知结果安全契约及实现 |
+| OB20压缩 | 明确不支持 | 非零uncompressed length仍拒绝 | 先取得客户端链路/版本/capability 依据，否则不实现 |
+| Proxy reroute | 明确不支持 | 当前拒绝相关响应标志 | 没有明确目标/TLS/租户及未知结果契约前不实现 |
 | 文本多语句 | 已实现 | 默认关闭，显式开启后文本多结果 | 参数/Prepare/cursor/Oracle输出组合仍拒绝；扩展前需明确范围 |
 | LOCAL INFILE | 已实现 | 显式授权、应用流输入、安全边界、同步/异步 | 实际服务器/代理策略、大文件及取消组合待验收 |
 | TLS/mTLS | 已实现 | 平台校验、自定义回调、客户端证书、池身份隔离、撤销选项 | 企业CA、负向握手、轮换和跨平台撤销未完整验收 |
@@ -61,11 +61,11 @@
 | Command/Batch行为 | 部分实现 | Prepare-only SchemaOnly、有界KeyInfo、SingleRow/SingleResult、Batch元数据及结果限制 | 完整游标/结果形状、目录权限、锁与副作用矩阵待补 |
 | MySQL存储过程 | 已实现 | 集合顺序Input/Output/InputOutput、多结果和隐藏输出 | ReturnValue、FetchSize、SchemaOnly/KeyInfo、INOUT stream等仍拒绝 |
 | Schema / 参数推导 | 已实现 | 双模式目录、DataTypes、原子参数派生、FLOAT及INOUT归一化 | 包内PL/SQL参数类型拒绝；权限/重载/版本/代理目录待验收 |
-| DataAdapter / CommandBuilder | 已实现 | 同步填充/映射/事件、显式CRUD和有界单表自动SQL | 键/生成值/复杂查询限制保留；真实SQL/锁/并发/运行时待验收；不含EF Core provider |
+| DataAdapter / CommandBuilder | 已移出支持范围 | Connector/J 没有对应能力，当前 CRUD 使用显式 `OceanBaseCommand` | 不再提供 public 类型、factory 入口或自动 CRUD 生成 |
 | Statement cache | 已实现 | opt-in idle LRU、容量/关闭、上下文/DDL/reset代际失效 | 真实reprepare、资源和负载报告待验收 |
 | 顺序Batch / INSERT rewrite | 已实现 | 顺序执行、Oracle array binding、opt-in MySQL INSERT合并及失败归属 | 真实触发器/默认值/警告、性能和部分失败组合待验收 |
-| Multi-send / 独立bulk | 未实现 | 尚无流水线/独立bulk协议 | 确认支持语义，再补部分失败、事务、取消和限额 |
-| 现有诊断 | 已实现 | 日志/Activity/Meter、池等待/租约、建连阶段、慢命令、协议帧/协商、会话I/O/源流读取 | 其他资源等待未补；真实负载、资源曲线和监听开销待验收 |
+| Multi-send / 独立bulk | 明确不支持 | 尚无 Java/OceanBase 流水线/独立bulk协议依据 | 不列为默认开发项 |
+| 现有诊断 | 已实现 | 日志/Activity/Meter、池等待/租约、建连阶段、慢命令、协议帧/协商、会话I/O/源流读取 | 其他未定义等待点不列为功能缺口；真实负载、资源曲线和监听开销待验收 |
 | TFM / 包消费 | 部分验证 | 五资产；Windows有实际运行时及nupkg协议子集证据 | 单一.NET10 host的五资产消费不等于五运行时；非Windows及完整承诺矩阵仍缺 |
 | 完整发布验收 | 未完成 | 双模式直连4.4.2.2、Windows/.NET10、TLS disabled的若干专项已有报告 | OBProxy、真实TLS/auth、完整资源/故障/版本/平台矩阵及发布审查未闭合 |
 
@@ -79,7 +79,7 @@
 
 最新**已交付**模块是`85e6fe6`协议协商诊断：保存结果为完整单测8091/8091、消费者340/340、重建专项/runner488/488及Release零警告/错误，一次独立最终走查无遗留问题。这些是该提交的历史证据，不是本次文档整理的新运行。
 
-开发优先级：先收尾当前草稿；随后优先推进Oracle输入/复杂结果等明确缺实现项。协议尚未确认的项目先列出具体待证实契约，不以诊断或文档交付替代核心功能支持。
+开发优先级：先收尾当前草稿；随后只推进有 Java/OceanBase 依据且纳入范围的验收。没有输入协议依据的 REF CURSOR/复杂形状和未定义批量/诊断扩展保持拒绝，不以诊断或文档交付替代核心功能支持。
 
 ## 维护规则与证据入口
 

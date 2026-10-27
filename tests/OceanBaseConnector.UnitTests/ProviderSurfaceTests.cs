@@ -20,13 +20,9 @@ namespace OceanBaseConnector.UnitTests
             Assert.IsType<OceanBaseParameter>(factory.CreateParameter());
             Assert.IsType<OceanBaseConnectionStringBuilder>(factory.CreateConnectionStringBuilder());
             Assert.True(factory.CanCreateBatch);
-            Assert.True(factory.CanCreateDataAdapter);
-            Assert.True(factory.CanCreateCommandBuilder);
             Assert.True(connection.CanCreateBatch);
             using var batch = Assert.IsType<OceanBaseBatch>(factory.CreateBatch());
             Assert.IsType<OceanBaseBatchCommand>(factory.CreateBatchCommand());
-            Assert.IsType<OceanBaseDataAdapter>(factory.CreateDataAdapter());
-            Assert.IsType<OceanBaseCommandBuilder>(factory.CreateCommandBuilder());
             Assert.Throws<InvalidOperationException>(() => connection.BeginTransaction());
             Assert.Throws<InvalidOperationException>(() => connection.ChangeDatabase("other"));
             Assert.Throws<ArgumentNullException>(() => connection.EnlistTransaction(null));

@@ -205,8 +205,6 @@ namespace OceanBaseConnector.ConsumerTests
                 {
                     var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(tfm));
                     var factory = (DbProviderFactory)assembly.GetType("OceanBaseConnector.OceanBaseProviderFactory")!.GetField("Instance")!.GetValue(null)!;
-                    Assert.True(factory.CanCreateDataAdapter);
-                    Assert.True(factory.CanCreateCommandBuilder);
                     using var connection = factory.CreateConnection()!;
                     connection.ConnectionString = "Server=localhost;User ID=u;Password=baseline-secret";
                     Assert.Equal(ConnectionState.Closed, connection.State);

@@ -142,31 +142,6 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
-        [Theory]
-        [InlineData(126, "7.25")]
-        [InlineData(53, "7.25")]
-        [InlineData(24, "7.25")]
-        [InlineData(1, "700")]
-        public async Task OracleNumberFloatBuilderBindsNumberWithoutCopyingBinaryPrecision(byte precision, string text)
-        {
-            var columns = new[] { SchemaColumn("id", 8, 20, flags: 1, originalName: "id"),
-                SchemaColumn("amount", 206, 126, precision, 171, originalName: "amount") };
-            await WithBuilderSchema(false, columns, new[] { BuilderKey("id") }, (_, builder) =>
-            {
-                var value = new OceanBaseDecimal(decimal.Parse(text, CultureInfo.InvariantCulture));
-                foreach (var command in new[] { builder.GetInsertCommand(), builder.GetUpdateCommand(), builder.GetDeleteCommand() })
-                    foreach (OceanBaseParameter parameter in command.Parameters)
-                        if (parameter.SourceColumn == "amount" && !parameter.SourceColumnNullMapping)
-                        {
-                            Assert.Equal(OceanBaseDbType.Decimal, parameter.OceanBaseDbType);
-                            Assert.Equal(0, parameter.Precision); Assert.Null(parameter.DeclaredDecimalScale);
-                            parameter.Value = value;
-                            Assert.Equal(PreparedParameters.Encode(new[] { new OceanBaseParameter { Value = value } }, OceanBaseCompatibilityMode.Oracle),
-                                PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle));
-                        }
-            });
-        }
-
         public static IEnumerable<object[]> OracleNumberFloatReaderCases()
         {
             foreach (var asynchronous in new[] { false, true })
