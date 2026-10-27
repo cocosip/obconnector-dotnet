@@ -614,6 +614,20 @@ namespace OceanBaseConnector.Internal.Session
             catch (AggregateException) { }
         }
 
+        internal bool TryCloseOpening()
+        {
+            lock (_gate)
+            {
+                if (_state != SessionState.Closed && _state != SessionState.Connecting) return false;
+                _started = true;
+                _state = SessionState.Closed;
+                ReleaseTransport();
+            }
+            try { _closing.Cancel(); }
+            catch (AggregateException) { }
+            return true;
+        }
+
         // No protocol cleanup is sent: unread responses always destroy the socket.
         public Task CloseAsync() { Close(); return Task.CompletedTask; }
         public void Dispose() => Close();

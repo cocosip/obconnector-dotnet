@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace OceanBaseConnector.Internal.Session
@@ -9,7 +10,12 @@ namespace OceanBaseConnector.Internal.Session
         private void TrackBorrowed(PhysicalSession session)
         {
             bool added;
-            lock (_gate) added = _borrowed.Add(session);
+            lock (_gate)
+            {
+                if (_disposed || !_sessions.Contains(session))
+                    throw new ObjectDisposedException(nameof(PhysicalSessionPool));
+                added = _borrowed.Add(session);
+            }
             if (added) DriverDiagnostics.PoolLeaseStarted();
             DriverDiagnostics.PoolBorrowed();
         }

@@ -109,8 +109,7 @@ namespace OceanBaseConnector.Internal.Session
                     try
                     {
                         var session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback, endpointHealth: HealthForGeneration(generation));
-                        RegisterCreated(session, generation);
-                        TrackBorrowed(session);
+                        RegisterCreated(session, generation, borrowed: true);
                         return session;
                     }
                     catch (ObjectDisposedException)
@@ -185,8 +184,7 @@ namespace OceanBaseConnector.Internal.Session
                     try
                     {
                         var session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback, endpointHealth: HealthForGeneration(generation));
-                        RegisterCreated(session, generation);
-                        TrackBorrowed(session);
+                        RegisterCreated(session, generation, borrowed: true);
                         return session;
                     }
                     catch (ObjectDisposedException)
@@ -530,7 +528,7 @@ namespace OceanBaseConnector.Internal.Session
             _lifetimeSeconds = options.ConnectionLifetimeSeconds;
         }
 
-        private void RegisterCreated(PhysicalSession session, long generation, bool idle = false)
+        private void RegisterCreated(PhysicalSession session, long generation, bool idle = false, bool borrowed = false)
         {
             if (idle) session.MarkReturned();
             var discard = false;
@@ -546,6 +544,7 @@ namespace OceanBaseConnector.Internal.Session
                 if (!discard)
                 {
                     _sessions.Add(session);
+                    if (borrowed) _borrowed.Add(session);
                     if (generation != _clearGeneration) _retiredSessions.Add(session);
                     if (idle) _idle.Push(session);
                 }
@@ -553,6 +552,11 @@ namespace OceanBaseConnector.Internal.Session
             }
             if (discard) { session.Dispose(); DriverDiagnostics.PoolDiscarded(); return; }
             DriverDiagnostics.PoolSessionAdded();
+            if (borrowed)
+            {
+                DriverDiagnostics.PoolLeaseStarted();
+                DriverDiagnostics.PoolBorrowed();
+            }
         }
 
         private void CompleteOpening()
@@ -693,6 +697,7 @@ namespace OceanBaseConnector.Internal.Session
         public void Dispose()
         {
             PhysicalSession[] sessions;
+            List<PhysicalSession> opening;
             int waiters;
             lock (_gate)
             {
@@ -703,10 +708,33 @@ namespace OceanBaseConnector.Internal.Session
                 _idle.CopyTo(sessions, 0);
                 _idle.Clear();
                 foreach (var session in sessions) _sessions.Remove(session);
+                opening = new List<PhysicalSession>();
+                foreach (var session in _sessions)
+                    if (_borrowed.Contains(session)) opening.Add(session);
                 waiters = _waiters;
             }
             foreach (var session in sessions)
             {
+                session.Dispose();
+                DriverDiagnostics.PoolSessionRemoved();
+                DriverDiagnostics.PoolDiscarded();
+            }
+            foreach (var session in opening)
+            {
+                if (!session.TryCloseOpening()) continue;
+                var removed = false;
+                var borrowed = false;
+                lock (_gate)
+                {
+                    if (_sessions.Remove(session))
+                    {
+                        _retiredSessions.Remove(session);
+                        borrowed = _borrowed.Remove(session);
+                        removed = true;
+                    }
+                }
+                if (!removed) continue;
+                if (borrowed) DriverDiagnostics.PoolLeaseEnded();
                 session.Dispose();
                 DriverDiagnostics.PoolSessionRemoved();
                 DriverDiagnostics.PoolDiscarded();
