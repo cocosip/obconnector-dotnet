@@ -45,7 +45,7 @@
 | 功能 | 开发状态 | 已支持范围 | 还缺什么 / 验收边界 |
 | --- | --- | --- | --- |
 | 标准MySQL压缩 | 已实现 | 显式协商、有界编解码、校验、序列和取消保护 | 不能与OB20同时启用；真实压缩部署矩阵待验收 |
-| 普通OB20 / trace | 已实现 | 普通帧、校验、legacy/modern trace编解码及协商诊断 | 真实命令双向帧、服务器策略和trace发送尚未完成显式验收 |
+| 普通OB20 / trace | 已实现 | 普通帧、校验、legacy/modern trace编解码及协商诊断；显式 profile 会拒绝服务端实际降级 | 用户租户实测协商为 MySQL，未提供实际 OB20/trace 帧；OBProxy、服务器策略和 trace 发送仍待专用环境 |
 | OB20压缩 | 明确不支持 | 非零uncompressed length仍拒绝 | 先取得客户端链路/版本/capability 依据，否则不实现 |
 | Proxy reroute | 明确不支持 | 当前拒绝相关响应标志 | 没有明确目标/TLS/租户及未知结果契约前不实现 |
 | 文本多语句 | 已实现 | 默认关闭，显式开启后文本多结果 | 参数/Prepare/cursor/Oracle输出组合仍拒绝；扩展前需明确范围 |
@@ -74,12 +74,12 @@
 | 项目 | 当前进度 | 尚未完成 |
 | --- | --- | --- |
 | Consumer CI耗时优化 | **已调整**：普通 PR/分支 push 不执行 consumer；仅 tag 的 Windows 发布腿运行 acceptance；行为矩阵保留 `netstandard2.0`、`netstandard2.1`、`net10.0` 三类实现路径，五资产依赖/目标面契约仍保留 | 本地本轮列举用例由 5918 降至 3396；完整 TLS consumer 仍受 Windows PFX 凭据环境限制，需在 CI 或可用证书环境复跑 |
-| OB20/trace显式验收（P2-06） | **交付门禁中，未提交**：五profile/十case；专项/runner **88/88**，Release零警告/错误，一次独立最终走查无问题，opt-out集成15通过/116跳过 | 完整单测首轮重现历史TNS File.Replace失败，同产物隔离1/1通过；完整运行尚未收尾，仍需最终文档/隐私检查和提交；未跑实库。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |
-| 验收占位 | 已提交基线仍有TLS/auth与OB20/trace两个DeferredReason；当前草稿将后者替换为可执行case | 草稿专项通过不等于模块交付，暂不减少已交付清单的两个占位 |
+| OB20/trace显式验收（P2-06） | **已提交，部分实库验收**：代码/文档见`bc020e2`、`c5b4c07`；专项/runner **88/88**，Release零警告/错误；直连4.4.2.2双模式 `declined-ob20` 各6通过 | 用户租户实际协商为 `Layer=mysql`，显式 `ob20` 各2项按契约失败；真实 OB20/trace、OBProxy、TLS/auth 和完整单测环境门禁仍未闭合。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |
+| 验收占位 | 已提交基线仅保留TLS/auth DeferredReason；OB20/trace已替换为可执行profile | 实际服务端未启用OB20时必须保留失败，不能用普通MySQL fallback关闭OB20门禁 |
 
 最新**已交付**模块是`85e6fe6`协议协商诊断：保存结果为完整单测8091/8091、消费者340/340、重建专项/runner488/488及Release零警告/错误，一次独立最终走查无遗留问题。这些是该提交的历史证据，不是本次文档整理的新运行。
 
-开发优先级：先收尾当前草稿；随后只推进有 Java/OceanBase 依据且纳入范围的验收。没有输入协议依据的 REF CURSOR/复杂形状和未定义批量/诊断扩展保持拒绝，不以诊断或文档交付替代核心功能支持。
+开发优先级：OB20/trace 草稿已提交，后续只推进有 Java/OceanBase 依据且纳入范围的验收。没有输入协议依据的 REF CURSOR/复杂形状和未定义批量/诊断扩展保持拒绝，不以诊断或文档交付替代核心功能支持。
 
 ## 维护规则与证据入口
 

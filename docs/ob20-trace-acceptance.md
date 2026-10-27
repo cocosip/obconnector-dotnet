@@ -39,4 +39,13 @@
 
 成功消费查询结果验证响应主体/校验路径；读Frame事件单独不证明主体有效，写Frame也不证明服务器收到。trace写帧证明本地发送路径接受了数据，不证明collector收到、服务器持续采样、完整链路导出、真实OBProxy兼容或性能预算。TLS/auth矩阵仍是独立占位；本模块不实现OB20压缩/reroute，也不关闭P2-06整项。
 
+## 当前真实环境结果
+
+在用户提供的直连 OceanBase 4.4.2.2 MySQL/Oracle 租户上，Windows/.NET 10.0.14、TLS Disabled
+运行了 `declined-ob20` 的同步/异步用例；两种模式均通过连接控制和两个 profile 用例（各 6 passed、0
+failed，其他 case 按配置跳过）。两种模式的 `ob20` profile 均按预期失败，诊断显示请求了 OB20 但实际
+`Layer=mysql`；因此该环境没有提供 OB20 实际帧或 trace 发送策略。客户端保留显式失败，不把服务端
+拒绝伪装成 OB20 成功。该结果只证明普通 MySQL fallback 的真实路径，不能证明 OB20/trace、OBProxy 或
+collector 兼容性。
+
 实现入口：[执行case](../tests/OceanBaseConnector.Acceptance/DatabaseCases.Ob20Trace.cs)、[标量捕获](../tests/OceanBaseConnector.Acceptance/Ob20TraceCapture.cs)。公共事件语义见[协议诊断](protocol-diagnostics.md)。
