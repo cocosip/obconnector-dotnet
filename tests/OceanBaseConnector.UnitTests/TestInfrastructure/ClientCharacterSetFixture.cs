@@ -187,11 +187,12 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             }
         }
 
-        internal static async Task Initialize(PacketChannel channel, string name, bool oracle, bool deprecated, CancellationToken token, string? client = null, string results = "utf8mb4")
+        internal static async Task Initialize(PacketChannel channel, string name, bool oracle, bool deprecated, CancellationToken token, string? client = null, string? results = null)
         {
+            var resultName = results ?? (oracle ? "utf8mb4" : name);
             var statements = oracle
                 ? new[] { "SET character_set_client = '" + name + "'", "SET character_set_connection = '" + name + "'", "SET character_set_results = 'utf8mb4'" }
-                : new[] { "SET NAMES " + name, "SET character_set_results=utf8mb4" };
+                : new[] { "SET NAMES " + name };
             foreach (var sql in statements)
             {
                 channel.BeginCommand(); var request = await channel.ReadPacketAsync(token);
@@ -200,11 +201,11 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             }
             channel.BeginCommand(); var state = await channel.ReadPacketAsync(token);
             Assert.Equal(StateSql + (oracle ? " FROM DUAL" : ""), Encoding.ASCII.GetString(state, 1, state.Length - 1));
-            await State(channel, name, oracle, deprecated, token, client, results);
+            await State(channel, name, oracle, deprecated, token, client, resultName);
         }
 
-        internal static async Task State(PacketChannel channel, string name, bool oracle, bool deprecated, CancellationToken token, string? client = null, string results = "utf8mb4", bool extra = false)
-            => await Values(channel, new[] { client ?? name, name, results, name + "_bin" }, oracle, deprecated, token, extra);
+        internal static async Task State(PacketChannel channel, string name, bool oracle, bool deprecated, CancellationToken token, string? client = null, string? results = null, bool extra = false)
+            => await Values(channel, new[] { client ?? name, name, results ?? (oracle ? "utf8mb4" : name), name + "_bin" }, oracle, deprecated, token, extra);
 
         internal static async Task<byte[]> Read(PacketChannel channel, bool oracle, string name, bool deprecated, CancellationToken token)
         {

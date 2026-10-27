@@ -36,7 +36,7 @@
 | 复杂整列RETURNING | 受限 | 已解析的类型身份及既有输出路径 | 未解析身份继续拒绝；不把它列为默认开发项 |
 | 类型描述缓存 | 已实现 | 显式清理、可观察DDL自动失效、嵌套与大小限制 | 外部/不透明DDL须显式清理；递归定义不支持，真实DDL矩阵待验收 |
 | 数值/时间及常见扩展类型 | 已实现 | NUMBER/FLOAT保真、signed scale、TZ/LTZ/INTERVAL、ROWID、Inf/NaN、MySQL BLOB族/ENUM/SET/原始GEOMETRY | 不代表所有类型码均支持；扩展元数据和未知类型仍拒绝 |
-| 客户端字符集 | 部分实现 | SQL/普通及JSON参数、复杂national输入、DBCS fallback、CLOB输入预校验 | Oracle UTF8MB3重映射、SJIS/Big5的Open失败仍在；非UTF8歧义表达式需ASCII别名 |
+| 客户端字符集 | 部分实现 | SQL/普通及JSON参数、复杂national输入、MySQL SJIS/Big5 Open、DBCS fallback、CLOB输入预校验 | Oracle UTF8MB3重映射、SJIS/Big5的Open失败仍在；非UTF8歧义表达式需ASCII别名 |
 | national存储/输出 | 部分实现 | 已有可信national元数据及受支持结果路径 | 存储complex要求AL16UTF16，其他存储/匿名输出形状待补 |
 | JSON / CLOB结果 | 已实现 | 当前严格UTF-8协议契约 | 非默认输入的存储/转换、结果元数据、其他版本/代理仍待验收，不应无依据改为客户端编码解码 |
 

@@ -144,10 +144,10 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, true)]
         [InlineData(true, false)]
         [InlineData(true, true)]
-        public async Task ClientCharsetInitializationRequiresMatchingInputAndUtf8Results(bool asynchronous, bool wrongResults)
+        public async Task ClientCharsetInitializationRequiresMatchingInputAndResultFamily(bool asynchronous, bool wrongResults)
         {
             var server = MySqlProcedureServer(channel => ClientCharacterSetFixture.Initialize(channel, "gbk", false, false, CancellationToken.None,
-                client: wrongResults ? "gbk" : "latin1", results: wrongResults ? "gbk" : "utf8mb4"));
+                client: wrongResults ? "gbk" : "latin1", results: wrongResults ? "utf8mb4" : "gbk"));
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Character Set=gbk");
             try
             {

@@ -58,7 +58,7 @@ namespace OceanBaseConnector.Internal.Session
                     values[i] = HandshakeFlow.ReadClientCharacterSetValue(result.Row![i]);
                 }
                 if (asynchronous ? await result.ReadAsync(token).ConfigureAwait(false) : result.Read()) throw new ProtocolException("Extra client character set state row.");
-                HandshakeFlow.ValidateClientCharacterSet(_session.ClientCharacterSet, values);
+                HandshakeFlow.ValidateClientCharacterSet(_session.ClientCharacterSet, Mode, values);
                 _session.SetClientCharacterSetVerified(true);
             }
             catch { _session.Break(); throw; }

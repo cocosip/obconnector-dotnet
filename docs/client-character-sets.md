@@ -34,12 +34,14 @@ share pool identity. They do not enable additional session charset management. A
 user/database handshake fields and initial identity queries remain UTF-8 (handshake collation45).
 
 A non-default name enables managed input encoding. After authentication and identity confirmation,
-MySQL Open executes `SET NAMES <canonical name>`, then `SET character_set_results=utf8mb4`.
-Oracle Open instead uses three separate quoted assignments: `SET character_set_client = '<name>'`,
+MySQL Open executes the Connector/J-compatible `SET NAMES <canonical name>`; its client,
+connection and result settings therefore use the configured family. Oracle Open instead uses three
+separate quoted assignments: `SET character_set_client = '<name>'`,
 `SET character_set_connection = '<name>'` and `SET character_set_results = 'utf8mb4'`.
 Both modes read client/connection/results/collation state; the Oracle SELECT includes `FROM DUAL`.
-Fresh Open and pool restoration share the same mode-specific SQL. Both input names must match the configured family,
-results must be utf8mb4, and collation must belong to that connection family. The connection is
+Fresh Open and pool restoration share the same mode-specific SQL. MySQL input and result names must
+match the configured family; Oracle input names must match while results remain utf8mb4. In both modes
+collation must belong to that connection family. The connection is
 published only after this response is complete and validated. Unknown/rejected settings fail Open.
 Result identifiers and error handling keep their existing UTF-8 contract; ordinary result values
 continue to use their column collations.

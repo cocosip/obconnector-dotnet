@@ -6,6 +6,29 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-28 DBCS client charset Open behavior
+
+Developed from `master/41380e8` for P1-08/W5. MySQL managed initialization now sends the single
+Connector/J-compatible `SET NAMES <canonical name>` statement. Because that statement controls
+client, connection and result character sets together, MySQL verification requires all three names
+and the collation to match the configured family. Oracle keeps its existing three quoted assignments
+(`character_set_client`, `character_set_connection`, `character_set_results=utf8mb4`) and strict
+four-setting validation. The temporary diagnostic variant that sent only `character_set_connection`
+was removed; no incomplete Oracle session is published.
+
+The direct OceanBase 4.4.2.2 MySQL profile on Windows/.NET 10.0.14 with TLS disabled passes SJIS
+and Big5 Open plus `SELECT 1` in sync/async, 4/4 cases. The same Oracle profile rejects all four
+SJIS/Big5 Open attempts with server `900/42000`; the failure occurs during the server's session
+charset handling and remains a deployment restriction. The test theory therefore exercises only
+the supported MySQL positive matrix; Oracle failures are retained as live evidence rather than
+encoded as a passing compatibility contract. No proxy, TLS, other-version or cross-platform claim
+is added. Focused synthetic client-character-set/national tests pass 227/227 using the .NET 11 RC
+SDK targeting `net10.0` on the installed .NET 10 runtime.
+
+The current matrix, [client charset contract](../client-character-sets.md), and architecture design
+were updated to keep the Java reference behavior and the Oracle server boundary consistent. This
+does not close P1-08 or any other gap ID/work package.
+
 ## 2026-10-27 Committed progress and pending acceptance alignment
 
 Documentation-only check against clean master/85e6fe6. The authenticated protocol negotiation

@@ -15,7 +15,7 @@ namespace OceanBaseConnector.Internal.Session
         internal static string[] ClientCharacterSetInitializationSql(ClientCharacterSet charset, OceanBaseCompatibilityMode mode) =>
             mode == OceanBaseCompatibilityMode.Oracle
                 ? new[] { "SET character_set_client = '" + charset.Name + "'", "SET character_set_connection = '" + charset.Name + "'", "SET character_set_results = 'utf8mb4'" }
-                : new[] { "SET NAMES " + charset.Name, "SET character_set_results=utf8mb4" };
+                : new[] { "SET NAMES " + charset.Name };
 
         internal static async Task InitializeClientCharacterSet(PacketChannel channel, ConnectResult info, ClientCharacterSet charset, bool asynchronous, CancellationToken token)
         {
@@ -48,7 +48,7 @@ namespace OceanBaseConnector.Internal.Session
             if (row.HasRemaining) throw new ProtocolException("Trailing client character set state bytes.");
             ValidateIdentityEnd(await Read().ConfigureAwait(false), info);
             channel.CompleteResponse();
-            ValidateClientCharacterSet(charset, values);
+            ValidateClientCharacterSet(charset, info.Mode, values);
             info.ObserveSessionVariables(new Dictionary<string, string>
             {
                 ["character_set_client"] = values[0],
@@ -68,11 +68,13 @@ namespace OceanBaseConnector.Internal.Session
             return ResultColumn.Utf8.GetString(bytes);
         }
 
-        internal static void ValidateClientCharacterSet(ClientCharacterSet charset, string[] values)
+        internal static void ValidateClientCharacterSet(ClientCharacterSet charset, OceanBaseCompatibilityMode mode, string[] values)
         {
             if (!charset.Matches(values[0]) || !charset.Matches(values[1]) ||
-                !string.Equals(values[2], "utf8mb4", StringComparison.OrdinalIgnoreCase) || !charset.MatchesCollation(values[3]))
-                throw new NotSupportedException("The session character sets do not match the configured client encoding and UTF-8 results.");
+                (mode == OceanBaseCompatibilityMode.Oracle
+                    ? !string.Equals(values[2], "utf8mb4", StringComparison.OrdinalIgnoreCase)
+                    : !charset.Matches(values[2])) || !charset.MatchesCollation(values[3]))
+                throw new NotSupportedException("The session character sets do not match the configured client encoding.");
         }
     }
 }

@@ -18,6 +18,20 @@ table column; no collection value is bound. Table cleanup is registered only aft
 CREATE, so the run has no cleanup failure. This does not add a client workaround or claim that
 collection procedure parameters/array binding are unsupported.
 
+## 2026-10-28 DBCS client charset Open behavior
+
+The managed MySQL initialization now follows Connector/J: one `SET NAMES <charset>` statement
+establishes client, connection and result character sets, and the driver validates that all three
+match the configured family. The Oracle path retains its three separate assignments and strict
+four-setting validation; it does not silently continue with only a client-side charset change.
+
+The real direct MySQL profile on OceanBase 4.4.2.2, Windows/.NET 10.0.14 with TLS disabled, passes
+SJIS and Big5 Open plus `SELECT 1` for sync/async, 4/4 cases. The same Oracle profile rejects all
+four SJIS/Big5 Open attempts with server `900/42000` while applying the session charset statements.
+That is a server/tenant protocol boundary, not a supported Oracle success. No Oracle workaround is
+claimed; UTF8MB3 remapping and the non-UTF8 expression-name limitation remain as documented above.
+The local focused client-charset/national regression set passes 227/227 with the synthetic peers.
+
 ## 2026-10-27 Authenticated protocol negotiation diagnostics
 
 Developed from master/37cf788. The existing protocol listener now distinguishes requested and
