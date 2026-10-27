@@ -59,7 +59,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 }
                 else if (value is Stream) continue; // Stream data is uploaded before EXECUTE, without an inline value.
                 else if (type == 160)
-                    ComplexValueCodec.WriteParameter(writer, complexTypes[i]!.Layout, ((OceanBaseComplexValue)value).WireValues(), mode, nationalCharacterSet, validateOnly, clientEncoding);
+                    ComplexValueCodec.WriteParameter(writer, complexTypes[i]!.Layout, ((OceanBaseComplexValue)value).WireValues(), mode, nationalCharacterSet, validateOnly, clientEncoding, lobLocators: complexTypes[i]!.IsAnonymous);
                 else if (type == 207 || type == 208)
                 {
                     if (!(value is string text)) throw new ArgumentException("A national character parameter requires a string.");

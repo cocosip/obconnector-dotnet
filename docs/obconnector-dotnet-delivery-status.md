@@ -1,12 +1,22 @@
 # Driver delivery status
 
-Last checked: 2026-10-27, committed source `master/c09cf0a`. This is the current overview; the detailed
+Last checked: 2026-10-27; latest module developed from `master/285459e`. This is the current overview; the detailed
 [completeness baseline](obconnector-dotnet-completeness.md) retains requirements and historical evidence.
 The [module records](obconnector-dotnet-progress.md) retain individual test/review results.
 
 ## Current checkpoint
 
-- Latest committed implementation, `c09cf0a`, developed from `master/ed2fc84`: configured client encodings for complex
+- Latest module, developed from `master/285459e`: named object/collection BLOB byte payloads and
+  strict UTF-8 CLOB text; anonymous scalar BLOB/CLOB arrays use matching session-bound locators.
+  Creation/execution revalidate connection, transaction and epoch without taking caller ownership.
+  Named locator rebinding rejects before target SQL. Default-charset Oracle checks pass12/12;
+  GB18030 passes10/12 after correcting a named-content charset bug with a RAW-output control and
+  an8-case RED; only anonymous CLOB array readbacks still mismatch.
+  Complete units7913/7913, affected consumers1220/1220 and Release build pass; independent review
+  has no Critical/Important finding. Final gates, live results and remaining charset limits are in the
+  [module record](obconnector-dotnet-progress.md#2026-10-27-complex-lob-inputs).
+
+- Previous committed implementation, `c09cf0a`, developed from `master/ed2fc84`: configured client encodings for complex
   NCHAR/NVARCHAR2 inputs. Oracle fresh Open/reset now share individual quoted SET statements;
   verification/revalidation uses FROM DUAL. Complete units7846/7846, focused units267/267,
   affected consumers350/350 and the final Release build pass. Independent source/test/docs review
@@ -194,9 +204,9 @@ These are concrete code/scope gaps, not merely missing real-database reports:
    Non-UTF8 expression results need ASCII aliases under the current metadata contract.
 2. Remaining resource-wait instrumentation and workload/overhead validation (P2-04).
 3. Input/InputOutput REF CURSOR and additional output shapes (P1-06).
-4. Non-empty complex LOB/cursor input, additional national/anonymous output shapes, text complex
-   results and unresolved whole-complex RETURNING identity (P1-07). Binary LOB/cursor result
-   members already have local implementations and must not be counted as missing.
+4. Named LOB locator rebinding, complex cursor input, additional national/anonymous output shapes,
+   text complex results and unresolved whole-complex RETURNING identity (P1-07). Named LOB content
+   and anonymous scalar locator inputs are implemented; non-UTF8 locator CLOB reads remain limited.
 5. Compressed OB20/proxy reroute, after establishing the client-link wire contract (P1-02).
 6. Multi-send/pipelining or a separate bulk protocol, after establishing supported semantics (P2-03).
 7. Replace the five remaining deferred `matrix.*` placeholders with controlled fixtures/assertions
@@ -232,7 +242,7 @@ approved wire contract or can be implemented without protocol research.
 | P1-04 TLS/mTLS | Server validation callback, client certificate identity isolation, data-source snapshots, revocation options | Additional rotation/platform regression where needed | Enterprise CA/mTLS, negative handshakes, expiry/rotation and platform revocation |
 | P1-05 Command/Batch behavior | SchemaOnly Prepare-only, bounded KeyInfo/hidden keys, SingleRow/SingleResult; MySQL procedure parameters/output/multi-results; Batch metadata/data-source creation/result limits; REF CURSOR limits | Complete behavior/shape matrix; existing explicit restrictions remain | Real metadata/permissions, prepare side effects/locks, procedure and cursor behavior |
 | P1-06 Oracle output/cursors | Independent Prepare, output ownership, positive ordinary-output FetchSize hints, binary and text cursor-valued columns (four-byte IDs) and nested ownership | **Input/InputOutput REF CURSOR and additional shapes**; output offset and positive array FetchSize remain rejected | Real direction/shape/pagination and resource matrix |
-| P1-07 Complex types | Nested objects/collections, directional national members with all configured client input encodings, explicit descriptor clear and invalidation after observed DDL; binary named/anonymous BLOB/CLOB and cursor result members with session-bound ownership | **Non-empty complex LOB/cursor input, text complex results, further national storage/anonymous output shapes and unresolved whole-complex RETURNING identity** | Nine configured encodings have direct national array-input evidence; three Open failures remain. Real DDL invalidation, complex LOB/cursor resource behavior/interoperability and further server-supported shapes remain |
+| P1-07 Complex types | Nested objects/collections, directional national members with all configured client input encodings, explicit descriptor clear and invalidation after observed DDL; binary named/anonymous BLOB/CLOB and cursor result members; named BLOB bytes/UTF-8 CLOB content and anonymous scalar locator inputs with session-bound ownership | **Named LOB locator rebinding, complex cursor input, text complex results, further national storage/anonymous output shapes and unresolved whole-complex RETURNING identity** | Default-charset complex LOB inputs pass12/12; charset probes and limitations are in the module record. Nine configured encodings have direct national array-input evidence; three Open failures remain. Real DDL invalidation, complex LOB/cursor resource behavior/interoperability and further server-supported shapes remain |
 | P1-08 Types/charsets | Signed DecimalScale, faithful unknown-precision Oracle NUMBER and exact FLOAT results/binding, strict result decoding/widths; tiny/medium/long BLOB, ENUM/SET/raw GEOMETRY, ROWID, Oracle Inf/NaN; national Unicode fallback IDs; trusted MySQL string prepare fallback for configured input charsets; GB18030-2022, DEC8/TIS620, SJIS, Big5 and HKSCS/HKSCS31; configured client SQL/ordinary, JSON and complex-national input encodings; mode-specific Oracle managed initialization/revalidation; CLOB input prevalidation | Further national/JSON/CLOB scope and extended metadata/types still need work | Real emission/storage/coercibility, all promised collation/mode/version profiles; Oracle UTF8MB3 remapping and SJIS/Big5 Open failures remain |
 | P1-09 Discovery/HA | TCP retry rounds/backoff/shared budget, endpoint TCP reachability cache, TNS/OCP adapters, groups/weights/selection, global/group/address blacklist controls and attempt ceilings | Further discovery/policy boundaries; TCP reachability does not prove database/tenant health | Real discovery services, node/proxy failure and route changes |
 | P1-10 Schema | Mode-aware catalog collections/DataTypes and atomic routine-parameter derivation, including FLOAT/NUMBER_FLOAT and INOUT normalization | Package-local PL/SQL argument types remain rejected; boundary regressions as actual dictionary differences are found | Real catalogs, permissions, case, overloads, versions and proxies |
@@ -273,7 +283,12 @@ These are representative commits, not a replacement for the complete Git log or 
 
 ## Verification boundary and next work
 
-- Latest committed complex-national module: saved reports contain complete units7846/7846,
+- Latest complex LOB input verification, retained REDs and safe live reports are in the
+  [module record](obconnector-dotnet-progress.md#2026-10-27-complex-lob-inputs).
+  Named contents and anonymous locator binding are separate wire contracts. Successful default
+  input checks do not close non-UTF8 CLOB reading, named locator materialization or cursor input.
+
+- Previous committed complex-national module: saved reports contain complete units7846/7846,
   focused267/267 and affected consumers350/350; the Release build records zero warnings/errors.
   Direct Oracle array-input evidence is36/48, with12 Open failures before DDL. These saved results
   were rechecked during the documentation alignment, not rerun. Exact evidence is in the

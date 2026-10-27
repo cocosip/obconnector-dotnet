@@ -90,7 +90,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("")]
         [InlineData(" NUMBER")]
         [InlineData("NUMBER(9)")]
-        [InlineData("BLOB")]
+        [InlineData("CURSOR")]
         [InlineData("NVARCHAR2(4)")]
         [InlineData("Owner.Thing")]
         [InlineData("\0")]
@@ -100,13 +100,16 @@ namespace OceanBaseConnector.UnitTests
             Assert.Throws<NotSupportedException>(() => connection.CreateArrayType(name));
         }
 
-        [Fact]
-        public void AnonymousArrayFactoryRequiresAnOpenConnectionAndNonNullElement()
+        [Theory]
+        [InlineData("RAW")]
+        [InlineData("BLOB")]
+        [InlineData("CLOB")]
+        public void AnonymousArrayFactoryRequiresAnOpenConnectionAndNonNullElement(string scalar)
         {
             using var connection = new OceanBaseConnection();
             Assert.Throws<ArgumentNullException>(() => connection.CreateArrayType((string)null!));
             Assert.Throws<ArgumentNullException>(() => connection.CreateArrayType((OceanBaseComplexType)null!));
-            Assert.Throws<InvalidOperationException>(() => connection.CreateArrayType("RAW"));
+            Assert.Throws<InvalidOperationException>(() => connection.CreateArrayType(scalar));
         }
 
         [Theory]

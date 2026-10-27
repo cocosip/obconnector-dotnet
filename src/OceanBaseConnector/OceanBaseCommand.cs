@@ -310,7 +310,8 @@ namespace OceanBaseConnector
                     bindings = new ParameterBindingPlan(bindings.CommandText, snapshots, bindings.BindingPositions);
                 }
                 foreach (var parameter in bindings.Parameters)
-                    if (!schemaOnly && (parameter.OceanBaseDbType == OceanBaseDbType.Blob || parameter.OceanBaseDbType == OceanBaseDbType.Clob || parameter.Value is OceanBaseLob) && !session.UseLobLocators)
+                    if (!schemaOnly && !session.UseLobLocators && (parameter.OceanBaseDbType == OceanBaseDbType.Blob || parameter.OceanBaseDbType == OceanBaseDbType.Clob ||
+                        parameter.Value is OceanBaseLob || (parameter.ComplexType ?? (parameter.Value as OceanBaseComplexValue)?.Type)?.Layout.HasLobMembers == true))
                         throw new NotSupportedException("LOB parameters require negotiated Use Lob Locators=true.");
                 // Internal PL/RETURNING output rows are not a fetch cursor.
                 var fetchSize = prepareOnly || schemaOnly || oracle != null ? 0 : _fetchSize;

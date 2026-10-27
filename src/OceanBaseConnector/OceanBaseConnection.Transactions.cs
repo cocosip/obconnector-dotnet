@@ -70,6 +70,7 @@ namespace OceanBaseConnector
                     {
                         var type = PreparedParameters.GetComplexType(parameter);
                         if (type != null) ValidateComplexBinding(type, session, transaction);
+                        if (parameter.Value is OceanBaseComplexValue complex) complex.ValidateLobBindings(this, session, transaction, owner);
                     }
                 }
                 var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin, localInfileStreamFactory: _localInfileStreamFactory, openGeneration: _openGeneration)

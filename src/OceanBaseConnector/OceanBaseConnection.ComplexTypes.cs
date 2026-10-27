@@ -26,7 +26,7 @@ namespace OceanBaseConnector
         public Task<OceanBaseComplexType> GetComplexTypeAsync(string schemaName, string typeName, OceanBaseTransaction? transaction = null, CancellationToken cancellationToken = default)
             => GetComplexTypeCore(schemaName, typeName, transaction, true, cancellationToken);
 
-        /// <summary>Creates a session-bound anonymous array of NUMBER, VARCHAR2, CHAR, NCHAR, NVARCHAR2, RAW, DATE or TIMESTAMP.</summary>
+        /// <summary>Creates a session-bound anonymous array of NUMBER, VARCHAR2, CHAR, NCHAR, NVARCHAR2, RAW, DATE, TIMESTAMP, BLOB or CLOB.</summary>
         public OceanBaseComplexType CreateArrayType(string elementTypeName, OceanBaseTransaction? transaction = null)
         {
             if (elementTypeName == null) throw new ArgumentNullException(nameof(elementTypeName));
@@ -41,6 +41,8 @@ namespace OceanBaseConnector
                 case "RAW": code = 203; break;
                 case "DATE": code = 12; break;
                 case "TIMESTAMP": code = 202; break;
+                case "BLOB": code = 210; break;
+                case "CLOB": code = 211; break;
                 default: throw new NotSupportedException("The anonymous array element type is not supported.");
             }
             EnsureAmbientTransaction();
@@ -85,7 +87,7 @@ namespace OceanBaseConnector
             return session;
         }
 
-        internal void ValidateComplexType(OceanBaseComplexType type)
+        internal void ValidateComplexType(OceanBaseComplexType type, OceanBaseComplexValue? value = null)
         {
             EnsureAmbientTransaction();
             lock (_gate)
@@ -93,6 +95,7 @@ namespace OceanBaseConnector
                 var context = type.Context ?? throw new NotSupportedException("An anonymous result descriptor has no dictionary session.");
                 var session = GetCommandSession(context.Transaction);
                 ValidateComplexBinding(type, session, context.Transaction);
+                value?.ValidateLobBindings(this, session, context.Transaction, null);
             }
         }
 

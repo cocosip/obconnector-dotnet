@@ -128,6 +128,10 @@ inherit the selected client encoding. The complete WriteText input is checked fo
 before its first write chunk, using bounded chunks for encoding checks; a rejected suffix leaves
 the locator and handle usable. Later
 server/network failures can still leave a completed prefix, as documented by the LOB mutation API.
+Named complex CLOB input is a separate content protocol: it uses strict UTF-8 because the schema
+member LONG_BLOB parser does not convert client bytes. This also applies to nested named elements;
+BLOB members remain raw byte arrays. Anonymous scalar CLOB arrays bind locator handles instead.
+
 CLOB reads retain the existing
 UTF-8 contract. LOB locator bytes, binary streams, CLOB storage rules, LOCAL INFILE filename rules
 and remaining extended metadata are not expanded by this option.

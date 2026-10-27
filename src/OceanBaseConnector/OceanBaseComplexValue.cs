@@ -51,5 +51,14 @@ namespace OceanBaseConnector
             for (var i = 0; i < values.Length; i++) if (values[i] is OceanBaseComplexValue nested) values[i] = nested.WireValues();
             return values;
         }
+        internal void ValidateLobBindings(OceanBaseConnection connection, Internal.Session.PhysicalSession session, OceanBaseTransaction? transaction, object? owner)
+        {
+            if (!Type.Layout.HasLobMembers) return;
+            foreach (var value in _values)
+            {
+                if (value is OceanBaseLob lob) lob.ValidateBinding(connection, session, transaction, owner);
+                else if (value is OceanBaseComplexValue nested) nested.ValidateLobBindings(connection, session, transaction, owner);
+            }
+        }
     }
 }

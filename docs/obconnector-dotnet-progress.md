@@ -4,6 +4,96 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Complex LOB inputs
+
+Developed from `master/285459e`, P1-07/W5. Named object/collection BLOB members now bind
+byte[] payloads and CLOB members bind strict UTF-8 text; nested named
+elements preserve this format. Factory BLOB/CLOB scalar arrays bind matching OceanBaseLob
+locators, with original connection/session/transaction/epoch validation at creation and execution.
+Caller ownership, NULLs, empty payloads, budgets, Prepare and SchemaOnly semantics are preserved.
+Direct named locator rebinding rejects before target SQL; automatic LOB materialization is absent.
+
+Protocol correction: the first local locator-for-all implementation passed synthetic wire fixtures
+but only4/12 real cases. Named BLOB measured locator content; named CLOB returned invalid text and
+cleanup then failed on the broken session. The diagnostic rerun retains both primary and cleanup
+exceptions. Fixed OceanBase source `5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5`,
+`src/pl/ob_pl_type.cpp` ObPLDataType::deserialize and `src/observer/mysql/obmp_stmt_execute.cpp`
+parse_basic_param_value, maps named schema LOB storage through MYSQL_TYPE_LONG_BLOB payload
+parsing; anonymous arrays explicitly declare210/211 locators. The final implementation follows
+that distinction and prevents locator headers from becoming stored user content.
+
+Retained RED/build/fixture evidence:
+
+- Initial40-case RED and diagnostic fixture failures remain under `TestResults/complex-lob-input-red*`.
+  Missing command-sequence reset was corrected before the intended40 unsupported-input RED cases.
+- An initial GREEN fixture used an output-bearing PrepareExecute header for an input-only call;
+  corrected header produced40/40. The additional Prepare-only guard regression then failed1/60:
+  a capability check was accidentally validating unused metadata; a descriptor-only guard repairs it.
+- Two old dictionary assertions expected unsupported rather than wrong-value errors; they now
+  require matching payload values. BLOB is a supported factory name; CURSOR remains rejected.
+- The initial integration build had a profile-enumeration cast error; corrected builds have zero
+  warnings/errors. The first consumer40-case run omitted command disposal before socket closure;
+  corrected consumer40/40 confirms statement closure and disposed-handle rejection across five assets.
+- Named-payload protocol RED fails32/40 while anonymous controls pass8/8; corrected focused
+  selection passes68/68, zero failures/skips (`TestResults/complex-lob-payload-{red,green}/*.trx`).
+- Before the protocol correction, the broader affected selection passed1528/1528; those synthetic
+  results do not override live failures. Before the charset correction, complete units7905/7905
+  and affected consumers1220/1220 pass; final-candidate gates are recorded separately below.
+
+Explicit default-charset Oracle final candidate passes12/12 plus connection control. Named
+procedures check exact BLOB/CLOB content and length; collection NULLs are checked. Anonymous
+ExecuteArray inserts two rows, rereads exact LOB content and SQL NULL, then rolls back. Temporary
+LOBs are freed and generated types/procedures/tables use owned LIFO cleanup; cleanup failures fail
+the case. Final safe report: `TestResults/complex-lob-live-4fd6ddd2.json`; the prior12/12 report
+`TestResults/complex-lob-live-f04af3af.json` is retained. Earlier4/12 failures remain
+in `TestResults/complex-lob-live-6f0f7e12.json` and `TestResults/complex-lob-live-7d84c686.json`.
+GB18030 diagnosis and correction:
+
+- The client-encoded named-content candidate passes6/12: all BLOBs, while named CLOB output
+  decoding and anonymous CLOB readback fail (`TestResults/complex-lob-live-5b079dfa.json`).
+- A separate named RAW-output control passes4/8 BLOB controls and fails4 CLOB byte comparisons
+  (`TestResults/complex-lob-live-23d71392.json`), isolating content mismatch from string decoding.
+  Source LONG_BLOB parsing copies bytes without client charset conversion. An8-case named/nested
+  UTF-8 regression fails8/8 with GB18030/latin1 encoders before the one-line strict UTF-8 fix
+  (`TestResults/complex-lob-charset-red/red.trx`). BLOB and anonymous locator bytes stay opaque.
+- The final GB18030 candidate passes10/12 plus connection control: all BLOBs and named CLOB
+  object/collection sync/async pass exact content and length. Only anonymous CLOB array readbacks
+  still mismatch (`TestResults/complex-lob-live-69c43622.json`). This remains an open non-UTF8
+  locator-reading boundary; do not claim the entire GB18030 LOB matrix passes.
+- An initial RAW-control invocation rejected an unknown connection option before Open/SQL
+  (`TestResults/complex-lob-live-b6ca6026.json`); it is not a server interoperability failure.
+
+Final local gates:
+
+- Serial Release solution build: zero warnings/errors
+  (`TestResults/complex-lob-utf8-final-build.log`). A preceding command used a nonexistent .sln
+  filename; it did not build anything. The actual .slnx build above succeeds.
+- Focused complex-LOB/charset units75/75, zero failures/skips
+  (`TestResults/complex-lob-utf8-green/green.trx`).
+- Without explicit integration configuration:0 passed/1 skipped/0 failed
+  (`TestResults/complex-lob-utf8-optout/optout.trx`).
+- Affected consumers1220/1220, zero failures/skips
+  (`TestResults/complex-lob-utf8-final-consumer/consumer.trx`); five assets in one .NET10 host,
+  not five independent runtimes. Complete units7913/7913, zero failures/skips,8m37s
+  (`TestResults/complex-lob-utf8-final-full/full.trx`). The earlier7905 run took44m24s; its
+  terminal result was collected before correcting CLOB encoding, not interrupted or restarted.
+- Scoped whitespace verification first identified22 formatting issues in two changed unit files;
+  whitespace-only formatting corrected them. Final scoped verify exits0
+  (`TestResults/complex-lob-utf8-format-final.log`; workspace-load warning, no WHITESPACE errors).
+- A single fresh-context independent reviewer inspected source, tests, docs and connected callers;
+  no Critical/Important issue. Two Minor findings were corrected: the stale audit module/no-rerun
+  wording, and test names describing named locator inputs rather than payloads. No product-code
+  repair was required by the review. The only subsequent C# edits are test-name and whitespace
+  corrections. Final serial solution build has zero warnings/errors
+  (`TestResults/complex-lob-final-build.log`); final focused tests77/77 and opt-out0/1 skipped/0 failed
+  confirm those saved sources (`TestResults/complex-lob-final-{focused,optout}/final.trx`).
+- Changed-document relative targets, the original23 gap IDs/eight work packages, added-content
+  privacy scan and final diff whitespace checks pass. Ignored safe reports/plans/runners are not
+  part of the commit; no private profile is added to tests, CI, docs or Git.
+
+No private connection values are persisted; the ignored runner accepts echo-disabled process stdin and prints only case labels,
+exception types/codes and source frames. The opt-in integration theory skips without configuration.
+
 ## 2026-10-27 Committed-source documentation alignment
 
 Documentation-only review of `master/c09cf0a`; the worktree was clean at entry. The latest

@@ -1,5 +1,29 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Complex LOB content and locator inputs
+
+Named Oracle object/collection BLOB members accept byte arrays and CLOB members accept strict UTF-8 strings;
+nested named elements use the same content protocol. Anonymous factory BLOB/CLOB arrays accept
+matching session-bound OceanBaseLob handles instead. Locator values in named members reject before
+target SQL: the server's schema-member parser consumes payload bytes rather than locator headers.
+Bindings retain packet/depth/member budgets and caller ownership; handle disposal, reservation,
+foreign/reopened sessions and transaction epochs are checked. See the
+[input contract](obconnector-dotnet-architecture-design.md#complex-types).
+
+Explicit default-charset Oracle checks pass12/12: BLOB/CLOB object, collection and anonymous-array
+inputs, sync/async, exact payloads, SQL NULL collection/array members, rollback, temporary LOB free
+and generated-object cleanup. The initial locator-for-all candidate passed only4/12; named BLOB
+length mismatches and named CLOB decode/cleanup errors are retained in the
+[module record](obconnector-dotnet-progress.md#2026-10-27-complex-lob-inputs).
+Final GB18030 checks pass10/12: all BLOBs and named CLOB content inputs pass; anonymous CLOB
+array readbacks still mismatch under the existing UTF-8 locator-reading contract. Named CLOB
+LONG_BLOB payloads bypass server client-charset conversion and therefore use strict UTF-8;
+the initial client-encoded candidate and separate RAW-output failures are retained in the module
+record. Complete units7913/7913, affected consumers1220/1220 and Release build pass; independent
+review has no Critical/Important finding. Exact safe-report paths and retained REDs are recorded there.
+Ordinary units/CI use synthetic peers; the integration theory requires explicit Oracle, object
+creation, PrepareExecute and locator opt-in. Other deployments and result shapes remain unverified.
+
 ## 2026-10-27 Complex national client encoding
 
 Complex NCHAR/NVARCHAR2 inputs now use the existing strict encoder for every configured client
@@ -847,7 +871,7 @@ Further skips depend on selected groups, compatibility mode, `slowQuery`, `alter
 | Savepoints | Oracle release; quoted/Unicode names and leading underscores such as `__EFSavePoint`. |
 | Binary stream parameters | InputOutput, text streams, array-binding combinations and client-prepare fallback. |
 | Oracle outputs/cursors | REF CURSOR Input/InputOutput remains unsupported. Binary and text cursor-valued columns accept four-byte cursor identifiers and use the existing session-bound ownership/lifecycle rules; output offset and ExecuteArray positive FetchSize remain unsupported. Standalone Prepare and positive command hints for ordinary output plans are supported; internal output rows do not use cursor paging. Real SQL acceptance remains open. |
-| Complex types | Text-protocol complex results, cyclic layouts and LOB/cursor members; other national storage encodings than queried AL16UTF16, anonymous ordinary national members without trusted storage context, complex whole-column RETURNING with unresolved source identity, and undeclared or stale type identities. |
+| Complex types | Text-protocol complex results, cycles, non-NULL cursor input and direct named LOB locator rebinding; named LOB payload inputs and anonymous LOB locator arrays are supported. Other national storage encodings than queried AL16UTF16, anonymous ordinary national members without trusted storage context, complex whole-column RETURNING with unresolved source identity, and undeclared or stale type identities remain restricted. Binary LOB/cursor result members are implemented. |
 | Array execution | SELECT, DDL and FetchSize; execution does not commit or roll back automatically. |
 | Discovery and recovery | TCP TNS/OCP discovery with groups, rotation/random/weighted selection, global/group/address blacklist policies and shared/group TCP-attempt ceilings is implemented; other discovery policies, transparent migration of active sessions/transactions and automatic SQL replay remain unsupported. |
 

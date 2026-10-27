@@ -25,16 +25,16 @@ namespace OceanBaseConnector.Internal.Values
             return cursor.CopyConsumed(position);
         }
 
-        internal static byte[] EncodeParameter(ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null)
+        internal static byte[] EncodeParameter(ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null, bool lobLocators = false)
         {
             using var stream = new MemoryStream(); using var writer = new BinaryWriter(stream, ResultColumn.Utf8, leaveOpen: true);
-            WriteParameter(writer, type, values, mode, national, validateOnly, clientEncoding); return stream.ToArray();
+            WriteParameter(writer, type, values, mode, national, validateOnly, clientEncoding, lobLocators); return stream.ToArray();
         }
 
-        internal static void WriteParameter(BinaryWriter writer, ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null)
+        internal static void WriteParameter(BinaryWriter writer, ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null, bool lobLocators = false)
         {
             ValidateRoot(type, mode); var budget = MaximumMembers;
-            Write(writer, type, values, 0, ref budget, national, validateOnly, clientEncoding ?? ResultColumn.Utf8);
+            Write(writer, type, values, 0, ref budget, national, validateOnly, clientEncoding ?? ResultColumn.Utf8, lobLocators);
         }
 
         private static void ValidateRoot(ComplexType type, OceanBaseCompatibilityMode mode)
@@ -107,7 +107,7 @@ namespace OceanBaseConnector.Internal.Values
             return cursor.ReadBytes(count);
         }
 
-        private static void Write(BinaryWriter writer, ComplexType type, object?[] values, int depth, ref int budget, NationalCharacterSet? national, bool validateOnly, Encoding clientEncoding)
+        private static void Write(BinaryWriter writer, ComplexType type, object?[] values, int depth, ref int budget, NationalCharacterSet? national, bool validateOnly, Encoding clientEncoding, bool lobLocators = false)
         {
             if (values == null) throw new ArgumentNullException(nameof(values));
             if (depth >= MaximumDepth || values.Length > budget) throw new NotSupportedException("Complex nesting or member count exceeds the supported limit.");
@@ -153,6 +153,26 @@ namespace OceanBaseConnector.Internal.Values
                     case 203:
                         if (!(value is byte[] bytes)) throw new ArgumentException("A RAW member requires bytes.");
                         ReserveBytes(writer, bytes.Length); PreparedParameters.WriteBytes(writer, bytes); break;
+                    case 210:
+                    case 211:
+                        if (lobLocators)
+                        {
+                            if (!(value is OceanBaseLob lob) || lob.IsCharacter != (member.TypeCode == 211))
+                                throw new ArgumentException("An anonymous LOB array requires matching locator values.");
+                            var locator = lob.BindingBytes();
+                            ReserveBytes(writer, locator.Length); PreparedParameters.WriteBytes(writer, locator);
+                        }
+                        else
+                        {
+                            // Named PL members use LONG_BLOB payloads, not the anonymous array locator protocol.
+                            if (value is OceanBaseLob) throw new NotSupportedException("Named complex LOB members require BLOB bytes or CLOB text, not locators.");
+                            if (member.TypeCode == 210 && value is byte[] payload)
+                            { ReserveBytes(writer, payload.Length); PreparedParameters.WriteBytes(writer, payload); }
+                            // LONG_BLOB payloads bypass the server's client charset conversion.
+                            else if (member.TypeCode == 211 && value is string clob) WriteText(writer, clob);
+                            else throw new ArgumentException("A named BLOB member requires bytes and a CLOB member requires text.");
+                        }
+                        break;
                     case 12:
                         if (!(value is DateTime date)) throw new ArgumentException("A DATE member requires an unzoned DateTime.");
                         Reserve(writer, 8); TemporalCodec.WriteDate(writer, 12, date, 0); break;

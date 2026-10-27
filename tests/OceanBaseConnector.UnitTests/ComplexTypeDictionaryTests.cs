@@ -481,7 +481,7 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData("BLOB", OceanBaseDbType.Blob)]
         [InlineData("CLOB", OceanBaseDbType.Clob)]
-        public async Task ComplexDictionaryLoadsLobMembersButDoesNotCreateLobParameters(string scalar, OceanBaseDbType dbType)
+        public async Task ComplexDictionaryLobMembersRequireMatchingPayloadValues(string scalar, OceanBaseDbType dbType)
         {
             var server = Server(async channel => await ComplexScalarType(channel, scalar: scalar, collection: false));
             using var connection = new OceanBaseConnection(Configuration(server.Port));
@@ -490,7 +490,7 @@ namespace OceanBaseConnector.UnitTests
                 await connection.OpenAsync();
                 var type = await connection.GetComplexTypeAsync("Owner", "Thing");
                 Assert.Equal(scalar, type.Members[0].TypeName);
-                Assert.Throws<NotSupportedException>(() => type.CreateValue(new object()));
+                Assert.Throws<ArgumentException>(() => type.CreateValue(new object()));
                 Assert.Equal(dbType, new OceanBaseParameter { OceanBaseDbType = dbType }.OceanBaseDbType);
             }
             finally { connection.Close(); server.Stop(); }
