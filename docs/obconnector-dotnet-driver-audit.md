@@ -2,6 +2,7 @@
 
 **最近复核：** 2026-10-27；最新DBCS字符串fallback模块开发起点master/f03f235。23项及八工作包仍未满足整体关闭标准，不能理解为所有子功能未实现。
 **当前检查点：** 配置的全部非UTF-8输入字符集现支持严格会话验证下的MySQL字符串fallback，含七种DBCS尾5C、四字节/补充字符。无别名表达式元数据仍有编码歧义。逐项状态以[交付概览](obconnector-dotnet-delivery-status.md)及完整性第15.95节为准；第18节以后保留各历史模块的原始证据。
+**最新模块：** 复杂national输入扩展及Oracle受管初始化修复已通过完整单测7846/7846、专项267/267、消费者350/350和Release构建，独立走查无遗留问题；真实数组输入36/48通过，另12项因UTF8MB3重映射或SJIS/Big5切换失败止于Open，见完整性第15.96节。
 **当前验证：** 串行Release全解决方案构建零警告/错误，完整单测7774/7774、本模块专项290/290、受影响消费者160/160通过；独立源码/测试/文档走查无遗留问题，见[模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)。显式MySQL只读生成字面量带ASCII别名14/14及连接对照通过，未建表/改SQL_MODE；未证明真实1295自动回退。完整初跑两项旧GBK拒绝断言、此前元数据失败、零日期SQL_MODE前置失败保持原记录；5个matrix.*占位仍保留。
 **此前验收：** matrix.pool-reset-reuse.sync/async按公开诊断listener引用及ChannelId拒绝重连；旧时区用例检查销毁替换并使用私有池，UTC区域名实跑1882失败后经RED/GREEN改数字偏移。完整7696/7696、专项40/40及双模式直连各4/4通过；仅证明同客户端通道，代理后端和完整资源矩阵仍缺；历史失败不删除。
 精确命令、脱敏报告及边界见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)；源码核对554项仍保留在此前记录。
@@ -128,7 +129,7 @@ Java 和 .NET 的连接池都已存在；.NET 默认 `Pooling=false`。会话识
 | MySQL 过程 | 部分实现 | 集合顺序 Input/Output/InputOutput、显式 Prepare、多结果及关闭排空输出 | PS_MULTI_RESULTS 必需；ReturnValue/FetchSize/SchemaOnly/KeyInfo/INOUT stream 拒绝；真实 TLS/代理/版本/资源矩阵仍缺 |
 | Oracle 输出与游标 | 部分实现 | PrepareExecute、独立Prepare、OUT/RETURNING、REF CURSOR输出、文本/二进制cursor列、LOB、array binding | Input/InputOutput REF CURSOR、真实列值/输出形状矩阵、输出offset/数组正FetchSize；普通输出正命令提示已接受但内部输出不分页 |
 | 复杂类型 | 部分实现 | object/collection标量/嵌套、有界national、二进制LOB/cursor结果成员、类型缓存、array binding和可观察DDL失效 | 非空复杂LOB/cursor输入、文本复杂结果、其他national/匿名输出及未解析身份的整列RETURNING；外部/不透明DDL须显式清理，真实矩阵未闭合 |
-| 类型与字符集 | 部分实现 | 常用类型、精确NUMBER/FLOAT及signed DecimalScale、普通结果严格解码/宽度、多种客户端SQL/参数编码、JSON参数和CLOB输入预校验 | JSON结果/CLOB读取UTF-8限制、复杂national存储AL16UTF16限制、非UTF-8字符串客户端fallback拒绝；其他类型/metadata及真实编码矩阵 |
+| 类型与字符集 | 部分实现 | 常用类型、精确NUMBER/FLOAT及signed DecimalScale、普通结果严格解码/宽度、多种客户端SQL/参数编码、JSON参数和CLOB输入预校验、配置的非UTF-8 MySQL字符串fallback、全部配置编码的复杂national输入及Oracle模式初始化/重验 | JSON结果/CLOB读取UTF-8限制、复杂national存储AL16UTF16限制、非UTF-8无别名表达式元数据歧义；三种编码Oracle Open实库失败保留；其他类型/metadata及真实编码矩阵 |
 | HA 与恢复 | 部分实现 | Open阶段TCP重试/固定退避/共享预算、TCP健康缓存、TNS/OCP、分组/权重/黑名单及尝试上限；连接级ERR退休与显式Close/Open | 活动连接迁移、透明重连、reroute及完整真实节点/代理故障验收；未知写不自动重放 |
 | Schema 元数据 | 部分实现 | Oracle 20/MySQL 18 个集合、静态 DataTypes 及自动参数推导有本地回归 | 实库字典、权限/版本/代理和类型/DDL 矩阵；推导不扩大过程执行支持 |
 | 批处理与准备缓存 | 部分实现 | 顺序DbBatch、Oracle array binding、opt-in MySQL INSERT rewrite、有限物理会话idle LRU | multi-send、独立bulk及真实DDL/缓存/批量/资源/负载验收 |

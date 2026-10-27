@@ -34,8 +34,11 @@ share pool identity. They do not enable additional session charset management. A
 user/database handshake fields and initial identity queries remain UTF-8 (handshake collation45).
 
 A non-default name enables managed input encoding. After authentication and identity confirmation,
-Open executes `SET NAMES <canonical name>`, then `SET character_set_results=utf8mb4`, and reads
-client/connection/results/collation state. Both input names must match the configured family,
+MySQL Open executes `SET NAMES <canonical name>`, then `SET character_set_results=utf8mb4`.
+Oracle Open instead uses three separate quoted assignments: `SET character_set_client = '<name>'`,
+`SET character_set_connection = '<name>'` and `SET character_set_results = 'utf8mb4'`.
+Both modes read client/connection/results/collation state; the Oracle SELECT includes `FROM DUAL`.
+Fresh Open and pool restoration share the same mode-specific SQL. Both input names must match the configured family,
 results must be utf8mb4, and collation must belong to that connection family. The connection is
 published only after this response is complete and validated. Unknown/rejected settings fail Open.
 Result identifiers and error handling keep their existing UTF-8 contract; ordinary result values
@@ -64,7 +67,7 @@ before it can be sent.
 The existing conservative classifier includes CALL/SET/PLSQL, executable comments, user variables
 and MySQL quoted backslashes. Therefore some otherwise ordinary SQL also causes rechecking.
 
-**A recheck is an actual SELECT.** After classified SQL it can change session diagnostic functions
+**A recheck is an actual SELECT** (with `FROM DUAL` in Oracle mode). After classified SQL it can change session diagnostic functions
 such as `ROW_COUNT()`, `FOUND_ROWS()` and warning diagnostics. Use returned ADO.NET counts/results
 and avoid depending on those session functions across such commands. Hidden effects of arbitrary
 functions/triggers are not comprehensively detected. This is the same incomplete implicit-state
@@ -115,9 +118,12 @@ The fixed OceanBase source's
 requests UTF8MB4 calculation collation for nonbinary strings from other charsets. This is source
 evidence for server-side conversion, not a completed deployment/storage matrix.
 Standalone NCHAR/NVARCHAR2
-parameters retain the independently verified national encoding. Complex national members already depend on connection charset and
-remain limited to the existing UTF8/UTF16 names; non-UTF8 managed names and the explicit utf8mb3
-name are rejected by that path. CLOB write buffers use ordinary string parameters and therefore
+parameters retain the independently verified national encoding. Complex national input members use
+the trusted connection charset, now resolving all configured client names through the strict client
+encoder, including explicit utf8mb3 and the eleven non-UTF8 families. Legacy UTF8/UTF16 handling
+is preserved. Nested members, scalar factory arrays and ExecuteArray share this input path;
+unrepresentable text fails before target execution. PL complex output and stored national result
+encodings are unchanged; stored national members still require AL16UTF16. CLOB write buffers use ordinary string parameters and therefore
 inherit the selected client encoding. The complete WriteText input is checked for representability
 before its first write chunk, using bounded chunks for encoding checks; a rejected suffix leaves
 the locator and handle usable. Later
@@ -159,3 +165,14 @@ pass14/14 generated-literal cases plus a connection control, with ASCII aliases 
 SQL_MODE. This extends local automatic-fallback support, not actual server1295/proxy or every
 SQL_MODE/collation/version profile. See its
 [module record](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback).
+
+The complex-national extension adds exact synthetic input bytes for all twelve non-default names,
+both prepare paths, sync/async and five-asset consumption. Explicit Oracle4.4.2.2 array-input
+checks pass36/48: ASCII, latin1, DEC8, TIS620, GBK, both GB18030 revisions and HKSCS/HKSCS31,
+each with NCHAR/NVARCHAR2, sync/async, exact read-back and SQL NULL. Each case rolls back and drops
+its generated table. The remaining12 fail at Open before DDL: the server reports UTF8MB4 after
+UTF8MB3/UTF8 assignments, violating strict configured-state matching; SJIS/Big5 session switching
+makes subsequent fixed ASCII statements fail900. No permissive alias/remapping workaround is added.
+These observations do not establish other versions, proxies, stored complex output, standalone
+national or live pool-reset compatibility. Retained initialization failures and final local gates
+are in the [module record](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding).

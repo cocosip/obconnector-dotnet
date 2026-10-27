@@ -16,7 +16,7 @@ namespace OceanBaseConnector.Internal.Session
         internal async Task InitializeClientCharacterSet(bool asynchronous, CancellationToken token)
         {
             SkipClientCharacterSetVerification = true;
-            foreach (var sql in new[] { "SET NAMES " + _session.ClientCharacterSet.Name, "SET character_set_results=utf8mb4" })
+            foreach (var sql in HandshakeFlow.ClientCharacterSetInitializationSql(_session.ClientCharacterSet, Mode))
             {
                 var request = OceanBaseCommand.SqlPacket(sql, 3);
                 if (asynchronous) await SendAsync(request, executesSql: false).ConfigureAwait(false); else Send(request, executesSql: false);
@@ -44,7 +44,7 @@ namespace OceanBaseConnector.Internal.Session
             _readingClientCharacterSet = true;
             try
             {
-                var request = OceanBaseCommand.SqlPacket(HandshakeFlow.ClientCharacterSetSql, 3);
+                var request = OceanBaseCommand.SqlPacket(HandshakeFlow.ClientCharacterSetSql(Mode), 3);
                 if (asynchronous) await SendAsync(request, executesSql: false, readerToken: token).ConfigureAwait(false); else Send(request, executesSql: false);
                 var result = new QueryResult(this, completeExchange: false);
                 if (asynchronous) await result.StartAsync(token).ConfigureAwait(false); else result.Start();

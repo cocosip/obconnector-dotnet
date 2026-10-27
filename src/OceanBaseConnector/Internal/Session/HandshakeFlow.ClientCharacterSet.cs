@@ -8,12 +8,19 @@ namespace OceanBaseConnector.Internal.Session
 {
     internal static partial class HandshakeFlow
     {
-        internal const string ClientCharacterSetSql = "SELECT @@character_set_client, @@character_set_connection, @@character_set_results, @@collation_connection";
+        internal static string ClientCharacterSetSql(OceanBaseCompatibilityMode mode) =>
+            "SELECT @@character_set_client, @@character_set_connection, @@character_set_results, @@collation_connection" +
+            (mode == OceanBaseCompatibilityMode.Oracle ? " FROM DUAL" : "");
+
+        internal static string[] ClientCharacterSetInitializationSql(ClientCharacterSet charset, OceanBaseCompatibilityMode mode) =>
+            mode == OceanBaseCompatibilityMode.Oracle
+                ? new[] { "SET character_set_client = '" + charset.Name + "'", "SET character_set_connection = '" + charset.Name + "'", "SET character_set_results = 'utf8mb4'" }
+                : new[] { "SET NAMES " + charset.Name, "SET character_set_results=utf8mb4" };
 
         internal static async Task InitializeClientCharacterSet(PacketChannel channel, ConnectResult info, ClientCharacterSet charset, bool asynchronous, CancellationToken token)
         {
             if (!charset.Managed) return;
-            foreach (var sql in new[] { "SET NAMES " + charset.Name, "SET character_set_results=utf8mb4" })
+            foreach (var sql in ClientCharacterSetInitializationSql(charset, info.Mode))
             {
                 token.ThrowIfCancellationRequested();
                 channel.BeginCommand();
@@ -28,7 +35,7 @@ namespace OceanBaseConnector.Internal.Session
                 channel.CompleteResponse();
             }
             channel.BeginCommand();
-            var query = OceanBaseCommand.SqlPacket(ClientCharacterSetSql, 3);
+            var query = OceanBaseCommand.SqlPacket(ClientCharacterSetSql(info.Mode), 3);
             if (asynchronous) await channel.WritePacketAsync(query, token).ConfigureAwait(false); else channel.WritePacket(query);
             async Task<byte[]> Read() => asynchronous ? await channel.ReadPacketAsync(token).ConfigureAwait(false) : channel.ReadPacket();
             ValidateIdentityHeader(await Read().ConfigureAwait(false), 4);

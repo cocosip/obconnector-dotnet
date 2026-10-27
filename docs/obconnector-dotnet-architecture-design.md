@@ -846,7 +846,15 @@ Pure Output/ReturnValue parameters send a protocol NULL placeholder. The declare
 `CreateArrayType` accepts NUMBER, VARCHAR2, CHAR, NCHAR, NVARCHAR2, RAW, DATE or TIMESTAMP, or a preloaded named element type. Factory scalar arrays support input/output; ordinary complex-element arrays accept input only. Anonymous descriptions obtained from results are read-only.
 
 <a id="complex-national-members"></a>
-NCHAR/NVARCHAR2 members retain distinct layouts (208/207), including nested named objects/collections and scalar factory arrays. `CreateValue` validates shape, Unicode and byte budgets without I/O; encoding is selected again at execution. Complex national inputs use the trusted **connection** character set, unlike standalone national scalar parameters. Ordinary VARCHAR2/CHAR members use the [selected client encoding](client-character-sets.md), default UTF-8. ExecuteArray uses the same encoding path and existing explicit-transaction, row-count and partial-failure contract.
+NCHAR/NVARCHAR2 members retain distinct layouts (208/207), including nested named objects/collections and scalar factory arrays. `CreateValue` validates shape, Unicode and byte budgets without I/O; encoding is selected again at execution. Complex national inputs use the trusted **connection** character set, unlike standalone national scalar parameters. This input resolver now accepts all configured strict client encodings, including UTF8MB3 and the eleven non-UTF8 families, while retaining legacy UTF8/UTF16 behavior. Ordinary VARCHAR2/CHAR members use the [selected client encoding](client-character-sets.md), default UTF-8. ExecuteArray uses the same encoding path and existing explicit-transaction, row-count and partial-failure contract.
+
+Managed client initialization shares mode-specific SQL between fresh Open and pool reset: MySQL
+uses SET NAMES plus UTF8MB4 results; Oracle sets client, connection and results separately with
+quoted canonical names. Four-setting verification and later trust revalidation append FROM DUAL
+in Oracle mode. Validation, full-response consumption and failed-restoration retirement remain
+required. Explicit Oracle checks confirm nine configured encodings for national array inputs;
+UTF8MB3 remapping and SJIS/Big5 failures remain documented deployment restrictions in
+[Compatibility](compatibility.md#2026-10-27-complex-national-client-encoding).
 
 PL complex OUT/INOUT values use the result snapshot's session national encoding. Ordinary binary named complex columns retain database national storage encoding: loading a type containing national members additionally reads `NLS_DATABASE_PARAMETERS` for `NLS_NCHAR_CHARACTERSET` on the same reserved session/transaction, with the existing timeout and cancellation source. Currently only `AL16UTF16` is accepted, using strict UTF-16 big endian without BOM insertion/removal. A valid single-row response is consumed before an unsupported value is rejected; failed loading does not publish that type. Other database national encodings require separate wire evidence and implementation.
 

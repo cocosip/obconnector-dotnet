@@ -6,7 +6,16 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 
 ## Current checkpoint
 
-- Latest implementation, developed from `f03f235`: configured GBK, GB18030/2022, SJIS, Big5 and
+- Latest implementation, developed from `master/ed2fc84`: configured client encodings for complex
+  NCHAR/NVARCHAR2 inputs. Oracle fresh Open/reset now share individual quoted SET statements;
+  verification/revalidation uses FROM DUAL. Complete units7846/7846, focused units267/267,
+  affected consumers350/350 and the final Release build pass. Independent source/test/docs review
+  has no actionable issue. Explicit Oracle array-input cases pass36/48;
+  UTF8MB3 is reported as UTF8MB4 and correctly rejected, while SJIS/Big5 switching causes later
+  fixed ASCII statements to fail900. All12 failures stop at Open before DDL. Original all48
+  initialization failures and the interrupted full run remain in the
+  [module record](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding).
+- Previous implementation, developed from `f03f235`: configured GBK, GB18030/2022, SJIS, Big5 and
   HKSCS/HKSCS31 now support the same opt-in MySQL string fallback, with strict matching session
   encodings and unchanged character-level escaping. DBCS trail5C bytes are preserved inside
   characters. Complete units pass7774/7774, focused units290/290 and affected consumers160/160;
@@ -177,6 +186,8 @@ These are concrete code/scope gaps, not merely missing real-database reports:
 1. Remaining national/JSON/CLOB and extended metadata boundaries (P1-08): JSON results and CLOB
    reads retain UTF-8 restrictions, stored complex national members require AL16UTF16, and
    unsupported type codes/extended metadata reject. Configured DBCS fallback is now locally implemented.
+   Complex-national inputs now resolve all configured names. UTF8MB3/SJIS/Big5 currently fail
+   managed Oracle Open in the explicit server profile; further national storage/output remains open.
    Non-UTF8 expression results need ASCII aliases under the current metadata contract.
 2. Remaining resource-wait instrumentation and workload/overhead validation (P2-04).
 3. Input/InputOutput REF CURSOR and additional output shapes (P1-06).
@@ -218,8 +229,8 @@ approved wire contract or can be implemented without protocol research.
 | P1-04 TLS/mTLS | Server validation callback, client certificate identity isolation, data-source snapshots, revocation options | Additional rotation/platform regression where needed | Enterprise CA/mTLS, negative handshakes, expiry/rotation and platform revocation |
 | P1-05 Command/Batch behavior | SchemaOnly Prepare-only, bounded KeyInfo/hidden keys, SingleRow/SingleResult; MySQL procedure parameters/output/multi-results; Batch metadata/data-source creation/result limits; REF CURSOR limits | Complete behavior/shape matrix; existing explicit restrictions remain | Real metadata/permissions, prepare side effects/locks, procedure and cursor behavior |
 | P1-06 Oracle output/cursors | Independent Prepare, output ownership, positive ordinary-output FetchSize hints, binary and text cursor-valued columns (four-byte IDs) and nested ownership | **Input/InputOutput REF CURSOR and additional shapes**; output offset and positive array FetchSize remain rejected | Real direction/shape/pagination and resource matrix |
-| P1-07 Complex types | Nested objects/collections, directional national members, explicit descriptor clear and invalidation after observed DDL; binary named/anonymous BLOB/CLOB and cursor result members with session-bound ownership | **Non-empty complex LOB/cursor input, text complex results, further national storage/anonymous output shapes and unresolved whole-complex RETURNING identity** | Real DDL invalidation, complex LOB/cursor resource behavior/interoperability and server-supported shapes; retained server failures remain visible |
-| P1-08 Types/charsets | Signed DecimalScale, faithful unknown-precision Oracle NUMBER and exact FLOAT results/binding, strict result decoding/widths; tiny/medium/long BLOB, ENUM/SET/raw GEOMETRY, ROWID, Oracle Inf/NaN; national Unicode fallback IDs; trusted MySQL string prepare fallback for configured input charsets; GB18030-2022, DEC8/TIS620, SJIS, Big5 and HKSCS/HKSCS31; configured client SQL/ordinary and JSON parameter encodings; CLOB input prevalidation | Further national/JSON/CLOB scope and extended metadata/types still need work | Real emission/storage/coercibility, all promised collation/mode/version profiles |
+| P1-07 Complex types | Nested objects/collections, directional national members with all configured client input encodings, explicit descriptor clear and invalidation after observed DDL; binary named/anonymous BLOB/CLOB and cursor result members with session-bound ownership | **Non-empty complex LOB/cursor input, text complex results, further national storage/anonymous output shapes and unresolved whole-complex RETURNING identity** | Nine configured encodings have direct national array-input evidence; three Open failures remain. Real DDL invalidation, complex LOB/cursor resource behavior/interoperability and further server-supported shapes remain |
+| P1-08 Types/charsets | Signed DecimalScale, faithful unknown-precision Oracle NUMBER and exact FLOAT results/binding, strict result decoding/widths; tiny/medium/long BLOB, ENUM/SET/raw GEOMETRY, ROWID, Oracle Inf/NaN; national Unicode fallback IDs; trusted MySQL string prepare fallback for configured input charsets; GB18030-2022, DEC8/TIS620, SJIS, Big5 and HKSCS/HKSCS31; configured client SQL/ordinary, JSON and complex-national input encodings; mode-specific Oracle managed initialization/revalidation; CLOB input prevalidation | Further national/JSON/CLOB scope and extended metadata/types still need work | Real emission/storage/coercibility, all promised collation/mode/version profiles; Oracle UTF8MB3 remapping and SJIS/Big5 Open failures remain |
 | P1-09 Discovery/HA | TCP retry rounds/backoff/shared budget, endpoint TCP reachability cache, TNS/OCP adapters, groups/weights/selection, global/group/address blacklist controls and attempt ceilings | Further discovery/policy boundaries; TCP reachability does not prove database/tenant health | Real discovery services, node/proxy failure and route changes |
 | P1-10 Schema | Mode-aware catalog collections/DataTypes and atomic routine-parameter derivation, including FLOAT/NUMBER_FLOAT and INOUT normalization | Package-local PL/SQL argument types remain rejected; boundary regressions as actual dictionary differences are found | Real catalogs, permissions, case, overloads, versions and proxies |
 | P1-11 Credentials | Per-Open provider acquisition, expiry/cancel, versioned rotation and old-session retirement, redacted diagnostics | Boundary regressions as real provider/plugin differences are found; local core exists | Real credential service, authentication plugins/KDC, rejection/expiry/rotation |

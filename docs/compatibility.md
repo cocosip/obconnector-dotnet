@@ -1,5 +1,29 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Complex national client encoding
+
+Complex NCHAR/NVARCHAR2 inputs now use the existing strict encoder for every configured client
+name; standalone national, PL output, stored AL16UTF16, JSON and CLOB read rules are unchanged.
+Fresh managed Oracle Open and pool reset use individual quoted SET assignments; charset
+verification/revalidation includes FROM DUAL. MySQL keeps its existing SET NAMES sequence.
+Complete units7846/7846, focused units267/267 and affected consumers350/350 pass; serial Release
+solution build has zero warnings/errors and independent source/test/docs review has no actionable issue.
+
+Explicit direct Oracle4.4.2.2, Windows/.NET10.0.13, TLS-disabled checks pass36/48 array-input
+cases: ASCII, latin1, DEC8, TIS620, GBK, GB18030/2022 and HKSCS/HKSCS31, each with NCHAR/NVARCHAR2
+and sync/async execution. Exact values with backslash/quote/trailing spaces and SQL NULL are
+checked, with transaction rollback and per-case generated-table cleanup. Twelve cases fail at
+Open before DDL: UTF8MB3/UTF8 assignments yield UTF8MB4 state, which strict matching rejects;
+SJIS/Big5 switching causes subsequent fixed ASCII result-setting/query statements to fail900.
+The latter server/session cause remains unresolved. No state validation is weakened.
+
+The original all48 initialization failures and a later local runner keyword error remain recorded;
+they are not overwritten by successful reruns. Final local gates and exact reports are in the
+[module record](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding).
+Ordinary units and CI use synthetic peers; the integration theory requires explicit Oracle
+PrepareExecute/object-creation opt-in. Other versions, proxies, independent runtimes, live pool
+restoration and further national/JSON/CLOB shapes remain unverified.
+
 ## 2026-10-27 DBCS MySQL string fallback
 
 Configured GBK, GB18030/2022, SJIS, Big5 and HKSCS/HKSCS31 now support trusted opt-in string

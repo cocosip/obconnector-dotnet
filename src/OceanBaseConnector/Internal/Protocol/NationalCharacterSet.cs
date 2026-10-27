@@ -15,7 +15,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal string? Connection { get; }
         private static bool FallsBack(string? value) => value == null || value.Length == 0 || string.Equals(value, "binary", StringComparison.OrdinalIgnoreCase);
         internal Encoding ParameterEncoding => Resolve(FallsBack(National) ? Connection : National);
-        internal Encoding ComplexParameterEncoding => Resolve(Connection);
+        internal Encoding ComplexParameterEncoding => Resolve(Connection, client: true);
         internal Encoding ResultEncoding(ushort collation)
         {
             if (!FallsBack(National)) return Resolve(National);
@@ -28,13 +28,19 @@ namespace OceanBaseConnector.Internal.Protocol
             if (ResultCharacterSet.IsUtf16Be(collation)) return Utf16;
             throw new NotSupportedException("The national column's source character set is not supported.");
         }
-        private static Encoding Resolve(string? name)
+        private static Encoding Resolve(string? name, bool client = false)
         {
             switch (name?.ToUpperInvariant())
             {
                 case "UTF8": case "UTF8MB4": return ResultColumn.Utf8;
                 case "UTF16": return Utf16;
-                default: throw new NotSupportedException("The session national character encoding is not supported.");
+                default:
+                    if (client && name != null)
+                    {
+                        try { return ClientCharacterSet.Parse(name); }
+                        catch (ArgumentException error) { throw new NotSupportedException("The connection character encoding is not supported.", error); }
+                    }
+                    throw new NotSupportedException("The session national character encoding is not supported.");
             }
         }
         internal static NationalCharacterSet? FromVariables(IReadOnlyDictionary<string, string>? variables)

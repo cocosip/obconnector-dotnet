@@ -4,6 +4,99 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Complex national client encoding
+
+Developed from `master/ed2fc84`, P1-07/P1-08/W5. Complex NCHAR/NVARCHAR2 inputs now
+resolve configured client encodings through the existing strict encoder. Standalone national,
+stored AL16UTF16, JSON and CLOB output rules are unchanged. Synthetic direct/public-wire cases
+cover all12 non-default names, null/empty members, malformed/unrepresentable text and both
+prepare paths. Preliminary focused units199/199 and affected consumers350/350 pass; five assets
+run in one .NET10 host. The first solution build failed because a new integration test treated
+IntegrationProfile as a record; corrected serial Release build has zero warnings/errors.
+The complete suite was deliberately interrupted when live evidence required another code change;
+that interrupted run is not complete-suite evidence. Final verification is recorded below.
+
+Initial explicit live evidence: default Oracle connection control passes, but all48 configured-client
+cases fail with server900 during Open, before DDL or complex input. Source at that checkpoint
+sent MySQL SET NAMES during fresh Open/reset, and charset verification omitted FROM DUAL. Session-local probes
+confirm three individual quoted assignments (client, connection, UTF8MB4 results) and the
+four-setting SELECT with FROM DUAL pass; removing FROM DUAL returns900. These are initialization
+probes, not complex-parameter success. Fresh Open and reset now share mode-specific initialization
+SQL, and both initial verification and later trust revalidation use FROM DUAL in Oracle mode.
+MySQL syntax and response/session-retirement guards are preserved; no new option/dependency/API.
+
+Final-candidate evidence:
+
+- Final complete units7846/7846 pass, zero failures/skips (8m32s), in
+  `TestResults/complex-national-client-final-full/full.trx`. This adds72 cases to the prior7774:
+  24 direct and48 public-wire cases; no existing unit was removed.
+- Oracle-init RED: the existing pooled-reuse selection fails both Oracle cases and passes both
+  MySQL controls before the repair; updated fixtures independently require the three literal SET
+  statements and FROM DUAL. Report: `TestResults/oracle-client-init-red/red.trx`.
+  The restricted build produced no output and was interrupted; the normal-permission run is
+  retained in `TestResults/oracle-client-init-red-normal.log`.
+- Charset/complex-national/CLOB focused GREEN267/267, zero failures/skips, in
+  `TestResults/oracle-client-init-green/green.trx`.
+- Serial Release solution build: zero warnings/errors (27 seconds), in
+  `TestResults/complex-national-client-final-build.log`.
+- Final complex-national/client consumers270/270 pass (1m28s); existing national consumers80/80
+  also pass (27 seconds), total350/350 with zero failures/skips. Reports:
+  `TestResults/complex-national-client-final-consumer/consumer.trx` and
+  `TestResults/complex-national-client-final-national-consumer/national.trx`.
+  Five assets share one .NET10 host; this is not five independent runtimes.
+- Without integration opt-in, the new theory skips:0 passed/0 failed/1 skipped, in
+  `TestResults/complex-national-client-final-opt-out/opt-out.trx`. No real profiles enter CI.
+- All ten changed C# files pass scoped whitespace verification (exit0); the workspace-load warning
+  is retained in `TestResults/complex-national-client-final-format.log`. Added/edited local document
+  links16/16 and git diff --check pass. Changed-file scanning finds no private-address/credential
+  candidates.
+- Independent read-only source/test/docs review finds no actionable Critical/Important/Minor issue.
+  The reviewer ran no tests or database operations and accessed no private connection input.
+  Server remapping/SJIS/Big5 causes and untested deployment/other result shapes remain explicit
+  external limits; this input extension does not claim JSON/CLOB decoder completion.
+
+Reproducible local commands (synthetic inputs only):
+
+```powershell
+dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 --disable-build-servers -v minimal
+dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~ClientCharacterSet|FullyQualifiedName~ClientCharset|FullyQualifiedName~ComplexNational|FullyQualifiedName~ClobCharacterSet|FullyQualifiedName~ClobPrevalidation|FullyQualifiedName~ClobRejects' --logger 'trx;LogFileName=green.trx' --results-directory TestResults/oracle-client-init-green -v minimal
+dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-build --no-restore --logger 'trx;LogFileName=full.trx' --results-directory TestResults/complex-national-client-final-full -v minimal
+dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~ComplexNationalClientConsumerTests|FullyQualifiedName~ClientCharacterSetConsumerTests' --logger 'trx;LogFileName=consumer.trx' --results-directory TestResults/complex-national-client-final-consumer -v minimal
+dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~NationalCharacterConsumerTests' --logger 'trx;LogFileName=national.trx' --results-directory TestResults/complex-national-client-final-national-consumer -v minimal
+```
+
+Post-fix explicit live result:36/48 national array-input cases pass, plus the default connection
+control. Direct Oracle4.4.2.2, Windows/.NET10.0.13, TLS disabled. Nine encodings pass:
+ASCII, latin1, DEC8, TIS620, GBK, GB18030/2022 and HKSCS/HKSCS31. Every encoding has NCHAR/NVARCHAR2,
+sync/async, exact text (including backslash/quote/trailing spaces), SQL NULL, explicit transaction
+rollback and generated-table cleanup. This exercises Oracle PrepareExecute ExecuteArray inputs;
+ordinary prepare/nested named inputs and pool reset have local evidence only.
+
+The remaining12 fail during Open before DDL. A separate fixed-statement probe establishes that
+UTF8MB3 and UTF8 assignments both yield UTF8MB4 input/collation state on this server; strict
+configured-state verification correctly rejects it. SJIS/Big5 client/connection assignments pass,
+but subsequent fixed ASCII UTF8MB4-results assignment and state query fail900; the server/session
+cause remains unresolved. No permissive mapping or validation bypass is added. Safe reports:
+`TestResults/complex-national-live-d6cfe02e.json` and
+`TestResults/complex-national-live-b67d3b54.json`. An intervening runner attempt used an unsupported
+connection keyword and failed local builder validation before networking; retained report:
+`TestResults/complex-national-live-38b4138d.json`. Initial all48 failures are retained below.
+
+Live runner command: `dotnet TestResults/complex-national-live-runner/bin/Release/net10.0/LiveNational.dll`;
+the fixed-session probe adds `charset-probe`. The ignored runner has zero-warning/error builds and
+prints only synthetic case labels, error types/codes, source frames and charset names. Connection
+input arrives through echo-disabled private stdin; connection data is never persisted. Other
+versions/proxies, stored/PL outputs, further national/JSON/CLOB combinations and live pool-reset
+compatibility remain open. All23 IDs/eight packages remain open.
+
+Retained local evidence: `TestResults/complex-national-client-green/green.trx`,
+`TestResults/complex-national-client-consumer/consumer.trx`,
+`TestResults/complex-national-client-build{,-corrected}.log`,
+`TestResults/complex-national-live-561e8c00.json`,
+`TestResults/complex-national-live-84f04333.json` and
+`TestResults/complex-national-live-65ab6d40.json`. Live input remains private stdin only;
+ordinary units/CI use synthetic peers and require no real database profile.
+
 ## 2026-10-27 DBCS MySQL string fallback
 
 Developed from `master/f03f235`, P1-08/W5. Configured GBK, GB18030/2022, SJIS, Big5 and

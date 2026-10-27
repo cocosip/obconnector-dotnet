@@ -82,7 +82,7 @@ namespace OceanBaseConnector.UnitTests
                     var packet = await ClientCharacterSetFixture.Read(channel, true, charset, false, CancellationToken.None);
                     if (packet[0] == 3)
                     {
-                        Assert.Equal(ClientCharsetStateSql, Encoding.ASCII.GetString(packet, 1, packet.Length - 1));
+                        Assert.Equal(ClientCharsetStateSql + " FROM DUAL", Encoding.ASCII.GetString(packet, 1, packet.Length - 1));
                         await ClientCharacterSetFixture.State(channel, charset, true, false, CancellationToken.None);
                         packet = await ClientCharacterSetFixture.Read(channel, true, charset, false, CancellationToken.None);
                     }

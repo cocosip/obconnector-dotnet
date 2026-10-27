@@ -83,7 +83,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Contains("VARCHAR2(4000)", ClientPreparedSql.Build(bindings, OceanBaseCompatibilityMode.Oracle, clientEncoding: ClientCharacterSet.Parse("latin1")));
             Assert.Throws<ArgumentException>(() => ClientPreparedSql.Build(bindings, OceanBaseCompatibilityMode.Oracle));
             var national = new ComplexType(false, new ComplexType(207));
-            Assert.Throws<NotSupportedException>(() => ComplexValueCodec.EncodeParameter(national, new object?[] { "中" },
+            Assert.Equal(Convert.FromHexString("0002D6D0"), ComplexValueCodec.EncodeParameter(national, new object?[] { "中" },
                 OceanBaseCompatibilityMode.Oracle, new NationalCharacterSet("utf16", "utf8mb4", "gbk"), clientEncoding: gbk));
         }
 

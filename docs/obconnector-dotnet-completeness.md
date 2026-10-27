@@ -3,8 +3,9 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27；当前模块开发起点master/f03f235，保持master。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；源码核对见第15.91节，会话验收见第15.92节，零日期验收见第15.93节，单字节字符串fallback见第15.94节，DBCS见第15.95节。
-**当前模块：** P1-08将MySQL字符串fallback扩展到配置的GBK、GB18030/2022、SJIS、Big5、HKSCS/HKSCS31；严格会话匹配、字符转义再编码保持多字节尾5C，兼顾四字节/补充字符。非UTF-8无别名表达式元数据仍有混合/歧义编码，保留ASCII别名限制；显式实库只验证生成字面量解析，不证明真实1295自动回退。
+**最近复核：** 2026-10-27；本模块开发起点master/ed2fc84，保持master。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；源码核对见第15.91节，会话验收见第15.92节，零日期验收见第15.93节，单字节字符串fallback见第15.94节，DBCS见第15.95节。
+**当前模块：** 复杂NCHAR/NVARCHAR2输入复用全部已配置客户端严格编码器；Oracle受管初始化已改为逐项quoted SET，新建连接、池reset及状态重验共用模式SQL，Oracle查询加FROM DUAL。完整单测7846/7846、专项267/267、受影响消费者350/350及Release构建通过，独立走查无遗留问题。显式Oracle数组输入36/48通过；UTF8MB3被服务器映射为UTF8MB4，严格校验拒绝，SJIS/Big5切换后固定ASCII语句报900，余12项止于Open。首次48项全部初始化失败及中止全量保留，三种编码的实库限制不计为完成，见第15.96节。
+**前一开发模块：** P1-08将MySQL字符串fallback扩展到配置的GBK、GB18030/2022、SJIS、Big5、HKSCS/HKSCS31；严格会话匹配、字符转义再编码保持多字节尾5C，兼顾四字节/补充字符。非UTF-8无别名表达式元数据仍有混合/歧义编码，保留ASCII别名限制；显式实库只验证生成字面量解析，不证明真实1295自动回退。
 **前一模块：** P1-08/P2-06将types.zero-date-policy从无条件Deferred改为显式zeroDateProfile及建表许可下执行；检查真实session SQL_MODE且不修改，覆盖DATE/DATETIME(6)正常/部分零/全零/NULL、文本/准备结果、转换拒绝及provider值回绑重读。MySQL直连连接通过，但零日期SQL_MODE前置条件失败，未建表；不能宣称真实零日期存储通过。
 **上一验收模块：** 同步/异步同客户端物理通道reset/reuse与旧时区销毁替换隔离已分开验收；双模式直连4.4.2.2、Windows/.NET10.0.13、TLS Disabled各4/4通过；不证明OBProxy后端身份或完整资源矩阵。
 **最近已实现模块：** P1-07/W5 Oracle 复杂类型 cursor 结果成员；二进制 object/collection 中的 type163 接受恰为四字节小端游标标识，并复用当前执行的 `OracleCursorOwner`，含命名/匿名布局及缓冲/SequentialAccess 路径。复杂 BLOB/CLOB 结果成员也已本地实现；非空复杂 LOB/cursor 输入及文本复杂结果仍不支持，真实 SQL/代理兼容性未验证，见第15.85/15.88节。
@@ -13,7 +14,7 @@ The overview separates remaining development from real-environment validation; h
 **此前完成模块：** Oracle NUMBER_FLOAT206精确结果、binary precision元数据及CommandBuilder绑定（184a767）；完整单测7578、专项204及受影响消费者229通过，独立走查无遗留问题，见第15.83节。2项实库和2项既有NUMBER对照均在初始握手失败，未完成认证或SQL，不能声称FLOAT存储成功。
 此前JSON客户端字符集（b94a421）完整单测7543、专项111、消费者570通过；其10项实库与2项默认字符集对照握手失败保留在第15.82节。
 此前CLOB整输入预校验（1da3ea8）、客户端SQL/参数字符集（b66cda1）、会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录；[输入字符集契约](client-character-sets.md)记录当前边界。
-**当前验证：** 串行Release全解决方案构建零警告/错误；完整单测7774/7774、本模块专项290/290、受影响消费者160/160通过，独立源码/测试/文档走查无遗留问题，见[本模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)。显式MySQL只读生成字面量14/14及连接对照通过，使用ASCII别名。完整初跑两项旧GBK拒绝断言与此前元数据/零日期失败均保留，不用新结果抹去历史限制。
+**前一模块验证：** 串行Release全解决方案构建零警告/错误；完整单测7774/7774、本模块专项290/290、受影响消费者160/160通过，独立源码/测试/文档走查无遗留问题，见[DBCS模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)。显式MySQL只读生成字面量14/14及连接对照通过，使用ASCII别名。完整初跑两项旧GBK拒绝断言与此前元数据/零日期失败均保留，不用新结果抹去历史限制。
 **历史限制：** 前一模块构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，八次独立及后续完整运行未复现；没有修改TNS或添加绕过。
 **剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向REF CURSOR及非空复杂LOB/cursor参数、文本复杂结果、未解析身份的复杂整列RETURNING、压缩OB20/代理reroute、多发送/独立bulk；5个matrix.*占位仍需受控环境和断言，零日期断言已有但需允许零日期的真实SQL_MODE profile。代理后端身份、其他版本/平台/TLS及完整资源矩阵仍缺。逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
 前一模块2项Oracle FLOAT实库及2项既有NUMBER对照连接尝试均止于初始greeting，未完成认证或SQL，服务器/网络根因未明；后续仍需其他资源指标、负载及完整部署验收。历史JSON/TNS及握手失败均保留原记录。
@@ -98,8 +99,8 @@ The overview separates remaining development from real-environment validation; h
 | 类型/性能 | 嵌套complex/DDL失效、字符集/NUMBER/scale、idle cache、分段/慢命令诊断 | 扩展成员/其余形状、批量优化、其他资源等待诊断及负载 |
 | 发布 | 五资产本地消费和部分直连报告 | 承诺版本/平台/独立运行时/OBProxy/TLS/认证/故障及包发布验收 |
 
-当前开发点：Oracle FLOAT参数派生见第15.84节；客户端SQL/参数编码保留第15.80节，组TCP上限及地址级覆盖保留第15.64/15.65节。
-具体已交付、验证结果和仍欠功能见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation)及[交付总览](obconnector-dotnet-delivery-status.md)。
+当前开发点：复杂national客户端输入及Oracle受管初始化见第15.96节；Oracle FLOAT参数派生保留第15.84节，客户端SQL/参数编码保留第15.80节，组TCP上限及地址级覆盖保留第15.64/15.65节。
+具体已交付、验证结果和仍欠功能见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding)及[交付总览](obconnector-dotnet-delivery-status.md)。
 
 ## 2. 当前能力基线
 
@@ -3048,6 +3049,44 @@ SJIS、Big5、HKSCS/HKSCS31，保留UTF8/mb3、1295/HY000门禁、SQL_MODE NUL�
 coercibility4；不建表、不改SQL_MODE。真实1295自动回退及其他mode/collation/版本/代理仍缺。
 常量原始报文复核发现文本无别名名称在执行间可能UTF-8或client字节，准备/显式别名样本为UTF-8，
 且存在合法UTF-8歧义；不能据此扩展统一解码器，ASCII别名限制及Oracle/CLOB等欠项保持开放。
+
+### 15.96 2026-10-27 复杂national客户端编码及Oracle受管初始化
+
+开发基线master/ed2fc84，本地开发门禁通过，真实兼容仅限下述成功profile。
+NCHAR/NVARCHAR2复杂输入现在复用既有严格ClientCharacterSet编码器，支持显式UTF8MB3及十一种
+非UTF8客户端编码，保留legacy UTF8/UTF16；普通/Oracle PrepareExecute、嵌套成员和匿名数组共用
+输入编码路径。不可表示、非法Unicode及有损别名仍拒绝；standalone national、PL输出快照、
+stored AL16UTF16、JSON/CLOB读取规则不扩展。
+
+实库首次48项都在Open报900，未到DDL。固定session探针证实Oracle不接受现有MySQL初始化/
+无DUAL查询组合。修复将新建连接及池reset的初始化SQL集中按模式生成：MySQL保持SET NAMES
+和results设置；Oracle分别quoted SET client/connection/results；首次状态验证及后续重验加
+FROM DUAL。仍完整消费响应并严格匹配配置，失败会话不发布/不回池。
+
+本地：修改fixture期望后，两项Oracle池用例RED，两项MySQL对照通过；修复后字符集/复杂national/
+CLOB专项267/267通过，最终串行Release全解决方案构建零警告/错误。新增24项direct及48项wire，
+240项新消费者覆盖五资产、同步/异步、两prepare路径；精确字节区分连接/national编码，包含
+尾5C、四字节/补充字符、quote/backslash、尾空格、NULL/空串、拒绝后可复用。
+最终完整单测7846/7846（8m32s）、受影响消费者350/350通过；独立只读源码/测试/文档走查无
+遗留问题，十个改动C#文件格式校验通过。此前中止全量不计成功。未显式启用integration时新理论1项跳过。
+
+显式直连Oracle4.4.2.2、Windows/.NET10.0.13、TLS Disabled：36/48数组输入用例通过及默认连接
+对照通过。九种编码（ASCII/latin1/DEC8/TIS620/GBK/GB18030/2022/HKSCS/HKSCS31）分别验证
+NCHAR/NVARCHAR2、同步/异步、精确值/SQL NULL、事务回滚及生成表清理。其余12项止于Open：
+UTF8MB3/UTF8赋值被服务器报告为UTF8MB4，严格匹配拒绝；SJIS/Big5切换后固定ASCII结果设置和
+查询仍报900，服务器/session根因未明。不放宽校验，不把三者列为真实通过。
+
+源码：[输入编码](../src/OceanBaseConnector/Internal/Protocol/NationalCharacterSet.cs)、
+[建连初始化](../src/OceanBaseConnector/Internal/Session/HandshakeFlow.ClientCharacterSet.cs)、
+[reset及重验](../src/OceanBaseConnector/Internal/Session/CommandExchange.ClientCharacterSet.cs)。
+测试：[direct/wire](../tests/OceanBaseConnector.UnitTests/ComplexNationalClientEncodingTests.cs)、
+[共享fixture](../tests/OceanBaseConnector.UnitTests/TestInfrastructure/ComplexNationalClientFixture.cs)、
+[消费者](../tests/OceanBaseConnector.ConsumerTests/ComplexNationalClientConsumerTests.cs)、
+[显式integration](../tests/OceanBaseConnector.IntegrationTests/Oracle/ComplexNationalClientEncodingTests.cs)。
+精确报告及原始失败保留于[模块台账](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding)。
+真实环境仅显式opt-in，连接信息不持久化；普通单测/CI使用合成loopback。
+普通prepare、命名复杂输入的真实互操作、live pool reset、其他版本/代理/运行时和其余类型矩阵仍缺。
+23项与八工作包整体仍开放。
 
 ## 16. 剩余交付工作包
 

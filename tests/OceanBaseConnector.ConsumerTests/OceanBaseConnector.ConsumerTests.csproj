@@ -17,6 +17,7 @@
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/TcpAttemptCapture.cs" Link="TestInfrastructure/TcpAttemptCapture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/CharacterSetFixture.cs" Link="TestInfrastructure/CharacterSetFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/ClientCharacterSetFixture.cs" Link="TestInfrastructure/ClientCharacterSetFixture.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/ComplexNationalClientFixture.cs" Link="TestInfrastructure/ComplexNationalClientFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/FloatingPointFixture.cs" Link="TestInfrastructure/FloatingPointFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/NumberFloatFixture.cs" Link="TestInfrastructure/NumberFloatFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/PoolConfigurationFixture.cs" Link="TestInfrastructure/PoolConfigurationFixture.cs" />

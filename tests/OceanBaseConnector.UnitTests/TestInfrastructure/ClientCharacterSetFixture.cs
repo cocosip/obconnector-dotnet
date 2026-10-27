@@ -189,14 +189,17 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
 
         internal static async Task Initialize(PacketChannel channel, string name, bool oracle, bool deprecated, CancellationToken token, string? client = null, string results = "utf8mb4")
         {
-            foreach (var sql in new[] { "SET NAMES " + name, "SET character_set_results=utf8mb4" })
+            var statements = oracle
+                ? new[] { "SET character_set_client = '" + name + "'", "SET character_set_connection = '" + name + "'", "SET character_set_results = 'utf8mb4'" }
+                : new[] { "SET NAMES " + name, "SET character_set_results=utf8mb4" };
+            foreach (var sql in statements)
             {
                 channel.BeginCommand(); var request = await channel.ReadPacketAsync(token);
                 Assert.Equal(sql, Encoding.ASCII.GetString(request, 1, request.Length - 1));
                 await channel.WritePacketAsync(Ok(oracle), token);
             }
             channel.BeginCommand(); var state = await channel.ReadPacketAsync(token);
-            Assert.Equal(StateSql, Encoding.ASCII.GetString(state, 1, state.Length - 1));
+            Assert.Equal(StateSql + (oracle ? " FROM DUAL" : ""), Encoding.ASCII.GetString(state, 1, state.Length - 1));
             await State(channel, name, oracle, deprecated, token, client, results);
         }
 
