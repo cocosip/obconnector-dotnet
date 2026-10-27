@@ -459,7 +459,7 @@ Oracle 匿名 `BEGIN`/`DECLARE` 块（包括 label）和 `CREATE [OR REPLACE] [E
 
 ### 5.6 ADO.NET 公共契约
 
-当前 `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有基础实现。`SingleRow` 只返回第一结果集的第一行并消费剩余行，不暴露其他结果集，`SingleResult` 会消费后续结果以保持连接可复用；`SchemaOnly` 接受带空白或注释前缀的 `SELECT`、`SHOW`、`DESCRIBE`、`DESC`、`EXPLAIN` 和 `VALUES` 文本查询，仅发送服务端 Prepare 获取元数据，不发送目标 COM_QUERY/EXECUTE/FETCH 或参数数据，也不使用客户端 fallback。多语句、过程及输出参数拒绝；输入参数名称/顺序/数量仍需匹配，但值不编码/读取/验证，FetchSize/offset 不启用。缓存的有效 statement 可复用；空 reader 的 exchange 已完成，HasRows=false、RecordsAffected=-1，CloseConnection 仍在 reader 释放时关闭原会话。命名复杂类型可能执行目录查询，但不执行目标。准备阶段仍有解析、权限及元数据锁成本，准备时列形状也可能与执行时不同；真实服务器副作用/锁/大结果验收仍开放。`KeyInfo` 的同会话键目录和单基表隐藏列已有本地实现，复杂形状保留原 SQL/unknown，详见 [KeyInfo 契约](../obconnector-dotnet-architecture-design.md#key-information-and-hidden-columns)；DataAdapter/CommandBuilder 的本地填充、映射、行事件、CRUD/乐观并发已实现，公共边界见 [adapter 契约](../obconnector-dotnet-architecture-design.md#data-adapters-and-command-generation)；现代资产 `DbBatch` 已支持 `SchemaOnly`/`KeyInfo` 及其与 `CloseConnection`/`SequentialAccess` 的组合；并支持跨整个批次的 `SingleRow`/`SingleResult`，见[批次结果限制](../obconnector-dotnet-architecture-design.md#batch-result-limits)。
+当前 `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`、`DbProviderFactory` 已有基础实现。`SingleRow` 只返回第一结果集的第一行并消费剩余行，不暴露其他结果集，`SingleResult` 会消费后续结果以保持连接可复用；`SchemaOnly` 接受带空白或注释前缀的 `SELECT`、`SHOW`、`DESCRIBE`、`DESC`、`EXPLAIN` 和 `VALUES` 文本查询，仅发送服务端 Prepare 获取元数据，不发送目标 COM_QUERY/EXECUTE/FETCH 或参数数据，也不使用客户端 fallback。多语句、过程及输出参数拒绝；输入参数名称/顺序/数量仍需匹配，但值不编码/读取/验证，FetchSize/offset 不启用。缓存的有效 statement 可复用；空 reader 的 exchange 已完成，HasRows=false、RecordsAffected=-1，CloseConnection 仍在 reader 释放时关闭原会话。命名复杂类型可能执行目录查询，但不执行目标。准备阶段仍有解析、权限及元数据锁成本，准备时列形状也可能与执行时不同；真实服务器副作用/锁/大结果验收仍开放。`KeyInfo` 的同会话键目录和单基表隐藏列已有本地实现，复杂形状保留原 SQL/unknown，详见 [KeyInfo 契约](../obconnector-dotnet-architecture-design.md#key-information-and-hidden-columns)；DataAdapter/CommandBuilder 的本地填充、映射、行事件、CRUD/乐观并发已实现，公共边界见 [历史 adapter 模块记录](#1523-2026-10-25-dataadapter--commandbuilder)；现代资产 `DbBatch` 已支持 `SchemaOnly`/`KeyInfo` 及其与 `CloseConnection`/`SequentialAccess` 的组合；并支持跨整个批次的 `SingleRow`/`SingleResult`，见[批次结果限制](../obconnector-dotnet-architecture-design.md#batch-result-limits)。
 
 目标要求：
 
@@ -1338,7 +1338,7 @@ dotnet test tests/OceanBaseConnector.IntegrationTests -c Release --no-restore --
 
 开发起点 `d7e8b5a`，master。P2-01 新增所有五资产的 OceanBaseDataAdapter / OceanBaseCommandBuilder 和 factory 创建入口；不引入依赖。第 15.22 节保留此前 KeyInfo 交付。
 
-契约：基于框架实现同步 Fill/FillSchema、DataTable/DataSet 映射、AddWithKey、行状态及原始值/NULL 绑定、RowUpdating/RowUpdated、AcceptChanges 和 ContinueUpdateOnError；顺序 UpdateBatchSize=1。生成命令继承源连接/事务/超时，不自动创建跨行事务、commit 或重试写；UPDATE/DELETE 零影响行报告 DBConcurrencyException。详见 [API 契约](../obconnector-dotnet-architecture-design.md#data-adapters-and-command-generation)。
+契约：基于框架实现同步 Fill/FillSchema、DataTable/DataSet 映射、AddWithKey、行状态及原始值/NULL 绑定、RowUpdating/RowUpdated、AcceptChanges 和 ContinueUpdateOnError；顺序 UpdateBatchSize=1。生成命令继承源连接/事务/超时，不自动创建跨行事务、commit 或重试写；UPDATE/DELETE 零影响行报告 DBConcurrencyException。详见 [历史 adapter 模块记录](#1523-2026-10-25-dataadapter--commandbuilder)。
 
 生成元数据来自同会话 SchemaOnly|KeyInfo。仅证明的单基表来源可生成；UPDATE/DELETE 要求完整可见行键，INSERT 可在已知基表无键时生成。隐藏键/未知形状不臆造更新目标；组合键成员全部保留，可空 UNIQUE 不能被框架误作行键。MySQL 数据库身份仅在 builder 本地目录中移到 schema 限定位置，防止框架丢掉 catalog；不改 reader 公共元数据。Oracle 使用双引号/:pN，MySQL 使用反引号/?。自动命令不回填 identity/default/RETURNING；locator LOB/复杂/cursor 绑定需要显式命令。RefreshSchema 使目录缓存失效并释放旧生成命令，下次生成时重取目录；adapter/command clone 不作为支持契约。
 

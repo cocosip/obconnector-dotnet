@@ -186,8 +186,8 @@ Java 和 .NET 的连接池都已存在；.NET 默认 `Pooling=false`。会话识
 | --- | --- | --- |
 | P2-01 | `DbDataAdapter`/`DbCommandBuilder` | **已按范围审计移除**：Connector/J 无对应 API，且不是 OceanBase 协议核心；CRUD 使用显式 `OceanBaseCommand` |
 | P2-02 | statement cache | 本地 idle LRU、容量/淘汰/关闭、epoch 和 reset generation 已实现；补真实 DDL/reprepare、资源/负载/代理验收 |
-| P2-03 | 批处理优化 | opt-in MySQL INSERT rewrite及合并组失败归属已本地实现；multi-send/pipelining、独立bulk及真实批量/资源/负载矩阵仍缺 |
-| P2-04 | 诊断 | 保留池/连接阶段、慢命令、协议帧、会话I/O、源流读取、当前租约及等待结果指标；补其他资源等待范围与真实负载/监听开销验收 |
+| P2-03 | 批处理优化 | opt-in MySQL INSERT rewrite及合并组失败归属已本地实现；multi-send/pipelining、独立bulk没有当前 Java/OceanBase 契约，明确不列为默认开发项 |
+| P2-04 | 诊断 | 保留池/连接阶段、慢命令、协议帧、会话I/O、源流读取、当前租约及等待结果指标；其他资源等待未定义为产品契约，不列为功能缺口；补已有指标的真实负载/监听开销验收 |
 | P2-05 | TFM/包生态 | 诊断卸载缺陷已修复并有历史默认消费者回归（第54节）；Windows实际8/9/10及Framework的nupkg协议子集已有记录；补每个承诺平台/运行时的完整功能、实库和包消费矩阵，原崩溃记录保留 |
 | P2-06 | 真实兼容矩阵 | 同客户端通道复用与旧时区销毁隔离已有双模式直连各4/4；2个matrix.*占位需环境和断言；网络unknown已有16项显式profile断言及双模式直连各17/17，XA协调器记录决定后的进程崩溃专项双模式各5/5，完整故障/部署矩阵仍缺；零日期已有独立opt-in及存储/回绑断言，但真实SQL_MODE前置失败；代理后端/完整资源、版本/TLS/认证/平台/故障/协调器恢复及发布检查仍缺 |
 
