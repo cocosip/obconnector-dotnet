@@ -59,10 +59,15 @@ jobs:
           dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj
           -c Release --no-restore --no-build
 
-      - name: Consumer tests (.NET 10)
+      # The full consumer matrix is a protocol/compatibility acceptance suite:
+      # it expands thousands of cases across five product assets and is run
+      # in local or dedicated acceptance runs. Keep the per-commit gate to fast
+      # package-consumer contracts.
+      - name: Consumer contract smoke tests (.NET 10)
         run: >-
           dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj
           -c Release --no-restore --no-build
+          --filter "FullyQualifiedName~DependencyVersionTests|FullyQualifiedName~TargetSurfaceIsolationTests|FullyQualifiedName~XidConsumerTests"
 
       - name: Dependency injection tests (.NET 10)
         run: >-
