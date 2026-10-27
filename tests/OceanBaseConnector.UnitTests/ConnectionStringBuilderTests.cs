@@ -143,6 +143,22 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal("ob2", builder.Server);
         }
 
+        [Fact]
+        public void SslModeAliasUsesTlsMode()
+        {
+            var builder = new OceanBaseConnectionStringBuilder("Server=ob1;User ID=u;SslMode=Disabled");
+            Assert.Equal(OceanBaseTlsMode.Disabled, builder.TlsMode);
+            Assert.Equal(OceanBaseTlsMode.Disabled, builder.Build().TlsMode);
+        }
+
+        [Fact]
+        public void SslModeAndTlsModeConflictsAreRejected()
+        {
+            var exception = Assert.Throws<ArgumentException>(() =>
+                new OceanBaseConnectionStringBuilder("Server=ob1;User ID=u;SslMode=Disabled;TLS Mode=Required"));
+            Assert.Contains("Conflicting", exception.Message, StringComparison.Ordinal);
+        }
+
         [Theory]
         [InlineData("Server=ob1;User ID=u;useServerPrepStmts=true")]
         [InlineData("Server=ob1;User ID=u;CompatibleMode=oracle")]

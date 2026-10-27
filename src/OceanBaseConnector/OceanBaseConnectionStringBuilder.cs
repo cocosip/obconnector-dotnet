@@ -12,7 +12,7 @@ namespace OceanBaseConnector
     /// Parses and serializes OceanBase connection strings. Canonical keys are
     /// <c>Server</c>, <c>Port</c>, <c>User ID</c>, <c>Password</c>,
     /// <c>Database</c>, <c>Connection Timeout</c>, <c>Connect Retry Count</c>, <c>Connect Retry Interval</c>, <c>Host Recheck Seconds</c>, <c>Command Timeout</c>, <c>Slow Query Threshold</c>,
-    /// <c>TLS Mode</c>, <c>TLS Server Name</c>, <c>Persist Security Info</c>,
+    /// <c>TLS Mode</c> (or the common <c>SslMode</c> spelling), <c>TLS Server Name</c>, <c>Persist Security Info</c>,
     /// <c>ExpectedMode</c>, <c>Pooling</c>, pool sizing/lifetime options,
     /// <c>Server RSA Public Key</c> and
     /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
@@ -867,6 +867,7 @@ namespace OceanBaseConnector
                     canonical = CommandTimeoutKey;
                     return true;
                 case "TLS MODE":
+                case "SSLMODE":
                     canonical = TlsModeKey;
                     return true;
                 case "TLS SERVER NAME":

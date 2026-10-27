@@ -39,7 +39,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `Command Timeout` | 30 seconds | Command execution budget. |
 | `Slow Query Threshold` | 0 milliseconds | Nonnegative Int32 client execute/cursor lifetime threshold; zero disables slow reporting. See [contract](#slow-query-diagnostics). |
 | `ExpectedMode` | Unset | Validates `MySql` or `Oracle` after detection. |
-| `TLS Mode` | `VerifyFull` | Validates certificate trust and hostname. `Required` encrypts without identity verification; `Disabled` uses plaintext transport. |
+| `TLS Mode` (`SslMode` alias) | `VerifyFull` | Validates certificate trust and hostname. `Required` encrypts without identity verification; `Disabled` uses plaintext transport. |
 | `TLS Server Name` | Endpoint hostname | Overrides the TLS certificate name. |
 | `Check Certificate Revocation` | false | Enables platform certificate revocation checks during TLS. |
 | `Persist Security Info` | false | Retains credentials in opened-connection and data-source connection strings when true. |
