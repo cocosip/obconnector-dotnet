@@ -3,7 +3,8 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**当前源码复核：** 2026-10-27，对齐master/06a18bb。输入/双向REF CURSOR、命名复杂LOB定位器回绑、文本复杂结果仍有显式拒绝路径；不能把输出游标ID、匿名定位器或二进制复杂解码直接当作其输入/文本协议。固定Java文本Array/Struct读取也未实现，服务端有独立文本序列化分支，见第15.105节。本次仅更新文档，不新增功能或实库运行；23项及八包仍未整体关闭。
+**当前诊断模块：** 2026-10-27，从master/37cf788补协议协商诊断Negotiated：物理认证、身份和字符集初始化完成后报告请求/实际帧层及trace请求/启用/modern格式，仅固定脱敏标量，不记录采样或导出成功。完整单测8091/8091、最终专项及runner488/488、五资产同一.NET10 host消费者340/340及零警告/错误Release构建通过；一次最终走查无遗留问题，门禁见第15.106节及模块台账。两验收占位仍保留，23项及八包仍未整体关闭。
+**前一源码复核：** 已提交37cf788，对齐master/06a18bb。输入/双向REF CURSOR、命名复杂LOB定位器回绑、文本复杂结果仍有显式拒绝路径；不能把输出游标ID、匿名定位器或二进制复杂解码直接当作其输入/文本协议。固定Java文本Array/Struct读取也未实现，服务端有独立文本序列化分支，见第15.105节。该次仅更新文档，不新增功能或实库运行。
 **当前拓扑验收：** 已提交06a18bb，2026-10-27从master/21e3de2开发六项受控客户端路由只读验收，见第15.104节。XA模块已提交21e3de2；实际节点/发现服务/代理HA仍未验证。
 **前一复核：** 2026-10-27，XA协调器进程崩溃恢复验收从master/7ebc590开发，见第15.103节；网络故障矩阵已提交7ebc590，历史记录15.1—15.102完整保留。23项及八工作包仍未整体关闭。
 **前一源流模块：** P2-04/W7应用上传源流读取耗时，覆盖MySQL long data、Oracle piece data及LOCAL INFILE的同步/异步Read调用；独立源类型/模式/最终结果固定标签，复用交换释放及pending完成后的汇总发布。专项156/156、完整单测7977/7977、受影响消费者315/315及Release构建零警告/错误通过；独立走查无遗留问题。指标范围见[源流读取契约](source-read-diagnostics.md)，证据见第15.101节；不证明实库或负载开销。
@@ -178,7 +179,7 @@ The overview separates remaining development from real-environment validation; h
 | P2-01 | P2 | DataAdapter | 部分实现；本地模块 | 同步填充、映射/事件、显式或自动参数化 CRUD；保留可见行键、生成值回填、复杂形状限制，补真实 CRUD/并发/运行时验收 |
 | P2-02 | P2 | Statement cache | 部分实现 | 有限 idle LRU、上下文/reset 失效和关闭已有本地实现；真实 DDL/reprepare、资源/负载/代理与运行时验收仍缺 |
 | P2-03 | P2 | 批处理优化 | 部分实现 | opt-in INSERT rewrite及合并组失败归属已有本地路径；multi-send/bulk及真实负载验收仍缺 |
-| P2-04 | P2 | 诊断 | 部分实现 | 建连/探活分段、慢命令阈值、协议帧、会话I/O/上传源流读取耗时及当前池租约指标已有本地实现；补其他资源等待及性能验收 |
+| P2-04 | P2 | 诊断 | 部分实现 | 建连/探活分段、慢命令阈值、协议帧及协商选择、会话I/O/上传源流读取耗时及当前池租约指标已有本地实现；补其他资源等待及性能验收 |
 | P2-05 | P2 | TFM/生态 | 部分验证；诊断卸载缺陷已修复 | 每个TFM的正式支持矩阵和package consumer验收；第15.58节保留原默认CLR崩溃与条件通过；第15.59节保留诊断卸载修复；第15.74节新增Windows六配置nupkg协议子集，完整运行时/平台/实库矩阵仍缺 |
 | P2-06 | P2（扩展矩阵）/ 发布阻塞（承诺范围） | 真实兼容性 | 部分验证 | 承诺范围必须有真实版本、OBProxy、TLS、认证、平台和故障报告，扩展范围再分期 |
 
@@ -3310,6 +3311,39 @@ opt-out集成15通过/116跳过，Oracle/MySQL各7/7是第15.104节模块的保�
 执行测试或连接实库。文档相对链接、历史15.1—15.104、23个ID/八包、差异空白和新增内容脱敏单独检查。
 TLS/auth及OB20/trace仍为两个DeferredReason占位。后续实库仅作独立显式验收，普通单测/CI继续使用合成回环，
 连接信息不进入源码、文件、命令参数、日志或文档。一般HA、其他Oracle形状和完整版本/代理/平台矩阵继续开放。
+
+### 15.106 2026-10-27 物理认证协议协商诊断
+
+从master/37cf788继续P2-04/P2-06、W7/W8，为后续OB20/trace显式验收补可观察的协商证据。
+现有DiagnosticListener新增OceanBaseConnector.Protocol.Negotiated；字段恰为ChannelId、Layer、
+RequestedLayer、FullLinkTraceRequested、FullLinkTraceEnabled、ModernTraceFormat。帧层来自当前
+channel实际wrapper，trace格式来自已启用的context；报告请求与实际选择的差异，不另缓存一份会话能力。
+普通/压缩/OB20、trace关闭/缺capability/legacy/modern均分开；modern仅在实际trace context启用时为真。
+
+同步/异步认证都在身份与受管字符集初始化成功后发布一次；认证/身份/字符集失败不发布，pool借用/reset不重复发布。
+事件复用Frame的listener实例/ChannelId、不可变字典、观察者异常隔离、Activity恢复及同线程递归抑制；
+关闭订阅不分配每事件字典。不含端点、认证插件/口令、SQL、参数、session变量、trace ID或extra-info内容。
+这只证明物理认证阶段完成及当前帧层选择，不证明稍后的logical Open、后续I/O、服务器采样/collector导出。
+晚订阅没有快照重放。完整字段与回调边界见[公共契约](protocol-diagnostics.md)。
+
+源码：[ProtocolDiagnostics](../src/OceanBaseConnector/Internal/Protocol/ProtocolDiagnostics.cs)、
+[PacketChannel](../src/OceanBaseConnector/Internal/Protocol/PacketChannel.cs)、
+[Ob20Stream](../src/OceanBaseConnector/Internal/Protocol/Ob20Stream.cs)、
+[握手发布位置](../src/OceanBaseConnector/Internal/Session/HandshakeFlow.cs)。
+回归：[合成公共握手](../tests/OceanBaseConnector.UnitTests/Protocol/ProtocolDiagnosticsTests.Negotiated.cs)、
+[五资产协商与复用](../tests/OceanBaseConnector.ConsumerTests/ProtocolDiagnosticsConsumerTests.cs)、
+[legacy/modern/TLS trace](../tests/OceanBaseConnector.ConsumerTests/Ob20TraceConsumerTests.cs)。
+测试先证实18失败/4负对照通过，缺失事件导致正向及观察者计数失败；补实现后初次专项455/455，
+再补字符集失败/关闭分配对照后专项458/458，消费者340/340通过；串行Release构建零警告/错误。
+完整单测8091/8091、零失败/跳过（8分58秒），相对8066新增25项、无移除；一次独立最终走查无Critical/Important/Minor。
+最终串行Release重建仍零警告/错误，五产品DLL哈希与已测产物相同；重建后的专项及runner488/488，
+opt-out集成15通过/116跳过/零失败；九文件格式、八文档930相对链接/历史/脱敏检查通过，未复审。
+完整门禁及一次独立最终走查结果见[模块台账](obconnector-dotnet-progress.md#2026-10-27-authenticated-protocol-negotiation-diagnostics)。
+
+不引入公共连接设置/依赖，不改变协商、降级或重放策略。本模块只用合成流/回环，未连接实库，
+五资产同一.NET10 host不等于五独立运行时。TLS/auth及OB20/trace两个DeferredReason仍保留；
+negotiation观测不代替受控完整验收、真实代理互操作、服务器trace导出或负载开销报告。
+23项及八工作包与15.1—15.105历史继续保留。
 
 ## 16. 剩余交付工作包
 

@@ -13,7 +13,7 @@ using Xunit;
 namespace OceanBaseConnector.UnitTests.Protocol
 {
     [Collection("Driver diagnostics")]
-    public sealed class ProtocolDiagnosticsTests
+    public sealed partial class ProtocolDiagnosticsTests
     {
         private const string ListenerName = "OceanBaseConnector.Protocol";
 

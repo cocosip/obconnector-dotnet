@@ -4,6 +4,51 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Authenticated protocol negotiation diagnostics
+
+Developed inline from master/37cf788, P2-04/P2-06 and W7/W8. The existing protocol listener adds
+Negotiated with exactly six fixed scalar fields: ChannelId, Layer, RequestedLayer,
+FullLinkTraceRequested, FullLinkTraceEnabled and ModernTraceFormat. Actual wrappers/context supply
+the selected values. Both authentication paths emit after identity/charset initialization success;
+failed setup emits nothing, pool reuse/reset does not renegotiate, late observers get no replay.
+No new public connection settings/dependencies or changed negotiation/fallback policy.
+The [public contract](protocol-diagnostics.md) distinguishes physical authentication from logical
+Open, later framed I/O and server sampling/trace export. No sensitive data is emitted.
+
+Evidence:
+
+- Test-first synthetic public handshake/observer RED:18 failed/4 passed/zero skipped because the
+  event is missing. Initial implementation focused455/455 pass. Additional charset-failure and
+  disabled-event allocation controls produce final focused458/458, zero failed/skipped.
+- Serial Release solution build: zero warnings/errors,21.33s. Affected consumers340/340 pass,
+  zero failed/skipped,1m25s. All five assets run in one .NET10 host; ordinary/compressed pool
+  reuse, OB20 requested/unrequested/unsupported/no-attributes, trace legacy/modern/disabled/
+  missing-capability and synthetic TLS paths retain existing wire assertions and add actual
+  Negotiated metadata checks. Observer filter/write/source failures remain isolated.
+- Complete units8091/8091 pass, zero failed/skipped,8m58s;25 additions and no removals against
+  the8066 baseline, and all original RED names map to final passes. Opt-out integration15 pass/
+  116 skip/zero failed. One independent final read-only review has no Critical/Important/Minor
+  finding; no re-review. Final serial rebuild/affected copy-layout checks follow the full run.
+- Initial whitespace verification flags six same-line test attributes; splitting only those
+  attributes fixes it. Scoped format then exits0 with the existing workspace-load warning.
+  The acceptance placeholder's former lack-of-observation explanation is updated; both
+  placeholders remain. These are layout/copy edits after the tested product implementation,
+  not new protocol behavior. Original failed format log remains.
+- Final serial Release rebuild: zero warnings/errors,20.97s. All five product DLL SHA-256 hashes
+  match the artifacts used by full units/consumers. Rebuilt focused plus acceptance-runner units
+  pass488/488, zero failed/skipped; final opt-out again15 pass/116 skip/zero failed. Nine-file
+  whitespace verification exits0 with the existing workspace-load warning. Eight changed docs
+  resolve930 relative links; history15.1–15.105,23 IDs/eight packages and two deferred cases are
+  preserved. Added-content privacy passes. Final --list retains both placeholders and reports
+  the corrected OB20 prerequisite. No product rebuild occurred while full units/consumers ran.
+
+Local ignored reports/logs: TestResults/protocol-negotiation-{red,focused,focused-final,consumers,
+full,optout}/ and TestResults/protocol-negotiation-*.log. No real database, package/runtime or
+workload validation is claimed. Both DeferredReason placeholders and all23 gaps/eight packages
+remain open. Real profile assertions and proxy/server trace-export evidence remain future work.
+The ignored verifier/result are TestResults/protocol-negotiation-verify.py and
+TestResults/protocol-negotiation-validation.json. Local master commit only; no push/publication.
+
 ## 2026-10-27 Oracle remaining-shape source alignment
 
 Documentation-only review against committed master/06a18bb. Current overview and completeness

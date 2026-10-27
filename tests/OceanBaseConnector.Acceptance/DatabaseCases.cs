@@ -45,7 +45,7 @@ internal static partial class DatabaseCases
         foreach (var item in new[]
         {
             ("matrix.tls-authentication", "Requires separate endpoint/certificate/plugin profiles, including negative handshakes."),
-            ("matrix.ob20-trace-negotiation", "Public API does not expose negotiated OB20/trace capabilities; normal SQL success alone is insufficient."),
+            ("matrix.ob20-trace-negotiation", "Requires explicit protocol/trace profiles and controlled assertions; negotiation alone does not prove end-to-end trace delivery."),
         }) cases.Add(new(item.Item1, "faults", (_, _) => Task.CompletedTask, DeferredReason: item.Item2));
         return cases;
     }

@@ -934,13 +934,19 @@ Use builder `UseLoggerFactory(...)` or the connection's `ILoggerFactory` constru
 <a id="protocol-diagnostics"></a>
 ### Protocol diagnostics
 
-DiagnosticListener `OceanBaseConnector.Protocol` exposes Frame/Error/Boundary events with read-only
+DiagnosticListener `OceanBaseConnector.Protocol` exposes Frame/Error/Boundary/Negotiated events with read-only
 scalar dictionaries. A local ChannelId links inner MySQL and compressed/OB20 wrappers within a listener
 instance, spanning handshake, commands, pool reset/probe and streaming. No logical-connection logger
 identity is retained by pooled channels. Read Frame means header observation before validation/body;
 write Frame means acceptance by the next stream, not flush/server receipt or successful SQL. Caught
 faults preserve the layer's original classification even after external Close or buffered continuation
 failure. Boundary rejects remain errors and preserve the existing transport behavior.
+
+Negotiated reports requested versus actual framing plus requested/enabled trace and active modern
+trace format after physical authentication, identity and configured charset initialization succeed.
+It uses the actual wrappers, not a second cached capabilities model. It is not emitted on failed
+authentication/identity/charset setup or repeated for pool reuse/reset. A late subscriber gets no
+replay; this event alone proves neither later I/O/logical Open nor server sampling/trace export.
 
 No SQL, payload/authentication/extra-info bytes, endpoint, username or exception object/message is
 emitted. Disabled events allocate no dictionary; observers are synchronous, exception-isolated and

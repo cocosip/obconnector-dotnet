@@ -27,6 +27,7 @@ Int64, shared by the MySQL channel and its compression/OB20 wrappers, not a serv
 | `OceanBaseConnector.Protocol.Frame` | Direction, Sequence, ExpectedSequence, PayloadLength, UncompressedLength, RequestId, Flags | A complete read header was obtained, or a whole write frame was accepted by the next stream |
 | `OceanBaseConnector.Protocol.Error` | Direction, Failure | A transport/framing operation caught an error, or an unread packet was abandoned |
 | `OceanBaseConnector.Protocol.Boundary` | Stage | A MySQL command boundary began or response boundary validation completed |
+| `OceanBaseConnector.Protocol.Negotiated` | RequestedLayer, FullLinkTraceRequested, FullLinkTraceEnabled, ModernTraceFormat | Physical authentication, identity verification and configured client charset initialization completed with this framing selection |
 
 Layer is `mysql`, `compressed` or `ob20`. Direction is `read`/`write`, with `boundary` for boundary errors.
 Stage is `begin`/`complete`. Failure is `protocol`, `io`, `canceled`, `disposed`, `incomplete` or `error`.
@@ -38,10 +39,32 @@ failure deduplication is independent of the transport's closed flag. An unread p
 
 Numeric frame fields describe the header, including malformed headers, before read validation/body
 consumption. PayloadLength is Int64; Sequence/ExpectedSequence/UncompressedLength are Int32, RequestId
-is Int64 (`-1` outside OB20), and Flags is UInt32 (`0` outside OB20). Other fields are strings, except
-ChannelId (Int64). A read Frame is not proof of valid checksum or complete body. ExpectedSequence is an
+is Int64 (`-1` outside OB20), and Flags is UInt32 (`0` outside OB20). ChannelId is Int64;
+the Frame/Error/Boundary fields otherwise use strings. A read Frame is not proof of valid checksum
+or complete body. ExpectedSequence is an
 observation: compressed MySQL inner packets may legally be renumbered. A write Frame is not proof of a
 flush, TCP delivery, server receipt or SQL success. Compression and OB20 can buffer inner writes.
+
+Subscribe to `OceanBaseConnector.Protocol.Negotiated` before opening when you need the actual protocol
+selection. Its dictionary contains exactly ChannelId (Int64), Layer/RequestedLayer (strings: `mysql`,
+`compressed` or `ob20`) and FullLinkTraceRequested/FullLinkTraceEnabled/ModernTraceFormat (Boolean).
+RequestedLayer describes the connection options; Layer describes the channel wrappers actually enabled.
+For example, a server that does not advertise the required OB20 capability can report RequestedLayer
+`ob20` with Layer `mysql`. Requested compression still requires its advertised MySQL capability;
+a rejected authentication, identity or charset initialization emits no Negotiated event.
+
+FullLinkTraceEnabled means the authenticated capability and request enabled the local OB20 trace
+context. ModernTraceFormat is true only when that active context uses modern extra-info encoding;
+both remain false when trace is disabled. These fields do not report server sampling, trace records,
+remote collector receipt or TLS/authentication plugin details. Trace IDs and extra-info bytes remain
+private. A Negotiated event alone does not prove subsequent framed I/O or successful logical Open:
+later physical-session/pool initialization can still fail. Correlate later Frame events and operation
+outcomes when verifying a complete connection or exchange.
+
+Negotiated is emitted once per successful physical authentication, including newly established pool
+sessions. Borrowing/resetting an existing channel does not emit it again. Observers subscribing after
+authentication receive no replay or cached snapshot; reopened physical channels have their own IDs.
+It shares the same synchronous callback, isolation, reentry and listener-identity rules as Frame events.
 
 The driver emits only these fixed scalar fields. It never places SQL, command bytes, parameters, rows,
 authentication data, endpoint/username, protocol extra-info bytes, exception objects/messages or byte

@@ -4,9 +4,10 @@ Oracle REF CURSOR readers support [SingleRow/SingleResult](docs/obconnector-dotn
 
 Modern `DbBatch` supports [SingleRow/SingleResult across the batch](docs/obconnector-dotnet-architecture-design.md#batch-result-limits) and [SchemaOnly/KeyInfo metadata](docs/obconnector-dotnet-architecture-design.md#batch-metadata). Advance entries with NextResult and dispose the reader to release its reservation. Data-source batches support direct CreateBatchCommand and own their connection lifetime.
 
-Observe [protocol frame diagnostics](docs/protocol-diagnostics.md) through the standard .NET
+Observe [protocol diagnostics](docs/protocol-diagnostics.md) through the standard .NET
 DiagnosticListener named `OceanBaseConnector.Protocol`. Fixed frame/boundary/error metadata spans
-MySQL, compression and OB20; SQL, authentication, parameters and payloads are omitted.
+MySQL, compression and OB20. Negotiated events distinguish requested and actual framing/trace
+selection after physical authentication; SQL, authentication data, parameters and payloads are omitted.
 
 Read ordinary Oracle [binary cursor columns](docs/obconnector-dotnet-architecture-design.md#oracle-cursor-valued-columns)
 with `OceanBaseRefCursor`: prepare the query, obtain the value, consume all parent results, then open its

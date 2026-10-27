@@ -54,6 +54,12 @@ namespace OceanBaseConnector.ConsumerTests
                 Assert.True(capture.Sources > 0);
                 if (observer == "normal")
                 {
+                    var negotiated = Assert.Single(capture.Events, x => x.Key.EndsWith(".Negotiated", StringComparison.Ordinal)).Value;
+                    Assert.Equal(compressed ? "compressed" : "mysql", negotiated["Layer"]);
+                    Assert.Equal(compressed ? "compressed" : "mysql", negotiated["RequestedLayer"]);
+                    Assert.Equal(false, negotiated["FullLinkTraceRequested"]);
+                    Assert.Equal(false, negotiated["FullLinkTraceEnabled"]);
+                    Assert.Equal(false, negotiated["ModernTraceFormat"]);
                     Assert.Contains(capture.Events, x => x.Key.EndsWith(".Frame", StringComparison.Ordinal) && Equals(x.Value["Layer"], compressed ? "compressed" : "mysql"));
                     Assert.Contains(capture.Events, x => x.Key.EndsWith(".Boundary", StringComparison.Ordinal));
                     Assert.DoesNotContain(capture.Events, x => x.Key.EndsWith(".Error", StringComparison.Ordinal));
@@ -71,16 +77,24 @@ namespace OceanBaseConnector.ConsumerTests
         public static IEnumerable<object[]> Ob20Assets()
         {
             foreach (var target in new[] { "netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0" })
-                foreach (var asynchronous in new[] { false, true }) yield return new object[] { target, asynchronous };
+                foreach (var asynchronous in new[] { false, true })
+                    foreach (var kind in new[] { "enabled", "unrequested", "unsupported", "no-attributes" })
+                        yield return new object[] { target, asynchronous, kind };
         }
 
         [Theory]
         [MemberData(nameof(Ob20Assets))]
-        public async Task EveryAssetCorrelatesOb20AndInnerFrames(string target, bool asynchronous)
+        public async Task EveryAssetCorrelatesOb20AndInnerFrames(string target, bool asynchronous, string kind)
         {
             InitializeFixtureDiagnostics(); using var capture = new Capture("normal");
-            await new Ob20ConsumerTests().EveryAssetNegotiatesOb20OrKeepsStandardFramesThroughPublicApis(target, asynchronous, "enabled");
-            Assert.Contains(capture.Events, x => x.Key.EndsWith(".Frame", StringComparison.Ordinal) && Equals(x.Value["Layer"], "ob20"));
+            await new Ob20ConsumerTests().EveryAssetNegotiatesOb20OrKeepsStandardFramesThroughPublicApis(target, asynchronous, kind);
+            var negotiated = Assert.Single(capture.Events, x => x.Key.EndsWith(".Negotiated", StringComparison.Ordinal)).Value;
+            Assert.Equal(kind == "enabled" ? "ob20" : "mysql", negotiated["Layer"]);
+            Assert.Equal(kind == "unrequested" ? "mysql" : "ob20", negotiated["RequestedLayer"]);
+            Assert.Equal(false, negotiated["FullLinkTraceRequested"]);
+            Assert.Equal(false, negotiated["FullLinkTraceEnabled"]);
+            Assert.Equal(false, negotiated["ModernTraceFormat"]);
+            Assert.Equal(kind == "enabled", capture.Events.Any(x => x.Key.EndsWith(".Frame", StringComparison.Ordinal) && Equals(x.Value["Layer"], "ob20")));
             Assert.Contains(capture.Events, x => x.Key.EndsWith(".Frame", StringComparison.Ordinal) && Equals(x.Value["Layer"], "mysql"));
             Assert.Single(capture.Events.Select(x => x.Value["ChannelId"]).Distinct()); CheckMetadata(capture.Events);
         }
@@ -88,18 +102,19 @@ namespace OceanBaseConnector.ConsumerTests
         private static void InitializeFixtureDiagnostics()
         { using var stream = new MemoryStream(); new PacketChannel(stream).BeginCommand(); }
 
-        private static void CheckMetadata(IEnumerable<KeyValuePair<string, IReadOnlyDictionary<string, object?>>> events)
+        internal static void CheckMetadata(IEnumerable<KeyValuePair<string, IReadOnlyDictionary<string, object?>>> events)
         {
-            var allowed = new[] { "ChannelId", "Layer", "Direction", "Sequence", "ExpectedSequence", "PayloadLength", "UncompressedLength", "RequestId", "Flags", "Stage", "Failure" };
+            var allowed = new[] { "ChannelId", "Layer", "Direction", "Sequence", "ExpectedSequence", "PayloadLength", "UncompressedLength", "RequestId", "Flags", "Stage", "Failure",
+                "RequestedLayer", "FullLinkTraceRequested", "FullLinkTraceEnabled", "ModernTraceFormat" };
             foreach (var item in events)
                 foreach (var field in item.Value)
                 {
-                    Assert.Contains(field.Key, allowed); Assert.True(field.Value is null or string or int or long or uint);
+                    Assert.Contains(field.Key, allowed); Assert.True(field.Value is null or string or int or long or uint or bool);
                     var value = field.Value?.ToString() ?? ""; Assert.DoesNotContain("secret", value); Assert.DoesNotContain("private", value);
                 }
         }
 
-        private sealed class Capture : IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
+        internal sealed class Capture : IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
         {
             private readonly string _kind;
             private readonly IDisposable _all;

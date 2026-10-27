@@ -42,6 +42,7 @@ namespace OceanBaseConnector.ConsumerTests
 
         private static async Task CorrelatesFullLinkTrace(string target, bool async, string kind, bool encrypted)
         {
+            using var protocol = new ProtocolDiagnosticsConsumerTests.Capture("normal");
             using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(12));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
@@ -106,6 +107,12 @@ namespace OceanBaseConnector.ConsumerTests
                     Assert.Equal(1, async ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
                 }
                 connection.Close(); await serving.WaitAsync(budget.Token);
+                var negotiated = Assert.Single(protocol.Events, x => x.Key.EndsWith(".Negotiated", StringComparison.Ordinal)).Value;
+                Assert.Equal("ob20", negotiated["Layer"]); Assert.Equal("ob20", negotiated["RequestedLayer"]);
+                Assert.Equal(kind != "disabled", negotiated["FullLinkTraceRequested"]);
+                Assert.Equal(active, negotiated["FullLinkTraceEnabled"]);
+                Assert.Equal(active && modern, negotiated["ModernTraceFormat"]);
+                ProtocolDiagnosticsConsumerTests.CheckMetadata(protocol.Events);
                 var commands = activities.Where(a => a.OperationName == "oceanbase.execute").ToArray(); Assert.Equal(kind == "no-listener" ? 0 : 3, commands.Length);
                 if (active)
                 {

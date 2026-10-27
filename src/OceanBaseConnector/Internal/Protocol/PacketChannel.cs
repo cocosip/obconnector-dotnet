@@ -68,6 +68,10 @@ namespace OceanBaseConnector.Internal.Protocol
         }
 
         internal bool FullLinkTraceEnabled => _ob20?.FullLinkTraceEnabled == true;
+        internal void ReportNegotiated(bool compressionRequested, bool ob20Requested, bool traceRequested)
+            => _diagnostics.Negotiated(_compression != null ? "compressed" : _ob20 != null ? "ob20" : "mysql",
+                compressionRequested ? "compressed" : ob20Requested ? "ob20" : "mysql", traceRequested,
+                FullLinkTraceEnabled, _ob20?.ModernTraceFormat == true);
         internal void SetTraceContext(ActivityContext context) => _traceContext = context;
         private void BeginOb20Request()
         { _ob20?.BeginRequest(_traceContext); _traceContext = default; }

@@ -36,13 +36,18 @@ namespace OceanBaseConnector.Internal.Protocol
 
         internal void Boundary(string stage) => Emit("Boundary", "mysql", "", stage: stage);
 
+        internal void Negotiated(string layer, string requestedLayer, bool traceRequested, bool traceEnabled, bool modernTraceFormat)
+            => Emit("Negotiated", layer, "", requestedLayer: requestedLayer, traceRequested: traceRequested,
+                traceEnabled: traceEnabled, modernTraceFormat: modernTraceFormat);
+
         internal void Error(string layer, string direction, Exception? error) =>
             Emit("Error", layer, direction, failure: error == null ? "incomplete" : error is ProtocolException ? "protocol"
                 : error is OperationCanceledException ? "canceled" : error is ObjectDisposedException ? "disposed"
                 : error is IOException ? "io" : "error");
 
         private void Emit(string kind, string layer, string direction, long length = 0, int sequence = 0, int expected = 0,
-            int originalLength = 0, long requestId = -1, uint flags = 0, string? failure = null, string? stage = null)
+            int originalLength = 0, long requestId = -1, uint flags = 0, string? failure = null, string? stage = null,
+            string? requestedLayer = null, bool traceRequested = false, bool traceEnabled = false, bool modernTraceFormat = false)
         {
             if (Emitting.Value || Source == null) return;
             var previous = Activity.Current;
@@ -50,10 +55,16 @@ namespace OceanBaseConnector.Internal.Protocol
             try
             {
                 var name = kind == "Frame" ? "OceanBaseConnector.Protocol.Frame"
-                    : kind == "Error" ? "OceanBaseConnector.Protocol.Error" : "OceanBaseConnector.Protocol.Boundary";
+                    : kind == "Error" ? "OceanBaseConnector.Protocol.Error" : kind == "Negotiated"
+                        ? "OceanBaseConnector.Protocol.Negotiated" : "OceanBaseConnector.Protocol.Boundary";
                 if (!Source.IsEnabled(name)) return;
                 var values = new Dictionary<string, object?> { ["ChannelId"] = _id, ["Layer"] = layer };
                 if (kind == "Boundary") values.Add("Stage", stage);
+                else if (kind == "Negotiated")
+                {
+                    values.Add("RequestedLayer", requestedLayer); values.Add("FullLinkTraceRequested", traceRequested);
+                    values.Add("FullLinkTraceEnabled", traceEnabled); values.Add("ModernTraceFormat", modernTraceFormat);
+                }
                 else
                 {
                     values.Add("Direction", direction);

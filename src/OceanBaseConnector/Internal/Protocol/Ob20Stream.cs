@@ -37,6 +37,7 @@ namespace OceanBaseConnector.Internal.Protocol
         { _inner = inner ?? throw new ArgumentNullException(nameof(inner)); _connectionId = connectionId; _trace = trace; _diagnostics = diagnostics ?? new ProtocolDiagnostics(); }
 
         internal bool FullLinkTraceEnabled => _trace != null;
+        internal bool ModernTraceFormat => _trace?.UsesModernFormat == true;
 
         public void BeginRequest(ActivityContext context = default)
         {

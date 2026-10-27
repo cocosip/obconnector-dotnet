@@ -1,5 +1,14 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Authenticated protocol negotiation diagnostics
+
+Developed from master/37cf788. The existing protocol listener now distinguishes requested and
+actual framing plus enabled trace/active modern format after authentication, identity and charset
+setup. It does not claim logical Open, later framed I/O, remote sampling/export or real OBProxy
+compatibility. Both deferred acceptance placeholders remain. The [contract](protocol-diagnostics.md)
+and [module record](obconnector-dotnet-progress.md#2026-10-27-authenticated-protocol-negotiation-diagnostics)
+retain synthetic verification and deployment limits; this module accesses no real database.
+
 ## 2026-10-27 Controlled topology acceptance
 
 Developed from master/21e3de2, P0-06/P1-09/P2-06 and W1/W4/W8. Six sync/async explicit

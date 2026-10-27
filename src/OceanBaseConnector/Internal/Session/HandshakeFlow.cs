@@ -55,6 +55,7 @@ namespace OceanBaseConnector.Internal.Session
                 ConfirmIdentity(channel, result, cancellationToken);
                 InitializeClientCharacterSet(channel, result, options.ClientCharacterSet, false, cancellationToken).GetAwaiter().GetResult();
                 phase?.Finish(null);
+                channel.ReportNegotiated(options.UseCompression, options.UseOb20, options.EnableFullLinkTrace);
                 return result;
             }
             catch (Exception error) { phase?.Finish(error); throw; }
@@ -93,6 +94,7 @@ namespace OceanBaseConnector.Internal.Session
                 await ConfirmIdentityAsync(channel, result, cancellationToken).ConfigureAwait(false);
                 await InitializeClientCharacterSet(channel, result, options.ClientCharacterSet, true, cancellationToken).ConfigureAwait(false);
                 phase?.Finish(null);
+                channel.ReportNegotiated(options.UseCompression, options.UseOb20, options.EnableFullLinkTrace);
                 return result;
             }
             catch (Exception error) { phase?.Finish(error); throw; }

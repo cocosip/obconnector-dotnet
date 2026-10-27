@@ -1,13 +1,25 @@
 # Driver delivery status
 
-Last checked: 2026-10-27 against `master/06a18bb`; controlled topology acceptance is committed.
-This source/documentation alignment adds no product implementation. This is the current overview; the detailed
+Last checked: 2026-10-27; protocol negotiation diagnostics developed from `master/37cf788`.
+The prior source/documentation alignment and controlled topology acceptance are committed. This is the current overview; the detailed
 [completeness baseline](obconnector-dotnet-completeness.md) retains requirements and historical evidence.
 The [module records](obconnector-dotnet-progress.md) retain individual test/review results.
 
 ## Current checkpoint
 
-- Current source review: input/InputOutput REF CURSOR, named complex LOB locator rebinding and
+- Current implementation: the protocol DiagnosticListener now reports requested/actual framing,
+  requested/enabled full-link trace and active modern trace format after physical authentication,
+  identity and charset initialization. Pool reuse/reset does not renegotiate; failed setup emits
+  no Negotiated event. This adds observable negotiation evidence for P2-04/P2-06, not server
+  sampling/export or the complete OB20/trace acceptance matrix. Focused458/458, affected
+  consumers340/340, complete units8091/8091 and a zero-warning/error serial Release build pass;
+  one independent final review has no finding. Final rebuilt focused/runner488/488,
+  opt-out15 pass/116 skip and nine-file format pass; five product hashes match the tested
+  assets. Full/final gates are
+  recorded in the [module ledger](obconnector-dotnet-progress.md#2026-10-27-authenticated-protocol-negotiation-diagnostics).
+  See the [public contract](protocol-diagnostics.md).
+
+- Prior source review at37cf788: input/InputOutput REF CURSOR, named complex LOB locator rebinding and
   text complex results remain explicitly unsupported. Binary complex results and named LOB
   content/anonymous scalar locator inputs already exist. Fixed Java text Array/Struct readers
   return null, while the inspected server has distinct text serialization branches; this is not
@@ -16,7 +28,7 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   Saved final topology evidence is rechecked; builds/tests/live checks are not rerun for this
   documentation-only change. All23 gap IDs/eight packages remain open.
 
-- Latest module: [controlled topology acceptance](topology-acceptance.md), six read-only explicit
+- Previous module: [controlled topology acceptance](topology-acceptance.md), six read-only explicit
   client-route cases: idle refresh/retirement, borrowed-session isolation and refused-TCP fallback,
   sync/async. Focused94/94 and real direct4.4.2.2 Oracle7/7/MySQL7/7 pass with no database objects;
   opt-out15 pass/116 skip and Release build zero warnings/errors. Complete units8066/8066 and scoped format/docs/privacy checks pass; one independent review
@@ -333,7 +345,7 @@ approved wire contract or can be implemented without protocol research.
 | P2-01 DataAdapter | Fill/mappings/events, explicit CRUD and bounded automatic CommandBuilder SQL with original-value/NULL/concurrency handling | Query/key/generated-value restrictions remain; EF Core provider is separate scope | Real generated SQL/catalog/locks/concurrency and independent runtimes |
 | P2-02 Statement cache | Opt-in idle LRU, capacity/close, context/schema/reset generation invalidation | Further reprepare/resource/load regressions | Real DDL/reprepare, prepare-count/latency/resource/proxy reports |
 | P2-03 Batch optimization | Sequential Batch, existing Oracle array binding, opt-in bounded MySQL INSERT rewrite with group error attribution | **Multi-send/pipelining and separate bulk protocol are missing** | Actual counts/partial failure, transaction/default/trigger/warning behavior, packet limits and throughput/memory |
-| P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics including current leases, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O/upload-source read durations and collectible-load fixes | **Additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
+| P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics including current leases, connection/ping phase timing, slow-query/cursor thresholds, protocol frame/negotiation events, session I/O/upload-source read durations and collectible-load fixes | **Additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
 | P2-05 Runtimes/ecosystem | Five product assets; Windows nupkg protocol subset on actual .NET 8/9/10 and Framework host, plus Standard assets on .NET 10 | Complete promised platform/runtime/API matrix; Framework/ORM support scope; existing savepoint identifier limitations | Non-Windows and full feature/real-database reports on promised runtimes |
 | P2-06 Real compatibility | Acceptance tooling and historical direct-server reports; distinct sync/async client-channel reset/reuse and time-zone retirement cases, 4/4 per mode on direct 4.4.2.2; executable opt-in zero-date storage/read/write-back assertions | **Two `matrix.*` deferred placeholders**; six controlled client-route cases (each mode7/7 including connection), controlled network and one XA coordinator process crash point have assertions and direct-server evidence; source/license/package/publication review remains | Proxy/backend identity and complete reset/resource matrix; TLS/auth, topology faults, unknown network outcomes, permissive zero-date SQL_MODE storage and external-coordinator XA crash recovery |
 

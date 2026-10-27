@@ -1,5 +1,6 @@
 # OceanBase .NET 驱动完整性走查报告
 
+**当前诊断模块：** 从master/37cf788补物理认证后的Negotiated事件，区分请求/实际帧层及trace启用/modern格式；不记录敏感载荷，不代替服务器采样或collector导出。完整门禁及边界见[模块台账](obconnector-dotnet-progress.md#2026-10-27-authenticated-protocol-negotiation-diagnostics)和[公共契约](protocol-diagnostics.md)。两验收占位、23项及八包继续开放。
 **当前拓扑验收：** 2026-10-27，从master/21e3de2补六项受控客户端路由只读验收，最终专项94/94通过；一次独立走查唯一Minor并发异常丢失已以真实双连接RST的RED/GREEN修正，无Critical/Important；完整单测8066/8066、双模式实库最终各7/7、Release零警告/错误及限定格式/文档/脱敏检查通过，见[模块台账](obconnector-dotnet-progress.md#2026-10-27-controlled-topology-acceptance)。不代表实际集群或代理HA。
 **前一复核：** 2026-10-27；当前XA协调器进程恢复验收从master/7ebc590开发，见完整性第15.103节及[模块台账](obconnector-dotnet-progress.md#2026-10-27-xa-coordinator-process-recovery)。23项及八工作包仍未整体关闭。
 **当前XA验收检查点：** 四项显式profile用例已覆盖同步/异步commit/rollback，子进程真实kill/非零退出及新进程从日志恢复，双模式直连各5/5，全部自有表/分支/日志清理。专项56、完整单测8044/8044、Release零警告/错误及opt-out15通过/116跳过；限定格式/文档/脱敏校验通过。一次独立最终走查无Critical/Important，唯一Minor占位数量旧值已修正；reviewer未执行测试或连接实库。生产源码/API/依赖未变；[故障边界](xa-process-recovery-acceptance.md)保留一般协调器/服务器/其他崩溃点欠项。
