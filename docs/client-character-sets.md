@@ -113,6 +113,14 @@ JSON text rather than parsing or serializing it. SQL NULL remains distinct from 
 Oracle mode and nonzero Precision/Scale remain rejected, including for SQL NULL. JSON results
 retain strict UTF-8 decoding. Server preparation/fallback restrictions above still apply.
 
+The fixed server's
+[ObJsonTC result branch](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/observer/mysql/obsm_utils.cpp)
+uses [json_cell_str](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp)
+to print the binary JSON value directly into a length-encoded text buffer, without a client
+charset conversion argument. This agrees with the existing UTF-8 result contract; configured
+input bytes do not imply results use that encoding. Other server/proxy result metadata and
+storage profiles still need live verification; this source check adds no live compatibility claim.
+
 The fixed OceanBase source's
 [is_valid_for_json](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/sql/engine/expr/ob_expr_json_func_helper.cpp#L1263)
 requests UTF8MB4 calculation collation for nonbinary strings from other charsets. This is source

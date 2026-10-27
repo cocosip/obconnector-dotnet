@@ -130,7 +130,7 @@ Java 和 .NET 的连接池都已存在；.NET 默认 `Pooling=false`。会话识
 | MySQL 过程 | 部分实现 | 集合顺序 Input/Output/InputOutput、显式 Prepare、多结果及关闭排空输出 | PS_MULTI_RESULTS 必需；ReturnValue/FetchSize/SchemaOnly/KeyInfo/INOUT stream 拒绝；真实 TLS/代理/版本/资源矩阵仍缺 |
 | Oracle 输出与游标 | 部分实现 | PrepareExecute、独立Prepare、OUT/RETURNING、REF CURSOR输出、文本/二进制cursor列、LOB、array binding | Input/InputOutput REF CURSOR、真实列值/输出形状矩阵、输出offset/数组正FetchSize；普通输出正命令提示已接受但内部输出不分页 |
 | 复杂类型 | 部分实现 | object/collection标量/嵌套、有界national、二进制LOB/cursor结果成员、命名LOB内容/匿名标量定位器输入、类型缓存、array binding和可观察DDL失效 | 命名LOB定位器回绑/复杂cursor输入、文本复杂结果、其他national/匿名输出及未解析身份的整列RETURNING；外部/不透明DDL须显式清理，真实矩阵未闭合 |
-| 类型与字符集 | 部分实现 | 常用类型、精确NUMBER/FLOAT及signed DecimalScale、普通结果严格解码/宽度、多种客户端SQL/参数编码、JSON参数和CLOB输入预校验、配置的非UTF-8 MySQL字符串fallback、全部配置编码的复杂national输入及Oracle模式初始化/重验 | JSON结果/CLOB读取UTF-8限制、复杂national存储AL16UTF16限制、非UTF-8无别名表达式元数据歧义；三种编码Oracle Open实库失败保留；其他类型/metadata及真实编码矩阵 |
+| 类型与字符集 | 部分实现 | 常用类型、精确NUMBER/FLOAT及signed DecimalScale、普通结果严格解码/宽度、多种客户端SQL/参数编码、JSON参数和CLOB输入预校验、配置的非UTF-8 MySQL字符串fallback、全部配置编码的复杂national输入及Oracle模式初始化/重验 | CLOB读取UTF-8及复杂national存储AL16UTF16边界、非UTF-8无别名表达式元数据歧义；JSON结果严格UTF-8与所查服务器路径一致，其他JSON存储/元数据/版本仍待验收；三种编码Oracle Open实库失败保留；其他类型/metadata及真实编码矩阵 |
 | HA 与恢复 | 部分实现 | Open阶段TCP重试/固定退避/共享预算、TCP健康缓存、TNS/OCP、分组/权重/黑名单及尝试上限；连接级ERR退休与显式Close/Open | 活动连接迁移、透明重连、reroute及完整真实节点/代理故障验收；未知写不自动重放 |
 | Schema 元数据 | 部分实现 | Oracle 20/MySQL 18 个集合、静态 DataTypes 及自动参数推导有本地回归 | 实库字典、权限/版本/代理和类型/DDL 矩阵；推导不扩大过程执行支持 |
 | 批处理与准备缓存 | 部分实现 | 顺序DbBatch、Oracle array binding、opt-in MySQL INSERT rewrite、有限物理会话idle LRU | multi-send、独立bulk及真实DDL/缓存/批量/资源/负载验收 |
@@ -171,7 +171,7 @@ Java 和 .NET 的连接池都已存在；.NET 默认 `Pooling=false`。会话识
 | P1-05 | ADO.NET 行为 | 保留 MySQL StoredProcedure 参数方向、输出和多结果实现及回归（第 24 节）；保留 KeyInfo 键/隐藏列与复杂形状 unknown 契约及回归，补真实目录和完整 schema/parameter metadata、Batch/游标行为表；保留 `SchemaOnly` Prepare-only、第55节Batch元数据/源条目创建及第56节结果限制回归；补真实准备行为验收，以及明确的 adapter 策略 |
 | P1-06 | Oracle 输出/游标 | 保留已实现的文本/二进制cursor列及输出所有权；补Input/InputOutput REF CURSOR、其余PrepareExecute输出形状和真实部署验收 |
 | P1-07 | 复杂类型 | 保留嵌套/有界national、二进制复杂LOB/cursor结果成员、命名LOB内容/匿名标量定位器输入及DDL失效；补命名LOB定位器回绑/复杂cursor输入、文本复杂结果、其他national/匿名输出、未解析身份的整列RETURNING及真实DDL/资源验收 |
-| P1-08 | 类型/字符集 | 保留NUMBER/FLOAT、DecimalScale、普通结果严格字符集/宽度、客户端SQL/参数编码、JSON参数及CLOB输入预校验；补剩余national/JSON/CLOB、扩展类型码/metadata和完整真实矩阵 |
+| P1-08 | 类型/字符集 | 保留NUMBER/FLOAT、DecimalScale、普通结果严格字符集/宽度、客户端SQL/参数编码、JSON参数及CLOB输入预校验；补剩余national/CLOB、扩展类型码/metadata和完整真实矩阵；JSON UTF-8结果是当前协议契约，其存储/服务器转换及元数据矩阵仍需验收，见[最新源码边界复核](obconnector-dotnet-completeness.md#15100-2026-10-27-源码状态与待开发边界复核) |
 | P1-09 | HA/发现 | 保留TCP重试/退避及端点TCP健康缓存；分组黑名单已有本地实现（第58节；全局策略见第50节、分组/权重见第49节）；其他发现策略边界、OBProxy拓扑及真实健康/故障验收仍缺 |
 | P1-10 | Schema | 常用目录/限制参数及 DataTypes 静态映射已有本地实现和最终回归；自动参数推导已有本地交付，真实目录/权限/版本/代理矩阵待验收，见 [Schema 契约](schema.md) |
 | P1-11 | 凭据提供/轮换 | 每次 Open 快照、全口令替换、版本退休、过期/取消及脱敏已有本地实现和最终回归；真实插件/凭据服务/KDC 验收仍缺 |

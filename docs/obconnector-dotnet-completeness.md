@@ -3,7 +3,7 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27；本模块从master/40fa822继续开发，最新证据见第15.99节。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；第15.97节保留前次已提交源码复核，会话、零日期、字符串fallback及复杂national输入分别见第15.92—15.96节。
+**最近复核：** 2026-10-27，对照已提交master/f9e8c20；最新功能从master/40fa822开发，功能证据见第15.99节，本次源码/文档对齐见第15.100节。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；第15.97节保留前次已提交源码复核，会话、零日期、字符串fallback及复杂national输入分别见第15.92—15.96节。
 **当前模块：** CLOB定位器标量/匿名数组输入在发送副本中执行严格客户端编码；V1转换，V2仅在已认证产品4.4.1+转换，旧版/未知身份保留原字节。原始句柄、UTF-8读取、身份/扩展/rowkey、BLOB及无内联内容的外置定位器保持不变，命名CLOB内容仍为严格UTF-8。已确认前一GB18030读回不匹配根因为回绑输入转码；默认和GB18030直连Oracle各16/16及连接对照通过，含外置大CLOB。最终完整单测7938/7938、受影响消费者1240/1240及零警告/错误Release构建通过；独立走查问题已修正并有12项生命周期RED/GREEN及既有不确定修改回归验证，见第15.99节。
 **前一模块：** P1-07/W5复杂LOB输入：命名object/collection的BLOB用byte[]、CLOB用严格UTF-8内容（含嵌套命名元素）；匿名标量BLOB/CLOB数组用同连接/会话/事务/代际的OceanBaseLob定位器。创建及执行均校验，保留调用方所有权；命名定位器回绑在目标SQL前拒绝。当时默认字符集Oracle实库12/12通过，GB18030为10/12；完整单测7913/7913、消费者1220/1220及独立走查通过。原始失败和门禁保留在第15.98节。
 **前一模块：** 复杂NCHAR/NVARCHAR2输入复用全部已配置客户端严格编码器；Oracle受管初始化使用逐项quoted SET及FROM DUAL状态查询。完整单测7846/7846、专项267/267、受影响消费者350/350及Release构建通过，独立走查无遗留问题。显式Oracle数组输入36/48通过；UTF8MB3重映射及SJIS/Big5切换使余12项止于Open，见第15.96节。
@@ -3170,6 +3170,27 @@ P1-07/P1-08，从`master/40fa822`继续开发。前一模块的GB18030匿名CLOB
 
 本模块不关闭命名定位器自动物化、复杂cursor输入、文本复杂结果、national/JSON/元数据其他边界、
 旧版backport、其他字符集/服务器/代理/平台/TLS及完整资源矩阵；原23项和八工作包均保留。
+
+### 15.100 2026-10-27 源码状态与待开发边界复核
+
+**复核基线：master/f9e8c20，工作区无未提交功能代码。** 最新CLOB模块已提交；“已实现”、明确拒绝和仅缺真实验收分别判断，不能用23项大缺口尚未关闭推断所有子功能未开发。
+
+| 范围 | 当前代码状态与入口 | 还缺什么 |
+| --- | --- | --- |
+| JSON | [ResultColumn](../src/OceanBaseConnector/Internal/Protocol/ResultColumn.cs)的type245仅接受MySQL及binary/受支持UTF-8元数据，结果严格UTF-8；[输入与流式回归](../tests/OceanBaseConnector.UnitTests/JsonTests.cs)已存在，配置客户端编码的输入另有实现 | 真实JSON存储、服务器转换及元数据/版本/代理矩阵仍待验收；UTF-8结果本身不列为确定的缺失解码器 |
+| REF CURSOR | [OracleCommandPlan](../src/OceanBaseConnector/Internal/Sql/OracleCommandPlan.cs)明确拒绝Input/InputOutput；Output/ReturnValue、文本/二进制游标值列及复杂结果成员已有实现 | 输入方向、复杂cursor输入及其他输出形状；需先确认输入线协议和会话所有权，不能按输出四字节ID猜测输入格式 |
+| 复杂LOB/结果形状 | [ComplexValueCodec](../src/OceanBaseConnector/Internal/Values/ComplexValueCodec.cs)支持命名BLOB字节/CLOB文本、匿名定位器输入及二进制LOB/cursor成员；[ResultColumn](../src/OceanBaseConnector/Internal/Protocol/ResultColumn.cs)仍拒绝文本复杂列 | 命名LOB定位器回绑、文本复杂结果、未解析身份的整列RETURNING及其他尚无契约的形状 |
+| National及普通元数据 | [NationalCharacterSet](../src/OceanBaseConnector/Internal/Protocol/NationalCharacterSet.cs)已支持全部配置的复杂national客户端输入；[存储类型装载](../src/OceanBaseConnector/OceanBaseConnection.ComplexTypes.cs)仍要求AL16UTF16 | 其他national存储/输出形状、扩展类型码/元数据，以及非UTF-8无别名表达式名称歧义；已有ASCII别名约束保留 |
+| OB20 | [Ob20Packet](../src/OceanBaseConnector/Internal/Protocol/Ob20Packet.cs)拒绝压缩frame；[Ob20Stream](../src/OceanBaseConnector/Internal/Protocol/Ob20Stream.cs)拒绝包含reroute的未支持标记 | 压缩OB20、代理reroute及实际协商/故障恢复验收；普通OB20和标准MySQL压缩不能替代这两项 |
+| 验收工具 | [DatabaseCases](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs)仍有五个DeferredReason：TLS/auth、OB20/trace、topology、unknown outcome、XA crash recovery；零日期已是可执行opt-in用例 | 五项受控环境/故障断言和完整实库矩阵；零日期还缺允许零日期SQL_MODE的真实存储证据，不能再写成第六个占位 |
+
+JSON边界另核对固定服务器提交`5d6cb5c`的
+[ObJsonTC分支](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/observer/mysql/obsm_utils.cpp)及
+[json_cell_str](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/rpc/obmysql/ob_mysql_util.cpp)：
+二进制JSON直接打印到length-encoded文本缓冲区，没有客户端字符集转换参数。现有严格UTF-8结果契约与所查路径一致；这不是所有服务器/代理版本的互操作证明，也不关闭P1-08。
+
+本次重新读取第15.99节最终报告：完整单测7938通过、消费者1240通过，均零失败/跳过；保存的Release构建记录零警告/错误。
+这些是上一功能提交的既有报告，本次仅核对源码、报告和文档，未重跑构建/测试、未连接实库、未新增产品能力。所有历史失败/跳过及23项/八工作包保留；批量multi-send/独立bulk、额外资源等待诊断和完整资源/部署矩阵仍见[交付总览](obconnector-dotnet-delivery-status.md)。
 
 ## 16. 剩余交付工作包
 

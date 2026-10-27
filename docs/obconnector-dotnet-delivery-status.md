@@ -1,10 +1,18 @@
 # Driver delivery status
 
-Last checked: 2026-10-27; latest module developed from `master/40fa822`. This is the current overview; the detailed
+Last checked: 2026-10-27 against committed `master/f9e8c20`; latest module developed from `master/40fa822`. This is the current overview; the detailed
 [completeness baseline](obconnector-dotnet-completeness.md) retains requirements and historical evidence.
 The [module records](obconnector-dotnet-progress.md) retain individual test/review results.
 
 ## Current checkpoint
+
+- Source/documentation alignment at `f9e8c20`: JSON result UTF-8 decoding is the current
+  protocol contract, consistent with the inspected fixed server serializer; it is not evidence
+  of an unimplemented client-charset decoder. Non-default JSON input/storage, unexpected result
+  metadata and other server/proxy profiles still require validation. This documentation-only
+  check rereads the saved final CLOB build/TRX reports; it does not rerun tests or access a database.
+  Concrete unsupported paths and validation-only work are separated in
+  [completeness section 15.100](obconnector-dotnet-completeness.md#15100-2026-10-27-源码状态与待开发边界复核).
 
 - Latest module, developed from `master/40fa822`: scalar/anonymous-array CLOB locator parameters
   transcode inline UTF-8 content in a sending copy using the strict client charset. V1 converts;
@@ -210,12 +218,15 @@ the [module ledger](obconnector-dotnet-progress.md#2026-10-26-session-io-diagnos
 
 These are concrete code/scope gaps, not merely missing real-database reports:
 
-1. Remaining national/JSON/CLOB and extended metadata boundaries (P1-08): JSON results and CLOB
-   reads retain UTF-8 restrictions, stored complex national members require AL16UTF16, and
+1. Remaining national/CLOB and extended metadata boundaries (P1-08): CLOB
+   reads retain the current UTF-8 contract, stored complex national members require AL16UTF16, and
    unsupported type codes/extended metadata reject. Configured DBCS fallback is now locally implemented.
    Complex-national inputs now resolve all configured names. UTF8MB3/SJIS/Big5 currently fail
    managed Oracle Open in the explicit server profile; further national storage/output remains open.
    Non-UTF8 expression results need ASCII aliases under the current metadata contract.
+   JSON results use strict UTF-8 under the inspected server serialization contract; do not add
+   client-charset decoding without evidence of another wire shape. JSON storage/conversion and
+   result metadata across actual server/proxy profiles remain validation work.
 2. Remaining resource-wait instrumentation and workload/overhead validation (P2-04).
 3. Input/InputOutput REF CURSOR and additional output shapes (P1-06).
 4. Named LOB locator rebinding, complex cursor input, additional national/anonymous output shapes,

@@ -4,6 +4,22 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Source and protocol boundary alignment
+
+Checked committed `master/f9e8c20` against result decoding, Oracle cursor planning, complex value
+encoding, national storage gates, OB20 rejection paths and the five remaining acceptance placeholders.
+The fixed server `ObJsonTC`/`json_cell_str` path prints binary JSON into text without a client
+charset conversion argument. The existing strict UTF-8 JSON result contract therefore stays;
+non-default input bytes are not a reason to decode JSON results using the client encoding.
+Other server/proxy metadata and real storage/conversion remain unverified.
+
+Updated the current overview, completeness and audit wording to separate concrete missing code
+from protocol boundaries and external validation. Details and source links are in
+[section 15.100](obconnector-dotnet-completeness.md#15100-2026-10-27-源码状态与待开发边界复核).
+Reread the saved final CLOB reports: units7938/7938 and consumers1240/1240, zero failures/skips;
+the saved Release build has zero warnings/errors. This documentation-only alignment does not
+rerun those gates, access a database or add implementation. Historical failures remain unchanged.
+
 ## 2026-10-27 CLOB locator client encoding
 
 Developed from `master/40fa822`, P1-07/P1-08. Scalar and anonymous-array CLOB locator inputs
