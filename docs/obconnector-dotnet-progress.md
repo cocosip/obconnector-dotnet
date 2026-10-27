@@ -58,7 +58,7 @@
 
 | 功能 | 开发状态 | 已支持范围 | 还缺什么 / 验收边界 |
 | --- | --- | --- | --- |
-| Command/Batch行为 | 部分实现 | Prepare-only SchemaOnly、有界KeyInfo、SingleRow/SingleResult、Batch元数据及结果限制；双模式直连已补 16 项 SchemaOnly/KeyInfo 矩阵（含组合主键、别名投影、可空唯一键和实际隐藏值读取），修复 MySQL 目录大小写匹配 | 完整游标/结果形状、目录权限、锁与副作用矩阵待补 |
+| Command/Batch行为 | 部分实现 | Prepare-only SchemaOnly、有界KeyInfo、SingleRow/SingleResult、Batch元数据及结果限制；双模式直连已补 16 项 SchemaOnly/KeyInfo 矩阵（含组合主键、别名投影、可空唯一键和实际隐藏值读取），新增双模式 Batch SingleRow/SingleResult 同步异步 4 项直连验收，修复 MySQL 目录大小写匹配 | 完整游标/结果形状、目录权限、锁与副作用矩阵待补 |
 | MySQL过程/函数 | 已实现 | 过程集合顺序Input/Output/InputOutput；函数单ReturnValue+Input、隐藏输出和多结果；本次 acceptance console 真实 MySQL 同步/异步函数各1项通过 | 函数不接受Output/InputOutput混用；FetchSize、SchemaOnly/KeyInfo、INOUT stream仍拒绝 |
 | Schema / 参数推导 | 已实现（直连验收部分完成） | 双模式目录、DataTypes、原子参数派生、FLOAT及INOUT归一化；本次双模式 Schema 实库用例 10 项通过，CommandBehavior 元数据补验 16 项通过，过程参数推导再通过 MySQL 2 项和 Oracle 4 项 | Oracle Views/Synonyms 建对象在当前租户返回 `1031/HY000`，不作为客户端 workaround；权限/大小写/重载/版本/代理目录待验收，见[Schema 记录](history/2026-10-28-schema-acceptance.md)和[参数推导记录](history/2026-10-28-routine-derivation-acceptance.md) |
 | DataAdapter / CommandBuilder | 已移出支持范围 | Connector/J 没有对应能力，当前 CRUD 使用显式 `OceanBaseCommand` | 不再提供 public 类型、factory 入口或自动 CRUD 生成 |
@@ -77,7 +77,7 @@
 | OB20/trace显式验收（P2-06） | **已提交，部分实库验收**：代码/文档见`bc020e2`、`c5b4c07`；专项/runner **88/88**，Release零警告/错误；直连4.4.2.2双模式 `declined-ob20` 各6通过 | 用户租户实际协商为 `Layer=mysql`，显式 `ob20` 各2项按契约失败；真实 OB20/trace、OBProxy、TLS/auth 和完整单测环境门禁仍未闭合。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |
 | 验收占位 | 已提交基线仅保留TLS/auth DeferredReason；OB20/trace已替换为可执行profile | 实际服务端未启用OB20时必须保留失败，不能用普通MySQL fallback关闭OB20门禁 |
 
-最新**已交付**模块是 P1-08 客户端字符集修正：MySQL SJIS/Big5 Open 按 Connector/J 发送统一 `SET NAMES`，直连同步/异步 4/4 通过；Oracle 同类 Open 由当前租户返回 `900/42000`，保持失败边界；本地字符集/国民字符回归 227/227 通过，证据见[兼容性记录](compatibility.md#2026-10-28-dbcs-client-charset-open-behavior)。此前**已交付**模块是 P1-02 标准 MySQL 压缩协商修正：服务端未声明 `CLIENT_COMPRESS` 时按 Java 降级普通协议，真实 MySQL/Oracle 直连同步/异步 4/4 通过，证据见[标准压缩记录](history/2026-10-28-standard-compression-fallback.md)。更早的 P0-02/P1-06 Oracle 资源与 REF CURSOR、P1-05/P1-10 元数据及 LOCAL INFILE 实库验收仍见对应历史台账。这些是历史证据，不是本次文档整理的新运行。
+最新**已交付**模块是 P1-05 Command/Batch 结果限制直连验收：双模式 Batch 的 SingleRow/SingleResult 同步异步 4 项通过，确认隐藏批次项排空且连接可复用，证据见[兼容性记录](compatibility.md#2026-10-28-commandbatch-limited-results-acceptance)。此前**已交付**模块是 P1-08 客户端字符集修正：MySQL SJIS/Big5 Open 按 Connector/J 发送统一 `SET NAMES`，直连同步/异步 4/4 通过；Oracle 同类 Open 由当前租户返回 `900/42000`，保持失败边界；本地字符集/国民字符回归 227/227 通过，证据见[兼容性记录](compatibility.md#2026-10-28-dbcs-client-charset-open-behavior)。此前**已交付**模块是 P1-02 标准 MySQL 压缩协商修正：服务端未声明 `CLIENT_COMPRESS` 时按 Java 降级普通协议，真实 MySQL/Oracle 直连同步/异步 4/4 通过，证据见[标准压缩记录](history/2026-10-28-standard-compression-fallback.md)。更早的 P0-02/P1-06 Oracle 资源与 REF CURSOR、P1-05/P1-10 元数据及 LOCAL INFILE 实库验收仍见对应历史台账。这些是历史证据，不是本次文档整理的新运行。
 
 开发优先级：OB20/trace 草稿已提交，后续只推进有 Java/OceanBase 依据且纳入范围的验收。没有输入协议依据的 REF CURSOR/复杂形状和未定义批量/诊断扩展保持拒绝，不以诊断或文档交付替代核心功能支持。
 

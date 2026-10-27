@@ -44,6 +44,18 @@ acceptance console `routines` group passed its synchronous/asynchronous cases (2
 the observed direct server SQL shape only; proxy, TLS, other versions, independent runtimes and
 function type/metadata matrices remain open.
 
+## 2026-10-28 Command/Batch limited results acceptance
+
+The acceptance console now exercises `CommandBehavior.SingleRow` and `SingleResult` on a two-entry
+batch in both compatibility modes and both sync/async paths. `SingleRow` exposes only the first row
+of the first result, while `SingleResult` retains the remaining rows in that result and hides later
+batch entries; both paths drain safely and leave the connection reusable.
+
+The direct OceanBase 4.4.2.2 MySQL and Oracle profiles passed the three selected batch cases each:
+the existing multiple-results control plus the new sync/async limited-result cases (6/6 total).
+This covers result-limit behavior through the public batch API only; permissions, metadata locks,
+cursor result shapes, proxy behavior and long-running resource limits remain open.
+
 ## 2026-10-28 Oracle complex acceptance correction
 
 The direct Oracle 4.4.2.2 run on Windows/.NET 10.0.14 now passes `complex.object` after the

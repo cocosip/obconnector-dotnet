@@ -34,6 +34,12 @@ internal static partial class DatabaseCases
         cases.Add(new("connection.factory-data-source", "connection", Factory));
         cases.Add(new("connection.change-database", "connection", ChangeDatabase, Mode: "MySql", RequiresAlternateDatabase: true));
         cases.Add(new("batch.multiple-results", "batch", Batch));
+        foreach (var asynchronous in new[] { false, true })
+        {
+            var suffix = asynchronous ? "async" : "sync";
+            cases.Add(new("batch.limited-results." + suffix, "batch",
+                (c, token) => BatchLimitedResults(c, asynchronous, token)));
+        }
         cases.Add(new("schema.collections", "schema", Schema));
         cases.Add(new("types.mysql-client-behavior", "types", MySqlClientBehavior, Mode: "MySql", RequiresObjects: true));
         cases.Add(new("schema.created-table", "schema", SchemaTable, RequiresObjects: true));

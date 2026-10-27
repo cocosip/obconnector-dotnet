@@ -188,6 +188,13 @@ public sealed class AcceptanceRunnerTests
             Assert.Equal("MySql", c.Mode);
             Assert.True(c.RequiresObjects);
         });
+        Assert.Equal(2, cases.Count(c => c.Name.StartsWith("batch.limited-results.", StringComparison.Ordinal)));
+        Assert.All(cases.Where(c => c.Name.StartsWith("batch.limited-results.", StringComparison.Ordinal)), c =>
+        {
+            Assert.Equal("batch", c.Group);
+            Assert.Null(c.Mode);
+            Assert.False(c.RequiresObjects);
+        });
     }
 
     [Fact]
