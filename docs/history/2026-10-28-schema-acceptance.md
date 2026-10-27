@@ -33,10 +33,12 @@ Oracle Views/Synonyms 的 DDL 互操作仍受该 OceanBase 租户能力限制，
 
 ## 2026-10-28 CommandBehavior 元数据补验
 
-在同一双模式直连 profile 上新增并运行 `MetadataBehaviorTests`，共 4 项通过：
+在同一双模式直连 profile 上新增并运行 `MetadataBehaviorTests`，共 16 项通过：
 
-- MySQL/Oracle 各一项 `SchemaOnly`：准备结果元数据但不上传输入流，流位置保持为 0；
-- MySQL/Oracle 各一项 `KeyInfo`：投影不含主键时追加隐藏主键列，`VisibleFieldCount` 保持原结果形状。
+- MySQL/Oracle、同步/异步各一项 `SchemaOnly`：准备结果元数据但不上传输入流，流位置保持为 0；
+- MySQL/Oracle、同步/异步各一项单主键 `KeyInfo`：投影不含主键时追加隐藏主键列；
+- MySQL/Oracle、同步/异步各一项组合主键别名投影：追加两个隐藏键列并实际读取键值；
+- MySQL/Oracle、同步/异步各一项可空唯一键：标记 `IsUnique`，不冒充 `IsKey`。
 
 补验首先在旧代码下复现 MySQL `KeyInfo` 缺陷：OceanBase MySQL 目录返回小写表名，而查询结果元数据保留大写对象名，大小写敏感匹配导致隐藏键列不追加。修复为仅在 MySQL 模式对 schema/table 来源标识使用不区分大小写匹配；Oracle 仍保持大小写敏感。受影响 KeyInfo 单测 97 项通过，Release 全解决方案构建 0 警告/0 错误。
 
