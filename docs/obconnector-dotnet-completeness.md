@@ -3,7 +3,8 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**当前诊断模块：** 2026-10-27，从master/37cf788补协议协商诊断Negotiated：物理认证、身份和字符集初始化完成后报告请求/实际帧层及trace请求/启用/modern格式，仅固定脱敏标量，不记录采样或导出成功。完整单测8091/8091、最终专项及runner488/488、五资产同一.NET10 host消费者340/340及零警告/错误Release构建通过；一次最终走查无遗留问题，门禁见第15.106节及模块台账。两验收占位仍保留，23项及八包仍未整体关闭。
+**当前源码检查点：** 2026-10-27，对照master/85e6fe6重新核对；本次仅同步文档。协议协商诊断已提交，OB20/trace显式验收尚未实现，不能将后续方案记作开发中或已完成。源码拒绝路径、两个验收占位及保存的测试证据见第15.107节；23项及八包仍未整体关闭，不代表其全部子功能缺失。
+**最新已提交诊断模块：** 85e6fe6，2026-10-27从master/37cf788补协议协商诊断Negotiated：物理认证、身份和字符集初始化完成后报告请求/实际帧层及trace请求/启用/modern格式，仅固定脱敏标量，不记录采样或导出成功。该模块保存结果为完整单测8091/8091、最终专项及runner488/488、五资产同一.NET10 host消费者340/340及零警告/错误Release构建通过；一次最终走查无遗留问题，门禁见第15.106节及模块台账。两验收占位仍保留。
 **前一源码复核：** 已提交37cf788，对齐master/06a18bb。输入/双向REF CURSOR、命名复杂LOB定位器回绑、文本复杂结果仍有显式拒绝路径；不能把输出游标ID、匿名定位器或二进制复杂解码直接当作其输入/文本协议。固定Java文本Array/Struct读取也未实现，服务端有独立文本序列化分支，见第15.105节。该次仅更新文档，不新增功能或实库运行。
 **当前拓扑验收：** 已提交06a18bb，2026-10-27从master/21e3de2开发六项受控客户端路由只读验收，见第15.104节。XA模块已提交21e3de2；实际节点/发现服务/代理HA仍未验证。
 **前一复核：** 2026-10-27，XA协调器进程崩溃恢复验收从master/7ebc590开发，见第15.103节；网络故障矩阵已提交7ebc590，历史记录15.1—15.102完整保留。23项及八工作包仍未整体关闭。
@@ -105,8 +106,8 @@ The overview separates remaining development from real-environment validation; h
 | 类型/性能 | 嵌套complex/DDL失效、字符集/NUMBER/scale、idle cache、分段/慢命令诊断 | 扩展成员/其余形状、批量优化、其他资源等待诊断及负载 |
 | 发布 | 五资产本地消费和部分直连报告 | 承诺版本/平台/独立运行时/OBProxy/TLS/认证/故障及包发布验收 |
 
-当前开发点：上传源流读取诊断见第15.101节；CLOB定位器客户端输入编码见第15.99节，命名LOB内容/匿名定位器输入见第15.98节，复杂national客户端输入及Oracle受管初始化见第15.96节；Oracle FLOAT参数派生保留第15.84节，客户端SQL/参数编码保留第15.80节，组TCP上限及地址级覆盖保留第15.64/15.65节。
-具体已交付、验证结果和仍欠功能见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-upload-source-read-diagnostics)及[交付总览](obconnector-dotnet-delivery-status.md)。
+最新已交付模块：协议协商诊断见第15.106节；当前源码与未实施边界见第15.107节。此前上传源流读取诊断见第15.101节；CLOB定位器客户端输入编码见第15.99节，命名LOB内容/匿名定位器输入见第15.98节，复杂national客户端输入及Oracle受管初始化见第15.96节；Oracle FLOAT参数派生保留第15.84节，客户端SQL/参数编码保留第15.80节，组TCP上限及地址级覆盖保留第15.64/15.65节。
+具体已交付、验证结果和仍欠功能见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-authenticated-protocol-negotiation-diagnostics)及[交付总览](obconnector-dotnet-delivery-status.md)。
 
 ## 2. 当前能力基线
 
@@ -3345,6 +3346,27 @@ opt-out集成15通过/116跳过/零失败；九文件格式、八文档930相对
 negotiation观测不代替受控完整验收、真实代理互操作、服务器trace导出或负载开销报告。
 23项及八工作包与15.1—15.105历史继续保留。
 
+### 15.107 2026-10-27 已提交进度与尚未实施工作复核
+
+本次以master/85e6fe6为源码基线；开始核对时工作区干净。仅更新完整性基线、交付总览和进度台账，
+不新增产品、测试或配置功能，不将研究方案计为开发交付。第15.106节的诊断模块现已提交为85e6fe6。
+
+| 范围 | 当前源码事实 | 还缺什么 |
+| --- | --- | --- |
+| 协议协商观测（P2-04/P2-06） | [HandshakeFlow](../src/OceanBaseConnector/Internal/Session/HandshakeFlow.cs)同步/异步完成物理认证、身份和字符集初始化后调用ReportNegotiated；[PacketChannel](../src/OceanBaseConnector/Internal/Protocol/PacketChannel.cs)从实际wrapper/context报告六个标量 | 后续命令双向帧、trace数据发送和服务器采样/导出须分别验收；事件不证明这些结果 |
+| OB20/trace与TLS/auth验收（P2-06） | [DatabaseCases](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs)仍有两个DeferredReason占位；[AcceptanceConfig](../tests/OceanBaseConnector.Acceptance/AcceptanceConfig.cs)尚无OB20/trace专用profile | 显式profile、协商成功/拒绝及格式断言、实际命令双向帧与trace发送断言；TLS/auth需独立证书/插件及负向握手profile。OB20/trace后续方案尚未落地，无新增验收结果 |
+| Oracle输入与复杂结果（P1-06/P1-07） | [OracleCommandPlan](../src/OceanBaseConnector/Internal/Sql/OracleCommandPlan.cs)仍拒绝Input/InputOutput REF CURSOR；[ComplexValueCodec](../src/OceanBaseConnector/Internal/Values/ComplexValueCodec.cs)拒绝命名LOB定位器且无非空cursor成员输入编码；[ResultColumn](../src/OceanBaseConnector/Internal/Protocol/ResultColumn.cs)仍拒绝文本复杂结果 | 先确认各输入/文本形状的协议与会话、statement、事务及资源所有权，再补实现和回归；已有输出/二进制解码不等于输入/文本支持 |
+| OB20压缩/reroute（P1-02） | [Ob20Packet](../src/OceanBaseConnector/Internal/Protocol/Ob20Packet.cs)拒绝非零uncompressed length；[Ob20Stream](../src/OceanBaseConnector/Internal/Protocol/Ob20Stream.cs)拒绝不支持的响应标志（含reroute） | 第16.3节客户端链路/版本/capability契约、编解码及安全路由/未知结果边界，随后真实代理互操作 |
+
+其余national存储/输出、扩展元数据、多发送/独立bulk、其他资源等待、并发/长期资源、真实HA及完整版本/
+代理/TLS/平台/运行时矩阵仍按第4、14、16节开放；不因新增协商事件而关闭任何整项。
+
+本次重新读取第15.106节保存的TRX、构建日志及五资产哈希，确认历史记录为完整单测8091/8091、
+消费者340/340、重建专项及runner488/488、opt-out集成15通过/116跳过，Release零警告/错误。
+这些是上个模块的保存证据，本次没有重跑构建、单测、消费者或实库，也未新增独立最终走查。
+文档差异、相对链接、历史段落、23个ID/八工作包、两个占位及新增内容脱敏另行检查。
+真实连接仅用于独立显式验收；普通单测/CI不依赖用户环境，连接信息不进入代码、配置、文档或验证产物。
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。
@@ -3357,7 +3379,7 @@ negotiation观测不代替受控完整验收、真实代理互操作、服务器
 | W4 信任、发现与凭据：P1-04、P1-09、P1-11 | 凭据提供/轮换已有本地实现，补真实凭据服务与插件验收；保留第15.50节TCP整轮重试/固定退避及共享预算、第15.51节端点TCP健康缓存；补真实节点/代理健康与故障验收，保留第15.52节TNS文件及第15.53节OCP HTTP适配，保留第15.54节分组/策略/权重，保留第15.55节全局黑名单/尝试上限及第15.63节分组覆盖，补其他发现边界；组内尝试上限及地址级黑名单已有本地实现（第15.64/15.65节）。现有 TLS 回调、证书副本及池身份无需重做 | 企业 CA/mTLS、证书与凭据过期/刷新失败、撤销、KDC/plugin 成功及拒绝；地址更新/错误身份/节点与代理故障；Windows/Linux 报告 | W1 池身份、W2 重试边界 |
 | W5 命令、Oracle 与类型：P1-05、P1-06、P1-07、P1-08 | 保留Command/Batch/REF CURSOR结果限制、KeyInfo/SchemaOnly、MySQL过程、Oracle独立Prepare/输出提示、文本/二进制cursor列及二进制复杂BLOB/CLOB/cursor结果成员；保留命名LOB内容/匿名标量定位器输入（第15.98节）、NUMBER/FLOAT、signed DecimalScale、客户端SQL/普通及JSON参数编码和CLOB输入预校验；补Input/InputOutput REF CURSOR、命名LOB定位器回绑/复杂cursor输入、文本复杂结果、其他national/匿名输出及未解析身份的复杂整列RETURNING；扩展类型/metadata及完整真实部署矩阵继续开放；可观察DDL自动失效已有，外部/不透明DDL须显式清理 | Command/Batch/REF CURSOR行为表；NULL/方向/精度/溢出/编码/取消与资源释放矩阵；SchemaOnly副作用/锁/大结果报告；服务端不支持形状单列 | G0；资源生命周期与W1联动 |
 | W6 目录与 ADO.NET 生态：P1-10、P2-01 | 常用目录/限制参数及 DataTypes 已本地完成；自动参数推导已通过本地回归和独立走查（第 15.18 节）；补实库/权限/版本/代理矩阵；DataAdapter/CommandBuilder 已有本地填充、映射/事件和有界 CRUD，补真实验收，不以 ADO.NET provider 代替 EF Core provider | 双模式目录/权限/大小写/空集合；类型映射与过程重载/参数方向；保留 adapter CRUD、键、原始值/NULL 和乐观并发本地回归；补实际 SQL/锁及独立运行时报告 | W5 键与结果元数据 |
-| W7 性能与可观测性：P2-02、P2-03、P2-04 | 保留已有 opt-in idle statement cache，补真实 DDL/reprepare/资源/负载验收；保留第15.72节opt-in MySQL INSERT rewrite及group failure，补multi-send/bulk及真实性能验收；保留建连/探活九阶段直方图及固定标签回归，保留慢命令阈值/脱敏/回调隔离回归；保留第15.57节协议帧诊断；补其他资源等待和负载验收。保留顺序 Batch 和 Oracle array binding | 缓存容量/失效/关闭、批量部分失败/事务/取消/包限额；吞吐、延迟、峰值内存与资源上限对照；诊断脱敏和监听开销 | W1 generation/reset、W5 绑定规则 |
+| W7 性能与可观测性：P2-02、P2-03、P2-04 | 保留已有 opt-in idle statement cache，补真实 DDL/reprepare/资源/负载验收；保留第15.72节opt-in MySQL INSERT rewrite及group failure，补multi-send/bulk及真实性能验收；保留建连/探活九阶段直方图及固定标签回归，保留慢命令阈值/脱敏/回调隔离回归；保留第15.57/15.106节协议帧/协商诊断、会话I/O及第15.101节上传源流读取耗时；补其他资源等待和负载验收。保留顺序 Batch 和 Oracle array binding | 缓存容量/失效/关闭、批量部分失败/事务/取消/包限额；吞吐、延迟、峰值内存与资源上限对照；诊断脱敏和监听开销 | W1 generation/reset、W5 绑定规则 |
 | W8 运行时与发布：P2-05、P2-06 | 明确版本/平台/TFM/Framework/ORM范围；保留Windows六配置nupkg协议子集、诊断卸载修复及历史失败；2个matrix.*占位需环境和断言；受控客户端路由已有6项只读显式断言及双模式直连各7/7（第15.104节），真实集群/发现/代理HA仍缺；受控网络unknown已有显式断言与双模式直连专项，完整故障矩阵仍缺，零日期已有显式profile及存储/回绑断言但真实SQL_MODE前置失败；保留同客户端通道复用与旧销毁隔离双模式报告，补代理后端与完整资源矩阵；完成包名/来源/许可/发布审查 | 每个承诺profile的nupkg consumer、实库/代理/TLS/认证/故障报告；允许零日期的SQL_MODE profile；保留失败/跳过、外部coordinator crash recovery及清理结果 | 各包持续积累证据，正式发布须满足第7.3节 |
 
 ### 16.1 压缩与 reroute 的独立交付边界

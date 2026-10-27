@@ -1,11 +1,20 @@
 # Driver delivery status
 
-Last checked: 2026-10-27; protocol negotiation diagnostics developed from `master/37cf788`.
-The prior source/documentation alignment and controlled topology acceptance are committed. This is the current overview; the detailed
+Last checked: 2026-10-27 against committed `master/85e6fe6` (protocol negotiation diagnostics).
+This check updates documentation only; it does not implement the next acceptance module. This is the current overview; the detailed
 [completeness baseline](obconnector-dotnet-completeness.md) retains requirements and historical evidence.
 The [module records](obconnector-dotnet-progress.md) retain individual test/review results.
 
 ## Current checkpoint
+
+- Source alignment at `85e6fe6`: negotiation diagnostics are committed. OB20/trace acceptance
+  still has no dedicated configuration profile or executable matrix case; it remains one of
+  two DeferredReason placeholders, alongside TLS/authentication. Research for that next module
+  is not an uncommitted implementation or a new validation result. Oracle input/complex-shape
+  and compressed-OB20/reroute rejection paths remain in source. See
+  [completeness section 15.107](obconnector-dotnet-completeness.md#15107-2026-10-27-已提交进度与尚未实施工作复核).
+  Saved latest reports and product hashes are rechecked; no build/test/database run or new
+  independent final review is performed for this documentation-only alignment.
 
 - Current implementation: the protocol DiagnosticListener now reports requested/actual framing,
   requested/enabled full-link trace and active modern trace format after physical authentication,
@@ -375,9 +384,15 @@ These are representative commits, not a replacement for the complete Git log or 
 | Trusted single-byte and DBCS MySQL string fallback | `f03f235`, `ed2fc84` |
 | Complex national client input and Oracle managed charset initialization | `c09cf0a` |
 | Diagnostics and packaged runtime protocol verification | `b2fce9d`, `5ea71b2`, `ffceec8`, `d7a5354`, `e3a07a2` |
+| Authenticated protocol negotiation diagnostics | `85e6fe6` |
 
 ## Verification boundary and next work
 
+- Latest implementation verification is [protocol negotiation diagnostics](obconnector-dotnet-progress.md#2026-10-27-authenticated-protocol-negotiation-diagnostics),
+  committed as `85e6fe6`: saved complete units8091/8091, consumers340/340, final focused/runner488/488,
+  opt-out15 pass/116 skip and Release zero warnings/errors. Product hashes match the saved
+  five-asset record. These are retained results, not tests rerun during this source alignment.
+  No real OB20/trace or independent-runtime/load compatibility is established by this module.
 - Latest acceptance verification is [controlled topology](obconnector-dotnet-progress.md#2026-10-27-controlled-topology-acceptance),
   committed as06a18bb: saved final full units8066/8066, Release build zero warnings/errors,
   opt-out integration15 pass/116 skip and direct Oracle7/7/MySQL7/7. These are the saved module

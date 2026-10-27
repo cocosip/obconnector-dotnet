@@ -4,9 +4,30 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Committed progress and pending acceptance alignment
+
+Documentation-only check against clean master/85e6fe6. The authenticated protocol negotiation
+module below is committed as85e6fe6. Source checks confirm its sync/async publication sites,
+actual wrapper/context values, the Oracle input/complex-result rejection paths and the
+compressed-OB20/reroute guards. Acceptance still has exactly two DeferredReason placeholders:
+TLS/authentication and OB20/trace. No dedicated OB20/trace profile or executable acceptance
+matrix has been added; the proposed follow-up is research, not implementation in progress.
+
+Saved final TRX/build reports and five product hashes are rechecked: complete units8091/8091,
+consumers340/340, final focused/runner488/488, opt-out15 pass/116 skip and Release zero warnings/
+errors belong to the committed module below. No build/test/consumer/database run or new
+independent final review is performed for this documentation-only change. Relative links,
+diff whitespace, historical sections,23 gap IDs/eight packages,two placeholders and added-content
+privacy are checked separately. No connection settings or secrets are added to tracked files.
+Ordinary unit/CI tests remain independent of real environments; live checks remain explicit.
+
+The [current overview](obconnector-dotnet-delivery-status.md) and
+[completeness section15.107](obconnector-dotnet-completeness.md#15107-2026-10-27-已提交进度与尚未实施工作复核)
+record the implementation/validation distinction. No original gap ID or work package is closed.
+
 ## 2026-10-27 Authenticated protocol negotiation diagnostics
 
-Developed inline from master/37cf788, P2-04/P2-06 and W7/W8. The existing protocol listener adds
+Committed as85e6fe6; developed inline from master/37cf788, P2-04/P2-06 and W7/W8. The existing protocol listener adds
 Negotiated with exactly six fixed scalar fields: ChannelId, Layer, RequestedLayer,
 FullLinkTraceRequested, FullLinkTraceEnabled and ModernTraceFormat. Actual wrappers/context supply
 the selected values. Both authentication paths emit after identity/charset initialization success;
