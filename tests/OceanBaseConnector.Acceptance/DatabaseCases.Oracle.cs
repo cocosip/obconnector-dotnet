@@ -135,10 +135,10 @@ internal static partial class DatabaseCases
         var name = c.NewObject("TYPE");
         await c.ExecuteAsync(connection, "CREATE TYPE " + name + (collection ? " AS TABLE OF NUMBER" : " AS OBJECT (n NUMBER, s VARCHAR2(40))"), token);
         var owner = Convert.ToString(await c.ScalarAsync(connection, "SELECT USER FROM DUAL", token), CultureInfo.InvariantCulture)!;
+        var table = await c.TableAsync(connection, "id INTEGER PRIMARY KEY, value " + name, token);
         var type = await connection.GetComplexTypeAsync(owner, name, cancellationToken: token);
         c.Check(type.IsCollection == collection, "Dictionary type kind must match created type.");
         var value = collection ? type.CreateValue(1, 2, 3) : type.CreateValue(7, "中文");
-        var table = await c.TableAsync(connection, "id INTEGER PRIMARY KEY, value " + name, token);
         await using (var insert = c.Command(connection, "INSERT INTO " + table + " VALUES (1, :value)"))
         { CaseContext.Parameter(insert, "value", value); await insert.ExecuteNonQueryAsync(token); }
         foreach (var prepared in new[] { false, true })

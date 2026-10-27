@@ -49,8 +49,7 @@ internal sealed class CaseContext(AcceptanceConfig config, string connectionStri
         => IntegerResult(await ScalarAsync(connection, "SELECT COUNT(*) FROM " + table, token, transaction));
     public string NewObject(string kind)
     {
-        if (kind != "TABLE" && kind != "TYPE" && kind != "PROCEDURE") throw new ArgumentException("Unsupported test object.");
-        var name = "OBA_" + Guid.NewGuid().ToString("N").Substring(0, 20).ToUpperInvariant();
+        var name = NewObjectName(kind);
         RegisterCleanup(kind, name, async () =>
         {
             await using var connection = await OpenAsync(CancellationToken.None);
@@ -66,9 +65,19 @@ internal sealed class CaseContext(AcceptanceConfig config, string connectionStri
 
     public async Task<string> TableAsync(OceanBaseConnection connection, string columns, CancellationToken token)
     {
-        var name = NewObject("TABLE");
+        var name = NewObjectName("TABLE");
         await ExecuteAsync(connection, "CREATE TABLE " + name + " (" + columns + ")", token);
+        RegisterCleanup("TABLE", name, async () =>
+        {
+            await using var cleanup = await OpenAsync(CancellationToken.None);
+            await ExecuteAsync(cleanup, "DROP TABLE " + name, CancellationToken.None);
+        });
         return name;
+    }
+    private static string NewObjectName(string kind)
+    {
+        if (kind != "TABLE" && kind != "TYPE" && kind != "PROCEDURE") throw new ArgumentException("Unsupported test object.");
+        return "OBA_" + Guid.NewGuid().ToString("N").Substring(0, 20).ToUpperInvariant();
     }
     internal static long IntegerResult(object? value)
     {

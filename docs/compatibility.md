@@ -8,6 +8,16 @@ because the server negotiated `Layer=mysql`. This is real fallback evidence, not
 trace collector compatibility. Dated module records below retain their historical counts and
 limitations; the [current matrix](obconnector-dotnet-progress.md) tracks the latest gates.
 
+## 2026-10-28 Oracle complex acceptance correction
+
+The direct Oracle 4.4.2.2 run on Windows/.NET 10.0.14 now passes `complex.object` after the
+acceptance case reloads its descriptor after the table DDL, matching the driver's automatic
+complex-type cache invalidation contract. `complex.collection` still fails at `CREATE TABLE`
+with server error `600/0A000` because this OceanBase version rejects a nested-table type as a
+table column; no collection value is bound. Table cleanup is registered only after a successful
+CREATE, so the run has no cleanup failure. This does not add a client workaround or claim that
+collection procedure parameters/array binding are unsupported.
+
 ## 2026-10-27 Authenticated protocol negotiation diagnostics
 
 Developed from master/37cf788. The existing protocol listener now distinguishes requested and
