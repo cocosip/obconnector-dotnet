@@ -23,6 +23,9 @@
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/PoolConfigurationFixture.cs" Link="TestInfrastructure/PoolConfigurationFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/CatalogSamples.cs" Link="TestInfrastructure/CatalogSamples.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/ServerIdentity.cs" Link="TestInfrastructure/ServerIdentity.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/SourceReadFixture.cs" Link="TestInfrastructure/SourceReadFixture.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/Loopback.cs" Link="TestInfrastructure/Loopback.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/ProtocolFixture.cs" Link="TestInfrastructure/ProtocolFixture.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/MutualTlsServer.cs" Link="TestInfrastructure/MutualTlsServer.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/CompressionServer.cs" Link="TestInfrastructure/CompressionServer.cs" />
     <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/CredentialServer.cs" Link="TestInfrastructure/CredentialServer.cs" />

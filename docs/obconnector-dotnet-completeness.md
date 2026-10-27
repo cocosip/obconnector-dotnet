@@ -3,8 +3,9 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27，对照已提交master/f9e8c20；最新功能从master/40fa822开发，功能证据见第15.99节，本次源码/文档对齐见第15.100节。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；第15.97节保留前次已提交源码复核，会话、零日期、字符串fallback及复杂national输入分别见第15.92—15.96节。
-**当前模块：** CLOB定位器标量/匿名数组输入在发送副本中执行严格客户端编码；V1转换，V2仅在已认证产品4.4.1+转换，旧版/未知身份保留原字节。原始句柄、UTF-8读取、身份/扩展/rowkey、BLOB及无内联内容的外置定位器保持不变，命名CLOB内容仍为严格UTF-8。已确认前一GB18030读回不匹配根因为回绑输入转码；默认和GB18030直连Oracle各16/16及连接对照通过，含外置大CLOB。最终完整单测7938/7938、受影响消费者1240/1240及零警告/错误Release构建通过；独立走查问题已修正并有12项生命周期RED/GREEN及既有不确定修改回归验证，见第15.99节。
+**最近复核：** 2026-10-27，源流读取诊断从master/3ef375d开发，门禁状态见第15.101节；已提交源码复核保留第15.100节，前一CLOB功能证据见第15.99节。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；第15.97节保留前次已提交源码复核，会话、零日期、字符串fallback及复杂national输入分别见第15.92—15.96节。
+**当前模块：** P2-04/W7应用上传源流读取耗时，覆盖MySQL long data、Oracle piece data及LOCAL INFILE的同步/异步Read调用；独立源类型/模式/最终结果固定标签，复用交换释放及pending完成后的汇总发布。专项156/156、完整单测7977/7977、受影响消费者315/315及Release构建零警告/错误通过；独立走查无遗留问题。指标范围见[源流读取契约](source-read-diagnostics.md)，证据见第15.101节；不证明实库或负载开销。
+**前一模块：** CLOB定位器标量/匿名数组输入在发送副本中执行严格客户端编码；V1转换，V2仅在已认证产品4.4.1+转换，旧版/未知身份保留原字节。原始句柄、UTF-8读取、身份/扩展/rowkey、BLOB及无内联内容的外置定位器保持不变，命名CLOB内容仍为严格UTF-8。已确认前一GB18030读回不匹配根因为回绑输入转码；默认和GB18030直连Oracle各16/16及连接对照通过，含外置大CLOB。最终完整单测7938/7938、受影响消费者1240/1240及零警告/错误Release构建通过；独立走查问题已修正并有12项生命周期RED/GREEN及既有不确定修改回归验证，见第15.99节。
 **前一模块：** P1-07/W5复杂LOB输入：命名object/collection的BLOB用byte[]、CLOB用严格UTF-8内容（含嵌套命名元素）；匿名标量BLOB/CLOB数组用同连接/会话/事务/代际的OceanBaseLob定位器。创建及执行均校验，保留调用方所有权；命名定位器回绑在目标SQL前拒绝。当时默认字符集Oracle实库12/12通过，GB18030为10/12；完整单测7913/7913、消费者1220/1220及独立走查通过。原始失败和门禁保留在第15.98节。
 **前一模块：** 复杂NCHAR/NVARCHAR2输入复用全部已配置客户端严格编码器；Oracle受管初始化使用逐项quoted SET及FROM DUAL状态查询。完整单测7846/7846、专项267/267、受影响消费者350/350及Release构建通过，独立走查无遗留问题。显式Oracle数组输入36/48通过；UTF8MB3重映射及SJIS/Big5切换使余12项止于Open，见第15.96节。
 **前一开发模块：** P1-08将MySQL字符串fallback扩展到配置的GBK、GB18030/2022、SJIS、Big5、HKSCS/HKSCS31；严格会话匹配、字符转义再编码保持多字节尾5C，兼顾四字节/补充字符。非UTF-8无别名表达式元数据仍有混合/歧义编码，保留ASCII别名限制；显式实库只验证生成字面量解析，不证明真实1295自动回退。
@@ -101,8 +102,8 @@ The overview separates remaining development from real-environment validation; h
 | 类型/性能 | 嵌套complex/DDL失效、字符集/NUMBER/scale、idle cache、分段/慢命令诊断 | 扩展成员/其余形状、批量优化、其他资源等待诊断及负载 |
 | 发布 | 五资产本地消费和部分直连报告 | 承诺版本/平台/独立运行时/OBProxy/TLS/认证/故障及包发布验收 |
 
-当前开发点：CLOB定位器客户端输入编码见第15.99节；命名LOB内容/匿名定位器输入见第15.98节，复杂national客户端输入及Oracle受管初始化见第15.96节；Oracle FLOAT参数派生保留第15.84节，客户端SQL/参数编码保留第15.80节，组TCP上限及地址级覆盖保留第15.64/15.65节。
-具体已交付、验证结果和仍欠功能见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-clob-locator-client-encoding)及[交付总览](obconnector-dotnet-delivery-status.md)。
+当前开发点：上传源流读取诊断见第15.101节；CLOB定位器客户端输入编码见第15.99节，命名LOB内容/匿名定位器输入见第15.98节，复杂national客户端输入及Oracle受管初始化见第15.96节；Oracle FLOAT参数派生保留第15.84节，客户端SQL/参数编码保留第15.80节，组TCP上限及地址级覆盖保留第15.64/15.65节。
+具体已交付、验证结果和仍欠功能见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-upload-source-read-diagnostics)及[交付总览](obconnector-dotnet-delivery-status.md)。
 
 ## 2. 当前能力基线
 
@@ -175,7 +176,7 @@ The overview separates remaining development from real-environment validation; h
 | P2-01 | P2 | DataAdapter | 部分实现；本地模块 | 同步填充、映射/事件、显式或自动参数化 CRUD；保留可见行键、生成值回填、复杂形状限制，补真实 CRUD/并发/运行时验收 |
 | P2-02 | P2 | Statement cache | 部分实现 | 有限 idle LRU、上下文/reset 失效和关闭已有本地实现；真实 DDL/reprepare、资源/负载/代理与运行时验收仍缺 |
 | P2-03 | P2 | 批处理优化 | 部分实现 | opt-in INSERT rewrite及合并组失败归属已有本地路径；multi-send/bulk及真实负载验收仍缺 |
-| P2-04 | P2 | 诊断 | 部分实现 | 建连/探活分段、慢命令阈值、协议帧、会话I/O耗时及当前池租约指标已有本地实现；补其他资源等待及性能验收 |
+| P2-04 | P2 | 诊断 | 部分实现 | 建连/探活分段、慢命令阈值、协议帧、会话I/O/上传源流读取耗时及当前池租约指标已有本地实现；补其他资源等待及性能验收 |
 | P2-05 | P2 | TFM/生态 | 部分验证；诊断卸载缺陷已修复 | 每个TFM的正式支持矩阵和package consumer验收；第15.58节保留原默认CLR崩溃与条件通过；第15.59节保留诊断卸载修复；第15.74节新增Windows六配置nupkg协议子集，完整运行时/平台/实库矩阵仍缺 |
 | P2-06 | P2（扩展矩阵）/ 发布阻塞（承诺范围） | 真实兼容性 | 部分验证 | 承诺范围必须有真实版本、OBProxy、TLS、认证、平台和故障报告，扩展范围再分期 |
 
@@ -3191,6 +3192,20 @@ JSON边界另核对固定服务器提交`5d6cb5c`的
 
 本次重新读取第15.99节最终报告：完整单测7938通过、消费者1240通过，均零失败/跳过；保存的Release构建记录零警告/错误。
 这些是上一功能提交的既有报告，本次仅核对源码、报告和文档，未重跑构建/测试、未连接实库、未新增产品能力。所有历史失败/跳过及23项/八工作包保留；批量multi-send/独立bulk、额外资源等待诊断和完整资源/部署矩阵仍见[交付总览](obconnector-dotnet-delivery-status.md)。
+
+### 15.101 2026-10-27 上传源流读取诊断
+
+**开发起点master/3ef375d，P2-04/W7；本地门禁完成。** 新增`oceanbase.client.source.read.duration`（double，秒），每交换/已使用源类型至多一条汇总，覆盖MySQL参数long data、Oracle参数piece data和LOCAL INFILE的同步/异步源流读取。
+EOF及抛错读取计时，源自身CPU工作和等待计入；流工厂/Dispose、网络发包及应答、读取调用间隔和结果消费不计入。固定标签为`oceanbase.source.kind=parameter/local_infile`、模式及最终映射outcome；不含文件名、SQL、参数下标/值、端点或异常文本。
+协议与源流计时独立启用，复用已有SessionIo锁/pending及释放后发布；关闭指标不启动计时，异步路径保持底层Task直返。参数流仍归调用方，LOCAL INFILE流仍由驱动释放；取消、超时、暂存数据及unknown outcome规则不变，指标不能授权重试。
+
+源码：[累积与发布](../src/OceanBaseConnector/Internal/DriverDiagnostics.SessionIo.cs)、[共享读封装](../src/OceanBaseConnector/Internal/Session/CommandExchange.Io.cs)。
+测试：[公共行为与并发对照](../tests/OceanBaseConnector.UnitTests/SourceReadDiagnosticsTests.cs)、[共享协议夹具](../tests/OceanBaseConnector.UnitTests/TestInfrastructure/SourceReadFixture.cs)、[五资产消费者](../tests/OceanBaseConnector.ConsumerTests/SourceReadConsumerTests.cs)。
+精确指标/回调/性能边界见[公共契约](source-read-diagnostics.md)，门禁及原始失败见[模块台账](obconnector-dotnet-progress.md#2026-10-27-upload-source-read-diagnostics)。
+
+最终完整单测7977/7977（相对前一CLOB模块新增39、无移除）、受影响消费者315/315（含新增五资产60例），均零失败/跳过；专项156/156及串行Release构建零警告/错误通过。普通opt-out集成13通过/116跳过/零失败，未读取真实环境。独立最终走查无Critical/Important/Minor，无拒绝或延期意见。30项缺少指标的RED均在最终完整单测通过；原夹具失败、24/30阶段断言修订及两次消费者缺链接构建失败保留。
+
+本模块不关闭其他资源等待、负载/开销、服务器/OBProxy/平台/独立运行时验证；所有23项/八工作包与历史失败保留。普通测试仅合成loopback，不读取真实连接信息。
 
 ## 16. 剩余交付工作包
 

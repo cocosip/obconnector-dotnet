@@ -254,7 +254,7 @@ namespace OceanBaseConnector.Internal.Session
             while (true)
             {
                 _budget.Token.ThrowIfCancellationRequested();
-                var read = stream.Read(buffer, 0, buffer.Length);
+                var read = ReadSource(stream, buffer, 0, buffer.Length, localInfile: true);
                 if (read == 0) break;
                 total = checked(total + read);
                 if (total > _channel.MaxPacketSize) throw new ProtocolException("LOCAL INFILE payload exceeds the maximum packet size.");
@@ -272,7 +272,7 @@ namespace OceanBaseConnector.Internal.Session
             while (true)
             {
                 readerToken.ThrowIfCancellationRequested();
-                var read = await stream.ReadAsync(buffer, 0, buffer.Length, _budget.Token).ConfigureAwait(false);
+                var read = await ReadSourceAsync(stream, buffer, 0, buffer.Length, localInfile: true).ConfigureAwait(false);
                 if (read == 0) break;
                 total = checked(total + read);
                 if (total > _channel.MaxPacketSize) throw new ProtocolException("LOCAL INFILE payload exceeds the maximum packet size.");

@@ -1,10 +1,20 @@
 # Driver delivery status
 
-Last checked: 2026-10-27 against committed `master/f9e8c20`; latest module developed from `master/40fa822`. This is the current overview; the detailed
+Last checked: 2026-10-27; latest source-read diagnostics module developed from `master/3ef375d`.
+The prior committed source review is `master/f9e8c20`. This is the current overview; the detailed
 [completeness baseline](obconnector-dotnet-completeness.md) retains requirements and historical evidence.
 The [module records](obconnector-dotnet-progress.md) retain individual test/review results.
 
 ## Current checkpoint
+
+- Latest module: [upload source read durations](source-read-diagnostics.md), covering
+  MySQL long-data parameters, Oracle piece-data parameters and LOCAL INFILE, sync/async.
+  Fixed source-kind/mode/outcome tags, independent enablement and shared post-release publication
+  preserve ownership/cancellation and protocol timing. Focused units156/156, complete units7977/7977,
+  affected consumers315/315 and the serial Release build zero warnings/errors pass. Independent
+  final review has no actionable finding. Opt-out integration has13 pass/116 skip/zero failures.
+  No real database or independent runtime/load compatibility is claimed. See the
+  [module record](obconnector-dotnet-progress.md#2026-10-27-upload-source-read-diagnostics).
 
 - Source/documentation alignment at `f9e8c20`: JSON result UTF-8 decoding is the current
   protocol contract, consistent with the inspected fixed server serializer; it is not evidence
@@ -14,7 +24,7 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   Concrete unsupported paths and validation-only work are separated in
   [completeness section 15.100](obconnector-dotnet-completeness.md#15100-2026-10-27-源码状态与待开发边界复核).
 
-- Latest module, developed from `master/40fa822`: scalar/anonymous-array CLOB locator parameters
+- Previous module, developed from `master/40fa822`: scalar/anonymous-array CLOB locator parameters
   transcode inline UTF-8 content in a sending copy using the strict client charset. V1 converts;
   V2 converts at authenticated product4.4.1+, preserving legacy/unknown V2 behavior. Original
   handles/readers, opaque identity/extensions/rowkeys, BLOBs and no-inline external locators stay
@@ -227,7 +237,8 @@ These are concrete code/scope gaps, not merely missing real-database reports:
    JSON results use strict UTF-8 under the inspected server serialization contract; do not add
    client-charset decoding without evidence of another wire shape. JSON storage/conversion and
    result metadata across actual server/proxy profiles remain validation work.
-2. Remaining resource-wait instrumentation and workload/overhead validation (P2-04).
+2. Additional resource-wait scope and workload/overhead validation (P2-04). Upload source read
+   diagnostics now have local implementation/regression evidence; their scope and gates are above.
 3. Input/InputOutput REF CURSOR and additional output shapes (P1-06).
 4. Named LOB locator rebinding, complex cursor input, additional national/anonymous output shapes,
    text complex results and unresolved whole-complex RETURNING identity (P1-07). Named LOB content
@@ -276,7 +287,7 @@ approved wire contract or can be implemented without protocol research.
 | P2-01 DataAdapter | Fill/mappings/events, explicit CRUD and bounded automatic CommandBuilder SQL with original-value/NULL/concurrency handling | Query/key/generated-value restrictions remain; EF Core provider is separate scope | Real generated SQL/catalog/locks/concurrency and independent runtimes |
 | P2-02 Statement cache | Opt-in idle LRU, capacity/close, context/schema/reset generation invalidation | Further reprepare/resource/load regressions | Real DDL/reprepare, prepare-count/latency/resource/proxy reports |
 | P2-03 Batch optimization | Sequential Batch, existing Oracle array binding, opt-in bounded MySQL INSERT rewrite with group error attribution | **Multi-send/pipelining and separate bulk protocol are missing** | Actual counts/partial failure, transaction/default/trigger/warning behavior, packet limits and throughput/memory |
-| P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics including current leases, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O durations and collectible-load fixes | **Additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
+| P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics including current leases, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O/upload-source read durations and collectible-load fixes | **Additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
 | P2-05 Runtimes/ecosystem | Five product assets; Windows nupkg protocol subset on actual .NET 8/9/10 and Framework host, plus Standard assets on .NET 10 | Complete promised platform/runtime/API matrix; Framework/ORM support scope; existing savepoint identifier limitations | Non-Windows and full feature/real-database reports on promised runtimes |
 | P2-06 Real compatibility | Acceptance tooling and historical direct-server reports; distinct sync/async client-channel reset/reuse and time-zone retirement cases, 4/4 per mode on direct 4.4.2.2; executable opt-in zero-date storage/read/write-back assertions | **Five `matrix.*` deferred placeholders**; source/license/package/publication review remains | Proxy/backend identity and complete reset/resource matrix; TLS/auth, topology faults, unknown network outcomes, permissive zero-date SQL_MODE storage and external-coordinator XA crash recovery |
 

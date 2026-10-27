@@ -1,5 +1,16 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Upload source read diagnostics
+
+The new [source-read histogram](source-read-diagnostics.md) covers MySQL long-data,
+Oracle piece-data and LOCAL INFILE source Read/ReadAsync calls independently of protocol I/O.
+Focused synthetic tests pass156/156, complete units7977/7977 and affected consumers315/315,
+with zero failures/skips. Serial Release builds with zero warnings/errors and independent final
+review has no actionable finding. Opt-out integration has13 pass/116 skip/zero failures. See the
+[module record](obconnector-dotnet-progress.md#2026-10-27-upload-source-read-diagnostics).
+No live database is accessed and no new server/runtime compatibility is claimed.
+This does not close other resource waits or deployment/load/overhead acceptance.
+
 ## 2026-10-27 CLOB locator client encoding
 
 Scalar and anonymous-array CLOB locator parameters now transcode inline UTF-8 content in a

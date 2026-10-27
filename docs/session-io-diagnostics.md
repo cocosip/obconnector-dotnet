@@ -30,15 +30,17 @@ those calls. It also includes their network/server waits. It is neither socket-o
 time nor server-only SQL time. Buffered calls may complete without socket I/O.
 
 Application gaps between reader/stream calls, application-side row processing and
-LOCAL INFILE source-stream reads are excluded. LOCAL INFILE packet writes are
-included. Handshake/TLS/authentication and pool waits have their separate
+upload-source reads are excluded. Parameter and LOCAL INFILE source reads have their
+independent [source-read histogram](source-read-diagnostics.md); LOCAL INFILE packet writes are
+included here. Handshake/TLS/authentication and pool waits have their separate
 [connection phase metrics](obconnector-dotnet-architecture-design.md#connection-phase-diagnostics).
 Do not add these durations together as an exact decomposition of command or Open
 elapsed time; scope and lifetime differ.
 
 An exchange starts accumulating only if this histogram is enabled when the
 exchange is created. Enabling a listener later does not instrument that exchange
-retroactively. Without a listener no accumulator is created, and async wrappers
+retroactively. Protocol timing and source timing are enabled independently. With neither
+histogram enabled no shared accumulator is created; disabled async wrappers
 return the underlying tasks directly. Enabled async wrappers can allocate state
 machines; no measured overhead guarantee is claimed.
 

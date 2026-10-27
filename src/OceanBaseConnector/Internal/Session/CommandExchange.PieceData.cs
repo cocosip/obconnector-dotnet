@@ -23,7 +23,7 @@ namespace OceanBaseConnector.Internal.Session
                     {
                         EnsureReading();
                         var requested = Math.Min(8192, raw.Length - buffered);
-                        var read = source.Read(raw, buffered, requested);
+                        var read = ReadSource(source, raw, buffered, requested);
                         EnsureReading();
                         CheckPieceRead(read, requested, ref remaining);
                         buffered += read;
@@ -56,7 +56,7 @@ namespace OceanBaseConnector.Internal.Session
                     {
                         EnsureReading();
                         var requested = Math.Min(8192, raw.Length - buffered);
-                        var read = await source.ReadAsync(raw, buffered, requested, _budget.Token).ConfigureAwait(false);
+                        var read = await ReadSourceAsync(source, raw, buffered, requested).ConfigureAwait(false);
                         EnsureReading();
                         CheckPieceRead(read, requested, ref remaining);
                         buffered += read;

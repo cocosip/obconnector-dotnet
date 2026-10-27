@@ -21,6 +21,7 @@ namespace OceanBaseConnector.Internal
         private static readonly Histogram<double>? PoolWait = Create(() => Meter?.CreateHistogram<double>("oceanbase.client.pool.wait.duration", "s"));
         private static readonly Histogram<double>? ConnectionPhaseDuration = Create(() => Meter?.CreateHistogram<double>("oceanbase.client.connection.phase.duration", "s"));
         private static readonly Histogram<double>? ProtocolIoDuration = Create(() => Meter?.CreateHistogram<double>("oceanbase.client.protocol.io.duration", "s"));
+        private static readonly Histogram<double>? SourceReadDuration = Create(() => Meter?.CreateHistogram<double>("oceanbase.client.source.read.duration", "s"));
         private static readonly Counter<long>? SlowOperations = Create(() => Meter?.CreateCounter<long>("oceanbase.client.slow.operations", "{operation}"));
 
         private static T? Create<T>(Func<T?> create) where T : class

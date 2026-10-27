@@ -1009,6 +1009,19 @@ operation result. See the [full metric contract](session-io-diagnostics.md) for
 scope, enablement, error interpretation and callback/allocation limits. Other
 resource waits and deployment overhead acceptance remain open.
 
+### Upload source read durations
+
+`oceanbase.client.source.read.duration` is a histogram in seconds. It sums application
+stream reads per source kind (`parameter` or `local_infile`) per command exchange,
+covering MySQL long data, Oracle piece data and LOCAL INFILE. EOF/throwing reads
+count; packet sends, stream acquisition/disposal and gaps outside read calls do not.
+Fixed labels are `oceanbase.source.kind`, compatibility mode and final mapped
+exchange outcome. It shares post-release/pending-completion publication with protocol
+I/O, while enablement and sums remain independent. Disabled wrappers preserve direct
+task forwarding. No content or filename is recorded; stream ownership is unchanged.
+See the [source-read contract](source-read-diagnostics.md) for outcome interpretation,
+callback, allocation and verification limits. Other resource waits/load remain open.
+
 ## MySQL compression
 
 `OceanBaseConnectionStringBuilder.UseCompression` / `Use Compression=true` requests CLIENT_COMPRESS. The default remains false, even when the server advertises compression. A requested capability missing from the greeting fails before the TLS/authentication response; authentication switches and the final authentication OK remain uncompressed. Compression starts after that OK and before OceanBase identity queries, above TLS when TLS is enabled. Both compatibility modes and all five target assets use the same implementation. The option is preserved when selecting an endpoint and is part of the connection configuration used for pool identity.

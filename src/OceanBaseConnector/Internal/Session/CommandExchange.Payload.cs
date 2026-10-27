@@ -119,7 +119,7 @@ namespace OceanBaseConnector.Internal.Session
                 try { return _raw.Read(buffer, offset, count); }
                 finally { _exchange._io?.Stop(started, write: false); }
             }
-            private Task<int> ReadRawAsync(byte[] buffer, int offset, int count) => _exchange._io == null
+            private Task<int> ReadRawAsync(byte[] buffer, int offset, int count) => _exchange._io?.ProtocolEnabled != true
                 ? _raw.ReadAsync(buffer, offset, count, _exchange._budget.Token) : TimedReadRawAsync(buffer, offset, count);
             private async Task<int> TimedReadRawAsync(byte[] buffer, int offset, int count)
             {

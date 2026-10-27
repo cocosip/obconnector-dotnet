@@ -23,7 +23,7 @@ namespace OceanBaseConnector.Internal.Session
                 while (true)
                 {
                     EnsureReading();
-                    var count = source.Read(packet, 7, 8192);
+                    var count = ReadSource(source, packet, 7, 8192);
                     EnsureReading();
                     CheckLongDataRead(count, ref remaining);
                     if (count == 0 && !first) break;
@@ -51,7 +51,7 @@ namespace OceanBaseConnector.Internal.Session
                 while (true)
                 {
                     EnsureReading();
-                    var count = await source.ReadAsync(packet, 7, 8192, _budget.Token).ConfigureAwait(false);
+                    var count = await ReadSourceAsync(source, packet, 7, 8192).ConfigureAwait(false);
                     EnsureReading();
                     CheckLongDataRead(count, ref remaining);
                     if (count == 0 && !first) break;

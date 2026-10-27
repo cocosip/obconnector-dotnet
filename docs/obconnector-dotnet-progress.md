@@ -4,6 +4,48 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Upload source read diagnostics
+
+Developed from `master/3ef375d`, P2-04/W7. The independently enabled
+`oceanbase.client.source.read.duration` sums source Read/ReadAsync calls per kind
+(`parameter`/`local_infile`) per exchange, across MySQL long data, Oracle piece data
+and LOCAL INFILE. It shares SessionIo's pending-completion fencing and post-release
+publication, preserving protocol sums, stream ownership and mapped error/timeout/cancel
+behavior. Fixed tags contain no content or filenames. See the [contract](source-read-diagnostics.md).
+
+Retained development evidence:
+
+- Initial fixture failures stop at handshake; correcting authentication mode exposes additional
+  Oracle session-state and connection-close fixture assumptions. The final RED is30/30 missing
+  metric assertions (`TestResults/source-read-red-final/red.trx`). Earlier failure logs remain.
+- Initial GREEN passes24/30; all6 failures incorrectly expect Broken for parameter cancellation/
+  timeout before any staged data. Existing semantics preserve Open there; only the assertions
+  change. Corrected source/session-I/O selection passes54/54. Additional source-work/server-wait,
+  mapped-exception and existing upload controls bring the focused selection to156/156
+  (`TestResults/source-read-focused/focused.trx`).
+- First solution builds fail at missing consumer links for the existing LoopbackServer and
+  ProtocolFixture helpers. The corrected serial Release solution build has zero warnings/errors
+  (`TestResults/source-read-build-final2.log`). Scoped whitespace formatting exits0.
+- Final complete units pass7977/7977 in8m30s (`TestResults/source-read-full/full.trx`),
+  zero failed/skipped. Compared with the previous CLOB final report,39 cases are added and
+  none removed; all30 original metric RED cases pass in that complete run.
+- Affected consumers pass315/315 in1m25s (`TestResults/source-read-consumer/consumer.trx`),
+  zero failed/skipped, including60 new source cases across five assets in one .NET10 host.
+  The selection covers source reads, existing diagnostics, MySQL long data, Oracle piece data/
+  PrepareExecute piece data and compression consumers. No product DLL is rebuilt during either run.
+- Ordinary opt-out integration passes13 with116 skipped and zero failed
+  (`TestResults/source-read-optout/optout.trx`). It does not connect to a database.
+- One fresh independent final source/tests/docs review reports no Critical/Important/Minor
+  finding. Nothing is declined or deferred. The reviewer does not rerun tests.
+- Final report/link/history/gap/package/privacy checks are recorded in
+  `TestResults/source-read-validation.json`:9 documents,878 relative file targets/new section
+  anchors, all23 gap IDs/eight packages, preserved historical sections and RED-to-full mapping.
+  Scoped final formatting exits0 (`TestResults/source-read-format-final.log`) and diff checks
+  pass. No real database is accessed by this module.
+
+Other resource waits, workload/overhead, real server/proxy and independent runtime/platform
+profiles remain open. This does not close P2-04, all23 gap IDs or eight work packages.
+
 ## 2026-10-27 Source and protocol boundary alignment
 
 Checked committed `master/f9e8c20` against result decoding, Oracle cursor planning, complex value

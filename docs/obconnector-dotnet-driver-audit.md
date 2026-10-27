@@ -134,7 +134,7 @@ Java 和 .NET 的连接池都已存在；.NET 默认 `Pooling=false`。会话识
 | HA 与恢复 | 部分实现 | Open阶段TCP重试/固定退避/共享预算、TCP健康缓存、TNS/OCP、分组/权重/黑名单及尝试上限；连接级ERR退休与显式Close/Open | 活动连接迁移、透明重连、reroute及完整真实节点/代理故障验收；未知写不自动重放 |
 | Schema 元数据 | 部分实现 | Oracle 20/MySQL 18 个集合、静态 DataTypes 及自动参数推导有本地回归 | 实库字典、权限/版本/代理和类型/DDL 矩阵；推导不扩大过程执行支持 |
 | 批处理与准备缓存 | 部分实现 | 顺序DbBatch、Oracle array binding、opt-in MySQL INSERT rewrite、有限物理会话idle LRU | multi-send、独立bulk及真实DDL/缓存/批量/资源/负载验收 |
-| 诊断 | 部分实现 | ILogger/Activity/Meter、池生命周期/当前租约/等待结果、九阶段建连/探活、慢命令、协议帧及会话I/O指标 | 其他资源等待范围及实现、真实负载/资源曲线和监听开销 |
+| 诊断 | 部分实现 | ILogger/Activity/Meter、池生命周期/当前租约/等待结果、九阶段建连/探活、慢命令、协议帧、会话I/O及源流读取汇总指标；见[最新门禁记录](obconnector-dotnet-progress.md#2026-10-27-upload-source-read-diagnostics) | 其他资源等待范围及实现、真实负载/资源曲线和监听开销 |
 | 真实兼容性 | 部分验证 | 直连 4.4.2.2 的有限记录，包含 Oracle 失败 | OBProxy、TLS/plugin、版本、平台、网络故障和 XA 恢复矩阵 |
 
 ### 3.1 除连接池之外的待开发范围
@@ -183,7 +183,7 @@ Java 和 .NET 的连接池都已存在；.NET 默认 `Pooling=false`。会话识
 | P2-01 | `DbDataAdapter`/`DbCommandBuilder` | 保留本地填充、映射/事件、原始值/NULL、行键/并发和事务回归；补双模式真实 CRUD/锁/目录与运行时报告；生成值回填及复杂形状限制须公开 |
 | P2-02 | statement cache | 本地 idle LRU、容量/淘汰/关闭、epoch 和 reset generation 已实现；补真实 DDL/reprepare、资源/负载/代理验收 |
 | P2-03 | 批处理优化 | opt-in MySQL INSERT rewrite及合并组失败归属已本地实现；multi-send/pipelining、独立bulk及真实批量/资源/负载矩阵仍缺 |
-| P2-04 | 诊断 | 保留池/连接阶段、慢命令、协议帧、会话I/O、当前租约及等待结果指标；补其他资源等待范围与真实负载/监听开销验收 |
+| P2-04 | 诊断 | 保留池/连接阶段、慢命令、协议帧、会话I/O、源流读取、当前租约及等待结果指标；补其他资源等待范围与真实负载/监听开销验收 |
 | P2-05 | TFM/包生态 | 诊断卸载缺陷已修复并有历史默认消费者回归（第54节）；Windows实际8/9/10及Framework的nupkg协议子集已有记录；补每个承诺平台/运行时的完整功能、实库和包消费矩阵，原崩溃记录保留 |
 | P2-06 | 真实兼容矩阵 | 同客户端通道复用与旧时区销毁隔离已有双模式直连各4/4；5个matrix.*占位需环境和断言；零日期已有独立opt-in及存储/回绑断言，但真实SQL_MODE前置失败；代理后端/完整资源、版本/TLS/认证/平台/故障/协调器恢复及发布检查仍缺 |
 
