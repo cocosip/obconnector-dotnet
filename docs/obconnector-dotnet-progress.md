@@ -11,7 +11,7 @@
 | --- | --- | --- | --- |
 | 双模式连接与基础SQL | 已实现 | 模式/产品身份确认、文本/准备执行、参数、多结果、同步/异步、取消/超时 | 其他版本、代理、故障组合仍需验收 |
 | 连接池基本生命周期 | 已实现 | 容量/等待/取消、预热、探活、空闲/总生命周期、清池、池指标 | 并发交错、长期负载和资源上限未完整验收 |
-| 池化会话隔离 | 部分实现 | reset代际、保守状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA保护 | 任意隐式副作用、完整资源交错及代理reset；直连已有专项，不能推及全部状态 |
+| 池化会话隔离 | 部分实现 | reset代际、保守状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA保护；Oracle 直连资源生命周期矩阵 32/32 通过 | 任意隐式副作用、完整资源交错及代理reset；直连专项不能推及全部状态 |
 | 池路由身份隔离 | 已实现 | resolver身份、每次Open快照、旧闲置端点退休、借出连接保留 | 受控单上游路由验收已通过；真实集群/代理HA未验收 |
 | 本地事务 / savepoint | 已实现 | 模式相关事务、现代TFM异步API及保存点 | 保留隔离级别/标识符限制；跨版本故障组合待验收 |
 | 单资源TransactionScope | 已实现 | PSPE登记、所有权、取消/晚回调、终态清理 | 分布式提升/durable prepare不支持；真实事务管理器故障矩阵待验收 |
@@ -24,7 +24,7 @@
 | 功能 | 开发状态 | 已支持范围 | 还缺什么 / 验收边界 |
 | --- | --- | --- | --- |
 | Oracle Prepare和普通输出 | 部分实现 | 独立Prepare、OUT/RETURNING、普通输出正FetchSize提示、数组绑定 | 输出offset/数组正FetchSize仍拒绝；其余形状和部署组合待补 |
-| REF CURSOR输出和结果列 | 已实现 | 输出、文本/二进制四字节游标ID、二进制复杂cursor成员及执行所有权 | 真实方向/分页/资源/代理矩阵未完整验收 |
+| REF CURSOR输出和结果列 | 已实现 | 输出、文本/二进制四字节游标ID、二进制复杂cursor成员及执行所有权；Oracle 直连输出/分页/释放矩阵 15/16 通过 | `SELECT CURSOR(...)` 结果列在当前租户执行阶段返回 `902/HY000`；其余真实方向/分页/资源/代理矩阵仍未完整验收 |
 | REF CURSOR Input/InputOutput | 明确不支持 | Java 没有对应输入绑定路径，当前 OracleCommandPlan 在发送前拒绝 | 除非取得明确的 Java/OceanBase 输入协议依据，否则不实现 |
 | 复杂类型二进制结果 | 已实现 | 嵌套object/collection、命名/匿名布局、BLOB/CLOB/cursor成员；直连 OceanBase 4.4.2.2 的 object 表列形状已通过 | collection nested-table 表列在该服务端返回600/0A000；其他真实SQL形状、版本、资源生命周期仍待验收 |
 | 命名复杂LOB内容输入 | 已实现 | BLOB字节、严格UTF-8 CLOB文本、嵌套命名元素 | 接受内容不等于接受定位器；其他字符集/版本/代理待验收 |
@@ -77,7 +77,7 @@
 | OB20/trace显式验收（P2-06） | **已提交，部分实库验收**：代码/文档见`bc020e2`、`c5b4c07`；专项/runner **88/88**，Release零警告/错误；直连4.4.2.2双模式 `declined-ob20` 各6通过 | 用户租户实际协商为 `Layer=mysql`，显式 `ob20` 各2项按契约失败；真实 OB20/trace、OBProxy、TLS/auth 和完整单测环境门禁仍未闭合。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |
 | 验收占位 | 已提交基线仅保留TLS/auth DeferredReason；OB20/trace已替换为可执行profile | 实际服务端未启用OB20时必须保留失败，不能用普通MySQL fallback关闭OB20门禁 |
 
-最新**已交付**模块是本次 P1-05/P1-10 元数据直连补验：KeyInfo 的 MySQL 大小写修复、双模式 SchemaOnly/KeyInfo 和 MySQL/Oracle 过程参数推导均有真实证据；代码和 Schema 证据见[Schema 记录](history/2026-10-28-schema-acceptance.md)，参数推导见[参数推导记录](history/2026-10-28-routine-derivation-acceptance.md)。此前**已交付**模块是 LOCAL INFILE 实库验收，见[模块台账](history/2026-10-28-local-infile-acceptance.md)。这些是历史证据，不是本次文档整理的新运行。
+最新**已交付**模块是本次 P0-02/P1-06 Oracle 资源与 REF CURSOR 直连验收：资源生命周期矩阵 32/32 通过，REF CURSOR 输出矩阵 15/16 通过，唯一失败是服务端拒绝 `SELECT CURSOR(...)` 结果列；证据见[资源与游标记录](history/2026-10-28-oracle-resource-cursor-acceptance.md)。此前**已交付**模块是 P1-05/P1-10 元数据直连补验：KeyInfo 的 MySQL 大小写修复、双模式 SchemaOnly/KeyInfo 和 MySQL/Oracle 过程参数推导均有真实证据；代码和 Schema 证据见[Schema 记录](history/2026-10-28-schema-acceptance.md)，参数推导见[参数推导记录](history/2026-10-28-routine-derivation-acceptance.md)。LOCAL INFILE 实库验收见[模块台账](history/2026-10-28-local-infile-acceptance.md)。这些是历史证据，不是本次文档整理的新运行。
 
 开发优先级：OB20/trace 草稿已提交，后续只推进有 Java/OceanBase 依据且纳入范围的验收。没有输入协议依据的 REF CURSOR/复杂形状和未定义批量/诊断扩展保持拒绝，不以诊断或文档交付替代核心功能支持。
 

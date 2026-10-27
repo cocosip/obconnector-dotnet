@@ -10,7 +10,7 @@
 | ID | 模块 | 已实现范围 | 仍缺开发 / 明确不支持 | 仍欠验收 |
 | --- | --- | --- | --- | --- |
 | P0-01 | 连接池 | 容量/等待/预热/探活/回收/清池/指标、重入和通知取消修复 | 其他并发/Dispose交错、长期资源与shutdown范围 | 持续资源上限、完整部署矩阵 |
-| P0-02 | 会话隔离 | reset代际、状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA隔离 | 任意隐式副作用、完整资源/中断/交错覆盖 | 代理reset、外置LOB真实中断、完整借用者隔离 |
+| P0-02 | 会话隔离 | reset代际、状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA隔离；Oracle 直连资源生命周期矩阵 32/32 通过 | 任意隐式副作用、完整资源/中断/交错覆盖 | 代理reset、外置LOB真实中断、完整借用者隔离 |
 | P0-03 | Ambient | 单资源PSPE、取消/晚回调/终态保护 | 分布式提升和durable prepare不支持；完整失败覆盖待补 | 实际事务管理器、timeout/in-doubt和代理故障 |
 | P0-04 | Unknown outcome | 分类、销毁/新租约、16项受控网络断言、应用核对示例 | 完整发送/执行/取消故障边界；不重放未知写 | 服务器/代理/协调器全故障矩阵 |
 | P0-05 | 活动连接恢复 | 连接ERR置Broken、旧事务失效、显式Close/Open | 无透明迁移/自动重连/replay，先定契约；补完整重建 | 节点/代理断连和恢复 |
@@ -20,7 +20,7 @@
 | P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界；同步/异步 `LOAD DATA LOCAL INFILE` 已在直连 OceanBase MySQL 4.4.2.2 通过 | 大输入/取消组合不纳入本模块新增实库范围 | 代理策略、大文件及中断行为 |
 | P1-04 | TLS/mTLS | 服务器回调、客户端证书、池隔离、撤销选项 | 发现实际差异后补轮换/平台回归 | 企业CA、负向握手、过期/轮换、平台撤销 |
 | P1-05 | Command/Batch | SchemaOnly/KeyInfo/结果限制、MySQL过程、Batch元数据；双模式直连补验 16 项 SchemaOnly/KeyInfo 矩阵（含组合主键、别名投影、可空唯一键和实际隐藏值读取），并修复 MySQL 目录大小写匹配 | 完整行为/结果形状矩阵，现有拒绝组合保留 | 权限/目录/prepare副作用/锁/游标 |
-| P1-06 | Oracle输出/游标 | Prepare、OUT/RETURNING、输出提示、文本/二进制cursor列 | Input/InputOutput REF CURSOR 没有 Java 输入绑定依据，当前发送前拒绝；输出offset/数组正FetchSize也拒绝 | 真实方向/分页/资源/版本/代理 |
+| P1-06 | Oracle输出/游标 | Prepare、OUT/RETURNING、输出提示、文本/二进制cursor列；Oracle 直连输出/分页/释放矩阵 15/16 通过 | Input/InputOutput REF CURSOR 没有 Java 输入绑定依据，当前发送前拒绝；输出offset/数组正FetchSize也拒绝；`SELECT CURSOR(...)` 结果列在当前租户执行阶段返回 `902/HY000` | 真实方向/分页/资源/版本/代理；结果列形状需服务端支持后复验 |
 | P1-07 | 复杂类型 | 嵌套二进制结果、LOB/cursor结果、命名LOB内容/匿名locator输入、DDL失效 | 命名LOB定位器回绑、复杂cursor输入、文本复杂结果及未解析RETURNING身份没有足够协议依据，当前拒绝；其他形状按服务端矩阵决定 | DDL、真实复杂SQL、资源生命周期和更多部署profile |
 | P1-08 | 类型/字符集 | NUMBER/FLOAT、scale、常见扩展类型、客户端编码、DBCS fallback、CLOB转码 | 其余national存储/输出、扩展类型/metadata；UTF8MB3/SJIS/Big5 Open失败待解决 | JSON/CLOB转换/存储、完整字符集/版本/代理；保留失败 |
 | P1-09 | HA/发现 | TCP重试/健康缓存、TNS/OCP、组/权重/黑名单/上限 | 其他发现/策略边界；TCP健康不等于数据库健康 | 实际发现服务/节点/代理故障 |

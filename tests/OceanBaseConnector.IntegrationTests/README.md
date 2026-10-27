@@ -29,13 +29,13 @@ This follows the fixed Java source policy and does not prove real-server support
 
 Filter `FullyQualifiedName~PreparedCursorColumnSurvivesParentCommandDisposal` with an Oracle
 prepare-execute profile. This new case explicitly prepares SELECT CURSOR, consumes the parent
-SequentialAccess response, disposes the parent command, then fetches the returned cursor. It currently
-has no passing real-server evidence: the built-DLL run recorded oracle-direct1failed/0skipped in
-Open/HandshakeFlow70 before greeting, before SQL execution. The initial project command executed no
-tests due to restored package-import paths pointing at the restricted account; it is not passing evidence.
-Binary fixtures/consumers are separate evidence. Text cursor columns now have a local implementation;
-Input/InputOutput REF CURSOR remains unsupported. Real cursor-column interoperability and the
-whole Oracle result-shape matrix remain open.
+SequentialAccess response, disposes the parent command, then fetches the returned cursor. `PrepareAsync`
+succeeds, but the current Oracle tenant rejects execution of `SELECT CURSOR(SELECT 7 AS value FROM DUAL) AS c FROM DUAL`
+with server error `902/HY000`; no parent row or child cursor is returned. The clean report records
+15 passed and 1 failed case, while temporary diagnostics captured the server code before the test
+diagnostic output was restored. Binary fixtures/consumers are separate evidence. Text cursor columns
+have a local implementation; Input/InputOutput REF CURSOR remains unsupported. Real cursor-column
+interoperability remains open until the server accepts this result shape.
 
 ## REF CURSOR result limits
 
@@ -43,10 +43,10 @@ Filter `FullyQualifiedName~ResultLimitsDrainCursorPagesAfterCommandDisposal` wit
 prepare-execute profile. Twelve read-only cases per profile cover sync/async, SingleRow/SingleResult/
 combined flags, empty/multiple rows, fetchSize1, parent disposal, drain then connection reuse, and
 CloseConnection for empty cursors. No database objects or global configuration are changed.
-The corrected run currently has12failed/0skipped in initial Open/HandshakeFlow70 before greeting;
-none reached SQL or FETCH. The initial12 profile-lookup failures were a corrected test-data enumeration
-error, not server evidence. Local fixture/consumer passes remain separate from real interoperability.
-See [full evidence](../../docs/history/obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制).
+The clean Oracle direct run has 15 passed and 1 failed. The 15 passing cases cover cursor output,
+fetch-size paging, command disposal, connection reuse, and sync/async behavior; the one failure is
+the `SELECT CURSOR(...)` result-column shape described above. Local fixture/consumer passes remain
+separate from real interoperability. See [full evidence](../../docs/history/2026-10-28-oracle-resource-cursor-acceptance.md).
 
 ## Running
 
