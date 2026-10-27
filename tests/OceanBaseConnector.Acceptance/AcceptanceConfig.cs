@@ -16,6 +16,7 @@ internal sealed class AcceptanceConfig
     public bool ZeroDateProfile { get; set; }
     public bool NetworkFaultProfile { get; set; }
     public bool XaCrashProfile { get; set; }
+    public bool TopologyFaultProfile { get; set; }
     public int LargeValueBytes { get; set; } = 65536;
     public string? SlowQuery { get; set; }
     public string? AlternateDatabase { get; set; }

@@ -43,6 +43,7 @@ copy them into repository files or shared logs/reports. Never print or commit re
 | `zeroDateProfile` | Default false. Explicitly enables MySQL `types.zero-date-policy`, also requiring `allowCreateObjects=true` and a session SQL_MODE without NO_ZERO_DATE/NO_ZERO_IN_DATE. The runner never changes SQL_MODE. |
 | `networkFaultProfile` | Default false. Explicitly enables 16 controlled write/transaction network fault cases, requiring `allowCreateObjects=true`, a single plain DNS/IPv4 host with separate Port, TLS disabled, no compression and no OB20. Incompatible profiles skip without downgrade. |
 | `xaCrashProfile` | Default false. Explicitly enables four XA coordinator process crash/restart cases. Requires `allowCreateObjects=true`, `dotnet` on PATH, and Oracle PrepareExecute in Oracle mode. Uses only owned branches/tables and a decision journal containing no credentials. |
+| `topologyFaultProfile` | Default false. Enables six read-only controlled client-route cases: idle refresh, borrowed-session isolation and refused-TCP fallback, sync/async. Single plain host, TLS disabled, no compression/OB20; no DDL. This does not prove real cluster HA. |
 | `largeValueBytes` | Binary round-trip size, default 65536; range 1–1048576. |
 | `slowQuery` | Optional read-only SQL taking over two seconds, for cancellation and timeout tests. Omitted means those cases are skipped. |
 | `alternateDatabase` | Optional MySQL database for change-and-restore testing. Omitted means skipped. |
@@ -57,8 +58,13 @@ Connection cases compare `ServerVersion` and schema product-version metadata wit
 `types.mysql-client-behavior` checks both TINYINT Boolean/integer mappings and both UPDATE
 row-count settings through real text/prepared sequential readers, including NULL and negative values.
 
-Three `matrix.*` entries are explicitly deferred: TLS/authentication, OB20/tracing negotiation
-and topology failover.
+Two `matrix.*` entries are explicitly deferred: TLS/authentication and OB20/tracing negotiation.
+Six opt-in `matrix.topology-failover.*` cases use transparent loopback relays to one upstream,
+require a fresh resolver snapshot per Open, prove unchanged-route reuse, removed-idle retirement,
+borrowed-session isolation and TCP fallback after a refused-only negative control. Only fixed
+read-only SQL is issued; no schema objects or cluster settings change. Both direct4.4.2.2 modes
+pass6/6 plus connection control on Windows/.NET10.0.13 TLSdisabled; this does not prove
+independent-node/discovery-service/proxy HA. See the [controlled topology contract](../../docs/topology-acceptance.md).
 The four opt-in `matrix.xa-crash-recovery.*` cases kill a live prepared coordinator process
 after its decision is flushed, then restart another process to recover that decision. Both
 direct4.4.2.2 modes pass4/4 plus connection control, with exact owned cleanup. General coordinator,

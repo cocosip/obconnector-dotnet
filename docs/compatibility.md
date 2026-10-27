@@ -1,5 +1,23 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Controlled topology acceptance
+
+Developed from master/21e3de2, P0-06/P1-09/P2-06 and W1/W4/W8. Six sync/async explicit
+`topologyFaultProfile` cases replace the topology placeholder: idle refresh/retirement,
+borrowed-session isolation and refused-TCP fallback. Transparent loopback relays forward to
+one configured upstream; physical connection counts, first-channel termination and matching
+resolver method/call counts reject simple SQL-success false passes. The refused-only negative
+control must fail Open/leave Closed without configured-address fallback before the same
+connection/private pool opens with refused+healthy routes and later reuses its healthy channel.
+Only fixed read-only SELECT is executed; no DDL, writes, cluster settings or business data
+changes. No product source/API/dependency changes. See the [contract](topology-acceptance.md).
+
+Final evidence: complete units8066/8066, focused94/94, serial Release zero warnings/errors,
+opt-out15 pass/116 skip, scoped format/docs/privacy checks pass. Each real mode passes7/7
+on direct4.4.2.2 Windows/.NET10.0.13 TLSdisabled with no objects created. The sole Minor from
+one independent final review (concurrent cleanup errors) is corrected with RED/GREEN; no
+Critical/Important finding. Exact gates are recorded in the [module record](obconnector-dotnet-progress.md#2026-10-27-controlled-topology-acceptance). Actual independent cluster/discovery/proxy/TLS/platform/load matrices remain open; two DeferredReason placeholders and all23 gaps/eight packages remain.
+
 ## 2026-10-27 XA coordinator process recovery
 
 The [explicit XA crash profile](xa-process-recovery-acceptance.md) now has four sync/async

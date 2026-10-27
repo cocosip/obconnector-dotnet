@@ -1,19 +1,26 @@
 # Driver delivery status
 
-Last checked: 2026-10-27; latest XA process recovery acceptance developed from `master/7ebc590`.
+Last checked: 2026-10-27; latest controlled topology acceptance developed from `master/21e3de2`.
 The prior committed source review is `master/f9e8c20`. This is the current overview; the detailed
 [completeness baseline](obconnector-dotnet-completeness.md) retains requirements and historical evidence.
 The [module records](obconnector-dotnet-progress.md) retain individual test/review results.
 
 ## Current checkpoint
 
-- Latest module: [XA coordinator process recovery](xa-process-recovery-acceptance.md), four
+- Latest module: [controlled topology acceptance](topology-acceptance.md), six read-only explicit
+  client-route cases: idle refresh/retirement, borrowed-session isolation and refused-TCP fallback,
+  sync/async. Focused94/94 and real direct4.4.2.2 Oracle7/7/MySQL7/7 pass with no database objects;
+  opt-out15 pass/116 skip and Release build zero warnings/errors. Complete units8066/8066 and scoped format/docs/privacy checks pass; one independent review
+  has no Critical/Important finding and its sole Minor aggregation issue is corrected with RED/GREEN. No product changes
+  or claim of real cluster/backend/discovery-service HA. Two deferred placeholders remain.
+
+- Previous module: [XA coordinator process recovery](xa-process-recovery-acceptance.md), four
   explicit-profile sync/async commit/rollback cases. A prepared coordinator is killed only
   after its decision flushes; a fresh process loads that decision, recovers only its branch
   and completes it. Both direct4.4.2.2 modes pass5/5, with all8 owned tables/branches/journals
   removed. Focused56/56 and opt-out15 pass/116 skip; Release builds with zero warnings/errors.
   Complete units8044/8044, scoped format/docs/privacy checks pass; the sole Minor documentation
-  count from one independent final review is corrected, with no Critical/Important finding. Three placeholders remain;
+  count from one independent final review is corrected, with no Critical/Important finding. At that checkpoint three placeholders remained;
   the general coordinator/server and other crash-point/deployment matrices remain open.
 
 
@@ -266,14 +273,16 @@ These are concrete code/scope gaps, not merely missing real-database reports:
    locator input conversion now passes direct default/GB18030 checks. Other profiles remain open.
 5. Compressed OB20/proxy reroute, after establishing the client-link wire contract (P1-02).
 6. Multi-send/pipelining or a separate bulk protocol, after establishing supported semantics (P2-03).
-7. Replace the three remaining deferred `matrix.*` placeholders with controlled fixtures/assertions
-   (P2-06): TLS/authentication, OB20/trace negotiation and topology failover.
+7. Replace the two remaining deferred `matrix.*` placeholders with controlled fixtures/assertions
+   (P2-06): TLS/authentication and OB20/trace negotiation.
+   Controlled topology now has six read-only route/failure assertions; actual discovery/node/proxy
+   failover and the full topology matrix still require external evidence.
    XA process recovery now has a prepared/recorded-decision crash point; its other crash points
    and general coordinator/server recovery still need implementation/validation.
    Controlled network outcome cases now have explicit assertions and direct-server evidence;
    their complete send/execution/cancellation/deployment boundaries remain open. `types.zero-date-policy` now has executable assertions and a separate
    opt-in SQL_MODE profile; actual zero-date storage on a permissive server remains unverified.
-   There are three explicit DeferredReason cases in total.
+   There are two explicit DeferredReason cases in total.
 
 Pool/session/transaction concurrency and resource boundaries, complete command/adapter restrictions,
 runtime/platform coverage and deployment gates also remain, as mapped individually below. Distributed
@@ -295,7 +304,7 @@ approved wire contract or can be implemented without protocol research.
 | P0-03 Ambient transactions | Single-resource PSPE enlistment, ownership, terminal states, cancellation/late-callback cleanup; promotion rejected | Complete failure regressions; distributed promotion/durable prepare is unsupported and requires a separate scope decision | Transaction manager, timeout/in-doubt, close and proxy failures |
 | P0-04 Unknown outcome | Classification, retirement/fresh leases,16 opt-in request/response fault cases with dual-mode direct-server evidence and application reconciliation example | Complete send/response/fault-boundary coverage; never replay unknown writes | Direct lost-ack cases exist; full server/proxy/coordinator fault matrix remains |
 | P0-05 Active connection failure | Connection-level ERR marks Broken, invalidates old transaction and supports explicit Close/Open | Transparent reconnect/migration/replay is absent and needs an explicit contract; complete reconstruction tests | Actual disconnect/node/proxy failure and recovery |
-| P0-06 Pool routing identity | Resolver reference identity, one route snapshot per Open, stale idle endpoint retirement | Boundary/stress coverage; no active-session migration or DNS-IP identity guarantee | Real discovery, topology and proxy changes |
+| P0-06 Pool routing identity | Resolver reference identity, one route snapshot per Open, stale idle endpoint retirement | Boundary/stress coverage; no active-session migration or DNS-IP identity guarantee | Controlled routes to one direct4.4.2.2 upstream pass7/7 per mode; independent-node discovery/topology and proxy changes remain |
 | P1-01 Multiple statements | Explicit opt-in text multi-results and rejection of unsupported combinations | Parameterized/prepared/cursor/Oracle-output combinations remain unsupported; scope decision required to expand | Both modes/versions/proxy, intermediate errors and resource cleanup |
 | P1-02 Compression/OB20 | Bounded standard MySQL compression; ordinary OB20 already exists | **Compressed OB20 and proxy reroute are missing**; confirm client link/version/capability contract before implementation | Real compression/OB20/proxy negotiation, corruption/cancellation and reroute |
 | P1-03 LOCAL INFILE | Explicitly authorized application-stream upload, path/resource boundaries and local regressions | Additional large-input/cancellation coverage within current contract | Actual server/proxy upload policies, cancellation and large files |
@@ -312,7 +321,7 @@ approved wire contract or can be implemented without protocol research.
 | P2-03 Batch optimization | Sequential Batch, existing Oracle array binding, opt-in bounded MySQL INSERT rewrite with group error attribution | **Multi-send/pipelining and separate bulk protocol are missing** | Actual counts/partial failure, transaction/default/trigger/warning behavior, packet limits and throughput/memory |
 | P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics including current leases, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O/upload-source read durations and collectible-load fixes | **Additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
 | P2-05 Runtimes/ecosystem | Five product assets; Windows nupkg protocol subset on actual .NET 8/9/10 and Framework host, plus Standard assets on .NET 10 | Complete promised platform/runtime/API matrix; Framework/ORM support scope; existing savepoint identifier limitations | Non-Windows and full feature/real-database reports on promised runtimes |
-| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports; distinct sync/async client-channel reset/reuse and time-zone retirement cases, 4/4 per mode on direct 4.4.2.2; executable opt-in zero-date storage/read/write-back assertions | **Three `matrix.*` deferred placeholders**; controlled network and one XA coordinator process crash point have assertions and direct-server evidence; source/license/package/publication review remains | Proxy/backend identity and complete reset/resource matrix; TLS/auth, topology faults, unknown network outcomes, permissive zero-date SQL_MODE storage and external-coordinator XA crash recovery |
+| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports; distinct sync/async client-channel reset/reuse and time-zone retirement cases, 4/4 per mode on direct 4.4.2.2; executable opt-in zero-date storage/read/write-back assertions | **Two `matrix.*` deferred placeholders**; six controlled client-route cases (each mode7/7 including connection), controlled network and one XA coordinator process crash point have assertions and direct-server evidence; source/license/package/publication review remains | Proxy/backend identity and complete reset/resource matrix; TLS/auth, topology faults, unknown network outcomes, permissive zero-date SQL_MODE storage and external-coordinator XA crash recovery |
 
 ## Committed delivery evidence
 

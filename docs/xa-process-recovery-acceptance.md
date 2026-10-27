@@ -49,3 +49,7 @@ power-loss durability, concurrent recovery/heuristics, ambient in-doubt, proxies
 platform/runtime/load profiles remain open under W2/W8. Three deferred matrix placeholders
 remain: TLS/authentication, OB20/trace negotiation and topology failover. The23-gap/eight-package
 baseline remains open.
+
+Current tool status: [controlled topology cases](topology-acceptance.md) now replace the topology
+placeholder; two deferred entries remain (TLS/authentication and OB20/trace). The preceding
+three-placeholder count records this XA module checkpoint.

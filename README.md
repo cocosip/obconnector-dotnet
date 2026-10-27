@@ -185,6 +185,7 @@ Check notes generation locally with `pwsh -File eng/Test-ReleaseNotes.ps1`. To p
 - [Database acceptance guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.Acceptance/README.md)
 - [Opt-in controlled network outcome acceptance](docs/network-outcome-acceptance.md)
 - [Opt-in XA coordinator process recovery acceptance](docs/xa-process-recovery-acceptance.md)
+- [Opt-in controlled topology acceptance](docs/topology-acceptance.md)
 - [Integration test guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.IntegrationTests/README.md)
 - [API reference](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-architecture-design.md)
 - [Credential provision and rotation](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/credentials.md)

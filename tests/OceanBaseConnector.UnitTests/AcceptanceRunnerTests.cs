@@ -179,7 +179,7 @@ public sealed class AcceptanceRunnerTests
         Assert.True(cases.Count >= 60);
         Assert.Equal(cases.Count, cases.Select(c => c.Name).Distinct().Count());
         Assert.Equal(DatabaseCases.Groups.OrderBy(g => g), cases.Select(c => c.Group).Distinct().OrderBy(g => g));
-        Assert.Equal(3, cases.Count(c => c.DeferredReason != null));
+        Assert.Equal(2, cases.Count(c => c.DeferredReason != null));
         Assert.All(cases.Where(c => c.Name.StartsWith("matrix.pool-reset", StringComparison.Ordinal)), c => Assert.Null(c.DeferredReason));
     }
 

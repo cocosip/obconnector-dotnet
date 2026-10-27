@@ -12,7 +12,7 @@ internal sealed record AcceptanceCase(string Name, string Group, Func<CaseContex
     string? Mode = null, bool RequiresObjects = false, bool RequiresPrepareExecute = false,
     bool RequiresLob = false, string? DeferredReason = null, bool ConnectionGate = false,
     bool RequiresSlowQuery = false, bool RequiresAlternateDatabase = false, bool RequiresZeroDateProfile = false,
-    bool RequiresNetworkFaultProfile = false, bool RequiresXaCrashProfile = false);
+    bool RequiresNetworkFaultProfile = false, bool RequiresXaCrashProfile = false, bool RequiresTopologyFaultProfile = false);
 internal sealed class AssertionFailure(string message) : Exception(message);
 internal sealed record ServerObservation(string Mode, string Version);
 internal sealed record CaseResult(string Name, string Group, string Status, string? Detail, long ElapsedMilliseconds = 0);
@@ -94,14 +94,15 @@ internal static class AcceptanceSuite
         if (test.Mode != null && test.Mode != config.Mode) return "Requires " + test.Mode + " mode.";
         if (test.DeferredReason != null) return test.DeferredReason;
         if (test.RequiresXaCrashProfile && !config.XaCrashProfile) return "Requires xaCrashProfile=true in a dedicated test schema.";
-        if (test.RequiresNetworkFaultProfile)
+        if (test.RequiresTopologyFaultProfile && !config.TopologyFaultProfile) return "Requires topologyFaultProfile=true for controlled client routes.";
+        if (test.RequiresNetworkFaultProfile || test.RequiresTopologyFaultProfile)
         {
-            if (!config.NetworkFaultProfile) return "Requires networkFaultProfile=true in a dedicated test schema.";
-            if (builder.TlsMode != OceanBaseTlsMode.Disabled) return "Network fault relay requires TLS Mode=Disabled; no downgrade is performed.";
-            if (builder.UseCompression) return "Network fault relay does not support compression.";
-            if (builder.UseOb20) return "Network fault relay does not support OB20.";
+            if (test.RequiresNetworkFaultProfile && !config.NetworkFaultProfile) return "Requires networkFaultProfile=true in a dedicated test schema.";
+            if (builder.TlsMode != OceanBaseTlsMode.Disabled) return "Controlled relay requires TLS Mode=Disabled; no downgrade is performed.";
+            if (builder.UseCompression) return "Controlled relay does not support compression.";
+            if (builder.UseOb20) return "Controlled relay does not support OB20.";
             if (Uri.CheckHostName(builder.Server) is not (UriHostNameType.Dns or UriHostNameType.IPv4))
-                return "Network fault relay requires a single plain host and separate Port.";
+                return "Controlled relay requires a single plain host and separate Port.";
         }
         if (test.RequiresZeroDateProfile && !config.ZeroDateProfile) return "Requires zeroDateProfile=true and a session SQL_MODE allowing zero dates.";
         if (test.RequiresSlowQuery && string.IsNullOrWhiteSpace(config.SlowQuery)) return "Requires a read-only slowQuery taking more than two seconds.";

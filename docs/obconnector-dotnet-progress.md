@@ -4,6 +4,59 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Controlled topology acceptance
+
+Developed from master/21e3de2, P0-06/P1-09/P2-06 and W1/W4/W8. Six sync/async explicit
+`topologyFaultProfile` cases replace the topology placeholder: idle refresh/retirement,
+borrowed-session isolation and refused-TCP fallback. Transparent loopback relays forward to
+one configured upstream; physical connection counts, first-channel termination and matching
+resolver method/call counts reject simple SQL-success false passes. The refused-only negative
+control must fail Open/leave Closed without configured-address fallback before the same
+connection/private pool opens with refused+healthy routes and later reuses its healthy channel.
+Only fixed read-only SELECT is executed; no DDL, writes, cluster settings or business data
+changes. No product source/API/dependency changes. See the [contract](topology-acceptance.md).
+
+Evidence retained:
+
+- Catalog/profile RED6/6 and execution RED15/15 fail because the feature does not exist.
+- First GREEN has44 pass/14 fail: Oracle fixture incorrectly advertises MySQL, and normal
+  listener-stop cancellation escapes relay disposal. Mode-bearing handshake and own-stop
+  cancellation handling fix these. Second run52 pass/6 fail exposes missing Oracle lazy
+  SESSIONTIMEZONE fixture response. Adding existing timezone/national helpers yields focused
+  93/93 pass, zero failures/skips, including routing/topology/runner/network regressions.
+- Synthetic execution covers both modes, sync/async and all three cases, plus two wrong-result
+  failures and cancellation while a read is pending. All accepted backend sessions reach EOF
+  before fixture cancellation; output/report assertions exclude synthetic secrets/endpoints.
+- Initial serial Release solution build: zero warnings/errors,12.64s; initial full units8065/8065
+  pass, zero failures/skips,8m47s. These precede the review correction. Final serial Release
+  solution build after correction: zero warnings/errors,2.10s. Final full units8066/8066 pass,
+  zero failures/skips,8m48s;22 actual additions and no removals against the8044 baseline.
+- Opt-out integration:15 passed/116 skipped/zero failed; final scoped format/docs validation passes (details below).
+- Explicit real direct OceanBase4.4.2.2 Windows/.NET10.0.13, TLS disabled: Oracle7/7 and
+  MySQL7/7, each connection control plus six route cases, no failures/skips/cancellation/cleanup
+  failures and no database objects created. Safe reports: topology-live-oracle-9808619e.json
+  and topology-live-mysql-7f5acfc8.json under TestResults. One independent final review finds no Critical/Important issue; its sole Minor identifies
+  lost concurrent-session exception evidence during relay disposal. Two initial regression
+  attempts do not actually inject RST because TcpClient.Dispose first shuts down gracefully.
+  After exchanging bytes, disposing linger-zero sockets directly yields the intended RED:
+  expected2 failures/actual1. Capturing the completed combined task exception preserves both.
+  Final focused94/94 pass; no re-review. Final live rerun again passes Oracle7/7/MySQL7/7,
+  no objects/failures/skips/cleanup failures; current safe reports are
+  topology-live-oracle-e327c048.json and topology-live-mysql-9aed6427.json. Initial live reports
+  remain. Final opt-out again15 pass/116 skip/zero fail. Nine-file whitespace verification
+  exits0 with the existing workspace-load warning. Eleven changed documents resolve920 relative
+  links; completeness history15.1–15.103 and prior module records are unchanged,23 IDs/eight
+  packages remain, all new RED cases map to final passes, and added-content/report privacy
+  checks pass. The reviewer did not run tests or access real environments.
+
+Local ignored evidence: TestResults/topology-{red,execution-red,green,green-corrected,focused,
+full,optout}/ and TestResults/topology-*.log. The original failed runs remain; corrections to
+fixture behavior are not presented as product fixes. No consumer/package/full database-suite
+rerun or independent runtime is claimed. No actual cluster/node/discovery-service/proxy HA
+claim: all relays forward to one server. TLS/auth, OB20/trace are the two remaining deferred
+placeholders; all23 gaps/eight packages and historical records remain open. Local master only,
+no push/publication. Secrets use private echo-disabled stdin, never files/arguments/new env vars.
+
 ## 2026-10-27 XA coordinator process recovery
 
 Developed from master/7ebc590, P0-04/W2 and P2-06/W8. Four sync/async commit/rollback cases

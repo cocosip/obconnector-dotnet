@@ -41,12 +41,11 @@ internal static partial class DatabaseCases
         cases.Add(new("faults.cancellation", "faults", (c, t) => SlowQuery(c, true, t), RequiresSlowQuery: true));
         cases.Add(new("faults.timeout", "faults", (c, t) => SlowQuery(c, false, t), RequiresSlowQuery: true));
         cases.Add(new("matrix.pool-reset", "faults", PoolReset));
-        AddTypes(cases); AddOracle(cases); AddNetwork(cases); AddXaCrash(cases);
+        AddTypes(cases); AddOracle(cases); AddNetwork(cases); AddXaCrash(cases); AddTopology(cases);
         foreach (var item in new[]
         {
             ("matrix.tls-authentication", "Requires separate endpoint/certificate/plugin profiles, including negative handshakes."),
             ("matrix.ob20-trace-negotiation", "Public API does not expose negotiated OB20/trace capabilities; normal SQL success alone is insufficient."),
-            ("matrix.topology-failover", "Requires controlled endpoint discovery and connection-failure injection."),
         }) cases.Add(new(item.Item1, "faults", (_, _) => Task.CompletedTask, DeferredReason: item.Item2));
         return cases;
     }

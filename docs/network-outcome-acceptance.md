@@ -40,5 +40,5 @@ cases plus one connection control; all 32 tables were removed. This is bounded d
 evidence. Provider-local pre-send, in-flight server execution, timeout/cancellation ordering,
 ambient in-doubt/coordinator crashes, real OBProxy, TLS, other versions/platforms and long-running
 load remain open under P0-04/W2 and P2-06/W8. A separate [XA coordinator process matrix](xa-process-recovery-acceptance.md)
-now covers one prepared/recorded-decision crash point; three deferred matrix placeholders
-remain. It does not close the 23-gap/eight-package baseline.
+now covers one prepared/recorded-decision crash point. [Controlled topology cases](topology-acceptance.md)
+cover client-route changes and refused TCP; two deferred matrix placeholders remain. It does not close the 23-gap/eight-package baseline.
