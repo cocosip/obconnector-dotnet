@@ -7,5 +7,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/OceanBaseConnector/OceanBaseConnector.csproj" />
     <InternalsVisibleTo Include="OceanBaseConnector.UnitTests" />
+    <Compile Include="../OceanBaseConnector.IntegrationTests/Infrastructure/TransactionResponseDropProxy.cs" Link="Infrastructure/TransactionResponseDropProxy.cs" />
   </ItemGroup>
 </Project>

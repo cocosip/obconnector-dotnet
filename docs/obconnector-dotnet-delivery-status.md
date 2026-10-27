@@ -1,13 +1,23 @@
 # Driver delivery status
 
-Last checked: 2026-10-27; latest source-read diagnostics module developed from `master/3ef375d`.
+Last checked: 2026-10-27; latest controlled network acceptance developed from `master/a265ce7`.
 The prior committed source review is `master/f9e8c20`. This is the current overview; the detailed
 [completeness baseline](obconnector-dotnet-completeness.md) retains requirements and historical evidence.
 The [module records](obconnector-dotnet-progress.md) retain individual test/review results.
 
 ## Current checkpoint
 
-- Latest module: [upload source read durations](source-read-diagnostics.md), covering
+- Latest module: [controlled network outcome acceptance](network-outcome-acceptance.md),16
+  individually reported sync/async cases behind a separate explicit profile. Both modes pass
+  17/17 on direct4.4.2.2 (one connection control plus16 faults), with all32 owned tables removed.
+  Focused tests70/70, complete units8018/8018 and opt-out integration15 pass/116 skip.
+  Final serial Release build has zero warnings/errors; scoped format verification exits0 and
+  one independent final review has no actionable findings.
+  Four deferred placeholders remain. Local pre-send, server execution interruption, cancel/timeout,
+  coordinator crash and real proxy/TLS/deployment matrices remain open.
+
+
+- Previous module: [upload source read durations](source-read-diagnostics.md), covering
   MySQL long-data parameters, Oracle piece-data parameters and LOCAL INFILE, sync/async.
   Fixed source-kind/mode/outcome tags, independent enablement and shared post-release publication
   preserve ownership/cancellation and protocol timing. Focused units156/156, complete units7977/7977,
@@ -83,11 +93,11 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   103/103, complete units pass 7708/7708, and the serial Release solution build has zero
   warnings/errors. Independent source/test/docs review has no actionable issue. The explicit real
   MySQL connection passes, but the SQL_MODE prerequisite fails before DDL: no objects were
-  created, and real zero-date storage remains unverified. Five DeferredReason cases remain;
+  created, and real zero-date storage remains unverified. At that checkpoint five DeferredReason cases remained;
   ordinary mode/configuration skips are separate. See the
   [module record](obconnector-dotnet-progress.md#2026-10-27-opt-in-zero-date-storage-acceptance).
 - Development stays on `master`. No new branch/worktree and no implicit push.
-- Latest documentation alignment checks the committed source and saved module reports; it does
+- The prior documentation-only alignment checked committed source and saved module reports; it did
   not rerun builds/tests or connect to a database. Current code limits and direct source links are
   recorded in [completeness section 15.97](obconnector-dotnet-completeness.md#1597-2026-10-27-已提交源码与文档再次对齐).
 - Historical source review baseline: `master/6e64c7e`, 2026-10-27. The serial Release solution build
@@ -246,11 +256,12 @@ These are concrete code/scope gaps, not merely missing real-database reports:
    locator input conversion now passes direct default/GB18030 checks. Other profiles remain open.
 5. Compressed OB20/proxy reroute, after establishing the client-link wire contract (P1-02).
 6. Multi-send/pipelining or a separate bulk protocol, after establishing supported semantics (P2-03).
-7. Replace the five remaining deferred `matrix.*` placeholders with controlled fixtures/assertions
-   (P2-06): TLS/authentication, OB20/trace negotiation, topology failover, unknown network outcome
-   and XA crash recovery. `types.zero-date-policy` now has executable assertions and a separate
+7. Replace the four remaining deferred `matrix.*` placeholders with controlled fixtures/assertions
+   (P2-06): TLS/authentication, OB20/trace negotiation, topology failover and XA crash recovery.
+   Controlled network outcome cases now have explicit assertions and direct-server evidence;
+   their complete send/execution/cancellation/deployment boundaries remain open. `types.zero-date-policy` now has executable assertions and a separate
    opt-in SQL_MODE profile; actual zero-date storage on a permissive server remains unverified.
-   There are five explicit DeferredReason cases in total.
+   There are four explicit DeferredReason cases in total.
 
 Pool/session/transaction concurrency and resource boundaries, complete command/adapter restrictions,
 runtime/platform coverage and deployment gates also remain, as mapped individually below. Distributed
@@ -270,7 +281,7 @@ approved wire contract or can be implemented without protocol research.
 | P0-01 Pool lifecycle | Capacity/wait/cancel, prewarm, ping, idle/lifetime retirement, metrics, explicit clearing, normalized identity; callback cleanup and waiter handoff fixes | Additional concurrency/reentrancy/Dispose interleavings and bounded resource/long-run tests; shutdown scope | Real reset/proxy behavior and sustained resource limits |
 | P0-02 Session isolation | Reset generation, conservative stateful-SQL retirement, Oracle fresh/reset autocommit, XA isolation, old-reader lease isolation, LOB/cursor retirement | Complete resource/interleaving and implicit-side-effect coverage; real interrupted external LOB isolation remains unproved | Some direct dual-mode/Oracle cases exist; complete reset/LOB/cursor/XA/proxy matrix remains |
 | P0-03 Ambient transactions | Single-resource PSPE enlistment, ownership, terminal states, cancellation/late-callback cleanup; promotion rejected | Complete failure regressions; distributed promotion/durable prepare is unsupported and requires a separate scope decision | Transaction manager, timeout/in-doubt, close and proxy failures |
-| P0-04 Unknown outcome | Classification, retirement/fresh leases, lost commit/rollback acknowledgement tests and application reconciliation example | Complete send/response/fault-boundary coverage; never replay unknown writes | Direct lost-ack cases exist; full server/proxy/coordinator fault matrix remains |
+| P0-04 Unknown outcome | Classification, retirement/fresh leases,16 opt-in request/response fault cases with dual-mode direct-server evidence and application reconciliation example | Complete send/response/fault-boundary coverage; never replay unknown writes | Direct lost-ack cases exist; full server/proxy/coordinator fault matrix remains |
 | P0-05 Active connection failure | Connection-level ERR marks Broken, invalidates old transaction and supports explicit Close/Open | Transparent reconnect/migration/replay is absent and needs an explicit contract; complete reconstruction tests | Actual disconnect/node/proxy failure and recovery |
 | P0-06 Pool routing identity | Resolver reference identity, one route snapshot per Open, stale idle endpoint retirement | Boundary/stress coverage; no active-session migration or DNS-IP identity guarantee | Real discovery, topology and proxy changes |
 | P1-01 Multiple statements | Explicit opt-in text multi-results and rejection of unsupported combinations | Parameterized/prepared/cursor/Oracle-output combinations remain unsupported; scope decision required to expand | Both modes/versions/proxy, intermediate errors and resource cleanup |
@@ -289,7 +300,7 @@ approved wire contract or can be implemented without protocol research.
 | P2-03 Batch optimization | Sequential Batch, existing Oracle array binding, opt-in bounded MySQL INSERT rewrite with group error attribution | **Multi-send/pipelining and separate bulk protocol are missing** | Actual counts/partial failure, transaction/default/trigger/warning behavior, packet limits and throughput/memory |
 | P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics including current leases, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O/upload-source read durations and collectible-load fixes | **Additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
 | P2-05 Runtimes/ecosystem | Five product assets; Windows nupkg protocol subset on actual .NET 8/9/10 and Framework host, plus Standard assets on .NET 10 | Complete promised platform/runtime/API matrix; Framework/ORM support scope; existing savepoint identifier limitations | Non-Windows and full feature/real-database reports on promised runtimes |
-| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports; distinct sync/async client-channel reset/reuse and time-zone retirement cases, 4/4 per mode on direct 4.4.2.2; executable opt-in zero-date storage/read/write-back assertions | **Five `matrix.*` deferred placeholders**; source/license/package/publication review remains | Proxy/backend identity and complete reset/resource matrix; TLS/auth, topology faults, unknown network outcomes, permissive zero-date SQL_MODE storage and external-coordinator XA crash recovery |
+| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports; distinct sync/async client-channel reset/reuse and time-zone retirement cases, 4/4 per mode on direct 4.4.2.2; executable opt-in zero-date storage/read/write-back assertions | **Four `matrix.*` deferred placeholders**; controlled network outcome assertions and direct-server evidence are now available; source/license/package/publication review remains | Proxy/backend identity and complete reset/resource matrix; TLS/auth, topology faults, unknown network outcomes, permissive zero-date SQL_MODE storage and external-coordinator XA crash recovery |
 
 ## Committed delivery evidence
 

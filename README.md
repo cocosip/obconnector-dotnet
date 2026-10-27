@@ -183,6 +183,7 @@ Check notes generation locally with `pwsh -File eng/Test-ReleaseNotes.ps1`. To p
 - [Complete driver audit report](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-driver-audit.md)
 - [Complete driver capability baseline and gap plan](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-completeness.md)
 - [Database acceptance guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.Acceptance/README.md)
+- [Opt-in controlled network outcome acceptance](docs/network-outcome-acceptance.md)
 - [Integration test guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.IntegrationTests/README.md)
 - [API reference](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-architecture-design.md)
 - [Credential provision and rotation](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/credentials.md)

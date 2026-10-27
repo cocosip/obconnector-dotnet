@@ -9,7 +9,9 @@ using System.Threading.Tasks;
 
 namespace OceanBaseConnector.IntegrationTests.Infrastructure;
 
-// Test-only plaintext relay: two sequential sessions, one exact transaction-end response fault.
+internal enum CommandDropPoint { BeforeForward, PartialRequest, WholeResponse, PartialResponse }
+
+// Test-only plaintext relay: two sequential sessions, one exact command fault.
 internal sealed class TransactionResponseDropProxy : IAsyncDisposable
 {
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
@@ -17,19 +19,28 @@ internal sealed class TransactionResponseDropProxy : IAsyncDisposable
     private readonly string _host;
     private readonly int _upstreamPort;
     private readonly string _target;
-    private readonly bool _partial;
+    private readonly CommandDropPoint _point;
     private int _armed;
     private int _awaitingResponse;
     private int _targetRequests;
+    private int _connections;
     internal int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
     internal int TargetRequests => Volatile.Read(ref _targetRequests);
+    internal int Connections => Volatile.Read(ref _connections);
     internal byte? ObservedResponseMarker { get; private set; }
     internal Task Completion { get; }
 
     internal TransactionResponseDropProxy(string host, int port, string target, bool partial)
+        : this(host, port, RequireTransactionEnd(target), partial ? CommandDropPoint.PartialResponse : CommandDropPoint.WholeResponse) { }
+
+    private static string RequireTransactionEnd(string target) => target is "COMMIT" or "ROLLBACK" ? target
+        : throw new ArgumentException("A transaction end is required.", nameof(target));
+
+    internal TransactionResponseDropProxy(string host, int port, string target, CommandDropPoint point)
     {
-        if (target != "COMMIT" && target != "ROLLBACK") throw new ArgumentException("A transaction end is required.", nameof(target));
-        _host = host; _upstreamPort = port; _target = target; _partial = partial;
+        if (string.IsNullOrWhiteSpace(target)) throw new ArgumentException("An exact command is required.", nameof(target));
+        if (!Enum.IsDefined(point)) throw new ArgumentOutOfRangeException(nameof(point));
+        _host = host; _upstreamPort = port; _target = target; _point = point;
         _listener.Start(); Completion = Run();
     }
 
@@ -45,6 +56,7 @@ internal sealed class TransactionResponseDropProxy : IAsyncDisposable
                 if (client == null) return;
                 using var upstream = new TcpClient();
                 await upstream.ConnectAsync(_host, _upstreamPort, _stop.Token);
+                Interlocked.Increment(ref _connections);
                 using var sessionStop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
                 var sending = Forward(client.GetStream(), upstream.GetStream(), true, sessionStop.Token);
                 var receiving = Forward(upstream.GetStream(), client.GetStream(), false, sessionStop.Token);
@@ -87,14 +99,24 @@ internal sealed class TransactionResponseDropProxy : IAsyncDisposable
                 Encoding.UTF8.GetString(frame, 5, frame.Length - 5) == _target)
             {
                 Interlocked.Increment(ref _targetRequests);
-                if (Interlocked.Exchange(ref _armed, 0) != 0) Volatile.Write(ref _awaitingResponse, 1);
+                if (Interlocked.Exchange(ref _armed, 0) != 0)
+                {
+                    // The provider has already sent to this relay; neither path proves local pre-send.
+                    if (_point == CommandDropPoint.BeforeForward) return;
+                    if (_point == CommandDropPoint.PartialRequest)
+                    {
+                        await output.WriteAsync(frame.AsMemory(0, 5), token);
+                        return;
+                    }
+                    Volatile.Write(ref _awaitingResponse, 1);
+                }
             }
             if (!request && Interlocked.Exchange(ref _awaitingResponse, 0) != 0)
             {
-                if (frame.Length <= 5) throw new InvalidDataException("A complete transaction response payload is required.");
+                if (frame.Length <= 5) throw new InvalidDataException("A complete command response payload is required.");
                 ObservedResponseMarker = frame[4];
                 // Keep the original length, but deliver at most one payload byte to the driver.
-                if (_partial) await output.WriteAsync(frame.AsMemory(0, 5), token);
+                if (_point == CommandDropPoint.PartialResponse) await output.WriteAsync(frame.AsMemory(0, 5), token);
                 return;
             }
             await output.WriteAsync(frame, token);

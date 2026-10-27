@@ -4,6 +4,58 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Controlled network outcome acceptance
+
+Developed from `master/a265ce7`, P0-04/W2 and P2-06/W8. The existing test-only relay
+now supports withheld/partial INSERT requests and whole/partial INSERT/COMMIT/ROLLBACK
+responses. The acceptance catalog has16 individually reported sync/async cases behind
+`networkFaultProfile=true` and object permission. Plain DNS/IPv4 host plus separate Port,
+TLS disabled and no compression/OB20 are required; incompatible profiles skip before Open/DDL.
+Product code, API, dependencies and the example opt-out defaults are unchanged.
+See the [precise boundaries](network-outcome-acceptance.md).
+
+Each case checks conservative unknown outcome, Broken state, transaction detach, independent
+reconciliation, a new TCP channel in a capacity-one private pool, no target replay, a fresh
+write and a fresh rollback. Request withholding is after provider-to-relay send, not local
+pre-send proof. Response faults occur after the complete server OK reaches the relay.
+
+Retained development evidence:
+
+- Gate/catalog RED6/6 and orchestration RED34/34 expose the missing field/cases. One earlier
+  test build used the wrong UserId spelling; corrected before the behavioral RED.
+- Initial GREEN0/40 and then6/40 retain fixture failures: missing synthetic username,
+  Oracle timezone/national replies and incorrect transaction-ended status. The temporary
+  synthetic-only stack probe also initially used a nonexistent relative output directory;
+  it was removed after identifying the fixture status error. No product fix was warranted.
+- Focused runner/network tests pass70/70; an additional invalid-relay validation case is
+  included in the complete suite. All32 normal mode/scenario combinations and2 intentionally
+  wrong reconciliation cases verify failure/cleanup and report privacy.
+- Complete units8018/8018 pass, zero failures/skips,8m31s;41 new cases and no removed cases
+  compared with the source-read baseline. All40 behavioral RED cases map to full-suite passes.
+- Final serial Release solution build: zero warnings/errors,2.03s; scoped whitespace verification
+  exits0 with the existing workspace-loading warning and no formatting diagnostics.
+- Ordinary opt-out integration:15 passed/116 skipped/zero failed, including exact0/5-byte
+  request boundaries and the four existing relay tests.
+- Explicit real direct OceanBase4.4.2.2, Windows/.NET10.0.13, TLS disabled: Oracle17/17 and
+  MySQL17/17 (connection control plus16 faults each), zero failures/skips; all32 owned tables
+  removed with zero cleanup failures. Credentials arrived only over echo-disabled stdin.
+- One fresh-context independent final reviewer found no actionable Critical/Important/Minor
+  issues; no findings were deferred or declined. The reviewer did not run tests or live access.
+
+Local ignored evidence: `TestResults/network-acceptance-{red,execution-red,green3,full,optout}/`
+and `TestResults/network-acceptance-*.log`; safe live reports are
+`TestResults/network-acceptance-live-oracle-52b804ea.json` and
+`TestResults/network-acceptance-live-mysql-903ee616.json`. These are local evidence, not committed artifacts.
+`TestResults/network-acceptance-validation.json` confirms8 documents/841 relative targets,
+23 IDs/eight packages, unchanged historical15.1–15.101, report counts and privacy checks.
+The private runner initially needed a restore for its missing assets file; the original log remains.
+
+The four DeferredReason placeholders remain TLS/authentication, OB20/trace, topology and XA
+crash recovery. Provider-local pre-send, execution-time interruption, timeout/cancellation
+ordering, ambient in-doubt/coordinator crashes, real OBProxy/TLS, other versions/platforms and
+load remain open. No consumer/package/independent-runtime or full database-suite rerun is
+claimed. All23 gaps/eight packages remain open; local master only, no push/publication.
+
 ## 2026-10-27 Upload source read diagnostics
 
 Developed from `master/3ef375d`, P2-04/W7. The independently enabled

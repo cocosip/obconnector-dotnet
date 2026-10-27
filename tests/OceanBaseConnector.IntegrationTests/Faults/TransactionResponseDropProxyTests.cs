@@ -14,6 +14,54 @@ namespace OceanBaseConnector.IntegrationTests.Faults;
 public sealed class TransactionResponseDropProxyTests
 {
     [Theory]
+    [InlineData((int)CommandDropPoint.BeforeForward, 0)]
+    [InlineData((int)CommandDropPoint.PartialRequest, 5)]
+    public async Task RelayCutsRequestAtExactBoundaryAndAllowsReplacement(int point, int expectedBytes)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var upstream = new TcpListener(IPAddress.Loopback, 0); upstream.Start();
+        var payload = Encoding.UTF8.GetBytes("\u0003INSERT INTO OBA_TEST VALUES (1)");
+        var frame = new byte[4 + payload.Length]; frame[0] = (byte)payload.Length; payload.CopyTo(frame, 4);
+        var serving = Task.Run(async () =>
+        {
+            using (var first = await upstream.AcceptTcpClientAsync(deadline.Token))
+            {
+                using var received = new MemoryStream();
+                await first.GetStream().CopyToAsync(received, deadline.Token);
+                Assert.Equal(frame.AsSpan(0, expectedBytes).ToArray(), received.ToArray());
+            }
+            using var second = await upstream.AcceptTcpClientAsync(deadline.Token);
+            var actual = new byte[frame.Length];
+            await second.GetStream().ReadExactlyAsync(actual, deadline.Token);
+            Assert.Equal(frame, actual);
+        });
+        await using var proxy = new TransactionResponseDropProxy("127.0.0.1", ((IPEndPoint)upstream.LocalEndpoint).Port,
+            "INSERT INTO OBA_TEST VALUES (1)", (CommandDropPoint)point);
+        try
+        {
+            using (var first = new TcpClient())
+            {
+                await first.ConnectAsync("127.0.0.1", proxy.Port, deadline.Token);
+                proxy.Arm(); await first.GetStream().WriteAsync(frame, deadline.Token);
+                Assert.Equal(0, await first.GetStream().ReadAsync(new byte[1], deadline.Token));
+            }
+            using (var second = new TcpClient())
+            {
+                await second.ConnectAsync("127.0.0.1", proxy.Port, deadline.Token);
+                await second.GetStream().WriteAsync(frame, deadline.Token);
+                Assert.Equal(0, await second.GetStream().ReadAsync(new byte[1], deadline.Token));
+            }
+            await serving.WaitAsync(deadline.Token); await proxy.Completion.WaitAsync(deadline.Token);
+            Assert.Equal(2, proxy.TargetRequests); Assert.Equal(2, proxy.Connections); Assert.Null(proxy.ObservedResponseMarker);
+        }
+        finally
+        {
+            deadline.Cancel(); upstream.Stop();
+            try { await serving; } catch (OperationCanceledException) when (deadline.IsCancellationRequested) { }
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task AcceptBoundarySuppressesStoppedListenerOnlyAfterCancellation(bool canceled)

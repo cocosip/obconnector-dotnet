@@ -11,7 +11,8 @@ namespace OceanBaseConnector.Acceptance;
 internal sealed record AcceptanceCase(string Name, string Group, Func<CaseContext, CancellationToken, Task> Run,
     string? Mode = null, bool RequiresObjects = false, bool RequiresPrepareExecute = false,
     bool RequiresLob = false, string? DeferredReason = null, bool ConnectionGate = false,
-    bool RequiresSlowQuery = false, bool RequiresAlternateDatabase = false, bool RequiresZeroDateProfile = false);
+    bool RequiresSlowQuery = false, bool RequiresAlternateDatabase = false, bool RequiresZeroDateProfile = false,
+    bool RequiresNetworkFaultProfile = false);
 internal sealed class AssertionFailure(string message) : Exception(message);
 internal sealed record ServerObservation(string Mode, string Version);
 internal sealed record CaseResult(string Name, string Group, string Status, string? Detail, long ElapsedMilliseconds = 0);
@@ -92,6 +93,15 @@ internal static class AcceptanceSuite
         if (config.Groups.Length != 0 && !config.Groups.Contains(test.Group, StringComparer.Ordinal)) return "Group not selected.";
         if (test.Mode != null && test.Mode != config.Mode) return "Requires " + test.Mode + " mode.";
         if (test.DeferredReason != null) return test.DeferredReason;
+        if (test.RequiresNetworkFaultProfile)
+        {
+            if (!config.NetworkFaultProfile) return "Requires networkFaultProfile=true in a dedicated test schema.";
+            if (builder.TlsMode != OceanBaseTlsMode.Disabled) return "Network fault relay requires TLS Mode=Disabled; no downgrade is performed.";
+            if (builder.UseCompression) return "Network fault relay does not support compression.";
+            if (builder.UseOb20) return "Network fault relay does not support OB20.";
+            if (Uri.CheckHostName(builder.Server) is not (UriHostNameType.Dns or UriHostNameType.IPv4))
+                return "Network fault relay requires a single plain host and separate Port.";
+        }
         if (test.RequiresZeroDateProfile && !config.ZeroDateProfile) return "Requires zeroDateProfile=true and a session SQL_MODE allowing zero dates.";
         if (test.RequiresSlowQuery && string.IsNullOrWhiteSpace(config.SlowQuery)) return "Requires a read-only slowQuery taking more than two seconds.";
         if (test.RequiresAlternateDatabase && string.IsNullOrWhiteSpace(config.AlternateDatabase)) return "Requires alternateDatabase.";

@@ -1,5 +1,22 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Controlled network outcome acceptance
+
+The [opt-in controlled matrix](network-outcome-acceptance.md) now has16 executable cases
+per mode: ordinary INSERT withheld/partial request and whole/partial response loss, plus
+COMMIT/ROLLBACK whole/partial response loss, sync/async. Oracle and MySQL direct4.4.2.2 each
+pass17/17 including connection control; Windows/.NET10.0.13, TLS disabled. All32 owned tables
+were removed. Complete units8018/8018 pass with zero failures/skips; ordinary opt-out integration
+has15 pass/116 skip/zero failures. Final serial Release builds with zero warnings/errors; scoped
+format verification exits0 and independent review has no actionable finding. See the [module record](obconnector-dotnet-progress.md#2026-10-27-controlled-network-outcome-acceptance).
+
+Faults require a separate networkFaultProfile, object creation permission, a plain DNS/IPv4
+host plus separate Port, no TLS/compression/OB20; incompatible profiles skip without downgrade.
+Request faults occur after provider-to-relay send, and response faults after the relay receives
+server OK. Local pre-send, execution interruption, cancellation/timeout ordering, coordinator
+crash, real proxy/TLS and other deployment/runtime/load profiles remain unverified. This does
+not close P0-04/P2-06 or the23-gap/eight-package baseline. Credentials are not test/CI inputs.
+
 ## 2026-10-27 Upload source read diagnostics
 
 The new [source-read histogram](source-read-diagnostics.md) covers MySQL long-data,
@@ -857,7 +874,7 @@ The cleanup failure was an attempted DROP of the table whose CREATE failed. The 
 
 ## Deferred acceptance cases
 
-Five `matrix.*` entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs)
+Four `matrix.*` entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs)
 have explicit `DeferredReason` values. They report skips, not successful validation.
 `types.zero-date-policy` is executable behind the separate opt-in described above;
 `matrix.pool-reset` is also executable and is listed separately below.
@@ -867,7 +884,6 @@ have explicit `DeferredReason` values. They report skips, not successful validat
 | `matrix.tls-authentication` | Trusted certificate chains, hostnames, plugin combinations and negative authentication profiles. TLS-disabled acceptance does not validate VerifyFull. |
 | `matrix.ob20-trace-negotiation` | Actual server OB20/full-link-trace negotiation and trace output. Ordinary SQL success does not prove either was negotiated. |
 | `matrix.topology-failover` | Controlled discovery, endpoint failures and routing on real deployments. |
-| `matrix.network-outcome-unknown` | Mid-request/response failures, cancellation ordering and interrupted commit/rollback on real deployments. |
 | `matrix.xa-crash-recovery` | External coordinator recovery under client/server process failure. Basic XA phase tests do not cover this. |
 
 `matrix.pool-reset` forces a one-session pool, changes the session time zone, closes the

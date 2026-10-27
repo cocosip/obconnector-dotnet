@@ -41,6 +41,7 @@ copy them into repository files or shared logs/reports. Never print or commit re
 | `groups` | Empty or omitted selects all groups; use `--list` for names. |
 | `allowCreateObjects` | Default false. Enables tests that create and drop schema objects; both example files set true. |
 | `zeroDateProfile` | Default false. Explicitly enables MySQL `types.zero-date-policy`, also requiring `allowCreateObjects=true` and a session SQL_MODE without NO_ZERO_DATE/NO_ZERO_IN_DATE. The runner never changes SQL_MODE. |
+| `networkFaultProfile` | Default false. Explicitly enables 16 controlled write/transaction network fault cases, requiring `allowCreateObjects=true`, a single plain DNS/IPv4 host with separate Port, TLS disabled, no compression and no OB20. Incompatible profiles skip without downgrade. |
 | `largeValueBytes` | Binary round-trip size, default 65536; range 1–1048576. |
 | `slowQuery` | Optional read-only SQL taking over two seconds, for cancellation and timeout tests. Omitted means those cases are skipped. |
 | `alternateDatabase` | Optional MySQL database for change-and-restore testing. Omitted means skipped. |
@@ -55,8 +56,14 @@ Connection cases compare `ServerVersion` and schema product-version metadata wit
 `types.mysql-client-behavior` checks both TINYINT Boolean/integer mappings and both UPDATE
 row-count settings through real text/prepared sequential readers, including NULL and negative values.
 
-Five `matrix.*` entries are explicitly deferred: TLS/authentication, OB20/tracing negotiation,
-topology failover, interrupted network outcomes and XA crash recovery.
+Four `matrix.*` entries are explicitly deferred: TLS/authentication, OB20/tracing negotiation,
+topology failover and XA crash recovery.
+The 16 opt-in `matrix.network-outcome-unknown.*` cases inject INSERT request/response and
+COMMIT/ROLLBACK response loss, then check unknown outcome, broken-channel replacement,
+independent reconciliation, no replay and fresh transaction recovery. Both direct 4.4.2.2
+modes passed 16/16 plus connection control; all owned tables were removed. This does not cover
+provider-local pre-send, server execution interruption, cancellation ordering, real proxy/TLS
+or coordinator crash recovery. See the [fault boundaries and cleanup contract](../../docs/network-outcome-acceptance.md).
 `types.zero-date-policy` is executable with the explicit `zeroDateProfile` opt-in. It checks
 the actual session SQL_MODE before DDL; an enabled incompatible profile fails with no object
 creation. It stores normal/partial-zero/all-zero/NULL DATE and DATETIME(6), verifies text and
