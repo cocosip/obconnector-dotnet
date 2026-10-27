@@ -25,6 +25,34 @@ namespace OceanBaseConnector.Internal.Sql
         {
             var parts = RoutineParameterDerivation.ParseName(name, mysql: true);
             if (parameters.Count > ushort.MaxValue) throw new ArgumentException("Too many routine parameters.");
+            OceanBaseParameter? returnValue = null;
+            foreach (OceanBaseParameter parameter in parameters)
+            {
+                if (parameter.Direction != ParameterDirection.ReturnValue) continue;
+                if (returnValue != null) throw new ArgumentException("A MySQL function accepts a single ReturnValue parameter.");
+                returnValue = parameter;
+            }
+            if (returnValue != null)
+            {
+                var variable = "@" + variablePrefix + "_0";
+                var function = new StringBuilder("SET ").Append(variable).Append(" = ");
+                for (var i = 0; i < parts.Length; i++)
+                { if (i != 0) function.Append('.'); function.Append('`').Append(parts[i].Replace("`", "``")).Append('`'); }
+                function.Append('(');
+                var functionInputs = new List<OceanBaseParameter>();
+                foreach (OceanBaseParameter parameter in parameters)
+                {
+                    if (ReferenceEquals(parameter, returnValue)) continue;
+                    if (parameter.Direction != ParameterDirection.Input)
+                        throw new NotSupportedException("MySQL function ReturnValue calls support input arguments only.");
+                    if (functionInputs.Count != 0) function.Append(", ");
+                    function.Append('?'); functionInputs.Add(parameter.Snapshot());
+                }
+                function.Append(')');
+                return new MySqlCommandPlan(new ParameterBindingPlan(function.ToString(), functionInputs.ToArray()),
+                    new[] { returnValue }, new ParameterBindingPlan(string.Empty, Array.Empty<OceanBaseParameter>()),
+                    "SELECT " + variable);
+            }
             var sql = new StringBuilder("CALL ");
             for (var i = 0; i < parts.Length; i++)
             { if (i != 0) sql.Append('.'); sql.Append('`').Append(parts[i].Replace("`", "``")).Append('`'); }
@@ -33,8 +61,6 @@ namespace OceanBaseConnector.Internal.Sql
             var initializers = new List<OceanBaseParameter>(); var assignments = new List<string>(); var variables = new List<string>();
             foreach (OceanBaseParameter parameter in parameters)
             {
-                if (parameter.Direction == ParameterDirection.ReturnValue)
-                    throw new NotSupportedException("MySQL procedures do not have a ReturnValue; call stored functions with a text SELECT.");
                 if (inputs.Count + outputs.Count != 0) sql.Append(", ");
                 var copy = parameter.Snapshot(); copy.Direction = ParameterDirection.Input;
                 if (parameter.Direction == ParameterDirection.Input) { sql.Append('?'); inputs.Add(copy); continue; }
@@ -57,7 +83,7 @@ namespace OceanBaseConnector.Internal.Sql
 
         internal void Initialize(CommandExchange exchange, PhysicalSession session)
         {
-            if (Outputs.Length == 0) return;
+            if (Outputs.Length == 0 || _initialization.CommandText.Length == 0) return;
             var encoded = PreparedParameters.Encode(_initialization.Parameters, OceanBaseCompatibilityMode.MySql, clientEncoding: exchange.ClientEncoding);
             exchange.Send(OceanBaseCommand.SqlPacket(_initialization.CommandText, 22, exchange.ClientEncoding), executesSql: false);
             var statement = PreparedStatement.Read(exchange, session, _initialization.CommandText)!;
@@ -75,7 +101,7 @@ namespace OceanBaseConnector.Internal.Sql
 
         internal async Task InitializeAsync(CommandExchange exchange, PhysicalSession session, CancellationToken token)
         {
-            if (Outputs.Length == 0) return;
+            if (Outputs.Length == 0 || _initialization.CommandText.Length == 0) return;
             var encoded = PreparedParameters.Encode(_initialization.Parameters, OceanBaseCompatibilityMode.MySql, clientEncoding: exchange.ClientEncoding);
             await exchange.SendAsync(OceanBaseCommand.SqlPacket(_initialization.CommandText, 22, exchange.ClientEncoding), executesSql: false).ConfigureAwait(false);
             var statement = (await PreparedStatement.ReadAsync(exchange, session, _initialization.CommandText, token).ConfigureAwait(false))!;

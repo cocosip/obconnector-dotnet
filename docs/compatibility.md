@@ -20,6 +20,19 @@ The solution was built with SDK 11.0.100-rc.3 and produced zero warnings and err
 evidence does not close arbitrary implicit side effects, long-running resource limits, OBProxy reset,
 or the full cancellation/interleaving matrix.
 
+## 2026-10-28 MySQL stored-function ReturnValue
+
+MySQL `CommandType.StoredProcedure` now accepts one `ReturnValue` together with Input arguments for
+stored functions. The command prepares `SET @private = function(?)`, then retrieves the value with a
+hidden text `SELECT`; the parameter is published only after the private result is fully consumed.
+Output/InputOutput mixed with a function return and multiple ReturnValue parameters remain rejected;
+procedure Output/InputOutput behavior and FetchSize/SchemaOnly/KeyInfo restrictions are unchanged.
+
+The local synchronous/asynchronous protocol cases passed 2/2. The direct MySQL profile against
+OceanBase 4.4.2.2 on Windows/.NET 10.0.14 passed 2/2 real create/execute/drop cases. This confirms
+the observed direct server SQL shape only; proxy, TLS, other versions, independent runtimes and
+function type/metadata matrices remain open.
+
 ## 2026-10-28 Oracle complex acceptance correction
 
 The direct Oracle 4.4.2.2 run on Windows/.NET 10.0.14 now passes `complex.object` after the

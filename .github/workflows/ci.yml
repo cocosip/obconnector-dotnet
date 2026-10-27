@@ -35,10 +35,18 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: ./eng/New-ReleaseNotes.ps1 -Tag $env:RELEASE_TAG
 
-      - name: Setup .NET 10 SDK
+      - name: Setup .NET 11 SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+
+      - name: Verify .NET 10 runtime
+        shell: pwsh
+        run: |
+          if (-not (dotnet --list-runtimes | Select-String 'Microsoft\.NETCore\.App 10\.')) {
+            throw '.NET 10 runtime is required to run the net10.0 test targets.'
+          }
 
       - name: Setup package-consumer runtimes (Windows)
         if: runner.os == 'Windows'
@@ -116,10 +124,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Setup .NET 10 SDK
+      - name: Setup .NET 11 SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
 
       - name: Download verified packages and release notes
         uses: actions/download-artifact@v4

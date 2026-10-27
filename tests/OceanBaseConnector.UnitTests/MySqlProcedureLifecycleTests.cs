@@ -39,7 +39,8 @@ namespace OceanBaseConnector.UnitTests
                 }
                 command.CommandText = "p";
                 command.Parameters.Add(new OceanBaseParameter { Direction = ParameterDirection.ReturnValue });
-                Assert.Throws<NotSupportedException>(() => command.Prepare()); command.Parameters.Clear();
+                command.Parameters.Add(new OceanBaseParameter { Direction = ParameterDirection.Output });
+                Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery()); command.Parameters.Clear();
                 command.FetchSize = 1; Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery()); command.FetchSize = 0;
                 Assert.Throws<NotSupportedException>(() => command.ExecuteReader(CommandBehavior.SchemaOnly));
                 Assert.Throws<NotSupportedException>(() => command.ExecuteReader(CommandBehavior.KeyInfo));

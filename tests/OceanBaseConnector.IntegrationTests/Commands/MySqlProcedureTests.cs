@@ -25,6 +25,14 @@ public sealed class MySqlProcedureTests
     [MemberData(nameof(ProfileTheoryData.MySqlWithCreateObjects), MemberType = typeof(ProfileTheoryData))]
     public Task MySqlProcedureCloseAsync(string profileName) => Execute(profileName, asynchronous: true, earlyClose: true);
 
+    [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.MySqlWithCreateObjects), MemberType = typeof(ProfileTheoryData))]
+    public Task MySqlFunctionReturnValue(string profileName) => ExecuteFunction(profileName, asynchronous: false);
+
+    [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.MySqlWithCreateObjects), MemberType = typeof(ProfileTheoryData))]
+    public Task MySqlFunctionReturnValueAsync(string profileName) => ExecuteFunction(profileName, asynchronous: true);
+
     private static async Task Execute(string profileName, bool asynchronous, bool earlyClose)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
@@ -70,5 +78,27 @@ public sealed class MySqlProcedureTests
             Assert.Equal("中文'input-done", inout.Value);
         }
         DatabaseContext.EqualNumber(await db.ScalarAsync(connection, "SELECT 1", CancellationToken.None), 1, "Connection is unusable after procedure completion.");
+    }
+
+    private static async Task ExecuteFunction(string profileName, bool asynchronous)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        var builder = db.Profile.CreateBuilder();
+        await using var connection = new OceanBaseConnection(builder.ConnectionString);
+        await connection.OpenAsync();
+        var name = "OBI_" + Guid.NewGuid().ToString("N").Substring(0, 20).ToUpperInvariant();
+        await db.ExecuteAsync(connection, "CREATE FUNCTION " + name + "(p BIGINT) RETURNS BIGINT DETERMINISTIC RETURN p + 35", CancellationToken.None);
+        db.RegisterCleanup("FUNCTION", name, async () =>
+        {
+            await using var cleanup = await db.OpenAsync();
+            await db.ExecuteAsync(cleanup, "DROP FUNCTION " + name, CancellationToken.None);
+        });
+        await using var command = db.Command(connection, name);
+        command.CommandType = CommandType.StoredProcedure;
+        var returned = DatabaseContext.Parameter(command, "RETURN_VALUE", -1L, DbType.Int64);
+        returned.Direction = ParameterDirection.ReturnValue;
+        DatabaseContext.Parameter(command, "p", 7L, DbType.Int64);
+        if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+        DatabaseContext.EqualNumber(returned.Value, 42, "MySQL function ReturnValue mismatch.");
     }
 }
