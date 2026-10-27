@@ -6,7 +6,17 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
 
 ## Current checkpoint
 
-- Latest acceptance module, developed from `7d777ae`: `types.zero-date-policy` is executable
+- Latest implementation, developed from `da62285`: opt-in MySQL string fallback accepts configured
+  ASCII, latin1, DEC8 and TIS620 with matching fresh session state and strict encoding. The existing
+  escaping, statement/packet guards and exact 1295/HY000 gate remain; DBCS remains unsupported.
+  Focused units pass 234/234 and affected consumers pass 90/90 across five assets in one .NET10
+  host. Complete units pass 7742/7742; Release solution build has zero warnings/errors and independent
+  source/test/integration/docs review has no actionable issue. Exact evidence is in the
+  [module record](obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback).
+  Read-only direct MySQL generated-literal checks pass 8/8 plus a connection control, using ASCII
+  aliases and existing SQL_MODE. Unaliased non-UTF8 expression metadata failed strict UTF-8
+  decoding and remains a known limit. This is not live automatic-fallback/DBCS/proxy proof.
+- Previous acceptance module, developed from `7d777ae`: `types.zero-date-policy` is executable
   behind `zeroDateProfile=true`, MySql mode and `allowCreateObjects=true`. It validates actual
   session SQL_MODE without changing it, checks normal/partial-zero/all-zero/NULL DATE and
   DATETIME(6) through text/prepared reads and provider-value write-back. Focused units pass
@@ -107,7 +117,8 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   89 focused units and279 affected consumers, all passing. See its [contract](session-io-diagnostics.md).
 - Further work: remaining national/JSON/CLOB and extended type boundaries, additional resource waits,
   Oracle cursor/complex shapes and the other priorities below. JSON parameters use strict client
-  bytes; MySQL string literal fallback retains its UTF-8-only restrictions. Managed charset
+  bytes; MySQL string literal fallback now also supports the four configured single-byte families
+  above, while DBCS and unaliased non-UTF8 expression metadata remain limited. Managed charset
   rechecks can change session diagnostic functions after conservatively classified SQL.
 - The historical TNS File.Replace failure remains cause-unconfirmed. Eight isolated runs and both
   fresh complete runs passed; no TNS source change, retry workaround or skipped assertion was made.
@@ -155,8 +166,9 @@ the [module ledger](obconnector-dotnet-progress.md#2026-10-26-session-io-diagnos
 These are concrete code/scope gaps, not merely missing real-database reports:
 
 1. Remaining national/JSON/CLOB and extended metadata boundaries (P1-08): JSON results and CLOB
-   reads retain UTF-8 restrictions, stored complex national members require AL16UTF16, non-UTF8
+   reads retain UTF-8 restrictions, stored complex national members require AL16UTF16, DBCS
    string client-prepare fallback is rejected, and unsupported type codes/extended metadata reject.
+   Non-UTF8 expression results need ASCII aliases under the current metadata contract.
 2. Remaining resource-wait instrumentation and workload/overhead validation (P2-04).
 3. Input/InputOutput REF CURSOR and additional output shapes (P1-06).
 4. Non-empty complex LOB/cursor input, additional national/anonymous output shapes, text complex
@@ -235,6 +247,10 @@ These are representative commits, not a replacement for the complete Git log or 
 
 ## Verification boundary and next work
 
+- Latest single-byte fallback: focused units234/234, complete units7742/7742 and affected
+  consumers90/90 pass; Release solution build has zero warnings/errors. Independent review has no
+  actionable issue. Real generated-literal parsing with ASCII aliases passes8/8 plus control;
+  actual server1295 automatic fallback and the metadata/DBCS/profile limits remain unverified.
 - Latest pool acceptance: focused units 40/40, Release build zero warnings/errors and direct
   4.4.2.2 acceptance 4/4 per mode. Complete-unit results, commands and retained failures are in the
   [module record](obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance).

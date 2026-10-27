@@ -79,11 +79,19 @@ inputs, metadata lookup parameters, KeyInfo rewrites and INSERT rewrite budgets.
 the encoding of the actual payload. Unrepresentable target SQL or ordinary parameters fail local
 prevalidation before target preparation/execution.
 
-MySQL string client-prepare fallback retains its trusted UTF-8-only collation/sql_mode rules;
-non-UTF8 string fallback is rejected. Use server preparation for those character sets. UTF8MB3
-fallback must match the configured input family and rejects supplementary text. Oracle scalar
-literal fallback uses the selected encoding for its 4000-byte limit. This module does not extend
-DBCS string literal fallback escaping.
+MySQL string client-prepare fallback accepts the existing UTF-8 families and explicitly configured
+`ascii`, `latin1`, `dec8` and `tis620`. Each fallback reads actual client/connection/collation/sql_mode
+state. Both non-UTF8 input names must match the configured family; the collation must belong to it.
+Strict single-byte encoding rejects unrepresentable text. Existing quote/backslash escaping, NUL
+rejection under NO_BACKSLASH_ESCAPES, single-statement parsing, packet limits and the exact
+1295/HY000 fallback gate remain. UTF8MB3 rejects supplementary text. DBCS string fallback remains
+unsupported; use server preparation for those character sets. Oracle scalar literal fallback uses
+the selected encoding for its 4000-byte limit.
+
+Use explicit ASCII result aliases for expressions containing non-UTF8 literals. A direct-server
+probe returned some unaliased expression names in client bytes despite UTF8MB4 result settings;
+the existing strict UTF-8 metadata decoder rejected them. This module does not change that
+metadata contract. An explicit `AS value` avoids relying on such derived column names.
 
 Explicit MySQL JSON parameters use the selected strict client encoding and the existing ordinary
 string wire type253. Unrepresentable text fails prevalidation before target preparation/execution;
@@ -126,3 +134,11 @@ server/network cause is unknown. No real JSON storage or OBProxy success is clai
 Accepted server names, collations, storage/coercibility, national/JSON/CLOB combinations and
 version/proxy/reset support still require the corresponding real-server matrix. This delivers
 local client-encoding behavior, not all P1-08.
+
+The single-byte fallback extension has local byte-exact automatic-fallback fixtures and five-asset
+consumption. Explicit read-only MySQL 4.4.2.2 checks pass all four families in sync/async mode with
+ASCII aliases, preserving values, HEX, collation and coercibility4 under the server's existing
+SQL_MODE. No objects or SQL_MODE were changed. These generated-literal checks do not exercise a
+real 1295-triggered automatic fallback, DBCS, other mode/collation/version profiles or OBProxy.
+Retained failures and exact local verification are in the
+[module record](obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback).

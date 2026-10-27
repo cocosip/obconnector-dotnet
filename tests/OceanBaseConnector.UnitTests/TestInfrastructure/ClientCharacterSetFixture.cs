@@ -27,6 +27,69 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
         private const string StateSql = "SELECT @@character_set_client, @@character_set_connection, @@character_set_results, @@collation_connection";
         private const string Result = "患者😀";
 
+        internal static async Task VerifySingleByteFallback(Type connectionType, byte[] greeting, int sample, bool asynchronous, bool deprecated)
+        {
+            var (name, text, hex) = Samples[sample];
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
+            using var connection = (DbConnection)Activator.CreateInstance(connectionType)!;
+            connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Character Set={name};Connection Timeout=5;Command Timeout=5";
+            var serving = Task.Run(async () =>
+            {
+                using var peer = await listener.AcceptTcpClientAsync(budget.Token);
+                var channel = new PacketChannel(peer.GetStream());
+                var hello = (byte[])greeting.Clone(); if (deprecated) hello[Array.IndexOf(hello, (byte)0, 1) + 20] |= 1;
+                await channel.WritePacketAsync(hello, budget.Token);
+                await channel.ReadPacketAsync(budget.Token); await channel.WritePacketAsync(Ok(false), budget.Token);
+                await ServerIdentity.ReplyAsync(channel, oracle: false, deprecated: deprecated, token: budget.Token);
+                await Initialize(channel, name, false, deprecated, budget.Token);
+                async Task<byte[]> Next()
+                {
+                    while (true)
+                    {
+                        var request = await Read(channel, false, name, deprecated, budget.Token);
+                        if (request[0] != 3 || Encoding.ASCII.GetString(request, 1, request.Length - 1) != StateSql) return request;
+                        await State(channel, name, false, deprecated, budget.Token);
+                    }
+                }
+                for (var i = 0; i < 2; i++)
+                {
+                    var request = await Next();
+                    Assert.Equal(22, request[0]); Assert.Equal("SELECT ?", Encoding.ASCII.GetString(request, 1, request.Length - 1));
+                    await channel.WritePacketAsync(new byte[] { 255, 15, 5, 35, 72, 89, 48, 48, 48, 115 }, budget.Token);
+                    request = await Next();
+                    Assert.Equal(3, request[0]);
+                    Assert.Equal("SELECT @@character_set_client, @@character_set_connection, @@collation_connection, @@sql_mode", Encoding.ASCII.GetString(request, 1, request.Length - 1));
+                    await Values(channel, new[] { name, name, name + "_bin", i == 0 ? "" : "NO_BACKSLASH_ESCAPES" }, false, deprecated, budget.Token);
+                    request = await Next(); Assert.Equal(3, request[0]);
+                    Assert.Equal(Join("SELECT ('", Convert.FromHexString(hex), i == 0 ? "''\\\\\\n')" : "''\\\n')"), request.AsSpan(1).ToArray());
+                    await Values(channel, new[] { text + "'\\\n" }, false, deprecated, budget.Token);
+                }
+                var after = await Next(); Assert.Equal(3, after[0]);
+                Assert.Equal("SELECT 1", Encoding.ASCII.GetString(after, 1, after.Length - 1));
+                await Values(channel, new[] { "1" }, false, deprecated, budget.Token);
+            }, budget.Token);
+            try
+            {
+                if (asynchronous) await connection.OpenAsync(budget.Token); else connection.Open();
+                using var command = connection.CreateCommand();
+                command.GetType().GetProperty("AllowClientSidePrepareFallback")!.SetValue(command, true);
+                command.CommandText = "SELECT ?";
+                var parameter = command.CreateParameter(); parameter.Value = text + "'\\\n"; command.Parameters.Add(parameter);
+                for (var i = 0; i < 2; i++)
+                    Assert.Equal(text + "'\\\n", asynchronous ? await command.ExecuteScalarAsync(budget.Token) : command.ExecuteScalar());
+                foreach (var invalid in new[] { "\ud800", "😀" })
+                {
+                    parameter.Value = invalid;
+                    await Assert.ThrowsAsync<EncoderFallbackException>(() => asynchronous ? command.ExecuteScalarAsync(budget.Token) : Task.FromResult(command.ExecuteScalar()));
+                }
+                command.Parameters.Clear(); command.CommandText = "SELECT 1";
+                Assert.Equal("1", asynchronous ? await command.ExecuteScalarAsync(budget.Token) : command.ExecuteScalar());
+                connection.Close(); await serving.WaitAsync(budget.Token);
+            }
+            finally { budget.Cancel(); listener.Stop(); }
+        }
+
         internal static async Task Verify(Type connectionType, byte[] greeting, int sample, bool oracle, bool asynchronous, bool pooling = false, bool deprecated = false, bool json = false)
         {
             var (name, text, hex) = Samples[sample]; var bytes = Convert.FromHexString(hex);

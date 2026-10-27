@@ -8,19 +8,28 @@ namespace OceanBaseConnector.Internal.Sql
     {
         private readonly bool _mb3;
         private readonly bool _noBackslashEscapes;
+        private readonly ClientCharacterSet? _singleByteEncoding;
 
-        private MySqlLiteralContext(bool mb3, bool noBackslashEscapes)
-        { _mb3 = mb3; _noBackslashEscapes = noBackslashEscapes; }
+        private MySqlLiteralContext(bool mb3, bool noBackslashEscapes, ClientCharacterSet? singleByteEncoding)
+        { _mb3 = mb3; _noBackslashEscapes = noBackslashEscapes; _singleByteEncoding = singleByteEncoding; }
 
-        internal static MySqlLiteralContext Parse(string client, string connection, string collation, string modes)
+        internal static MySqlLiteralContext Parse(string client, string connection, string collation, string modes, ClientCharacterSet? configuredEncoding = null)
         {
             var clientMb3 = IsMb3(client);
             var connectionMb3 = IsMb3(connection);
-            if ((!clientMb3 && !string.Equals(client, "utf8mb4", StringComparison.OrdinalIgnoreCase)) ||
+            var singleByte = configuredEncoding != null &&
+                (configuredEncoding.Name == "ascii" || configuredEncoding.Name == "latin1" || configuredEncoding.Name == "dec8" || configuredEncoding.Name == "tis620");
+            if (singleByte)
+            {
+                if (!configuredEncoding!.Matches(client) || !configuredEncoding.Matches(connection))
+                    throw new NotSupportedException("The literal session character sets do not match the configured client encoding.");
+            }
+            else if ((!clientMb3 && !string.Equals(client, "utf8mb4", StringComparison.OrdinalIgnoreCase)) ||
                 (!connectionMb3 && !string.Equals(connection, "utf8mb4", StringComparison.OrdinalIgnoreCase)))
-                throw new NotSupportedException("MySQL client string preparation requires UTF-8 client and connection character sets.");
+                throw new NotSupportedException("MySQL client string preparation requires UTF-8 or a configured single-byte character set.");
             ValidateName(collation);
-            if (!(connectionMb3 ? collation.StartsWith("utf8_", StringComparison.OrdinalIgnoreCase) || collation.StartsWith("utf8mb3_", StringComparison.OrdinalIgnoreCase)
+            if (!(singleByte ? configuredEncoding!.MatchesCollation(collation) :
+                connectionMb3 ? collation.StartsWith("utf8_", StringComparison.OrdinalIgnoreCase) || collation.StartsWith("utf8mb3_", StringComparison.OrdinalIgnoreCase)
                 : collation.StartsWith("utf8mb4_", StringComparison.OrdinalIgnoreCase)))
                 throw new NotSupportedException("The MySQL connection collation does not match its character set.");
             var noBackslashEscapes = false;
@@ -30,7 +39,7 @@ namespace OceanBaseConnector.Internal.Sql
                     ValidateName(mode);
                     if (string.Equals(mode, "NO_BACKSLASH_ESCAPES", StringComparison.OrdinalIgnoreCase)) noBackslashEscapes = true;
                 }
-            return new MySqlLiteralContext(clientMb3 || connectionMb3, noBackslashEscapes);
+            return new MySqlLiteralContext(clientMb3 || connectionMb3, noBackslashEscapes, singleByte ? configuredEncoding : null);
         }
 
         private static bool IsMb3(string name) => string.Equals(name, "utf8", StringComparison.OrdinalIgnoreCase) ||
@@ -46,7 +55,7 @@ namespace OceanBaseConnector.Internal.Sql
 
         internal void ValidateText(string text)
         {
-            _ = ResultColumn.Utf8.GetByteCount(text);
+            _ = (_singleByteEncoding ?? (Encoding)ResultColumn.Utf8).GetByteCount(text);
             if (_mb3)
                 foreach (var c in text)
                     if (char.IsSurrogate(c)) throw new ArgumentException("Supplementary characters cannot be client prepared through UTF8MB3.");

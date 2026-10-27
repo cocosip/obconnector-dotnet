@@ -33,7 +33,7 @@ namespace OceanBaseConnector.Internal.Session
         {
             if (_session.ClientCharacterSet.Managed && (!_session.ClientCharacterSet.Matches(values[0]) || !_session.ClientCharacterSet.Matches(values[1])))
                 throw new System.NotSupportedException("The literal session character sets do not match the configured client encoding.");
-            return MySqlLiteralContext.Parse(values[0], values[1], values[2], values[3]);
+            return MySqlLiteralContext.Parse(values[0], values[1], values[2], values[3], _session.ClientCharacterSet);
         }
 
         private static string[] ReadMySqlLiteralState(QueryResult result, bool hasRow)

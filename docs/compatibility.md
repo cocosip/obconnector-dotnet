@@ -1,5 +1,24 @@
 # Compatibility and known gaps
 
+## 2026-10-27 Single-byte MySQL string fallback
+
+Configured ASCII, latin1, DEC8 and TIS620 now support opt-in string fallback after exact
+1295/HY000. Fresh client/connection/collation/sql_mode state, strict encoding and existing
+escaping/parser/packet guards remain required. DBCS remains refused. Local focused units pass
+234/234, affected consumers pass 90/90 across five assets in one .NET10 host, and the serial
+Release solution build has zero warnings/errors. Complete units pass7742/7742 and independent
+source/test/integration/docs review has no actionable issue. Exact results are in the
+[module record](obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback).
+
+Explicit direct MySQL 4.4.2.2 checks on Windows/.NET10.0.13, TLS disabled, pass a connection
+control and 8/8 read-only generated-literal cases. Fixed synthetic values with ASCII aliases
+preserve exact characters/HEX, actual connection collation and coercibility4 under existing
+SQL_MODE. No table or SQL_MODE changes were made. Earlier failures exposed a test numeric
+getter mismatch and unaliased non-UTF8 expression names rejected by the current UTF-8 metadata
+decoder; these failures are retained. ASCII aliases are required for that result shape.
+The live checks do not establish actual server-1295 automatic fallback, DBCS, alternative
+SQL_MODE/collation/version profiles, other platforms/TLS or OBProxy compatibility.
+
 ## 2026-10-27 Opt-in zero-date storage acceptance
 
 `types.zero-date-policy` now has executable MySQL assertions, requiring `zeroDateProfile=true`

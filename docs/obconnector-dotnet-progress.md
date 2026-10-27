@@ -4,6 +4,75 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Single-byte MySQL string fallback
+
+Developed from `master/da62285`, P1-08/W5. The existing opt-in automatic fallback after exact
+1295/HY000 now accepts explicitly configured ASCII, latin1, DEC8 and TIS620. Both freshly read
+client/connection names must match the configured encoding, and collation must belong to it.
+MySqlLiteralContext validates SQL and values with the existing strict round-trip encoder and
+reuses quote/backslash escaping unchanged. NO_BACKSLASH_ESCAPES still rejects NUL; single-statement
+parsing, malformed mode/collation rejection and packet budgets remain. Default unmanaged UTF-8,
+managed UTF8MB3 and DBCS refusal retain their boundaries. No dependency/public API change.
+
+Local evidence:
+
+- RED: four direct literal cases fail at the original UTF-8 restriction. Sixteen public wire
+  cases also fail there after correcting the new fixture's initial mistaken Oracle identity.
+- An intermediate run passes 83/99 and fails all sixteen wire cases only at the new fixture's
+  mistaken COM_QUIT expectation: connection Close ends this socket without that packet. Removing
+  that expectation makes all actual fallback/byte/reuse assertions pass. No product workaround.
+- Final focused units: 234/234 passed, zero failures/skips. New cases cover four single-byte
+  mappings, exact escaped bytes, both SQL_MODE escape branches, strict invalid text rejection,
+  sync/async, both EOF styles, connection reuse, mismatched/untrusted state and continued DBCS
+  refusal. Existing fallback/parser/client-charset regressions also run.
+- Affected consumers: 90/90 passed, zero failures/skips (14 seconds), including all40 new
+  single-byte cases,20 existing MySQL string cases and30 client-encoding cases. Five assets load
+  in one .NET10 host; this is not five independent runtime deployments.
+- Serial Release solution build: zero warnings/errors (26 seconds). The subsequently added
+  opt-in integration check also builds with zero warnings/errors using --no-dependencies.
+  Final full-solution rebuild passes with zero warnings/errors (2 seconds), recorded in
+  `TestResults/single-byte-fallback-final-build.log`.
+- Complete units: 7742/7742 passed, zero failures/skips (8m24s), at
+  `TestResults/single-byte-fallback-full/full.trx`.
+- Independent source/test and subsequent integration/docs reviews found no actionable issue.
+  Changed-file whitespace verification passes with a workspace-load warning; new module links
+  resolve and `git diff --check` passes. Final verification uses the same product implementation.
+
+Commands (local synthetic units/consumers do not use real credentials):
+
+```powershell
+dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 --disable-build-servers -v minimal
+dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 --disable-build-servers --filter 'FullyQualifiedName~SingleByteClientPrepareTests|FullyQualifiedName~MySqlLiteralContextTests|FullyQualifiedName~MySqlClientStrings|FullyQualifiedName~ClientPreparedSqlTests|FullyQualifiedName~ClientCharacterSet' --logger 'trx;LogFileName=green.trx' --results-directory TestResults/single-byte-fallback-green -v minimal
+dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-build --no-restore --logger 'trx;LogFileName=full.trx' --results-directory TestResults/single-byte-fallback-full -v minimal
+dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~SingleByteClientPrepareConsumerTests|FullyQualifiedName~EveryAssetPreparesMySqlClientStringsFromTrustedState|FullyQualifiedName~ClientCharacterSetConsumerTests|FullyQualifiedName~EveryAssetClientPrepares' --logger 'trx;LogFileName=consumer.trx' --results-directory TestResults/single-byte-fallback-consumer -v minimal
+```
+
+Evidence stays in ignored `TestResults/single-byte-fallback-*` logs/TRX. Private live runner
+builds have zero warnings/errors and receive real connection data through echo-disabled stdin,
+verified first with a nonsecret sample. No credentials/endpoints enter files, commands, reports
+or CI. The opt-in IntegrationTheory selects only configured MySQL profiles and reads fixed
+synthetic constants; ordinary unit tests have no real database dependency.
+Without integration opt-in, the new IntegrationTheory is visibly skipped (0 failures,1 skip),
+as verified in `TestResults/single-byte-fallback-integration-opt-out/opt-out.trx`.
+
+Explicit live check: direct MySQL4.4.2.2, Windows/.NET10.0.13, TLS disabled. Connection control
+and all8 sync/async generated-literal checks pass, with ASCII aliases, preserving exact values,
+HEX, actual collation and coercibility4 under the existing SQL_MODE. No tables were created and
+no SQL_MODE was changed. Final safe report: `TestResults/single-byte-live-85e25121.json`.
+The runner command is `dotnet TestResults/single-byte-live-runner/bin/Release/net10.0/LiveSingleByte.dll`.
+
+Retained initial live reports `single-byte-live-97848b91.json`, `single-byte-live-c5024ac6.json`
+and `single-byte-live-fee96d31.json` have a passing control and8 failed checks each. They exposed
+an overly narrow GetInt32 assertion and non-UTF8 unaliased expression names rejected by the
+existing strict UTF-8 metadata decoder. Integration uses generic integer conversion and explicit
+ASCII aliases; the metadata limitation remains documented, not fixed. Safe diagnostics printed
+only exception types, numeric server code and source line/method names, never exception messages.
+
+These real checks exercise generated literals, not an actual server1295 automatic-fallback
+exchange. DBCS, unaliased non-UTF8 expression metadata, other SQL_MODE/collation/version profiles,
+OBProxy, Oracle/CLOB and full deployment compatibility remain open. All23 IDs/eight packages
+remain open; this module is local development and does not publish or push.
+
 ## 2026-10-27 Opt-in zero-date storage acceptance
 
 Developed from `master/7d777ae` for P1-08/P2-06 (W5/W8). The former unconditional
