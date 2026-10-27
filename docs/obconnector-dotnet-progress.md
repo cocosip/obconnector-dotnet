@@ -4,6 +4,30 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Oracle remaining-shape source alignment
+
+Documentation-only review against committed master/06a18bb. Current overview and completeness
+section15.105 distinguish implemented binary complex results/named LOB contents/anonymous locators
+from explicitly unsupported input/InputOutput REF CURSOR, named locator rebinding, non-null complex
+cursor input and text complex results. The fixed Java text Array/Struct/cursor getters return null;
+the inspected fixed public server source includes distinct text serialization branches. Neither
+source establishes that the binary result decoder or four-byte output cursor ID can serve these
+missing directions. Shape-specific protocol/ownership work remains; no capability is closed.
+
+The final topology TRX/build logs and safe reports are reread: saved complete units8066/8066,
+Release zero warnings/errors, opt-out15 pass/116 skip, Oracle7/7/MySQL7/7. These remain the previous
+module's results, not fresh executions. No build/test/database/consumer/runtime run is performed
+for this documentation-only alignment. Relative links, preserved completeness history15.1–15.104,
+all23 gap IDs/eight packages, whitespace and added-content privacy are checked separately.
+Real connection information remains outside files/arguments/new environment variables/logs;
+ordinary CI/unit tests remain synthetic and real checks require explicit opt-in.
+
+Final documentation validation passes for3 changed documents and457 relative links; historical
+sections,23 IDs/eight packages and2 deferred placeholders are preserved. One independent final
+read-only source/test/docs/evidence review has no Critical/Important/Minor findings. No re-review.
+Local ignored verification: TestResults/oracle-shape-alignment-verify.py and
+TestResults/oracle-shape-alignment-validation.json. Local master commit only; no push/publication.
+
 ## 2026-10-27 Controlled topology acceptance
 
 Developed from master/21e3de2, P0-06/P1-09/P2-06 and W1/W4/W8. Six sync/async explicit

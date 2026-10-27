@@ -3,7 +3,8 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**当前拓扑验收：** 2026-10-27，从master/21e3de2开发六项受控客户端路由只读验收，见第15.104节。XA模块已提交21e3de2；实际节点/发现服务/代理HA仍未验证。
+**当前源码复核：** 2026-10-27，对齐master/06a18bb。输入/双向REF CURSOR、命名复杂LOB定位器回绑、文本复杂结果仍有显式拒绝路径；不能把输出游标ID、匿名定位器或二进制复杂解码直接当作其输入/文本协议。固定Java文本Array/Struct读取也未实现，服务端有独立文本序列化分支，见第15.105节。本次仅更新文档，不新增功能或实库运行；23项及八包仍未整体关闭。
+**当前拓扑验收：** 已提交06a18bb，2026-10-27从master/21e3de2开发六项受控客户端路由只读验收，见第15.104节。XA模块已提交21e3de2；实际节点/发现服务/代理HA仍未验证。
 **前一复核：** 2026-10-27，XA协调器进程崩溃恢复验收从master/7ebc590开发，见第15.103节；网络故障矩阵已提交7ebc590，历史记录15.1—15.102完整保留。23项及八工作包仍未整体关闭。
 **前一源流模块：** P2-04/W7应用上传源流读取耗时，覆盖MySQL long data、Oracle piece data及LOCAL INFILE的同步/异步Read调用；独立源类型/模式/最终结果固定标签，复用交换释放及pending完成后的汇总发布。专项156/156、完整单测7977/7977、受影响消费者315/315及Release构建零警告/错误通过；独立走查无遗留问题。指标范围见[源流读取契约](source-read-diagnostics.md)，证据见第15.101节；不证明实库或负载开销。
 **前一模块：** CLOB定位器标量/匿名数组输入在发送副本中执行严格客户端编码；V1转换，V2仅在已认证产品4.4.1+转换，旧版/未知身份保留原字节。原始句柄、UTF-8读取、身份/扩展/rowkey、BLOB及无内联内容的外置定位器保持不变，命名CLOB内容仍为严格UTF-8。已确认前一GB18030读回不匹配根因为回绑输入转码；默认和GB18030直连Oracle各16/16及连接对照通过，含外置大CLOB。最终完整单测7938/7938、受影响消费者1240/1240及零警告/错误Release构建通过；独立走查问题已修正并有12项生命周期RED/GREEN及既有不确定修改回归验证，见第15.99节。
@@ -11,10 +12,10 @@ The overview separates remaining development from real-environment validation; h
 **前一模块：** 复杂NCHAR/NVARCHAR2输入复用全部已配置客户端严格编码器；Oracle受管初始化使用逐项quoted SET及FROM DUAL状态查询。完整单测7846/7846、专项267/267、受影响消费者350/350及Release构建通过，独立走查无遗留问题。显式Oracle数组输入36/48通过；UTF8MB3重映射及SJIS/Big5切换使余12项止于Open，见第15.96节。
 **前一开发模块：** P1-08将MySQL字符串fallback扩展到配置的GBK、GB18030/2022、SJIS、Big5、HKSCS/HKSCS31；严格会话匹配、字符转义再编码保持多字节尾5C，兼顾四字节/补充字符。非UTF-8无别名表达式元数据仍有混合/歧义编码，保留ASCII别名限制；显式实库只验证生成字面量解析，不证明真实1295自动回退。
 **前一模块：** P1-08/P2-06将types.zero-date-policy从无条件Deferred改为显式zeroDateProfile及建表许可下执行；检查真实session SQL_MODE且不修改，覆盖DATE/DATETIME(6)正常/部分零/全零/NULL、文本/准备结果、转换拒绝及provider值回绑重读。MySQL直连连接通过，但零日期SQL_MODE前置条件失败，未建表；不能宣称真实零日期存储通过。
-**上一验收模块：** 同步/异步同客户端物理通道reset/reuse与旧时区销毁替换隔离已分开验收；双模式直连4.4.2.2、Windows/.NET10.0.13、TLS Disabled各4/4通过；不证明OBProxy后端身份或完整资源矩阵。
-**最近已实现模块：** P1-07/W5 Oracle 复杂类型 cursor 结果成员；二进制 object/collection 中的 type163 接受恰为四字节小端游标标识，并复用当前执行的 `OracleCursorOwner`，含命名/匿名布局及缓冲/SequentialAccess 路径。复杂 BLOB/CLOB 结果成员也已本地实现；复杂LOB输入现已分命名内容/匿名定位器实现；复杂cursor输入及文本复杂结果仍不支持，其余真实SQL/代理兼容性未验证，见第15.85/15.88节。
-**上一开发模块：** P1-06/W5 Oracle 文本游标值列；文本结果 type163 现在接受恰为四字节小端游标标识，并复用已有会话绑定的 `OceanBaseRefCursor` 所有权。同步/异步、缓冲/SequentialAccess 本地回归4项通过，见第15.87节。
-**最近完成模块：** P1-08/P1-10 Oracle FLOAT/NUMBER_FLOAT参数派生、INOUT目录归一及按需字符长度补查；完整单测7656、专项189及受影响消费者168通过，独立最终走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation)及第15.84节。新增实库过程/函数用例仅编译，未运行。
+**此前池验收模块：** 同步/异步同客户端物理通道reset/reuse与旧时区销毁替换隔离已分开验收；双模式直连4.4.2.2、Windows/.NET10.0.13、TLS Disabled各4/4通过；不证明OBProxy后端身份或完整资源矩阵。
+**此前复杂结果模块：** P1-07/W5 Oracle 复杂类型 cursor 结果成员；二进制 object/collection 中的 type163 接受恰为四字节小端游标标识，并复用当前执行的 `OracleCursorOwner`，含命名/匿名布局及缓冲/SequentialAccess 路径。复杂 BLOB/CLOB 结果成员也已本地实现；复杂LOB输入现已分命名内容/匿名定位器实现；复杂cursor输入及文本复杂结果仍不支持，其余真实SQL/代理兼容性未验证，见第15.85/15.88节。
+**此前文本游标模块：** P1-06/W5 Oracle 文本游标值列；文本结果 type163 现在接受恰为四字节小端游标标识，并复用已有会话绑定的 `OceanBaseRefCursor` 所有权。同步/异步、缓冲/SequentialAccess 本地回归4项通过，见第15.87节。
+**此前参数派生模块：** P1-08/P1-10 Oracle FLOAT/NUMBER_FLOAT参数派生、INOUT目录归一及按需字符长度补查；完整单测7656、专项189及受影响消费者168通过，独立最终走查无遗留问题，见[模块交付记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation)及第15.84节。新增实库过程/函数用例仅编译，未运行。
 **此前完成模块：** Oracle NUMBER_FLOAT206精确结果、binary precision元数据及CommandBuilder绑定（184a767）；完整单测7578、专项204及受影响消费者229通过，独立走查无遗留问题，见第15.83节。2项实库和2项既有NUMBER对照均在初始握手失败，未完成认证或SQL，不能声称FLOAT存储成功。
 此前JSON客户端字符集（b94a421）完整单测7543、专项111、消费者570通过；其10项实库与2项默认字符集对照握手失败保留在第15.82节。
 此前CLOB整输入预校验（1da3ea8）、客户端SQL/参数字符集（b66cda1）、会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录；[输入字符集契约](client-character-sets.md)记录当前边界。
@@ -3276,6 +3277,39 @@ fixture误报模式与中继正常停止取消上浮；修正后二轮52通过/6
 
 无条件占位从3减为2：TLS/auth、OB20/trace。一般发现/拓扑、真实服务端和代理、故障认证/TLS、
 DNS IP变化、活动迁移/未知写重放、版本/平台/持续负载矩阵继续开放；23项/八包与15.1—15.103历史保留。
+
+### 15.105 2026-10-27 剩余 Oracle 形状与当前检查点对齐
+
+本次以master/06a18bb为代码检查点，只同步文档。最新已提交模块是第15.104节受控拓扑验收；
+之前CLOB、池复用等专项仍是其各自历史证据，不再称为当前最新验收。已实现子能力、明确拒绝路径、
+待确认协议及部署验证分别判断；不新增关闭项，不把源码研究记为功能交付。
+
+| 剩余项 | 当前实际实现与拒绝位置 | 开发前还缺什么 |
+| --- | --- | --- |
+| P1-06 输入/双向REF CURSOR | [OracleCommandPlan](../src/OceanBaseConnector/Internal/Sql/OracleCommandPlan.cs)拒绝Input/InputOutput；Output/ReturnValue及结果游标已有。结果ID由[ResultColumn](../src/OceanBaseConnector/Internal/Protocol/ResultColumn.cs)按恰四字节读取 | 确认输入绑定的类型/字节契约，以及原连接、statement、事务、单次消费和活跃reader的所有权规则；不能将输出ID直接回传作为已证实方案 |
+| P1-07 命名复杂LOB定位器回绑 | [ComplexValueCodec](../src/OceanBaseConnector/Internal/Values/ComplexValueCodec.cs)的命名成员接受BLOB字节/CLOB文本、拒绝OceanBaseLob；匿名标量LOB数组已有定位器绑定 | 确认命名成员的服务端定位器契约，或显式物化方案的I/O、取消、大小限额及生命周期；匿名locator分支不能直接套用 |
+| P1-07 文本复杂结果 | [ResultColumn.RequireComplexResult](../src/OceanBaseConnector/Internal/Protocol/ResultColumn.cs)仍要求二进制结果；[拒绝回归](../tests/OceanBaseConnector.UnitTests/ComplexResultTests.cs)含文本协议。二进制嵌套及LOB/cursor结果成员已有 | 逐形状确认命名/匿名、SQL UDT/PL object/collection的文本表示、NULL/转义/编码、类型身份和资源成员语义；不能只去掉binary guard |
+| P1-07 复杂cursor输入 | [ComplexValueCodec](../src/OceanBaseConnector/Internal/Values/ComplexValueCodec.cs)没有非空type163参数编码；[CreateArrayType](../src/OceanBaseConnector/OceanBaseConnection.ComplexTypes.cs)的标量工厂也不支持cursor | 输入协议与游标所有权；已有二进制type163结果成员不证明输入方向可用 |
+
+文本复杂结果的固定源码证据：
+
+- Java参考固定为`6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。
+  [TextRowProtocol](https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/com/read/resultset/rowprotocol/TextRowProtocol.java#L1099)
+  的`getInternalArray`、`getInternalStruct`和`getInternalComplexCursor`均直接返回null。
+  JDBC层存在COMPLEX分派不等于文本Array/Struct解码已实现；本次没有运行Java。
+- 固定公共服务端`5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5`的
+  [ObExtendTC分支](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/observer/mysql/obsm_utils.cpp#L236)
+  对多种形状调用带TEXT/BINARY参数的类型序列化；其中匿名PL文本分支调用
+  [extend_cell_str](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/observer/mysql/obsm_utils.cpp#L625)，
+  它构造类型名、括号及文本序列化内容，再写length-encoded字段。另有SQL UDT/collection字符串分支。
+  这说明需区分形状，未证明所有type160文本字段均为二进制payload，也未给出可逆解析的完整语法。
+  此公共源码提交不代表已确认的实库构建提交，不能据此宣布所有服务器版本支持或不支持。
+
+本次重新读取最终拓扑TRX、构建日志及脱敏实库报告：完整单测8066/8066、Release零警告/错误、
+opt-out集成15通过/116跳过，Oracle/MySQL各7/7是第15.104节模块的保存结果；没有重新构建、
+执行测试或连接实库。文档相对链接、历史15.1—15.104、23个ID/八包、差异空白和新增内容脱敏单独检查。
+TLS/auth及OB20/trace仍为两个DeferredReason占位。后续实库仅作独立显式验收，普通单测/CI继续使用合成回环，
+连接信息不进入源码、文件、命令参数、日志或文档。一般HA、其他Oracle形状和完整版本/代理/平台矩阵继续开放。
 
 ## 16. 剩余交付工作包
 

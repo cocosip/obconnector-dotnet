@@ -1,11 +1,20 @@
 # Driver delivery status
 
-Last checked: 2026-10-27; latest controlled topology acceptance developed from `master/21e3de2`.
-The prior committed source review is `master/f9e8c20`. This is the current overview; the detailed
+Last checked: 2026-10-27 against `master/06a18bb`; controlled topology acceptance is committed.
+This source/documentation alignment adds no product implementation. This is the current overview; the detailed
 [completeness baseline](obconnector-dotnet-completeness.md) retains requirements and historical evidence.
 The [module records](obconnector-dotnet-progress.md) retain individual test/review results.
 
 ## Current checkpoint
+
+- Current source review: input/InputOutput REF CURSOR, named complex LOB locator rebinding and
+  text complex results remain explicitly unsupported. Binary complex results and named LOB
+  content/anonymous scalar locator inputs already exist. Fixed Java text Array/Struct readers
+  return null, while the inspected server has distinct text serialization branches; this is not
+  a confirmed binary-decoder port. Shape-specific wire contracts and resource ownership must be
+  established before extending these paths. See [completeness section 15.105](obconnector-dotnet-completeness.md#15105-2026-10-27-剩余-oracle-形状与当前检查点对齐).
+  Saved final topology evidence is rechecked; builds/tests/live checks are not rerun for this
+  documentation-only change. All23 gap IDs/eight packages remain open.
 
 - Latest module: [controlled topology acceptance](topology-acceptance.md), six read-only explicit
   client-route cases: idle refresh/retirement, borrowed-session isolation and refused-TCP fallback,
@@ -129,7 +138,7 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   Text and binary top-level cursor columns also exist. Complex cursor inputs and named locator rebinding,
   Input/InputOutput REF CURSOR, text complex results and unresolved whole-complex RETURNING
   remain unsupported; real interoperability is unverified.
-- Latest acceptance delivery, developed from `fbcb694`: `matrix.pool-reset-reuse.sync/async`
+- Earlier same-channel pool acceptance delivery, developed from `fbcb694`: `matrix.pool-reset-reuse.sync/async`
   require the same client protocol channel through two borrowers and prepared-command reopen.
   Listener reference plus local ChannelId rejects reconnection; private pools and subscriptions
   are disposed. The separate `matrix.pool-reset` still checks retirement isolation and now uses
@@ -266,11 +275,16 @@ These are concrete code/scope gaps, not merely missing real-database reports:
    result metadata across actual server/proxy profiles remain validation work.
 2. Additional resource-wait scope and workload/overhead validation (P2-04). Upload source read
    diagnostics now have local implementation/regression evidence; their scope and gates are above.
-3. Input/InputOutput REF CURSOR and additional output shapes (P1-06).
+3. Input/InputOutput REF CURSOR and additional output shapes (P1-06). Current input directions
+   reject in OracleCommandPlan. The four-byte output cursor ID is not an established input
+   contract; input binding also needs originating session/statement/transaction ownership rules.
 4. Named LOB locator rebinding, complex cursor input, additional national/anonymous output shapes,
    text complex results and unresolved whole-complex RETURNING identity (P1-07). Named LOB content
    and anonymous scalar locator inputs are implemented. CLOB reads remain UTF-8; version-gated
    locator input conversion now passes direct default/GB18030 checks. Other profiles remain open.
+   Named LOB contents and anonymous locator bytes are different contracts; supporting named
+   locators is not a switch-only change. Text complex results require shape-specific serialization
+   evidence; the fixed Java text Array/Struct getters return null. See section15.105 above.
 5. Compressed OB20/proxy reroute, after establishing the client-link wire contract (P1-02).
 6. Multi-send/pipelining or a separate bulk protocol, after establishing supported semantics (P2-03).
 7. Replace the two remaining deferred `matrix.*` placeholders with controlled fixtures/assertions
@@ -352,7 +366,11 @@ These are representative commits, not a replacement for the complete Git log or 
 
 ## Verification boundary and next work
 
-- Latest CLOB locator input verification, retained REDs and safe live reports are in the
+- Latest acceptance verification is [controlled topology](obconnector-dotnet-progress.md#2026-10-27-controlled-topology-acceptance),
+  committed as06a18bb: saved final full units8066/8066, Release build zero warnings/errors,
+  opt-out integration15 pass/116 skip and direct Oracle7/7/MySQL7/7. These are the saved module
+  results rechecked during this alignment, not new runs or real independent-node/proxy HA proof.
+- CLOB locator input verification, retained REDs and safe live reports are in the
   [module record](obconnector-dotnet-progress.md#2026-10-27-clob-locator-client-encoding).
   Named contents and locator binding are separate wire contracts. Default/GB18030 input checks
   do not close older backports, other server/proxy versions, named locator materialization or cursor input.
@@ -369,7 +387,7 @@ These are representative commits, not a replacement for the complete Git log or 
   consumers90/90 pass; Release solution build has zero warnings/errors. Independent review has no
   actionable issue. Real generated-literal parsing with ASCII aliases passes8/8 plus control;
   actual server1295 automatic fallback and the metadata/DBCS/profile limits remain unverified.
-- Latest pool acceptance: focused units 40/40, Release build zero warnings/errors and direct
+- Earlier same-channel pool acceptance: focused units 40/40, Release build zero warnings/errors and direct
   4.4.2.2 acceptance 4/4 per mode. Complete-unit results, commands and retained failures are in the
   [module record](obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance).
 - Historical `6e64c7e` source review: Release build has zero warnings/errors; the focused unit
