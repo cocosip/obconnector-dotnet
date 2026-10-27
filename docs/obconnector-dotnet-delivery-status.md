@@ -19,10 +19,16 @@ The [module records](obconnector-dotnet-progress.md) retain individual test/revi
   Text and binary top-level cursor columns also exist. Non-empty complex LOB/cursor inputs,
   Input/InputOutput REF CURSOR, text complex results and unresolved whole-complex RETURNING
   remain unsupported; real interoperability is unverified.
-- Acceptance implementation: `matrix.pool-reset` is executable but has not been run against a
-  real server. Its SET/ALTER SESSION time-zone change marks the first session for retirement.
-  It checks borrower isolation by replacement, not COM_RESET_CONNECTION on a reused physical
-  session. A distinct real reset/reuse assertion remains required.
+- Latest acceptance delivery, developed from `fbcb694`: `matrix.pool-reset-reuse.sync/async`
+  require the same client protocol channel through two borrowers and prepared-command reopen.
+  Listener reference plus local ChannelId rejects reconnection; private pools and subscriptions
+  are disposed. The separate `matrix.pool-reset` still checks retirement isolation and now uses
+  numeric offsets after Oracle rejected the UTC region name (1882). Focused units pass 40/40;
+  complete units pass 7696/7696 and the Release solution build has zero warnings/errors.
+  Explicit direct-server checks pass 4/4 per
+  mode on 4.4.2.2, Windows/.NET 10.0.13, TLS disabled. Complete unit evidence and retained failures
+  are in the [module record](obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance).
+  Channel identity is local, not a server/backend session ID; the proxy/resource matrix remains open.
 - Current local delivery: `oceanbase.client.pool.wait.duration` now carries the standard
   `oceanbase.outcome` tag (`acquired`, `timeout`, `canceled` or `error`) for sync and async pool
   waits. The focused regression passes 2/2; the affected diagnostics selection passes 228/230,
@@ -152,13 +158,13 @@ These are concrete code/scope gaps, not merely missing real-database reports:
    (P2-06): TLS/authentication, OB20/trace negotiation, topology failover, unknown network outcome
    and XA crash recovery. The separate `types.zero-date-policy` placeholder needs a dedicated
    SQL_MODE profile; there are six explicit DeferredReason cases in total.
-8. Add real physical-session reset/reuse evidence separately from the executable
-   `matrix.pool-reset` borrower-isolation-by-retirement case; that case has no live run yet.
 
 Pool/session/transaction concurrency and resource boundaries, complete command/adapter restrictions,
 runtime/platform coverage and deployment gates also remain, as mapped individually below. Distributed
 ambient promotion and transparent active-session replay are unsupported and need explicit scope
 decisions; they are not promised by existing single-resource or reconnect APIs.
+The new direct-server client-channel reset/reuse and separate retirement evidence still needs
+promised proxy/backend, version/platform/TLS and complete resource-isolation profiles.
 
 ## All 23 gaps: implementation versus remaining work
 
@@ -190,7 +196,7 @@ approved wire contract or can be implemented without protocol research.
 | P2-03 Batch optimization | Sequential Batch, existing Oracle array binding, opt-in bounded MySQL INSERT rewrite with group error attribution | **Multi-send/pipelining and separate bulk protocol are missing** | Actual counts/partial failure, transaction/default/trigger/warning behavior, packet limits and throughput/memory |
 | P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics including current leases, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O durations and collectible-load fixes | **Additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
 | P2-05 Runtimes/ecosystem | Five product assets; Windows nupkg protocol subset on actual .NET 8/9/10 and Framework host, plus Standard assets on .NET 10 | Complete promised platform/runtime/API matrix; Framework/ORM support scope; existing savepoint identifier limitations | Non-Windows and full feature/real-database reports on promised runtimes |
-| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports; executable `matrix.pool-reset` borrower-isolation case, not live-run | **Five `matrix.*` plus one `types.zero-date-policy` deferred placeholders**; add physical-session reset/reuse evidence distinct from retirement; source/license/package/publication review remains | OBProxy, TLS/auth profiles, topology faults, unknown network outcomes, zero-date SQL_MODE and external-coordinator XA crash recovery |
+| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports; distinct sync/async client-channel reset/reuse and time-zone retirement cases, 4/4 per mode on direct 4.4.2.2 | **Five `matrix.*` plus one `types.zero-date-policy` deferred placeholders**; source/license/package/publication review remains | Proxy/backend identity and complete reset/resource matrix; TLS/auth, topology faults, unknown network outcomes, zero-date SQL_MODE and external-coordinator XA crash recovery |
 
 ## Committed delivery evidence
 
@@ -218,7 +224,10 @@ These are representative commits, not a replacement for the complete Git log or 
 
 ## Verification boundary and next work
 
-- Current `6e64c7e` source review: Release build has zero warnings/errors; the focused unit
+- Latest pool acceptance: focused units 40/40, Release build zero warnings/errors and direct
+  4.4.2.2 acceptance 4/4 per mode. Complete-unit results, commands and retained failures are in the
+  [module record](obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance).
+- Historical `6e64c7e` source review: Release build has zero warnings/errors; the focused unit
   selection passes 554/554, with no full-suite, consumer or real-server rerun. Original full-suite
   failures, stale-assertion corrections and server greeting failures remain in their module records.
 - Previous completed feature, Big5: 7 core tests, 698 focused units, 7,262 complete units and 500 affected
@@ -233,8 +242,9 @@ These are representative commits, not a replacement for the complete Git log or 
   trusted session rules together; a result decoder alone does not implement it.
 - OB20 compression/reroute requires the documented client-link protocol evidence; real proxy testing
   cannot be replaced with a direct database connection.
-- Real database testing is a separate gate. If the next task needs it, stop and report the exact case.
-  Endpoints and credentials are deliberately excluded from this document.
+- Real database testing is an explicit integration/acceptance gate, independent of ordinary unit
+  tests and CI. Record the exact profile scope and safe results; endpoints and credentials stay
+  in private process input/local secrets and are deliberately excluded from this document.
 - Historical real-server results and failures are retained in the completeness/progress records.
   In particular, the Connector/J-correlated nested-table-column server limitation is not proof that
   all complex/array shapes fail or pass. Skips, cleanup failures and missing profiles stay visible.

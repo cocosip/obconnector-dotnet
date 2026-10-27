@@ -14,6 +14,11 @@ shared logs/reports. Review diagnostic output before sharing it; never print res
 
 This suite is the engineering counterpart of the [acceptance console](../OceanBaseConnector.Acceptance/README.md): the console produces curated release reports; these suites are what you filter, debug and re-run from an IDE or `dotnet test`.
 
+The console now has separate same-client-channel reset/reuse and time-zone retirement cases.
+Its ChannelId observation complements this suite's internal physical-session/generation assertions;
+it does not prove proxy backend identity or replace the remaining resource/fault profiles. See the
+[delivery record](../../docs/obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance).
+
 ## Ordinary Oracle cursor columns
 
 A positive parent command FetchSize is accepted as a hint, but prepared cursor-valued columns

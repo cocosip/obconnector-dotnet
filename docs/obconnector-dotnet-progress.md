@@ -4,6 +4,79 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 Same-channel pool reset and reuse acceptance
+
+Developed from `master/fbcb694` for P0-02/P2-06 (W1/W8). The existing time-zone case only
+proved isolation by retirement. New `matrix.pool-reset-reuse.sync/async` use a private capacity-1
+data source with lifetimes disabled: prepare/execute SELECT 1, close, execute from a second
+borrower, then reopen the first connection and execute its original prepared command. Public
+protocol Frame events must have one listener reference and one local ChannelId throughout.
+Missing observations or reconnection fail the case. AsyncLocal excludes unrelated execution
+contexts; capture stores one identity and a difference flag, and disposes its subscriptions.
+
+The original `matrix.pool-reset` retains its retirement assertion and now uses a private data
+source so the case cannot leave a registry-pool session behind. Its first real Oracle run failed
+with code 1882 when selecting UTC. Two numeric-baseline regressions reproduced that rejection
+before the case changed to +05:45/+06:45, which require no server region files.
+
+Local evidence:
+
+- Eight new protocol cases cover Oracle/MySQL, sync/async and reset success/rejection. They require
+  actual prepare/execute/reset/ping packets and fresh statement IDs; successful SQL after reconnect
+  still fails acceptance. The two offset cases require retirement of the changed first session and
+  final closure of the private pool's second socket. The catalog now distinguishes executable
+  matrix cases from the six DeferredReason registrations.
+- Initial missing-case RED: 8 failed. Fixture mode/autocommit and timezone/national metadata
+  mismatches were corrected by reusing existing wire helpers; intermediate 6/3/2 fixture failures
+  are retained. The first offset RED had an incomplete fixture; after correcting metadata query
+  handling, both cases failed on the UTC rejection as intended. Final focused selection: 40/40
+  passed, zero failures/skips; TRX `TestResults/pool-reset-reuse-final-focused/green.trx`.
+- Final serial Release solution build: zero warnings/errors. Initial parallel test build was
+  canceled after worker startup made no visible progress; the serial build/test commands below
+  use disabled build servers. No product workaround was added.
+- Changed-file whitespace verification passes. The restricted-account attempt failed to connect
+  to the MSBuild host pipe (`UnauthorizedAccessException`); the same read-only verification under
+  the normal user passed. No formatting/source workaround was added.
+- Complete units before the numeric-offset repair passed 7694/7694, zero failures/skips (8m24s),
+  at `TestResults/pool-reset-reuse-full/full.trx`. Final post-repair complete units pass
+  7696/7696, zero failures/skips (8m24s), at `TestResults/pool-reset-reuse-final-full/full.trx`.
+- Independent source/test review and incremental offset review found no actionable issue.
+  Review covered capture identity/scope, bounded storage, prepared generation, private-pool and
+  subscription cleanup. Review did not execute tests or access real profiles.
+
+Reproducible local commands (all unit cases use synthetic/local resources):
+
+```powershell
+dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 --disable-build-servers -v minimal
+dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-restore -m:1 --disable-build-servers --filter 'FullyQualifiedName~AcceptanceTimeZoneIsolationUsesOffsetsWithoutRegionFiles|FullyQualifiedName~AcceptanceRequiresResetReuseRatherThanSuccessfulReconnection|FullyQualifiedName~AcceptanceRunnerTests' --logger 'trx;LogFileName=green.trx' --results-directory TestResults/pool-reset-reuse-final-focused -v minimal
+dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release --no-build --no-restore --logger 'trx;LogFileName=full.trx' --results-directory TestResults/pool-reset-reuse-final-full -v minimal
+dotnet tests/OceanBaseConnector.Acceptance/bin/Release/net10.0/OceanBaseConnector.Acceptance.dll --list
+```
+
+Explicit real evidence is separate from unit/CI execution. An ignored local .NET harness invokes
+the existing AcceptanceSuite with only `connection.async`, `matrix.pool-reset-reuse.sync/async`
+and `matrix.pool-reset`. Credentials arrive on stdin after console echo is disabled (verified
+with nonsecret input); no actual connection data is written to configuration, commands or reports.
+The harness command is `dotnet TestResults/pool-reset-reuse-live-runner/bin/Release/net10.0/LivePoolReset.dll`;
+its private input is intentionally omitted. It creates no tables, only reads SQL and changes the
+owned session's time zone. The serialized AcceptanceReport retains only the normal safe fields.
+
+First real run: Oracle 3 passed/1 failed (1882), MySQL 4 passed. Final run: Oracle 4/4 and MySQL 4/4
+passed, zero skips/cleanup failures. Both are direct OceanBase 4.4.2.2, TLS disabled, Windows and
+.NET 10.0.13; Oracle uses PrepareExecute. Ignored safe reports:
+
+- Initial: `TestResults/pool-reset-reuse-live-oracle-30d4c91e.json`,
+  `TestResults/pool-reset-reuse-live-mysql-4647b39b.json`.
+- Final: `TestResults/pool-reset-reuse-live-oracle-277b9ed9.json`,
+  `TestResults/pool-reset-reuse-live-mysql-2f604920.json`.
+
+ChannelId identifies the driver client channel, not a server session ID. This does not verify
+OBProxy/backend identity, other versions/platforms/TLS or the full transaction/LOB/cursor/XA/fault
+matrix. No package-consumer rerun was needed for this acceptance-only module; no driver public API
+or package implementation changed. The six placeholders, all 23 IDs and eight packages remain open.
+Historical full-suite/greeting failures remain in their original records; this direct profile
+success neither establishes their root cause nor broadens compatibility.
+
 ## 2026-10-27 Source review and progress alignment
 
 Reviewed `master/6e64c7e` against the completeness baseline, implementation, tests and Acceptance

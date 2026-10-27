@@ -3,16 +3,17 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27，源码基线master/6e64c7e；保持master。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；本次进度核对见第15.91节。
+**最近复核：** 2026-10-27；当前模块开发起点master/fbcb694，保持master。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；源码核对见第15.91节，最新会话验收见第15.92节。
+**当前模块：** P0-02/P2-06新增同步/异步同客户端物理通道reset/reuse验收；公开协议诊断按listener引用及ChannelId识别重连，私有单会话池覆盖不同借用者和原prepared命令重开。旧时区用例保留销毁替换隔离，改数字偏移并清理私有池。双模式直连4.4.2.2、Windows/.NET10.0.13、TLS Disabled各4/4通过；不证明OBProxy后端身份或完整资源矩阵。
 **最近已实现模块：** P1-07/W5 Oracle 复杂类型 cursor 结果成员；二进制 object/collection 中的 type163 接受恰为四字节小端游标标识，并复用当前执行的 `OracleCursorOwner`，含命名/匿名布局及缓冲/SequentialAccess 路径。复杂 BLOB/CLOB 结果成员也已本地实现；非空复杂 LOB/cursor 输入及文本复杂结果仍不支持，真实 SQL/代理兼容性未验证，见第15.85/15.88节。
 **上一开发模块：** P1-06/W5 Oracle 文本游标值列；文本结果 type163 现在接受恰为四字节小端游标标识，并复用已有会话绑定的 `OceanBaseRefCursor` 所有权。同步/异步、缓冲/SequentialAccess 本地回归4项通过，见第15.87节。
 **最近完成模块：** P1-08/P1-10 Oracle FLOAT/NUMBER_FLOAT参数派生、INOUT目录归一及按需字符长度补查；完整单测7656、专项189及受影响消费者168通过，独立最终走查无遗留问题，见[最新交付记录](obconnector-dotnet-progress.md#2026-10-27-oracle-float-routine-derivation)及第15.84节。新增实库过程/函数用例仅编译，未运行。
 **此前完成模块：** Oracle NUMBER_FLOAT206精确结果、binary precision元数据及CommandBuilder绑定（184a767）；完整单测7578、专项204及受影响消费者229通过，独立走查无遗留问题，见第15.83节。2项实库和2项既有NUMBER对照均在初始握手失败，未完成认证或SQL，不能声称FLOAT存储成功。
 此前JSON客户端字符集（b94a421）完整单测7543、专项111、消费者570通过；其10项实库与2项默认字符集对照握手失败保留在第15.82节。
 此前CLOB整输入预校验（1da3ea8）、客户端SQL/参数字符集（b66cda1）、会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录；[输入字符集契约](client-character-sets.md)记录当前边界。
-**当前验证：** 6e64c7e串行Release全解决方案构建零警告/错误；复杂类型、REF CURSOR、cursor列、会话状态隔离及压缩协议选择554项通过、零失败/跳过；Acceptance --list确认5个matrix.*及独立types.zero-date-policy共6个显式Deferred占位。命令与报告见第15.91节。本次未重跑全套、包消费者或实库。此前复杂结果439项及格式检查通过（workspace-load warning）保留为历史证据；完整单测一次7544通过/141失败（总计7685）及后续匿名type163旧断言修正仍保留，专项通过不表示当前全套已绿。
+**当前验证：** 串行Release全解决方案构建零警告/错误；最终完整单测7696/7696、本模块专项40/40及双模式显式实库8/8通过，零失败/跳过；精确命令/报告见第15.92节和进度记录。6e64c7e源码核对554项、此前439项及历史完整单测7544通过/141失败与旧断言修正保留原记录；不以新结果删除历史失败。
 **历史限制：** 前一模块构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，八次独立及后续完整运行未复现；没有修改TNS或添加绕过。
-**剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向REF CURSOR及非空复杂LOB/cursor参数、文本复杂结果、未解析身份的复杂整列RETURNING、压缩OB20/代理reroute、多发送/独立bulk；5个matrix.*及1个零日期占位仍需真实环境和断言。matrix.pool-reset已可执行但尚未实跑，且通过SET/ALTER SESSION触发旧会话销毁，只检查替换隔离，不能证明同一物理会话reset/复用；该验收仍需单独补齐。逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
+**剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向REF CURSOR及非空复杂LOB/cursor参数、文本复杂结果、未解析身份的复杂整列RETURNING、压缩OB20/代理reroute、多发送/独立bulk；5个matrix.*及1个零日期占位仍需真实环境和断言。同客户端通道复用与销毁替换已有分开验收；代理后端身份、其他版本/平台/TLS及完整资源矩阵仍缺。逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
 前一模块2项Oracle FLOAT实库及2项既有NUMBER对照连接尝试均止于初始greeting，未完成认证或SQL，服务器/网络根因未明；后续仍需其他资源指标、负载及完整部署验收。历史JSON/TNS及握手失败均保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\Code\dotnet\obconnector-dotnet`；历史审计使用 `D:\dotnet-code\obconnector-dotnet` 及 `D:\java-code\obconnector-j` 固定源码，本次未重新运行 Java。
@@ -728,7 +729,7 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 | P2-03 | DbBatch默认逐条，opt-in MySQL INSERT rewrite及group failure本地路径见第15.72节；Oracle array binding已有。multi-send/bulk仍缺。 | `OceanBaseBatch.InsertRewrite.cs`、`MySqlInsertRewrite.cs`、`BatchInsertRewrite*Tests.cs`；`OceanBaseCommand.ArrayBinding.cs` | 对已承诺路径补真实行数/部分失败、取消、包上限和事务边界；与顺序模式作吞吐/内存对照。保留OUT限制及未知写不重放。 |
 | P2-04 | 日志/Activity/Meter、池指标、九阶段建连/探活、慢命令、协议帧及卸载修复已有；会话I/O耗时、当前租约及池等待结果也已本地实现；其他资源等待范围与负载验收仍缺。 | `Internal/DriverDiagnostics.cs`、`DriverDiagnostics.ConnectionPhases.cs`、`DriverDiagnostics.SessionIo.cs`；`SlowQueryDiagnosticsTests.cs`、`ConnectionPhaseDiagnosticsTests.cs`、`SessionIoDiagnosticsTests.cs`、`PoolLeaseMetricsTests.cs`、`DiagnosticsTests.cs` | 指标单位/聚合、异常分类、监听开销及脱敏；borrowed是累计借用次数，leased才是当前借出会话数；池等待outcome分acquired/timeout/canceled/error，不能据专项通过推定负载开销。 |
 | P2-05 | 两个包均产出五个 TFM，但现代 API 条件编译；第15.74节已有Windows实际8/9/10及Framework的nupkg协议子集，不覆盖完整功能/ORM与非Windows；第15.58节原崩溃检查点和第15.59节诊断卸载修复及默认642项回归继续保留。 | 两个 src 项目 `.csproj`；`.github/workflows/ci.yml`；`eng/Verify-Packages.ps1`；`tests/PackageConsumer/ProtocolScenarios.cs`；ConsumerTests、DI tests | 对每个承诺运行时运行实际 nupkg consumer；Windows/Linux、标准/现代 API 差异和 Framework 支持决定有报告。savepoint 的当前标识符规则不接受 `__EFSavePoint`，ORM 集成需单独验收。 |
-| P2-06 | Acceptance有5个matrix.*及独立types.zero-date-policy共6个Deferred占位；matrix.pool-reset可执行但未实跑，其时区SET/ALTER会触发旧会话销毁，只覆盖替换隔离，不能证明同一物理会话reset/复用。 | `tests/OceanBaseConnector.Acceptance/DatabaseCases.cs`、`DatabaseCases.Types.cs`；`Internal/Sql/SessionStateSql.cs`；`Internal/Session/PhysicalSessionPool.cs`；IntegrationTests；`docs/compatibility.md` | 为占位案例实现受控环境和断言；单独补真实物理会话reset/复用证据，区分销毁替换；保存JSON/TRX、版本/profile/清理结果；OBProxy、跨版本及其他承诺范围缺证据仍阻塞发布。 |
+| P2-06 | Acceptance有5个matrix.*及独立types.zero-date-policy共6个Deferred占位；新增pool-reset-reuse.sync/async与旧时区销毁隔离已分开验收，双模式4.4.2.2直连各4/4；仅证明同客户端物理通道，见第15.92节。 | `tests/OceanBaseConnector.Acceptance/DatabaseCases.Pooling.cs`、`ProtocolChannelCapture.cs`、`DatabaseCases.cs`、`DatabaseCases.Types.cs`；IntegrationTests；`docs/compatibility.md` | 为占位案例实现受控环境和断言；保留本轮客户端复用证据，补代理后端/版本/平台/TLS及完整资源矩阵；保存脱敏JSON/TRX与清理结果，缺证据仍阻塞发布。 |
 
 
 
@@ -2974,6 +2975,28 @@ cursor列、会话状态隔离及压缩协议选择554/554通过，零失败/跳
 本次未重跑全套、包消费者、实库/OBProxy或负载；历史完整单测失败、旧断言修正及greeting失败
 保持原记录。文档更新不修改产品或测试行为，不增加真实兼容性结论。
 
+### 15.92 2026-10-27 同客户端物理通道reset/reuse验收
+
+从master/fbcb694开发，新增matrix.pool-reset-reuse.sync/async。
+私有容量1数据源禁用lifetime，准备/执行SELECT 1，
+关闭后由另一逻辑连接执行SQL，再重开原连接执行原prepared命令；公开协议Frame诊断必须始终
+来自同一listener引用和ChannelId。无事件或重连不能通过；AsyncLocal隔离其他执行上下文，
+只保留首个身份与差异标志，退出释放监听器和私有池，不保留帧内容或秘密。
+
+原matrix.pool-reset仍检查SET/ALTER SESSION触发的销毁替换隔离，改用私有池。
+首次Oracle实跑因UTC区域名返回1882，保留原报告；两个基线偏移回归先RED后GREEN，
+现用+05:45/+06:45数字偏移，不依赖区域文件。八项协议回归另验证实际reset/ping次数、
+新statement ID及reset失败后即使重连SQL成功也必须判失败；专项合计40/40通过。
+
+最终串行Release全解决方案构建零警告/错误；完整单测、原始失败与精确命令见
+[模块记录](obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance)。
+显式实库采用进程内存输入、关闭回显，仅运行连接和三个池案例：MySQL/Oracle直连
+OceanBase4.4.2.2、Windows/.NET10.0.13、TLS Disabled各4/4通过，清理失败0。
+未创建表；未把实库接入单元测试或CI。脱敏报告不含端点、用户名、口令、SQL或服务端错误文本。
+
+ChannelId是驱动本地通道标识，不是服务器会话ID；此证据不证明代理后端会话身份，也不关闭
+完整事务/LOB/cursor/XA/故障、其他版本/平台/TLS及六个Deferred占位。P0-02/P2-06和W1/W8继续开放。
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。
@@ -2987,7 +3010,7 @@ cursor列、会话状态隔离及压缩协议选择554/554通过，零失败/跳
 | W5 命令、Oracle 与类型：P1-05、P1-06、P1-07、P1-08 | 保留Command/Batch/REF CURSOR结果限制、KeyInfo/SchemaOnly、MySQL过程、Oracle独立Prepare/输出提示、文本/二进制cursor列及二进制复杂BLOB/CLOB/cursor结果成员；保留NUMBER/FLOAT、signed DecimalScale、客户端SQL/普通及JSON参数编码和CLOB输入预校验；补Input/InputOutput REF CURSOR、非空复杂LOB/cursor输入、文本复杂结果、其他national/匿名输出及未解析身份的复杂整列RETURNING；扩展类型/metadata及完整真实部署矩阵继续开放；可观察DDL自动失效已有，外部/不透明DDL须显式清理 | Command/Batch/REF CURSOR行为表；NULL/方向/精度/溢出/编码/取消与资源释放矩阵；SchemaOnly副作用/锁/大结果报告；服务端不支持形状单列 | G0；资源生命周期与W1联动 |
 | W6 目录与 ADO.NET 生态：P1-10、P2-01 | 常用目录/限制参数及 DataTypes 已本地完成；自动参数推导已通过本地回归和独立走查（第 15.18 节）；补实库/权限/版本/代理矩阵；DataAdapter/CommandBuilder 已有本地填充、映射/事件和有界 CRUD，补真实验收，不以 ADO.NET provider 代替 EF Core provider | 双模式目录/权限/大小写/空集合；类型映射与过程重载/参数方向；保留 adapter CRUD、键、原始值/NULL 和乐观并发本地回归；补实际 SQL/锁及独立运行时报告 | W5 键与结果元数据 |
 | W7 性能与可观测性：P2-02、P2-03、P2-04 | 保留已有 opt-in idle statement cache，补真实 DDL/reprepare/资源/负载验收；保留第15.72节opt-in MySQL INSERT rewrite及group failure，补multi-send/bulk及真实性能验收；保留建连/探活九阶段直方图及固定标签回归，保留慢命令阈值/脱敏/回调隔离回归；保留第15.57节协议帧诊断；补其他资源等待和负载验收。保留顺序 Batch 和 Oracle array binding | 缓存容量/失效/关闭、批量部分失败/事务/取消/包限额；吞吐、延迟、峰值内存与资源上限对照；诊断脱敏和监听开销 | W1 generation/reset、W5 绑定规则 |
-| W8 运行时与发布：P2-05、P2-06 | 明确版本/平台/TFM/Framework/ORM范围；保留Windows六配置nupkg协议子集、诊断卸载修复及历史失败；5个matrix.*加独立零日期占位需环境和断言；matrix.pool-reset尚未实跑且触发销毁替换，另补同一物理会话reset/复用证据；完成包名/来源/许可/发布审查 | 每个承诺profile的nupkg consumer、实库/代理/TLS/认证/故障报告；保留Oracle失败和跳过；外部coordinator crash recovery、可复现命令及清理结果 | 各包持续积累证据，正式发布须满足第7.3节 |
+| W8 运行时与发布：P2-05、P2-06 | 明确版本/平台/TFM/Framework/ORM范围；保留Windows六配置nupkg协议子集、诊断卸载修复及历史失败；5个matrix.*加独立零日期占位需环境和断言；保留新同客户端通道复用与旧销毁隔离的双模式直连报告，补代理后端与完整资源矩阵；完成包名/来源/许可/发布审查 | 每个承诺profile的nupkg consumer、实库/代理/TLS/认证/故障报告；保留Oracle失败和跳过；外部coordinator crash recovery、可复现命令及清理结果 | 各包持续积累证据，正式发布须满足第7.3节 |
 
 ### 16.1 压缩与 reroute 的独立交付边界
 

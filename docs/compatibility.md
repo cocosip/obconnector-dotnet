@@ -1,6 +1,24 @@
 # Compatibility and known gaps
 
-## 2026-10-27 Source review checkpoint
+## 2026-10-27 Same-channel pool reset and reuse acceptance
+
+`matrix.pool-reset-reuse.sync/async` now require one client protocol channel across two borrowers
+and reopening the original prepared command. Public Frame observations are scoped by AsyncLocal
+and correlated using listener reference plus local ChannelId. A successful replacement connection
+fails this case. Private one-session pools disable lifetimes and dispose their sessions/listeners.
+
+The separate `matrix.pool-reset` checks retirement isolation through SET/ALTER SESSION. The first
+Oracle run failed with code 1882 for UTC; numeric offsets +05:45/+06:45 remove the region-file
+dependency. The failure report is retained. Final direct 4.4.2.2 checks pass 4/4 per mode on
+Windows/.NET 10.0.13 with TLS disabled, zero cleanup failures. Focused units pass 40/40 and the
+Release solution build has zero warnings/errors; complete units and exact evidence are in the
+[module record](obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance).
+
+ChannelId is not a server/backend session ID. These results do not establish proxy backend reuse,
+the complete resource/transaction/fault matrix or other versions/platforms/TLS. The six DeferredReason
+placeholders remain. Real access used private process input and was not added to unit tests or CI.
+
+## 2026-10-27 Historical source review checkpoint
 
 At `master/6e64c7e`, the serial Release solution build passes with zero warnings/errors;
 554 selected complex/cursor/session-isolation/compression unit cases pass with zero failures/skips.
@@ -721,10 +739,10 @@ successful validation. `matrix.pool-reset` is executable and is listed separatel
 borrower, and requires the next MySQL or Oracle borrower to observe the original time zone.
 The SET/ALTER SESSION change is classified for retirement by `SessionStateSql.RequiresDiscard`;
 `PhysicalSessionPool.Return/ReturnAsync` destroys that session before reset. This checks borrower
-isolation by replacement, not COM_RESET_CONNECTION on the same physical session. The case has
-not been run against a real server. Separate real reset/reuse evidence must distinguish physical
-session reuse from retirement, and prove the relevant reset behavior. OBProxy, other server
-versions, TLS profiles, long-running load and failure injection remain open.
+isolation by replacement, not COM_RESET_CONNECTION on the same physical session.
+`matrix.pool-reset-reuse.sync/async` separately require the same client channel and prepared-command
+reuse. Both paths now have direct 4.4.2.2 dual-mode evidence described above. OBProxy/backend identity,
+other server versions, TLS profiles, the complete resource matrix, load and fault injection remain open.
 
 Further skips depend on selected groups, compatibility mode, `slowQuery`, `alternateDatabase`, DDL permissions and Oracle extension options. If a connection prerequisite fails, dependent cases are skipped. See [AcceptanceSuite.SkipReason](../tests/OceanBaseConnector.Acceptance/AcceptanceSuite.cs); a zero exit code can still include skips.
 

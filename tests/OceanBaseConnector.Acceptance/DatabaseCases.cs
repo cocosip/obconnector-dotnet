@@ -27,6 +27,7 @@ internal static partial class DatabaseCases
             cases.Add(new("reader.cursor." + suffix, "reader", (c, t) => Cursor(c, async, false, t), RequiresObjects: true));
             cases.Add(new("reader.cursor-offset." + suffix, "reader", (c, t) => Cursor(c, async, true, t), Mode: "Oracle", RequiresObjects: true));
             cases.Add(new("streams.binary." + suffix, "streams", (c, t) => BinaryStream(c, async, t), RequiresObjects: true));
+            cases.Add(new("matrix.pool-reset-reuse." + suffix, "faults", (c, t) => PoolResetReuse(c, async, t)));
         }
         cases.Add(new("connection.factory-data-source", "connection", Factory));
         cases.Add(new("connection.change-database", "connection", ChangeDatabase, Mode: "MySql", RequiresAlternateDatabase: true));
@@ -281,23 +282,23 @@ internal static partial class DatabaseCases
 
     private static async Task PoolReset(CaseContext c, CancellationToken token)
     {
-        using var source = c.CreateConnection();
-        var builder = new OceanBaseConnectionStringBuilder(source.ConnectionString)
+        using var configuration = c.CreateConnection();
+        var builder = new OceanBaseConnectionStringBuilder(configuration.ConnectionString)
         {
             Pooling = true,
             MaxPoolSize = 1,
             MinPoolSize = 0,
         };
-        await using var first = new OceanBaseConnection(builder.ConnectionString);
+        await using var source = new OceanBaseDataSourceBuilder(builder.ConnectionString).Build();
+        await using var first = (OceanBaseConnection)source.CreateConnection();
         await first.OpenAsync(token);
         var baseline = c.Oracle
             ? Convert.ToString(await c.ScalarAsync(first, "SELECT SESSIONTIMEZONE FROM DUAL", token), System.Globalization.CultureInfo.InvariantCulture)
             : Convert.ToString(await c.ScalarAsync(first, "SELECT @@session.time_zone", token), System.Globalization.CultureInfo.InvariantCulture);
         c.Check(!string.IsNullOrWhiteSpace(baseline), "The initial session time zone must be observable.");
 
-        var changed = c.Oracle
-            ? string.Equals(baseline, "UTC", StringComparison.OrdinalIgnoreCase) ? "+00:00" : "UTC"
-            : string.Equals(baseline, "+00:00", StringComparison.Ordinal) ? "+01:00" : "+00:00";
+        // Numeric offsets do not require server time-zone region files.
+        var changed = string.Equals(baseline, "+05:45", StringComparison.Ordinal) ? "+06:45" : "+05:45";
         await c.ExecuteAsync(first, c.Oracle ? "ALTER SESSION SET TIME_ZONE = '" + changed + "'" : "SET SESSION time_zone = '" + changed + "'", token);
         var observed = c.Oracle
             ? Convert.ToString(await c.ScalarAsync(first, "SELECT SESSIONTIMEZONE FROM DUAL", token), System.Globalization.CultureInfo.InvariantCulture)
@@ -305,7 +306,7 @@ internal static partial class DatabaseCases
         c.Check(string.Equals(observed, changed, StringComparison.OrdinalIgnoreCase), "The session time zone change must be visible before close.");
         await first.CloseAsync();
 
-        await using var second = new OceanBaseConnection(builder.ConnectionString);
+        await using var second = (OceanBaseConnection)source.CreateConnection();
         await second.OpenAsync(token);
         var reset = c.Oracle
             ? Convert.ToString(await c.ScalarAsync(second, "SELECT SESSIONTIMEZONE FROM DUAL", token), System.Globalization.CultureInfo.InvariantCulture)

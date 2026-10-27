@@ -57,9 +57,15 @@ row-count settings through real text/prepared sequential readers, including NULL
 Five `matrix.*` entries are explicitly deferred: TLS/authentication, OB20/tracing negotiation,
 topology failover, interrupted network outcomes and XA crash recovery. The separate
 `types.zero-date-policy` case is also deferred, so six explicit placeholders report skips.
-`matrix.pool-reset` is executable but has no live-run evidence. It changes the session time zone
-through SET/ALTER SESSION, which retires the changed physical session; it checks isolation by
-replacement, not COM_RESET_CONNECTION/reuse. A real same-session reset check remains separate.
+`matrix.pool-reset-reuse.sync/async` require the same client protocol channel across two borrowers
+and reopening the original prepared command. They observe public Frame events using listener
+identity plus local ChannelId, and reject successful reconnection as proof of reuse. No payloads
+are captured. Private one-session pools and diagnostic subscriptions are disposed on exit.
+`matrix.pool-reset` separately changes the time zone through SET/ALTER SESSION, which retires
+the changed session; it checks isolation by replacement. Numeric offsets avoid dependence on
+server region files. These cases plus the connection check passed 4/4 per mode on direct 4.4.2.2,
+Windows/.NET 10.0.13, TLS disabled. ChannelId is not a server/backend session ID; proxy/backend,
+other versions/platforms/TLS and complete resource behavior still need validation.
 Mode/configuration skips are additional. See [Compatibility](../../docs/compatibility.md) for the
 failed Oracle case and deployment restrictions, and [verification status](../../docs/obconnector-dotnet-progress.md)
 for retained test results and environment gates.
