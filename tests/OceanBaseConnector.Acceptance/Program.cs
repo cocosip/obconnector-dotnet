@@ -14,7 +14,12 @@ internal static class Program
         using var cancellation = new CancellationTokenSource();
         ConsoleCancelEventHandler handler = (_, eventArgs) => { eventArgs.Cancel = true; cancellation.Cancel(); };
         Console.CancelKeyPress += handler;
-        try { return await RunAsync(args, Console.Out, cancellation.Token); }
+        try
+        {
+            if (args.Length == 1 && args[0] == "--xa-crash-worker")
+                return await XaCrashWorker.RunAsync(Console.In, Console.Out, cancellation.Token);
+            return await RunAsync(args, Console.Out, cancellation.Token);
+        }
         finally { Console.CancelKeyPress -= handler; }
     }
 

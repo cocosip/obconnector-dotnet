@@ -39,5 +39,6 @@ On direct OceanBase 4.4.2.2, Windows/.NET 10.0.13, TLS disabled, both modes pass
 cases plus one connection control; all 32 tables were removed. This is bounded direct-server
 evidence. Provider-local pre-send, in-flight server execution, timeout/cancellation ordering,
 ambient in-doubt/coordinator crashes, real OBProxy, TLS, other versions/platforms and long-running
-load remain open under P0-04/W2 and P2-06/W8. The four unrelated deferred matrix placeholders
+load remain open under P0-04/W2 and P2-06/W8. A separate [XA coordinator process matrix](xa-process-recovery-acceptance.md)
+now covers one prepared/recorded-decision crash point; three deferred matrix placeholders
 remain. It does not close the 23-gap/eight-package baseline.

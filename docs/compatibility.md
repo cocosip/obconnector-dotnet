@@ -1,5 +1,22 @@
 # Compatibility and known gaps
 
+## 2026-10-27 XA coordinator process recovery
+
+The [explicit XA crash profile](xa-process-recovery-acceptance.md) now has four sync/async
+commit/rollback cases. The supervisor kills a live prepared coordinator after its decision
+flushes, then a new process loads that journal, recovers only its branch and completes the
+recorded decision. Direct OceanBase4.4.2.2, Windows/.NET10.0.13, TLS disabled: both modes pass5/5
+including connection control; all8 owned tables/branches/journals removed. Focused56/56 and
+opt-out15 pass/116 skip; serial Release builds with zero warnings/errors. Complete units8044/8044
+and scoped format/docs/privacy checks pass. One independent final review has no Critical/Important
+finding; its sole Minor documentation count is corrected. See the [module record](obconnector-dotnet-progress.md#2026-10-27-xa-coordinator-process-recovery).
+
+Ordinary tests use synthetic loopback and real profiles require xaCrashProfile plus object
+permission and Oracle PrepareExecute. No credentials enter journals/arguments/new environment
+variables or reports. General coordinators, other crash/acknowledgement points, server failure,
+power loss, concurrency/heuristics, ambient in-doubt and independent proxy/TLS/platform/load
+profiles remain unverified. Three deferred placeholders remain;23IDs/eight packages stay open.
+
 ## 2026-10-27 Controlled network outcome acceptance
 
 The [opt-in controlled matrix](network-outcome-acceptance.md) now has16 executable cases
@@ -874,7 +891,7 @@ The cleanup failure was an attempted DROP of the table whose CREATE failed. The 
 
 ## Deferred acceptance cases
 
-Four `matrix.*` entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs)
+Three `matrix.*` entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs)
 have explicit `DeferredReason` values. They report skips, not successful validation.
 `types.zero-date-policy` is executable behind the separate opt-in described above;
 `matrix.pool-reset` is also executable and is listed separately below.
@@ -884,7 +901,6 @@ have explicit `DeferredReason` values. They report skips, not successful validat
 | `matrix.tls-authentication` | Trusted certificate chains, hostnames, plugin combinations and negative authentication profiles. TLS-disabled acceptance does not validate VerifyFull. |
 | `matrix.ob20-trace-negotiation` | Actual server OB20/full-link-trace negotiation and trace output. Ordinary SQL success does not prove either was negotiated. |
 | `matrix.topology-failover` | Controlled discovery, endpoint failures and routing on real deployments. |
-| `matrix.xa-crash-recovery` | External coordinator recovery under client/server process failure. Basic XA phase tests do not cover this. |
 
 `matrix.pool-reset` forces a one-session pool, changes the session time zone, closes the
 borrower, and requires the next MySQL or Oracle borrower to observe the original time zone.

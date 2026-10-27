@@ -889,7 +889,7 @@ Inspect `ArrayBindingResult.Items` for zero-based Succeeded/Failed/Unknown resul
 
 `connection.GetXaResource()` dedicates the open physical session to XA until Close. Use `OceanBaseXid` with Start, End, Prepare, Commit, Rollback and Recover; sync/async APIs are available. Oracle requires PrepareExecute.
 
-Business commands require an active XA branch and no local `Transaction`. Local transactions and database switching are rejected in XA mode. Close does not complete a branch. XA return codes use `OceanBaseException.XaErrorCode`, separately from `ServerErrorCode`; coordinator recovery is the application's responsibility.
+Business commands require an active XA branch and no local `Transaction`. Local transactions and database switching are rejected in XA mode. Close does not complete a branch. XA return codes use `OceanBaseException.XaErrorCode`, separately from `ServerErrorCode`; coordinator recovery is the application's responsibility. A separate [opt-in process recovery harness](xa-process-recovery-acceptance.md) tests one prepared/recorded-decision coordinator crash point; it is not a product coordinator.
 
 With pooling enabled, XA dedication persists even before Start and after Commit/Rollback. Close destroys the dedicated physical session instead of resetting it into the ordinary pool. A reopened logical connection cannot reuse an old resource; all sync/async resource methods reject it. After Close, prepared branches require explicit recovery/completion by the application on a separate session; Close is not a confirmed business rollback. [Scoped pool acceptance and remaining failure matrix](obconnector-dotnet-completeness.md#516-xa-专用会话的池隔离).
 

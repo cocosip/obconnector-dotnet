@@ -1,19 +1,29 @@
 # Driver delivery status
 
-Last checked: 2026-10-27; latest controlled network acceptance developed from `master/a265ce7`.
+Last checked: 2026-10-27; latest XA process recovery acceptance developed from `master/7ebc590`.
 The prior committed source review is `master/f9e8c20`. This is the current overview; the detailed
 [completeness baseline](obconnector-dotnet-completeness.md) retains requirements and historical evidence.
 The [module records](obconnector-dotnet-progress.md) retain individual test/review results.
 
 ## Current checkpoint
 
-- Latest module: [controlled network outcome acceptance](network-outcome-acceptance.md),16
+- Latest module: [XA coordinator process recovery](xa-process-recovery-acceptance.md), four
+  explicit-profile sync/async commit/rollback cases. A prepared coordinator is killed only
+  after its decision flushes; a fresh process loads that decision, recovers only its branch
+  and completes it. Both direct4.4.2.2 modes pass5/5, with all8 owned tables/branches/journals
+  removed. Focused56/56 and opt-out15 pass/116 skip; Release builds with zero warnings/errors.
+  Complete units8044/8044, scoped format/docs/privacy checks pass; the sole Minor documentation
+  count from one independent final review is corrected, with no Critical/Important finding. Three placeholders remain;
+  the general coordinator/server and other crash-point/deployment matrices remain open.
+
+
+- Previous module: [controlled network outcome acceptance](network-outcome-acceptance.md),16
   individually reported sync/async cases behind a separate explicit profile. Both modes pass
   17/17 on direct4.4.2.2 (one connection control plus16 faults), with all32 owned tables removed.
   Focused tests70/70, complete units8018/8018 and opt-out integration15 pass/116 skip.
   Final serial Release build has zero warnings/errors; scoped format verification exits0 and
   one independent final review has no actionable findings.
-  Four deferred placeholders remain. Local pre-send, server execution interruption, cancel/timeout,
+  At that checkpoint four deferred placeholders remained. Local pre-send, server execution interruption, cancel/timeout,
   coordinator crash and real proxy/TLS/deployment matrices remain open.
 
 
@@ -256,12 +266,14 @@ These are concrete code/scope gaps, not merely missing real-database reports:
    locator input conversion now passes direct default/GB18030 checks. Other profiles remain open.
 5. Compressed OB20/proxy reroute, after establishing the client-link wire contract (P1-02).
 6. Multi-send/pipelining or a separate bulk protocol, after establishing supported semantics (P2-03).
-7. Replace the four remaining deferred `matrix.*` placeholders with controlled fixtures/assertions
-   (P2-06): TLS/authentication, OB20/trace negotiation, topology failover and XA crash recovery.
+7. Replace the three remaining deferred `matrix.*` placeholders with controlled fixtures/assertions
+   (P2-06): TLS/authentication, OB20/trace negotiation and topology failover.
+   XA process recovery now has a prepared/recorded-decision crash point; its other crash points
+   and general coordinator/server recovery still need implementation/validation.
    Controlled network outcome cases now have explicit assertions and direct-server evidence;
    their complete send/execution/cancellation/deployment boundaries remain open. `types.zero-date-policy` now has executable assertions and a separate
    opt-in SQL_MODE profile; actual zero-date storage on a permissive server remains unverified.
-   There are four explicit DeferredReason cases in total.
+   There are three explicit DeferredReason cases in total.
 
 Pool/session/transaction concurrency and resource boundaries, complete command/adapter restrictions,
 runtime/platform coverage and deployment gates also remain, as mapped individually below. Distributed
@@ -300,7 +312,7 @@ approved wire contract or can be implemented without protocol research.
 | P2-03 Batch optimization | Sequential Batch, existing Oracle array binding, opt-in bounded MySQL INSERT rewrite with group error attribution | **Multi-send/pipelining and separate bulk protocol are missing** | Actual counts/partial failure, transaction/default/trigger/warning behavior, packet limits and throughput/memory |
 | P2-04 Diagnostics | ILogger/Activity/Meter, pool metrics including current leases, connection/ping phase timing, slow-query/cursor thresholds, protocol frame events, session I/O/upload-source read durations and collectible-load fixes | **Additional resource-wait instrumentation**, workload/overhead validation | Real load, resource curves and listener overhead |
 | P2-05 Runtimes/ecosystem | Five product assets; Windows nupkg protocol subset on actual .NET 8/9/10 and Framework host, plus Standard assets on .NET 10 | Complete promised platform/runtime/API matrix; Framework/ORM support scope; existing savepoint identifier limitations | Non-Windows and full feature/real-database reports on promised runtimes |
-| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports; distinct sync/async client-channel reset/reuse and time-zone retirement cases, 4/4 per mode on direct 4.4.2.2; executable opt-in zero-date storage/read/write-back assertions | **Four `matrix.*` deferred placeholders**; controlled network outcome assertions and direct-server evidence are now available; source/license/package/publication review remains | Proxy/backend identity and complete reset/resource matrix; TLS/auth, topology faults, unknown network outcomes, permissive zero-date SQL_MODE storage and external-coordinator XA crash recovery |
+| P2-06 Real compatibility | Acceptance tooling and historical direct-server reports; distinct sync/async client-channel reset/reuse and time-zone retirement cases, 4/4 per mode on direct 4.4.2.2; executable opt-in zero-date storage/read/write-back assertions | **Three `matrix.*` deferred placeholders**; controlled network and one XA coordinator process crash point have assertions and direct-server evidence; source/license/package/publication review remains | Proxy/backend identity and complete reset/resource matrix; TLS/auth, topology faults, unknown network outcomes, permissive zero-date SQL_MODE storage and external-coordinator XA crash recovery |
 
 ## Committed delivery evidence
 

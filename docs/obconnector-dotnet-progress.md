@@ -4,6 +4,57 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 XA coordinator process recovery
+
+Developed from master/7ebc590, P0-04/W2 and P2-06/W8. Four sync/async commit/rollback cases
+replace the XA crash placeholder behind xaCrashProfile and object permission; Oracle requires
+PrepareExecute. The existing acceptance executable serves as an independent test coordinator:
+prepare, CreateNew/Flush(true) a decision, announce PREPARED and wait; the supervisor kills the
+live process and verifies nonzero exit. A fresh process reads the journal, recovers only its
+branch, completes that recorded decision, verifies absence and exits zero. Independent observer
+checks confirm invisible prepared writes and the selected durable result. Product source/API/
+dependencies and example opt-out defaults are unchanged. See the [contract](xa-process-recovery-acceptance.md).
+
+Owned random table/global IDs and decisions are the only journal contents. Credentials use
+redirected stdin, never arguments/files/new environment variables. Strict size/schema/recursive
+name validation precedes Open. Each child has a90-second budget; failure/cancellation reaps it.
+Cleanup honors a flushed decision, considers only the exact owned XID, retains an unresolved
+branch's journal and preserves main/cleanup failures. Unrelated recovered branches are not completed.
+
+Retained evidence:
+
+- Catalog/guard RED3/3 and process orchestration RED5/5 expose missing cases/profile.
+- Initial process/runner GREEN38/38. Journal tests then pass15/16 and fail nested duplicate
+  Commit before-connection rejection; recursive duplicate validation fixes that actual new-tool
+  boundary. Focused55/55 and final56/56 pass, zero failures/skips. Seven subprocess rows cover
+  four normal modes, missing prepared branch, cancellation during write, and completion failure
+  retaining its commit decision plus the original failure and two cleanup failures.
+- Serial Release solution build: zero warnings/errors,14.95s. Complete units8044/8044 pass,
+  zero failures/skips,8m36s;26 actual additions and no removals against the8018 baseline.
+- Ordinary opt-out integration:15 passed/116 skipped/zero failed. No live profiles enter CI.
+- Explicit real direct OceanBase4.4.2.2, Windows/.NET10.0.13, TLS disabled: Oracle5/5 and
+  MySQL5/5 (connection control plus4 process cases each), zero failures/skips; all8 owned tables,
+  branches and journals removed, zero cleanup failures. This run preceded the temp-directory
+  name acquiring its generated XID prefix; journal content and database behavior are unchanged.
+  Credentials arrived only over echo-disabled stdin; all child process traffic uses private pipes.
+- Final ten-file whitespace verification exits0 (workspace-load warning retained). Ten changed
+  documents resolve906 relative links; history15.1–15.102,23 IDs/eight packages, RED-to-GREEN
+  mapping, live cleanup and added-content privacy checks pass. One independent final review
+  finds no Critical/Important issue; its sole Minor stale remaining-placeholder count is
+  corrected from4 to3. The reviewer did not run tests or access the real databases.
+
+Local ignored evidence: TestResults/xa-process-{red,execution-red,focused-final,full,optout}/,
+TestResults/xa-journal-red/ and TestResults/xa-process-*.log. Safe live reports are
+TestResults/xa-process-live-oracle-012212ef.json and TestResults/xa-process-live-mysql-d26f6b50.json.
+Earlier failures remain; the nested duplicate RED is not hidden by the initial process GREEN.
+
+Three DeferredReason placeholders remain: TLS/authentication, OB20/trace and topology.
+This is one prepared/recorded-decision coordinator-process crash point, not a production
+coordinator or complete XA recovery. Other crash/acknowledgement points, general coordinator/
+server failure, power loss, concurrency/heuristics, ambient in-doubt, proxies/TLS and independent
+platform/runtime/load matrices remain open. No consumer/package/full database-suite rerun is
+claimed. All23 gaps/eight packages remain open; local master only, no push/publication.
+
 ## 2026-10-27 Controlled network outcome acceptance
 
 Developed from `master/a265ce7`, P0-04/W2 and P2-06/W8. The existing test-only relay

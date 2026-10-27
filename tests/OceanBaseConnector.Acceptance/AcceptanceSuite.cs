@@ -12,7 +12,7 @@ internal sealed record AcceptanceCase(string Name, string Group, Func<CaseContex
     string? Mode = null, bool RequiresObjects = false, bool RequiresPrepareExecute = false,
     bool RequiresLob = false, string? DeferredReason = null, bool ConnectionGate = false,
     bool RequiresSlowQuery = false, bool RequiresAlternateDatabase = false, bool RequiresZeroDateProfile = false,
-    bool RequiresNetworkFaultProfile = false);
+    bool RequiresNetworkFaultProfile = false, bool RequiresXaCrashProfile = false);
 internal sealed class AssertionFailure(string message) : Exception(message);
 internal sealed record ServerObservation(string Mode, string Version);
 internal sealed record CaseResult(string Name, string Group, string Status, string? Detail, long ElapsedMilliseconds = 0);
@@ -93,6 +93,7 @@ internal static class AcceptanceSuite
         if (config.Groups.Length != 0 && !config.Groups.Contains(test.Group, StringComparer.Ordinal)) return "Group not selected.";
         if (test.Mode != null && test.Mode != config.Mode) return "Requires " + test.Mode + " mode.";
         if (test.DeferredReason != null) return test.DeferredReason;
+        if (test.RequiresXaCrashProfile && !config.XaCrashProfile) return "Requires xaCrashProfile=true in a dedicated test schema.";
         if (test.RequiresNetworkFaultProfile)
         {
             if (!config.NetworkFaultProfile) return "Requires networkFaultProfile=true in a dedicated test schema.";

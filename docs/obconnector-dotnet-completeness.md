@@ -3,7 +3,7 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27，受控网络故障验收从master/a265ce7开发，见第15.102节；源流读取诊断已提交a265ce7，历史源码复核保留第15.100节。23项及八工作包仍未整体关闭。
+**最近复核：** 2026-10-27，XA协调器进程崩溃恢复验收从master/7ebc590开发，见第15.103节；网络故障矩阵已提交7ebc590，历史记录15.1—15.102完整保留。23项及八工作包仍未整体关闭。
 **前一源流模块：** P2-04/W7应用上传源流读取耗时，覆盖MySQL long data、Oracle piece data及LOCAL INFILE的同步/异步Read调用；独立源类型/模式/最终结果固定标签，复用交换释放及pending完成后的汇总发布。专项156/156、完整单测7977/7977、受影响消费者315/315及Release构建零警告/错误通过；独立走查无遗留问题。指标范围见[源流读取契约](source-read-diagnostics.md)，证据见第15.101节；不证明实库或负载开销。
 **前一模块：** CLOB定位器标量/匿名数组输入在发送副本中执行严格客户端编码；V1转换，V2仅在已认证产品4.4.1+转换，旧版/未知身份保留原字节。原始句柄、UTF-8读取、身份/扩展/rowkey、BLOB及无内联内容的外置定位器保持不变，命名CLOB内容仍为严格UTF-8。已确认前一GB18030读回不匹配根因为回绑输入转码；默认和GB18030直连Oracle各16/16及连接对照通过，含外置大CLOB。最终完整单测7938/7938、受影响消费者1240/1240及零警告/错误Release构建通过；独立走查问题已修正并有12项生命周期RED/GREEN及既有不确定修改回归验证，见第15.99节。
 **前一模块：** P1-07/W5复杂LOB输入：命名object/collection的BLOB用byte[]、CLOB用严格UTF-8内容（含嵌套命名元素）；匿名标量BLOB/CLOB数组用同连接/会话/事务/代际的OceanBaseLob定位器。创建及执行均校验，保留调用方所有权；命名定位器回绑在目标SQL前拒绝。当时默认字符集Oracle实库12/12通过，GB18030为10/12；完整单测7913/7913、消费者1220/1220及独立走查通过。原始失败和门禁保留在第15.98节。
@@ -19,7 +19,7 @@ The overview separates remaining development from real-environment validation; h
 此前CLOB整输入预校验（1da3ea8）、客户端SQL/参数字符集（b66cda1）、会话协议I/O耗时（f0edabf）及当前借出会话指标（33c052b）保留其独立记录；[输入字符集契约](client-character-sets.md)记录当前边界。
 **前一模块验证：** 串行Release全解决方案构建零警告/错误；完整单测7774/7774、本模块专项290/290、受影响消费者160/160通过，独立源码/测试/文档走查无遗留问题，见[DBCS模块记录](obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback)。显式MySQL只读生成字面量14/14及连接对照通过，使用ASCII别名。完整初跑两项旧GBK拒绝断言与此前元数据/零日期失败均保留，不用新结果抹去历史限制。
 **历史限制：** 前一模块构建曾因与testhost并行产生DLL锁而失败，原始记录保留。历史TNS文件替换失败根因仍未确认，八次独立及后续完整运行未复现；没有修改TNS或添加绕过。
-**剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向REF CURSOR、复杂cursor参数及命名LOB定位器回绑、文本复杂结果、未解析身份的复杂整列RETURNING、压缩OB20/代理reroute、多发送/独立bulk；4个matrix.*占位仍需受控环境和断言；网络unknown已有16项显式opt-in断言及双模式各17/17直连专项，但完整发送/执行/取消/部署边界仍缺，零日期断言已有但需允许零日期的真实SQL_MODE profile。代理后端身份、其他版本/平台/TLS及完整资源矩阵仍缺。逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
+**剩余开发：** 其余national/JSON/CLOB/元数据边界、输入/双向REF CURSOR、复杂cursor参数及命名LOB定位器回绑、文本复杂结果、未解析身份的复杂整列RETURNING、压缩OB20/代理reroute、多发送/独立bulk；3个matrix.*占位仍需受控环境和断言；网络unknown已有16项显式opt-in断言及双模式各17/17直连专项，但完整发送/执行/取消/部署边界仍缺，零日期断言已有但需允许零日期的真实SQL_MODE profile。XA已有显式prepare/决策落盘后的协调器进程kill/restart专项，其他崩溃点/服务器/完整协调器协议仍缺。代理后端身份、其他版本/平台/TLS及完整资源矩阵仍缺。逐项见[统一进度及剩余工作](obconnector-dotnet-delivery-status.md)。
 前一模块2项Oracle FLOAT实库及2项既有NUMBER对照连接尝试均止于初始greeting，未完成认证或SQL，服务器/网络根因未明；后续仍需其他资源指标、负载及完整部署验收。历史JSON/TNS及握手失败均保留原记录。
 **初次审计：** 2026-10-24，.NET `06d58e1`；Java 固定参考 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1` / Connector/J 2.4.14。
 **适用仓库：** `D:\Code\dotnet\obconnector-dotnet`；历史审计使用 `D:\dotnet-code\obconnector-dotnet` 及 `D:\java-code\obconnector-j` 固定源码，本次未重新运行 Java。
@@ -119,7 +119,7 @@ The overview separates remaining development from real-environment validation; h
 | LOCAL INFILE | 部分实现 | `Allow Local Infile=true` 才协商 `CLIENT_LOCAL_FILES`，应用流工厂负责提供输入；真实服务器、代理和长文件矩阵未验证 |
 | OB20 | 部分实现 | 普通 OB20、校验和、trace 结构有代码；压缩 frame 和 proxy reroute 缺失 |
 | 本地事务 | 部分实现 | MySQL/Oracle 隔离级别和 savepoint 有限制；ambient 支持本地 `TransactionScope` enlistment，分布式提升不支持 |
-| XA | 部分实现 | 显式生命周期和 recover API 有代码；外部 coordinator crash recovery 未验证 |
+| XA | 部分实现 | 显式生命周期/recover已有；测试协调器prepare/决策落盘后被kill并由新进程恢复，双模式直连各5/5见第15.103节；完整外部coordinator/服务器/其他崩溃点仍缺 |
 | 连接池 | 部分实现 | `Pooling=true` 可复用物理会话，支持最大容量、等待超时、最小池预热及失败回滚、借用前存活探测、惰性生命周期回收、空池 registry 清理和池指标；完整资源 reset 和真实服务器矩阵未闭合 |
 | HA 和恢复 | 部分实现 | Open 阶段 TCP 候选整轮重试及可取消固定退避；活动连接没有透明迁移、重连或 replay |
 | MySQL 类型 | 部分实现 | 常用数值、时间、YEAR、BIT、JSON、零日期已有映射；字符集和扩展类型仍有限制 |
@@ -706,7 +706,7 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 | P0-01 | 等效配置的容量与清池身份已本地统一，空 PAM 因子及旧池快照保留；Closed回调同步/异步池化Open先完成本次捕获清理（第5.1.4/15.48节），原等待缺陷已修复；通用日志重入边界保留。满池 Close/Open、source Dispose、长期资源/并发及完整真实验收尚缺。 | `OceanBaseConnection.cs`、`OceanBaseConnection.Transactions.cs`、`OceanBaseConnectionStringBuilder.cs`、`OceanBaseConnection.Pooling.cs`；`Internal/Session/PhysicalSessionPool.cs`；`PoolConfiguration*Tests.cs`、`PoolOwnershipTests.cs`、`PoolClearingTests.cs`、`Session/PhysicalSessionPoolTests.cs` | 保留有效配置/凭据策略/私有源隔离及五资产回归、双模式直连报告；补压力下无超额建连、双重归还或等待泄漏，清理超时、Dispose/reset 交错、长借用、预热失败及真实代理报告。 |
 | P0-02 | Oracle fresh/reset 自动提交初始化已本地实现且直接服务器专项通过，见第 5.1.5 节；旧 reader 延迟 Close 的逻辑租约缺陷已修复，源码与完整证据见第 5.1.7/15.41 节；内联 LOB/REF CURSOR 阶段与外置持久 LOB 完整读取/本地中断验收见第 5.1.8/15.43/15.44 节；注释、多语句、不透明过程/动态执行和目标发送标记已有本地实现；任意函数/触发器隐式副作用及真实资源/reset 矩阵仍未闭合，不能认定所有状态已隔离。 | `Internal/Session/HandshakeFlow.Identity.cs`、`Internal/Sql/SessionStateSql.cs`、`Internal/Session/CommandExchange.cs`、`PhysicalSession.cs`；`Session/HandshakeFlowTests.OracleAutocommit*.cs` 与 IntegrationTests 的 `Connections/PoolIsolationTests.cs`；`SessionStateSqlTests.cs`、`PoolSessionStateTests.cs`、`PoolSessionStateLifecycleTests.cs`、`PoolingTests.cs`、`TemporaryLobLifecycleTests.cs`、`RefCursorTests.cs`、`PooledResourceIsolationTests.cs`、`PooledExternalLobLifecycleTests.cs` 与真实 `Connections/PoolResourceIsolationTests.cs`/`PoolResourceIsolationTests.ExternalLobs.cs`；五资产 `SessionStateConsumerTests.cs` | 保留 Oracle fresh/reset 隐式写、初始化错误/取消/超时销毁与真实复用证据，补版本/代理/平台矩阵；保留第 5.1.2/15.24 节回归；事务、变量、临时对象、reader、statement、LOB、cursor、XA 各有 A 污染/B 验证的真实双模式和代理测试；不能恢复的状态强制销毁。 |
 | P0-03 | PSPE 拒绝第二资源/提升并区分 InDoubt；Initialize 与晚回调绑定原 Open/事务；自动初始化取消及同 scope/单容量池重开已有本地证据，仍不能视为跨资源原子提交或真实故障验收。 | `Internal/Session/AmbientEnlistment.cs`；`OceanBaseConnection.cs`、`OceanBaseConnection.Transactions.cs`；`AmbientTransaction*Tests.cs`、五资产消费者；原 `TransactionTests.cs`/`TransactionFailureTests.cs` 保留 | 保留两条初始化控制 SQL 取消、exact caller token、池/协调器清理、成功 Open 后 token 独立及既有终态/身份回归；补真实模式/版本/代理/事务管理器故障及恢复示例，不以本地 PSPE 关闭整个 P0-03。 |
-| P0-04 | 业务写入或提交已发送，响应断开/取消；应用错误重试会重复写入。受控真实请求转发/截断、普通写及提交/回滚回包丢失、查账和新租约专项见第15.102节，完整故障矩阵仍缺。 | `OceanBaseException.cs`；`Internal/Session/CommandExchange.cs`；`CommandFaultTests.cs`、`TransactionFailureTests.cs`、`PooledTransactionResponseLossTests.cs`、`AcceptanceNetworkExecutionTests.cs`、Acceptance的`DatabaseCases.Network.cs`；IntegrationTests的`Faults/TransactionResponseLossTests.cs`；[应用核对指南](unknown-outcome-recovery.md) | 在发送前、发送后、响应中、commit/rollback 响应丢失注入故障；验证异常分类、会话销毁、禁止 replay 及应用核对操作结果的示例。 |
+| P0-04 | 业务写入或提交已发送，响应断开/取消；应用错误重试会重复写入。受控真实请求转发/截断、普通写及提交/回滚回包丢失、查账和新租约专项见第15.102节，XA记录决定后的进程崩溃专项见第15.103节，完整故障矩阵仍缺。 | `OceanBaseException.cs`；`Internal/Session/CommandExchange.cs`；`CommandFaultTests.cs`、`TransactionFailureTests.cs`、`PooledTransactionResponseLossTests.cs`、`AcceptanceNetworkExecutionTests.cs`、Acceptance的`DatabaseCases.Network.cs`；IntegrationTests的`Faults/TransactionResponseLossTests.cs`；[应用核对指南](unknown-outcome-recovery.md) | 在发送前、发送后、响应中、commit/rollback 响应丢失注入故障；验证异常分类、会话销毁、禁止 replay 及应用核对操作结果的示例。 |
 | P0-05 | 已打开连接遇到节点/代理故障，现有候选重试只覆盖建连 TCP 失败。 | `Internal/Session/PhysicalSession.cs`；`Internal/EndpointSelector.cs`；`TopologyExecutionTests.cs` | 保留第15.49节连接级ERR与显式重建本地回归，补真实节点/代理和完整连接/事务故障；若新增透明恢复，须分别证明只读、幂等写、非幂等写和活动事务边界。完整驱动不要求自动重放未知写。 |
 | P0-06 | 不同 resolver 共池、路由更新后复用旧会话的问题已复现并本地修复；真实拓扑/故障矩阵未验证。 | `OceanBaseConnection.cs` 的 `AddressResolver`/`PrepareOpen`；`PhysicalSessionPoolRegistry`/`PhysicalSessionPool.Rent`（同在池文件中）；`PoolRoutingTests.cs` | 保留双服务端、引用身份、快照/预热、失败/取消/总预算、并发发现、Closed 回调清理和借出会话回归；补真实发现/代理/跨平台报告。 |
 
@@ -735,7 +735,8 @@ Oracle NUMBER 的结果 metadata 可以含负 scale；`DbParameter.Scale` 保持
 | P2-03 | DbBatch默认逐条，opt-in MySQL INSERT rewrite及group failure本地路径见第15.72节；Oracle array binding已有。multi-send/bulk仍缺。 | `OceanBaseBatch.InsertRewrite.cs`、`MySqlInsertRewrite.cs`、`BatchInsertRewrite*Tests.cs`；`OceanBaseCommand.ArrayBinding.cs` | 对已承诺路径补真实行数/部分失败、取消、包上限和事务边界；与顺序模式作吞吐/内存对照。保留OUT限制及未知写不重放。 |
 | P2-04 | 日志/Activity/Meter、池指标、九阶段建连/探活、慢命令、协议帧及卸载修复已有；会话I/O耗时、当前租约及池等待结果也已本地实现；其他资源等待范围与负载验收仍缺。 | `Internal/DriverDiagnostics.cs`、`DriverDiagnostics.ConnectionPhases.cs`、`DriverDiagnostics.SessionIo.cs`；`SlowQueryDiagnosticsTests.cs`、`ConnectionPhaseDiagnosticsTests.cs`、`SessionIoDiagnosticsTests.cs`、`PoolLeaseMetricsTests.cs`、`DiagnosticsTests.cs` | 指标单位/聚合、异常分类、监听开销及脱敏；borrowed是累计借用次数，leased才是当前借出会话数；池等待outcome分acquired/timeout/canceled/error，不能据专项通过推定负载开销。 |
 | P2-05 | 两个包均产出五个 TFM，但现代 API 条件编译；第15.74节已有Windows实际8/9/10及Framework的nupkg协议子集，不覆盖完整功能/ORM与非Windows；第15.58节原崩溃检查点和第15.59节诊断卸载修复及默认642项回归继续保留。 | 两个 src 项目 `.csproj`；`.github/workflows/ci.yml`；`eng/Verify-Packages.ps1`；`tests/PackageConsumer/ProtocolScenarios.cs`；ConsumerTests、DI tests | 对每个承诺运行时运行实际 nupkg consumer；Windows/Linux、标准/现代 API 差异和 Framework 支持决定有报告。savepoint 的当前标识符规则不接受 `__EFSavePoint`，ORM 集成需单独验收。 |
-| P2-06 | Acceptance网络unknown已有16项显式opt-in断言及双模式各17/17直连专项；仍有4个matrix.* Deferred占位；types.zero-date-policy已有独立opt-in及存储/读取/回绑断言，但当前实库SQL_MODE前置失败（第15.93节）；pool-reset-reuse.sync/async与旧时区销毁隔离已分开验收，双模式直连各4/4（第15.92节）。 | `tests/OceanBaseConnector.Acceptance/DatabaseCases.Pooling.cs`、`DatabaseCases.Network.cs`、`ProtocolChannelCapture.cs`、`DatabaseCases.cs`、`DatabaseCases.ZeroDates.cs`；IntegrationTests；`docs/compatibility.md` | 为4个占位实现受控环境和断言；零日期需允许的真实profile；补代理后端/版本/平台/TLS及完整资源矩阵，保存脱敏报告与清理结果。 |
+| P2-06 | Acceptance网络unknown已有16项显式opt-in断言及双模式各17/17直连专项；XA协调器进程专项已有4项显式断言及双模式各5/5；仍有3个matrix.* Deferred占位；types.zero-date-policy已有独立opt-in及存储/读取/回绑断言，但当前实库SQL_MODE前置失败（第15.93节）；pool-reset-reuse.sync/async与旧时区销毁隔离已分开验收，双模式直连各4/4（第15.92节）。 | `tests/OceanBaseConnector.Acceptance/DatabaseCases.Pooling.cs`、`DatabaseCases.Network.cs`、`DatabaseCases.XaCrash.cs`、`XaCrashWorker.cs`、`ProtocolChannelCapture.cs`、`DatabaseCases.cs`、`DatabaseCases.ZeroDates.cs`；IntegrationTests；`docs/compatibility.md` | 为3个占位实现受控环境和断言；零日期需允许的真实profile；补代理后端/版本/平台/TLS及完整资源矩阵，保存脱敏报告与清理结果。 |
+
 
 
 
@@ -3230,6 +3231,29 @@ RED6+34及原夹具/编译/诊断探针失败保留；专项70通过，opt-out15
 本地发送前、服务器执行中断、超时/取消排序、ambient in-doubt/协调器crash、真实代理/TLS、其他版本/平台/长期负载仍缺。
 未重跑消费者/打包/独立运行时/完整数据库套件；本地master提交，不push或发布，全部历史失败/跳过原文保留。
 
+### 15.103 2026-10-27 XA协调器进程崩溃恢复验收
+
+从master/7ebc590继续P0-04/W2、P2-06/W8。四项同步/异步commit/rollback显式用例需xaCrashProfile=true、
+建表授权及dotnet host；Oracle需PrepareExecute。测试协调器子进程Start/写入/End/Prepare后，以CreateNew和
+Flush(true)落盘仅含自有表/global ID/决定的日志，输出PREPARED后等待。父进程确认仍存活后强制kill，
+核对非零退出；新进程仅从日志取决定，Recover精确自有分支并完成，再核对分支移除及观察连接持久行数。
+这不是正常Close/Dispose替代崩溃，也不是产品新增durable coordinator。见[完整契约](xa-process-recovery-acceptance.md)。
+
+凭据仅走stdin私有管道，不进入参数/日志/新增环境变量；请求65536字符、日志4096字节上限和递归重复/未知/必填字段、
+固定标识校验在Open前。每子进程90秒预算；取消/失败终止并回收。清理仅处理精确自有XID，已有落盘决定必须遵守，
+无决定时回滚；未解决分支保留日志，原始失败及清理失败并存，不完成无关分支。生产代码/API/依赖未变，普通CI只有合成回环。
+
+RED3+5、初始GREEN38，以及重复嵌套Commit的15通过/1失败RED均保留；递归校验后55和最终56专项通过。
+覆盖真实子进程死亡/重启、无关分支保护、缺失分支、取消清理、完成失败后保留决定及主/清理错误。串行Release零警告/错误，
+opt-out15通过/116跳过；完整单测8044/8044通过（8分36秒），对比8018基线新增26项、无移除；十文件格式及文档/脱敏校验通过。
+一次独立最终走查无Critical/Important，唯一Minor为剩余占位数量旧值，已从4修正为3；reviewer未运行测试或连接实库。
+详见[最终模块台账](obconnector-dotnet-progress.md#2026-10-27-xa-coordinator-process-recovery)。
+实库OceanBase4.4.2.2双模式直连、Windows/.NET10.0.13、TLSdisabled，各5/5（连接+4故障）通过；8张自有表、分支、日志全部清理。
+
+无条件占位从4减为3：TLS/auth、OB20/trace、topology。该专项仅覆盖prepare及决定落盘后的一个协调器进程崩溃点；
+其他提交确认丢失/决定落盘前、一般协调器协议/服务器崩溃、系统掉电、并发恢复/启发式、ambient in-doubt、真实代理/TLS及其他平台/负载仍缺。
+未重跑消费者/打包/独立运行时/完整数据库套件；23项及八工作包不整体关闭，本地master提交，不push或发布。
+
 ## 16. 剩余交付工作包
 
 以下拆分面向实施和评审，沿用第 4、14 节全部 23 个 ID；每个 ID 只归入一个主工作包，跨模块依赖不因此消失。它区分新增能力、已有实现的验证和范围决定，避免把已完成模块重新开发。所有工作包尚未整体关闭，负责人和交付日期未分配。
@@ -3237,13 +3261,13 @@ RED6+34及原夹具/编译/诊断探针失败保留；专项70通过，opt-out15
 | 工作包 / 覆盖 ID | 剩余开发或范围决定 | 必须交付的验证产物 | 主要依赖 |
 | --- | --- | --- | --- |
 | W1 池与会话隔离：P0-01、P0-02、P0-06 | 保留 Oracle fresh/reset 自动提交基线及真实直连专项（第 5.1.5 节），补部署矩阵；保留会话识别/不透明调用及目标发送销毁规则；内部配置归一化、容量/清池统一及原始空因子身份已有本地实现（第 5.1.4 节），补部署验收；保留 XA 专用销毁及 prepared 跨关闭恢复的直连专项（第 5.1.6 节）；保留旧 reader 延迟关闭租约隔离及八项本地/二十项消费者/四项直连回归（第 5.1.7 节）；保留第 5.1.8/15.43/15.44 节内联 LOB/REF CURSOR 阶段及外置持久 LOB 完整读取与本地中断专项；补隐式副作用、完整 reader/cursor、外置 LOB 真实中断及XA 故障恢复与隔离，保留第15.48节Closed事件内满池重开与资源释放回归及第15.58节通知后取消交接修复，补其他日志重入/并发/长期资源，决定统一 shutdown 范围。已有容量、探活、预热、路由/证书隔离、清池/退休及指标保留 | 保留等效配置及五资产/双模式直连证据；补双借用者污染/隔离、满池、清池、取消、预热、Dispose/reset、Close/Open 交错及长期资源曲线、真实 OBProxy reset 报告 | G0 契约；与 W2/W4 联合验收 |
-| W2 事务与失败恢复：P0-03、P0-04、P0-05 | 保留已交付的 PSPE 单资源/终态、初始化与晚回调/池身份、自动初始化取消/池与协调器恢复及超时本地回归；保留第5.2.1/15.45节真实响应丢失及单容量池恢复、[应用核对示例](unknown-outcome-recovery.md)；保留第15.49节连接级ERR退休、当前请求unknown及显式重建本地回归；保留第15.102节普通写请求截断/响应丢失及事务回包丢失的16项显式验收；补真实事务管理器/代理故障及完整重建矩阵；分布式提升拒绝，透明恢复另定范围 | 发送前/后、响应中、commit/rollback 回包丢失、超时/in-doubt、提前关闭的故障矩阵；异常分类、会话销毁及业务核对示例；无未知写 replay | W1 租约与隔离规则 |
+| W2 事务与失败恢复：P0-03、P0-04、P0-05 | 保留已交付的 PSPE 单资源/终态、初始化与晚回调/池身份、自动初始化取消/池与协调器恢复及超时本地回归；保留第5.2.1/15.45节真实响应丢失及单容量池恢复、[应用核对示例](unknown-outcome-recovery.md)；保留第15.49节连接级ERR退休、当前请求unknown及显式重建本地回归；保留第15.102节普通写请求截断/响应丢失及事务回包丢失的16项显式验收；补真实事务管理器/代理故障及完整重建矩阵；保留第15.103节记录决定后协调器进程kill/restart的4项显式验收；分布式提升拒绝，透明恢复另定范围 | 发送前/后、响应中、commit/rollback 回包丢失、超时/in-doubt、提前关闭的故障矩阵；异常分类、会话销毁及业务核对示例；无未知写 replay | W1 租约与隔离规则 |
 | W3 协议选项：P1-01、P1-02、P1-03 | 标准 MySQL 压缩已本地实现；先确认客户端 OB20 压缩契约再补实现，并补 reroute；保留已实现的 opt-in 文本多语句和应用流 LOCAL INFILE，明确不支持的组合 | 客户端链路/版本/capability 依据；协商成功/拒绝、分片/序列/校验/解压限额；多结果中途错误；上传超限/取消/代理策略；真实 OceanBase/OBProxy 互操作 | G0 及第 16.3 节；reroute 依赖 W2/W4 |
 | W4 信任、发现与凭据：P1-04、P1-09、P1-11 | 凭据提供/轮换已有本地实现，补真实凭据服务与插件验收；保留第15.50节TCP整轮重试/固定退避及共享预算、第15.51节端点TCP健康缓存；补真实节点/代理健康与故障验收，保留第15.52节TNS文件及第15.53节OCP HTTP适配，保留第15.54节分组/策略/权重，保留第15.55节全局黑名单/尝试上限及第15.63节分组覆盖，补其他发现边界；组内尝试上限及地址级黑名单已有本地实现（第15.64/15.65节）。现有 TLS 回调、证书副本及池身份无需重做 | 企业 CA/mTLS、证书与凭据过期/刷新失败、撤销、KDC/plugin 成功及拒绝；地址更新/错误身份/节点与代理故障；Windows/Linux 报告 | W1 池身份、W2 重试边界 |
 | W5 命令、Oracle 与类型：P1-05、P1-06、P1-07、P1-08 | 保留Command/Batch/REF CURSOR结果限制、KeyInfo/SchemaOnly、MySQL过程、Oracle独立Prepare/输出提示、文本/二进制cursor列及二进制复杂BLOB/CLOB/cursor结果成员；保留命名LOB内容/匿名标量定位器输入（第15.98节）、NUMBER/FLOAT、signed DecimalScale、客户端SQL/普通及JSON参数编码和CLOB输入预校验；补Input/InputOutput REF CURSOR、命名LOB定位器回绑/复杂cursor输入、文本复杂结果、其他national/匿名输出及未解析身份的复杂整列RETURNING；扩展类型/metadata及完整真实部署矩阵继续开放；可观察DDL自动失效已有，外部/不透明DDL须显式清理 | Command/Batch/REF CURSOR行为表；NULL/方向/精度/溢出/编码/取消与资源释放矩阵；SchemaOnly副作用/锁/大结果报告；服务端不支持形状单列 | G0；资源生命周期与W1联动 |
 | W6 目录与 ADO.NET 生态：P1-10、P2-01 | 常用目录/限制参数及 DataTypes 已本地完成；自动参数推导已通过本地回归和独立走查（第 15.18 节）；补实库/权限/版本/代理矩阵；DataAdapter/CommandBuilder 已有本地填充、映射/事件和有界 CRUD，补真实验收，不以 ADO.NET provider 代替 EF Core provider | 双模式目录/权限/大小写/空集合；类型映射与过程重载/参数方向；保留 adapter CRUD、键、原始值/NULL 和乐观并发本地回归；补实际 SQL/锁及独立运行时报告 | W5 键与结果元数据 |
 | W7 性能与可观测性：P2-02、P2-03、P2-04 | 保留已有 opt-in idle statement cache，补真实 DDL/reprepare/资源/负载验收；保留第15.72节opt-in MySQL INSERT rewrite及group failure，补multi-send/bulk及真实性能验收；保留建连/探活九阶段直方图及固定标签回归，保留慢命令阈值/脱敏/回调隔离回归；保留第15.57节协议帧诊断；补其他资源等待和负载验收。保留顺序 Batch 和 Oracle array binding | 缓存容量/失效/关闭、批量部分失败/事务/取消/包限额；吞吐、延迟、峰值内存与资源上限对照；诊断脱敏和监听开销 | W1 generation/reset、W5 绑定规则 |
-| W8 运行时与发布：P2-05、P2-06 | 明确版本/平台/TFM/Framework/ORM范围；保留Windows六配置nupkg协议子集、诊断卸载修复及历史失败；4个matrix.*占位需环境和断言；受控网络unknown已有显式断言与双模式直连专项，完整故障矩阵仍缺，零日期已有显式profile及存储/回绑断言但真实SQL_MODE前置失败；保留同客户端通道复用与旧销毁隔离双模式报告，补代理后端与完整资源矩阵；完成包名/来源/许可/发布审查 | 每个承诺profile的nupkg consumer、实库/代理/TLS/认证/故障报告；允许零日期的SQL_MODE profile；保留失败/跳过、外部coordinator crash recovery及清理结果 | 各包持续积累证据，正式发布须满足第7.3节 |
+| W8 运行时与发布：P2-05、P2-06 | 明确版本/平台/TFM/Framework/ORM范围；保留Windows六配置nupkg协议子集、诊断卸载修复及历史失败；3个matrix.*占位需环境和断言；受控网络unknown已有显式断言与双模式直连专项，完整故障矩阵仍缺，零日期已有显式profile及存储/回绑断言但真实SQL_MODE前置失败；保留同客户端通道复用与旧销毁隔离双模式报告，补代理后端与完整资源矩阵；完成包名/来源/许可/发布审查 | 每个承诺profile的nupkg consumer、实库/代理/TLS/认证/故障报告；允许零日期的SQL_MODE profile；保留失败/跳过、外部coordinator crash recovery及清理结果 | 各包持续积累证据，正式发布须满足第7.3节 |
 
 ### 16.1 压缩与 reroute 的独立交付边界
 
