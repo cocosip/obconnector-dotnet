@@ -12,7 +12,7 @@ namespace OceanBaseConnector.Acceptance;
 
 internal static partial class DatabaseCases
 {
-    public static readonly string[] Groups = { "connection", "crud", "types", "transactions", "reader", "batch", "schema", "streams", "oracle", "lob", "complex", "xa", "diagnostics", "faults" };
+    public static readonly string[] Groups = { "connection", "crud", "types", "transactions", "reader", "batch", "schema", "streams", "routines", "oracle", "lob", "complex", "xa", "diagnostics", "faults" };
     public static IReadOnlyList<AcceptanceCase> All()
     {
         var cases = new List<AcceptanceCase>();
@@ -43,7 +43,7 @@ internal static partial class DatabaseCases
         cases.Add(new("faults.cancellation", "faults", (c, t) => SlowQuery(c, true, t), RequiresSlowQuery: true));
         cases.Add(new("faults.timeout", "faults", (c, t) => SlowQuery(c, false, t), RequiresSlowQuery: true));
         cases.Add(new("matrix.pool-reset", "faults", PoolReset));
-        AddTypes(cases); AddOracle(cases); AddNetwork(cases); AddXaCrash(cases); AddTopology(cases); AddOb20Trace(cases);
+        AddTypes(cases); AddRoutines(cases); AddOracle(cases); AddNetwork(cases); AddXaCrash(cases); AddTopology(cases); AddOb20Trace(cases);
         foreach (var item in new[]
         {
             ("matrix.tls-authentication", "Requires separate endpoint/certificate/plugin profiles, including negative handshakes."),

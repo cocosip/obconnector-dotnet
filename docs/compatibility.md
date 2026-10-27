@@ -39,7 +39,8 @@ Output/InputOutput mixed with a function return and multiple ReturnValue paramet
 procedure Output/InputOutput behavior and FetchSize/SchemaOnly/KeyInfo restrictions are unchanged.
 
 The local synchronous/asynchronous protocol cases passed 2/2. The direct MySQL profile against
-OceanBase 4.4.2.2 on Windows/.NET 10.0.14 passed 2/2 real create/execute/drop cases. This confirms
+OceanBase 4.4.2.2 on Windows/.NET 10.0.14 passed 2/2 real create/execute/drop cases, and the
+acceptance console `routines` group passed its synchronous/asynchronous cases (2/2). This confirms
 the observed direct server SQL shape only; proxy, TLS, other versions, independent runtimes and
 function type/metadata matrices remain open.
 

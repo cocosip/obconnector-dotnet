@@ -181,6 +181,13 @@ public sealed class AcceptanceRunnerTests
         Assert.Equal(DatabaseCases.Groups.OrderBy(g => g), cases.Select(c => c.Group).Distinct().OrderBy(g => g));
         Assert.Single(cases, c => c.DeferredReason != null);
         Assert.All(cases.Where(c => c.Name.StartsWith("matrix.pool-reset", StringComparison.Ordinal)), c => Assert.Null(c.DeferredReason));
+        Assert.Equal(2, cases.Count(c => c.Name.StartsWith("mysql.function-return-value.", StringComparison.Ordinal)));
+        Assert.All(cases.Where(c => c.Name.StartsWith("mysql.function-return-value.", StringComparison.Ordinal)), c =>
+        {
+            Assert.Equal("routines", c.Group);
+            Assert.Equal("MySql", c.Mode);
+            Assert.True(c.RequiresObjects);
+        });
     }
 
     [Fact]
