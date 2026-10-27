@@ -2,6 +2,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using OceanBaseConnector.Internal.Protocol;
 using Xunit;
 
@@ -22,7 +23,8 @@ namespace OceanBaseConnector.UnitTests.Protocol
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public void V1AcceptsEmptyAndCompatibilityLocators(bool empty)
         {
             var bytes = V1.Take(empty ? 40 : V1.Length).ToArray();
@@ -73,8 +75,10 @@ namespace OceanBaseConnector.UnitTests.Protocol
         }
 
         [Theory]
-        [InlineData(32, uint.MaxValue)] [InlineData(36, uint.MaxValue)]
-        [InlineData(32, 18u)] [InlineData(36, 2u)]
+        [InlineData(32, uint.MaxValue)]
+        [InlineData(36, uint.MaxValue)]
+        [InlineData(32, 18u)]
+        [InlineData(36, 2u)]
         public void V1RejectsOffsetsOverflowTruncationAndTrailingData(int position, uint number)
         {
             var bytes = V1; Write32(bytes, position, number);
@@ -109,9 +113,12 @@ namespace OceanBaseConnector.UnitTests.Protocol
         }
 
         [Theory]
-        [InlineData(32, uint.MaxValue)] [InlineData(36, uint.MaxValue)]
-        [InlineData(32, 0u)] [InlineData(36, 2u)]
-        [InlineData(30, 0xffffu)] [InlineData(40, 0xffffu)]
+        [InlineData(32, uint.MaxValue)]
+        [InlineData(36, uint.MaxValue)]
+        [InlineData(32, 0u)]
+        [InlineData(36, 2u)]
+        [InlineData(30, 0xffffu)]
+        [InlineData(40, 0xffffu)]
         public void V2RejectsExternalHeaderBoundsAndPayloadOverlap(int position, uint number)
         {
             var bytes = Convert.FromHexString(Disk(true, false, true, 3)); Write32(bytes, position, number);
@@ -142,7 +149,9 @@ namespace OceanBaseConnector.UnitTests.Protocol
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
         public void V2ExternalUninitializedDiskHandlesPayloadAndBothEmptyOffsets(bool empty, bool syntheticOffset)
         {
             var bytes = new byte[53 + (empty ? 0 : 3)];
@@ -168,6 +177,67 @@ namespace OceanBaseConnector.UnitTests.Protocol
         }
 
         private static void Write32(byte[] bytes, int offset, uint value) => BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(offset), value);
+
+        [Theory]
+        [InlineData("ḿ", "A8BC")]
+        [InlineData("\ue7c7", "8135F437")]
+        [InlineData("", "")]
+        public void InlineEncodingPreservesEveryLayoutPrefixAndUpdatesOnlyByteSizes(string text, string hex)
+        {
+            var externalUninitialized = new byte[56];
+            Write32(externalUninitialized, 0, 0x18401); Write32(externalUninitialized, 4, 0x12102);
+            externalUninitialized[30] = 2; externalUninitialized[40] = 5;
+            Write32(externalUninitialized, 32, 13); Write32(externalUninitialized, 36, 3); Write32(externalUninitialized, 49, 0x8401);
+            var layouts = new[]
+            {
+                (V1, 57, (int?)36, (int?)null),
+                (Convert.FromHexString("0184010002A10000616263"), 8, (int?)null, (int?)null),
+                (Convert.FromHexString("018401000221000001840000616263"), 12, (int?)null, (int?)null),
+                (Convert.FromHexString(Disk(true, true, false, 3)), 36, (int?)null, (int?)28),
+                (Convert.FromHexString(Disk(true, false, false, 3)), 92, (int?)null, (int?)28),
+                (Convert.FromHexString(Disk(true, true, true, 3)), 77, (int?)36, (int?)69),
+                (Convert.FromHexString(Disk(true, false, true, 3)), 133, (int?)36, (int?)69),
+                (externalUninitialized, 53, (int?)36, (int?)null),
+            };
+            foreach (var (template, offset, payloadSize, diskSize) in layouts)
+            {
+                byte[] Replace(byte[] payload)
+                {
+                    var bytes = template.Take(offset).Concat(payload).ToArray();
+                    if (payloadSize.HasValue) Write32(bytes, payloadSize.Value, (uint)payload.Length);
+                    if (diskSize.HasValue) BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(diskSize.Value), (ulong)payload.Length);
+                    return bytes;
+                }
+                var source = Replace(Encoding.UTF8.GetBytes(text)); var snapshot = (byte[])source.Clone();
+                var locator = LobLocator.Parse(source);
+                var encoded = locator.EncodeInline(ClientCharacterSet.Parse("gb18030"));
+                Assert.Equal(Replace(Convert.FromHexString(hex)), encoded);
+                Assert.Equal(snapshot, source); Assert.Equal(Encoding.UTF8.GetByteCount(text), locator.ByteLength);
+                var reparsed = LobLocator.Parse(encoded);
+                Assert.Equal(hex.Length / 2, reparsed.ByteLength); Assert.Equal(offset, reparsed.InlineData.Offset);
+            }
+        }
+
+        [Fact]
+        public void InlineEncodingRejectsMalformedUtf8UnrepresentableTextAndExpansionBeforeCopy()
+        {
+            byte[] Locator(byte[] payload)
+            {
+                var bytes = V1.Take(57).Concat(payload).ToArray(); Write32(bytes, 36, (uint)payload.Length); return bytes;
+            }
+            var malformed = Locator(new byte[] { 0xc3, 0x28 });
+            Assert.Throws<DecoderFallbackException>(() => LobLocator.Parse(malformed).EncodeInline(ClientCharacterSet.Parse("gb18030")));
+            var bytes = Locator(Encoding.UTF8.GetBytes("😀")); var snapshot = (byte[])bytes.Clone();
+            foreach (var name in new[] { "ascii", "latin1", "utf8mb3" })
+                Assert.Throws<EncoderFallbackException>(() => LobLocator.Parse(bytes).EncodeInline(ClientCharacterSet.Parse(name)));
+            Assert.Throws<ArgumentException>(() => LobLocator.Parse(bytes).EncodeInline(new OversizedLocatorEncoding()));
+            Assert.Equal(snapshot, bytes);
+        }
+
+        private sealed class OversizedLocatorEncoding : UTF8Encoding
+        {
+            public override int GetByteCount(string s) => int.MaxValue;
+        }
 
         private static string Disk(bool inline, bool diskInline, bool external, long length)
         {

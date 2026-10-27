@@ -1,5 +1,23 @@
 # Compatibility and known gaps
 
+## 2026-10-27 CLOB locator client encoding
+
+Scalar and anonymous-array CLOB locator parameters now transcode inline UTF-8 content in a
+sending copy using the strict client encoder. V1 converts; V2 converts at authenticated OceanBase
+product4.4.1+, following the newer inrow parser. Legacy/unknown V2 bytes remain unchanged.
+Original handles, UTF-8 readers, opaque header identity/extensions/rowkeys, BLOBs and external
+locators without inline data are preserved. Named CLOB content still uses strict UTF-8.
+
+The previous GB18030 mismatch was input corruption during locator rebinding, confirmed by
+temporary-reader, scalar SUBSTR, stored RAW and readback controls. Direct default and GB18030
+Oracle4.4.2.2 each pass16/16 plus connection control: the original12 BLOB/CLOB object/collection/
+array cases and4 small/large CLOB sync/async controls. The large stored locator is asserted
+external and its complete UTF-8 content is checked. This does not establish compatibility with
+older backports, other server/proxy builds or the entire charset/runtime/TLS matrix. Complete units
+pass7938/7938, affected consumers1240/1240 and the serial Release build has zero warnings/errors.
+Independent review findings were corrected with12 lifecycle RED/GREEN regressions and existing
+uncertain-mutation controls; no finding remains deferred. See the [module record](obconnector-dotnet-progress.md#2026-10-27-clob-locator-client-encoding).
+
 ## 2026-10-27 Complex LOB content and locator inputs
 
 Named Oracle object/collection BLOB members accept byte arrays and CLOB members accept strict UTF-8 strings;
@@ -16,7 +34,7 @@ and generated-object cleanup. The initial locator-for-all candidate passed only4
 length mismatches and named CLOB decode/cleanup errors are retained in the
 [module record](obconnector-dotnet-progress.md#2026-10-27-complex-lob-inputs).
 Final GB18030 checks pass10/12: all BLOBs and named CLOB content inputs pass; anonymous CLOB
-array readbacks still mismatch under the existing UTF-8 locator-reading contract. Named CLOB
+array readbacks still mismatch in that candidate; the later module above traces this to input conversion. Named CLOB
 LONG_BLOB payloads bypass server client-charset conversion and therefore use strict UTF-8;
 the initial client-encoded candidate and separate RAW-output failures are retained in the module
 record. Complete units7913/7913, affected consumers1220/1220 and Release build pass; independent

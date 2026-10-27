@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 using System.Threading;
 using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.Internal.Session;
@@ -57,6 +58,14 @@ namespace OceanBaseConnector
         }
         internal void ThrowIfDisposed() { if (Volatile.Read(ref _disposed) != 0) throw new ObjectDisposedException(nameof(OceanBaseLob)); }
         internal byte[] BindingBytes() { ThrowIfDisposed(); return _bytes; }
+        internal byte[] BindingBytes(Encoding clientEncoding)
+        {
+            ThrowIfDisposed();
+            if (!IsCharacter || !Locator.HasInlineData || ReferenceEquals(clientEncoding, ResultColumn.Utf8) || clientEncoding is ClientCharacterSet { Managed: false }) return _bytes;
+            // shortcut: V2 client conversion is confirmed from 4.4.1; verify older backports before extending it.
+            if (Locator.Version == 2 && (Context.Session.Info?.ProductVersion is not Version version || version < new Version(4, 4, 1, 0))) return _bytes;
+            return Locator.EncodeInline(clientEncoding);
+        }
         internal void ValidateBinding(OceanBaseConnection connection, PhysicalSession session, OceanBaseTransaction? transaction, object? owner)
         {
             ThrowIfDisposed();

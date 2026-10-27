@@ -118,7 +118,12 @@ namespace OceanBaseConnector
             ThrowIfDisposed(); var operation = new LobMutation(this);
             if (Interlocked.CompareExchange(ref _mutation, operation, null) != null)
             { operation.Dispose(); throw new InvalidOperationException("A LOB mutation is already active."); }
-            try { Context.Connection.ValidateLobContext(Context, operation, reserve: true); ThrowIfDisposed(); return operation; }
+            try
+            {
+                Context.Connection.ValidateLobContext(Context, operation, reserve: true); ThrowIfDisposed();
+                // Local locator conversion failures must not enter the mutation's handle-invalidation path.
+                _ = BindingBytes(Context.Session.ClientEncoding); return operation;
+            }
             catch { Interlocked.CompareExchange(ref _mutation, null, operation); operation.Dispose(); throw; }
         }
         private async Task EndMutation(LobMutation operation, bool async)

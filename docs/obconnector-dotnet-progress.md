@@ -4,6 +4,93 @@ Current overview: [all 23 gaps, implemented subfeatures and remaining work](obco
 The records below are chronological feature evidence; their historical “remaining” statements apply
 to the candidate recorded in each section.
 
+## 2026-10-27 CLOB locator client encoding
+
+Developed from `master/40fa822`, P1-07/P1-08. Scalar and anonymous-array CLOB locator inputs
+share a bounded sending-copy encoder. Original handle bytes, UTF-8 readers, identity/extensions/
+rowkeys, BLOBs and no-inline external locators stay unchanged. V1 inline content uses the strict
+client encoding. V2 converts only at authenticated product4.4.1+, preserving legacy/unknown V2;
+named complex CLOB contents remain strict UTF-8. No public option, implicit read or charset change
+was added. When inline conversion runs, malformed UTF-8 and unrepresentable input reject before
+target SQL; default/legacy opaque paths retain their existing validation behavior.
+
+Diagnosis corrects the previous module's open “readback” boundary: a fixed generated-data probe
+found the temporary handle's UTF-8 bytes and reader correct, but scalar rebinding and stored RAW
+already corrupted. Original probes remain in `TestResults/complex-lob-live-762cd866.json` and its
+terminal boundary/layout checks; the report records completion, not assertion success. A separate
+diagnostic variant with an added charset-state query failed InvalidOperationException/cleanup942
+(`TestResults/complex-lob-live-f3d5a335.json`); its cause was not established and it is not success.
+
+Public server source explains the version distinction: fixed `5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5`
+and v4.3.5_CE keep V2 opaque. v4.4.1_CE (`70824e90816ed333c56f3dd1af34ffec43d0fa88`) and
+v4.4.2_CE_BP2 (`e9fc1e5f01f0cf7cc3a801af6c2c05c34d491d77`),
+`src/observer/mysql/obmp_stmt_execute.cpp`, convert CLOB has_inrow_data from connection charset
+to server charset and update payload sizes. Product identity, rather than MySQL greeting, gates
+the new V2 path. Public tag SHAs are not an identification of the live server build; older backports
+and additional server/proxy versions remain unverified.
+
+Retained regression and fixture evidence:
+
+- Existing parameter APIs first fail6/8 byte/framing cases, with2 legacy V2 controls passing
+  (`TestResults/clob-locator-red/red.trx`), then pass8/8 after the shared fix
+  (`TestResults/clob-locator-green/green.trx`). All12 configured non-default charset samples use
+  independent literal vectors; scalar/anonymous paths, V1/modern V2/legacy V2 and repeated binding
+  preserve the original handle and text. Layout checks cover all structurally distinct inline
+  prefixes, contraction/expansion/empty data, byte-size fields, malformed input and pre-copy bounds.
+  The first focused selection passes12/12 (`TestResults/clob-locator-focused/focused.trx`);
+  subsequent complete units also include added BLOB/external/default-UTF8 opacity controls.
+- Five-asset public sync/async scalar/array tests initially pass10/20: invalid anonymous data
+  correctly rejects at CreateValue, earlier than the execution assertion expected. Corrected
+  expectations pass20/20 (`TestResults/clob-locator-consumer-green/green.trx`). The test confirms
+  byte-exact GB18030 payloads, unchanged original readers and rejection before target SQL.
+- The first expanded live run reached an unsupported test Convert.ToInt64 on OceanBaseDecimal;
+  all4 cases failed that assertion, not the encoding comparison
+  (`TestResults/complex-lob-live-38cb0310.json`). Reusing DatabaseContext.IntegerResult repairs
+  the test. Preliminary expanded controls pass4/4 for GB18030/default respectively
+  (`TestResults/complex-lob-live-a52a7fe7.json`, `TestResults/complex-lob-live-eaffdf2e.json`).
+
+Final direct Oracle4.4.2.2 checks each pass16/16 plus connection control:
+
+- Default charset: `TestResults/complex-lob-live-68574fca.json`.
+- GB18030: `TestResults/complex-lob-live-62d19a1c.json`.
+
+These are the final lifecycle-corrected candidate. Earlier16/16 reports
+`TestResults/complex-lob-live-26c854b7.json` and `TestResults/complex-lob-live-f783e5f8.json`
+retain their pre-review candidate scope.
+
+Each includes the original12 BLOB/CLOB object/collection/array sync/async checks plus4 small/
+large CLOB controls. They compare temporary reader, scalar GETLENGTH/SUBSTR, stored RAW/text,
+NULL, stored-locator rebinding and complete readback. Large data is240000 UTF-8 bytes; the stored
+locator is explicitly asserted external. Transactions roll back, temporary LOBs are freed and
+generated objects use owned cleanup. Only the private echo-disabled stdin receives connection
+information. These checks do not establish the complete charset/server/proxy/runtime/TLS matrix.
+
+Independent final review found one Important interaction: locator conversion could fail before
+dispatch inside LobMutation.Execute, whose uncertain-mutation catch disposed the original handle.
+The fix prevalidates locator encoding under the session reservation, before entering that path.
+Public write/trim/free sync/async V1/V2 tests first fail12/12 with ObjectDisposedException
+(`TestResults/clob-locator-review-red/red.trx`), then pass12/12; with7 existing uncertain-mutation
+invalidation controls the final selection passes19/19
+(`TestResults/clob-locator-review-green-final/green.trx`). An intermediate peer omitted the normal
+charset revalidation query before the follow-up command; its12 fixture failures are retained in
+`TestResults/clob-locator-review-green/green.trx`. The review's unqualified validation wording was
+also narrowed to converting paths; default/legacy opaque paths keep existing validation behavior.
+No finding was declined and no Minor remains deferred; fixes are verified by tests, without another reviewer.
+
+Before that correction complete units pass7926/7926 in8m42s
+(`TestResults/clob-locator-full/full.trx`), affected consumers1240/1240 in5m1s
+(`TestResults/clob-locator-consumer/consumer.trx`). After the lifecycle correction, the serial
+Release solution build has zero warnings/errors (`TestResults/clob-locator-review-final-build.log`),
+affected consumers pass1240/1240 in4m58s (`TestResults/clob-locator-review-final-consumer/consumer.trx`),
+and scoped whitespace verification exits0 (`TestResults/clob-locator-review-format-final.log`).
+Complete units pass7938/7938 in8m36s, zero failures/skips
+(`TestResults/clob-locator-review-final-full/full.trx`). Ordinary unconfigured integration has0 failed/2 skipped
+for both live-only theories (`TestResults/clob-locator-review-final-optout/optout.trx`); the earlier
+single-theory0 failed/1 skipped remains in `TestResults/clob-locator-optout/optout.trx`.
+Private marker scan,830 local file links, all23 original gap IDs/eight work packages and
+git diff --check pass. Units and consumers use synthetic loopback only.
+No push or branch/worktree change is part of this module.
+
 ## 2026-10-27 Complex LOB inputs
 
 Developed from `master/285459e`, P1-07/W5. Named object/collection BLOB members now bind

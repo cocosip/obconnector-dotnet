@@ -159,7 +159,7 @@ namespace OceanBaseConnector.Internal.Values
                         {
                             if (!(value is OceanBaseLob lob) || lob.IsCharacter != (member.TypeCode == 211))
                                 throw new ArgumentException("An anonymous LOB array requires matching locator values.");
-                            var locator = lob.BindingBytes();
+                            var locator = lob.BindingBytes(clientEncoding);
                             ReserveBytes(writer, locator.Length); PreparedParameters.WriteBytes(writer, locator);
                         }
                         else

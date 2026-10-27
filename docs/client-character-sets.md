@@ -131,9 +131,19 @@ server/network failures can still leave a completed prefix, as documented by the
 Named complex CLOB input is a separate content protocol: it uses strict UTF-8 because the schema
 member LONG_BLOB parser does not convert client bytes. This also applies to nested named elements;
 BLOB members remain raw byte arrays. Anonymous scalar CLOB arrays bind locator handles instead.
+Scalar and anonymous-array CLOB locator parameters encode inline UTF-8 content into the selected
+strict client charset in a sending copy. V1 uses this conversion; V2 enables it at authenticated
+OceanBase product version4.4.1 or later, following the newer server inrow conversion path.
+Legacy/unknown V2 identity preserves the original bytes; older backports remain unverified.
+Only payload bytes and declared byte sizes change. Original handles, UTF-8 readers, opaque
+identity/rowkey/extensions, BLOBs and external locators without inline content remain unchanged.
+When inline conversion runs, invalid UTF-8 or unrepresentable input rejects before target SQL;
+local conversion rejection also preserves handles used by write/trim/free operations. Opaque
+default/legacy paths retain their existing validation behavior. Named CLOB content still uses
+strict UTF-8, independently of this locator parameter conversion.
 
 CLOB reads retain the existing
-UTF-8 contract. LOB locator bytes, binary streams, CLOB storage rules, LOCAL INFILE filename rules
+UTF-8 contract. Binary streams, CLOB storage rules, LOCAL INFILE filename rules
 and remaining extended metadata are not expanded by this option.
 
 ## Evidence boundary

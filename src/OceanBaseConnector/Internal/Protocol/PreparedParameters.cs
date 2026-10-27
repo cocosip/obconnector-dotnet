@@ -78,7 +78,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 else if (type == 210 || type == 211)
                 {
                     if (!(value is OceanBaseLob lob) || lob.IsCharacter != (type == 211)) throw new ArgumentException("A LOB parameter requires a matching locator value.");
-                    var bytes = lob.BindingBytes(); CheckLength(writer, bytes.Length); WriteBytes(writer, bytes);
+                    var bytes = lob.BindingBytes(clientEncoding); CheckLength(writer, bytes.Length); WriteBytes(writer, bytes);
                 }
                 else if (type == 201)
                 {

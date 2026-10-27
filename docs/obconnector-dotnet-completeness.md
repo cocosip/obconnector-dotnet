@@ -3,8 +3,9 @@
 **Current delivery overview:** [all 23 gaps, committed implementation and remaining work](obconnector-dotnet-delivery-status.md).
 The overview separates remaining development from real-environment validation; historical records below retain their original scope.
 
-**最近复核：** 2026-10-27；本模块从master/285459e继续开发，最新交付证据见第15.98节。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；第15.97节保留前次已提交源码复核，会话、零日期、字符串fallback及复杂national输入分别见第15.92—15.96节。
-**当前模块：** P1-07/W5复杂LOB输入：命名object/collection的BLOB用byte[]、CLOB用严格UTF-8内容（含嵌套命名元素）；匿名标量BLOB/CLOB数组用同连接/会话/事务/代际的OceanBaseLob定位器。创建及执行均校验，保留调用方所有权；命名定位器回绑在目标SQL前拒绝。默认字符集Oracle实库12/12通过；GB18030修正后10/12通过，另2项匿名CLOB数组读回不匹配；原命名CLOB客户端编码错误已由RAW控制确认并修正。完整单测7913/7913、消费者1220/1220通过；独立走查无阻塞问题。最终门禁及原始失败见第15.98节。
+**最近复核：** 2026-10-27；本模块从master/40fa822继续开发，最新证据见第15.99节。全部23项及八工作包仍未满足整体关闭标准，不代表其子功能均未实现；第15.97节保留前次已提交源码复核，会话、零日期、字符串fallback及复杂national输入分别见第15.92—15.96节。
+**当前模块：** CLOB定位器标量/匿名数组输入在发送副本中执行严格客户端编码；V1转换，V2仅在已认证产品4.4.1+转换，旧版/未知身份保留原字节。原始句柄、UTF-8读取、身份/扩展/rowkey、BLOB及无内联内容的外置定位器保持不变，命名CLOB内容仍为严格UTF-8。已确认前一GB18030读回不匹配根因为回绑输入转码；默认和GB18030直连Oracle各16/16及连接对照通过，含外置大CLOB。最终完整单测7938/7938、受影响消费者1240/1240及零警告/错误Release构建通过；独立走查问题已修正并有12项生命周期RED/GREEN及既有不确定修改回归验证，见第15.99节。
+**前一模块：** P1-07/W5复杂LOB输入：命名object/collection的BLOB用byte[]、CLOB用严格UTF-8内容（含嵌套命名元素）；匿名标量BLOB/CLOB数组用同连接/会话/事务/代际的OceanBaseLob定位器。创建及执行均校验，保留调用方所有权；命名定位器回绑在目标SQL前拒绝。当时默认字符集Oracle实库12/12通过，GB18030为10/12；完整单测7913/7913、消费者1220/1220及独立走查通过。原始失败和门禁保留在第15.98节。
 **前一模块：** 复杂NCHAR/NVARCHAR2输入复用全部已配置客户端严格编码器；Oracle受管初始化使用逐项quoted SET及FROM DUAL状态查询。完整单测7846/7846、专项267/267、受影响消费者350/350及Release构建通过，独立走查无遗留问题。显式Oracle数组输入36/48通过；UTF8MB3重映射及SJIS/Big5切换使余12项止于Open，见第15.96节。
 **前一开发模块：** P1-08将MySQL字符串fallback扩展到配置的GBK、GB18030/2022、SJIS、Big5、HKSCS/HKSCS31；严格会话匹配、字符转义再编码保持多字节尾5C，兼顾四字节/补充字符。非UTF-8无别名表达式元数据仍有混合/歧义编码，保留ASCII别名限制；显式实库只验证生成字面量解析，不证明真实1295自动回退。
 **前一模块：** P1-08/P2-06将types.zero-date-policy从无条件Deferred改为显式zeroDateProfile及建表许可下执行；检查真实session SQL_MODE且不修改，覆盖DATE/DATETIME(6)正常/部分零/全零/NULL、文本/准备结果、转换拒绝及provider值回绑重读。MySQL直连连接通过，但零日期SQL_MODE前置条件失败，未建表；不能宣称真实零日期存储通过。
@@ -100,8 +101,8 @@ The overview separates remaining development from real-environment validation; h
 | 类型/性能 | 嵌套complex/DDL失效、字符集/NUMBER/scale、idle cache、分段/慢命令诊断 | 扩展成员/其余形状、批量优化、其他资源等待诊断及负载 |
 | 发布 | 五资产本地消费和部分直连报告 | 承诺版本/平台/独立运行时/OBProxy/TLS/认证/故障及包发布验收 |
 
-当前开发点：复杂national客户端输入及Oracle受管初始化见第15.96节；Oracle FLOAT参数派生保留第15.84节，客户端SQL/参数编码保留第15.80节，组TCP上限及地址级覆盖保留第15.64/15.65节。
-具体已交付、验证结果和仍欠功能见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding)及[交付总览](obconnector-dotnet-delivery-status.md)。
+当前开发点：CLOB定位器客户端输入编码见第15.99节；命名LOB内容/匿名定位器输入见第15.98节，复杂national客户端输入及Oracle受管初始化见第15.96节；Oracle FLOAT参数派生保留第15.84节，客户端SQL/参数编码保留第15.80节，组TCP上限及地址级覆盖保留第15.64/15.65节。
+具体已交付、验证结果和仍欠功能见[最新模块记录](obconnector-dotnet-progress.md#2026-10-27-clob-locator-client-encoding)及[交付总览](obconnector-dotnet-delivery-status.md)。
 
 ## 2. 当前能力基线
 
@@ -3141,6 +3142,34 @@ CLOB不能用客户端字节：LONG_BLOB不执行客户端字符集转换。RAW�
 
 本次只关闭该子功能：命名定位器回绑、非UTF-8定位器CLOB读回、复杂cursor输入、文本复杂结果、
 其余national/匿名输出、未解析身份的复杂整列RETURNING及其他版本/代理/平台/资源矩阵仍开放。
+
+### 15.99 2026-10-27 CLOB定位器客户端编码
+
+P1-07/P1-08，从`master/40fa822`继续开发。前一模块的GB18030匿名CLOB数组不匹配已定位为
+输入损坏：临时句柄的原始UTF-8和TextReader正确，但标量SUBSTR回绑及数组存储后的RAW均改变。
+旧固定服务器源码及v4.3.5不转换V2内联内容；公开v4.4.1及v4.4.2_BP2源码增加has_inrow_data转换。
+因此V1按严格客户端编码发送，V2仅在已认证产品版本4.4.1+启用，不能用MySQL greeting判断。
+公开源码tag不等于实库build SHA，旧版backport和其他版本/代理仍未验收。
+
+共享编码器复用已验证布局偏移，仅在发送副本转换内联内容并修正payload/disk字节长度；
+保留身份、扩展、rowkey及原始句柄；启用内联转换时拒绝无效UTF-8、不可表示字符及超包长度，
+默认/旧版opaque路径保持既有校验。修改操作在失效处理前预校验定位器编码，拒绝时句柄仍可读取/重用。
+标量、匿名数组及内部LOB参数调用复用该路径，无隐式LOB读取、会话字符集切换或新连接选项。
+命名CLOB的LONG_BLOB内容协议继续严格UTF-8，BLOB及无内联内容的外置定位器不转换。
+
+默认字符集和GB18030直连Oracle4.4.2.2各16/16及连接对照通过：原12项复杂LOB矩阵，
+另4项小/大CLOB同步/异步比较临时读取、标量绑定、存储RAW/文本、NULL及完整读回。
+大值为240000个UTF-8字节，显式断言存储定位器无内联数据，回绑和读取均通过。
+最终生命周期修正后的安全报告分别为`TestResults/complex-lob-live-68574fca.json`及`TestResults/complex-lob-live-62d19a1c.json`。
+初始6/8编码RED、2项旧V2对照通过，修正后8/8；五资产公共路径20/20通过。
+最终完整单测7938/7938、受影响消费者1240/1240及串行Release构建零警告/错误；独立走查发现的
+本地拒绝误销毁句柄问题已有12项RED/GREEN及7项既有不确定修改失效对照验证，19/19通过，
+未遗留走查意见。普通未配置环境两项实库理论跳过、零失败；格式、830本地链接、隐私标记及23项/八工作包检查通过。
+历史10/12、诊断失败及测试数值转换错误均保留在
+[本模块台账](obconnector-dotnet-progress.md#2026-10-27-clob-locator-client-encoding)。真实连接只走关闭回显的私有stdin，普通单测/CI不依赖实库。
+
+本模块不关闭命名定位器自动物化、复杂cursor输入、文本复杂结果、national/JSON/元数据其他边界、
+旧版backport、其他字符集/服务器/代理/平台/TLS及完整资源矩阵；原23项和八工作包均保留。
 
 ## 16. 剩余交付工作包
 
