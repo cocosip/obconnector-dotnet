@@ -73,8 +73,9 @@ public sealed class SchemaTests
         var parent = await db.TableAsync(connection, "A INTEGER, B INTEGER, CONSTRAINT " + pk + " PRIMARY KEY (A, B)", CancellationToken.None);
         var child = await db.TableAsync(connection, "A INTEGER, B INTEGER, CONSTRAINT " + fk + " FOREIGN KEY (A, B) REFERENCES " + parent + " (A, B) ON DELETE CASCADE", CancellationToken.None);
         await db.ExecuteAsync(connection, "CREATE INDEX " + index + " ON " + parent + " (B, A)", CancellationToken.None);
-        var view = db.NewObject("VIEW");
+        var view = db.NewObject("VIEW", registerCleanup: false);
         await db.ExecuteAsync(connection, "CREATE VIEW " + view + " AS SELECT A FROM " + parent, CancellationToken.None);
+        db.RegisterDropCleanup("VIEW", view);
         var owner = db.Oracle ? Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture) : connection.Database;
         string?[] Filter(string table, string? item = null) => db.Oracle ? new[] { null, owner, table, item } : new[] { owner, null, table, item };
         using var keys = await connection.GetSchemaAsync("Keys", Filter(parent));
@@ -105,10 +106,16 @@ public sealed class SchemaTests
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
-        var type = db.NewObject("TYPE"); await db.ExecuteAsync(connection, "CREATE TYPE " + type + " AS OBJECT (A NUMBER)", CancellationToken.None);
-        var sequence = db.NewObject("SEQUENCE"); await db.ExecuteAsync(connection, "CREATE SEQUENCE " + sequence + " START WITH 1 MAXVALUE 9999999999999999999999999999", CancellationToken.None);
+        var type = db.NewObject("TYPE", registerCleanup: false);
+        await db.ExecuteAsync(connection, "CREATE TYPE " + type + " AS OBJECT (A NUMBER)", CancellationToken.None);
+        db.RegisterDropCleanup("TYPE", type);
+        var sequence = db.NewObject("SEQUENCE", registerCleanup: false);
+        await db.ExecuteAsync(connection, "CREATE SEQUENCE " + sequence + " START WITH 1 MAXVALUE 9999999999999999999999999999", CancellationToken.None);
+        db.RegisterDropCleanup("SEQUENCE", sequence);
         var table = await db.TableAsync(connection, "A INTEGER", CancellationToken.None);
-        var synonym = db.NewObject("SYNONYM"); await db.ExecuteAsync(connection, "CREATE SYNONYM " + synonym + " FOR " + table, CancellationToken.None);
+        var synonym = db.NewObject("SYNONYM", registerCleanup: false);
+        await db.ExecuteAsync(connection, "CREATE SYNONYM " + synonym + " FOR " + table, CancellationToken.None);
+        db.RegisterDropCleanup("SYNONYM", synonym);
         var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture);
         using var types = await connection.GetSchemaAsync("Types", new[] { null, owner, type });
         var typeRow = Assert.Single(types.Rows.Cast<DataRow>()); Assert.Equal("OBJECT", typeRow["TYPE_CODE"]); Assert.Equal(1, typeRow["ATTRIBUTE_COUNT"]);

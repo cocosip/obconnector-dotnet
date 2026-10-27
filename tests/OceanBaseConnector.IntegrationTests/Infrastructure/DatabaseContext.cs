@@ -63,17 +63,20 @@ public sealed class DatabaseContext : IAsyncDisposable
         OceanBaseTransaction? transaction = null)
         => IntegerResult(await ScalarAsync(connection, "SELECT COUNT(*) FROM " + table, token, transaction));
 
-    public string NewObject(string kind)
+    public string NewObject(string kind, bool registerCleanup = true)
     {
         if (kind is not ("TABLE" or "TYPE" or "PROCEDURE" or "VIEW" or "SEQUENCE" or "SYNONYM")) throw new ArgumentException("Unsupported test object.");
         var name = "OBI_" + Guid.NewGuid().ToString("N").Substring(0, 20).ToUpperInvariant();
+        if (registerCleanup) RegisterDropCleanup(kind, name);
+        return name;
+    }
+
+    public void RegisterDropCleanup(string kind, string name) =>
         RegisterCleanup(kind, name, async () =>
         {
             await using var connection = await OpenAsync(CancellationToken.None);
             await ExecuteAsync(connection, "DROP " + kind + " " + name, CancellationToken.None);
         });
-        return name;
-    }
 
     public void RegisterCleanup(string kind, string name, Func<Task> cleanup) =>
         _owned.Add((kind, name, cleanup));
