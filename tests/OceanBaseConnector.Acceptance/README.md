@@ -1,6 +1,6 @@
 # Database acceptance console
 
-Runs database tests through the driver's public APIs. Requires the .NET 10 SDK and a dedicated test database or tenant. Recorded results are in [Compatibility](../../docs/compatibility.md).
+Runs database tests through the driver's public APIs. Targets `net10.0` and requires a .NET 10 runtime; any SDK that can target `net10.0` can build it (the .NET 11 SDK is supported). Use a dedicated test database or tenant. Recorded results are in [Compatibility](../../docs/compatibility.md).
 
 ## Run
 
@@ -45,6 +45,7 @@ copy them into repository files or shared logs/reports. Never print or commit re
 | `xaCrashProfile` | Default false. Explicitly enables four XA coordinator process crash/restart cases. Requires `allowCreateObjects=true`, `dotnet` on PATH, and Oracle PrepareExecute in Oracle mode. Uses only owned branches/tables and a decision journal containing no credentials. |
 | `topologyFaultProfile` | Default false. Enables six read-only controlled client-route cases: idle refresh, borrowed-session isolation and refused-TCP fallback, sync/async. Single plain host, TLS disabled, no compression/OB20; no DDL. This does not prove real cluster HA. |
 | `ob20TraceProfile` | Default omitted. Selects `ob20`, `trace-legacy`, `trace-modern`, `declined-ob20` or `declined-trace`; only the matching sync/async cases run. Requires OB20, no compression, and Full Link Trace requested except for `ob20`. Keeps TLS settings; no DDL. See the [assertions and trace limits](../../docs/ob20-trace-acceptance.md). |
+| `localInfileProfile` | Default false. Enables the two MySQL `streams.local-infile` cases only when `Allow Local Infile=true` is explicit; the profile also requires `allowCreateObjects=true` because it creates a random table. Oracle mode and missing local-file capability are rejected before networking. |
 | `largeValueBytes` | Binary round-trip size, default 65536; range 1–1048576. |
 | `slowQuery` | Optional read-only SQL taking over two seconds, for cancellation and timeout tests. Omitted means those cases are skipped. |
 | `alternateDatabase` | Optional MySQL database for change-and-restore testing. Omitted means skipped. |
@@ -53,7 +54,7 @@ Use positive connection and command timeouts. The console sets `ExpectedMode` fr
 
 ## Coverage and cleanup
 
-Tests cover connections, CRUD, types, transactions, readers, batches, schema metadata, binary streams, Oracle outputs/cursors/array binding/LOBs/complex types, XA and diagnostics. Availability depends on mode and configuration; `--list` shows individual cases.
+Tests cover connections, CRUD, types, transactions, readers, batches, schema metadata, binary streams, opt-in MySQL LOCAL INFILE sync/async upload, Oracle outputs/cursors/array binding/LOBs/complex types, XA and diagnostics. Availability depends on mode and configuration; `--list` shows individual cases.
 
 Connection cases compare `ServerVersion` and schema product-version metadata with `ob_version()`.
 `types.mysql-client-behavior` checks both TINYINT Boolean/integer mappings and both UPDATE
@@ -90,6 +91,11 @@ provider-specific values back for another text/prepared check. It creates one ow
 table and drops it through normal cleanup. Default/example configurations skip this case.
 The direct 4.4.2.2 profile checked on Windows/.NET 10.0.13, TLS disabled, rejected the SQL_MODE
 precondition; no table was created and real zero-date storage remains unverified.
+The explicit `localInfileProfile` checked both sync/async upload paths against a direct
+OceanBase 4.4.2.2 MySQL tenant on Windows/.NET 10.0.14 with TLS disabled. Each case
+asserts the server filename callback, two UTF-8 CSV rows, affected-row count and a
+follow-up query on the same connection; all four stream cases passed and owned tables
+were removed. Proxy policy, large-file and interruption combinations remain open.
 `matrix.pool-reset-reuse.sync/async` require the same client protocol channel across two borrowers
 and reopening the original prepared command. They observe public Frame events using listener
 identity plus local ChannelId, and reject successful reconnection as proof of reuse. No payloads

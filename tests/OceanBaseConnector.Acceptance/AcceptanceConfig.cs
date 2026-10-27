@@ -17,6 +17,7 @@ internal sealed class AcceptanceConfig
     public bool NetworkFaultProfile { get; set; }
     public bool XaCrashProfile { get; set; }
     public bool TopologyFaultProfile { get; set; }
+    public bool LocalInfileProfile { get; set; }
     public string? Ob20TraceProfile { get; set; }
     public int LargeValueBytes { get; set; } = 65536;
     public string? SlowQuery { get; set; }
@@ -58,6 +59,11 @@ internal sealed class AcceptanceConfig
             throw new ArgumentException("Acceptance requires finite positive connection and command timeouts.");
         if (Ob20TraceProfile != null && (!builder.UseOb20 || builder.UseCompression || builder.EnableFullLinkTrace != (Ob20TraceProfile != "ob20")))
             throw new ArgumentException("ob20TraceProfile requires Use OB20=true, no compression and Full Link Trace enabled except for the ob20 profile.");
+        if (LocalInfileProfile)
+        {
+            if (Mode != "MySql") throw new ArgumentException("localInfileProfile requires MySql mode.");
+            if (!builder.AllowLocalInfile) throw new ArgumentException("localInfileProfile requires Allow Local Infile=true.");
+        }
         // Build validates the immutable product options without opening a socket.
         using var source = new OceanBaseDataSourceBuilder(builder.ConnectionString).Build();
         return builder.ConnectionString;

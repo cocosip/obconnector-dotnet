@@ -17,7 +17,7 @@
 | P0-06 | 池路由隔离 | resolver身份、Open快照、闲置退休和借出保留 | 其他边界/压力覆盖；无活动迁移/DNS-IP身份保证 | 单上游受控路由已通过，独立节点/代理HA仍缺 |
 | P1-01 | 多语句 | opt-in文本多结果 | 参数/Prepare/cursor/Oracle输出组合拒绝，扩展范围待定 | 中途错误/排空/版本/代理 |
 | P1-02 | 压缩/OB20 | 标准MySQL压缩、普通OB20及trace | 压缩OB20、proxy reroute 当前明确拒绝；除非取得客户端协议依据，不列为默认开发项 | 真实压缩/OB20/代理及损坏/取消 |
-| P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界 | 大输入/取消边界回归待补 | 实际上传策略、代理和大文件 |
+| P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界；同步/异步 `LOAD DATA LOCAL INFILE` 已在直连 OceanBase MySQL 4.4.2.2 通过 | 大输入/取消组合不纳入本模块新增实库范围 | 代理策略、大文件及中断行为 |
 | P1-04 | TLS/mTLS | 服务器回调、客户端证书、池隔离、撤销选项 | 发现实际差异后补轮换/平台回归 | 企业CA、负向握手、过期/轮换、平台撤销 |
 | P1-05 | Command/Batch | SchemaOnly/KeyInfo/结果限制、MySQL过程、Batch元数据 | 完整行为/结果形状矩阵，现有拒绝组合保留 | 权限/目录/prepare副作用/锁/游标 |
 | P1-06 | Oracle输出/游标 | Prepare、OUT/RETURNING、输出提示、文本/二进制cursor列 | Input/InputOutput REF CURSOR 没有 Java 输入绑定依据，当前发送前拒绝；输出offset/数组正FetchSize也拒绝 | 真实方向/分页/资源/版本/代理 |
