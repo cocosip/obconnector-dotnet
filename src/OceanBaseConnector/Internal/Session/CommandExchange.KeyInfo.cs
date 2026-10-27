@@ -64,7 +64,7 @@ namespace OceanBaseConnector.Internal.Session
                 foreach (var column in result.Columns)
                     if (column.TypeCode != 15 && column.TypeCode != 253 && column.TypeCode != 254 || column.FieldType != typeof(string))
                         throw new ProtocolException("KeyInfo directory requires ordinary string columns.");
-                var catalog = new KeyInfoMetadata.Catalog();
+                var catalog = new KeyInfoMetadata.Catalog(Mode == OceanBaseCompatibilityMode.MySql);
                 while (asynchronous ? await result.ReadAsync(token).ConfigureAwait(false) : result.Read())
                 {
                     var row = new string?[8];

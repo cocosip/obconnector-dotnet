@@ -47,11 +47,15 @@ namespace OceanBaseConnector.Internal.Protocol
         }
         internal sealed class Catalog
         {
+            private readonly bool _ignoreCase;
             private readonly Dictionary<string, Key> _keys = new Dictionary<string, Key>(StringComparer.Ordinal);
             private readonly Dictionary<string, bool> _nullable = new Dictionary<string, bool>(StringComparer.Ordinal);
             private readonly HashSet<string> _unique = new HashSet<string>(StringComparer.Ordinal);
             private string? _schema, _table;
             private int _rows, _bytes;
+
+            internal Catalog() : this(false) { }
+            internal Catalog(bool ignoreCase) => _ignoreCase = ignoreCase;
             internal void Add(string?[] row)
             {
                 if (++_rows > 4096) throw new NotSupportedException("KeyInfo catalog row limit exceeded.");
@@ -105,11 +109,14 @@ namespace OceanBaseConnector.Internal.Protocol
 
             internal bool Matches(KeyInfoQuery query, ResultColumn[] columns)
             {
-                if (_schema == null || query.Table != _table || query.Schema != null && query.Schema != _schema) return false;
+                if (_schema == null || !SameIdentifier(query.Table, _table) || query.Schema != null && !SameIdentifier(query.Schema, _schema)) return false;
                 foreach (var column in columns)
-                    if (column.OriginalTable.Length != 0 && (column.OriginalTable != _table || column.Database != _schema)) return false;
+                    if (column.OriginalTable.Length != 0 && (!SameIdentifier(column.OriginalTable, _table) || !SameIdentifier(column.Database, _schema))) return false;
                 return true;
             }
+
+            private bool SameIdentifier(string? left, string? right) => string.Equals(left, right,
+                _ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
             internal List<string> Missing(Key? key, ResultColumn[] columns)
             {

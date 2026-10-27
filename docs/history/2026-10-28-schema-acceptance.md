@@ -30,3 +30,14 @@
 双模式 Schema 目录实现本身已经有真实直连证据；本次 10 个通过项可计入 P1-10/P1-05 的实库进度。
 Oracle Views/Synonyms 的 DDL 互操作仍受该 OceanBase 租户能力限制，不能据此判定驱动目录实现缺陷，也不能把两个用例记为通过。
 权限、大小写、版本、OBProxy 以及其他真实目录矩阵仍未关闭。
+
+## 2026-10-28 CommandBehavior 元数据补验
+
+在同一双模式直连 profile 上新增并运行 `MetadataBehaviorTests`，共 4 项通过：
+
+- MySQL/Oracle 各一项 `SchemaOnly`：准备结果元数据但不上传输入流，流位置保持为 0；
+- MySQL/Oracle 各一项 `KeyInfo`：投影不含主键时追加隐藏主键列，`VisibleFieldCount` 保持原结果形状。
+
+补验首先在旧代码下复现 MySQL `KeyInfo` 缺陷：OceanBase MySQL 目录返回小写表名，而查询结果元数据保留大写对象名，大小写敏感匹配导致隐藏键列不追加。修复为仅在 MySQL 模式对 schema/table 来源标识使用不区分大小写匹配；Oracle 仍保持大小写敏感。受影响 KeyInfo 单测 97 项通过，Release 全解决方案构建 0 警告/0 错误。
+
+这组用例证明了当前两个直连租户上的基本准备/目录路径，不关闭权限、目录锁、副作用、组合键/唯一键、版本或 OBProxy 矩阵；SchemaOnly 的真实目标 SQL 不执行仍以协议路径和本地回归为准，当前实库用例直接验证了不上传输入参数。

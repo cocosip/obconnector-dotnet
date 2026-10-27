@@ -58,9 +58,9 @@
 
 | 功能 | 开发状态 | 已支持范围 | 还缺什么 / 验收边界 |
 | --- | --- | --- | --- |
-| Command/Batch行为 | 部分实现 | Prepare-only SchemaOnly、有界KeyInfo、SingleRow/SingleResult、Batch元数据及结果限制 | 完整游标/结果形状、目录权限、锁与副作用矩阵待补 |
+| Command/Batch行为 | 部分实现 | Prepare-only SchemaOnly、有界KeyInfo、SingleRow/SingleResult、Batch元数据及结果限制；双模式直连已补 SchemaOnly 不上传流参数、KeyInfo 隐藏主键列回归，修复 MySQL 目录大小写匹配 | 完整游标/结果形状、目录权限、锁与副作用矩阵待补 |
 | MySQL存储过程 | 已实现 | 集合顺序Input/Output/InputOutput、多结果和隐藏输出 | ReturnValue、FetchSize、SchemaOnly/KeyInfo、INOUT stream等仍拒绝 |
-| Schema / 参数推导 | 已实现（直连验收部分完成） | 双模式目录、DataTypes、原子参数派生、FLOAT及INOUT归一化；本次双模式 Schema 实库用例 10 项通过 | Oracle Views/Synonyms 建对象在当前租户返回 `1031/HY000`，不作为客户端 workaround；权限/大小写/重载/版本/代理目录待验收，见[直连验收记录](history/2026-10-28-schema-acceptance.md) |
+| Schema / 参数推导 | 已实现（直连验收部分完成） | 双模式目录、DataTypes、原子参数派生、FLOAT及INOUT归一化；本次双模式 Schema 实库用例 10 项通过，另有 4 项 CommandBehavior 元数据补验通过 | Oracle Views/Synonyms 建对象在当前租户返回 `1031/HY000`，不作为客户端 workaround；权限/大小写/重载/版本/代理目录待验收，见[直连验收记录](history/2026-10-28-schema-acceptance.md) |
 | DataAdapter / CommandBuilder | 已移出支持范围 | Connector/J 没有对应能力，当前 CRUD 使用显式 `OceanBaseCommand` | 不再提供 public 类型、factory 入口或自动 CRUD 生成 |
 | Statement cache | 已实现 | opt-in idle LRU、容量/关闭、上下文/DDL/reset代际失效 | 真实reprepare、资源和负载报告待验收 |
 | 顺序Batch / INSERT rewrite | 已实现 | 顺序执行、Oracle array binding、opt-in MySQL INSERT合并及失败归属 | 真实触发器/默认值/警告、性能和部分失败组合待验收 |
