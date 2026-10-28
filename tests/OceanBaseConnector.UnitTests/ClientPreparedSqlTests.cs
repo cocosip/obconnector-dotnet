@@ -16,6 +16,13 @@ namespace OceanBaseConnector.UnitTests
             return ClientPreparedSql.Build(ParameterBindingPlan.Create(sql, mode, collection), mode);
         }
 
+        private static string BuildMulti(string sql, OceanBaseCompatibilityMode mode, params OceanBaseParameter[] parameters)
+        {
+            var collection = new OceanBaseParameterCollection();
+            foreach (var parameter in parameters) collection.Add(parameter);
+            return ClientPreparedSql.Build(ParameterBindingPlan.Create(sql, mode, collection), mode, multiStatement: true);
+        }
+
         [Theory]
         [InlineData("select :p, ':hidden ?', q'[it''s ? :hidden]', :P", "select (CAST('it''s \\ 中文' AS VARCHAR2(4000))), ':hidden ?', q'[it''s ? :hidden]', (CAST('it''s \\ 中文' AS VARCHAR2(4000)))")]
         [InlineData("select /* ? :hidden */ :p -- ?\n", "select /* ? :hidden */ (CAST('it''s \\ 中文' AS VARCHAR2(4000))) -- ?\n")]
@@ -128,6 +135,21 @@ namespace OceanBaseConnector.UnitTests
                 new OceanBaseParameter { ParameterName = "p", DbType = DbType.String, Value = 'x' }));
             Assert.ThrowsAny<ArgumentException>(() => Build("select ?", OceanBaseCompatibilityMode.MySql,
                 new OceanBaseParameter { DbType = DbType.Int32, Value = new LiteralProbe("1; DROP TABLE t") }));
+        }
+
+        [Fact]
+        public void MultiStatementTemporalLiteralsUseModeSpecificSql()
+        {
+            Assert.Equal("select ('2026-01-02'); select ('2026-01-02 03:04:05.123'); select ('-27:08:09.456000')",
+                BuildMulti("select ?; select ?; select ?", OceanBaseCompatibilityMode.MySql,
+                    new OceanBaseParameter { DbType = DbType.Date, Value = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Unspecified) },
+                    new OceanBaseParameter { DbType = DbType.DateTime, Scale = 3, Value = new DateTime(2026, 1, 2, 3, 4, 5, 123, DateTimeKind.Unspecified) },
+                    new OceanBaseParameter { DbType = DbType.Time, Value = new TimeSpan(-1, -3, -8, -9, -456) }));
+            Assert.Equal("select (TO_DATE('2026-01-02 03:04:05','YYYY-MM-DD HH24:MI:SS')); select (TIMESTAMP '2026-01-02 03:04:05.123456789')",
+                BuildMulti("select :d; select :t", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "d", DbType = DbType.Date, Value = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Unspecified) },
+                    new OceanBaseParameter { ParameterName = "t", OceanBaseDbType = OceanBaseDbType.Timestamp,
+                        Value = new OceanBaseTimestamp(new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Unspecified), 123456789) }));
         }
 
         private sealed record LiteralProbe(string Text) : IFormattable

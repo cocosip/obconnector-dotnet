@@ -67,6 +67,30 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MySqlTemporalMultiStatementsUseTextLiterals(bool asynchronous)
+        {
+            var server = MySqlProcedureServer(async channel =>
+            {
+                await Query(channel, "SELECT ('2026-01-02 03:04:05.123456'); SELECT ('27:08:09.456000')");
+                await channel.WritePacketAsync(Ok(2, 10)); await channel.WritePacketAsync(Ok(3, 2));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Multi Statements=true");
+            try
+            {
+                await connection.OpenAsync(); using var command = connection.CreateCommand();
+                command.CommandText = "SELECT ?; SELECT ?";
+                command.Parameters.Add(new OceanBaseParameter { DbType = DbType.DateTime,
+                    Value = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Unspecified).AddTicks(1234560) });
+                command.Parameters.Add(new OceanBaseParameter { DbType = DbType.Time, Value = new TimeSpan(0, 27, 8, 9, 456) });
+                Assert.Equal(5, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         [Fact]
         public async Task MySqlMultiStatementParametersAreSnapshottedBeforeLiteralStateAwait()
         {

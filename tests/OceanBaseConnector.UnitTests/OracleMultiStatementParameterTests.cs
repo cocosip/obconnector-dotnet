@@ -99,6 +99,30 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
+        public async Task OracleTemporalMultiStatementsUseDateAndTimestampLiterals(bool asynchronous)
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "select (TO_DATE('2026-01-02 03:04:05','YYYY-MM-DD HH24:MI:SS')) from dual; select (TIMESTAMP '2026-01-02 03:04:05.123456789') from dual");
+                await channel.WritePacketAsync(Ok(2, 14)); await channel.WritePacketAsync(Ok(3));
+            }, multiStatements: true);
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Multi Statements=true");
+            try
+            {
+                await connection.OpenAsync(); using var command = connection.CreateCommand();
+                command.CommandText = "select :d from dual; select :t from dual";
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "d", DbType = DbType.Date, Value = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Unspecified) });
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "t", OceanBaseDbType = OceanBaseDbType.Timestamp,
+                    Value = new OceanBaseTimestamp(new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Unspecified), 123456789) });
+                Assert.Equal(5, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task OracleParameterizedMultiStatementsRejectUnsupportedInputsBeforeSending(bool asynchronous)
         {
             var server = Server(async channel =>
@@ -117,7 +141,6 @@ namespace OceanBaseConnector.UnitTests
                 Func<Task> execute = () => asynchronous ? command.ExecuteNonQueryAsync() : Task.FromResult(command.ExecuteNonQuery());
                 command.FetchSize = 1; await Assert.ThrowsAsync<NotSupportedException>(execute); command.FetchSize = 0;
                 await Assert.ThrowsAsync<NotSupportedException>(() => asynchronous ? command.PrepareAsync() : Task.Run(command.Prepare));
-                parameter.Value = new DateTime(2026, 1, 1); await Assert.ThrowsAsync<NotSupportedException>(execute);
                 using var stream = new MemoryStream(new byte[] { 1 });
                 parameter.Value = stream; parameter.DbType = DbType.Binary; await Assert.ThrowsAsync<ArgumentException>(execute);
                 Assert.Equal(0, stream.Position);

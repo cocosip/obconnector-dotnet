@@ -48,15 +48,16 @@ namespace OceanBaseConnector.Internal.Sql
         {
             if (parameter.Direction != ParameterDirection.Input) throw Unsupported();
             var provider = parameter.OceanBaseDbType;
+            var temporal = multiStatement && IsClientTemporal(parameter);
             if (provider.HasValue && provider != OceanBaseDbType.Null && provider != OceanBaseDbType.Decimal &&
                 provider != OceanBaseDbType.String && provider != OceanBaseDbType.Binary && provider != OceanBaseDbType.Boolean &&
-                (provider < OceanBaseDbType.SByte || provider > OceanBaseDbType.Double)) throw Unsupported();
+                (provider < OceanBaseDbType.SByte || provider > OceanBaseDbType.Double) && !temporal) throw Unsupported();
             var type = parameter.DbType;
             if (type != DbType.String && type != DbType.AnsiString && type != DbType.StringFixedLength && type != DbType.AnsiStringFixedLength &&
                 type != DbType.Binary && type != DbType.Boolean && type != DbType.Decimal &&
                 type != DbType.SByte && type != DbType.Byte && type != DbType.Int16 && type != DbType.UInt16 &&
                 type != DbType.Int32 && type != DbType.UInt32 && type != DbType.Int64 && type != DbType.UInt64 &&
-                type != DbType.Single && type != DbType.Double && provider != OceanBaseDbType.Null) throw Unsupported();
+                type != DbType.Single && type != DbType.Double && !temporal && provider != OceanBaseDbType.Null) throw Unsupported();
             var value = parameter.Value;
             if (value == null || value == DBNull.Value) return "NULL";
             if (value is string text)
@@ -73,6 +74,7 @@ namespace OceanBaseConnector.Internal.Sql
                 var hex = Hex(binary);
                 return mode == OceanBaseCompatibilityMode.Oracle ? "HEXTORAW('" + hex + "')" : "X'" + hex + "'";
             }
+            if (multiStatement && IsClientTemporal(parameter)) return Temporal(parameter, mode);
             if (value is bool boolean) return boolean ? "1" : "0";
             if (type == DbType.Decimal)
             {
@@ -98,6 +100,65 @@ namespace OceanBaseConnector.Internal.Sql
                 value is int || value is uint || value is long || value is ulong)
                 return ((IFormattable)value).ToString(null, CultureInfo.InvariantCulture);
             throw new ArgumentException("The client literal value does not match its declared DbType.");
+        }
+
+        private static bool IsClientTemporal(OceanBaseParameter parameter)
+        {
+            if (parameter.DbType != DbType.Date && parameter.DbType != DbType.DateTime &&
+                parameter.DbType != DbType.DateTime2 && parameter.DbType != DbType.Time) return false;
+            var provider = parameter.OceanBaseDbType;
+            return !provider.HasValue || provider == OceanBaseDbType.OracleDate || provider == OceanBaseDbType.Timestamp ||
+                provider == OceanBaseDbType.Date || provider == OceanBaseDbType.DateTime || provider == OceanBaseDbType.Time;
+        }
+
+        private static string Temporal(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode)
+        {
+            if (mode == OceanBaseCompatibilityMode.MySql)
+            {
+                if (parameter.DbType == DbType.Time)
+                {
+                    if (!(parameter.Value is TimeSpan time)) throw new ArgumentException("The parameter value does not match its declared DbType.");
+                    return "'" + FormatTime(time, parameter.DeclaredScale) + "'";
+                }
+                var date = parameter.Value is OceanBaseDateTime providerDateTime ? providerDateTime :
+                    parameter.Value is OceanBaseDate providerDate ? new OceanBaseDateTime(providerDate, scale: 0) :
+                    parameter.Value is DateTime dateTime ? new OceanBaseDateTime(dateTime) :
+                    throw new ArgumentException("The parameter value does not match its declared DbType.");
+                var scale = parameter.DeclaredScale ?? date.Scale;
+                var text = date.Date.ToString();
+                if (parameter.DbType != DbType.Date)
+                    text += " " + date.Hour.ToString("D2", CultureInfo.InvariantCulture) + ":" +
+                        date.Minute.ToString("D2", CultureInfo.InvariantCulture) + ":" + date.Second.ToString("D2", CultureInfo.InvariantCulture) +
+                        Fraction(date.Microsecond, scale, 6);
+                return "'" + text + "'";
+            }
+            if (parameter.DbType == DbType.Date)
+            {
+                if (!(parameter.Value is DateTime date)) throw new ArgumentException("The parameter value does not match its declared DbType.");
+                return "TO_DATE('" + date.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + "','YYYY-MM-DD HH24:MI:SS')";
+            }
+            var timestamp = parameter.Value is OceanBaseTimestamp providerTimestamp ? providerTimestamp :
+                parameter.Value is DateTime timestampValue ? new OceanBaseTimestamp(timestampValue) :
+                throw new ArgumentException("The parameter value does not match its declared DbType.");
+            if (parameter.DeclaredScale.HasValue)
+                timestamp = new OceanBaseTimestamp(timestamp.WholeSeconds, timestamp.Nanosecond, parameter.DeclaredScale.Value);
+            return "TIMESTAMP '" + timestamp.ToString() + "'";
+        }
+
+        private static string FormatTime(TimeSpan value, byte? declaredScale)
+        {
+            var negative = value < TimeSpan.Zero;
+            var magnitude = value.Duration();
+            var text = (negative ? "-" : "") + (magnitude.Days * 24 + magnitude.Hours).ToString("D2", CultureInfo.InvariantCulture) + ":" +
+                magnitude.Minutes.ToString("D2", CultureInfo.InvariantCulture) + ":" + magnitude.Seconds.ToString("D2", CultureInfo.InvariantCulture);
+            return text + Fraction((int)(magnitude.Ticks % TimeSpan.TicksPerSecond / 10), declaredScale ?? 6, 6);
+        }
+
+        private static string Fraction(int microsecond, int scale, int maximumScale)
+        {
+            if (scale == 0 || microsecond == 0) return string.Empty;
+            if (scale > maximumScale) throw new ArgumentException("The temporal parameter precision is not supported.");
+            return "." + microsecond.ToString("D6", CultureInfo.InvariantCulture).Substring(0, scale);
         }
 
         private static string Floating(string value, OceanBaseCompatibilityMode mode, string suffix)

@@ -42,14 +42,14 @@
 | MySQL 过程/函数 FetchSize 提示 | 已实现并完成本轮验收 | Java 2.4.14 实库对照、36项原限制RED、相关单测100/100、公开DLL消费者48/48、MySQL过程/函数实库30/30、完整默认单测8053/8053、DI14/14；五资产Release零警告/错误，独立走查无遗留；内部结果不分页，输出语义保持，见[记录](history/2026-10-28-mysql-routine-fetch-hint.md) |
 | Oracle参数化文本多语句 | 已实现并完成本轮验收 | Java双模式对照确认客户端绑定支持；新增正常用例6项RED→GREEN，相关单测47/47、公开DLL消费者12/12、当时双模式直连组24/24（新增Oracle参数8项）、完整默认单测8063/8063、DI14/14，五资产Release零警告/错误，独立最终走查无遗留；详见[记录](history/2026-10-28-oracle-multi-statement-parameters.md)。MySQL普通输入本轮已补，其他边界见矩阵 |
 | MySQL参数化文本多语句 | 已实现并完成本轮验收 | 官方Java/实库对照；6项RED→GREEN、相关单测232/232、双模式公开DLL消费者24/24、双模式实库组78/78（新增MySQL54项，含12种非默认客户端字符集）、完整默认单测8102/8102（0失败、0跳过）、DI14/14、五资产Release零警告/错误，独立最终走查无待修发现；MySQL字符串保持值/collation/coercibility并支持NUL和SQL_MODE切换，解析字符集须稳定，详见[记录](history/2026-10-28-mysql-multi-statement-parameters.md) |
+| 多语句时间参数输入 | 已实现并完成本轮回归 | MySQL DATE/DATETIME/TIMESTAMP/TIME 与 Oracle DATE/TIMESTAMP 客户端字面量，复用已有精度/范围校验；同步/异步 MySQL/Oracle 文本执行和精确 SQL 回归 5/5 通过，见[记录](history/2026-10-28-multi-statement-temporal-input.md) |
 | 生产级完整验收 | 未完成 | 完整资源/并发、真实OBProxy/TLS/auth/HA/版本/平台/运行时及发布审查 |
 
 ## 优先处理的明确缺实现
 
-1. 多语句Date/Time/Timestamp输入：本轮官方Java双模式实库已确认可执行，当前.NET尚未实现；普通数字/字符串/二进制/NULL已支持，stream/复杂输入和Prepare/cursor/输出继续按依据分类，不据局部交付关闭整个工作包。
-2. 连接池完整 reset、资源隔离、并发和真实部署验收。
-3. 已有 Java/OceanBase 依据但仍受限的 REF CURSOR 输出、复杂类型和字符集形状，先按真实服务端矩阵确认。
-4. OB20 压缩/reroute 等当前 Java/协议依据不足的组合继续明确拒绝，不列为默认开发目标。
-5. TLS/auth、代理/版本/平台和发布运行时的真实验收。
+1. 连接池完整 reset、资源隔离、并发和真实部署验收。
+2. 已有 Java/OceanBase 依据但仍受限的 REF CURSOR 输出、复杂类型和字符集形状，先按真实服务端矩阵确认。
+3. OB20 压缩/reroute 等当前 Java/协议依据不足的组合继续明确拒绝，不列为默认开发目标。
+4. TLS/auth、代理/版本/平台和发布运行时的真实验收。
 
 已有实现欠验收、明确拒绝和已移除功能是三类工作，不能把推测性 Oracle/MySQL 完整性当成项目需求。详细失败/跳过保留在历史记录；新连接信息不写入任何文档，实库验收独立于普通单测/CI。

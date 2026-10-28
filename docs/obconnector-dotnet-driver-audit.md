@@ -125,7 +125,7 @@ Java 和 .NET 的连接池都已存在；.NET 默认 `Pooling=false`。会话识
 | 认证 | 部分实现 | native、old、clear、SHA-2、Ed25519、PAM、GSSAPI 路径 | 真实插件成功/拒绝矩阵、KDC、短期凭据服务及轮换实库验收 |
 | TLS | 部分实现 | 默认平台信任库和主机名校验；可选服务器验证回调及按引用隔离的普通池；池化/直连 `ClientCertificate` 和 source 证书快照；可选撤销检查 | 真实企业 CA/轮换/撤销和跨平台语义、真实 mTLS 矩阵 |
 | 基础 SQL | 已实现 | 文本执行、server prepare、参数绑定、多结果、流式读取、取消、超时 | 真实版本/代理/大数据量边界仍需验收 |
-| 多语句 | 部分实现 | 显式 `Allow Multi Statements=true` 的文本多结果、Oracle命名/MySQL位置普通标量输入、默认关闭；Oracle匿名块和程序DDL的内部分号按单个程序单元处理 | MySQL字符串要求稳定解析字符集，动态执行/CALL/quoted SET组合拒绝，隐式副作用不承诺；Prepare/cursor/输出、stream/时间/复杂输入拒绝，其余类型/形状须继续核对；程序单元非法尾部由服务端解析 |
+| 多语句 | 部分实现 | 显式 `Allow Multi Statements=true` 的文本多结果、Oracle命名/MySQL位置普通标量输入及 MySQL DATE/DATETIME/TIMESTAMP/TIME、Oracle DATE/TIMESTAMP，默认关闭；Oracle匿名块和程序DDL的内部分号按单个程序单元处理 | MySQL字符串要求稳定解析字符集，动态执行/CALL/quoted SET组合拒绝，隐式副作用不承诺；Prepare/cursor/输出、stream/时区时间/复杂输入拒绝，其余类型/形状须继续核对；程序单元非法尾部由服务端解析 |
 | 压缩与 OB20 | 部分实现 | 显式 Use Compression 的标准 MySQL 压缩；基础 OB20、校验和、extra info、trace 结构 | OB20 压缩 frame、proxy reroute 及真实压缩矩阵 |
 | LOCAL INFILE | 部分实现 | `Allow Local Infile=true` 才请求 `CLIENT_LOCAL_FILES`；应用通过 `LocalInfileStreamFactory` 提供流；同步/异步上传后读取最终 OK，失败会销毁物理会话 | 真实 OceanBase/OBProxy 互操作、代理策略、超过 64 MiB、服务器错误和中断恢复 |
 | 本地事务 | 部分实现；本地单资源模块 | MySQL/Oracle 隔离级别、savepoint；PSPE 单资源、终态/身份及自动初始化取消/失败清理回归 | 真实模式/版本/代理/事务管理器故障和恢复示例；分布式提升明确拒绝 |
