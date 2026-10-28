@@ -3,6 +3,7 @@ using System;
 using System.Data.Common;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal;
 using OceanBaseConnector.Internal.Session;
@@ -17,6 +18,9 @@ namespace OceanBaseConnector
         private readonly ConnectionLog _log;
         internal PhysicalSessionPool Pool { get; }
         private bool _disposed;
+        private readonly CancellationTokenSource _closing = new CancellationTokenSource();
+        internal CancellationToken ClosingToken => _closing.Token;
+        internal bool IsDisposed { get { lock (_gate) return _disposed; } }
         internal IOceanBaseAddressResolver? AddressResolver { get; }
         internal IOceanBaseCredentialProvider? CredentialProvider { get; }
         internal RemoteCertificateValidationCallback? RemoteCertificateValidationCallback { get; }
@@ -55,8 +59,18 @@ namespace OceanBaseConnector
         {
             if (disposing)
             {
-                lock (_gate) _disposed = true;
-                Pool.Dispose();
+                lock (_gate)
+                {
+                    if (_disposed) return;
+                    _disposed = true;
+                }
+                try { Pool.Dispose(); }
+                finally
+                {
+                    // Callbacks may reenter the source; cancel after retiring the pool, outside both locks.
+                    try { _closing.Cancel(); }
+                    catch (AggregateException) { }
+                }
             }
             base.Dispose(disposing);
         }

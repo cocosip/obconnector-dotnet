@@ -9,7 +9,7 @@
 
 | ID | 模块 | 已实现范围 | 仍缺开发 / 明确不支持 | 仍欠验收 |
 | --- | --- | --- | --- | --- |
-| P0-01 | 连接池 | 容量/等待/预热/探活/回收/清池/指标、重入和通知取消修复；池销毁中止未完成物理 Open/预热及池持有的探活/reset session | 其他并发/Dispose交错、长期资源与shutdown范围 | 持续资源上限、完整部署矩阵 |
+| P0-01 | 连接池 | 容量/等待/预热/探活/回收/清池/指标、重入和通知取消修复；池销毁中止未完成物理 Open/预热及池持有的探活/reset session；DataSource 关闭覆盖凭据/发现及非池化 Open，已建立连接保持可用，见[源关闭证据](history/2026-10-28-data-source-open-shutdown.md) | 其他并发/Dispose交错、长期资源与shutdown范围 | 持续资源上限、完整部署矩阵 |
 | P0-02 | 会话隔离 | reset代际、状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA隔离；池销毁原子关闭 `Closed/Connecting` 借出和预热 session，保留 `Open/Busy` 借出连接并关闭池持有的探活/reset；双模式直连池隔离专项94通过/1跳过，Oracle直连资源生命周期矩阵32/32通过 | 任意隐式副作用、完整资源/中断/交错覆盖 | 代理reset、外置LOB真实中断、完整借用者隔离 |
 | P0-03 | Ambient | 单资源PSPE、取消/晚回调/终态保护 | 分布式提升和durable prepare不支持；完整失败覆盖待补 | 实际事务管理器、timeout/in-doubt和代理故障 |
 | P0-04 | Unknown outcome | 分类、销毁/新租约、16项受控网络断言、应用核对示例 | 完整发送/执行/取消故障边界；不重放未知写 | 服务器/代理/协调器全故障矩阵 |

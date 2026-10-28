@@ -300,7 +300,11 @@ namespace OceanBaseConnector
                 var pool = registryPool ? _pool = PhysicalSessionPoolRegistry.GetForRent(poolKey, _addressResolver, _remoteCertificateValidationCallback, clientCertificate, _credentialProvider)
                     : _options.Pooling ? _pool : null;
                 _opening = true;
+#if NET8_0_OR_GREATER
+                var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token, _source?.ClosingToken ?? CancellationToken.None);
+#else
                 var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+#endif
                 _openingCancellation = cancellation;
                 return new OpenContext(_options, pool, poolKey, _addressResolver, _endpointSelector, clientCertificate, _remoteCertificateValidationCallback, ++_openGeneration, cancellation, token, Transaction.Current, registryPool, _credentialProvider);
             }
@@ -456,10 +460,14 @@ namespace OceanBaseConnector
             }
         }
 
-        private static Exception NormalizeOpenError(OpenContext context, Exception error, PhysicalSession? session)
+        private Exception NormalizeOpenError(OpenContext context, Exception error, PhysicalSession? session)
         {
             if (context.CallerToken.IsCancellationRequested)
                 return new OperationCanceledException("Connection opening canceled.", error, context.CallerToken);
+#if NET8_0_OR_GREATER
+            if (_source?.IsDisposed == true)
+                return new ObjectDisposedException(nameof(OceanBaseDataSource));
+#endif
             if (context.RouteBudget?.IsCancellationRequested == true && !context.Cancellation.IsCancellationRequested)
                 return new TimeoutException("Connection opening timed out.", error);
             if (session == null && context.Resolver != null && !(error is OceanBaseException || error is OperationCanceledException || error is TimeoutException || error is ObjectDisposedException))

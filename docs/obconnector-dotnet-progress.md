@@ -10,8 +10,8 @@
 | 功能 | 开发状态 | 已支持范围 | 还缺什么 / 验收边界 |
 | --- | --- | --- | --- |
 | 双模式连接与基础SQL | 已实现 | 模式/产品身份确认、文本/准备执行、参数、多结果、同步/异步、取消/超时 | 其他版本、代理、故障组合仍需验收 |
-| 连接池基本生命周期 | 已实现 | 容量/等待/取消、预热、探活、空闲/总生命周期、清池、池指标；池销毁会中止未完成物理 Open、预热以及池持有的探活/reset；双模式直连新增最大池2、4 worker同步/异步并发 4 项验收 | 并发交错、长期负载和资源上限未完整验收 |
-| 池化会话隔离 | 部分实现 | reset代际、保守状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA保护；池销毁时原子关闭 `Closed/Connecting` 借出 session 及预热 session，已建立 `Open/Busy` 借出连接保持可用；池持有的探活/reset 即时关闭，见[维护关闭记录](history/2026-10-28-pool-maintenance-shutdown.md)；双模式直连池隔离专项 94/95（94通过、1项因未配置 `alternateDatabase` 跳过），Oracle 直连资源生命周期矩阵 32/32 通过 | 任意隐式副作用、完整资源交错及代理reset；直连专项不能推及全部状态 |
+| 连接池基本生命周期 | 已实现 | 容量/等待/取消、预热、探活、空闲/总生命周期、清池、池指标；池销毁会中止未完成物理 Open、预热以及池持有的探活/reset；DataSource 关闭取消尚在凭据/发现阶段及非池化 Open，保留已建立借用连接，见[源关闭记录](history/2026-10-28-data-source-open-shutdown.md)；双模式直连最大池2、4 worker同步/异步并发 4 项验收 | 并发交错、长期负载和资源上限未完整验收 |
+| 池化会话隔离 | 部分实现 | reset代际、保守状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA保护；池销毁时原子关闭 `Closed/Connecting` 借出 session 及预热 session，已建立 `Open/Busy` 借出连接保持可用；池持有的探活/reset 即时关闭，见[维护关闭记录](history/2026-10-28-pool-maintenance-shutdown.md)；本轮双模式 Connections 直连矩阵128通过、4配置跳过，含源关闭后活动 reader 及连接继续使用 | 任意隐式副作用、完整资源交错及代理reset；直连专项不能推及全部状态 |
 | 池路由身份隔离 | 已实现 | resolver身份、每次Open快照、旧闲置端点退休、借出连接保留 | 受控单上游路由验收已通过；真实集群/代理HA未验收 |
 | 本地事务 / savepoint | 已实现 | 模式相关事务、现代TFM异步API及保存点 | 保留隔离级别/标识符限制；跨版本故障组合待验收 |
 | 单资源TransactionScope | 已实现 | PSPE登记、所有权、取消/晚回调、终态清理 | 分布式提升/durable prepare不支持；真实事务管理器故障矩阵待验收 |

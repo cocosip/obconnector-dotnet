@@ -354,6 +354,7 @@ namespace OceanBaseConnector.UnitTests.Session
         public async Task ResetFailureDestroysSessionInsteadOfReturningIt()
         {
             var resetFailures = 0;
+            var ownReset = new AsyncLocal<bool> { Value = true };
             using var listener = new MeterListener
             {
                 InstrumentPublished = (instrument, owner) =>
@@ -364,7 +365,7 @@ namespace OceanBaseConnector.UnitTests.Session
             };
             listener.SetMeasurementEventCallback<long>((instrument, value, _, _) =>
             {
-                if (instrument.Name == "oceanbase.client.pool.reset.failures") Interlocked.Add(ref resetFailures, (int)value);
+                if (ownReset.Value && instrument.Name == "oceanbase.client.pool.reset.failures") Interlocked.Add(ref resetFailures, (int)value);
             });
             listener.Start();
             var server = LoopbackServer.Start(async client =>

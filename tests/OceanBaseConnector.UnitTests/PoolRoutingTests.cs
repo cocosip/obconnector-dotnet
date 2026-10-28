@@ -17,6 +17,40 @@ namespace OceanBaseConnector.UnitTests
     {
         [Theory]
         [InlineData(false, false)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public async Task SourceDisposalCancelsPendingDiscovery(bool asynchronous, bool pooling)
+        {
+            await using var server = new RoutingServer();
+            var resolver = new Resolver(server.Port);
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var late = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            resolver.Sync = token => { entered.TrySetResult(); token.WaitHandle.WaitOne(); token.ThrowIfCancellationRequested(); return "127.0.0.1:1"; };
+            resolver.Async = _ => { entered.TrySetResult(); return late.Task; };
+            var configuration = new OceanBaseConnectionStringBuilder(Configuration(server.Port)) { Pooling = pooling, ConnectionTimeout = 0 }.ConnectionString;
+            using var source = new OceanBaseDataSourceBuilder(configuration).UseAddressResolver(resolver).Build();
+            using var connection = (OceanBaseConnection)source.CreateConnection();
+            var opening = Open(connection, asynchronous);
+            try
+            {
+                await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                source.Dispose();
+                await Assert.ThrowsAsync<ObjectDisposedException>(() => opening.WaitAsync(TimeSpan.FromSeconds(2)));
+                Assert.Equal(ConnectionState.Closed, connection.State);
+                Assert.True(source.Pool.IsEmpty);
+                late.TrySetResult("127.0.0.1:" + server.Port);
+                Assert.Equal(0, server.Accepted);
+            }
+            finally
+            {
+                connection.Close(); late.TrySetResult("127.0.0.1:" + server.Port);
+                await Record.ExceptionAsync(() => opening.WaitAsync(TimeSpan.FromSeconds(5)));
+            }
+        }
+
+        [Theory]
+        [InlineData(false, false)]
         [InlineData(true, false)]
         [InlineData(false, true)]
         [InlineData(true, true)]

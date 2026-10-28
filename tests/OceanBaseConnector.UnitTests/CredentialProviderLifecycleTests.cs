@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics.Metrics;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,146 @@ namespace OceanBaseConnector.UnitTests
 {
     public sealed partial class CredentialProviderTests
     {
+        [Fact]
+        public async Task SourceDisposalWinsOpenFailureWhilePoolRetirementIsStillRunning()
+        {
+            await using var server = Server(); var provider = new Provider(Credential(1));
+            using var source = new OceanBaseDataSourceBuilder(Configuration(server.Port)).UseCredentialProvider(provider).Build();
+            using var connection = (OceanBaseConnection)source.CreateConnection();
+            await connection.OpenAsync(); await connection.CloseAsync();
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var late = new TaskCompletionSource<OceanBaseCredential>(TaskCreationOptions.RunContinuationsAsynchronously);
+            provider.Async = _ => { entered.TrySetResult(); return late.Task; };
+            var retiring = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var release = new ManualResetEventSlim();
+            var disposalThread = 0;
+            using var listener = new MeterListener
+            {
+                InstrumentPublished = (instrument, owner) =>
+                {
+                    if (instrument.Meter.Name == "OceanBaseConnector" && instrument.Name == "oceanbase.client.pool.sessions")
+                        owner.EnableMeasurementEvents(instrument);
+                },
+            };
+            listener.SetMeasurementEventCallback<long>((_, value, _, _) =>
+            {
+                if (value != -1 || Environment.CurrentManagedThreadId != Volatile.Read(ref disposalThread)) return;
+                retiring.TrySetResult();
+                Assert.True(release.Wait(TimeSpan.FromSeconds(10)));
+            });
+            listener.Start();
+            var opening = connection.OpenAsync();
+            Task disposing = Task.CompletedTask;
+            try
+            {
+                await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                disposing = Task.Run(() => { Volatile.Write(ref disposalThread, Environment.CurrentManagedThreadId); source.Dispose(); });
+                await retiring.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                late.TrySetException(new InvalidOperationException("provider failed during retirement"));
+                await Assert.ThrowsAsync<ObjectDisposedException>(() => opening.WaitAsync(TimeSpan.FromSeconds(2)));
+            }
+            finally
+            {
+                release.Set(); late.TrySetResult(Credential(1)); connection.Close();
+                await disposing.WaitAsync(TimeSpan.FromSeconds(5));
+                await Record.ExceptionAsync(() => opening.WaitAsync(TimeSpan.FromSeconds(5)));
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task SourceDisposalPreservesEstablishedBusyConnection(bool pooling)
+        {
+            await using var server = new TestInfrastructure.CredentialServer(
+                ProtocolFixture.Load("initial-handshake-oceanbase").Payload, oracle: false);
+            using var source = new OceanBaseDataSourceBuilder(Configuration(server.Port, pooling)).Build();
+            using var connection = (OceanBaseConnection)source.CreateConnection();
+            await connection.OpenAsync();
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            server.BeforeProbeReply = () => { entered.TrySetResult(); return release.Task; };
+            var session = connection.GetOpenSession();
+            var probe = session.ProbeAsync(new ConnectionLog(null), 5);
+            try
+            {
+                await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                await source.DisposeAsync();
+                Assert.Equal(SessionState.Busy, session.State);
+                release.TrySetResult();
+                await probe.WaitAsync(TimeSpan.FromSeconds(5));
+                using var command = connection.CreateCommand(); command.CommandText = "SELECT 1 FROM DUAL";
+                Assert.Equal(0, await command.ExecuteNonQueryAsync());
+                Assert.Equal(ConnectionState.Open, connection.State);
+            }
+            finally { release.TrySetResult(); connection.Close(); await Record.ExceptionAsync(() => probe); }
+        }
+
+        [Fact]
+        public async Task SourceShutdownCancellationCallbackCanDisposeSourceFromAnotherThread()
+        {
+            var provider = new Provider(Credential(1));
+            using var source = new OceanBaseDataSourceBuilder(Configuration(1)).UseCredentialProvider(provider).Build();
+            using var connection = (OceanBaseConnection)source.CreateConnection();
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var reentered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var late = new TaskCompletionSource<OceanBaseCredential>(TaskCreationOptions.RunContinuationsAsynchronously);
+            provider.Async = async token =>
+            {
+                using var registration = token.Register(() =>
+                {
+                    Task.Run(source.Dispose).WaitAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
+                    reentered.TrySetResult();
+                });
+                entered.TrySetResult();
+                return await late.Task;
+            };
+            var opening = connection.OpenAsync();
+            try
+            {
+                await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                await Task.Run(source.Dispose).WaitAsync(TimeSpan.FromSeconds(5));
+                await reentered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                await Assert.ThrowsAsync<ObjectDisposedException>(() => opening);
+            }
+            finally { late.TrySetResult(Credential(1)); connection.Close(); await Record.ExceptionAsync(() => opening); }
+        }
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public async Task SourceDisposalCancelsPendingCredentials(bool asynchronous, bool pooling)
+        {
+            await using var server = Server();
+            var provider = new Provider(Credential(1));
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var late = new TaskCompletionSource<OceanBaseCredential>(TaskCreationOptions.RunContinuationsAsynchronously);
+            provider.Sync = token => { entered.TrySetResult(); token.WaitHandle.WaitOne(); token.ThrowIfCancellationRequested(); return provider.Current; };
+            provider.Async = _ => { entered.TrySetResult(); return late.Task; };
+            var configuration = new OceanBaseConnectionStringBuilder(Configuration(server.Port, pooling)) { ConnectionTimeout = 0 }.ConnectionString;
+            using var source = new OceanBaseDataSourceBuilder(configuration).UseCredentialProvider(provider).Build();
+            using var connection = (OceanBaseConnection)source.CreateConnection();
+            var opening = Open(connection, asynchronous);
+            try
+            {
+                await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                source.Dispose();
+                await Assert.ThrowsAsync<ObjectDisposedException>(() => opening.WaitAsync(TimeSpan.FromSeconds(2)));
+                Assert.Equal(ConnectionState.Closed, connection.State);
+                Assert.True(source.Pool.IsEmpty);
+                late.TrySetResult(Credential(1));
+                Assert.Equal(0, server.Accepted);
+                Assert.False(provider.Disposed);
+            }
+            finally
+            {
+                connection.Close(); late.TrySetResult(Credential(1));
+                await Record.ExceptionAsync(() => opening.WaitAsync(TimeSpan.FromSeconds(5)));
+            }
+        }
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
