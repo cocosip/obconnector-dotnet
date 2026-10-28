@@ -28,6 +28,7 @@ namespace OceanBaseConnector.Internal.Protocol
 
         private Stream _stream;
         private int _sequence;
+        private bool _frameWriteStarted;
         private Ob20Stream? _ob20;
         private MySqlCompressionStream? _compression;
         private ActivityContext _traceContext;
@@ -119,8 +120,11 @@ namespace OceanBaseConnector.Internal.Protocol
             EnsureIdle();
             _compression?.BeginCommand();
             _sequence = 0;
+            _frameWriteStarted = false;
             _diagnostics.Boundary("begin");
         }
+
+        internal bool HasStartedFrameWrite => _frameWriteStarted;
 
         public byte[] ReadPacket()
         {
@@ -273,6 +277,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private void WriteFrame(byte[] payload, int offset, int count)
         {
             PrepareHeader(count);
+            _frameWriteStarted = true;
             try
             {
                 _stream.Write(_headerBuffer, 0, 4);
@@ -288,6 +293,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private async Task WriteFrameAsync(byte[] payload, int offset, int count, CancellationToken cancellationToken)
         {
             PrepareHeader(count);
+            _frameWriteStarted = true;
             try
             {
                 await _stream.WriteAsync(_headerBuffer, 0, 4, cancellationToken).ConfigureAwait(false);

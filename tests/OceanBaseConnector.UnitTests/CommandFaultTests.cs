@@ -55,6 +55,33 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task LocalPacketValidationBeforeFrameWriteDoesNotBecomeUnknownOrBreakSession(bool asynchronous)
+        {
+            var server = Server(async channel => { await Query(channel, "after local validation"); await channel.WritePacketAsync(Ok(1)); });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                using (var exchange = new CommandExchange(connection.GetOpenSession(), new ConnectionLog(null), 0,
+                    CancellationToken.None, () => { }))
+                {
+                    var error = asynchronous
+                        ? await Assert.ThrowsAsync<OceanBaseException>(() => exchange.SendAsync(new byte[] { 3 }, count: 2))
+                        : Assert.Throws<OceanBaseException>(() => exchange.Send(new byte[] { 3 }, count: 2));
+                    Assert.False(error.IsExecutionOutcomeUnknown);
+                    Assert.IsType<ArgumentOutOfRangeException>(error.InnerException);
+                }
+                Assert.Equal(ConnectionState.Open, connection.State);
+                using var command = connection.CreateCommand(); command.CommandText = "after local validation";
+                Assert.Equal(1, await command.ExecuteNonQueryAsync());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData(false, "query", 2)]
         [InlineData(true, "query", 2)]
         [InlineData(false, "query", 6)]

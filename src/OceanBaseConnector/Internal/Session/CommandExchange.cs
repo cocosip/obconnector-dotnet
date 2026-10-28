@@ -370,7 +370,9 @@ namespace OceanBaseConnector.Internal.Session
         {
             if (_terminal || Volatile.Read(ref _finished) != 0) return error;
             if (error is OceanBaseException databaseError && databaseError.IsExecutionOutcomeUnknown) return error;
-            if (_responsePending || _longDataPending) _lease.Dispose();
+            var executionFrameStarted = _sqlSent && _channel.HasStartedFrameWrite;
+            var localPreSendFailure = _responsePending && _sqlSent && !_longDataPending && !executionFrameStarted;
+            if ((_responsePending || _longDataPending) && !localPreSendFailure) _lease.Dispose();
             else _lease.CompleteIfActive();
             Exception cause = error;
             var caller = _cancellationOrigin?.Invoke() ?? _caller;
@@ -378,7 +380,7 @@ namespace OceanBaseConnector.Internal.Session
             else if (error is OperationCanceledException canceled && canceled.CancellationToken.CanBeCanceled && canceled.CancellationToken != _budget.Token) cause = error;
             else if (_cancel.IsCancellationRequested || _operationToken.IsCancellationRequested) cause = new OperationCanceledException("Command canceled.", error);
             else if (_budget.IsCancellationRequested) cause = new TimeoutException("Command timed out.", error);
-            var mapped = _sqlSent
+            var mapped = executionFrameStarted
                 ? new OceanBaseException("The command response was not fully consumed; execution outcome is unknown.",
                     isExecutionOutcomeUnknown: true, innerException: cause)
                 : _responsePending && !(cause is OperationCanceledException) && !(cause is TimeoutException)
