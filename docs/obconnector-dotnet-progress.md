@@ -63,7 +63,7 @@
 | Schema / 参数推导 | 已实现（直连验收部分完成） | 双模式目录、DataTypes、原子参数派生、FLOAT及INOUT归一化；本次双模式 Schema 实库用例 10 项通过，CommandBehavior 元数据补验 16 项通过，过程参数推导再通过 MySQL 2 项和 Oracle 4 项 | Oracle Views/Synonyms 建对象在当前租户返回 `1031/HY000`，不作为客户端 workaround；权限/大小写/重载/版本/代理目录待验收，见[Schema 记录](history/2026-10-28-schema-acceptance.md)和[参数推导记录](history/2026-10-28-routine-derivation-acceptance.md) |
 | DataAdapter / CommandBuilder | 已移出支持范围 | Connector/J 没有对应能力，当前 CRUD 使用显式 `OceanBaseCommand` | 不再提供 public 类型、factory 入口或自动 CRUD 生成 |
 | Statement cache | 已实现 | opt-in idle LRU、容量/关闭、上下文/DDL/reset代际失效；双模式直连4/4验证实际缓存命中、held/idle语句DDL刷新及池reset重备，见[证据](history/2026-10-28-statement-cache-live-lifecycle.md) | 外部DDL/reprepare错误、资源和负载报告待验收 |
-| 顺序Batch / INSERT rewrite | 已实现 | 顺序执行、Oracle array binding、opt-in MySQL INSERT合并及失败归属 | 真实触发器/默认值/警告、性能和部分失败组合待验收 |
+| 顺序Batch / INSERT rewrite | 已实现 | 顺序执行、Oracle array binding、opt-in MySQL INSERT合并及失败归属；MySQL直连6/6验证默认值/触发器、提交/回滚及重复组的prefix/suffix边界，见[证据](history/2026-10-28-batch-rewrite-live-semantics.md) | 更多触发器/默认表达式/警告、性能和部分失败组合待验收 |
 | Multi-send / 独立bulk | 明确不支持 | 尚无 Java/OceanBase 流水线/独立bulk协议依据 | 不列为默认开发项 |
 | 现有诊断 | 已实现 | 日志/Activity/Meter、池等待/租约、建连阶段、慢命令、协议帧/协商、会话I/O/源流读取 | 其他未定义等待点不列为功能缺口；真实负载、资源曲线和监听开销待验收 |
 | TFM / 包消费 | 部分验证 | 五资产；Windows有实际运行时及nupkg协议子集证据 | 单一.NET10 host的五资产消费不等于五运行时；非Windows及完整承诺矩阵仍缺 |
