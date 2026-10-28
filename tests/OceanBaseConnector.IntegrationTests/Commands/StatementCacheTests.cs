@@ -93,6 +93,76 @@ public sealed class StatementCacheTests
         }
     }
 
+    [IntegrationTheory]
+    [MemberData(nameof(Rows))]
+    public async Task ExternalColumnDropConfirmedErrorEvictsFailedCachedStatement(string profileName, bool asynchronous)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        using var deadline = new CancellationTokenSource(System.TimeSpan.FromSeconds(30));
+        var builder = db.Profile.CreateBuilder(); builder.Pooling = false; builder.StatementCacheSize = 0;
+        await using var external = new OceanBaseConnection(builder.ConnectionString);
+        await external.OpenAsync(deadline.Token);
+        var textType = db.Oracle ? "VARCHAR2(100)" : "VARCHAR(100)";
+        var table = await db.TableAsync(external, "id INTEGER PRIMARY KEY, value " + textType, deadline.Token);
+        await db.ExecuteAsync(external, "INSERT INTO " + table + " VALUES (1, 'before')", deadline.Token);
+        builder.Pooling = true; builder.MinPoolSize = 0; builder.MaxPoolSize = 1; builder.StatementCacheSize = 2;
+        await using var source = new OceanBaseDataSourceBuilder(builder.ConnectionString).Build();
+        await using var connection = (OceanBaseConnection)source.CreateConnection();
+        if (asynchronous) await connection.OpenAsync(deadline.Token); else connection.Open();
+        var session = connection.GetOpenSession();
+        var sql = "SELECT * FROM " + table + " WHERE id=" + db.ParameterSql(":id") + " AND value IS NOT NULL";
+        object original;
+        using (var first = Create())
+        {
+            await Prepare(first); original = Prepared(first);
+            await Read(first, false);
+        }
+        using (var cached = Create())
+        {
+            await Prepare(cached); Assert.Same(original, Prepared(cached));
+            await db.ExecuteAsync(external, "ALTER TABLE " + table + " DROP COLUMN value", deadline.Token);
+            var error = await Assert.ThrowsAsync<OceanBaseException>(async () =>
+            {
+                if (asynchronous) await cached.ExecuteScalarAsync(deadline.Token); else cached.ExecuteScalar();
+            });
+            Assert.False(error.IsExecutionOutcomeUnknown); Assert.NotEqual(0, error.ServerErrorCode);
+            Assert.Equal(ConnectionState.Open, connection.State); Assert.Same(session, connection.GetOpenSession());
+        }
+        // External DDL is deliberately not tracked by the client's schema epoch.
+        await db.ExecuteAsync(external, "ALTER TABLE " + table + (db.Oracle ? " ADD (value " + textType + ", extra INTEGER)" : " ADD value " + textType + ", ADD extra INTEGER"), deadline.Token);
+        await db.ExecuteAsync(external, "UPDATE " + table + " SET value='after', extra=9 WHERE id=1", deadline.Token);
+        using (var replacement = Create())
+        {
+            await Prepare(replacement); Assert.NotSame(original, Prepared(replacement));
+            await Read(replacement, true);
+        }
+        DatabaseContext.EqualNumber(await db.ScalarAsync(connection, db.SelectOne, deadline.Token), 1, "A confirmed missing-column error must preserve the session.");
+        Assert.Same(session, connection.GetOpenSession());
+
+        OceanBaseCommand Create()
+        {
+            var command = db.Command(connection, sql);
+            DatabaseContext.Parameter(command, "id", 1, DbType.Int32);
+            return command;
+        }
+        async Task Prepare(OceanBaseCommand command) { if (asynchronous) await command.PrepareAsync(deadline.Token); else command.Prepare(); }
+        async Task Read(OceanBaseCommand command, bool after)
+        {
+            var reader = asynchronous ? await command.ExecuteReaderAsync(deadline.Token) : command.ExecuteReader();
+            try
+            {
+                Assert.Equal(after ? 3 : 2, reader.FieldCount);
+                Assert.True(asynchronous ? await reader.ReadAsync(deadline.Token) : reader.Read());
+                DatabaseContext.EqualNumber(reader.GetValue(0), 1, "Prepared binding must survive explicit command recreation.");
+                Assert.Equal(after ? "after" : "before", reader.GetString(1));
+                if (after) DatabaseContext.EqualNumber(reader.GetValue(2), 9, "The new schema must replace cached metadata.");
+                Assert.False(asynchronous ? await reader.ReadAsync(deadline.Token) : reader.Read());
+                Assert.False(asynchronous ? await reader.NextResultAsync(deadline.Token) : reader.NextResult());
+            }
+            finally { if (asynchronous) await reader.DisposeAsync(); else reader.Dispose(); }
+        }
+    }
+
     // Inspect identity to distinguish a real cache hit from another successful server prepare.
     private static object Prepared(OceanBaseCommand command)
     {

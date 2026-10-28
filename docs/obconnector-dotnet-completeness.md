@@ -26,7 +26,7 @@
 | P1-09 | HA/发现 | TCP重试/健康缓存、TNS/OCP、组/权重/黑名单/上限 | 其他发现/策略边界；TCP健康不等于数据库健康 | 实际发现服务/节点/代理故障 |
 | P1-10 | Schema | 双模式目录、DataTypes、原子参数派生、FLOAT/INOUT；本次直连 Schema 用例 10 项通过，CommandBehavior 元数据补验 16 项通过，过程参数推导再通过 MySQL 2 项和 Oracle 4 项 | 包内PL/SQL参数类型拒绝；当前 Oracle 租户 `CREATE VIEW`/`CREATE SYNONYM` 返回 `1031/HY000`，不增加客户端 workaround | 权限、大小写、重载、版本、代理及其他目录矩阵 |
 | P1-11 | 凭据轮换 | 每次Open取值、过期/取消、版本退休、脱敏 | 实际provider/plugin差异回归待补 | 凭据服务、plugin/KDC、拒绝/刷新/轮换 |
-| P2-02 | Statement cache | opt-in idle LRU、上下文/DDL/reset代际失效；双模式直连4/4实际缓存命中、held/idle DDL刷新和reset重备，见[证据](history/2026-10-28-statement-cache-live-lifecycle.md) | 更多外部DDL/reprepare错误/资源/负载回归 | 资源/延迟和代理 |
+| P2-02 | Statement cache | opt-in idle LRU、上下文/DDL/reset代际失效；双模式直连4/4实际缓存命中、held/idle DDL刷新和reset重备，见[证据](history/2026-10-28-statement-cache-live-lifecycle.md)；外部删列确认错误后失败条目淘汰和新结构读取4/4，见[补验](history/2026-10-28-statement-cache-external-ddl.md) | 其他外部DDL/特定reprepare错误/资源/负载回归 | 资源/延迟和代理 |
 | P2-03 | 批处理优化 | 顺序Batch、Oracle array binding、MySQL INSERT rewrite；直连6/6验证默认值/触发器/事务及已确认prefix、失败group、未执行suffix，见[证据](history/2026-10-28-batch-rewrite-live-semantics.md) | multi-send/pipelining、独立bulk 没有当前 Java/OceanBase 契约，明确不列为待实现 | 更多部分失败/触发器/警告/限额与吞吐 |
 | P2-04 | 诊断 | 日志/Activity/Meter、池/阶段/慢命令/协议/I/O/源流 | 其他资源等待不是已定义产品契约，不列为待实现 | 真实负载、资源曲线和监听开销 |
 | P2-05 | TFM/生态 | 五资产、Windows实际运行时nupkg协议子集 | 完整平台/API矩阵、Framework/ORM支持范围 | 非Windows、完整功能和实库消费者 |
