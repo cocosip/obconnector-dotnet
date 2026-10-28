@@ -1,6 +1,6 @@
 # 开发进度与功能矩阵
 
-更新：2026-10-28。范围审计基线：`89a304d`；最近功能模块提交为`7bf10e1`；当前范围审计移除了 DataAdapter/CommandBuilder；下表同步最新调整。
+更新：2026-10-28。范围审计基线：`89a304d`；DataAdapter/CommandBuilder已移除；本轮模块及证据以下表为准。
 
 **已实现**表示支持“已支持范围”一列且有本地回归，不等于所有部署均已验收。**部分实现**表示仍有明确缺口；**未实现**表示当前不支持；**开发中**不计交付。实库结果只覆盖记录的 profile。
 原清单的23个审计编号保留用于追溯，P2-01 已移出当前范围；其余工作包不能整体关闭，也不按提交数/单测数计算完成率。
@@ -36,7 +36,7 @@
 | 复杂整列RETURNING | 受限 | 已解析的类型身份及既有输出路径 | 未解析身份继续拒绝；不把它列为默认开发项 |
 | 类型描述缓存 | 已实现 | 显式清理、可观察DDL自动失效、嵌套与大小限制 | 外部/不透明DDL须显式清理；递归定义不支持，真实DDL矩阵待验收 |
 | 数值/时间及常见扩展类型 | 已实现 | NUMBER/FLOAT保真、signed scale、TZ/LTZ/INTERVAL、ROWID、Inf/NaN、MySQL BLOB族/ENUM/SET/原始GEOMETRY | 不代表所有类型码均支持；扩展元数据和未知类型仍拒绝 |
-| 客户端字符集 | 部分实现 | SQL/普通及JSON参数、复杂national输入、MySQL SJIS/Big5 Open、DBCS fallback、CLOB输入预校验 | Oracle UTF8MB3重映射、SJIS/Big5的Open失败仍在；非UTF8歧义表达式需ASCII别名 |
+| 客户端字符集 | 部分实现 | SQL/普通及JSON参数、复杂national输入、MySQL SJIS/Big5 Open、DBCS fallback、CLOB输入预校验 | 双模式utf8mb3被服务端报告为utf8mb4，严格Open仍拒绝；Oracle SJIS/Big5初始化返回900；非UTF8歧义表达式需ASCII别名，见[直连复核](history/2026-10-28-direct-profile-matrix.md) |
 | national存储/输出 | 部分实现 | 已有可信national元数据及受支持结果路径 | 存储complex要求AL16UTF16，其他存储/匿名输出形状待补 |
 | JSON / CLOB结果 | 已实现 | 当前严格UTF-8协议契约 | 非默认输入的存储/转换、结果元数据、其他版本/代理仍待验收，不应无依据改为客户端编码解码 |
 
@@ -49,7 +49,7 @@
 | OB20压缩 | 明确不支持 | 非零uncompressed length仍拒绝 | 先取得客户端链路/版本/capability 依据，否则不实现 |
 | Proxy reroute | 明确不支持 | 当前拒绝相关响应标志 | 没有明确目标/TLS/租户及未知结果契约前不实现 |
 | 文本多语句 | 已实现 | 默认关闭，显式开启后文本多结果；客户端请求位不要求服务端握手声明，双模式直连16/16验证结果、中途错误及默认关闭无副作用，见[门禁修复](history/2026-10-28-multi-statement-client-policy.md) | 参数/Prepare/cursor/Oracle输出组合仍拒绝；扩展前需明确范围 |
-| LOCAL INFILE | 已实现 | 显式授权、应用流输入、安全边界、同步/异步；基础上传及大于1MiB分块输入、源读取失败/新会话恢复4/4直连验收，逐行校验和流释放见[证据](history/2026-10-28-local-infile-chunked-acceptance.md) | 代理策略、超限输入及真实取消组合待验收 |
+| LOCAL INFILE | 已实现 | 显式授权、应用流输入、安全边界、同步/异步；大于1MiB分块及源失败恢复4/4直连验收见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)；异步源等待期间真实取消/超时2/2，见[中断记录](history/2026-10-28-local-infile-interruption.md) | 代理策略、超限输入、同步源阻塞及其他中断/协议组合待验收 |
 | TLS/mTLS | 已实现 | 平台校验、自定义回调、客户端证书、池身份隔离、撤销选项 | 企业CA、负向握手、轮换和跨平台撤销未完整验收 |
 | 认证/凭据轮换 | 已实现 | 已有认证插件路径；每次Open提供凭据、版本轮换、过期/取消和旧会话退休 | 真实插件、凭据服务及KDC矩阵未验收 |
 | 发现与路由策略 | 已实现 | TCP重试预算/退避、健康缓存、TNS/OCP、组/权重/策略、各级黑名单/尝试上限 | TCP可达不代表数据库健康；其他策略边界和真实发现/节点/代理故障待验收 |

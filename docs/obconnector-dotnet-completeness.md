@@ -1,6 +1,6 @@
 # 驱动完整性清单与剩余开发
 
-更新：2026-10-28。范围审计基线为`89a304d`，最近功能模块提交为`7bf10e1`；P2-01 DataAdapter/CommandBuilder 已按范围审计移除；OB20/trace验收已提交但仍有真实环境门禁，专项88/88通过。
+更新：2026-10-28。范围审计基线为`89a304d`；P2-01 DataAdapter/CommandBuilder已移除；本轮模块及验证见下表，完整直连失败保留在[复核记录](history/2026-10-28-direct-profile-matrix.md)。
 日常查看[具体功能矩阵](obconnector-dotnet-progress.md)；本文件保留原23项审计编号（其中P2-01已移除）和剩余工作包，不再重复交付流水。
 
 ## 23项缺口矩阵
@@ -17,12 +17,12 @@
 | P0-06 | 池路由隔离 | resolver身份、Open快照、闲置退休和借出保留 | 其他边界/压力覆盖；无活动迁移/DNS-IP身份保证 | 单上游受控路由已通过，独立节点/代理HA仍缺 |
 | P1-01 | 多语句 | opt-in文本多结果；修复客户端请求位门禁，双模式直连16/16验证完整结果、未读销毁/重建、中途错误与默认关闭无副作用，见[证据](history/2026-10-28-multi-statement-client-policy.md) | 参数/Prepare/cursor/Oracle输出组合拒绝，扩展范围待定 | 更多结果形状、版本/代理 |
 | P1-02 | 压缩/OB20 | 标准MySQL压缩、普通OB20及trace；服务端未声明 `CLIENT_COMPRESS` 时按 Java 降级为普通协议，双模式直连验收通过 | 压缩OB20、proxy reroute 当前明确拒绝；除非取得客户端协议依据，不列为默认开发项 | 真实压缩帧/OBProxy、TLS、跨平台及损坏/取消矩阵 |
-| P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界；同步/异步基础上传及大于1MiB分块/源失败恢复4/4直连通过，见[证据](history/2026-10-28-local-infile-chunked-acceptance.md) | 超限输入、真实上传取消/超时组合仍待验收 | 代理策略及完整中断行为 |
+| P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界；大于1MiB分块/源失败恢复4/4直连见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)，异步源等待期间取消/超时2/2见[中断记录](history/2026-10-28-local-infile-interruption.md) | 超限输入、同步源阻塞及其他协议/中断组合仍待验收 | 代理策略及完整中断行为 |
 | P1-04 | TLS/mTLS | 服务器回调、客户端证书、池隔离、撤销选项 | 发现实际差异后补轮换/平台回归 | 企业CA、负向握手、过期/轮换、平台撤销 |
 | P1-05 | Command/Batch | SchemaOnly/KeyInfo/结果限制、MySQL过程/函数、Batch元数据；双模式直连补验 16 项 SchemaOnly/KeyInfo 矩阵（含组合主键、别名投影、可空唯一键和实际隐藏值读取），并修复 MySQL 目录大小写匹配 | 完整行为/结果形状矩阵，函数仅支持单 ReturnValue+Input，现有拒绝组合保留 | 权限/目录/prepare副作用/锁/游标 |
 | P1-06 | Oracle输出/游标 | Prepare、OUT/RETURNING、输出提示、文本/二进制cursor列；Oracle 直连输出/分页/释放矩阵 15/16 通过 | Input/InputOutput REF CURSOR 没有 Java 输入绑定依据，当前发送前拒绝；输出offset/数组正FetchSize也拒绝；`SELECT CURSOR(...)` 结果列在当前租户执行阶段返回 `902/HY000` | 真实方向/分页/资源/版本/代理；结果列形状需服务端支持后复验 |
 | P1-07 | 复杂类型 | 嵌套二进制结果、LOB/cursor结果、命名LOB内容/匿名locator输入、DDL失效 | 命名LOB定位器回绑、复杂cursor输入、文本复杂结果及未解析RETURNING身份没有足够协议依据，当前拒绝；其他形状按服务端矩阵决定 | DDL、真实复杂SQL、资源生命周期和更多部署profile |
-| P1-08 | 类型/字符集 | NUMBER/FLOAT、scale、常见扩展类型、客户端编码、MySQL DBCS fallback/Open、CLOB转码 | 其余national存储/输出、扩展类型/metadata；Oracle UTF8MB3/SJIS/Big5 Open失败待解决 | JSON/CLOB转换/存储、完整字符集/版本/代理；保留失败 |
+| P1-08 | 类型/字符集 | NUMBER/FLOAT、scale、常见扩展类型、客户端编码、MySQL DBCS fallback/Open、CLOB转码 | 其余national存储/输出、扩展类型/metadata；双模式utf8mb3严格Open及Oracle SJIS/Big5初始化失败，见[复核](history/2026-10-28-direct-profile-matrix.md) | JSON/CLOB转换/存储、完整字符集/版本/代理；保留失败 |
 | P1-09 | HA/发现 | TCP重试/健康缓存、TNS/OCP、组/权重/黑名单/上限 | 其他发现/策略边界；TCP健康不等于数据库健康 | 实际发现服务/节点/代理故障 |
 | P1-10 | Schema | 双模式目录、DataTypes、原子参数派生、FLOAT/INOUT；本次直连 Schema 用例 10 项通过，CommandBehavior 元数据补验 16 项通过，过程参数推导再通过 MySQL 2 项和 Oracle 4 项 | 包内PL/SQL参数类型拒绝；当前 Oracle 租户 `CREATE VIEW`/`CREATE SYNONYM` 返回 `1031/HY000`，不增加客户端 workaround | 权限、大小写、重载、版本、代理及其他目录矩阵 |
 | P1-11 | 凭据轮换 | 每次Open取值、过期/取消、版本退休、脱敏 | 实际provider/plugin差异回归待补 | 凭据服务、plugin/KDC、拒绝/刷新/轮换 |

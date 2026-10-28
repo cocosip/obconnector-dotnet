@@ -1,6 +1,6 @@
 # 交付状态摘要
 
-更新：2026-10-28。范围审计基线为`89a304d`，最近功能模块提交为`7bf10e1`；P2-01 DataAdapter/CommandBuilder 已按范围审计移除；主文档改为当前状态，历史流水不再默认加载。
+更新：2026-10-28。范围审计基线为`89a304d`；P2-01 DataAdapter/CommandBuilder已移除；本轮交付及门禁以下表为准，历史流水按需读取。
 
 | 阅读目的 | 文档 |
 | --- | --- |
@@ -25,6 +25,8 @@
 | LOCAL INFILE分块/源失败 | 已完成本轮直连矩阵 | 同步异步共4/4通过；大于1MiB、256行全部内容、流释放及失败后新会话/无重放验证，独立走查无发现。见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)；超限/真实取消/代理等门禁保留 |
 | Statement cache DDL/reset | 已完成本轮直连矩阵 | 双模式同步异步4/4，实际缓存复用、held/idle语句刷新及同物理会话reset后重备，独立走查无发现。见[证据](history/2026-10-28-statement-cache-live-lifecycle.md)；外部DDL/reprepare错误及负载门禁保留 |
 | MySQL INSERT rewrite真实语义 | 已完成本轮直连矩阵 | 6/6验证Unicode默认值、触发器、事务和重复键失败边界；相关回归245通过/4配置跳过，走查后加强直接字符串读取断言。见[证据](history/2026-10-28-batch-rewrite-live-semantics.md) |
+| LOCAL INFILE源等待中断 | 已完成本轮直连矩阵 | 取消/超时新增2/2，协议组26/26；走查后修复失败路径任务等待，默认未启用实库18通过/137跳过。见[证据](history/2026-10-28-local-infile-interruption.md) |
+| 完整双模式直连复核 | 仍有失败，未整体关闭 | 600项中576通过、18失败、6配置跳过；字符集初始化、Oracle结果形状及目录权限问题保留，精确分类和服务端探针见[复核](history/2026-10-28-direct-profile-matrix.md) |
 | 连接池交叉借用隔离验收 | 已完成本轮直连矩阵 | MySQL/Oracle 直连共94通过、1配置跳过、0失败；Windows/.NET 10.0.14，SDK 11.0.100-rc.3 构建零警告/错误。证据见[兼容性记录](compatibility.md#2026-10-28-pool-cross-borrower-isolation-acceptance)；OBProxy、长期并发和完整资源边界仍开放 |
 | MySQL 存储函数 ReturnValue | 已实现并完成直连验收 | 单ReturnValue+Input 使用 `SET @var = function(?)` 和隐藏 `SELECT`；同步/异步单测及真实 OceanBase MySQL 各通过1项；完整代理/版本/运行时矩阵仍开放 |
 | 原23项审计项 / 八包 | P2-01 已移除，其余按证据分类 | 子功能已实现范围见矩阵；没有整体完成百分比 |

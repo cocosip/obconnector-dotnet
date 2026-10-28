@@ -21,6 +21,62 @@ public sealed class LocalInfileTests
         return rows;
     }
 
+    public static TheoryData<string, bool> InterruptionRows()
+    {
+        var rows = new TheoryData<string, bool>();
+        foreach (var profile in IntegrationEnvironment.Profiles.Where(p => p.CreateObjects && !p.Oracle))
+            foreach (var cancel in new[] { false, true }) rows.Add(profile.Name, cancel);
+        return rows;
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(InterruptionRows))]
+    public async Task CancellationOrTimeoutDuringSourceReadRequiresNewLease(string profileName, bool cancel)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var observer = await db.OpenAsync(deadline.Token);
+        var table = await db.TableAsync(observer, "id INTEGER PRIMARY KEY, value TEXT", deadline.Token);
+        var bytes = Encoding.UTF8.GetBytes(string.Concat(Enumerable.Range(1, 64).Select(id => id + "," + new string('x', 2000) + "\n")));
+        using var upload = new WaitingUploadStream(bytes);
+        var requests = 0;
+        var builder = db.Profile.CreateBuilder();
+        builder.Pooling = true; builder.MinPoolSize = 0; builder.MaxPoolSize = 1; builder.AllowLocalInfile = true;
+        await using var source = new OceanBaseDataSourceBuilder(builder.ConnectionString).Build();
+        await using var connection = (OceanBaseConnection)source.CreateConnection();
+        connection.LocalInfileStreamFactory = _ => { requests++; return upload; };
+        await connection.OpenAsync(deadline.Token);
+        var original = connection.GetOpenSession();
+        using var command = db.Command(connection, "LOAD DATA LOCAL INFILE 'obi-cancel.csv' INTO TABLE " + table +
+            " FIELDS TERMINATED BY ',' LINES TERMINATED BY '\\n'");
+        command.CommandTimeout = cancel ? 10 : 1;
+        using var caller = new CancellationTokenSource();
+        var execution = command.ExecuteNonQueryAsync(caller.Token);
+        try
+        {
+            await upload.Waiting.Task.WaitAsync(deadline.Token);
+            if (cancel) caller.Cancel();
+            var error = await Assert.ThrowsAsync<OceanBaseException>(() => execution.WaitAsync(deadline.Token));
+            Assert.True(error.IsExecutionOutcomeUnknown);
+            if (cancel) Assert.Equal(caller.Token, Assert.IsType<OperationCanceledException>(error.InnerException).CancellationToken);
+            else Assert.IsType<TimeoutException>(error.InnerException);
+        }
+        finally
+        {
+            command.Cancel();
+            await Record.ExceptionAsync(() => execution.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.True(execution.IsCompleted, "The upload must finish before fixture disposal.");
+        }
+        Assert.True(upload.Disposed);
+        Assert.Equal(1, requests);
+        Assert.Equal(ConnectionState.Broken, connection.State);
+        await connection.CloseAsync(); await connection.OpenAsync(deadline.Token);
+        Assert.NotSame(original, connection.GetOpenSession());
+        DatabaseContext.EqualNumber(await db.ScalarAsync(connection, db.SelectOne, deadline.Token), 1,
+            "An interrupted upload must allow explicit recovery without replay.");
+        Assert.Equal(1, requests);
+    }
+
     [IntegrationTheory]
     [MemberData(nameof(Rows))]
     public async Task ChunkedUploadOrSourceFailurePreservesOwnershipAndRecovery(string profileName, bool asynchronous, bool fail)
@@ -105,6 +161,21 @@ public sealed class LocalInfileTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(Read(buffer, offset, count));
+        }
+        protected override void Dispose(bool disposing) { Disposed = true; base.Dispose(disposing); }
+    }
+
+    private sealed class WaitingUploadStream(byte[] bytes) : MemoryStream(bytes, writable: false)
+    {
+        private bool _read;
+        internal TaskCompletionSource Waiting { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal bool Disposed { get; private set; }
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            if (!_read) { _read = true; return base.Read(buffer, offset, count); }
+            Waiting.TrySetResult();
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            throw new InvalidOperationException("The upload read must be interrupted.");
         }
         protected override void Dispose(bool disposing) { Disposed = true; base.Dispose(disposing); }
     }
