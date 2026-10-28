@@ -165,5 +165,83 @@ namespace OceanBaseConnector.UnitTests
             Assert.Throws<ArgumentException>(() => ClientPreparedSql.Build(new ParameterBindingPlan(sql, parameters), OceanBaseCompatibilityMode.MySql,
                 MySqlLiteralContext.Parse("utf8mb4", "utf8mb4", "utf8mb4_bin", "")));
         }
+
+        [Theory]
+        [InlineData("utf8mb4", "a'\\\0中😀", "61275C00E4B8ADF09F9880")]
+        [InlineData("utf8mb3", "中", "E4B8AD")]
+        [InlineData("latin1", "é€", "E980")]
+        [InlineData("gbk", "乗", "815C")]
+        [InlineData("sjis", "ソ", "835C")]
+        [InlineData("big5", "功", "A55C")]
+        [InlineData("utf8mb4", "", "")]
+        public void MySqlMultiStatementLiteralsUseStrictHexContentIndependentOfSqlMode(string name, string value, string hex)
+        {
+            var encoding = ClientCharacterSet.Parse(name);
+            foreach (var modes in new[] { "", "NO_BACKSLASH_ESCAPES", "ANSI_QUOTES,NO_BACKSLASH_ESCAPES" })
+            {
+                var context = MySqlLiteralContext.Parse(name, name, name + "_bin", modes, encoding);
+                var sql = ClientPreparedSql.Build(new ParameterBindingPlan("SELECT ?; SELECT 1", new[] { new OceanBaseParameter { Value = value } }),
+                    OceanBaseCompatibilityMode.MySql, context, encoding, multiStatement: true);
+                Assert.Equal("SELECT (REPLACE('x','x',_" + (name == "utf8mb3" ? "utf8" : name) + " X'" + hex + "')); SELECT 1", sql);
+            }
+        }
+
+        [Theory]
+        [InlineData("SET NAMES latin1; SELECT ?")]
+        [InlineData("SELECT ?; SET CHARACTER SET latin1")]
+        [InlineData("SELECT ?; SET CHARSET latin1")]
+        [InlineData("SELECT ?; SET @@session.character_set_client='latin1'")]
+        [InlineData("SELECT ?; SET SESSION character_set_connection='latin1'")]
+        [InlineData("SELECT ?; SET collation_connection='latin1_bin'")]
+        [InlineData("SELECT ?; SET /* hi */ @@session . `character_set_client`='latin1'")]
+        [InlineData("SELECT ?; SET \"character_set_connection\"='latin1'")]
+        [InlineData("SELECT ?; CALL p()")]
+        [InlineData("SELECT ?; DO f()")]
+        [InlineData("SELECT ?; EXECUTE prepared_stmt")]
+        [InlineData("SELECT ?; PREPARE stmt FROM @sql")]
+        [InlineData("SELECT ?; DEALLOCATE PREPARE stmt")]
+        [InlineData("SELECT ?; RESET CONNECTION")]
+        [InlineData("SET @v=1, @@character_set_connection='latin1'; SELECT ?")]
+        public void MySqlStringMultiStatementsRejectObservableCharsetAndDynamicExecutionChanges(string sql)
+        {
+            var bindings = new ParameterBindingPlan(sql, new[] { new OceanBaseParameter { Value = "secret" } });
+            var context = MySqlLiteralContext.Parse("utf8mb4", "utf8mb4", "utf8mb4_general_ci", "");
+            var error = Assert.Throws<NotSupportedException>(() => ClientPreparedSql.Build(bindings, OceanBaseCompatibilityMode.MySql, context, multiStatement: true));
+            Assert.DoesNotContain("secret", error.Message);
+        }
+
+        [Theory]
+        [InlineData("SELECT /*!50000 ? */ ?; SELECT 1")]
+        [InlineData("SELECT /*m! ? */ ?; SELECT 1")]
+        [InlineData("SELECT 'back\\' ? '; SELECT ?")]
+        [InlineData("SELECT ?; SELECT 'unfinished")]
+        public void MySqlMultiStatementQuotingAndExecutableCommentsStayFailClosed(string sql)
+        {
+            var bindings = new ParameterBindingPlan(sql, new[] { new OceanBaseParameter { Value = "secret" } });
+            Assert.Throws<ArgumentException>(() => ClientPreparedSql.Build(bindings, OceanBaseCompatibilityMode.MySql,
+                MySqlLiteralContext.Parse("utf8mb4", "utf8mb4", "utf8mb4_general_ci", ""), multiStatement: true));
+        }
+
+        [Theory]
+        [InlineData("my ordinary comment")]
+        [InlineData("My ordinary comment")]
+        [InlineData("MISSING is only comment text")]
+        public void OrdinaryMySqlCommentsDoNotBecomeExecutableBecauseOfTheirInitialLetter(string comment)
+        {
+            var sql = "SELECT ?; /*" + comment + "*/ SELECT 1";
+            Assert.Equal("SELECT (REPLACE('x','x',_utf8mb4 X'78')); /*" + comment + "*/ SELECT 1",
+                ClientPreparedSql.Build(new ParameterBindingPlan(sql, new[] { new OceanBaseParameter { Value = "x" } }),
+                    OceanBaseCompatibilityMode.MySql, MySqlLiteralContext.Parse("utf8mb4", "utf8mb4", "utf8mb4_general_ci", ""), multiStatement: true));
+        }
+
+        [Fact]
+        public void MySqlHexMultiStatementStringsStillRespectTheSharedPacketBudget()
+        {
+            var parameters = new OceanBaseParameter[9];
+            var value = new string('a', 4 * 1024 * 1024);
+            for (var i = 0; i < parameters.Length; i++) parameters[i] = new OceanBaseParameter { Value = value };
+            Assert.Throws<ArgumentException>(() => ClientPreparedSql.Build(new ParameterBindingPlan("SELECT ?; SELECT ?,?,?,?,?,?,?,?", parameters),
+                OceanBaseCompatibilityMode.MySql, MySqlLiteralContext.Parse("utf8mb4", "utf8mb4", "utf8mb4_general_ci", ""), multiStatement: true));
+        }
     }
 }

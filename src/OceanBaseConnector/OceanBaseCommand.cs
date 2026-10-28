@@ -101,9 +101,11 @@ namespace OceanBaseConnector
                 operation.MySql?.Initialize(execution, operation.Session);
                 var statement = operation.Binary && (operation.Oracle == null || _prepared != null || HasStreamParameters(operation.Bindings.Parameters))
                     ? EnsurePrepared(operation, operation.ClientFallback) : null;
-                var text = operation.Binary && operation.Oracle == null && statement == null
+                var clientMultiStatement = !operation.Binary && operation.Bindings.Parameters.Length != 0;
+                var text = (operation.Binary || clientMultiStatement) && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode,
-                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? execution.ReadMySqlLiteralContext() : null, execution.ClientEncoding) : operation.Bindings.CommandText;
+                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? execution.ReadMySqlLiteralContext() : null, execution.ClientEncoding,
+                        multiStatement: clientMultiStatement) : operation.Bindings.CommandText;
                 if (statement != null && operation.Oracle == null) execution.ResolveComplexColumns(statement);
                 var hasCursorColumns = statement != null && operation.Oracle == null && execution.HasCursorColumns(statement);
                 ValidateCursorStatement(operation.FetchSize, statement);
@@ -181,9 +183,11 @@ namespace OceanBaseConnector
                 if (operation.MySql != null) await operation.MySql.InitializeAsync(execution, operation.Session, cancellationToken).ConfigureAwait(false);
                 var statement = operation.Binary && (operation.Oracle == null || _prepared != null || HasStreamParameters(operation.Bindings.Parameters))
                     ? await EnsurePreparedAsync(operation, cancellationToken, operation.ClientFallback).ConfigureAwait(false) : null;
-                var text = operation.Binary && operation.Oracle == null && statement == null
+                var clientMultiStatement = !operation.Binary && operation.Bindings.Parameters.Length != 0;
+                var text = (operation.Binary || clientMultiStatement) && operation.Oracle == null && statement == null
                     ? ClientPreparedSql.Build(operation.Bindings, execution.Mode,
-                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? await execution.ReadMySqlLiteralContextAsync(cancellationToken).ConfigureAwait(false) : null, execution.ClientEncoding) : operation.Bindings.CommandText;
+                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? await execution.ReadMySqlLiteralContextAsync(cancellationToken).ConfigureAwait(false) : null, execution.ClientEncoding,
+                        multiStatement: clientMultiStatement) : operation.Bindings.CommandText;
                 if (statement != null && operation.Oracle == null) await execution.ResolveComplexColumnsAsync(statement, cancellationToken).ConfigureAwait(false);
                 var hasCursorColumns = statement != null && operation.Oracle == null && execution.HasCursorColumns(statement);
                 ValidateCursorStatement(operation.FetchSize, statement);
@@ -289,13 +293,12 @@ namespace OceanBaseConnector
                 if (oracle == null && mysql == null && CommandType != CommandType.Text) throw new NotSupportedException("Oracle stored procedures require Use Oracle Prepare Execute=true.");
                 if (oracle != null && cursorOffset) throw new NotSupportedException("Oracle output execution does not support offset fetch.");
                 var bindings = mysql?.Bindings ?? oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
-                if (multiStatement && (prepareOnly || _explicitPreparation || _fetchSize > 0 || oracle != null ||
-                    bindings.Parameters.Length != 0 && session.Info!.Mode != OceanBaseCompatibilityMode.Oracle))
-                    throw new NotSupportedException("Multi-statement execution supports only Oracle scalar input parameters without Prepare or server cursors.");
-                if (multiStatement && bindings.Parameters.Length != 0)
+                if (multiStatement && (prepareOnly || _explicitPreparation || _fetchSize > 0 || oracle != null))
+                    throw new NotSupportedException("Multi-statement execution supports only scalar input parameters without Prepare or server cursors.");
+                if (multiStatement && bindings.Parameters.Length != 0 && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle)
                     bindings = new ParameterBindingPlan(ClientPreparedSql.Build(bindings, session.Info!.Mode,
                         clientEncoding: session.ClientEncoding), Array.Empty<OceanBaseParameter>());
-                var clientFallback = AllowClientSidePrepareFallback && !prepareOnly && !schemaOnly && !keyInfo && !_explicitPreparation && _fetchSize == 0 && oracle == null && mysql == null;
+                var clientFallback = AllowClientSidePrepareFallback && !multiStatement && !prepareOnly && !schemaOnly && !keyInfo && !_explicitPreparation && _fetchSize == 0 && oracle == null && mysql == null;
                 // Stream identity must not depend on a user stream's equality implementation.
                 ConditionalWeakTable<Stream, OceanBaseParameter>? streamBindings = null;
                 foreach (var parameter in bindings.Parameters)
@@ -306,8 +309,8 @@ namespace OceanBaseConnector
                     streamBindings.Add(source, parameter);
                 }
                 var streams = streamBindings != null;
-                if (streams && clientFallback) throw new NotSupportedException("Stream parameters require server preparation without client fallback.");
-                if (clientFallback || streams)
+                if (streams && (clientFallback || multiStatement)) throw new NotSupportedException("Stream parameters require a single server-prepared statement without client fallback.");
+                if (clientFallback || streams || multiStatement)
                 {
                     var snapshots = new OceanBaseParameter[bindings.Parameters.Length];
                     for (var i = 0; i < snapshots.Length; i++) snapshots[i] = bindings.Parameters[i].Snapshot();
@@ -320,8 +323,8 @@ namespace OceanBaseConnector
                 // Internal PL/RETURNING output rows are not a fetch cursor.
                 var fetchSize = prepareOnly || schemaOnly || oracle != null || mysql != null ? 0 : _fetchSize;
                 if (prepareOnly) _explicitPreparation = true;
-                var binary = keyInfo || schemaOnly || oracle != null || mysql != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
-                var parameters = binary && !prepareOnly && !schemaOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true, clientEncoding: session.ClientEncoding) : Array.Empty<byte>();
+                var binary = !multiStatement && (keyInfo || schemaOnly || oracle != null || mysql != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText);
+                var parameters = (binary || multiStatement) && !prepareOnly && !schemaOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true, clientEncoding: session.ClientEncoding) : Array.Empty<byte>();
                 if (arrayCount != 0) _ = OraclePrepareExecutePacket.BuildArray(0, bindings.CommandText, bindings.Parameters, validateOnly: true, clientEncoding: session.ClientEncoding);
                 if (_prepared != null && (!binary || !ReferenceEquals(_prepared.Session, session) ||
                     _prepared.Generation != session.Generation || _prepared.CacheEpoch != session.StatementCacheEpoch || _prepared.CommandText != bindings.CommandText))

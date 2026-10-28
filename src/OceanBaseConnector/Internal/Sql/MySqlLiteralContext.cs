@@ -9,9 +9,10 @@ namespace OceanBaseConnector.Internal.Sql
         private readonly bool _mb3;
         private readonly bool _noBackslashEscapes;
         private readonly ClientCharacterSet? _clientEncoding;
+        private readonly string _literalCharacterSet;
 
-        private MySqlLiteralContext(bool mb3, bool noBackslashEscapes, ClientCharacterSet? clientEncoding)
-        { _mb3 = mb3; _noBackslashEscapes = noBackslashEscapes; _clientEncoding = clientEncoding; }
+        private MySqlLiteralContext(bool mb3, bool noBackslashEscapes, ClientCharacterSet? clientEncoding, string literalCharacterSet)
+        { _mb3 = mb3; _noBackslashEscapes = noBackslashEscapes; _clientEncoding = clientEncoding; _literalCharacterSet = literalCharacterSet; }
 
         internal static MySqlLiteralContext Parse(string client, string connection, string collation, string modes, ClientCharacterSet? configuredEncoding = null)
         {
@@ -38,7 +39,8 @@ namespace OceanBaseConnector.Internal.Sql
                     ValidateName(mode);
                     if (string.Equals(mode, "NO_BACKSLASH_ESCAPES", StringComparison.OrdinalIgnoreCase)) noBackslashEscapes = true;
                 }
-            return new MySqlLiteralContext(clientMb3 || connectionMb3, noBackslashEscapes, nonUtf8 ? configuredEncoding : null);
+            return new MySqlLiteralContext(clientMb3 || connectionMb3, noBackslashEscapes, nonUtf8 ? configuredEncoding : null,
+                clientMb3 ? "utf8" : client.ToLowerInvariant());
         }
 
         private static bool IsMb3(string name) => string.Equals(name, "utf8", StringComparison.OrdinalIgnoreCase) ||
@@ -84,6 +86,14 @@ namespace OceanBaseConnector.Internal.Sql
                     }
             }
             return literal.Append('\'').ToString();
+        }
+
+        internal string MultiStatementLiteral(string text)
+        {
+            ValidateText(text);
+            // Hex content survives SQL_MODE changes; REPLACE retains ordinary literal collation/coercibility.
+            return "REPLACE('x','x',_" + _literalCharacterSet + " X'" +
+                ClientPreparedSql.Hex((_clientEncoding ?? (Encoding)ResultColumn.Utf8).GetBytes(text)) + "')";
         }
     }
 }

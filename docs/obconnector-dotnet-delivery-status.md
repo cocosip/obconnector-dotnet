@@ -40,12 +40,13 @@
 | Windows CI池夹具取消 | 已修复提交 `a7a313f` | 保留 `994a262` 的取消/等待/停止顺序，仅在取消已触发且socket错误为OperationAborted时正常退出；专项连续160/160、当时完整默认单测8003/8003，独立走查无遗留，见[记录](history/2026-10-28-windows-pool-fixture-cancellation.md)；远程CI尚未复验 |
 | Oracle 数组 FetchSize 提示 | 已实现并完成本轮验收 | Java 2.4.14 及 Oracle 直连确认正提示不阻止数组执行；新增8项RED后通过、相关单测134/134、公开DLL消费者36/36、Oracle数组实库12/12、完整默认单测8011/8011、DI14/14；五资产Release零警告/错误，独立走查无遗留；内部结果不分页，offset仍拒绝，见[记录](history/2026-10-28-array-fetch-hint.md) |
 | MySQL 过程/函数 FetchSize 提示 | 已实现并完成本轮验收 | Java 2.4.14 实库对照、36项原限制RED、相关单测100/100、公开DLL消费者48/48、MySQL过程/函数实库30/30、完整默认单测8053/8053、DI14/14；五资产Release零警告/错误，独立走查无遗留；内部结果不分页，输出语义保持，见[记录](history/2026-10-28-mysql-routine-fetch-hint.md) |
-| Oracle参数化文本多语句 | 已实现并完成本轮验收 | Java双模式对照确认客户端绑定支持；新增正常用例6项RED→GREEN，相关单测47/47、公开DLL消费者12/12、双模式直连组24/24（新增Oracle参数8项）、完整默认单测8063/8063、DI14/14，五资产Release零警告/错误，独立最终走查无遗留；详见[记录](history/2026-10-28-oracle-multi-statement-parameters.md)。MySQL参数仍缺，Prepare/cursor/输出及复杂输入继续拒绝 |
+| Oracle参数化文本多语句 | 已实现并完成本轮验收 | Java双模式对照确认客户端绑定支持；新增正常用例6项RED→GREEN，相关单测47/47、公开DLL消费者12/12、当时双模式直连组24/24（新增Oracle参数8项）、完整默认单测8063/8063、DI14/14，五资产Release零警告/错误，独立最终走查无遗留；详见[记录](history/2026-10-28-oracle-multi-statement-parameters.md)。MySQL普通输入本轮已补，其他边界见矩阵 |
+| MySQL参数化文本多语句 | 已实现并完成本轮验收 | 官方Java/实库对照；6项RED→GREEN、相关单测232/232、双模式公开DLL消费者24/24、双模式实库组78/78（新增MySQL54项，含12种非默认客户端字符集）、完整默认单测8102/8102（0失败、0跳过）、DI14/14、五资产Release零警告/错误，独立最终走查无待修发现；MySQL字符串保持值/collation/coercibility并支持NUL和SQL_MODE切换，解析字符集须稳定，详见[记录](history/2026-10-28-mysql-multi-statement-parameters.md) |
 | 生产级完整验收 | 未完成 | 完整资源/并发、真实OBProxy/TLS/auth/HA/版本/平台/运行时及发布审查 |
 
 ## 优先处理的明确缺实现
 
-1. MySQL 参数化文本多语句：官方 Java 与当前实库均已确认支持，客户端仍拒绝；先明确 SQL_MODE/字符集变化时的安全绑定契约。
+1. 多语句Date/Time/Timestamp输入：本轮官方Java双模式实库已确认可执行，当前.NET尚未实现；普通数字/字符串/二进制/NULL已支持，stream/复杂输入和Prepare/cursor/输出继续按依据分类，不据局部交付关闭整个工作包。
 2. 连接池完整 reset、资源隔离、并发和真实部署验收。
 3. 已有 Java/OceanBase 依据但仍受限的 REF CURSOR 输出、复杂类型和字符集形状，先按真实服务端矩阵确认。
 4. OB20 压缩/reroute 等当前 Java/协议依据不足的组合继续明确拒绝，不列为默认开发目标。

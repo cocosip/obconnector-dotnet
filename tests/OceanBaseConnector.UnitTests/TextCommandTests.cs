@@ -606,7 +606,7 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public async Task ParameterizedMultiStatementsAreRejectedBeforeSend(bool asynchronous)
+        public async Task ParameterizedMultiStatementCursorsAreRejectedBeforeSend(bool asynchronous)
         {
             var server = Server(async channel =>
             {
@@ -620,11 +620,13 @@ namespace OceanBaseConnector.UnitTests
                 UseInternalMySqlFixture(connection);
                 using var command = connection.CreateCommand();
                 command.CommandText = "select ?; select 2";
+                ((OceanBaseCommand)command).FetchSize = 1;
                 command.Parameters.Add(new OceanBaseParameter { Value = 1 });
                 var execute = asynchronous
                     ? new Func<Task>(() => command.ExecuteNonQueryAsync())
                     : () => { command.ExecuteNonQuery(); return Task.CompletedTask; };
                 await Assert.ThrowsAsync<NotSupportedException>(execute);
+                ((OceanBaseCommand)command).FetchSize = 0;
                 command.Parameters.Clear();
                 command.CommandText = "after multi statement rejection";
                 Assert.Equal(1, await command.ExecuteNonQueryAsync());
