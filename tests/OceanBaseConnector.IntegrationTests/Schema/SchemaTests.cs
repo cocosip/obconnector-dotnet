@@ -64,7 +64,7 @@ public sealed class SchemaTests
     }
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.WithCreateObjects), MemberType = typeof(ProfileTheoryData))]
-    public async Task CompositeKeysIndexesForeignKeysAndViewsHaveOrderedMetadata(string profileName)
+    public async Task CompositeKeysIndexesAndForeignKeysHaveOrderedMetadata(string profileName)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
@@ -73,9 +73,6 @@ public sealed class SchemaTests
         var parent = await db.TableAsync(connection, "A INTEGER, B INTEGER, CONSTRAINT " + pk + " PRIMARY KEY (A, B)", CancellationToken.None);
         var child = await db.TableAsync(connection, "A INTEGER, B INTEGER, CONSTRAINT " + fk + " FOREIGN KEY (A, B) REFERENCES " + parent + " (A, B) ON DELETE CASCADE", CancellationToken.None);
         await db.ExecuteAsync(connection, "CREATE INDEX " + index + " ON " + parent + " (B, A)", CancellationToken.None);
-        var view = db.NewObject("VIEW", registerCleanup: false);
-        await db.ExecuteAsync(connection, "CREATE VIEW " + view + " AS SELECT A FROM " + parent, CancellationToken.None);
-        db.RegisterDropCleanup("VIEW", view);
         var owner = db.Oracle ? Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture) : connection.Database;
         string?[] Filter(string table, string? item = null) => db.Oracle ? new[] { null, owner, table, item } : new[] { owner, null, table, item };
         using var keys = await connection.GetSchemaAsync("Keys", Filter(parent));
@@ -96,13 +93,26 @@ public sealed class SchemaTests
         using var foreignColumns = await connection.GetSchemaAsync("ForeignKeyColumns", Filter(child, fk));
         Assert.Equal(new[] { "A", "B" }, foreignColumns.Rows.Cast<DataRow>().Select(row => (string)row["COLUMN_NAME"]));
         Assert.Equal(new[] { "A", "B" }, foreignColumns.Rows.Cast<DataRow>().Select(row => (string)row["REFERENCED_COLUMN_NAME"]));
-        using var views = await connection.GetSchemaAsync("Views", Filter(view).Take(3).ToArray());
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.WithCreateObjects), MemberType = typeof(ProfileTheoryData))]
+    public async Task CreatedViewIsDiscoverable(string profileName)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var table = await db.TableAsync(connection, "A INTEGER", CancellationToken.None);
+        var view = db.NewObject("VIEW", registerCleanup: false);
+        await db.ExecuteAsync(connection, "CREATE VIEW " + view + " AS SELECT A FROM " + table, CancellationToken.None);
+        db.RegisterDropCleanup("VIEW", view);
+        var owner = db.Oracle ? Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture) : connection.Database;
+        using var views = await connection.GetSchemaAsync("Views", db.Oracle ? new[] { null, owner, view } : new[] { owner, null, view });
         Assert.Equal("VIEW", Assert.Single(views.Rows.Cast<DataRow>())["TABLE_TYPE"]);
     }
 
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.OracleWithCreateObjects), MemberType = typeof(ProfileTheoryData))]
-    public async Task OracleTypesSequencesAndSynonymsAreDiscoverableWithoutAdvancingSequence(string profileName)
+    public async Task OracleTypesAndSequencesAreDiscoverableWithoutAdvancingSequence(string profileName)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
@@ -112,10 +122,6 @@ public sealed class SchemaTests
         var sequence = db.NewObject("SEQUENCE", registerCleanup: false);
         await db.ExecuteAsync(connection, "CREATE SEQUENCE " + sequence + " START WITH 1 MAXVALUE 9999999999999999999999999999", CancellationToken.None);
         db.RegisterDropCleanup("SEQUENCE", sequence);
-        var table = await db.TableAsync(connection, "A INTEGER", CancellationToken.None);
-        var synonym = db.NewObject("SYNONYM", registerCleanup: false);
-        await db.ExecuteAsync(connection, "CREATE SYNONYM " + synonym + " FOR " + table, CancellationToken.None);
-        db.RegisterDropCleanup("SYNONYM", synonym);
         var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture);
         using var types = await connection.GetSchemaAsync("Types", new[] { null, owner, type });
         var typeRow = Assert.Single(types.Rows.Cast<DataRow>()); Assert.Equal("OBJECT", typeRow["TYPE_CODE"]); Assert.Equal(1, typeRow["ATTRIBUTE_COUNT"]);
@@ -123,6 +129,19 @@ public sealed class SchemaTests
         var sequenceRow = Assert.Single(sequences.Rows.Cast<DataRow>());
         Assert.Equal("9999999999999999999999999999", Assert.IsType<OceanBaseDecimal>(sequenceRow["MAXIMUM_VALUE"]).ToString());
         DatabaseContext.EqualNumber(await db.ScalarAsync(connection, "SELECT " + sequence + ".NEXTVAL FROM DUAL", CancellationToken.None), 1, "Metadata must not advance sequences.");
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.OracleWithCreateObjects), MemberType = typeof(ProfileTheoryData))]
+    public async Task OracleCreatedSynonymIsDiscoverable(string profileName)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var table = await db.TableAsync(connection, "A INTEGER", CancellationToken.None);
+        var synonym = db.NewObject("SYNONYM", registerCleanup: false);
+        await db.ExecuteAsync(connection, "CREATE SYNONYM " + synonym + " FOR " + table, CancellationToken.None);
+        db.RegisterDropCleanup("SYNONYM", synonym);
+        var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture);
         using var synonyms = await connection.GetSchemaAsync("Synonyms", new[] { null, owner, synonym });
         Assert.Equal(table, Assert.Single(synonyms.Rows.Cast<DataRow>())["OBJECT_NAME"]);
     }

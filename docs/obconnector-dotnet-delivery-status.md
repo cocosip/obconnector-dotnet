@@ -23,12 +23,12 @@
 | 环境事务管理器定时超时 | 已完成本轮直连矩阵 | 双模式同步异步4/4，真实超时事件、关闭前owner实际回滚、同物理会话的新事务及旧事务晚释放隔离；走查后补强原连接查询，最终事务/XA/故障相关组135/135。见[证据](history/2026-10-28-ambient-manager-timeout.md)；活动命令超时、in-doubt及管理器/代理崩溃仍开放 |
 | 活动事务取消/超时后重建 | 已完成本轮直连矩阵 | 新增8/8，完整事务/XA/故障组75/75通过、0跳过；确认旧写回滚、新物理会话及旧事务晚释放隔离，独立走查无发现。见[证据](history/2026-10-28-interrupted-transaction-recovery.md)；完整发送/执行边界和真实节点/代理故障仍开放 |
 | 文本多语句客户端门禁 | 已修复并验收 | 按Java客户端选项启用，不再要求服务端握手声明；本地回归RED→GREEN，专项13/13、双模式直连16/16、完整单测8140/8140、DI14/14；五资产Release零警告/错误，独立走查无发现。见[证据](history/2026-10-28-multi-statement-client-policy.md) |
-| LOCAL INFILE分块/源失败 | 已完成本轮直连矩阵 | 同步异步共4/4通过；大于1MiB、256行全部内容、流释放及失败后新会话/无重放验证，独立走查无发现。见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)；超限/真实取消/代理等门禁保留 |
+| LOCAL INFILE分块/源失败 | 已完成本轮直连矩阵 | 同步异步共4/4通过；大于1MiB、256行全部内容、流释放及失败后新会话/无重放验证，独立走查无发现。见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)；超限/同步源阻塞/其他中断及代理组合仍保留 |
 | Statement cache DDL/reset | 已完成本轮直连矩阵 | 双模式同步异步4/4，实际缓存复用、held/idle语句刷新及同物理会话reset后重备，独立走查无发现。见[证据](history/2026-10-28-statement-cache-live-lifecycle.md)；外部删列确认错误后条目淘汰及新结构读取另4/4，相关34/34，见[补验](history/2026-10-28-statement-cache-external-ddl.md)；特定reprepare错误及负载门禁保留 |
 | MySQL INSERT rewrite真实语义 | 已完成本轮直连矩阵 | 6/6验证Unicode默认值、触发器、事务和重复键失败边界；相关回归245通过/4配置跳过，走查后加强直接字符串读取断言。见[证据](history/2026-10-28-batch-rewrite-live-semantics.md) |
 | LOCAL INFILE源等待中断 | 已完成本轮直连矩阵 | 取消/超时新增2/2，协议组26/26；走查后修复失败路径任务等待，默认未启用实库18通过/137跳过。见[证据](history/2026-10-28-local-infile-interruption.md) |
 | LOCAL INFILE源流校验失败释放 | 已修复并验收 | 修复工厂流在CanRead校验失败前的泄漏，新增单测4项RED→GREEN、相关19/19，直连4/4及协议/缓存38/38；五资产构建零警告/错误、完整单测8144/8144、DI14/14、独立走查无遗留。见[记录](history/2026-10-28-local-infile-validation-ownership.md) |
-| 完整双模式直连复核 | 仍有失败，未整体关闭 | 截至`f51310d`，630项中606通过、18失败、6配置跳过；与此前600项快照的18项失败名称完全一致。默认未启用实库20通过/140跳过；字符集初始化、Oracle结果形状及目录权限问题保留，见[复核](history/2026-10-28-direct-profile-matrix.md) |
+| 完整双模式直连复核 | 仍有失败，未整体关闭 | 截至`05d226e`及目录测试拆分，643项中625通过、12失败、6配置跳过；与此前630项快照的18项失败名称完全一致。默认未启用实库22通过/142跳过；最新源码完整单测8144/8144、DI14/14及五资产构建零警告/错误。Oracle SJIS/Big5初始化、nested-table及游标结果形状和目录权限问题保留；utf8mb3归一校验已修复，见[归因](history/2026-10-28-direct-failure-triage.md) |
 | 写入请求/回包截断 | 已完成本轮直连矩阵 | 新增16/16，完整事务/XA/故障组91/91；独立核对实际零/一行、无重放、新租约及旧Command晚释放，走查无发现。见[证据](history/2026-10-28-write-outcome-boundaries.md)；驱动本地pre-send及真实服务器/代理/协调器故障仍开放 |
 | 外置LOB读取回包中断 | 已完成本轮直连矩阵 | Oracle BLOB/CLOB同步异步及整包/半包中断8/8；非unknown、Broken、新会话及旧资源晚释放时新LOB完整内容，相关回归244通过/4配置跳过；后续修正转发器在共享Acceptance项目中的内部类型访问编译错误，夹具10/10、验收网络/拓扑14/14、故障/LOB直连68/68，独立走查无遗留。见[证据](history/2026-10-28-external-lob-read-interruption.md)；其他中断点和代理reset仍开放 |
 | 连接池交叉借用隔离验收 | 已完成本轮直连矩阵 | MySQL/Oracle 直连共94通过、1配置跳过、0失败；Windows/.NET 10.0.14，SDK 11.0.100-rc.3 构建零警告/错误。证据见[兼容性记录](compatibility.md#2026-10-28-pool-cross-borrower-isolation-acceptance)；OBProxy、长期并发和完整资源边界仍开放 |

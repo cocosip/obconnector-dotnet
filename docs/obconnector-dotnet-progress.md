@@ -24,7 +24,7 @@
 | 功能 | 开发状态 | 已支持范围 | 还缺什么 / 验收边界 |
 | --- | --- | --- | --- |
 | Oracle Prepare和普通输出 | 部分实现 | 独立Prepare、OUT/RETURNING、普通输出正FetchSize提示、数组绑定 | 输出offset/数组正FetchSize仍拒绝；其余形状和部署组合待补 |
-| REF CURSOR输出和结果列 | 已实现 | 输出、文本/二进制四字节游标ID、二进制复杂cursor成员及执行所有权；Oracle 直连输出/分页/释放矩阵 15/16 通过 | `SELECT CURSOR(...)` 结果列在当前租户执行阶段返回 `902/HY000`；其余真实方向/分页/资源/代理矩阵仍未完整验收 |
+| REF CURSOR输出和结果列 | 部分实现 | 输出、四字节游标ID解析、二进制复杂cursor成员及执行所有权；Oracle 直连输出/分页/释放矩阵 15/16 通过 | 当前租户准备执行 `SELECT CURSOR(...)` 返回 `902/HY000`，官方Java同样失败；文本返回CURSOR元数据但实际值不符合四字节解析，不能承诺该形状可用，见[归因](history/2026-10-28-direct-failure-triage.md)；其余部署/资源矩阵仍待验收 |
 | REF CURSOR Input/InputOutput | 明确不支持 | Java 没有对应输入绑定路径，当前 OracleCommandPlan 在发送前拒绝 | 除非取得明确的 Java/OceanBase 输入协议依据，否则不实现 |
 | 复杂类型二进制结果 | 已实现 | 嵌套object/collection、命名/匿名布局、BLOB/CLOB/cursor成员；直连 OceanBase 4.4.2.2 的 object 表列形状已通过 | collection nested-table 表列在该服务端返回600/0A000；其他真实SQL形状、版本、资源生命周期仍待验收 |
 | 命名复杂LOB内容输入 | 已实现 | BLOB字节、严格UTF-8 CLOB文本、嵌套命名元素 | 接受内容不等于接受定位器；其他字符集/版本/代理待验收 |
@@ -36,7 +36,7 @@
 | 复杂整列RETURNING | 受限 | 已解析的类型身份及既有输出路径 | 未解析身份继续拒绝；不把它列为默认开发项 |
 | 类型描述缓存 | 已实现 | 显式清理、可观察DDL自动失效、嵌套与大小限制 | 外部/不透明DDL须显式清理；递归定义不支持，真实DDL矩阵待验收 |
 | 数值/时间及常见扩展类型 | 已实现 | NUMBER/FLOAT保真、signed scale、TZ/LTZ/INTERVAL、ROWID、Inf/NaN、MySQL BLOB族/ENUM/SET/原始GEOMETRY | 不代表所有类型码均支持；扩展元数据和未知类型仍拒绝 |
-| 客户端字符集 | 部分实现 | SQL/普通及JSON参数、复杂national输入、MySQL SJIS/Big5 Open、DBCS fallback、CLOB输入预校验 | 双模式utf8mb3被服务端报告为utf8mb4，严格Open仍拒绝；Oracle SJIS/Big5初始化返回900；非UTF8歧义表达式需ASCII别名，见[直连复核](history/2026-10-28-direct-profile-matrix.md) |
+| 客户端字符集 | 部分实现 | SQL/普通及JSON参数、复杂national输入、MySQL SJIS/Big5 Open、DBCS fallback、CLOB输入预校验；修复utf8mb3对服务端utf8mb4归一名的过严校验，原6项实库通过，输入限制与池身份保留 | Oracle SJIS/Big5初始化失败已由官方Java独立复现；非UTF8歧义表达式需ASCII别名，见[归因](history/2026-10-28-direct-failure-triage.md) |
 | national存储/输出 | 部分实现 | 已有可信national元数据及受支持结果路径 | 存储complex要求AL16UTF16，其他存储/匿名输出形状待补 |
 | JSON / CLOB结果 | 已实现 | 当前严格UTF-8协议契约 | 非默认输入的存储/转换、结果元数据、其他版本/代理仍待验收，不应无依据改为客户端编码解码 |
 

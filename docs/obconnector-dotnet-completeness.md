@@ -20,9 +20,9 @@
 | P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界；大于1MiB分块/源失败恢复4/4直连见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)，异步源等待期间取消/超时2/2见[中断记录](history/2026-10-28-local-infile-interruption.md)；修复CanRead校验失败前的工厂源流泄漏，单测4项RED→GREEN、直连4/4，见[释放记录](history/2026-10-28-local-infile-validation-ownership.md) | 超限输入、同步源阻塞及其他协议/中断组合仍待验收 | 代理策略及完整中断行为 |
 | P1-04 | TLS/mTLS | 服务器回调、客户端证书、池隔离、撤销选项 | 发现实际差异后补轮换/平台回归 | 企业CA、负向握手、过期/轮换、平台撤销 |
 | P1-05 | Command/Batch | SchemaOnly/KeyInfo/结果限制、MySQL过程/函数、Batch元数据；双模式直连补验 16 项 SchemaOnly/KeyInfo 矩阵（含组合主键、别名投影、可空唯一键和实际隐藏值读取），并修复 MySQL 目录大小写匹配 | 完整行为/结果形状矩阵，函数仅支持单 ReturnValue+Input，现有拒绝组合保留 | 权限/目录/prepare副作用/锁/游标 |
-| P1-06 | Oracle输出/游标 | Prepare、OUT/RETURNING、输出提示、文本/二进制cursor列；Oracle 直连输出/分页/释放矩阵 15/16 通过 | Input/InputOutput REF CURSOR 没有 Java 输入绑定依据，当前发送前拒绝；输出offset/数组正FetchSize也拒绝；`SELECT CURSOR(...)` 结果列在当前租户执行阶段返回 `902/HY000` | 真实方向/分页/资源/版本/代理；结果列形状需服务端支持后复验 |
+| P1-06 | Oracle输出/游标 | Prepare、OUT/RETURNING、输出提示、四字节cursor解析；Oracle 直连输出/分页/释放矩阵 15/16 通过 | Input/InputOutput REF CURSOR 没有 Java 输入绑定依据，当前发送前拒绝；输出offset/数组正FetchSize也拒绝；准备执行 `SELECT CURSOR(...)` 返回902且Java同样失败；文本元数据可返回，但实际游标值与现有四字节解析不兼容，见[归因](history/2026-10-28-direct-failure-triage.md) | 真实方向/分页/资源/版本/代理；不得承诺该结果列形状可用 |
 | P1-07 | 复杂类型 | 嵌套二进制结果、LOB/cursor结果、命名LOB内容/匿名locator输入、DDL失效 | 命名LOB定位器回绑、复杂cursor输入、文本复杂结果及未解析RETURNING身份没有足够协议依据，当前拒绝；其他形状按服务端矩阵决定 | DDL、真实复杂SQL、资源生命周期和更多部署profile |
-| P1-08 | 类型/字符集 | NUMBER/FLOAT、scale、常见扩展类型、客户端编码、MySQL DBCS fallback/Open、CLOB转码 | 其余national存储/输出、扩展类型/metadata；双模式utf8mb3严格Open及Oracle SJIS/Big5初始化失败，见[复核](history/2026-10-28-direct-profile-matrix.md) | JSON/CLOB转换/存储、完整字符集/版本/代理；保留失败 |
+| P1-08 | 类型/字符集 | NUMBER/FLOAT、scale、常见扩展类型、客户端编码、MySQL DBCS fallback/Open、CLOB转码；utf8mb3接受服务端utf8mb4归一名，保留mb3输入限制，原6项实库通过 | 其余national存储/输出、扩展类型/metadata；Oracle SJIS/Big5初始化失败由官方Java独立复现，见[归因](history/2026-10-28-direct-failure-triage.md) | JSON/CLOB转换/存储、完整字符集/版本/代理 |
 | P1-09 | HA/发现 | TCP重试/健康缓存、TNS/OCP、组/权重/黑名单/上限 | 其他发现/策略边界；TCP健康不等于数据库健康 | 实际发现服务/节点/代理故障 |
 | P1-10 | Schema | 双模式目录、DataTypes、原子参数派生、FLOAT/INOUT；本次直连 Schema 用例 10 项通过，CommandBehavior 元数据补验 16 项通过，过程参数推导再通过 MySQL 2 项和 Oracle 4 项 | 包内PL/SQL参数类型拒绝；当前 Oracle 租户 `CREATE VIEW`/`CREATE SYNONYM` 返回 `1031/HY000`，不增加客户端 workaround | 权限、大小写、重载、版本、代理及其他目录矩阵 |
 | P1-11 | 凭据轮换 | 每次Open取值、过期/取消、版本退休、脱敏 | 实际provider/plugin差异回归待补 | 凭据服务、plugin/KDC、拒绝/刷新/轮换 |

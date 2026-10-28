@@ -8,23 +8,32 @@
 `TestResults/direct-profile-final.*`。完整驱动单测8140/8140、DI14/14及五资产Release
 零警告/错误见[多语句模块](2026-10-28-multi-statement-client-policy.md)。
 后续新增写入边界16项、外置LOB读取回包中断8项及两项原生转发器fixture、外部删列缓存4项。
-截至 `f51310d` 的最新完整矩阵630项：606通过、18失败、6跳过，耗时1分50秒。
-逐项比较600项快照和本次TRX的失败名称，18项完全一致、差异为零。
-最新日志/TRX为ignored `TestResults/direct-profile-current.*`；默认不启用实库时
+截至 `f51310d` 的630项快照：606通过、18失败、6跳过，耗时1分50秒。
+逐项比较600项快照和该次TRX的失败名称，18项完全一致、差异为零。
+该次日志/TRX为ignored `TestResults/direct-profile-current.*`；默认不启用实库时
 20通过、140跳过、0失败，日志为 `TestResults/current-no-opt-in.log`。
 新模块分别见[写入边界](2026-10-28-write-outcome-boundaries.md)、
 [外置LOB](2026-10-28-external-lob-read-interruption.md)、
 [外部删列缓存](2026-10-28-statement-cache-external-ddl.md)，均已有独立走查及本地提交。
 
-18项失败保留为失败，没有删除用例、改成skip或放宽契约：
+截至 `05d226e` 及目录测试拆分后的矩阵643项：625通过、12失败、6跳过，耗时2分3秒。
+比630项快照增加两项转发器长SQL fixture、四项LOCAL INFILE源流校验释放、四项事务管理器超时。
+再次逐项比较失败名称，18项完全一致；日志/TRX为ignored
+`TestResults/direct-profile-ownership-timeout.*`。默认未启用实库时22通过、142跳过、0失败，
+日志为 `TestResults/ownership-timeout-no-opt-in.log`。
+最新生产源码完整单测8144/8144、DI14/14及五资产Release零警告/错误见
+[源流所有权修复](2026-10-28-local-infile-validation-ownership.md)；
+[管理器超时验收](2026-10-28-ambient-manager-timeout.md)已有独立走查、强化断言后的135/135相关回归和单独提交。
+
+6项utf8mb3失败已修复并通过实库复验；剩余12项按独立对照归因为服务端能力或账户权限限制，详见[失败归因](2026-10-28-direct-failure-triage.md)。没有删除用例、改成skip或放宽其他契约：
 
 | 项目 | 失败数 | 当前复核 |
 | --- | --- | --- |
-| Oracle complex national客户端编码 | 12 | utf8mb3、sjis、big5各4项止于Open；不代表数组绑定已执行失败 |
-| MySQL JSON/utf8mb3 | 2 | 同步/异步均止于Open的严格会话字符集校验，不代表JSON存储已完成验收 |
+| Oracle complex national客户端编码 | 8 retained | SJIS/Big5各4项止于Open；官方Java同样失败，utf8mb3 4项已修复通过 |
+| MySQL JSON/utf8mb3 | 0 retained | 同步/异步已通过修复后的mb3归一校验 |
 | Oracle nested-table表列 | 1 | 自有collection类型创建后，使用该类型建表返回600/0A000 |
 | Oracle SELECT CURSOR结果列 | 1 | 准备后执行阶段返回902/HY000，未取得结果列 |
-| Oracle目录对象权限 | 2 | CREATE VIEW与CREATE SYNONYM均返回1031/HY000，无法完成相应目录断言 |
+| Oracle目录对象权限 | 2 | CREATE VIEW与CREATE SYNONYM均返回1031/HY000；独立拆分后其余目录断言通过 |
 
 另用相同驱动公开API单独核对会话状态及服务端错误，源代码和日志保留在ignored
 `TestResults/charset-gap-probe/`、`TestResults/direct-gap-probe.log`。探针只创建随机自有
@@ -47,7 +56,7 @@
 已经完成的模块分别有本地提交、单测/实库证据和独立走查。当前工作包继续保持开放：
 
 - W1：外置LOB真实读取回包中断已后续补验8/8，见[记录](2026-10-28-external-lob-read-interruption.md)；其他中断点、完整资源交错与持续资源上限、代理reset仍缺。
-- W2：更多发送/执行边界、节点/代理和事务管理器故障。
+- W2：本地管理器空闲事务定时超时已补验4/4；活动命令超时/in-doubt、更多发送/执行边界、节点/代理和管理器崩溃仍缺。
 - W3：上传超限、其他协议组合、真实压缩帧和OB20/trace环境。
 - W4：实际TLS/mTLS、证书轮换、认证插件/KDC及多节点发现/HA。
 - W5/W6：上述失败的服务端/权限前提及其他类型/目录形状。
