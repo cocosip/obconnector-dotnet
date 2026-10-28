@@ -4,11 +4,17 @@
 
 以本轮已提交源码和本机显式启用的两套直连profile执行完整IntegrationTests。
 第一轮584项：560通过、18失败、6跳过。新增上传、缓存和批处理测试均单独通过；
-最终600项：576通过、18失败、6跳过，失败集合与首轮一致。日志/TRX为ignored
+此前600项：576通过、18失败、6跳过，失败集合与首轮一致。日志/TRX为ignored
 `TestResults/direct-profile-final.*`。完整驱动单测8140/8140、DI14/14及五资产Release
 零警告/错误见[多语句模块](2026-10-28-multi-statement-client-policy.md)。
-该全量快照之后新增写入边界16项，单独及完整事务/XA/故障组91/91通过，见
-[后续模块](2026-10-28-write-outcome-boundaries.md)；不将其冒充上述600项的一部分。
+后续新增写入边界16项、外置LOB读取回包中断8项及两项原生转发器fixture、外部删列缓存4项。
+截至 `f51310d` 的最新完整矩阵630项：606通过、18失败、6跳过，耗时1分50秒。
+逐项比较600项快照和本次TRX的失败名称，18项完全一致、差异为零。
+最新日志/TRX为ignored `TestResults/direct-profile-current.*`；默认不启用实库时
+20通过、140跳过、0失败，日志为 `TestResults/current-no-opt-in.log`。
+新模块分别见[写入边界](2026-10-28-write-outcome-boundaries.md)、
+[外置LOB](2026-10-28-external-lob-read-interruption.md)、
+[外部删列缓存](2026-10-28-statement-cache-external-ddl.md)，均已有独立走查及本地提交。
 
 18项失败保留为失败，没有删除用例、改成skip或放宽契约：
 
