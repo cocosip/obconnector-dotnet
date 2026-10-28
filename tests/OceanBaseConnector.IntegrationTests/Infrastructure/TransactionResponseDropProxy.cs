@@ -6,7 +6,6 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OceanBaseConnector.Internal.Protocol;
 
 namespace OceanBaseConnector.IntegrationTests.Infrastructure;
 
@@ -128,9 +127,20 @@ internal sealed class TransactionResponseDropProxy : IAsyncDisposable
         if (frame.Length <= 5 || frame[3] != 0) return false;
         if (frame[4] == 3) return Encoding.UTF8.GetString(frame, 5, frame.Length - 5) == _target;
         if (frame[4] != 0xa1) return false;
-        var cursor = new ByteCursor(frame, 4, frame.Length - 4);
-        cursor.ReadUInt8(); cursor.ReadUInt32(); cursor.ReadUInt8(); cursor.ReadUInt32();
-        return Encoding.UTF8.GetString(cursor.ReadLengthEncodedBytes()) == _target;
+        using var payload = new MemoryStream(frame, 4, frame.Length - 4, writable: false);
+        using var reader = new BinaryReader(payload);
+        reader.ReadByte(); reader.ReadUInt32(); reader.ReadByte(); reader.ReadUInt32();
+        ulong length = reader.ReadByte();
+        length = length switch
+        {
+            0xfb or 0xff => throw new InvalidDataException("A non-null SQL length is required."),
+            0xfc => reader.ReadUInt16(),
+            0xfd => (uint)(reader.ReadByte() | reader.ReadByte() << 8 | reader.ReadByte() << 16),
+            0xfe => reader.ReadUInt64(),
+            _ => length,
+        };
+        if (length > (ulong)(payload.Length - payload.Position)) throw new InvalidDataException("The SQL exceeds its request frame.");
+        return Encoding.UTF8.GetString(reader.ReadBytes((int)length)) == _target;
     }
 
     private static async Task<byte[]?> ReadFrame(Stream input, CancellationToken token)

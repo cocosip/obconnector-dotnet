@@ -10,7 +10,7 @@ profile下，BLOB/CLOB × 同步/异步 × 整包/半包截断共8/8通过。
 新LOB流/文本reader已占用新会话后才晚释放旧资源，完整内容仍逐字节/逐字符相等，
 随后普通SQL成功；清池/关闭后等待两个转发连接结束。
 
-复用原精确命令转发器，新增0xa1 PrepareExecute SQL识别，使用生产ByteCursor作有界读取。
+复用原精确命令转发器，新增0xa1 PrepareExecute SQL识别，使用标准BinaryReader作有界读取。
 先观察原生fixture两项失败、文本两项通过，再实现识别；全部本地fixture8/8通过。
 首次实库BLOB4项通过，CLOB4项因测试误用仅限BLOB的OpenRead失败，改用已有OpenTextReader
 契约后最终8/8通过；没有为迁就测试修改产品API或生产读取逻辑。
@@ -24,3 +24,14 @@ profile下，BLOB/CLOB × 同步/异步 × 整包/半包截断共8/8通过。
 证据限当前Oracle直连、Windows/.NET10、单上游明文标准协议。
 首帧marker=0是原生metadata，只证明真实读取回包已到达转发器，不证明内容块已接收或
 服务端READ已完成；不能替代真实OBProxy故障、其他读取中断点或持续资源压力验收。
+
+## 共享验收工具构建修正
+
+后续重新构建单测发现，Acceptance项目链接了同一份转发器源码，初版引用的内部ByteCursor
+在该项目中不可访问，导致CS0122。此前仅Integration构建不足以证明这个共享依赖通过。
+已改为标准库BinaryReader/MemoryStream，不扩大驱动内部可见范围；保留SQL长度、帧界限和序号校验。
+增加251/65536填充长度的原生SQL用例，覆盖两种多字节长度前缀，夹具现在10/10通过。
+Acceptance及UnitTests重新构建成功；验收网络/拓扑单测14/14、故障及外置LOB直连组68/68通过，
+独立走查无待修发现。日志为ignored `TestResults/relay-shared-acceptance-tests.log`、
+`TestResults/relay-shared-fixture-live.log`、`TestResults/relay-acceptance-build-green.log`。
+生产源码未改；完整单测门禁在下一源码修复模块重新执行，不能将此专项称为全量单测通过。

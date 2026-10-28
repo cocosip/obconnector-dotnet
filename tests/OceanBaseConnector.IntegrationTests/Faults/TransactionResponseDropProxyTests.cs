@@ -75,15 +75,18 @@ public sealed class TransactionResponseDropProxyTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public async Task RelaySuppressesOnlyArmedReplyAndForwardsReplacementUnchanged(bool partial, bool oracle)
+    [InlineData(false, false, 0)]
+    [InlineData(true, false, 0)]
+    [InlineData(false, true, 0)]
+    [InlineData(true, true, 0)]
+    [InlineData(false, true, 251)]
+    [InlineData(true, true, 65536)]
+    public async Task RelaySuppressesOnlyArmedReplyAndForwardsReplacementUnchanged(bool partial, bool oracle, int padding)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var upstream = new TcpListener(IPAddress.Loopback, 0); upstream.Start();
-        var payload = oracle ? OraclePrepareExecutePacket.Build(0, "COMMIT", 0, Array.Empty<byte>()) : Encoding.UTF8.GetBytes("\u0003COMMIT");
+        var sql = new string('x', padding) + "COMMIT";
+        var payload = oracle ? OraclePrepareExecutePacket.Build(0, sql, 0, Array.Empty<byte>()) : Encoding.UTF8.GetBytes("\u0003" + sql);
         var target = Frame(payload, 0);
         var response = Frame(new byte[] { 0, 0, 0, 2, 0, 0, 0 }, 1);
         var sameTextOtherSequence = Frame(payload, 1);
@@ -100,7 +103,8 @@ public sealed class TransactionResponseDropProxyTests
             await EqualFrame(second.GetStream(), target); await second.GetStream().WriteAsync(response, deadline.Token);
             Assert.Equal(0, await second.GetStream().ReadAsync(new byte[1], deadline.Token));
         });
-        var proxy = new TransactionResponseDropProxy("127.0.0.1", ((IPEndPoint)upstream.LocalEndpoint).Port, "COMMIT", partial);
+        var proxy = new TransactionResponseDropProxy("127.0.0.1", ((IPEndPoint)upstream.LocalEndpoint).Port, sql,
+            partial ? CommandDropPoint.PartialResponse : CommandDropPoint.WholeResponse);
         TcpClient? client = null; Exception? failure = null;
         try
         {
@@ -133,6 +137,6 @@ public sealed class TransactionResponseDropProxyTests
         async Task EqualFrame(Stream stream, byte[] expected)
         { var bytes = new byte[expected.Length]; await stream.ReadExactlyAsync(bytes, deadline.Token); Assert.Equal(expected, bytes); }
         static byte[] Frame(byte[] payload, byte sequence)
-        { var frame = new byte[payload.Length + 4]; frame[0] = (byte)payload.Length; frame[3] = sequence; payload.CopyTo(frame, 4); return frame; }
+        { var frame = new byte[payload.Length + 4]; frame[0] = (byte)payload.Length; frame[1] = (byte)(payload.Length >> 8); frame[2] = (byte)(payload.Length >> 16); frame[3] = sequence; payload.CopyTo(frame, 4); return frame; }
     }
 }
