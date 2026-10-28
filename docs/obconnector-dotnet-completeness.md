@@ -13,7 +13,7 @@
 | P0-02 | 会话隔离 | reset代际、状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA隔离；池销毁原子关闭 `Closed/Connecting` 借出和预热 session，保留 `Open/Busy` 借出连接并关闭池持有的探活/reset；双模式直连池隔离专项94通过/1跳过，Oracle直连资源生命周期矩阵32/32通过 | 任意隐式副作用、完整资源/中断/交错覆盖 | 代理reset、外置LOB真实中断、完整借用者隔离 |
 | P0-03 | Ambient | 单资源PSPE、取消/晚回调/终态保护；双模式直连16/16验证自动入列、数据库可见性及下一借用者事务隔离，见[证据](history/2026-10-28-ambient-transaction-acceptance.md) | 分布式提升和durable prepare不支持；完整失败覆盖待补 | 实际事务管理器、timeout/in-doubt和代理故障 |
 | P0-04 | Unknown outcome | 分类、销毁/新租约、16项受控网络断言、应用核对示例 | 完整发送/执行/取消故障边界；不重放未知写 | 服务器/代理/协调器全故障矩阵 |
-| P0-05 | 活动连接恢复 | 连接ERR置Broken、旧事务失效、显式Close/Open | 无透明迁移/自动重连/replay，先定契约；补完整重建 | 节点/代理断连和恢复 |
+| P0-05 | 活动连接恢复 | 连接ERR置Broken、旧事务失效、显式Close/Open；取消/超时事务双模式直连8/8验证新租约及旧事务晚释放隔离，见[证据](history/2026-10-28-interrupted-transaction-recovery.md) | 无透明迁移/自动重连/replay，先定契约；补完整重建 | 节点/代理断连和恢复 |
 | P0-06 | 池路由隔离 | resolver身份、Open快照、闲置退休和借出保留 | 其他边界/压力覆盖；无活动迁移/DNS-IP身份保证 | 单上游受控路由已通过，独立节点/代理HA仍缺 |
 | P1-01 | 多语句 | opt-in文本多结果 | 参数/Prepare/cursor/Oracle输出组合拒绝，扩展范围待定 | 中途错误/排空/版本/代理 |
 | P1-02 | 压缩/OB20 | 标准MySQL压缩、普通OB20及trace；服务端未声明 `CLIENT_COMPRESS` 时按 Java 降级为普通协议，双模式直连验收通过 | 压缩OB20、proxy reroute 当前明确拒绝；除非取得客户端协议依据，不列为默认开发项 | 真实压缩帧/OBProxy、TLS、跨平台及损坏/取消矩阵 |
