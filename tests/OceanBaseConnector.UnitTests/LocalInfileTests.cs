@@ -214,6 +214,43 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task LocalInfileRejectsPayloadBeyondLogicalPacketLimit(bool asynchronous)
+        {
+            var server = LocalInfileServer(async channel =>
+            {
+                await Query(channel, "load data local infile 'oversized.csv'");
+                await channel.WritePacketAsync(LocalInfile("oversized.csv"));
+                try
+                {
+                    while (true) Assert.NotEmpty(await channel.ReadPacketAsync());
+                }
+                catch (ProtocolException) { }
+            }, expectedCapability: true);
+            var source = new OversizedUploadStream(PacketChannel.DefaultMaxPacketSize + 1);
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Local Infile=true");
+            connection.LocalInfileStreamFactory = _ => source;
+            try
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "load data local infile 'oversized.csv'";
+                OceanBaseException error;
+                if (asynchronous) error = await Assert.ThrowsAsync<OceanBaseException>(() => command.ExecuteNonQueryAsync());
+                else error = Assert.Throws<OceanBaseException>(() => command.ExecuteNonQuery());
+                Assert.True(error.IsExecutionOutcomeUnknown);
+                Assert.IsType<ProtocolException>(error.InnerException);
+                Assert.Contains("maximum packet size", error.InnerException!.Message, StringComparison.Ordinal);
+                Assert.Equal(ConnectionState.Broken, connection.State);
+                Assert.Equal(1, source.DisposeCalls);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(1, source.DisposeCalls);
+        }
+
         [Fact]
         public async Task LocalInfileCancellationIsUnknownAndBreaksSession()
         {
@@ -310,6 +347,36 @@ namespace OceanBaseConnector.UnitTests
             public override int Read(byte[] buffer, int offset, int count) { Reads++; return base.Read(buffer, offset, count); }
             public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
             { Reads++; return base.ReadAsync(buffer, offset, count, cancellationToken); }
+            protected override void Dispose(bool disposing) { if (disposing) DisposeCalls++; base.Dispose(disposing); }
+        }
+
+        private sealed class OversizedUploadStream : Stream
+        {
+            private readonly long _length;
+            private long _remaining;
+            internal int DisposeCalls { get; private set; }
+            internal OversizedUploadStream(long length) { _length = length; _remaining = length; }
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => _length;
+            public override long Position { get => _length - _remaining; set => throw new NotSupportedException(); }
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                var read = (int)Math.Min(_remaining, count);
+                Array.Clear(buffer, offset, read);
+                _remaining -= read;
+                return read;
+            }
+            public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(Read(buffer, offset, count));
+            }
+            public override void Flush() { }
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
             protected override void Dispose(bool disposing) { if (disposing) DisposeCalls++; base.Dispose(disposing); }
         }
 

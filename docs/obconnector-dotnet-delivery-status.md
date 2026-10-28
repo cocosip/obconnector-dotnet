@@ -23,7 +23,7 @@
 | 环境事务管理器定时超时 | 已完成本轮直连矩阵 | 双模式同步异步4/4，真实超时事件、关闭前owner实际回滚、同物理会话的新事务及旧事务晚释放隔离；走查后补强原连接查询，最终事务/XA/故障相关组135/135。见[证据](history/2026-10-28-ambient-manager-timeout.md)；活动命令超时、in-doubt及管理器/代理崩溃仍开放 |
 | 活动事务取消/超时后重建 | 已完成本轮直连矩阵 | 新增8/8，完整事务/XA/故障组75/75通过、0跳过；确认旧写回滚、新物理会话及旧事务晚释放隔离，独立走查无发现。见[证据](history/2026-10-28-interrupted-transaction-recovery.md)；完整发送/执行边界和真实节点/代理故障仍开放 |
 | 文本多语句客户端门禁 | 已修复并验收 | 按Java客户端选项启用，不再要求服务端握手声明；本地回归RED→GREEN，专项13/13、双模式直连16/16、完整单测8140/8140、DI14/14；五资产Release零警告/错误，独立走查无发现。见[证据](history/2026-10-28-multi-statement-client-policy.md) |
-| LOCAL INFILE分块/源失败 | 已完成本轮直连矩阵 | 同步异步共4/4通过；大于1MiB、256行全部内容、流释放及失败后新会话/无重放验证，独立走查无发现。见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)；超限/同步源阻塞/其他中断及代理组合仍保留 |
+| LOCAL INFILE分块/源失败 | 已完成本轮直连矩阵 | 同步异步共4/4通过；大于1MiB、256行全部内容、流释放及失败后新会话/无重放验证，独立走查无发现。见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)；同步源阻塞/其他中断及代理组合仍保留 |
 | Statement cache DDL/reset | 已完成本轮直连矩阵 | 双模式同步异步4/4，实际缓存复用、held/idle语句刷新及同物理会话reset后重备，独立走查无发现。见[证据](history/2026-10-28-statement-cache-live-lifecycle.md)；外部删列确认错误后条目淘汰及新结构读取另4/4，相关34/34，见[补验](history/2026-10-28-statement-cache-external-ddl.md)；特定reprepare错误及负载门禁保留 |
 | MySQL INSERT rewrite真实语义 | 已完成本轮直连矩阵 | 6/6验证Unicode默认值、触发器、事务和重复键失败边界；相关回归245通过/4配置跳过，走查后加强直接字符串读取断言。见[证据](history/2026-10-28-batch-rewrite-live-semantics.md) |
 | LOCAL INFILE源等待中断 | 已完成本轮直连矩阵 | 取消/超时新增2/2，协议组26/26；走查后修复失败路径任务等待，默认未启用实库18通过/137跳过。见[证据](history/2026-10-28-local-infile-interruption.md) |
