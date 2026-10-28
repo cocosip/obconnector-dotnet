@@ -12,7 +12,10 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public async Task MySqlFunctionReturnValueUsesSetAndPublishesAfterPrivateSelect(bool asynchronous)
+        public Task MySqlFunctionReturnValueUsesSetAndPublishesAfterPrivateSelect(bool asynchronous)
+            => MySqlFunctionReturnValueCore(asynchronous);
+
+        private static async Task MySqlFunctionReturnValueCore(bool asynchronous, int fetchSize = 0)
         {
             var server = MySqlProcedureServer(async channel =>
             {
@@ -38,8 +41,9 @@ namespace OceanBaseConnector.UnitTests
             using var connection = new OceanBaseConnection(Configuration(server.Port));
             try
             {
-                await connection.OpenAsync(); using var command = connection.CreateCommand();
+                await connection.OpenAsync(); using var command = (OceanBaseCommand)connection.CreateCommand();
                 command.CommandType = CommandType.StoredProcedure; command.CommandText = "db.f";
+                command.FetchSize = fetchSize;
                 var returnValue = new OceanBaseParameter { Direction = ParameterDirection.ReturnValue, Value = "old" };
                 command.Parameters.Add(returnValue); command.Parameters.Add(new OceanBaseParameter { Value = 7L });
                 command.Parameters.Add(new OceanBaseParameter { Value = 5L });
@@ -48,6 +52,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
                 Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
                 Assert.Equal(42L, returnValue.Value);
+                Assert.Equal(fetchSize, command.FetchSize);
                 if (asynchronous) await command.DisposeAsync(); else command.Dispose();
                 using var after = connection.CreateCommand(); after.CommandText = "after function";
                 Assert.Equal(1, asynchronous ? await after.ExecuteNonQueryAsync() : after.ExecuteNonQuery());

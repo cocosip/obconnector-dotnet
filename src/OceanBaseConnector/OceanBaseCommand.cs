@@ -39,8 +39,8 @@ namespace OceanBaseConnector
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get => _timeout; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _timeout = value; } }
         /// <summary>Rows requested per server cursor fetch; zero uses ordinary result streaming.
-        /// Oracle array execution, internal output rows and cursor-valued columns do not page their parent result;
-        /// returned REF CURSOR readers have their own page size.</summary>
+        /// Stored routines and Oracle arrays do not page their internal results. Oracle cursor-valued columns
+        /// do not page their parent result; returned REF CURSOR readers have their own page size.</summary>
         public int FetchSize { get => _fetchSize; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _fetchSize = value; } }
         /// <summary>Use Oracle offset fetch for a positive FetchSize; requires OceanBase 2.2.5 or later.
         /// Not supported for Oracle output plans or cursor-valued result columns.</summary>
@@ -271,8 +271,8 @@ namespace OceanBaseConnector
                     (arrayCount != 0 || CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters, arrayCount) : null;
                 var mysql = CommandType == CommandType.StoredProcedure && session.Info!.Mode == OceanBaseCompatibilityMode.MySql
                     ? MySqlCommandPlan.Create(text, _parameters, _mysqlVariablePrefix ??= "obc_" + Guid.NewGuid().ToString("N"), session.ClientEncoding) : null;
-                if (mysql != null && (_fetchSize > 0 || !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientPsMultiResults)))
-                    throw new NotSupportedException("MySQL stored procedures require PS multi-results support and do not support FetchSize.");
+                if (mysql != null && !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientPsMultiResults))
+                    throw new NotSupportedException("MySQL stored procedures require PS multi-results support.");
                 var multiStatement = CommandType == CommandType.Text && SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
                 if (schemaOnly && multiStatement) throw new NotSupportedException("SchemaOnly requires a single statement.");
                 if (keyInfo && multiStatement) throw new NotSupportedException("KeyInfo requires a single statement.");
@@ -314,7 +314,7 @@ namespace OceanBaseConnector
                         parameter.Value is OceanBaseLob || (parameter.ComplexType ?? (parameter.Value as OceanBaseComplexValue)?.Type)?.Layout.HasLobMembers == true))
                         throw new NotSupportedException("LOB parameters require negotiated Use Lob Locators=true.");
                 // Internal PL/RETURNING output rows are not a fetch cursor.
-                var fetchSize = prepareOnly || schemaOnly || oracle != null ? 0 : _fetchSize;
+                var fetchSize = prepareOnly || schemaOnly || oracle != null || mysql != null ? 0 : _fetchSize;
                 if (prepareOnly) _explicitPreparation = true;
                 var binary = keyInfo || schemaOnly || oracle != null || mysql != null || _explicitPreparation || bindings.Parameters.Length != 0 || fetchSize > 0 || _prepared != null && _prepared.CommandText == bindings.CommandText;
                 var parameters = binary && !prepareOnly && !schemaOnly ? PreparedParameters.Encode(bindings.Parameters, session.Info!.Mode, validateOnly: true, clientEncoding: session.ClientEncoding) : Array.Empty<byte>();

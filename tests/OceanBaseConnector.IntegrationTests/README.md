@@ -63,6 +63,15 @@ Select a subset with `OB_INTEGRATION_PROFILES` (comma-separated names) or ordina
 
 Misconfiguration fails loudly: with the opt-in set, a missing file, an unresolvable environment reference or an unknown profile name fails the run instead of silently passing.
 
+## MySQL procedure and function FetchSize hints
+
+Filter `FullyQualifiedName~MySqlProcedureTests` with a MySQL `createObjects` profile.
+Twenty-four hint cases cover sync/async, implicit/explicit preparation and FetchSize 1 or
+Int32.MaxValue: procedures expose both results or drain on early close, publish OUT/INOUT
+after completion, and can execute twice; functions publish their return value. The hint stays
+unchanged and the connection remains usable. These are opt-in database tests outside CI;
+the current profiles disable TLS. They do not prove server cursor paging for routine results.
+
 ## Oracle array execution FetchSize hints
 
 Filter `FullyQualifiedName~ArrayBindingTests` with an Oracle `createObjects`/PrepareExecute

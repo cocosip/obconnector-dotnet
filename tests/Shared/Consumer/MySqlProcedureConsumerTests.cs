@@ -22,7 +22,10 @@ namespace OceanBaseConnector.ConsumerTests
 
         [Theory]
         [MemberData(nameof(MySqlProcedureAssets))]
-        public async Task EveryAssetExecutesMySqlProcedureAndPublishesOutputsOnClose(string target, bool async, bool ob20, bool encrypted, bool deprecated)
+        public Task EveryAssetExecutesMySqlProcedureAndPublishesOutputsOnClose(string target, bool async, bool ob20, bool encrypted, bool deprecated)
+            => MySqlProcedureConsumerCore(target, async, ob20, encrypted, deprecated);
+
+        private static async Task MySqlProcedureConsumerCore(string target, bool async, bool ob20, bool encrypted, bool deprecated, int fetchSize = 0)
         {
             using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
@@ -61,7 +64,7 @@ namespace OceanBaseConnector.ConsumerTests
                     await Reply(new byte[] { 0, 0, 0, 2, 0, 0, 0 });
                     Assert.Equal(new byte[] { 25, 80, 0, 0, 0 }, await Read());
                     Assert.Equal(OceanBaseCommand.SqlPacket("CALL `p`(?, " + string.Join(", ", variables) + ")", 22), await Read());
-                    await Prepare(81, 1); request = await Read(); Assert.Equal(23, request[0]); Assert.Equal(81, request[1]);
+                    await Prepare(81, 1); request = await Read(); Assert.Equal(23, request[0]); Assert.Equal(81, request[1]); Assert.Equal(0, request[5]);
                     var result = new List<byte[]> { new byte[] { 1 }, Column(8) };
                     if (!deprecated) result.Add(End(2));
                     result.Add(new byte[] { 0, 0, 9, 0, 0, 0, 0, 0, 0, 0 }); result.Add(End(10)); result.Add(new byte[] { 0, 3, 0, 2, 0, 0, 0 });
@@ -100,8 +103,10 @@ namespace OceanBaseConnector.ConsumerTests
                 using (var command = connection.CreateCommand())
                 {
                     command.CommandType = CommandType.StoredProcedure; command.CommandText = "p";
+                    command.GetType().GetProperty("FetchSize")!.SetValue(command, fetchSize);
                     var parameters = Bind(command.Parameters, command.CreateParameter);
                     await ReadClose(async ? await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, budget.Token) : command.ExecuteReader(CommandBehavior.SequentialAccess), parameters);
+                    Assert.Equal(fetchSize, command.GetType().GetProperty("FetchSize")!.GetValue(command));
                 }
                 if (modern)
                 {

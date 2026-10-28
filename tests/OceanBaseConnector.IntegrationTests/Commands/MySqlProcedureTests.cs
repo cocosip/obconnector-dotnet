@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,7 +34,31 @@ public sealed class MySqlProcedureTests
     [MemberData(nameof(ProfileTheoryData.MySqlWithCreateObjects), MemberType = typeof(ProfileTheoryData))]
     public Task MySqlFunctionReturnValueAsync(string profileName) => ExecuteFunction(profileName, asynchronous: true);
 
-    private static async Task Execute(string profileName, bool asynchronous, bool earlyClose)
+    public static IEnumerable<object[]> FetchHintProfiles()
+    {
+        foreach (var profile in ProfileTheoryData.MySqlWithCreateObjects())
+            foreach (var asynchronous in new[] { false, true })
+                foreach (var prepared in new[] { false, true })
+                    foreach (var fetchSize in new[] { 1, int.MaxValue })
+                        yield return new object[] { profile, asynchronous, prepared, fetchSize };
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(FetchHintProfiles))]
+    public Task ProcedureFetchHintPreservesResultsAndOutputs(string profileName, bool asynchronous, bool prepared, int fetchSize)
+        => Execute(profileName, asynchronous, earlyClose: false, fetchSize, prepared);
+
+    [IntegrationTheory]
+    [MemberData(nameof(FetchHintProfiles))]
+    public Task ProcedureFetchHintPreservesOutputsOnEarlyClose(string profileName, bool asynchronous, bool prepared, int fetchSize)
+        => Execute(profileName, asynchronous, earlyClose: true, fetchSize, prepared);
+
+    [IntegrationTheory]
+    [MemberData(nameof(FetchHintProfiles))]
+    public Task FunctionFetchHintPreservesReturnValue(string profileName, bool asynchronous, bool prepared, int fetchSize)
+        => ExecuteFunction(profileName, asynchronous, fetchSize, prepared);
+
+    private static async Task Execute(string profileName, bool asynchronous, bool earlyClose, int fetchSize = 0, bool prepared = true)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         var builder = db.Profile.CreateBuilder();
@@ -54,10 +79,11 @@ public sealed class MySqlProcedureTests
         });
         await using var command = db.Command(connection, name);
         command.CommandType = CommandType.StoredProcedure;
+        command.FetchSize = fetchSize;
         DatabaseContext.Parameter(command, "ignored", 7L, DbType.Int64);
         var output = DatabaseContext.Parameter(command, "o", -1L, DbType.Int64); output.Direction = ParameterDirection.Output;
         var inout = DatabaseContext.Parameter(command, "s", "中文'input", DbType.String); inout.Direction = ParameterDirection.InputOutput;
-        if (asynchronous) await command.PrepareAsync(); else command.Prepare();
+        if (prepared) { if (asynchronous) await command.PrepareAsync(); else command.Prepare(); }
         for (var attempt = 0; attempt < 2; attempt++)
         {
             output.Value = -1L; inout.Value = "中文'input";
@@ -76,11 +102,12 @@ public sealed class MySqlProcedureTests
             if (asynchronous) await reader.CloseAsync(); else reader.Close();
             DatabaseContext.EqualNumber(output.Value, 8, "Stored procedure OUT mismatch.");
             Assert.Equal("中文'input-done", inout.Value);
+            Assert.Equal(fetchSize, command.FetchSize);
         }
         DatabaseContext.EqualNumber(await db.ScalarAsync(connection, "SELECT 1", CancellationToken.None), 1, "Connection is unusable after procedure completion.");
     }
 
-    private static async Task ExecuteFunction(string profileName, bool asynchronous)
+    private static async Task ExecuteFunction(string profileName, bool asynchronous, int fetchSize = 0, bool prepared = false)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         var builder = db.Profile.CreateBuilder();
@@ -95,10 +122,14 @@ public sealed class MySqlProcedureTests
         });
         await using var command = db.Command(connection, name);
         command.CommandType = CommandType.StoredProcedure;
+        command.FetchSize = fetchSize;
         var returned = DatabaseContext.Parameter(command, "RETURN_VALUE", -1L, DbType.Int64);
         returned.Direction = ParameterDirection.ReturnValue;
         DatabaseContext.Parameter(command, "p", 7L, DbType.Int64);
+        if (prepared) { if (asynchronous) await command.PrepareAsync(); else command.Prepare(); }
         if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
         DatabaseContext.EqualNumber(returned.Value, 42, "MySQL function ReturnValue mismatch.");
+        Assert.Equal(fetchSize, command.FetchSize);
+        DatabaseContext.EqualNumber(await db.ScalarAsync(connection, "SELECT 1", CancellationToken.None), 1, "Connection is unusable after function completion.");
     }
 }

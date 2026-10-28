@@ -59,7 +59,7 @@
 | 功能 | 开发状态 | 已支持范围 | 还缺什么 / 验收边界 |
 | --- | --- | --- | --- |
 | Command/Batch行为 | 部分实现 | Prepare-only SchemaOnly、有界KeyInfo、SingleRow/SingleResult、Batch元数据及结果限制；双模式直连已补 16 项 SchemaOnly/KeyInfo 矩阵（含组合主键、别名投影、可空唯一键和实际隐藏值读取），新增双模式 Batch SingleRow/SingleResult 同步异步 4 项直连验收，修复 MySQL 目录大小写匹配 | 完整游标/结果形状、目录权限、锁与副作用矩阵待补 |
-| MySQL过程/函数 | 已实现 | 过程集合顺序Input/Output/InputOutput；函数单ReturnValue+Input、隐藏输出和多结果；本次 acceptance console 真实 MySQL 同步/异步函数各1项通过 | 函数不接受Output/InputOutput混用；FetchSize、SchemaOnly/KeyInfo、INOUT stream仍拒绝 |
+| MySQL过程/函数 | 已实现 | 过程集合顺序Input/Output/InputOutput；函数单ReturnValue+Input、隐藏输出和多结果；过程/函数正FetchSize提示不分页，见[提示记录](history/2026-10-28-mysql-routine-fetch-hint.md)；MySQL过程/函数直连组30/30（含正提示24项）通过 | 函数不接受Output/InputOutput混用；SchemaOnly/KeyInfo、INOUT stream仍拒绝；真实部署矩阵仍缺 |
 | Schema / 参数推导 | 已实现（直连验收部分完成） | 双模式目录、DataTypes、原子参数派生、FLOAT及INOUT归一化；本次双模式 Schema 实库用例 10 项通过，CommandBehavior 元数据补验 16 项通过，过程参数推导再通过 MySQL 2 项和 Oracle 4 项 | Oracle Views/Synonyms 建对象在当前租户返回 `1031/HY000`，不作为客户端 workaround；权限/大小写/重载/版本/代理目录待验收，见[Schema 记录](history/2026-10-28-schema-acceptance.md)和[参数推导记录](history/2026-10-28-routine-derivation-acceptance.md) |
 | DataAdapter / CommandBuilder | 已移出支持范围 | Connector/J 没有对应能力，当前 CRUD 使用显式 `OceanBaseCommand` | 不再提供 public 类型、factory 入口或自动 CRUD 生成 |
 | Statement cache | 已实现 | opt-in idle LRU、容量/关闭、上下文/DDL/reset代际失效；双模式直连4/4验证实际缓存命中、held/idle语句DDL刷新及池reset重备，见[证据](history/2026-10-28-statement-cache-live-lifecycle.md)；外部删列确认错误后条目淘汰及重建命令读取新结构4/4，见[补验](history/2026-10-28-statement-cache-external-ddl.md) | 其他外部DDL、特定reprepare错误、资源和负载报告待验收 |

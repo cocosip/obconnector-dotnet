@@ -41,7 +41,8 @@ namespace OceanBaseConnector.UnitTests
                 command.Parameters.Add(new OceanBaseParameter { Direction = ParameterDirection.ReturnValue });
                 command.Parameters.Add(new OceanBaseParameter { Direction = ParameterDirection.Output });
                 Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery()); command.Parameters.Clear();
-                command.FetchSize = 1; Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery()); command.FetchSize = 0;
+                command.FetchSize = 1; command.UseCursorOffset = true;
+                Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery()); command.FetchSize = 0; command.UseCursorOffset = false;
                 Assert.Throws<NotSupportedException>(() => command.ExecuteReader(CommandBehavior.SchemaOnly));
                 Assert.Throws<NotSupportedException>(() => command.ExecuteReader(CommandBehavior.KeyInfo));
                 command.Parameters.Add(new OceanBaseParameter { Direction = ParameterDirection.InputOutput, Value = new MemoryStream() });
@@ -64,7 +65,10 @@ namespace OceanBaseConnector.UnitTests
 
         [Theory]
         [MemberData(nameof(MySqlProcedureFailureCases))]
-        public async Task MySqlProcedureFailureDoesNotPublishPartialOutputsOrReplay(bool async, int stage)
+        public Task MySqlProcedureFailureDoesNotPublishPartialOutputsOrReplay(bool async, int stage)
+            => MySqlProcedureFailureCore(async, stage);
+
+        private static async Task MySqlProcedureFailureCore(bool async, int stage, int fetchSize = 0)
         {
             var server = MySqlProcedureServer(async channel =>
             {
@@ -99,6 +103,7 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await connection.OpenAsync(); var command = (OceanBaseCommand)connection.CreateCommand(); var parameters = AddMySqlProcedureParameters(command);
+                command.FetchSize = fetchSize;
                 var old = parameters.Output.Value;
                 var error = await Record.ExceptionAsync(async () => { if (async) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery(); });
                 Assert.NotNull(error); Assert.Same(old, parameters.Output.Value); Assert.Equal("中文'input", parameters.InOut.Value);

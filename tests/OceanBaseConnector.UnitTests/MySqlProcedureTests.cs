@@ -93,7 +93,10 @@ namespace OceanBaseConnector.UnitTests
 
         [Theory]
         [MemberData(nameof(MySqlProcedureCases))]
-        public async Task MySqlProcedureStreamsResultsAndPublishesOutputsOnlyAfterPrivateSelectCompletes(bool async, bool deprecated, bool sequential, bool close)
+        public Task MySqlProcedureStreamsResultsAndPublishesOutputsOnlyAfterPrivateSelectCompletes(bool async, bool deprecated, bool sequential, bool close)
+            => MySqlProcedureResultsCore(async, deprecated, sequential, close);
+
+        private static async Task MySqlProcedureResultsCore(bool async, bool deprecated, bool sequential, bool close, int fetchSize = 0)
         {
             var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -121,9 +124,10 @@ namespace OceanBaseConnector.UnitTests
             using var connection = new OceanBaseConnection(Configuration(server.Port));
             try
             {
-                await connection.OpenAsync(); using var command = connection.CreateCommand();
+                await connection.OpenAsync(); using var command = (OceanBaseCommand)connection.CreateCommand();
                 Assert.Equal(OceanBaseCompatibilityMode.MySql, connection.CompatibilityMode);
                 command.CommandType = CommandType.StoredProcedure; command.CommandText = "db.`p``name`";
+                command.FetchSize = fetchSize;
                 command.Parameters.Add(new OceanBaseParameter { ParameterName = "ignored name", Value = 7L });
                 var output = new OceanBaseParameter { Direction = ParameterDirection.Output, Value = new object() };
                 var inout = new OceanBaseParameter { Direction = ParameterDirection.InputOutput, Value = "中文'input" };
@@ -149,6 +153,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Throws<InvalidOperationException>(() => blocked.ExecuteNonQuery());
                 release.TrySetResult(); await completing.WaitAsync(TimeSpan.FromSeconds(10));
                 Assert.Equal(DBNull.Value, output.Value); Assert.Equal("new", inout.Value); Assert.Equal(3, reader.RecordsAffected);
+                Assert.Equal(fetchSize, command.FetchSize);
                 if (async) await command.DisposeAsync(); else command.Dispose();
                 using var after = connection.CreateCommand(); after.CommandText = "after procedure"; Assert.Equal(1, await after.ExecuteNonQueryAsync());
             }

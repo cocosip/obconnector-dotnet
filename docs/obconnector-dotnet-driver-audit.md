@@ -131,7 +131,7 @@ Java 和 .NET 的连接池都已存在；.NET 默认 `Pooling=false`。会话识
 | 本地事务 | 部分实现；本地单资源模块 | MySQL/Oracle 隔离级别、savepoint；PSPE 单资源、终态/身份及自动初始化取消/失败清理回归 | 真实模式/版本/代理/事务管理器故障和恢复示例；分布式提升明确拒绝 |
 | Unknown outcome | 部分实现 | 异常可标记未知执行结果，驱动不自动 replay | 发送/响应/commit/rollback 故障状态机和真实故障验证 |
 | XA | 部分实现 | Start/End/Prepare/Commit/Rollback/Recover，MySQL/Oracle 分支 | coordinator crash recovery、普通池与 XA 的完整隔离验证 |
-| MySQL 过程/函数 | 部分实现 | 过程集合顺序 Input/Output/InputOutput、显式 Prepare、多结果及关闭排空输出；函数单 ReturnValue+Input 的 SET/隐藏 SELECT | PS_MULTI_RESULTS 必需；函数 ReturnValue 不得混用 Output/InputOutput，FetchSize/SchemaOnly/KeyInfo/INOUT stream 仍拒绝；真实 TLS/代理/版本/资源矩阵仍缺 |
+| MySQL 过程/函数 | 部分实现 | 过程集合顺序 Input/Output/InputOutput、显式 Prepare、正FetchSize提示、多结果及关闭排空输出；函数单 ReturnValue+Input 的 SET/隐藏 SELECT | PS_MULTI_RESULTS 必需；函数 ReturnValue 不得混用 Output/InputOutput，SchemaOnly/KeyInfo/INOUT stream 仍拒绝；真实 TLS/代理/版本/资源矩阵仍缺 |
 | Oracle 输出与游标 | 部分实现 | PrepareExecute、独立Prepare、OUT/RETURNING、REF CURSOR输出、文本/二进制cursor列、LOB、array binding | Input/InputOutput REF CURSOR 没有 Java 输入绑定依据，当前拒绝；真实列值/输出形状矩阵仍待验收；数组正FetchSize提示已接受，输出offset仍拒绝 |
 | 复杂类型 | 部分实现 | object/collection标量/嵌套、有界national、二进制LOB/cursor结果成员、命名LOB内容/匿名标量定位器输入、类型缓存、array binding和可观察DDL失效 | 无足够协议依据的命名LOB定位器回绑/复杂cursor输入/文本复杂结果/未解析身份整列RETURNING继续拒绝；外部/不透明DDL须显式清理，真实矩阵未闭合 |
 | 类型与字符集 | 部分实现 | 常用类型、精确NUMBER/FLOAT及signed DecimalScale、普通结果严格解码/宽度、多种客户端SQL/参数编码、JSON参数和CLOB输入预校验、配置的非UTF-8 MySQL字符串fallback、全部配置编码的复杂national输入及Oracle模式初始化/重验 | CLOB读取UTF-8及复杂national存储AL16UTF16边界、非UTF-8无别名表达式元数据歧义；JSON结果严格UTF-8与所查服务器路径一致，其他JSON存储/元数据/版本仍待验收；三种编码Oracle Open实库失败保留；其他类型/metadata及真实编码矩阵 |
