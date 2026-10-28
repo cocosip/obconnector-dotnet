@@ -30,6 +30,7 @@ namespace OceanBaseConnector.Internal.Session
         private readonly object _gate = new object();
         private readonly Stack<PhysicalSession> _idle = new Stack<PhysicalSession>();
         private readonly HashSet<PhysicalSession> _sessions = new HashSet<PhysicalSession>();
+        private readonly HashSet<PhysicalSession> _warming = new HashSet<PhysicalSession>();
         private readonly HashSet<PhysicalSession> _retiredSessions = new HashSet<PhysicalSession>();
         private long _clearGeneration;
         private EndpointHealthCache _endpointHealth = new EndpointHealthCache();
@@ -422,7 +423,9 @@ namespace OceanBaseConnector.Internal.Session
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback, endpointHealth: HealthForGeneration(generation));
-                        session.Open(cancellationToken);
+                        TrackWarming(session);
+                        try { session.Open(cancellationToken); }
+                        finally { UntrackWarming(session); }
                         registrationAttempted = true;
                         RegisterCreated(session, generation, idle: true);
                         warmed.Add(session);
@@ -457,7 +460,9 @@ namespace OceanBaseConnector.Internal.Session
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         session = new PhysicalSession(options, resolver, selector, TlsClientCertificate, resolvedEndpoints: endpoints, remoteCertificateValidationCallback: RemoteCertificateValidationCallback, endpointHealth: HealthForGeneration(generation));
-                        await session.OpenAsync(cancellationToken).ConfigureAwait(false);
+                        TrackWarming(session);
+                        try { await session.OpenAsync(cancellationToken).ConfigureAwait(false); }
+                        finally { UntrackWarming(session); }
                         registrationAttempted = true;
                         RegisterCreated(session, generation, idle: true);
                         warmed.Add(session);
@@ -490,6 +495,20 @@ namespace OceanBaseConnector.Internal.Session
                 _opening++;
                 return true;
             }
+        }
+
+        private void TrackWarming(PhysicalSession session)
+        {
+            lock (_gate)
+            {
+                if (_disposed) throw new ObjectDisposedException(nameof(PhysicalSessionPool));
+                _warming.Add(session);
+            }
+        }
+
+        private void UntrackWarming(PhysicalSession session)
+        {
+            lock (_gate) _warming.Remove(session);
         }
 
         private static bool ContainsEndpoint(IReadOnlyList<OceanBaseEndpoint>? endpoints, string endpoint)
@@ -698,6 +717,7 @@ namespace OceanBaseConnector.Internal.Session
         {
             PhysicalSession[] sessions;
             List<PhysicalSession> opening;
+            List<PhysicalSession> warming;
             int waiters;
             lock (_gate)
             {
@@ -711,6 +731,7 @@ namespace OceanBaseConnector.Internal.Session
                 opening = new List<PhysicalSession>();
                 foreach (var session in _sessions)
                     if (_borrowed.Contains(session)) opening.Add(session);
+                warming = new List<PhysicalSession>(_warming);
                 waiters = _waiters;
             }
             foreach (var session in sessions)
@@ -738,6 +759,12 @@ namespace OceanBaseConnector.Internal.Session
                 session.Dispose();
                 DriverDiagnostics.PoolSessionRemoved();
                 DriverDiagnostics.PoolDiscarded();
+            }
+            foreach (var session in warming)
+            {
+                session.TryCloseOpening();
+                lock (_gate) _warming.Remove(session);
+                session.Dispose();
             }
             for (var i = 0; i < waiters; i++) _available.Release();
             TlsClientCertificate?.Dispose();

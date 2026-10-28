@@ -186,6 +186,54 @@ namespace OceanBaseConnector.UnitTests.Session
         }
 
         [Fact]
+        public async Task DisposedPoolCancelsSessionDuringMinPoolWarmup()
+        {
+            var greetingSent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var server = LoopbackServer.Start(async client =>
+            {
+                using (client)
+                {
+                    var channel = new PacketChannel(client.GetStream());
+                    await channel.WritePacketAsync(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
+                    greetingSent.TrySetResult();
+                    var buffer = new byte[1];
+                    while (await client.GetStream().ReadAsync(buffer, 0, buffer.Length) != 0) { }
+                }
+            });
+            var options = new OceanBaseConnectionStringBuilder
+            {
+                Server = "127.0.0.1",
+                Port = server.Port,
+                UserId = "u",
+                Password = "p",
+                TlsMode = OceanBaseTlsMode.Disabled,
+                ConnectionTimeout = 5,
+                Pooling = true,
+                MinPoolSize = 1,
+                MaxPoolSize = 1,
+            }.Build();
+            using var pool = new PhysicalSessionPool();
+            var renting = Task.Run(() =>
+            {
+                var session = pool.Rent(options, null, new EndpointSelector(), out _);
+                session.Dispose();
+            });
+            try
+            {
+                await greetingSent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                pool.Dispose();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => renting.WaitAsync(TimeSpan.FromSeconds(2)));
+            }
+            finally
+            {
+                pool.Dispose();
+                server.Stop();
+                await Record.ExceptionAsync(() => renting);
+                await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+        }
+
+        [Fact]
         public async Task PoolWaitsAndTimesOutWhenMaximumIsBorrowed()
         {
             var options = new OceanBaseConnectionStringBuilder
