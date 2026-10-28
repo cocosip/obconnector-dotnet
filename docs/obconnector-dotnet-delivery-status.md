@@ -22,6 +22,7 @@
 | 单资源环境事务直连验收 | 已完成本轮矩阵 | 新增16/16通过，完整事务/XA/故障直连组67/67通过；独立走查后加强下一借用者的未提交事务隔离断言。见[模块证据](history/2026-10-28-ambient-transaction-acceptance.md)；事务管理器/代理/服务器故障门禁保留 |
 | 活动事务取消/超时后重建 | 已完成本轮直连矩阵 | 新增8/8，完整事务/XA/故障组75/75通过、0跳过；确认旧写回滚、新物理会话及旧事务晚释放隔离，独立走查无发现。见[证据](history/2026-10-28-interrupted-transaction-recovery.md)；完整发送/执行边界和真实节点/代理故障仍开放 |
 | 文本多语句客户端门禁 | 已修复并验收 | 按Java客户端选项启用，不再要求服务端握手声明；本地回归RED→GREEN，专项13/13、双模式直连16/16、完整单测8140/8140、DI14/14；五资产Release零警告/错误，独立走查无发现。见[证据](history/2026-10-28-multi-statement-client-policy.md) |
+| LOCAL INFILE分块/源失败 | 已完成本轮直连矩阵 | 同步异步共4/4通过；大于1MiB、256行全部内容、流释放及失败后新会话/无重放验证，独立走查无发现。见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)；超限/真实取消/代理等门禁保留 |
 | 连接池交叉借用隔离验收 | 已完成本轮直连矩阵 | MySQL/Oracle 直连共94通过、1配置跳过、0失败；Windows/.NET 10.0.14，SDK 11.0.100-rc.3 构建零警告/错误。证据见[兼容性记录](compatibility.md#2026-10-28-pool-cross-borrower-isolation-acceptance)；OBProxy、长期并发和完整资源边界仍开放 |
 | MySQL 存储函数 ReturnValue | 已实现并完成直连验收 | 单ReturnValue+Input 使用 `SET @var = function(?)` 和隐藏 `SELECT`；同步/异步单测及真实 OceanBase MySQL 各通过1项；完整代理/版本/运行时矩阵仍开放 |
 | 原23项审计项 / 八包 | P2-01 已移除，其余按证据分类 | 子功能已实现范围见矩阵；没有整体完成百分比 |

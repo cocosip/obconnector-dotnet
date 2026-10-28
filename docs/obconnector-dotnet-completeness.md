@@ -17,7 +17,7 @@
 | P0-06 | 池路由隔离 | resolver身份、Open快照、闲置退休和借出保留 | 其他边界/压力覆盖；无活动迁移/DNS-IP身份保证 | 单上游受控路由已通过，独立节点/代理HA仍缺 |
 | P1-01 | 多语句 | opt-in文本多结果；修复客户端请求位门禁，双模式直连16/16验证完整结果、未读销毁/重建、中途错误与默认关闭无副作用，见[证据](history/2026-10-28-multi-statement-client-policy.md) | 参数/Prepare/cursor/Oracle输出组合拒绝，扩展范围待定 | 更多结果形状、版本/代理 |
 | P1-02 | 压缩/OB20 | 标准MySQL压缩、普通OB20及trace；服务端未声明 `CLIENT_COMPRESS` 时按 Java 降级为普通协议，双模式直连验收通过 | 压缩OB20、proxy reroute 当前明确拒绝；除非取得客户端协议依据，不列为默认开发项 | 真实压缩帧/OBProxy、TLS、跨平台及损坏/取消矩阵 |
-| P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界；同步/异步 `LOAD DATA LOCAL INFILE` 已在直连 OceanBase MySQL 4.4.2.2 通过 | 大输入/取消组合不纳入本模块新增实库范围 | 代理策略、大文件及中断行为 |
+| P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界；同步/异步基础上传及大于1MiB分块/源失败恢复4/4直连通过，见[证据](history/2026-10-28-local-infile-chunked-acceptance.md) | 超限输入、真实上传取消/超时组合仍待验收 | 代理策略及完整中断行为 |
 | P1-04 | TLS/mTLS | 服务器回调、客户端证书、池隔离、撤销选项 | 发现实际差异后补轮换/平台回归 | 企业CA、负向握手、过期/轮换、平台撤销 |
 | P1-05 | Command/Batch | SchemaOnly/KeyInfo/结果限制、MySQL过程/函数、Batch元数据；双模式直连补验 16 项 SchemaOnly/KeyInfo 矩阵（含组合主键、别名投影、可空唯一键和实际隐藏值读取），并修复 MySQL 目录大小写匹配 | 完整行为/结果形状矩阵，函数仅支持单 ReturnValue+Input，现有拒绝组合保留 | 权限/目录/prepare副作用/锁/游标 |
 | P1-06 | Oracle输出/游标 | Prepare、OUT/RETURNING、输出提示、文本/二进制cursor列；Oracle 直连输出/分页/释放矩阵 15/16 通过 | Input/InputOutput REF CURSOR 没有 Java 输入绑定依据，当前发送前拒绝；输出offset/数组正FetchSize也拒绝；`SELECT CURSOR(...)` 结果列在当前租户执行阶段返回 `902/HY000` | 真实方向/分页/资源/版本/代理；结果列形状需服务端支持后复验 |
