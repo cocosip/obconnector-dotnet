@@ -715,7 +715,7 @@ namespace OceanBaseConnector.Internal.Session
 
         public void Dispose()
         {
-            PhysicalSession[] sessions;
+            List<PhysicalSession> sessions;
             List<PhysicalSession> opening;
             List<PhysicalSession> warming;
             int waiters;
@@ -724,10 +724,16 @@ namespace OceanBaseConnector.Internal.Session
                 if (_disposed) return;
                 _disposed = true;
                 _endpointHealth = new EndpointHealthCache();
-                sessions = new PhysicalSession[_idle.Count];
-                _idle.CopyTo(sessions, 0);
+                // Probe/reset sessions are pool-owned even while absent from the idle stack.
+                sessions = new List<PhysicalSession>();
+                foreach (var session in _sessions)
+                    if (!_borrowed.Contains(session)) sessions.Add(session);
                 _idle.Clear();
-                foreach (var session in sessions) _sessions.Remove(session);
+                foreach (var session in sessions)
+                {
+                    _sessions.Remove(session);
+                    _retiredSessions.Remove(session);
+                }
                 opening = new List<PhysicalSession>();
                 foreach (var session in _sessions)
                     if (_borrowed.Contains(session)) opening.Add(session);
