@@ -177,8 +177,9 @@ namespace OceanBaseConnector.UnitTests
             }
             finally
             {
-                stop.Cancel(); listener.Stop();
+                stop.Cancel();
                 await serving.WaitAsync(TimeSpan.FromSeconds(5));
+                listener.Stop();
             }
 
             async Task Scalar(PacketChannel channel, bool binary)
