@@ -28,6 +28,7 @@
 | LOCAL INFILE源等待中断 | 已完成本轮直连矩阵 | 取消/超时新增2/2，协议组26/26；走查后修复失败路径任务等待，默认未启用实库18通过/137跳过。见[证据](history/2026-10-28-local-infile-interruption.md) |
 | 完整双模式直连复核 | 仍有失败，未整体关闭 | 600项中576通过、18失败、6配置跳过；字符集初始化、Oracle结果形状及目录权限问题保留，精确分类和服务端探针见[复核](history/2026-10-28-direct-profile-matrix.md) |
 | 写入请求/回包截断 | 已完成本轮直连矩阵 | 新增16/16，完整事务/XA/故障组91/91；独立核对实际零/一行、无重放、新租约及旧Command晚释放，走查无发现。见[证据](history/2026-10-28-write-outcome-boundaries.md)；驱动本地pre-send及真实服务器/代理/协调器故障仍开放 |
+| 外置LOB读取回包中断 | 已完成本轮直连矩阵 | Oracle BLOB/CLOB同步异步及整包/半包中断8/8；非unknown、Broken、新会话及旧资源晚释放时新LOB完整内容，相关回归244通过/4配置跳过，独立走查无发现。见[证据](history/2026-10-28-external-lob-read-interruption.md)；其他中断点和代理reset仍开放 |
 | 连接池交叉借用隔离验收 | 已完成本轮直连矩阵 | MySQL/Oracle 直连共94通过、1配置跳过、0失败；Windows/.NET 10.0.14，SDK 11.0.100-rc.3 构建零警告/错误。证据见[兼容性记录](compatibility.md#2026-10-28-pool-cross-borrower-isolation-acceptance)；OBProxy、长期并发和完整资源边界仍开放 |
 | MySQL 存储函数 ReturnValue | 已实现并完成直连验收 | 单ReturnValue+Input 使用 `SET @var = function(?)` 和隐藏 `SELECT`；同步/异步单测及真实 OceanBase MySQL 各通过1项；完整代理/版本/运行时矩阵仍开放 |
 | 原23项审计项 / 八包 | P2-01 已移除，其余按证据分类 | 子功能已实现范围见矩阵；没有整体完成百分比 |

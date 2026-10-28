@@ -10,7 +10,7 @@
 | ID | 模块 | 已实现范围 | 仍缺开发 / 明确不支持 | 仍欠验收 |
 | --- | --- | --- | --- | --- |
 | P0-01 | 连接池 | 容量/等待/预热/探活/回收/清池/指标、重入和通知取消修复；池销毁中止未完成物理 Open/预热及池持有的探活/reset session；DataSource 关闭覆盖凭据/发现及非池化 Open，已建立连接保持可用，见[源关闭证据](history/2026-10-28-data-source-open-shutdown.md) | 其他并发/Dispose交错、长期资源与shutdown范围 | 持续资源上限、完整部署矩阵 |
-| P0-02 | 会话隔离 | reset代际、状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA隔离；池销毁原子关闭 `Closed/Connecting` 借出和预热 session，保留 `Open/Busy` 借出连接并关闭池持有的探活/reset；双模式直连池隔离专项94通过/1跳过，Oracle直连资源生命周期矩阵32/32通过 | 任意隐式副作用、完整资源/中断/交错覆盖 | 代理reset、外置LOB真实中断、完整借用者隔离 |
+| P0-02 | 会话隔离 | reset代际、状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA隔离；池销毁原子关闭 `Closed/Connecting` 借出和预热 session，保留 `Open/Busy` 借出连接并关闭池持有的探活/reset；双模式直连池隔离专项94通过/1跳过，Oracle直连资源生命周期矩阵32/32通过；外置BLOB/CLOB真实读取回包中断8/8及新租约资源隔离，见[证据](history/2026-10-28-external-lob-read-interruption.md) | 任意隐式副作用、完整资源/中断/交错覆盖 | 代理reset、其他读取中断点、完整借用者隔离 |
 | P0-03 | Ambient | 单资源PSPE、取消/晚回调/终态保护；双模式直连16/16验证自动入列、数据库可见性及下一借用者事务隔离，见[证据](history/2026-10-28-ambient-transaction-acceptance.md) | 分布式提升和durable prepare不支持；完整失败覆盖待补 | 实际事务管理器、timeout/in-doubt和代理故障 |
 | P0-04 | Unknown outcome | 分类、销毁/新租约、事务回包丢失16项与写入上游请求/回包截断16项、应用核对示例，见[新增证据](history/2026-10-28-write-outcome-boundaries.md) | 驱动本地pre-send及完整发送/执行/取消故障边界；不重放未知写 | 服务器/代理/协调器全故障矩阵 |
 | P0-05 | 活动连接恢复 | 连接ERR置Broken、旧事务失效、显式Close/Open；取消/超时事务双模式直连8/8验证新租约及旧事务晚释放隔离，见[证据](history/2026-10-28-interrupted-transaction-recovery.md) | 无透明迁移/自动重连/replay，先定契约；补完整重建 | 节点/代理断连和恢复 |

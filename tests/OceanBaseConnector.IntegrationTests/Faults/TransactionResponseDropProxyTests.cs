@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.IntegrationTests.Infrastructure;
 using Xunit;
 
@@ -74,15 +75,18 @@ public sealed class TransactionResponseDropProxyTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RelaySuppressesOnlyArmedReplyAndForwardsReplacementUnchanged(bool partial)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task RelaySuppressesOnlyArmedReplyAndForwardsReplacementUnchanged(bool partial, bool oracle)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var upstream = new TcpListener(IPAddress.Loopback, 0); upstream.Start();
-        var target = Frame(Encoding.UTF8.GetBytes("\u0003COMMIT"), 0);
+        var payload = oracle ? OraclePrepareExecutePacket.Build(0, "COMMIT", 0, Array.Empty<byte>()) : Encoding.UTF8.GetBytes("\u0003COMMIT");
+        var target = Frame(payload, 0);
         var response = Frame(new byte[] { 0, 0, 0, 2, 0, 0, 0 }, 1);
-        var sameTextOtherSequence = Frame(Encoding.UTF8.GetBytes("\u0003COMMIT"), 1);
+        var sameTextOtherSequence = Frame(payload, 1);
         var serving = Task.Run(async () =>
         {
             using (var first = await upstream.AcceptTcpClientAsync(deadline.Token))

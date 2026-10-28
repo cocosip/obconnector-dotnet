@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using OceanBaseConnector.Internal.Protocol;
 
 namespace OceanBaseConnector.IntegrationTests.Infrastructure;
 
@@ -95,8 +96,7 @@ internal sealed class TransactionResponseDropProxy : IAsyncDisposable
         {
             var frame = await ReadFrame(input, token);
             if (frame == null) return;
-            if (request && frame.Length > 5 && frame[3] == 0 && frame[4] == 3 &&
-                Encoding.UTF8.GetString(frame, 5, frame.Length - 5) == _target)
+            if (request && MatchesCommand(frame))
             {
                 Interlocked.Increment(ref _targetRequests);
                 if (Interlocked.Exchange(ref _armed, 0) != 0)
@@ -121,6 +121,16 @@ internal sealed class TransactionResponseDropProxy : IAsyncDisposable
             }
             await output.WriteAsync(frame, token);
         }
+    }
+
+    private bool MatchesCommand(byte[] frame)
+    {
+        if (frame.Length <= 5 || frame[3] != 0) return false;
+        if (frame[4] == 3) return Encoding.UTF8.GetString(frame, 5, frame.Length - 5) == _target;
+        if (frame[4] != 0xa1) return false;
+        var cursor = new ByteCursor(frame, 4, frame.Length - 4);
+        cursor.ReadUInt8(); cursor.ReadUInt32(); cursor.ReadUInt8(); cursor.ReadUInt32();
+        return Encoding.UTF8.GetString(cursor.ReadLengthEncodedBytes()) == _target;
     }
 
     private static async Task<byte[]?> ReadFrame(Stream input, CancellationToken token)
