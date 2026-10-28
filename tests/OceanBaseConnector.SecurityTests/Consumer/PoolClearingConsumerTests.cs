@@ -15,14 +15,8 @@ using Xunit;
 namespace OceanBaseConnector.ConsumerTests
 {
     [Collection("Consumer diagnostics")]
-    public sealed class PoolClearingConsumerTests
+    public sealed partial class PoolClearingConsumerTests
     {
-        public static IEnumerable<object[]> Assets()
-        {
-            foreach (var target in ConsumerTargetMatrix.Representative)
-                foreach (var asynchronous in new[] { false, true })
-                    foreach (var all in new[] { false, true }) yield return new object[] { target, asynchronous, all };
-        }
 
         [Theory]
         [MemberData(nameof(Assets))]
@@ -92,6 +86,12 @@ namespace OceanBaseConnector.ConsumerTests
                 Assert.Equal(3, server.Accepted);
             }
             finally { context.Unload(); }
+        }
+        public static IEnumerable<object[]> Assets()
+        {
+            foreach (var target in ConsumerTargetMatrix.Representative)
+                foreach (var asynchronous in new[] { false, true })
+                    foreach (var all in new[] { false, true }) yield return new object[] { target, asynchronous, all };
         }
 
         private static DbConnection Connection(Type type, string configuration, object certificate)

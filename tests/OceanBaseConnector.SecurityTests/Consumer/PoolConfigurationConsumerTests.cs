@@ -11,15 +11,8 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed class PoolConfigurationConsumerTests
+    public sealed partial class PoolConfigurationConsumerTests
     {
-        public static IEnumerable<object[]> Assets()
-        {
-            foreach (var target in ConsumerTargetMatrix.Representative)
-                foreach (var oracle in new[] { false, true })
-                    foreach (var asynchronous in new[] { false, true })
-                        foreach (var scenario in new[] { 0, 1, 2, 3 }) yield return new object[] { target, oracle, asynchronous, scenario };
-        }
 
         [Theory]
         [MemberData(nameof(Assets))]
@@ -36,6 +29,13 @@ namespace OceanBaseConnector.ConsumerTests
                 await PoolConfigurationFixture.Verify(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!, server, certificate, asynchronous, scenario);
             }
             finally { context.Unload(); }
+        }
+        public static IEnumerable<object[]> Assets()
+        {
+            foreach (var target in ConsumerTargetMatrix.Representative)
+                foreach (var oracle in new[] { false, true })
+                    foreach (var asynchronous in new[] { false, true })
+                        foreach (var scenario in new[] { 0, 1, 2, 3 }) yield return new object[] { target, oracle, asynchronous, scenario };
         }
     }
 }

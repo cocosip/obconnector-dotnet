@@ -17,12 +17,6 @@ namespace OceanBaseConnector.ConsumerTests
 {
     public sealed partial class Ob20ConsumerTests
     {
-        public static IEnumerable<object[]> TlsValidationAssets()
-        {
-            foreach (var target in ConsumerTargetMatrix.Representative)
-                foreach (var asynchronous in new[] { false, true })
-                    foreach (var accept in new[] { false, true }) yield return new object[] { target, asynchronous, accept };
-        }
 
         [Theory]
         [MemberData(nameof(TlsValidationAssets))]
@@ -85,6 +79,12 @@ namespace OceanBaseConnector.ConsumerTests
                 await serving.WaitAsync(budget.Token);
             }
             finally { budget.Cancel(); listener.Stop(); context.Unload(); }
+        }
+        public static IEnumerable<object[]> TlsValidationAssets()
+        {
+            foreach (var target in ConsumerTargetMatrix.Representative)
+                foreach (var asynchronous in new[] { false, true })
+                    foreach (var accept in new[] { false, true }) yield return new object[] { target, asynchronous, accept };
         }
     }
 }

@@ -222,47 +222,12 @@ namespace OceanBaseConnector.UnitTests
             Assert.Throws<InvalidOperationException>(() => connection.CredentialProvider = q);
             source.Dispose(); Assert.False(p.Disposed);
         }
-
-        internal static CredentialServer Server() => new(ProtocolFixture.Load("initial-handshake-oceanbase").Payload);
-        private static OceanBaseCredential Credential(long version, DateTimeOffset? expiresAt = null) => new("user", "password-" + version, version, expiresAt);
-        private static string Configuration(int port, bool pooling = true, int minimum = 0) => new OceanBaseConnectionStringBuilder
-        {
-            Server = "127.0.0.1",
-            Port = port,
-            UserId = "configured-user",
-            Password = "static-password",
-            TlsMode = OceanBaseTlsMode.Disabled,
-            Pooling = pooling,
-            MinPoolSize = minimum,
-            MaxPoolSize = 3,
-            ConnectionTimeout = 3,
-            CommandTimeout = 2,
-        }.ConnectionString;
-        private static Task Open(OceanBaseConnection connection, bool asynchronous) => asynchronous ? connection.OpenAsync() : Task.Run(connection.Open);
-        private static Task Close(OceanBaseConnection connection, bool asynchronous) => asynchronous ? connection.CloseAsync() : Task.Run(connection.Close);
         private static byte[] NativeResponse(string password)
         {
             var first = SHA1.HashData(Encoding.UTF8.GetBytes(password)); var second = SHA1.HashData(first);
             var seed = Convert.FromHexString("01020304050607081112131415161718191a1b1c");
             var last = SHA1.HashData(seed.Concat(second).ToArray());
             return first.Zip(last, (a, b) => (byte)(a ^ b)).ToArray();
-        }
-        private sealed class Provider : IOceanBaseCredentialProvider, IDisposable
-        {
-            internal Provider(OceanBaseCredential credential) => Current = credential;
-            internal OceanBaseCredential Current;
-            internal OceanBaseCredentialContext? Context;
-            internal bool Fail, Disposed;
-            internal int Calls;
-            internal Func<CancellationToken, OceanBaseCredential>? Sync;
-            internal Func<CancellationToken, Task<OceanBaseCredential>>? Async;
-            public OceanBaseCredential GetCredential(OceanBaseCredentialContext context, CancellationToken token)
-            { Interlocked.Increment(ref Calls); Context = context; if (Fail) throw new InvalidOperationException("secret-provider-token"); return Sync != null ? Sync(token) : Current; }
-            public Task<OceanBaseCredential> GetCredentialAsync(OceanBaseCredentialContext context, CancellationToken token)
-            { if (Async == null) return Task.FromResult(GetCredential(context, token)); Interlocked.Increment(ref Calls); Context = context; return Async(token); }
-            public void Dispose() => Disposed = true;
-            public override bool Equals(object? obj) => obj is Provider;
-            public override int GetHashCode() => 1;
         }
     }
 }

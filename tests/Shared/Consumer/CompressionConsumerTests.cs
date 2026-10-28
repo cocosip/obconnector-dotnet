@@ -12,15 +12,8 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed class CompressionConsumerTests
+    public sealed partial class CompressionConsumerTests
     {
-        public static IEnumerable<object[]> Assets()
-        {
-            foreach (var target in ConsumerTargetMatrix.Representative)
-                foreach (var oracle in new[] { false, true })
-                    foreach (var asynchronous in new[] { false, true })
-                        foreach (var tls in new[] { false, true }) yield return new object[] { target, oracle, asynchronous, tls };
-        }
         [Theory]
         [MemberData(nameof(Assets))]
         public async Task EveryAssetCompressesOverTcpAndTlsWithPoolReset(string target, bool oracle, bool asynchronous, bool tls)
@@ -61,6 +54,13 @@ namespace OceanBaseConnector.ConsumerTests
                 }
                 context.Unload();
             }
+        }
+        public static IEnumerable<object[]> Assets()
+        {
+            foreach (var target in ConsumerTargetMatrix.Representative)
+                foreach (var oracle in new[] { false, true })
+                    foreach (var asynchronous in new[] { false, true })
+                        foreach (var tls in new[] { OceanBaseConnector.Tests.TransportTestMode.Encrypted }) yield return new object[] { target, oracle, asynchronous, tls };
         }
     }
 }

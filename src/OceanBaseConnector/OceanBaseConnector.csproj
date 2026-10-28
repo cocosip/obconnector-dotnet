@@ -32,6 +32,7 @@
     <InternalsVisibleTo Include="OceanBaseConnector.UnitTests" />
     <InternalsVisibleTo Include="OceanBaseConnector.IntegrationTests" />
     <InternalsVisibleTo Include="OceanBaseConnector.ConsumerTests" />
+    <InternalsVisibleTo Include="OceanBaseConnector.SecurityTests" />
   </ItemGroup>
 
 </Project>

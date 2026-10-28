@@ -23,4 +23,9 @@
     <None Include="..\fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" LinkBase="fixtures" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../Shared/Unit/**/*.cs" LinkBase="Shared" />
+    <Compile Include="../Shared/TransportTestMode.cs" Link="Shared/TransportTestMode.cs" />
+  </ItemGroup>
+
 </Project>

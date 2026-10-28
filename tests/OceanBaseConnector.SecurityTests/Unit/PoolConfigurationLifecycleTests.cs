@@ -8,7 +8,7 @@ using Xunit;
 
 namespace OceanBaseConnector.UnitTests
 {
-    public sealed class PoolConfigurationLifecycleTests
+    public sealed partial class PoolConfigurationLifecycleTests
     {
         [Theory]
         [InlineData(false)]

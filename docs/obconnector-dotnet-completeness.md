@@ -51,7 +51,7 @@
 
 正式发布仍缺：完整reset/资源隔离、Oracle未分类失败闭合、真实OBProxy和TLS、完整unknown/XA/活动连接故障报告，以及非Windows和完整生态矩阵。此前局部通过不取消这些门槛。
 
-不自动重放未知写，不静默降级TLS，失败会话不回池。分布式ambient提升、透明活动会话迁移、通用durable coordinator没有现成承诺，扩展前须明确范围。真实连接仅用于显式验收，普通单测/CI不依赖用户环境。
+不自动重放未知写，不静默降级TLS，失败会话不回池。分布式ambient提升、透明活动会话迁移、通用durable coordinator没有现成承诺，扩展前须明确范围。真实连接仅用于显式验收，普通单测/CI不依赖用户环境。证书生成/导入、TLS/mTLS握手及TLS消费者用例独立到 [SecurityTests](../tests/OceanBaseConnector.SecurityTests/README.md)，不在主解决方案或CI中执行；纯配置/协议和TCP覆盖保留。
 
 ## 按需查阅
 

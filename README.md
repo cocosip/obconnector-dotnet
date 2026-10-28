@@ -144,7 +144,7 @@ The driver does not automatically replay SQL. If `OceanBaseException.IsExecution
 
 ## Build and test
 
-Requires the .NET 11 SDK and a .NET 10 runtime. Tests target and run on .NET 10. Real-database integration tests never run in CI or a plain dotnet test; they need an explicit opt-in and a configured environment ([integration guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.IntegrationTests/README.md)).
+Requires the .NET 11 SDK and a .NET 10 runtime. Tests target and run on .NET 10. Certificate creation/import, TLS/mTLS handshakes and TLS consumer tests belong to the separate [security acceptance suite](tests/OceanBaseConnector.SecurityTests/README.md), outside the main solution and CI. Real-database integration tests never run in CI or a plain dotnet test; they need an explicit opt-in and a configured environment ([integration guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.IntegrationTests/README.md)).
 
 ```powershell
 dotnet restore OceanBaseConnector.slnx

@@ -15,14 +15,8 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed class ClientCertificateConsumerTests
+    public sealed partial class ClientCertificateConsumerTests
     {
-        public static IEnumerable<object[]> Assets()
-        {
-            foreach (var target in ConsumerTargetMatrix.Representative)
-                foreach (var asynchronous in new[] { false, true })
-                    foreach (var pooling in new[] { false, true }) yield return new object[] { target, asynchronous, pooling };
-        }
 
         [Theory]
         [MemberData(nameof(Assets))]
@@ -86,6 +80,12 @@ namespace OceanBaseConnector.ConsumerTests
                 Assert.All(server.AuthenticatedCertificates, actual => Assert.Equal(hash, actual));
             }
             finally { context.Unload(); }
+        }
+        public static IEnumerable<object[]> Assets()
+        {
+            foreach (var target in ConsumerTargetMatrix.Representative)
+                foreach (var asynchronous in new[] { false, true })
+                    foreach (var pooling in new[] { false, true }) yield return new object[] { target, asynchronous, pooling };
         }
 
         private static async Task Execute(DbConnection connection, bool asynchronous)

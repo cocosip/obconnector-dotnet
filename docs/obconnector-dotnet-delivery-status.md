@@ -36,6 +36,7 @@
 | MySQL 存储函数 ReturnValue | 已实现并完成直连验收 | 单ReturnValue+Input 使用 `SET @var = function(?)` 和隐藏 `SELECT`；同步/异步单测及真实 OceanBase MySQL 各通过1项；完整代理/版本/运行时矩阵仍开放 |
 | TFM / 包消费 | 已完成 Windows 验收 | `Verify-Packages.ps1 -VerifyNetFramework` 验证两包的五目标资产、依赖组、nupkg 哈希和消费者 restore graph；net8.0/net9.0/net10.0 各运行8项协议样例，netstandard2.0/2.1由net10 host加载，面向`net48`的host在已安装.NET Framework 4.8.1上加载netstandard2.0并通过8项样例。见[记录](history/2026-10-28-package-consumption.md)；非Windows和完整生态矩阵仍开放 |
 | 原23项审计项 / 八包 | P2-01 已移除，其余按证据分类 | 子功能已实现范围见矩阵；没有整体完成百分比 |
+| 安全验收与默认CI隔离 | 已拆分，验证见记录 | 证书/TLS测试独立到主解决方案之外的SecurityTests，默认保留TCP/协议覆盖；详见[记录](history/2026-10-28-security-test-isolation.md)，真实TLS环境门禁保留 |
 | 生产级完整验收 | 未完成 | 完整资源/并发、真实OBProxy/TLS/auth/HA/版本/平台/运行时及发布审查 |
 
 ## 优先处理的明确缺实现

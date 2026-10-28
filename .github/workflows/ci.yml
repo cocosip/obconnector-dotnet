@@ -74,12 +74,15 @@ jobs:
       - name: Build netstandard2.1 unit test asset
         run: dotnet build src/OceanBaseConnector/OceanBaseConnector.csproj -c Release --no-restore -f netstandard2.1
 
+      # Real databases and certificate/TLS security acceptance stay outside CI.
+      # SecurityTests is deliberately excluded from OceanBaseConnector.slnx.
       - name: Unit tests (.NET 10)
         run: >-
           dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj
           -c Release --no-restore --no-build
 
-      # ConsumerTests is the compatibility acceptance suite. It runs once on
+      # ConsumerTests contains TCP/protocol compatibility acceptance, without TLS.
+      # It runs once on
       # the Windows tag leg after the representative target matrix is reduced
       # to netstandard2.0, netstandard2.1 and net10.0.
       - name: Consumer acceptance tests (tag only)

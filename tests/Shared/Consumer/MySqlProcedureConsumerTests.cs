@@ -19,14 +19,6 @@ namespace OceanBaseConnector.ConsumerTests
 {
     public sealed partial class Ob20ConsumerTests
     {
-        public static IEnumerable<object[]> MySqlProcedureAssets()
-        {
-            foreach (var target in ConsumerTargetMatrix.Representative)
-                foreach (var async in new[] { false, true })
-                    foreach (var ob20 in new[] { false, true })
-                        foreach (var tls in new[] { false, true })
-                            foreach (var deprecated in new[] { false, true }) yield return new object[] { target, async, ob20, tls, deprecated };
-        }
 
         [Theory]
         [MemberData(nameof(MySqlProcedureAssets))]
@@ -121,6 +113,14 @@ namespace OceanBaseConnector.ConsumerTests
             }
             catch (Exception error) when (serving.IsFaulted) { throw new AggregateException(error, serving.Exception!); }
             finally { budget.Cancel(); listener.Stop(); context.Unload(); }
+        }
+        public static IEnumerable<object[]> MySqlProcedureAssets()
+        {
+            foreach (var target in ConsumerTargetMatrix.Representative)
+                foreach (var async in new[] { false, true })
+                    foreach (var ob20 in new[] { false, true })
+                        foreach (var tls in new[] { OceanBaseConnector.Tests.TransportTestMode.Encrypted })
+                            foreach (var deprecated in new[] { false, true }) yield return new object[] { target, async, ob20, tls, deprecated };
         }
     }
 }

@@ -52,4 +52,9 @@
     <ProjectReference Include="..\OceanBaseConnector.CollectibleProbe\OceanBaseConnector.CollectibleProbe.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../Shared/Consumer/**/*.cs" LinkBase="Shared" />
+    <Compile Include="../Shared/TransportTestMode.cs" Link="Shared/TransportTestMode.cs" />
+  </ItemGroup>
+
 </Project>

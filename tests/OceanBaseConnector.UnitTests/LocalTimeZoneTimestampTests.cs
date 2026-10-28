@@ -11,31 +11,6 @@ namespace OceanBaseConnector.UnitTests
 {
     public sealed partial class TextCommandTests
     {
-        private const string SessionTimeZoneSql = "SELECT SESSIONTIMEZONE FROM DUAL";
-
-        private static async Task TimeZoneReply(PacketChannel channel, string zone = "+00:00", bool deprecated = false)
-        {
-            await channel.WritePacketAsync(new byte[] { 1 });
-            await channel.WritePacketAsync(Column("SESSIONTIMEZONE", 253));
-            if (!deprecated) await channel.WritePacketAsync(Eof());
-            await channel.WritePacketAsync(WithLength(Encoding.UTF8.GetBytes(zone)));
-            await channel.WritePacketAsync(deprecated ? TimeZoneOk(null, 254) : Eof());
-        }
-
-        internal static async Task<byte[]> ReadClientCommand(PacketChannel channel, bool deprecated = false)
-        {
-            var request = await channel.ReadPacketAsync();
-            while (request[0] == 3)
-            {
-                var sql = Encoding.UTF8.GetString(request, 1, request.Length - 1);
-                if (sql == SessionTimeZoneSql) await TimeZoneReply(channel, deprecated: deprecated);
-                else if (sql == NationalCharacterSetSql) await NationalCharacterSetReply(channel, deprecated: deprecated);
-                else break;
-                channel.BeginCommand();
-                request = await channel.ReadPacketAsync();
-            }
-            return request;
-        }
 
         [Theory]
         [InlineData(0)]

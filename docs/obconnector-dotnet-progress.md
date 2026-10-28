@@ -88,3 +88,7 @@
 - 详细测试、失败/跳过、走查及提交记录写入[历史台账](history/obconnector-dotnet-progress.md)，按需打开。
 - 23项缺口与八工作包映射见[完整性清单](obconnector-dotnet-completeness.md)；详细协议要求和关闭标准见[审计参考](history/obconnector-dotnet-completeness.md)。
 - 实际支持声明见[兼容性](compatibility.md)；实库仅显式验收，普通单测/CI不依赖用户环境，连接信息不进入文档或产物。
+
+## 测试执行边界（2026-10-28）
+
+真实数据库只由显式启用的 IntegrationTests/验收控制台访问。生成/导入证书、TLS/mTLS握手、TLS认证及TLS消费者用例移至独立 [SecurityTests](../tests/OceanBaseConnector.SecurityTests/README.md)，该项目不在主解决方案或普通/tag CI中。默认UnitTests与ConsumerTests保留纯配置、协议及TCP覆盖；混合矩阵按编译入口分别使用TCP/TLS行，不以跳过安全用例冒充验收通过。证据见[拆分记录](history/2026-10-28-security-test-isolation.md)。真实服务端TLS支持仍未验收。

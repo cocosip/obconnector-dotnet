@@ -62,8 +62,6 @@ namespace OceanBaseConnector.UnitTests.Session
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
-        private static byte[] Sha2Token => Convert.FromHexString("40d9e546b2cb35d699e9c5254222d2d9961b99dcc2b43f3656634f559e76779b");
-
         [Theory]
         [InlineData("sha256_password", "")]
         [InlineData("sha256_password", "päss🔑")]
@@ -211,61 +209,6 @@ namespace OceanBaseConnector.UnitTests.Session
         }
 
         [Theory]
-        [InlineData(false, "fast")]
-        [InlineData(true, "fast")]
-        [InlineData(false, "full")]
-        [InlineData(true, "full")]
-        [InlineData(false, "sha256")]
-        [InlineData(true, "sha256")]
-        [InlineData(false, "switch")]
-        [InlineData(true, "switch")]
-        public async Task Sha2RequiredTlsEncryptsFastButRefusesCompletePassword(bool asynchronous, string path)
-        {
-            var server = LoopbackServer.Start(async client =>
-            {
-                var stream = client.GetStream(); var channel = new PacketChannel(stream);
-                await channel.WritePacketAsync(BuildInitialHandshake(pluginName: path == "sha256" ? "sha256_password" : "caching_sha2_password"));
-                Assert.Equal(32, (await channel.ReadPacketAsync()).Length);
-                using var certificate = TestCertificateFactory.CreateSelfSigned();
-                using var tls = new SslStream(stream, leaveInnerStreamOpen: true);
-                await tls.AuthenticateAsServerAsync(certificate);
-                channel.ReplaceUnderlyingStream(tls);
-                if (path != "sha256")
-                {
-                    var response = await channel.ReadPacketAsync();
-                    var cursor = new ByteCursor(response); cursor.Skip(32); cursor.ReadNullTerminatedAscii();
-                    Assert.Equal(Sha2Token, cursor.ReadLengthEncodedBytes());
-                    if (path == "fast")
-                    {
-                        await channel.WritePacketAsync(new byte[] { 1, 3 });
-                        await channel.WritePacketAsync(BuildAuthOk(oracleMode: true));
-                        await ServerIdentity.ReplyAsync(channel);
-                    }
-                    else await channel.WritePacketAsync(path == "switch" ? Sha2Switch("sha256_password") : new byte[] { 1, 4 });
-                }
-                Assert.Equal(0, await tls.ReadUpToAsync(new byte[1], 1));
-            });
-            using var session = Sha2Session(server.Port, OceanBaseTlsMode.Required);
-            try
-            {
-                if (path == "fast")
-                {
-                    if (asynchronous) await session.OpenAsync(); else session.Open();
-                    Assert.Equal(SessionState.Open, session.State);
-                }
-                else
-                {
-                    var error = asynchronous ? await Assert.ThrowsAsync<OceanBaseException>(() => session.OpenAsync())
-                        : Assert.Throws<OceanBaseException>(() => session.Open());
-                    Assert.Contains("VerifyFull", error.Message); Assert.DoesNotContain("secretpw", error.ToString());
-                    Assert.Equal(SessionState.Broken, session.State);
-                }
-            }
-            finally { session.Close(); server.Stop(); }
-            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
-        }
-
-        [Theory]
         [InlineData(false, "timeout")]
         [InlineData(true, "timeout")]
         [InlineData(false, "close")]
@@ -300,12 +243,6 @@ namespace OceanBaseConnector.UnitTests.Session
             finally { session.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
-
-        private static PhysicalSession Sha2Session(int port, OceanBaseTlsMode tls = OceanBaseTlsMode.Disabled, int timeout = 5)
-            => new PhysicalSession(new OceanBaseConnectionStringBuilder
-            {
-                Server = "127.0.0.1", Port = port, UserId = "u@sys", Password = "secretpw", TlsMode = tls, ConnectionTimeout = timeout,
-            }.Build());
 
         [Theory]
         [InlineData(false)]
@@ -394,14 +331,6 @@ namespace OceanBaseConnector.UnitTests.Session
             }
             finally { session.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
-        }
-
-        private static byte[] Sha2Switch(string plugin)
-        {
-            using var buffer = new MemoryStream(); buffer.WriteByte(254);
-            buffer.Write(Encoding.ASCII.GetBytes(plugin)); buffer.WriteByte(0);
-            buffer.Write(SeedBytes(SeedHex)); buffer.WriteByte(0);
-            return buffer.ToArray();
         }
     }
 }

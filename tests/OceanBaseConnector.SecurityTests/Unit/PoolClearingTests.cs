@@ -15,26 +15,8 @@ using Xunit;
 namespace OceanBaseConnector.UnitTests
 {
     [Collection("Driver diagnostics")]
-    public sealed class PoolClearingTests
+    public sealed partial class PoolClearingTests
     {
-        private static readonly RemoteCertificateValidationCallback Validate = (_, _, _, _) => true;
-        private static void Clear(OceanBaseConnection connection)
-        {
-            var method = typeof(OceanBaseConnection).GetMethod("ClearPool", BindingFlags.Public | BindingFlags.Static);
-            Assert.NotNull(method);
-            try { method!.Invoke(null, new object?[] { connection }); }
-            catch (TargetInvocationException error) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error.InnerException!).Throw(); }
-        }
-        private static void ClearAll()
-        {
-            var method = typeof(OceanBaseConnection).GetMethod("ClearAllPools", BindingFlags.Public | BindingFlags.Static);
-            Assert.NotNull(method); method!.Invoke(null, null);
-        }
-        private static void ClearSource(OceanBaseDataSource source)
-        {
-            var method = typeof(OceanBaseDataSource).GetMethod("Clear");
-            Assert.NotNull(method); method!.Invoke(source, null);
-        }
 
         [Theory]
         [InlineData(false, false)]
@@ -314,12 +296,12 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal(0, Interlocked.Read(ref sessions));
             Assert.Equal(removed, Interlocked.Read(ref discards));
         }
-
-        private static MeterListener Metrics(Action<string, long> measurement)
+        private static void Clear(OceanBaseConnection connection)
         {
-            var listener = new MeterListener { InstrumentPublished = (instrument, owner) => { if (instrument.Meter.Name == "OceanBaseConnector") owner.EnableMeasurementEvents(instrument); } };
-            listener.SetMeasurementEventCallback<long>((instrument, value, _, _) => measurement(instrument.Name, value));
-            listener.Start(); return listener;
+            var method = typeof(OceanBaseConnection).GetMethod("ClearPool", BindingFlags.Public | BindingFlags.Static);
+            Assert.NotNull(method);
+            try { method!.Invoke(null, new object?[] { connection }); }
+            catch (TargetInvocationException error) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error.InnerException!).Throw(); }
         }
 
         private static OceanBaseDataSource Source(string configuration, X509Certificate2 certificate) =>
@@ -334,11 +316,29 @@ namespace OceanBaseConnector.UnitTests
         private static async Task Query(OceanBaseConnection connection) { using var command = connection.CreateCommand(); command.CommandText = "selected"; Assert.Equal(1, await command.ExecuteNonQueryAsync()); }
         private static PhysicalSessionPool? Pool(OceanBaseConnection connection) => (PhysicalSessionPool?)typeof(OceanBaseConnection).GetField("_pool", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(connection);
         private static void Cleanup(string configuration, PhysicalSessionPool? pool) { if (pool != null) { pool.Dispose(); PhysicalSessionPoolRegistry.ReleaseIfEmpty(configuration, pool); } }
+        private static void ClearSource(OceanBaseDataSource source)
+        {
+            var method = typeof(OceanBaseDataSource).GetMethod("Clear");
+            Assert.NotNull(method); method!.Invoke(source, null);
+        }
         private static async Task WaitForWaiter(PhysicalSessionPool pool)
         {
             var field = typeof(PhysicalSessionPool).GetField("_waiters", BindingFlags.NonPublic | BindingFlags.Instance)!;
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             while ((int)field.GetValue(pool)! == 0) await Task.Delay(10, deadline.Token);
         }
+        private static void ClearAll()
+        {
+            var method = typeof(OceanBaseConnection).GetMethod("ClearAllPools", BindingFlags.Public | BindingFlags.Static);
+            Assert.NotNull(method); method!.Invoke(null, null);
+        }
+
+        private static MeterListener Metrics(Action<string, long> measurement)
+        {
+            var listener = new MeterListener { InstrumentPublished = (instrument, owner) => { if (instrument.Meter.Name == "OceanBaseConnector") owner.EnableMeasurementEvents(instrument); } };
+            listener.SetMeasurementEventCallback<long>((instrument, value, _, _) => measurement(instrument.Name, value));
+            listener.Start(); return listener;
+        }
+        private static readonly RemoteCertificateValidationCallback Validate = (_, _, _, _) => true;
     }
 }

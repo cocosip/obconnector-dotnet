@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <DefineConstants>$(DefineConstants);SECURITY_ACCEPTANCE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/OceanBaseConnector/OceanBaseConnector.csproj" />
+    <ProjectReference Include="../OceanBaseConnector.ConsumerTests.NetStandard/OceanBaseConnector.ConsumerTests.NetStandard.csproj" />
+    <Compile Include="../Shared/**/*.cs" LinkBase="Shared" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/DiscoveryBlacklistFixture.cs" Link="TestInfrastructure/DiscoveryBlacklistFixture.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/TnsFileFixture.cs" Link="TestInfrastructure/TnsFileFixture.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/TcpAttemptCapture.cs" Link="TestInfrastructure/TcpAttemptCapture.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/PoolConfigurationFixture.cs" Link="TestInfrastructure/PoolConfigurationFixture.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/ServerIdentity.cs" Link="TestInfrastructure/ServerIdentity.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/Loopback.cs" Link="TestInfrastructure/Loopback.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/ProtocolFixture.cs" Link="TestInfrastructure/ProtocolFixture.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/MutualTlsServer.cs" Link="TestInfrastructure/MutualTlsServer.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/CompressionServer.cs" Link="TestInfrastructure/CompressionServer.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/TestInfrastructure/CredentialServer.cs" Link="TestInfrastructure/CredentialServer.cs" />
+    <Compile Include="../OceanBaseConnector.UnitTests/Transport/TestCertificateFactory.cs" Link="TestInfrastructure/TestCertificateFactory.cs" />
+    <Compile Include="../OceanBaseConnector.ConsumerTests/RepositoryLocator.cs" Link="Infrastructure/RepositoryLocator.cs" />
+    <Compile Include="../OceanBaseConnector.ConsumerTests/ConsumerTargetMatrix.cs" Link="Infrastructure/ConsumerTargetMatrix.cs" />
+    <Compile Include="../OceanBaseConnector.ConsumerTests/SessionTimeZoneFixture.cs" Link="Infrastructure/SessionTimeZoneFixture.cs" />
+    <None Include="../fixtures/**/*.json" CopyToOutputDirectory="PreserveNewest" LinkBase="fixtures" />
+  </ItemGroup>
+</Project>

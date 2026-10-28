@@ -50,14 +50,6 @@ namespace OceanBaseConnector.ConsumerTests
             finally { budget.Cancel(); listener.Stop(); context.Unload(); }
         }
 
-        public static IEnumerable<object[]> TlsPartialCases()
-        {
-            foreach (var target in ConsumerTargetMatrix.Representative)
-                foreach (var async in new[] { false, true })
-                    foreach (var kind in new[] { "crc", "cancel", "timeout", "close" })
-                        yield return new object[] { target, async, kind };
-        }
-
         [Theory]
         [MemberData(nameof(TlsPartialCases))]
         public async Task EveryAssetDiscardsPartialOb20TlsResponsesAfterPublicFieldReads(string target, bool async, string kind)
@@ -133,6 +125,14 @@ namespace OceanBaseConnector.ConsumerTests
                 await serving.WaitAsync(budget.Token);
             }
             finally { budget.Cancel(); listener.Stop(); context.Unload(); }
+        }
+
+        public static IEnumerable<object[]> TlsPartialCases()
+        {
+            foreach (var target in ConsumerTargetMatrix.Representative)
+                foreach (var async in new[] { false, true })
+                    foreach (var kind in new[] { "crc", "cancel", "timeout", "close" })
+                        yield return new object[] { target, async, kind };
         }
     }
 }

@@ -16,12 +16,8 @@ using Xunit;
 
 namespace OceanBaseConnector.UnitTests
 {
-    public sealed class PooledClientCertificateTests
+    public sealed partial class PooledClientCertificateTests
     {
-        private static readonly RemoteCertificateValidationCallback ValidateServer = (_, certificate, _, errors) =>
-            certificate != null && (errors & ~SslPolicyErrors.RemoteCertificateChainErrors) == 0;
-        private static MutualTlsServer Server() => new MutualTlsServer(ProtocolFixture.Load("initial-handshake-oceanbase").Payload,
-            channel => TextCommandTests.ReadClientCommand(channel));
 
         [Theory]
         [InlineData(false, 0, false)]
@@ -242,6 +238,8 @@ namespace OceanBaseConnector.UnitTests
             Assert.True(source.Pool.IsEmpty);
             Assert.True(certificate.HasPrivateKey);
         }
+        private static MutualTlsServer Server() => new MutualTlsServer(ProtocolFixture.Load("initial-handshake-oceanbase").Payload,
+            channel => TextCommandTests.ReadClientCommand(channel));
 
         private static OceanBaseConnection Connection(string configuration, X509Certificate2? certificate) =>
             new OceanBaseConnection(configuration) { ClientCertificate = certificate, RemoteCertificateValidationCallback = ValidateServer };
@@ -262,5 +260,7 @@ namespace OceanBaseConnector.UnitTests
             (PhysicalSessionPool?)typeof(OceanBaseConnection).GetField("_pool", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(connection);
         private static void Clear(string configuration, PhysicalSessionPool? pool)
         { if (pool != null) { pool.Dispose(); PhysicalSessionPoolRegistry.ReleaseIfEmpty(configuration, pool); } }
+        private static readonly RemoteCertificateValidationCallback ValidateServer = (_, certificate, _, errors) =>
+            certificate != null && (errors & ~SslPolicyErrors.RemoteCertificateChainErrors) == 0;
     }
 }
