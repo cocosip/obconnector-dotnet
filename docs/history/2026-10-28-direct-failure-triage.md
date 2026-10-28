@@ -1,6 +1,6 @@
 # 18项实库失败归因（2026-10-28）
 
-本记录针对 `direct-profile-ownership-timeout` 的18项失败做了独立对照，不把测试失败码直接当作驱动缺陷或“服务器不支持”。凭据仍只在本机user-secrets；对照使用官方 `com.oceanbase:oceanbase-client:2.4.14`，源码固定提交 `6adc311ba5db8b2f19f98e3f6e4734667fdfdda1`。
+本记录针对 `direct-profile-ownership-timeout` 的18项失败做了独立对照，不把测试失败码直接当作驱动缺陷或“服务器不支持”。凭据仍只在本机user-secrets；对照使用官方 `com.oceanbase:oceanbase-client:2.4.14`，源码固定提交 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`。
 
 ## 结论矩阵
 

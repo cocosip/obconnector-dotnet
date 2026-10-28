@@ -19,7 +19,15 @@ namespace OceanBaseConnector.ConsumerTests
     {
         [Theory]
         [MemberData(nameof(OracleAssets))]
-        public async Task EveryAssetExecutesArrayReturningAndKeepsOutputsAtomicAcrossOb20(string target, bool asynchronous, string kind)
+        public Task EveryAssetExecutesArrayReturningAndKeepsOutputsAtomicAcrossOb20(string target, bool asynchronous, string kind)
+            => ArrayReturningCore(target, asynchronous, kind, fetchSize: 0);
+
+        [Theory]
+        [MemberData(nameof(OracleAssets))]
+        public Task EveryAssetAcceptsArrayFetchHintWithoutPagingInternalResults(string target, bool asynchronous, string kind)
+            => ArrayReturningCore(target, asynchronous, kind, asynchronous ? int.MaxValue : 1);
+
+        private static async Task ArrayReturningCore(string target, bool asynchronous, string kind, int fetchSize)
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
@@ -87,6 +95,7 @@ namespace OceanBaseConnector.ConsumerTests
                 await connection.OpenAsync(budget.Token); using var transaction = await connection.BeginTransactionAsync(budget.Token);
                 var type = connection.GetType().GetMethod("CreateArrayType", new[] { typeof(string), transaction.GetType() })!.Invoke(connection, new object[] { "NUMBER", transaction })!;
                 using var command = connection.CreateCommand(); command.Transaction = transaction; command.CommandText = "update t set x=:p returning x into :o";
+                command.GetType().GetProperty("FetchSize")!.SetValue(command, fetchSize);
                 var input = command.CreateParameter(); input.ParameterName = "p"; input.Value = type.GetType().GetMethod("CreateValue")!.Invoke(type, new object[] { new object?[] { 1, null, 2 } }); command.Parameters.Add(input);
                 var output = command.CreateParameter(); output.ParameterName = "o"; output.Direction = ParameterDirection.Output; output.Value = "old";
                 output.GetType().GetProperty("ComplexType")!.SetValue(output, type); command.Parameters.Add(output);
@@ -119,6 +128,7 @@ namespace OceanBaseConnector.ConsumerTests
                     Assert.Equal(1, items[1].GetType().GetProperty("ServerErrorCode")!.GetValue(items[1]));
                     command.Dispose(); await transaction.RollbackAsync(budget.Token);
                 }
+                Assert.Equal(fetchSize, command.GetType().GetProperty("FetchSize")!.GetValue(command));
                 connection.Close(); await serving.WaitAsync(budget.Token);
             }
             finally { budget.Cancel(); listener.Stop(); context.Unload(); }

@@ -20,7 +20,7 @@
 | P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界；大于1MiB分块/源失败恢复4/4直连见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)，异步源等待期间取消/超时2/2见[中断记录](history/2026-10-28-local-infile-interruption.md)；修复CanRead校验失败前的工厂源流泄漏，单测4项RED→GREEN、直连4/4，见[释放记录](history/2026-10-28-local-infile-validation-ownership.md)；64MiB逻辑包上限及未知结果/坏会话同步/异步2/2见[上限记录](history/2026-10-28-local-infile-overlimit.md) | 同步源阻塞及其他协议/中断组合仍待验收 | 代理策略及完整中断行为 |
 | P1-04 | TLS/mTLS | 服务器回调、客户端证书、池隔离、撤销选项 | 发现实际差异后补轮换/平台回归 | 企业CA、负向握手、过期/轮换、平台撤销 |
 | P1-05 | Command/Batch | SchemaOnly/KeyInfo/结果限制、MySQL过程/函数、Batch元数据；双模式直连补验 16 项 SchemaOnly/KeyInfo 矩阵（含组合主键、别名投影、可空唯一键和实际隐藏值读取），并修复 MySQL 目录大小写匹配 | 完整行为/结果形状矩阵，函数仅支持单 ReturnValue+Input，现有拒绝组合保留 | 权限/目录/prepare副作用/锁/游标 |
-| P1-06 | Oracle输出/游标 | Prepare、OUT/RETURNING、输出提示、四字节cursor解析；Oracle 直连输出/分页/释放矩阵 15/16 通过 | Input/InputOutput REF CURSOR 没有 Java 输入绑定依据，当前发送前拒绝；输出offset/数组正FetchSize也拒绝；准备执行 `SELECT CURSOR(...)` 返回902且Java同样失败；文本元数据可返回，但实际游标值与现有四字节解析不兼容，见[归因](history/2026-10-28-direct-failure-triage.md) | 真实方向/分页/资源/版本/代理；不得承诺该结果列形状可用 |
+| P1-06 | Oracle输出/游标 | Prepare、OUT/RETURNING、输出提示、四字节cursor解析；Oracle 直连输出/分页/释放矩阵 15/16 通过 | Input/InputOutput REF CURSOR 没有 Java 输入绑定依据，当前发送前拒绝；数组正FetchSize提示已接受，内部结果不分页，见[记录](history/2026-10-28-array-fetch-hint.md)；输出offset仍拒绝；准备执行 `SELECT CURSOR(...)` 返回902且Java同样失败；文本元数据可返回，但实际游标值与现有四字节解析不兼容，见[归因](history/2026-10-28-direct-failure-triage.md) | 真实方向/分页/资源/版本/代理；不得承诺该结果列形状可用 |
 | P1-07 | 复杂类型 | 嵌套二进制结果、LOB/cursor结果、命名LOB内容/匿名locator输入、DDL失效 | 命名LOB定位器回绑、复杂cursor输入、文本复杂结果及未解析RETURNING身份没有足够协议依据，当前拒绝；其他形状按服务端矩阵决定 | DDL、真实复杂SQL、资源生命周期和更多部署profile |
 | P1-08 | 类型/字符集 | NUMBER/FLOAT、scale、常见扩展类型、客户端编码、MySQL DBCS fallback/Open、CLOB转码；utf8mb3接受服务端utf8mb4归一名，保留mb3输入限制，原6项实库通过 | 其余national存储/输出、扩展类型/metadata；Oracle SJIS/Big5初始化失败由官方Java独立复现，见[归因](history/2026-10-28-direct-failure-triage.md) | JSON/CLOB转换/存储、完整字符集/版本/代理 |
 | P1-09 | HA/发现 | TCP重试/健康缓存、TNS/OCP、组/权重/黑名单/上限 | 其他发现/策略边界；TCP健康不等于数据库健康 | 实际发现服务/节点/代理故障 |
@@ -49,7 +49,7 @@
 
 每项功能须具备：明确支持/拒绝契约、源码、对应回归、成功构建、完整单测、一次独立最终走查、同步矩阵及本地提交。适用的实库/代理/运行时证据另行验证，不能用合成回环替代。
 
-正式发布仍缺：完整reset/资源隔离、Oracle未分类失败闭合、真实OBProxy和TLS、完整unknown/XA/活动连接故障报告，以及非Windows和完整生态矩阵。此前局部通过不取消这些门槛。
+正式发布仍缺：完整reset/资源隔离、已归因的Oracle服务端/权限失败在满足前提后复验、真实OBProxy和TLS、完整unknown/XA/活动连接故障报告，以及非Windows和完整生态矩阵。此前局部通过不取消这些门槛。
 
 不自动重放未知写，不静默降级TLS，失败会话不回池。分布式ambient提升、透明活动会话迁移、通用durable coordinator没有现成承诺，扩展前须明确范围。真实连接仅用于显式验收，普通单测/CI不依赖用户环境。证书生成/导入、TLS/mTLS握手及TLS消费者用例独立到 [SecurityTests](../tests/OceanBaseConnector.SecurityTests/README.md)，不在主解决方案或CI中执行；纯配置/协议和TCP覆盖保留。
 

@@ -28,7 +28,7 @@
 | MySQL INSERT rewrite真实语义 | 已完成本轮直连矩阵 | 6/6验证Unicode默认值、触发器、事务和重复键失败边界；相关回归245通过/4配置跳过，走查后加强直接字符串读取断言。见[证据](history/2026-10-28-batch-rewrite-live-semantics.md) |
 | LOCAL INFILE源等待中断 | 已完成本轮直连矩阵 | 取消/超时新增2/2，协议组26/26；走查后修复失败路径任务等待，默认未启用实库18通过/137跳过。见[证据](history/2026-10-28-local-infile-interruption.md) |
 | LOCAL INFILE源流校验失败释放 | 已修复并验收 | 修复工厂流在CanRead校验失败前的泄漏，新增单测4项RED→GREEN、相关19/19，直连4/4及协议/缓存38/38；五资产构建零警告/错误、完整单测8144/8144、DI14/14、独立走查无遗留。见[记录](history/2026-10-28-local-infile-validation-ownership.md) |
-| 完整双模式直连复核 | 仍有失败，未整体关闭 | 截至`05d226e`及目录测试拆分，643项中625通过、12失败、6配置跳过；与此前630项快照的18项失败名称完全一致。默认未启用实库22通过/142跳过；最新源码完整单测8144/8144、DI14/14及五资产构建零警告/错误。Oracle SJIS/Big5初始化、nested-table及游标结果形状和目录权限问题保留；utf8mb3归一校验已修复，见[归因](history/2026-10-28-direct-failure-triage.md) |
+| 完整双模式直连复核 | 仍有失败，未整体关闭 | 截至`05d226e`及目录测试拆分，643项中625通过、12失败、6配置跳过；原18项中6项已修复，剩余12项保留；目录权限失败拆分为独立View/Synonym测试。默认未启用实库22通过/142跳过；当时源码完整单测8144/8144、DI14/14及五资产构建零警告/错误。Oracle SJIS/Big5初始化、nested-table及游标结果形状和目录权限问题保留；utf8mb3归一校验已修复，见[归因](history/2026-10-28-direct-failure-triage.md) |
 | Unknown outcome 本地 pre-send 边界 | 已修复并验收 | 同步/异步帧写入前参数校验2/2：不误报执行结果未知、保持连接可用并成功执行下一条命令；见[证据](history/2026-10-28-unknown-outcome-presend.md)；实际写入后的完整发送/执行/取消及服务器/代理/协调器故障仍开放 |
 | 写入请求/回包截断 | 已完成本轮直连矩阵 | 新增16/16，完整事务/XA/故障组91/91；独立核对实际零/一行、无重放、新租约及旧Command晚释放，走查无发现。见[证据](history/2026-10-28-write-outcome-boundaries.md)；真实服务器/代理/协调器故障仍开放 |
 | 外置LOB读取回包中断 | 已完成本轮直连矩阵 | Oracle BLOB/CLOB同步异步及整包/半包中断8/8；非unknown、Broken、新会话及旧资源晚释放时新LOB完整内容，相关回归244通过/4配置跳过；后续修正转发器在共享Acceptance项目中的内部类型访问编译错误，夹具10/10、验收网络/拓扑14/14、故障/LOB直连68/68，独立走查无遗留。见[证据](history/2026-10-28-external-lob-read-interruption.md)；其他中断点和代理reset仍开放 |
@@ -37,6 +37,7 @@
 | TFM / 包消费 | 已完成 Windows 验收 | `Verify-Packages.ps1 -VerifyNetFramework` 验证两包的五目标资产、依赖组、nupkg 哈希和消费者 restore graph；net8.0/net9.0/net10.0 各运行8项协议样例，netstandard2.0/2.1由net10 host加载，面向`net48`的host在已安装.NET Framework 4.8.1上加载netstandard2.0并通过8项样例。见[记录](history/2026-10-28-package-consumption.md)；非Windows和完整生态矩阵仍开放 |
 | 原23项审计项 / 八包 | P2-01 已移除，其余按证据分类 | 子功能已实现范围见矩阵；没有整体完成百分比 |
 | 安全验收与默认CI隔离 | 已拆分，验证见记录 | 证书/TLS测试独立到主解决方案之外的SecurityTests，默认保留TCP/协议覆盖；详见[记录](history/2026-10-28-security-test-isolation.md)，真实TLS环境门禁保留 |
+| Oracle 数组 FetchSize 提示 | 已实现并完成本轮验收 | Java 2.4.14 及 Oracle 直连确认正提示不阻止数组执行；新增8项RED后通过、相关单测134/134、公开DLL消费者36/36、Oracle数组实库12/12、完整默认单测8011/8011、DI14/14；五资产Release零警告/错误，独立走查无遗留；内部结果不分页，offset仍拒绝，见[记录](history/2026-10-28-array-fetch-hint.md) |
 | 生产级完整验收 | 未完成 | 完整资源/并发、真实OBProxy/TLS/auth/HA/版本/平台/运行时及发布审查 |
 
 ## 优先处理的明确缺实现

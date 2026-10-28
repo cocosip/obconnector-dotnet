@@ -45,7 +45,19 @@ namespace OceanBaseConnector.UnitTests
         public Task OracleStandalonePrepareArrayExecutionUsesRetainedStatement(bool asynchronous, bool deprecated)
             => OracleArrayExecutionCore(asynchronous, deprecated, prepared: true);
 
-        private static async Task OracleArrayExecutionCore(bool asynchronous, bool deprecated, bool prepared)
+        [Theory]
+        [InlineData(false, false, 1)]
+        [InlineData(true, false, 1)]
+        [InlineData(false, true, 1)]
+        [InlineData(true, true, 1)]
+        [InlineData(false, false, int.MaxValue)]
+        [InlineData(true, false, int.MaxValue)]
+        [InlineData(false, true, int.MaxValue)]
+        [InlineData(true, true, int.MaxValue)]
+        public Task OracleArrayFetchHintPreservesBatchResultsWithoutRequestingCursor(bool asynchronous, bool prepared, int fetchSize)
+            => OracleArrayExecutionCore(asynchronous, deprecated: true, prepared, fetchSize);
+
+        private static async Task OracleArrayExecutionCore(bool asynchronous, bool deprecated, bool prepared, int fetchSize = 0)
         {
             var server = Server(async channel =>
             {
@@ -67,10 +79,12 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync(); using var transaction = (OceanBaseTransaction)await connection.BeginTransactionAsync();
                 using var command = (OceanBaseCommand)connection.CreateCommand(); command.Transaction = transaction; command.CommandText = "update t set x=:p";
+                command.FetchSize = fetchSize;
                 var type = connection.CreateArrayType("NUMBER", transaction); command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", Value = type.CreateValue(1, null, 2) });
                 if (prepared) { if (asynchronous) await command.PrepareAsync(); else command.Prepare(); }
                 var result = asynchronous ? await command.ExecuteArrayAsync(3) : command.ExecuteArray(3);
                 Assert.Same(result, command.ArrayBindingResult); Assert.True(result.IsComplete); Assert.Equal(2, result.RecordsAffected);
+                Assert.Equal(fetchSize, command.FetchSize);
                 Assert.Equal(new long?[] { 2, null, 0 }, result.Items.Select(i => i.RecordsAffected)); Assert.Equal(1, result.Items[1].ServerErrorCode);
                 Assert.Same(connection, transaction.Connection); command.Dispose(); await transaction.RollbackAsync();
             }
@@ -234,7 +248,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("count")]
         [InlineData("size")]
         [InlineData("sql")]
-        [InlineData("fetch")]
+        [InlineData("offset")]
         [InlineData("no-column")]
         [InlineData("output-type")]
         [InlineData("stale")]
@@ -254,7 +268,7 @@ namespace OceanBaseConnector.UnitTests
                 var type = connection.CreateArrayType("NUMBER", transaction);
                 if (fault != "no-column") command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", Value = fault == "scalar" ? (object)1 : type.CreateValue(1, 2), Size = fault == "size" ? 1 : 0 });
                 if (fault == "output-type") ((OceanBaseParameter)command.Parameters[0]).Direction = ParameterDirection.Output;
-                if (fault == "fetch") command.FetchSize = 1;
+                if (fault == "offset") { command.FetchSize = 1; command.UseCursorOffset = true; }
                 if (fault == "stale") connection.ClearComplexTypeCache(transaction);
                 using var canceled = new System.Threading.CancellationTokenSource(); if (fault == "pre-cancel") canceled.Cancel();
                 await Assert.ThrowsAnyAsync<Exception>(() => command.ExecuteArrayAsync(fault == "count" ? 1 : 2, canceled.Token));

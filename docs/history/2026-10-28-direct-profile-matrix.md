@@ -16,12 +16,12 @@
 [外置LOB](2026-10-28-external-lob-read-interruption.md)、
 [外部删列缓存](2026-10-28-statement-cache-external-ddl.md)，均已有独立走查及本地提交。
 
-截至 `05d226e` 及目录测试拆分后的矩阵643项：625通过、12失败、6跳过，耗时2分3秒。
-比630项快照增加两项转发器长SQL fixture、四项LOCAL INFILE源流校验释放、四项事务管理器超时。
-再次逐项比较失败名称，18项完全一致；日志/TRX为ignored
-`TestResults/direct-profile-ownership-timeout.*`。默认未启用实库时22通过、142跳过、0失败，
+源流校验/管理器超时补验后、修复前的640项快照为616通过、18失败、6跳过，见 `TestResults/direct-profile-ownership-timeout.trx`。截至 `05d226e` 及目录测试拆分后的矩阵643项：625通过、12失败、6跳过。
+640项比630项快照增加两项转发器长SQL fixture、四项LOCAL INFILE源流校验释放、四项事务管理器超时；随后目录拆分增加三项，成为643项。
+修复前18项中，6项utf8mb3已通过；其余12项保留。两项目录权限失败从综合用例拆为独立View/Synonym用例，名称随拆分改变，其余10项失败名称不变。修复后的日志/TRX为ignored
+`TestResults/direct-profile-failure-triage.*`。默认未启用实库时22通过、142跳过、0失败，
 日志为 `TestResults/ownership-timeout-no-opt-in.log`。
-最新生产源码完整单测8144/8144、DI14/14及五资产Release零警告/错误见
+当时生产源码完整单测8144/8144、DI14/14及五资产Release零警告/错误见
 [源流所有权修复](2026-10-28-local-infile-validation-ownership.md)；
 [管理器超时验收](2026-10-28-ambient-manager-timeout.md)已有独立走查、强化断言后的135/135相关回归和单独提交。
 
@@ -56,12 +56,12 @@
 已经完成的模块分别有本地提交、单测/实库证据和独立走查。当前工作包继续保持开放：
 
 - W1：外置LOB真实读取回包中断已后续补验8/8，见[记录](2026-10-28-external-lob-read-interruption.md)；其他中断点、完整资源交错与持续资源上限、代理reset仍缺。
-- W2：本地管理器空闲事务定时超时已补验4/4；活动命令超时/in-doubt、更多发送/执行边界、节点/代理和管理器崩溃仍缺。
-- W3：上传超限、其他协议组合、真实压缩帧和OB20/trace环境。
+- W2：本地管理器空闲事务定时超时已补验4/4；活动命令超时已后续补验4/4，见[记录](2026-10-28-ambient-active-command-timeout.md)；in-doubt、更多发送/执行边界、节点/代理和管理器崩溃仍缺。
+- W3：上传超限已补本地协议同步/异步2/2，见[记录](2026-10-28-local-infile-overlimit.md)；其他协议组合、真实压缩帧和OB20/trace环境。
 - W4：实际TLS/mTLS、证书轮换、认证插件/KDC及多节点发现/HA。
 - W5/W6：上述失败的服务端/权限前提及其他类型/目录形状。
 - W7：外部删列确认错误后缓存淘汰已后续补验4/4，见[记录](2026-10-28-statement-cache-external-ddl.md)；其他DDL/特定reprepare错误、警告/限额、负载与诊断开销仍缺。
-- W8：其他平台、承诺运行时、真实包消费和发布审查。
+- W8：Windows五资产包消费及对应运行时已有专项，见[记录](2026-10-28-package-consumption.md)；其他平台、完整生态和发布审查仍缺。
 
 不为消除红项而把utf8mb3静默改为utf8mb4、不增加服务器不支持形状的客户端
 workaround、不自动授予权限，也不扩展没有协议依据的输入游标、OB20压缩/reroute、bulk。

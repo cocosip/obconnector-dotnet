@@ -63,6 +63,15 @@ Select a subset with `OB_INTEGRATION_PROFILES` (comma-separated names) or ordina
 
 Misconfiguration fails loudly: with the opt-in set, a missing file, an unresolvable environment reference or an unknown profile name fails the run instead of silently passing.
 
+## Oracle array execution FetchSize hints
+
+Filter `FullyQualifiedName~ArrayBindingTests` with an Oracle `createObjects`/PrepareExecute
+profile. Eight hint cases cover sync/async, implicit/explicit preparation and FetchSize 1 or
+Int32.MaxValue. They check preparation has no write side effect, three actual inserted rows,
+complete batch results, an unchanged hint, rollback and subsequent connection reuse.
+Array DML does not page internal batch results. These cases require the integration opt-in;
+they do not run in CI or require TLS/DBA permissions.
+
 ## Ambient timeout during an active command
 
 Filter `FullyQualifiedName~AmbientActiveCommandTimeoutTests` with `createObjects` and the existing

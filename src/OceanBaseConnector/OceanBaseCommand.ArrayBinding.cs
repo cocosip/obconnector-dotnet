@@ -14,6 +14,7 @@ namespace OceanBaseConnector
         /// <remarks>Each input is a factory anonymous array of rowCount elements. OUT/RETURNING requires an explicit
         /// anonymous array type and publishes object[][] grouped by input position only after a validated terminal OK.
         /// Item errors are returned in the result; protocol or terminal errors throw and preserve old output values.
+        /// FetchSize is accepted as a hint; internal batch results do not use a fetch cursor.
         /// No commit, rollback or replay is performed.</remarks>
         public OceanBaseArrayBindingResult ExecuteArray(int rowCount)
         {
