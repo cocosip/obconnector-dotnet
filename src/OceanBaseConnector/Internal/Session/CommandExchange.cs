@@ -290,8 +290,12 @@ namespace OceanBaseConnector.Internal.Session
             var stream = _localInfileStreamFactory(filename);
             if (stream == null)
                 throw new NotSupportedException("LOCAL INFILE stream factory returned null.");
-            if (!stream.CanRead) throw new NotSupportedException("LOCAL INFILE stream factory must return a readable stream.");
-            return stream;
+            try
+            {
+                if (!stream.CanRead) throw new NotSupportedException("LOCAL INFILE stream factory must return a readable stream.");
+                return stream;
+            }
+            catch { stream.Dispose(); throw; }
         }
 
         private static string ParseLocalInfileFilename(byte[] request)

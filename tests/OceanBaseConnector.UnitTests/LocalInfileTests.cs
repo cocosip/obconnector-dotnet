@@ -179,6 +179,41 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public async Task LocalInfileDisposesFactoryStreamWhenReadabilityValidationFails(bool asynchronous, bool throws)
+        {
+            var server = LocalInfileServer(async channel =>
+            {
+                await Query(channel, "load data local infile 'invalid.csv'");
+                await channel.WritePacketAsync(LocalInfile("invalid.csv"));
+                await Assert.ThrowsAsync<ProtocolException>(() => channel.ReadPacketAsync());
+            }, expectedCapability: true);
+            using var source = new InvalidUploadStream(throws);
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Local Infile=true");
+            var calls = 0;
+            connection.LocalInfileStreamFactory = _ => { calls++; return source; };
+            try
+            {
+                if (asynchronous) await connection.OpenAsync(); else connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "load data local infile 'invalid.csv'";
+                var error = await Assert.ThrowsAsync<OceanBaseException>(async () =>
+                {
+                    if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+                });
+                Assert.True(error.IsExecutionOutcomeUnknown);
+                if (throws) Assert.IsType<IOException>(error.InnerException); else Assert.IsType<NotSupportedException>(error.InnerException);
+                Assert.Equal(ConnectionState.Broken, connection.State);
+                Assert.Equal(1, calls); Assert.Equal(0, source.Reads); Assert.Equal(1, source.DisposeCalls);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         [Fact]
         public async Task LocalInfileCancellationIsUnknownAndBreaksSession()
         {
@@ -265,6 +300,17 @@ namespace OceanBaseConnector.UnitTests
             public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
             public override void SetLength(long value) => throw new NotSupportedException();
             public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        }
+
+        private sealed class InvalidUploadStream(bool throws) : MemoryStream
+        {
+            internal int DisposeCalls { get; private set; }
+            internal int Reads { get; private set; }
+            public override bool CanRead => throws ? throw new IOException("Injected readability failure.") : false;
+            public override int Read(byte[] buffer, int offset, int count) { Reads++; return base.Read(buffer, offset, count); }
+            public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            { Reads++; return base.ReadAsync(buffer, offset, count, cancellationToken); }
+            protected override void Dispose(bool disposing) { if (disposing) DisposeCalls++; base.Dispose(disposing); }
         }
 
         private sealed class BlockingReadStream : Stream

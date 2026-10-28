@@ -79,6 +79,41 @@ public sealed class LocalInfileTests
 
     [IntegrationTheory]
     [MemberData(nameof(Rows))]
+    public async Task RejectedFactoryStreamIsDisposedBeforeExplicitRecovery(string profileName, bool asynchronous, bool throws)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var observer = await db.OpenAsync(deadline.Token);
+        var table = await db.TableAsync(observer, "id INTEGER PRIMARY KEY", deadline.Token);
+        using var upload = new InvalidUploadStream(throws);
+        var requests = 0;
+        var builder = db.Profile.CreateBuilder();
+        builder.Pooling = true; builder.MinPoolSize = 0; builder.MaxPoolSize = 1; builder.AllowLocalInfile = true;
+        await using var source = new OceanBaseDataSourceBuilder(builder.ConnectionString).Build();
+        await using var connection = (OceanBaseConnection)source.CreateConnection();
+        connection.LocalInfileStreamFactory = _ => { requests++; return upload; };
+        await Open(); var original = connection.GetOpenSession();
+        using (var command = db.Command(connection, "LOAD DATA LOCAL INFILE 'obi-invalid.csv' INTO TABLE " + table))
+        {
+            var error = await Assert.ThrowsAsync<OceanBaseException>(async () =>
+            {
+                if (asynchronous) await command.ExecuteNonQueryAsync(deadline.Token); else command.ExecuteNonQuery();
+            });
+            Assert.True(error.IsExecutionOutcomeUnknown);
+            if (throws) Assert.IsType<IOException>(error.InnerException); else Assert.IsType<NotSupportedException>(error.InnerException);
+        }
+        Assert.Equal(1, upload.DisposeCalls); Assert.Equal(0, upload.Reads); Assert.Equal(1, requests);
+        Assert.Equal(ConnectionState.Broken, connection.State);
+        if (asynchronous) await connection.CloseAsync(); else connection.Close();
+        await Open(); Assert.NotSame(original, connection.GetOpenSession());
+        DatabaseContext.EqualNumber(await db.ScalarAsync(connection, db.SelectOne, deadline.Token), 1, "Rejected stream validation must allow explicit recovery without retrying the source.");
+        Assert.Equal(1, requests); Assert.Equal(1, upload.DisposeCalls);
+
+        async Task Open() { if (asynchronous) await connection.OpenAsync(deadline.Token); else connection.Open(); }
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(Rows))]
     public async Task ChunkedUploadOrSourceFailurePreservesOwnershipAndRecovery(string profileName, bool asynchronous, bool fail)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
@@ -163,6 +198,17 @@ public sealed class LocalInfileTests
             return Task.FromResult(Read(buffer, offset, count));
         }
         protected override void Dispose(bool disposing) { Disposed = true; base.Dispose(disposing); }
+    }
+
+    private sealed class InvalidUploadStream(bool throws) : MemoryStream
+    {
+        internal int DisposeCalls { get; private set; }
+        internal int Reads { get; private set; }
+        public override bool CanRead => throws ? throw new IOException("Injected readability failure.") : false;
+        public override int Read(byte[] buffer, int offset, int count) { Reads++; return base.Read(buffer, offset, count); }
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        { Reads++; return base.ReadAsync(buffer, offset, count, cancellationToken); }
+        protected override void Dispose(bool disposing) { if (disposing) DisposeCalls++; base.Dispose(disposing); }
     }
 
     private sealed class WaitingUploadStream(byte[] bytes) : MemoryStream(bytes, writable: false)

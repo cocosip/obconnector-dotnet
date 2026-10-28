@@ -118,6 +118,7 @@ namespace OceanBaseConnector
         /// <summary>
         /// Supplies a readable stream for a server-requested LOCAL INFILE filename.
         /// The filename is an opaque server value; the driver never opens it as a local path.
+        /// The driver disposes every returned non-null stream, including one rejected as unreadable.
         /// Set this before opening the connection when <c>Allow Local Infile=true</c>.
         /// </summary>
         public Func<string, Stream?>? LocalInfileStreamFactory

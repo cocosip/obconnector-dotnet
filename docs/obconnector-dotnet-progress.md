@@ -49,7 +49,7 @@
 | OB20压缩 | 明确不支持 | 非零uncompressed length仍拒绝 | 先取得客户端链路/版本/capability 依据，否则不实现 |
 | Proxy reroute | 明确不支持 | 当前拒绝相关响应标志 | 没有明确目标/TLS/租户及未知结果契约前不实现 |
 | 文本多语句 | 已实现 | 默认关闭，显式开启后文本多结果；客户端请求位不要求服务端握手声明，双模式直连16/16验证结果、中途错误及默认关闭无副作用，见[门禁修复](history/2026-10-28-multi-statement-client-policy.md) | 参数/Prepare/cursor/Oracle输出组合仍拒绝；扩展前需明确范围 |
-| LOCAL INFILE | 已实现 | 显式授权、应用流输入、安全边界、同步/异步；大于1MiB分块及源失败恢复4/4直连验收见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)；异步源等待期间真实取消/超时2/2，见[中断记录](history/2026-10-28-local-infile-interruption.md) | 代理策略、超限输入、同步源阻塞及其他中断/协议组合待验收 |
+| LOCAL INFILE | 已实现 | 显式授权、应用流输入、安全边界、同步/异步；大于1MiB分块及源失败恢复4/4直连验收见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)；异步源等待期间真实取消/超时2/2，见[中断记录](history/2026-10-28-local-infile-interruption.md)；CanRead为false或抛错时也释放工厂源流，新增直连4/4，见[修复记录](history/2026-10-28-local-infile-validation-ownership.md) | 代理策略、超限输入、同步源阻塞及其他中断/协议组合待验收 |
 | TLS/mTLS | 已实现 | 平台校验、自定义回调、客户端证书、池身份隔离、撤销选项 | 企业CA、负向握手、轮换和跨平台撤销未完整验收 |
 | 认证/凭据轮换 | 已实现 | 已有认证插件路径；每次Open提供凭据、版本轮换、过期/取消和旧会话退休 | 真实插件、凭据服务及KDC矩阵未验收 |
 | 发现与路由策略 | 已实现 | TCP重试预算/退避、健康缓存、TNS/OCP、组/权重/策略、各级黑名单/尝试上限 | TCP可达不代表数据库健康；其他策略边界和真实发现/节点/代理故障待验收 |
