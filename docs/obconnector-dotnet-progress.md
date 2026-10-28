@@ -48,7 +48,7 @@
 | 普通OB20 / trace | 已实现 | 普通帧、校验、legacy/modern trace编解码及协商诊断；显式 profile 会拒绝服务端实际降级 | 用户租户实测协商为 MySQL，未提供实际 OB20/trace 帧；OBProxy、服务器策略和 trace 发送仍待专用环境 |
 | OB20压缩 | 明确不支持 | 非零uncompressed length仍拒绝 | 先取得客户端链路/版本/capability 依据，否则不实现 |
 | Proxy reroute | 明确不支持 | 当前拒绝相关响应标志 | 没有明确目标/TLS/租户及未知结果契约前不实现 |
-| 文本多语句 | 已实现 | 默认关闭，显式开启后文本多结果 | 参数/Prepare/cursor/Oracle输出组合仍拒绝；扩展前需明确范围 |
+| 文本多语句 | 已实现 | 默认关闭，显式开启后文本多结果；客户端请求位不要求服务端握手声明，双模式直连16/16验证结果、中途错误及默认关闭无副作用，见[门禁修复](history/2026-10-28-multi-statement-client-policy.md) | 参数/Prepare/cursor/Oracle输出组合仍拒绝；扩展前需明确范围 |
 | LOCAL INFILE | 已实现 | 显式授权、应用流输入、安全边界、同步/异步；显式 `localInfileProfile` 已在直连 OceanBase MySQL 4.4.2.2 完成两项上传验收 | 代理策略、大文件及取消组合待验收 |
 | TLS/mTLS | 已实现 | 平台校验、自定义回调、客户端证书、池身份隔离、撤销选项 | 企业CA、负向握手、轮换和跨平台撤销未完整验收 |
 | 认证/凭据轮换 | 已实现 | 已有认证插件路径；每次Open提供凭据、版本轮换、过期/取消和旧会话退休 | 真实插件、凭据服务及KDC矩阵未验收 |

@@ -711,9 +711,11 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public async Task OptedInMultiStatementsExposeResultsAndKeepConnectionUsable(bool asynchronous)
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public async Task OptedInMultiStatementsExposeResultsAndKeepConnectionUsable(bool asynchronous, bool serverAdvertises)
         {
             var server = Server(async channel =>
             {
@@ -731,12 +733,14 @@ namespace OceanBaseConnector.UnitTests
                 channel.BeginCommand();
                 await Query(channel, "after multi statement");
                 await channel.WritePacketAsync(Ok(1));
-            }, multiStatements: true);
+            }, multiStatements: serverAdvertises);
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Multi Statements=true");
             try
             {
                 await connection.OpenAsync();
-                Assert.True(connection.GetOpenSession().Info!.Capabilities.HasEffective(CapabilityFlags.ClientMultiStatements));
+                var capabilities = connection.GetOpenSession().Info!.Capabilities;
+                Assert.True(capabilities.Requested.HasFlag(CapabilityFlags.ClientMultiStatements));
+                Assert.Equal(serverAdvertises, capabilities.HasEffective(CapabilityFlags.ClientMultiStatements));
                 using var command = connection.CreateCommand();
                 command.CommandText = "select first; select second";
                 using (var reader = asynchronous ? await command.ExecuteReaderAsync() : command.ExecuteReader())

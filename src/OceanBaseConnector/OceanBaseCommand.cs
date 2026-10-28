@@ -276,8 +276,9 @@ namespace OceanBaseConnector
                 var multiStatement = CommandType == CommandType.Text && SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
                 if (schemaOnly && multiStatement) throw new NotSupportedException("SchemaOnly requires a single statement.");
                 if (keyInfo && multiStatement) throw new NotSupportedException("KeyInfo requires a single statement.");
-                if (multiStatement && !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientMultiStatements))
-                    throw new NotSupportedException("Multi-statement execution requires Allow Multi Statements=true and server support.");
+                // CLIENT_MULTI_STATEMENTS is a client opt-in, not a server-offered capability.
+                if (multiStatement && (session.Info!.Capabilities.Requested & CapabilityFlags.ClientMultiStatements) == 0)
+                    throw new NotSupportedException("Multi-statement execution requires Allow Multi Statements=true.");
 #if NET8_0_OR_GREATER
                 if (BatchCommand is OceanBaseBatchCommand batch)
                 {

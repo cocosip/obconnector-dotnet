@@ -15,7 +15,7 @@
 | P0-04 | Unknown outcome | 分类、销毁/新租约、16项受控网络断言、应用核对示例 | 完整发送/执行/取消故障边界；不重放未知写 | 服务器/代理/协调器全故障矩阵 |
 | P0-05 | 活动连接恢复 | 连接ERR置Broken、旧事务失效、显式Close/Open；取消/超时事务双模式直连8/8验证新租约及旧事务晚释放隔离，见[证据](history/2026-10-28-interrupted-transaction-recovery.md) | 无透明迁移/自动重连/replay，先定契约；补完整重建 | 节点/代理断连和恢复 |
 | P0-06 | 池路由隔离 | resolver身份、Open快照、闲置退休和借出保留 | 其他边界/压力覆盖；无活动迁移/DNS-IP身份保证 | 单上游受控路由已通过，独立节点/代理HA仍缺 |
-| P1-01 | 多语句 | opt-in文本多结果 | 参数/Prepare/cursor/Oracle输出组合拒绝，扩展范围待定 | 中途错误/排空/版本/代理 |
+| P1-01 | 多语句 | opt-in文本多结果；修复客户端请求位门禁，双模式直连16/16验证完整结果、未读销毁/重建、中途错误与默认关闭无副作用，见[证据](history/2026-10-28-multi-statement-client-policy.md) | 参数/Prepare/cursor/Oracle输出组合拒绝，扩展范围待定 | 更多结果形状、版本/代理 |
 | P1-02 | 压缩/OB20 | 标准MySQL压缩、普通OB20及trace；服务端未声明 `CLIENT_COMPRESS` 时按 Java 降级为普通协议，双模式直连验收通过 | 压缩OB20、proxy reroute 当前明确拒绝；除非取得客户端协议依据，不列为默认开发项 | 真实压缩帧/OBProxy、TLS、跨平台及损坏/取消矩阵 |
 | P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界；同步/异步 `LOAD DATA LOCAL INFILE` 已在直连 OceanBase MySQL 4.4.2.2 通过 | 大输入/取消组合不纳入本模块新增实库范围 | 代理策略、大文件及中断行为 |
 | P1-04 | TLS/mTLS | 服务器回调、客户端证书、池隔离、撤销选项 | 发现实际差异后补轮换/平台回归 | 企业CA、负向握手、过期/轮换、平台撤销 |
