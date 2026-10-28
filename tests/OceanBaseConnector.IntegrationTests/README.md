@@ -63,6 +63,19 @@ Select a subset with `OB_INTEGRATION_PROFILES` (comma-separated names) or ordina
 
 Misconfiguration fails loudly: with the opt-in set, a missing file, an unresolvable environment reference or an unknown profile name fails the run instead of silently passing.
 
+## Ambient timeout during an active command
+
+Filter `FullyQualifiedName~AmbientActiveCommandTimeoutTests` with `createObjects` and the existing
+`slowQuery` capability (SQL running longer than two seconds). The local transaction manager times
+out after one second while that command is pending. Cases cover synchronous/asynchronous execution,
+discarding the broken physical session, replacement in a capacity-one pool, and late disposal of the
+old transaction/command while the new transaction remains uncommitted. The observer must see only
+the new transaction's two committed rows. A command's own timeout or caller cancellation cannot
+stand in for the manager interruption.
+
+These tests require the explicit integration opt-in and are not run by CI. They need neither DBA
+permissions nor TLS certificates; they use the selected profile's ordinary table-creation permission.
+
 ## Closed callback pool reuse
 
 Filter `FullyQualifiedName~CloseCallbackPoolTests`. Each configured profile covers synchronous/asynchronous Close, committed implicit writes or an active local transaction, and reopening the same logical connection or a second borrower from one private capacity-one pool. The callback queries the real table after cleanup: implicit writes remain, while uncommitted writes have rolled back. The test also verifies physical-session identity and an increased reset generation. This does not replace topology, long-running load, fault injection or platform acceptance.
