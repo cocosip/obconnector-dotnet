@@ -33,6 +33,7 @@
 | 外置LOB读取回包中断 | 已完成本轮直连矩阵 | Oracle BLOB/CLOB同步异步及整包/半包中断8/8；非unknown、Broken、新会话及旧资源晚释放时新LOB完整内容，相关回归244通过/4配置跳过；后续修正转发器在共享Acceptance项目中的内部类型访问编译错误，夹具10/10、验收网络/拓扑14/14、故障/LOB直连68/68，独立走查无遗留。见[证据](history/2026-10-28-external-lob-read-interruption.md)；其他中断点和代理reset仍开放 |
 | 连接池交叉借用隔离验收 | 已完成本轮直连矩阵 | MySQL/Oracle 直连共94通过、1配置跳过、0失败；Windows/.NET 10.0.14，SDK 11.0.100-rc.3 构建零警告/错误。证据见[兼容性记录](compatibility.md#2026-10-28-pool-cross-borrower-isolation-acceptance)；OBProxy、长期并发和完整资源边界仍开放 |
 | MySQL 存储函数 ReturnValue | 已实现并完成直连验收 | 单ReturnValue+Input 使用 `SET @var = function(?)` 和隐藏 `SELECT`；同步/异步单测及真实 OceanBase MySQL 各通过1项；完整代理/版本/运行时矩阵仍开放 |
+| TFM / 包消费 | 已完成 Windows 验收 | `Verify-Packages.ps1 -VerifyNetFramework` 验证两包的五目标资产、依赖组、nupkg 哈希和消费者 restore graph；net8.0/net9.0/net10.0 各运行8项协议样例，netstandard2.0/2.1由net10 host加载，面向`net48`的host在已安装.NET Framework 4.8.1上加载netstandard2.0并通过8项样例。见[记录](history/2026-10-28-package-consumption.md)；非Windows和完整生态矩阵仍开放 |
 | 原23项审计项 / 八包 | P2-01 已移除，其余按证据分类 | 子功能已实现范围见矩阵；没有整体完成百分比 |
 | 生产级完整验收 | 未完成 | 完整资源/并发、真实OBProxy/TLS/auth/HA/版本/平台/运行时及发布审查 |
 

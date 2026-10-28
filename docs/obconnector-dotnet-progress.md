@@ -66,7 +66,7 @@
 | 顺序Batch / INSERT rewrite | 已实现 | 顺序执行、Oracle array binding、opt-in MySQL INSERT合并及失败归属；MySQL直连6/6验证默认值/触发器、提交/回滚及重复组的prefix/suffix边界，见[证据](history/2026-10-28-batch-rewrite-live-semantics.md) | 更多触发器/默认表达式/警告、性能和部分失败组合待验收 |
 | Multi-send / 独立bulk | 明确不支持 | 尚无 Java/OceanBase 流水线/独立bulk协议依据 | 不列为默认开发项 |
 | 现有诊断 | 已实现 | 日志/Activity/Meter、池等待/租约、建连阶段、慢命令、协议帧/协商、会话I/O/源流读取 | 其他未定义等待点不列为功能缺口；真实负载、资源曲线和监听开销待验收 |
-| TFM / 包消费 | 部分验证 | 五资产；Windows有实际运行时及nupkg协议子集证据 | 单一.NET10 host的五资产消费不等于五运行时；非Windows及完整承诺矩阵仍缺 |
+| TFM / 包消费 | 已实现（Windows验收） | 五资产nupkg内容、依赖组、五目标资产选择及包消费者协议样例均通过；net8.0、net9.0、net10.0分别在对应运行时执行，netstandard2.0/2.1由net10 host加载，并由面向`net48`的host在已安装.NET Framework 4.8.1上加载netstandard2.0通过，见[包消费记录](history/2026-10-28-package-consumption.md) | 单一Windows主机不等于非Windows或完整生态承诺矩阵；其他平台仍缺 |
 | 完整发布验收 | 未完成 | 双模式直连4.4.2.2、Windows/.NET10、TLS disabled的若干专项已有报告 | OBProxy、真实TLS/auth、完整资源/故障/版本/平台矩阵及发布审查未闭合 |
 
 ## 当前开发项与门禁

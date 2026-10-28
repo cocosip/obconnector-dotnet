@@ -29,7 +29,7 @@
 | P2-02 | Statement cache | opt-in idle LRU、上下文/DDL/reset代际失效；双模式直连4/4实际缓存命中、held/idle DDL刷新和reset重备，见[证据](history/2026-10-28-statement-cache-live-lifecycle.md)；外部删列确认错误后失败条目淘汰和新结构读取4/4，见[补验](history/2026-10-28-statement-cache-external-ddl.md) | 其他外部DDL/特定reprepare错误/资源/负载回归 | 资源/延迟和代理 |
 | P2-03 | 批处理优化 | 顺序Batch、Oracle array binding、MySQL INSERT rewrite；直连6/6验证默认值/触发器/事务及已确认prefix、失败group、未执行suffix，见[证据](history/2026-10-28-batch-rewrite-live-semantics.md) | multi-send/pipelining、独立bulk 没有当前 Java/OceanBase 契约，明确不列为待实现 | 更多部分失败/触发器/警告/限额与吞吐 |
 | P2-04 | 诊断 | 日志/Activity/Meter、池/阶段/慢命令/协议/I/O/源流 | 其他资源等待不是已定义产品契约，不列为待实现 | 真实负载、资源曲线和监听开销 |
-| P2-05 | TFM/生态 | 五资产、Windows实际运行时nupkg协议子集 | 完整平台/API矩阵、Framework/ORM支持范围 | 非Windows、完整功能和实库消费者 |
+| P2-05 | TFM/生态 | 五资产、Windows实际运行时nupkg协议子集；包内容/依赖、五目标资产选择、消费者协议样例及面向`net48`的host在已安装.NET Framework 4.8.1上已通过，见[记录](history/2026-10-28-package-consumption.md) | 完整平台/API矩阵、ORM支持范围 | 非Windows、完整功能和实库消费者 |
 | P2-06 | 真实兼容性 | 验收工具、双模式直连和网络/XA/路由专项 | TLS/auth占位；OB20/trace已提交但真实环境仍受限；发布审查 | OBProxy、TLS/auth、允许零日期SQL_MODE、完整资源/故障/版本/平台 |
 
 ## 八个工作包
@@ -49,7 +49,7 @@
 
 每项功能须具备：明确支持/拒绝契约、源码、对应回归、成功构建、完整单测、一次独立最终走查、同步矩阵及本地提交。适用的实库/代理/运行时证据另行验证，不能用合成回环替代。
 
-正式发布仍缺：完整reset/资源隔离、Oracle未分类失败闭合、真实OBProxy和TLS、完整unknown/XA/活动连接故障报告，以及声明TFM的包消费证据。此前局部通过不取消这些门槛。
+正式发布仍缺：完整reset/资源隔离、Oracle未分类失败闭合、真实OBProxy和TLS、完整unknown/XA/活动连接故障报告，以及非Windows和完整生态矩阵。此前局部通过不取消这些门槛。
 
 不自动重放未知写，不静默降级TLS，失败会话不回池。分布式ambient提升、透明活动会话迁移、通用durable coordinator没有现成承诺，扩展前须明确范围。真实连接仅用于显式验收，普通单测/CI不依赖用户环境。
 

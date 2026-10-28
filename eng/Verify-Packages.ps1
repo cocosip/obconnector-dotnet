@@ -169,7 +169,7 @@ Write-ConsumerFile 'PackageConsumer.csproj' @'
 Copy-Item -LiteralPath (Join-Path $repository 'tests/PackageConsumer/Program.cs') -Destination $run
 Copy-Item -LiteralPath (Join-Path $repository 'tests/PackageConsumer/ProtocolScenarios.cs') -Destination $run
 $projectPath = Join-Path $run 'PackageConsumer.csproj'
-Invoke-Dotnet @('restore', $projectPath, '--configfile', (Join-Path $run 'NuGet.Config'), '--packages', (Join-Path $run 'packages'))
+Invoke-Dotnet @('restore', $projectPath, '--configfile', (Join-Path $run 'NuGet.Config'), '--packages', (Join-Path $run 'packages'), '-p:NuGetAudit=false')
 $restored = Get-Content -LiteralPath (Join-Path $run 'obj/project.assets.json') -Raw | ConvertFrom-Json
 foreach ($target in $targets) {
     $graph = $restored.targets.$target
@@ -245,7 +245,7 @@ internal static class Program
 }
 '@
     $frameworkProject = Join-Path $frameworkDirectory 'FrameworkHost.csproj'
-    Invoke-Dotnet @('restore', $frameworkProject, '--configfile', (Join-Path $run 'NuGet.Config'), '--packages', (Join-Path $run 'packages'))
+    Invoke-Dotnet @('restore', $frameworkProject, '--configfile', (Join-Path $run 'NuGet.Config'), '--packages', (Join-Path $run 'packages'), '-p:NuGetAudit=false')
     $frameworkAssets = Get-Content -LiteralPath (Join-Path $frameworkDirectory 'obj/project.assets.json') -Raw | ConvertFrom-Json
     $frameworkGraph = $frameworkAssets.targets.net48
     foreach ($id in $packages) {
