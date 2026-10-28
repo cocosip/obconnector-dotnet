@@ -14,7 +14,7 @@
 | 池化会话隔离 | 部分实现 | reset代际、保守状态SQL退休、Oracle自动提交、reader/LOB/cursor/XA保护；池销毁时原子关闭 `Closed/Connecting` 借出 session 及预热 session，已建立 `Open/Busy` 借出连接保持可用；池持有的探活/reset 即时关闭，见[维护关闭记录](history/2026-10-28-pool-maintenance-shutdown.md)；本轮双模式 Connections 直连矩阵128通过、4配置跳过，含源关闭后活动 reader 及连接继续使用 | 任意隐式副作用、完整资源交错及代理reset；直连专项不能推及全部状态 |
 | 池路由身份隔离 | 已实现 | resolver身份、每次Open快照、旧闲置端点退休、借出连接保留 | 受控单上游路由验收已通过；真实集群/代理HA未验收 |
 | 本地事务 / savepoint | 已实现 | 模式相关事务、现代TFM异步API及保存点 | 保留隔离级别/标识符限制；跨版本故障组合待验收 |
-| 单资源TransactionScope | 已实现 | PSPE登记、所有权、取消/晚回调、终态清理 | 分布式提升/durable prepare不支持；真实事务管理器故障矩阵待验收 |
+| 单资源TransactionScope | 已实现 | PSPE登记、所有权、取消/晚回调、终态清理；双模式直连16项验证自动入列、提交/回滚可见性及迟到回调与下一借用者事务隔离，见[验收记录](history/2026-10-28-ambient-transaction-acceptance.md) | 分布式提升/durable prepare不支持；真实事务管理器故障矩阵待验收 |
 | Unknown outcome处理 | 已实现 | 不确定结果分类、坏会话销毁、新租约及业务核对示例；不自动重放未知写 | 已有16项受控网络验收；完整发送/执行/取消/服务器故障边界仍缺 |
 | 活动连接故障恢复 | 部分实现 | 连接级ERR置Broken、旧事务失效、显式Close/Open | 透明迁移/自动重连/replay未实现且须先定契约；完整重建验收仍缺 |
 | 显式XA | 已实现 | 生命周期/recover、专用会话隔离；记录决定后协调器进程kill/restart验收 | 通用持久协调器不是现有产品能力；其他崩溃点/服务器/代理恢复未完整验收 |
