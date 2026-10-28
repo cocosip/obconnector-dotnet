@@ -7,6 +7,8 @@
 最终600项：576通过、18失败、6跳过，失败集合与首轮一致。日志/TRX为ignored
 `TestResults/direct-profile-final.*`。完整驱动单测8140/8140、DI14/14及五资产Release
 零警告/错误见[多语句模块](2026-10-28-multi-statement-client-policy.md)。
+该全量快照之后新增写入边界16项，单独及完整事务/XA/故障组91/91通过，见
+[后续模块](2026-10-28-write-outcome-boundaries.md)；不将其冒充上述600项的一部分。
 
 18项失败保留为失败，没有删除用例、改成skip或放宽契约：
 
