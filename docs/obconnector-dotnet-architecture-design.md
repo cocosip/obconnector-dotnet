@@ -57,7 +57,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `Enable Full Link Trace` | false | Requests server tracing; requires `Use OB20=true`. |
 | `Use Oracle Prepare Execute` | false | Enables Oracle procedures and output bindings; requires server version discovery and OceanBase >=2.2.76. |
 | `Use Lob Locators` | false | Enables Oracle locator LOBs. External reads and mutations also require PrepareExecute. |
-| `Allow Multi Statements` | false | Explicitly negotiates `CLIENT_MULTI_STATEMENTS` for text commands. Parameters, Prepare, server cursors and Oracle output paths remain unsupported for multi-statements. |
+| `Allow Multi Statements` | false | Explicitly requests `CLIENT_MULTI_STATEMENTS` for text commands. Oracle named scalar inputs use validated client literals; MySQL parameters, Prepare, server cursors and output paths remain unsupported for multi-statements. |
 | `Allow Local Infile` | false | Explicitly negotiates `CLIENT_LOCAL_FILES` for server-requested uploads. Set `OceanBaseConnection.LocalInfileStreamFactory` before `Open`; the filename is opaque and the returned readable stream is disposed by the driver. |
 | `Treat Tiny As Boolean` | true | MySQL signed `TINYINT(1)` with zero scale returns `bool`: zero is false, every nonzero value is true. Set false to read the full `sbyte` value. Unsigned TINYINT, other widths, Oracle types and BIT are unaffected. |
 | `Use Affected Rows` | false | MySQL UPDATE reports matched rows by default (`CLIENT_FOUND_ROWS`). Set true to request changed rows instead. Commands, readers and batches retain the counts returned by the server. |

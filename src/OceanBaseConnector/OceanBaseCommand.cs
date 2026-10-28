@@ -289,8 +289,12 @@ namespace OceanBaseConnector
                 if (oracle == null && mysql == null && CommandType != CommandType.Text) throw new NotSupportedException("Oracle stored procedures require Use Oracle Prepare Execute=true.");
                 if (oracle != null && cursorOffset) throw new NotSupportedException("Oracle output execution does not support offset fetch.");
                 var bindings = mysql?.Bindings ?? oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
-                if (multiStatement && (bindings.Parameters.Length != 0 || prepareOnly || _fetchSize > 0 || oracle != null))
-                    throw new NotSupportedException("Multi-statement execution does not support parameters, Prepare or server cursors.");
+                if (multiStatement && (prepareOnly || _explicitPreparation || _fetchSize > 0 || oracle != null ||
+                    bindings.Parameters.Length != 0 && session.Info!.Mode != OceanBaseCompatibilityMode.Oracle))
+                    throw new NotSupportedException("Multi-statement execution supports only Oracle scalar input parameters without Prepare or server cursors.");
+                if (multiStatement && bindings.Parameters.Length != 0)
+                    bindings = new ParameterBindingPlan(ClientPreparedSql.Build(bindings, session.Info!.Mode,
+                        clientEncoding: session.ClientEncoding), Array.Empty<OceanBaseParameter>());
                 var clientFallback = AllowClientSidePrepareFallback && !prepareOnly && !schemaOnly && !keyInfo && !_explicitPreparation && _fetchSize == 0 && oracle == null && mysql == null;
                 // Stream identity must not depend on a user stream's equality implementation.
                 ConditionalWeakTable<Stream, OceanBaseParameter>? streamBindings = null;

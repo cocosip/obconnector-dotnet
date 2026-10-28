@@ -37,15 +37,18 @@
 | TFM / 包消费 | 已完成 Windows 验收 | `Verify-Packages.ps1 -VerifyNetFramework` 验证两包的五目标资产、依赖组、nupkg 哈希和消费者 restore graph；net8.0/net9.0/net10.0 各运行8项协议样例，netstandard2.0/2.1由net10 host加载，面向`net48`的host在已安装.NET Framework 4.8.1上加载netstandard2.0并通过8项样例。见[记录](history/2026-10-28-package-consumption.md)；非Windows和完整生态矩阵仍开放 |
 | 原23项审计项 / 八包 | P2-01 已移除，其余按证据分类 | 子功能已实现范围见矩阵；没有整体完成百分比 |
 | 安全验收与默认CI隔离 | 已拆分，验证见记录 | 证书/TLS测试独立到主解决方案之外的SecurityTests，默认保留TCP/协议覆盖；详见[记录](history/2026-10-28-security-test-isolation.md)，真实TLS环境门禁保留 |
+| Windows CI池夹具取消 | 已修复提交 `a7a313f` | 保留 `994a262` 的取消/等待/停止顺序，仅在取消已触发且socket错误为OperationAborted时正常退出；专项连续160/160、当时完整默认单测8003/8003，独立走查无遗留，见[记录](history/2026-10-28-windows-pool-fixture-cancellation.md)；远程CI尚未复验 |
 | Oracle 数组 FetchSize 提示 | 已实现并完成本轮验收 | Java 2.4.14 及 Oracle 直连确认正提示不阻止数组执行；新增8项RED后通过、相关单测134/134、公开DLL消费者36/36、Oracle数组实库12/12、完整默认单测8011/8011、DI14/14；五资产Release零警告/错误，独立走查无遗留；内部结果不分页，offset仍拒绝，见[记录](history/2026-10-28-array-fetch-hint.md) |
 | MySQL 过程/函数 FetchSize 提示 | 已实现并完成本轮验收 | Java 2.4.14 实库对照、36项原限制RED、相关单测100/100、公开DLL消费者48/48、MySQL过程/函数实库30/30、完整默认单测8053/8053、DI14/14；五资产Release零警告/错误，独立走查无遗留；内部结果不分页，输出语义保持，见[记录](history/2026-10-28-mysql-routine-fetch-hint.md) |
+| Oracle参数化文本多语句 | 已实现并完成本轮验收 | Java双模式对照确认客户端绑定支持；新增正常用例6项RED→GREEN，相关单测47/47、公开DLL消费者12/12、双模式直连组24/24（新增Oracle参数8项）、完整默认单测8063/8063、DI14/14，五资产Release零警告/错误，独立最终走查无遗留；详见[记录](history/2026-10-28-oracle-multi-statement-parameters.md)。MySQL参数仍缺，Prepare/cursor/输出及复杂输入继续拒绝 |
 | 生产级完整验收 | 未完成 | 完整资源/并发、真实OBProxy/TLS/auth/HA/版本/平台/运行时及发布审查 |
 
 ## 优先处理的明确缺实现
 
-1. 连接池完整 reset、资源隔离、并发和真实部署验收。
-2. 已有 Java/OceanBase 依据但仍受限的 REF CURSOR 输出、复杂类型和字符集形状，先按真实服务端矩阵确认。
-3. OB20 压缩/reroute 等当前 Java/协议依据不足的组合继续明确拒绝，不列为默认开发目标。
-4. TLS/auth、代理/版本/平台和发布运行时的真实验收。
+1. MySQL 参数化文本多语句：官方 Java 与当前实库均已确认支持，客户端仍拒绝；先明确 SQL_MODE/字符集变化时的安全绑定契约。
+2. 连接池完整 reset、资源隔离、并发和真实部署验收。
+3. 已有 Java/OceanBase 依据但仍受限的 REF CURSOR 输出、复杂类型和字符集形状，先按真实服务端矩阵确认。
+4. OB20 压缩/reroute 等当前 Java/协议依据不足的组合继续明确拒绝，不列为默认开发目标。
+5. TLS/auth、代理/版本/平台和发布运行时的真实验收。
 
 已有实现欠验收、明确拒绝和已移除功能是三类工作，不能把推测性 Oracle/MySQL 完整性当成项目需求。详细失败/跳过保留在历史记录；新连接信息不写入任何文档，实库验收独立于普通单测/CI。

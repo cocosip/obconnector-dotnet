@@ -15,7 +15,7 @@
 | P0-04 | Unknown outcome | 分类、销毁/新租约、本地帧写入前校验（同步/异步2/2）、事务回包丢失16项与写入上游请求/回包截断16项、应用核对示例，见[本地边界](history/2026-10-28-unknown-outcome-presend.md)和[写入边界](history/2026-10-28-write-outcome-boundaries.md) | 完整发送/执行/取消故障边界；不重放未知写 | 服务器/代理/协调器全故障矩阵 |
 | P0-05 | 活动连接恢复 | 连接ERR置Broken、旧事务失效、显式Close/Open；取消/超时事务双模式直连8/8验证新租约及旧事务晚释放隔离，见[证据](history/2026-10-28-interrupted-transaction-recovery.md) | 无透明迁移/自动重连/replay，先定契约；补完整重建 | 节点/代理断连和恢复 |
 | P0-06 | 池路由隔离 | resolver身份、Open快照、闲置退休和借出保留 | 其他边界/压力覆盖；无活动迁移/DNS-IP身份保证 | 单上游受控路由已通过，独立节点/代理HA仍缺 |
-| P1-01 | 多语句 | opt-in文本多结果；修复客户端请求位门禁，双模式直连16/16验证完整结果、未读销毁/重建、中途错误与默认关闭无副作用，见[证据](history/2026-10-28-multi-statement-client-policy.md) | 参数/Prepare/cursor/Oracle输出组合拒绝，扩展范围待定 | 更多结果形状、版本/代理 |
+| P1-01 | 多语句 | opt-in文本多结果；Oracle普通命名标量输入使用现有客户端编码，双模式直连组24/24（新增Oracle参数8项），见[参数证据](history/2026-10-28-oracle-multi-statement-parameters.md)及[门禁修复](history/2026-10-28-multi-statement-client-policy.md) | MySQL参数有Java/实库支持依据但尚未实现，须先处理SQL_MODE/字符集安全边界；Prepare/cursor/输出、stream/时间/复杂输入组合拒绝 | 更多结果形状、版本/代理 |
 | P1-02 | 压缩/OB20 | 标准MySQL压缩、普通OB20及trace；服务端未声明 `CLIENT_COMPRESS` 时按 Java 降级为普通协议，双模式直连验收通过 | 压缩OB20、proxy reroute 当前明确拒绝；除非取得客户端协议依据，不列为默认开发项 | 真实压缩帧/OBProxy、TLS、跨平台及损坏/取消矩阵 |
 | P1-03 | LOCAL INFILE | opt-in应用流上传、安全边界；大于1MiB分块/源失败恢复4/4直连见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)，异步源等待期间取消/超时2/2见[中断记录](history/2026-10-28-local-infile-interruption.md)；修复CanRead校验失败前的工厂源流泄漏，单测4项RED→GREEN、直连4/4，见[释放记录](history/2026-10-28-local-infile-validation-ownership.md)；64MiB逻辑包上限及未知结果/坏会话同步/异步2/2见[上限记录](history/2026-10-28-local-infile-overlimit.md) | 同步源阻塞及其他协议/中断组合仍待验收 | 代理策略及完整中断行为 |
 | P1-04 | TLS/mTLS | 服务器回调、客户端证书、池隔离、撤销选项 | 发现实际差异后补轮换/平台回归 | 企业CA、负向握手、过期/轮换、平台撤销 |
