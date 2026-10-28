@@ -267,22 +267,24 @@ namespace OceanBaseConnector.UnitTests
             using var cleanupListener = new MeterListener { MeasurementsCompleted = (_, _) => { } };
             cleanupListener.InstrumentPublished = (instrument, owner) =>
             { if (instrument.Meter.Name == "OceanBaseConnector" && instrument.Name == "oceanbase.client.pool.waiters") owner.EnableMeasurementEvents(instrument); };
-            var callbackTime = TimeSpan.Zero;
+            var waitLifetime = new Stopwatch();
+            var beforeCleanup = TimeSpan.Zero;
             cleanupListener.SetMeasurementEventCallback<long>((_, value, _, _) =>
             {
                 if (value != -1) return;
-                var elapsed = Stopwatch.StartNew(); Thread.Sleep(500); callbackTime = elapsed.Elapsed;
+                beforeCleanup = waitLifetime.Elapsed;
+                Thread.Sleep(500);
             });
             cleanupListener.Start();
             var configuration = Configuration(server.Port, pooled: true);
             using var first = new OceanBaseConnection(configuration); using var second = new OceanBaseConnection(configuration);
             try
             {
-                await Open(first, asynchronous); capture.Clear(); var pending = Open(second, asynchronous);
+                await Open(first, asynchronous); capture.Clear(); waitLifetime.Start(); var pending = Open(second, asynchronous);
                 await capture.Waiting.Task.WaitAsync(TimeSpan.FromSeconds(5)); first.Close(); await pending;
                 Assert.Equal("pool.wait", capture.Phases[0]);
-                Assert.True(callbackTime.TotalMilliseconds >= 500);
-                Assert.True(capture.Seconds[0] < callbackTime.TotalSeconds, "Blocked time must exclude the later cleanup callback.");
+                Assert.True(beforeCleanup > TimeSpan.Zero);
+                Assert.True(capture.Seconds[0] <= beforeCleanup.TotalSeconds, "Blocked time must exclude the later cleanup callback.");
             }
             finally { first.Close(); second.Close(); OceanBaseConnection.ClearPool(first); }
         }

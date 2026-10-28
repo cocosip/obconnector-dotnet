@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using OceanBaseConnector.UnitTests.TestInfrastructure;
 using Xunit;
 
 namespace OceanBaseConnector.UnitTests
@@ -8,19 +9,21 @@ namespace OceanBaseConnector.UnitTests
     {
         internal static async Task ProtocolCancellationObservation(bool asynchronous, bool close, Action beforeCancel)
         {
-            var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var server = Server(async channel =>
-            {
-                await Query(channel, "private-diagnostics-write"); received.SetResult();
-                Assert.Equal(0, await channelStreamRead(channel));
-            });
+            var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)));
             using var connection = new OceanBaseConnection(Configuration(server.Port));
             try
             {
                 await connection.OpenAsync(); using var command = connection.CreateCommand(); command.CommandText = "private-diagnostics-write";
+                using var wire = new ProtocolFaultStream(new byte[] { 1 });
+                // Cancel inside the header read, after the response read has actually started.
+                wire.AfterInputConsumed = () =>
+                {
+                    beforeCancel();
+                    if (close) connection.Close(); else command.Cancel();
+                };
+                using (var lease = connection.GetOpenSession().Acquire())
+                { lease.Channel.ReplaceUnderlyingStream(wire); lease.Complete(); }
                 var pending = asynchronous ? command.ExecuteNonQueryAsync() : Task.Run(() => command.ExecuteNonQuery());
-                await received.Task.WaitAsync(TimeSpan.FromSeconds(10)); beforeCancel();
-                if (close) connection.Close(); else command.Cancel();
                 var error = await Assert.ThrowsAsync<OceanBaseException>(() => pending.WaitAsync(TimeSpan.FromSeconds(10)));
                 Assert.True(error.IsExecutionOutcomeUnknown);
             }
