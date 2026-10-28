@@ -40,8 +40,11 @@ separate quoted assignments: `SET character_set_client = '<name>'`,
 `SET character_set_connection = '<name>'` and `SET character_set_results = 'utf8mb4'`.
 Both modes read client/connection/results/collation state; the Oracle SELECT includes `FROM DUAL`.
 Fresh Open and pool restoration share the same mode-specific SQL. MySQL input and result names must
-match the configured family; Oracle input names must match while results remain utf8mb4. In both modes
-collation must belong to that connection family. The connection is
+match the configured family; Oracle input names must match while results remain utf8mb4. A configured
+`utf8mb3` also accepts the server's `utf8mb4` names and collations: OceanBase 4.4.2.2 normalizes
+`utf8`/`utf8mb3` assignments this way. The mb3 encoder still rejects supplementary characters, and its
+pool identity remains distinct from mb4. Other charset families retain exact matching. In both modes
+collation must belong to the accepted connection family. The connection is
 published only after this response is complete and validated. Unknown/rejected settings fail Open.
 Result identifiers and error handling keep their existing UTF-8 contract; ordinary result values
 continue to use their column collations.
@@ -194,9 +197,11 @@ The complex-national extension adds exact synthetic input bytes for all twelve n
 both prepare paths, sync/async and five-asset consumption. Explicit Oracle4.4.2.2 array-input
 checks pass36/48: ASCII, latin1, DEC8, TIS620, GBK, both GB18030 revisions and HKSCS/HKSCS31,
 each with NCHAR/NVARCHAR2, sync/async, exact read-back and SQL NULL. Each case rolls back and drops
-its generated table. The remaining12 fail at Open before DDL: the server reports UTF8MB4 after
-UTF8MB3/UTF8 assignments, violating strict configured-state matching; SJIS/Big5 session switching
-makes subsequent fixed ASCII statements fail900. No permissive alias/remapping workaround is added.
+its generated table. That historical run had12 failures at Open before DDL. The later
+[failure investigation](history/2026-10-28-direct-failure-triage.md) identifies four as an overly strict
+driver UTF8MB3 state check; those four now pass, making this group40/48. The remaining8 are SJIS/Big5:
+session switching makes subsequent fixed ASCII statements fail900, independently reproduced with
+official Connector/J2.4.14. No substitution of a different input encoding is added for those families.
 These observations do not establish other versions, proxies, stored complex output, standalone
 national or live pool-reset compatibility. Retained initialization failures and final local gates
 are in the [module record](history/obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding).

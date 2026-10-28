@@ -15,6 +15,26 @@ namespace OceanBaseConnector.UnitTests
 {
     public sealed class ClientCharacterSetTests
     {
+        [Theory]
+        [InlineData(OceanBaseCompatibilityMode.MySql)]
+        [InlineData(OceanBaseCompatibilityMode.Oracle)]
+        public void Utf8Mb3AcceptsNormalizedUtf8Mb4SessionWithoutWideningInput(OceanBaseCompatibilityMode mode)
+        {
+            var encoding = ClientCharacterSet.Parse("utf8mb3");
+            var state = new[] { "utf8mb4", "utf8mb4", "utf8mb4", "utf8mb4_general_ci" };
+            HandshakeFlow.ValidateClientCharacterSet(encoding, mode, state);
+            Assert.Equal(Convert.FromHexString("E4B8ADC3A9"), encoding.GetBytes("中é"));
+            Assert.Throws<EncoderFallbackException>(() => encoding.GetBytes("😀"));
+            for (var i = 0; i < state.Length; i++)
+            {
+                var mismatch = (string[])state.Clone();
+                mismatch[i] = i == 3 ? "latin1_swedish_ci" : "latin1";
+                Assert.Throws<NotSupportedException>(() => HandshakeFlow.ValidateClientCharacterSet(encoding, mode, mismatch));
+            }
+            Assert.False(ClientCharacterSet.Parse("utf8mb4").Matches("utf8mb3"));
+            Assert.False(encoding.MatchesCollation("utf8mb4_general_ci;"));
+        }
+
         public static IEnumerable<object[]> WireCases()
         {
             for (var sample = 0; sample < ClientCharacterSetFixture.Samples.Length; sample++)

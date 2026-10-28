@@ -38,14 +38,16 @@ namespace OceanBaseConnector.Internal.Protocol
         }
 
         internal bool Matches(string name) => string.Equals(Name, name, StringComparison.OrdinalIgnoreCase) ||
-            Name == "utf8mb3" && string.Equals(name, "utf8", StringComparison.OrdinalIgnoreCase);
+            Name == "utf8mb3" && (string.Equals(name, "utf8", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "utf8mb4", StringComparison.OrdinalIgnoreCase));
 
         internal bool MatchesCollation(string name)
         {
             foreach (var c in name)
                 if (!(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_')) return false;
             return name.Length <= 128 && (name.StartsWith(Name + "_", StringComparison.OrdinalIgnoreCase) ||
-                Name == "utf8mb3" && name.StartsWith("utf8_", StringComparison.OrdinalIgnoreCase));
+                Name == "utf8mb3" && (name.StartsWith("utf8_", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith("utf8mb4_", StringComparison.OrdinalIgnoreCase)));
         }
 
         private byte[] Encode(string text)
