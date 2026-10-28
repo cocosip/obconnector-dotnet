@@ -160,6 +160,7 @@ namespace OceanBaseConnector.UnitTests
                 }
                 catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
                 catch (ObjectDisposedException) when (stop.IsCancellationRequested) { }
+                catch (SocketException e) when (stop.IsCancellationRequested && e.SocketErrorCode == SocketError.OperationAborted) { }
             });
             try
             {
