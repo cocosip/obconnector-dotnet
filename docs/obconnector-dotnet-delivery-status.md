@@ -11,10 +11,13 @@
 | 查协议依据与详细验收标准 | [历史审计参考](history/obconnector-dotnet-completeness.md) |
 | 查整理前的交付总览 | [历史总览](history/obconnector-dotnet-delivery-status.md) |
 
+当前时间回退模块已完成，按用户要求暂停；尚未整体完成，详见[完成/剩余检查点](obconnector-dotnet-pause-checkpoint.md)。
+
 ## 当前交付与草稿
 
 | 项目 | 状态 | 证据 / 剩余门禁 |
 | --- | --- | --- |
+| MySQL日期/时间普通客户端回退 | 已交付；完整默认单测8548/8548，一次独立最终走查无Critical/Important/Minor | 复用现有时间字面量及验证；相关81/81、公开DLL96/96（新增24项）、直连92/92（新增40项）、DI14/14、五目标Release零警告/错误。TIME上限小数的二进制/严格文本转换差异如实保留；注入1295不等于原生触发，见[模块记录](history/2026-10-29-mysql-temporal-fallback.md) |
 | MySQL JSON普通客户端回退 | 已实现并完成本轮验收 | 复用普通字符串字面量、严格编码及每次拒绝后的可信会话状态；相关单测78/78、公开DLL84/84（新增24项）、新增JSON实库36/36及扩大直连142/142、DI14/14、五目标Release零警告/错误；完整默认单测8529/8529，一次独立最终走查无Critical/Important/Minor。中继注入拒绝不等于原生1295；官方Java默认模式三种编码通过，NO_BACKSLASH_ESCAPES三项失败如实保留。见[模块记录](history/2026-10-29-mysql-json-fallback.md) |
 | MySQL BIT/YEAR普通客户端回退 | 已实现并完成本轮验收 | 复用精确数值字面量与既有验证；完整默认单测8518/8518、相关98/98、公开DLL78/78（新增24项）及既有类型/多语句消费者24/24、中继注入Prepare拒绝后的真实存储/事务16/16及扩大实库44/44、DI14/14、五目标Release零警告/错误；一次独立最终走查无Critical/Important/Minor。官方Java单语句文本精确存储已通过，当前租户原生1295未复现，见[模块记录](history/2026-10-29-mysql-bit-year-fallback.md)；完整部署/故障/负载矩阵仍开放 |
 | Oracle二进制INOUT流 | 已实现并完成本轮验收 | 复用PrepareExecute分片上传；输出遵循服务端元数据，当前匿名包装为CHAR十六进制。完整默认单测8502/8502、相关176/176、夹具修正后专项101/101、公开DLL54/54、最终直连87/87（新增Oracle37项，含定位器开/关独立存储核对）、DI14/14、五目标Release零警告/错误；一次独立最终走查的唯一Important夹具问题已RED→GREEN修复，无遗留问题，见[模块记录](history/2026-10-29-oracle-inout-stream.md)；其他部署/资源/故障门禁仍开放 |

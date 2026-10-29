@@ -49,7 +49,7 @@ namespace OceanBaseConnector.Internal.Sql
         {
             if (parameter.Direction != ParameterDirection.Input) throw Unsupported();
             var provider = parameter.OceanBaseDbType;
-            var temporal = multiStatement && IsClientTemporal(parameter);
+            var temporal = (multiStatement || mode == OceanBaseCompatibilityMode.MySql) && IsClientTemporal(parameter);
             var interval = multiStatement && (provider == OceanBaseDbType.IntervalYearToMonth || provider == OceanBaseDbType.IntervalDayToSecond ||
                 !provider.HasValue && parameter.DbType == DbType.Object && (parameter.Value is OceanBaseIntervalYearToMonth || parameter.Value is OceanBaseIntervalDayToSecond));
             if (provider.HasValue && provider != OceanBaseDbType.Null && provider != OceanBaseDbType.Decimal &&
@@ -91,7 +91,7 @@ namespace OceanBaseConnector.Internal.Sql
                 var hex = Hex(binary);
                 return mode == OceanBaseCompatibilityMode.Oracle ? "HEXTORAW('" + hex + "')" : "X'" + hex + "'";
             }
-            if (multiStatement && IsClientTemporal(parameter)) return Temporal(parameter, mode);
+            if (temporal) return Temporal(parameter, mode);
             if (value is bool boolean) return boolean ? "1" : "0";
             if (type == DbType.Decimal)
             {
