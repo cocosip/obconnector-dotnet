@@ -42,7 +42,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.All(table.Rows.Cast<DataRow>(), row =>
                 {
                     Assert.True((bool)row["IsNullable"]);
-                    Assert.True((bool)row["IsSupportedForParameters"]);
+                    Assert.True((bool)row["IsSupportedForParameters"] || !mysql && (string)row["TypeName"] == "ROWID");
                     Assert.True(Enum.IsDefined(typeof(OceanBaseDbType), row["ProviderDbType"]));
                     Assert.NotNull(typeof(OceanBaseConnection).Assembly.GetType((string)row["ProviderSpecificDataType"]) ?? Type.GetType((string)row["ProviderSpecificDataType"]));
                 });
@@ -84,6 +84,9 @@ namespace OceanBaseConnector.UnitTests
                     Assert.Contains("NVARCHAR2", names); Assert.Contains("ARRAY", names); Assert.Contains("OBJECT", names);
                     Assert.DoesNotContain("JSON", names); Assert.DoesNotContain("BIT", names);
                     Assert.DoesNotContain("ENUM", names); Assert.DoesNotContain("SET", names); Assert.DoesNotContain("GEOMETRY", names);
+                    var rowid = DataTypeRow(table, "ROWID", typeof(string));
+                    Assert.False((bool)rowid["IsSupportedForParameters"]); Assert.True((bool)rowid["IsSupportedForResults"]);
+                    Assert.False((bool)rowid["IsLiteralSupported"]); Assert.Contains("209", (string)rowid["RequiredFeatures"]);
                     var cursor = DataTypeRow(table, "REF CURSOR", typeof(OceanBaseRefCursor));
                     Assert.False((bool)cursor["IsSupportedForResults"]); Assert.Equal("Output,ReturnValue", cursor["ParameterDirections"]);
                     Assert.Equal(DBNull.Value, cursor["CreateFormat"]); Assert.Equal(DBNull.Value, cursor["LiteralPrefix"]);
@@ -187,6 +190,7 @@ namespace OceanBaseConnector.UnitTests
             yield return new object[] { false, "DATE", (byte)12, 19U, (byte)0, (byte)0, (ushort)0, (ushort)45, typeof(DateTime) };
             yield return new object[] { false, "NVARCHAR2", (byte)207, 100U, (byte)0, (byte)0, (ushort)0, (ushort)45, typeof(string) };
             yield return new object[] { false, "RAW", (byte)203, 100U, (byte)0, (byte)0, (ushort)0, (ushort)63, typeof(byte[]) };
+            yield return new object[] { false, "ROWID", (byte)209, 120U, (byte)0, (byte)0, (ushort)0, (ushort)45, typeof(string) };
         }
 
         [Theory]

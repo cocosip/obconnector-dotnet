@@ -88,8 +88,10 @@ opaque bytes regardless of collation; it does not add a GEOMETRY inventory row, 
 type or SQL-support claim. These result-code extensions have local evidence only.
 
 Oracle ROWID result code209 likewise has local result-reading support using String and strict session
-UTF-8, independent of its reported collation. It preserves identifier text and wire length metadata;
-it adds no ROWID SQL inventory entry or parameter wire identity. MySQL results reject this code.
+UTF-8, independent of its reported collation. `DataTypes` exposes a result-only `ROWID` row with the
+same String provider identity; parameter and literal support remain false because no dedicated ROWID
+parameter wire identity is implemented. It preserves identifier text and wire length metadata. UROWID
+and MySQL results remain outside this mapping.
 
 NUMBER/DECIMAL each have two rows with the same SQL name and provider identity. The System.Decimal row covers precision 1..28 with 0 <= scale <= precision; otherwise an unknown/nonpositive precision, precision above 28, negative scale or scale above precision selects OceanBaseDecimal. The wide rows retain mode codec limits: Oracle precision <=38, metadata scale -84..127; MySQL precision <=65, scale 0..30 and scale <= precision. Overlapping bounds are intentional; ResultTypeCondition selects the normal reader representation, while ProviderSpecificDataType always reports the exact provider representation. Oracle TIMESTAMP similarly has DateTime for scale 0..7 and OceanBaseTimestamp for scale 8..9. MySQL zero-date shapes require provider-specific date access; ordinary DateTime conversion retains its existing checks.
 

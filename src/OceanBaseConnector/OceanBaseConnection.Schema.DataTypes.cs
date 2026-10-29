@@ -128,6 +128,9 @@ namespace OceanBaseConnector
                 Temporal("TIMESTAMP", OceanBaseDbType.Timestamp, typeof(OceanBaseTimestamp), 8, 9)["IsBestMatch"] = true;
                 Temporal("TIMESTAMP WITH TIME ZONE", OceanBaseDbType.TimestampWithTimeZone, typeof(OceanBaseTimestampWithTimeZone), 0, 9)["IsBestMatch"] = true;
                 Temporal("TIMESTAMP WITH LOCAL TIME ZONE", OceanBaseDbType.TimestampLocalTimeZone, typeof(OceanBaseTimestampLocalTimeZone), 0, 9)["RequiredFeatures"] = "Oracle session time zone";
+                var rowid = TypeRow("ROWID", OceanBaseDbType.String, typeof(string));
+                rowid["IsSupportedForParameters"] = false;
+                rowid["RequiredFeatures"] = "Oracle result type code 209; returned as strict session text";
                 Text("CHAR", OceanBaseDbType.String, fixedLength: true);
                 Text("VARCHAR2", OceanBaseDbType.String)["IsBestMatch"] = true;
                 Text("NCHAR", OceanBaseDbType.NChar, fixedLength: true)["RequiredFeatures"] = "Trusted national character set";

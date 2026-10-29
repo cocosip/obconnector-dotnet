@@ -549,9 +549,11 @@ SQL/spatial interoperability require real acceptance; local fixtures do not esta
 Oracle ROWID result code209 returns an unchanged string through the existing String provider identity.
 It uses the strict session UTF-8 decoder, including when binary or unknown collation is reported;
 the identifier is not parsed or normalized. Text/prepared buffered/sequential readers share the
-ordinary length-encoded path, with empty and NULL values preserved. MySQL rejects this code. No new
-ROWID CLR type, parameter wire code or SQL inventory declaration is added. Actual server metadata,
-ROWID SQL/parameter behavior and deployment compatibility require real validation.
+ordinary length-encoded path, with empty and NULL values preserved. MySQL rejects this code. The
+`DataTypes` collection exposes a result-only `ROWID` row with the same String provider identity;
+parameter and literal support remain disabled because no dedicated ROWID parameter wire identity is
+implemented. UROWID, actual server metadata, ROWID SQL/parameter behavior and deployment compatibility
+require real validation.
 
 | Result family | Accepted collation IDs | Maximum bytes per character |
 | --- | --- | ---: |
