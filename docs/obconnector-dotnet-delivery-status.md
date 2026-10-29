@@ -15,7 +15,8 @@
 
 | 项目 | 状态 | 证据 / 剩余门禁 |
 | --- | --- | --- |
-| MySQL多语句JSON输入 | 已实现并完成本轮验收 | 官方Java文本路径及三种编码实库对照；支持显式Json输入并区分JSON null与SQL NULL，沿用字符串编码/字符集/SQL_MODE保护；完整默认单测8120/8120、消费者相关组72/72、双模式多语句/类型/JSON字符集实库202/202、DI14/14，五目标Release零警告/错误；独立走查无遗留。见[模块证据](history/2026-10-29-multi-statement-json-input.md)；national及其他多语句/部署边界仍开放 |
+| Oracle多语句national输入 | 已实现并完成本轮验收 | NChar/NVarchar2使用OceanBase Unicode字面量；相关单测413/413、公开DLL消费者120/120、双模式直连回归240/240（新增38项）、DI14/14，五目标Release零警告/错误；完整默认单测8128/8128，独立最终走查无遗留。见[模块证据](history/2026-10-29-multi-statement-national-input.md)；national结果/复杂存储及其他部署边界仍开放 |
+| MySQL多语句JSON输入 | 已实现并完成本轮验收 | 官方Java文本路径及三种编码实库对照；支持显式Json输入并区分JSON null与SQL NULL，沿用字符串编码/字符集/SQL_MODE保护；完整默认单测8120/8120、消费者相关组72/72、双模式多语句/类型/JSON字符集实库202/202、DI14/14，五目标Release零警告/错误；独立走查无遗留。见[模块证据](history/2026-10-29-multi-statement-json-input.md)；national输出/复杂存储及其他多语句/部署边界仍开放 |
 | 协议协商诊断 | 已提交`85e6fe6` | 保存的完整单测8091/8091、消费者340/340、重建专项/runner488/488；Release零警告/错误，一次最终走查无遗留 |
 | OB20/trace显式验收 | **已提交，部分实库验收** | `bc020e2`/`c5b4c07`；专项/runner88/88、Release零警告/错误；直连4.4.2.2双模式 `declined-ob20` 各6通过。用户租户实际协商为MySQL，显式OB20各2项失败；真实OB20/trace、OBProxy、TLS/auth及完整单测环境门禁仍开放。见[证据](history/2026-10-27-ob20-trace-acceptance.md) |
 | 池维护期间关闭 | 已完成本轮代码与回归 | 探活/reset 同步异步 4 项 RED→GREEN，物理池专项 23/23、完整单测 8126/8126、DI 14/14；五资产 Release 零警告/错误，独立走查无待修发现。见[模块证据](history/2026-10-28-pool-maintenance-shutdown.md)；长期压力和真实部署矩阵仍开放 |

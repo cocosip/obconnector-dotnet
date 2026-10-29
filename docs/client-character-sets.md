@@ -130,8 +130,12 @@ The fixed OceanBase source's
 [is_valid_for_json](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/sql/engine/expr/ob_expr_json_func_helper.cpp#L1263)
 requests UTF8MB4 calculation collation for nonbinary strings from other charsets. This is source
 evidence for server-side conversion, not a completed deployment/storage matrix.
-Standalone NCHAR/NVARCHAR2
-parameters retain the independently verified national encoding. Complex national input members use
+Standalone binary NCHAR/NVARCHAR2 parameters retain the independently verified national encoding.
+Oracle text multi-statements instead encode explicit NChar/NVarchar2 inputs as ASCII Unicode
+literals, so their values can contain characters outside the selected client charset. Ordinary
+SQL text still requires representability. Input validation and the total SQL packet budget remain;
+result decoding still requires fresh trusted national state and the existing UTF-8/UTF-16 scope.
+See the [national input evidence](history/2026-10-29-multi-statement-national-input.md). Complex national input members use
 the trusted connection charset, now resolving all configured client names through the strict client
 encoder, including explicit utf8mb3 and the eleven non-UTF8 families. Legacy UTF8/UTF16 handling
 is preserved. Nested members, scalar factory arrays and ExecuteArray share this input path;

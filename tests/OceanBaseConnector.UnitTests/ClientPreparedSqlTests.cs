@@ -88,6 +88,51 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
+        public void MultiStatementNationalStringsUseUnicodeCodeUnitsWithoutOrdinaryLiteralLimits()
+        {
+            Assert.Equal("select (u'\\4e2d\\d83d\\de42\\0027\\005c\\0000\\003b\\003a\\0070'); select (NULL), (u'')",
+                BuildMulti("select :n; select :v, :e", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "n", OceanBaseDbType = OceanBaseDbType.NChar, Value = "中🙂'\\\0;:p", Size = 9 },
+                    new OceanBaseParameter { ParameterName = "v", OceanBaseDbType = OceanBaseDbType.NVarchar2, Value = DBNull.Value },
+                    new OceanBaseParameter { ParameterName = "e", OceanBaseDbType = OceanBaseDbType.NVarchar2, Value = "" }));
+            var large = new string('中', 4001);
+            var sql = BuildMulti("select :n; select :n", OceanBaseCompatibilityMode.Oracle,
+                new OceanBaseParameter { ParameterName = "n", OceanBaseDbType = OceanBaseDbType.NVarchar2, Value = large });
+            Assert.StartsWith("select (u'\\4e2d\\4e2d", sql);
+            Assert.EndsWith("\\4e2d'); select (u'" + string.Concat(System.Linq.Enumerable.Repeat("\\4e2d", 4001)) + "')", sql);
+        }
+
+        [Fact]
+        public void MultiStatementNationalStringsRetainModeDeclarationAndFallbackValidation()
+        {
+            foreach (var provider in new[] { OceanBaseDbType.NChar, OceanBaseDbType.NVarchar2 })
+            {
+                Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = provider, Value = DBNull.Value }));
+                Assert.Throws<NotSupportedException>(() => BuildMulti("select ?; select 1", OceanBaseCompatibilityMode.MySql,
+                    new OceanBaseParameter { OceanBaseDbType = provider, Value = DBNull.Value }));
+                Assert.Throws<System.Text.EncoderFallbackException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = provider, Value = "\ud800" }));
+                Assert.Throws<ArgumentException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = provider, Value = "🙂", Size = 1 }));
+                Assert.Throws<NotSupportedException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = provider, Value = DBNull.Value, Precision = 1 }));
+                Assert.Throws<NotSupportedException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = provider, Value = DBNull.Value, Scale = 1 }));
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void MultiStatementNationalLiteralExpansionAndRepeatedNamesRespectPacketBudget(bool repeated)
+        {
+            var text = new string('x', checked((int)(OceanBaseConnector.Internal.Protocol.PacketChannel.DefaultMaxPacketSize / (repeated ? 10 : 5) + 1)));
+            Assert.Throws<ArgumentException>(() => BuildMulti(repeated ? "select :p; select :p" : "select :p; select 1", OceanBaseCompatibilityMode.Oracle,
+                new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.NVarchar2, Value = text }));
+        }
+
+        [Fact]
         public void MultiStatementJsonRetainsModeMetadataAndFallbackRestrictions()
         {
             Assert.Throws<NotSupportedException>(() => Build("select ?", OceanBaseCompatibilityMode.MySql,

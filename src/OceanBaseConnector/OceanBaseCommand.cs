@@ -117,7 +117,7 @@ namespace OceanBaseConnector
                     PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                     national = execution.EnsureNationalCharacterSet();
                 }
-                var parameters = HasNationalParameters(operation.Bindings.Parameters)
+                var parameters = !clientMultiStatement && HasNationalParameters(operation.Bindings.Parameters)
                     ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national, clientEncoding: execution.ClientEncoding) : operation.Parameters;
                 var request = operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters, national, clientEncoding: execution.ClientEncoding)
                     : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters, execution.ClientEncoding)
@@ -199,7 +199,7 @@ namespace OceanBaseConnector
                     PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                     national = await execution.EnsureNationalCharacterSetAsync(cancellationToken).ConfigureAwait(false);
                 }
-                var parameters = HasNationalParameters(operation.Bindings.Parameters)
+                var parameters = !clientMultiStatement && HasNationalParameters(operation.Bindings.Parameters)
                     ? PreparedParameters.Encode(operation.Bindings.Parameters, execution.Mode, national, clientEncoding: execution.ClientEncoding) : operation.Parameters;
                 var request = operation.Oracle?.ArrayBinding != null ? OraclePrepareExecutePacket.BuildArray(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters, national, clientEncoding: execution.ClientEncoding)
                     : operation.Oracle != null ? OraclePrepareExecutePacket.Build(statement?.Id ?? 0, operation.Bindings.CommandText, operation.Bindings.Parameters.Length, parameters, execution.ClientEncoding)

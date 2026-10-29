@@ -54,7 +54,7 @@ namespace OceanBaseConnector.Internal.Sql
             if (provider.HasValue && provider != OceanBaseDbType.Null && provider != OceanBaseDbType.Decimal &&
                 provider != OceanBaseDbType.String && provider != OceanBaseDbType.Binary && provider != OceanBaseDbType.Boolean &&
                 (provider < OceanBaseDbType.SByte || provider > OceanBaseDbType.Double) && !temporal && !interval &&
-                !(multiStatement && provider == OceanBaseDbType.Json)) throw Unsupported();
+                !(multiStatement && (provider == OceanBaseDbType.Json || provider == OceanBaseDbType.NChar || provider == OceanBaseDbType.NVarchar2))) throw Unsupported();
             var type = parameter.DbType;
             if (type != DbType.String && type != DbType.AnsiString && type != DbType.StringFixedLength && type != DbType.AnsiStringFixedLength &&
                 type != DbType.Binary && type != DbType.Boolean && type != DbType.Decimal &&
@@ -78,6 +78,7 @@ namespace OceanBaseConnector.Internal.Sql
             if (value is string text)
             {
                 if (mode == OceanBaseCompatibilityMode.MySql) return multiStatement ? context!.MultiStatementLiteral(text) : context!.Literal(text);
+                if (provider == OceanBaseDbType.NChar || provider == OceanBaseDbType.NVarchar2) return NationalLiteral(text);
                 if (text.IndexOf('\0') >= 0) throw new ArgumentException("Oracle client text literals cannot contain NUL.");
                 text = text.Replace("'", "''");
                 if (clientEncoding.GetByteCount(text) > 4000) throw new ArgumentException("Oracle client text literal exceeds 4000 bytes.");
@@ -115,6 +116,15 @@ namespace OceanBaseConnector.Internal.Sql
                 value is int || value is uint || value is long || value is ulong)
                 return ((IFormattable)value).ToString(null, CultureInfo.InvariantCulture);
             throw new ArgumentException("The client literal value does not match its declared DbType.");
+        }
+
+        private static string NationalLiteral(string text)
+        {
+            if (5L * text.Length + 3 > PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Client prepared SQL exceeds the packet size limit.");
+            // Unicode escapes preserve national text outside the client character set, as in Connector/J.
+            var literal = new StringBuilder("u'", text.Length * 5 + 3);
+            foreach (var c in text) literal.Append('\\').Append(((int)c).ToString("x4", CultureInfo.InvariantCulture));
+            return literal.Append('\'').ToString();
         }
 
         private static bool IsClientTemporal(OceanBaseParameter parameter)

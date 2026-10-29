@@ -9,6 +9,62 @@ namespace OceanBaseConnector.UnitTests
     public sealed partial class TextCommandTests
     {
         [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task OracleNationalMultiStatementsUseUnicodeLiteralsAndKeepSessionContext(bool asynchronous)
+        {
+            var server = Server(async channel =>
+            {
+                var request = await ReadNationalClientCommand(channel, "utf16");
+                Assert.Equal(3, request[0]);
+                Assert.Equal("insert into t values ((u'\\4e2d\\d83d\\de42\\0027\\005c\\0000')); update t set v=(NULL), n=(u'\\4e2d\\d83d\\de42\\0027\\005c\\0000')",
+                    System.Text.Encoding.UTF8.GetString(request, 1, request.Length - 1));
+                await channel.WritePacketAsync(Ok(2, 14)); await channel.WritePacketAsync(Ok(3));
+                channel.BeginCommand(); await Query(channel, "after national multi parameters"); await channel.WritePacketAsync(Ok(1));
+            }, multiStatements: true, nationalCharacterSet: "utf16");
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Multi Statements=true");
+            try
+            {
+                await connection.OpenAsync(); using var command = connection.CreateCommand();
+                command.CommandText = "insert into t values (:n); update t set v=:v, n=:N";
+                var parameter = new OceanBaseParameter { ParameterName = "n", OceanBaseDbType = OceanBaseDbType.NChar, Value = "中🙂'\\\0", Size = 6 };
+                command.Parameters.Add(parameter);
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "v", OceanBaseDbType = OceanBaseDbType.NVarchar2, Value = DBNull.Value });
+                Assert.Equal(5, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+                Assert.Equal("中🙂'\\\0", parameter.Value);
+                command.Parameters.Clear(); command.CommandText = "after national multi parameters";
+                Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task OracleNationalMultiStatementsDoNotUseBinaryEncodingForUnicodeLiterals(bool asynchronous)
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "insert into t values ((u'\\4e2d')); select 1");
+                await channel.WritePacketAsync(Ok(1, 14)); await channel.WritePacketAsync(Ok(0));
+                channel.BeginCommand(); await Query(channel, "after national text input"); await channel.WritePacketAsync(Ok(1));
+            }, multiStatements: true, nationalCharacterSet: "unsupported");
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Multi Statements=true");
+            try
+            {
+                await connection.OpenAsync(); using var command = connection.CreateCommand();
+                command.CommandText = "insert into t values (:n); select 1";
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "n", OceanBaseDbType = OceanBaseDbType.NVarchar2, Value = "中" });
+                Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+                command.Parameters.Clear(); command.CommandText = "after national text input";
+                Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData(false, false)]
         [InlineData(true, false)]
         [InlineData(false, true)]

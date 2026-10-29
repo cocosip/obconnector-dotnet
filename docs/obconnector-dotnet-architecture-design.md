@@ -57,7 +57,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `Enable Full Link Trace` | false | Requests server tracing; requires `Use OB20=true`. |
 | `Use Oracle Prepare Execute` | false | Enables Oracle procedures and output bindings; requires server version discovery and OceanBase >=2.2.76. |
 | `Use Lob Locators` | false | Enables Oracle locator LOBs. External reads and mutations also require PrepareExecute. |
-| `Allow Multi Statements` | false | Explicitly requests `CLIENT_MULTI_STATEMENTS` for text commands. Oracle named and MySQL positional scalar inputs use validated client literals, including MySQL JSON and DATE/DATETIME/TIMESTAMP/TIME and Oracle DATE/TIMESTAMP/TIMESTAMP WITH TIME ZONE/TIMESTAMP WITH LOCAL TIME ZONE/INTERVAL YEAR TO MONTH/INTERVAL DAY TO SECOND. MySQL string binding requires stable parsing charsets and rejects dynamic execution/CALL/quoted SET identifiers. Prepare, cursors, outputs, stream/complex inputs remain unsupported. |
+| `Allow Multi Statements` | false | Explicitly requests `CLIENT_MULTI_STATEMENTS` for text commands. Oracle named and MySQL positional scalar inputs use validated client literals, including MySQL JSON and DATE/DATETIME/TIMESTAMP/TIME and Oracle NChar/NVarchar2 and DATE/TIMESTAMP/TIMESTAMP WITH TIME ZONE/TIMESTAMP WITH LOCAL TIME ZONE/INTERVAL YEAR TO MONTH/INTERVAL DAY TO SECOND. MySQL string binding requires stable parsing charsets and rejects dynamic execution/CALL/quoted SET identifiers. Prepare, cursors, outputs, stream/complex inputs remain unsupported. |
 | `Allow Local Infile` | false | Explicitly negotiates `CLIENT_LOCAL_FILES` for server-requested uploads. Set `OceanBaseConnection.LocalInfileStreamFactory` before `Open`; the filename is opaque and the returned readable stream is disposed by the driver. |
 | `Treat Tiny As Boolean` | true | MySQL signed `TINYINT(1)` with zero scale returns `bool`: zero is false, every nonzero value is true. Set false to read the full `sbyte` value. Unsigned TINYINT, other widths, Oracle types and BIT are unaffected. |
 | `Use Affected Rows` | false | MySQL UPDATE reports matched rows by default (`CLIENT_FOUND_ROWS`). Set true to request changed rows instead. Commands, readers and batches retain the counts returned by the server. |
@@ -275,6 +275,21 @@ connection. Connection/Transaction getters/setters and standalone Prepare remain
 join the ambient single-resource transaction. The source command timeout is the batch default. Normal
 connection batches keep caller-owned connection behavior. Standard assets expose no modern batch API.
 See [local evidence and remaining acceptance](history/obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
+
+### Oracle national inputs in text multi-statements
+
+Explicit NChar/NVarchar2 Input parameters use OceanBase Unicode literals: each validated UTF-16
+code unit becomes an ASCII `\hhhh` escape inside `u'...'`, following Connector/J OBNStringParameter.
+This preserves supplementary characters, quotes, backslashes and NUL even outside the configured
+client charset. Empty national strings have the server's SQL NULL semantics. Both provider types
+produce NCHAR expression metadata; they do not force the binary parameter expression type.
+Unicode validity, Size, zero Precision/Scale and combined SQL packet limits are checked before
+sending the script. Expanded literals are bounded before allocation, including repeated bindings.
+Ordinary VARCHAR2/RAW literal limits do not apply to national literals. Text execution skips the
+unused binary national parameter encoder; binary paths retain their encoding checks. Result decoding
+still requires fresh trusted national state and the existing UTF-8/UTF-16 encodings, including for
+later results. National input support does not widen national result/storage or complex-type scope.
+See the [OceanBase/Java and direct-test evidence](history/2026-10-29-multi-statement-national-input.md).
 
 ### MySQL client string preparation
 
