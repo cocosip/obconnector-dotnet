@@ -29,6 +29,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 "gb18030_2022" => 216,
                 "dec8" => 3,
                 "tis620" => 18,
+                "euckr" => 19,
                 "sjis" => 13,
                 "big5" => 1,
                 "hkscs" => 152,

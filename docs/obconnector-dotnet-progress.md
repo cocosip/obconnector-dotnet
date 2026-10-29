@@ -87,8 +87,8 @@
 | T16 LONG/LONG RAW/BFILE/NCLOB | — | 排除专用支持 | 无专用API/模拟实现 | O4明确不支持；Java别名/枚举不能扩大范围 |
 | T17 XMLType/SDO_GEOMETRY/ANYDATA | — | 服务端有条件能力，.NET专用codec未承诺 | 可使用服务端转换为已支持标量 | O8；不是现有复杂codec自动支持；列候选差距 |
 | T18 向量/位图/SQL数组 | 服务端版本相关；无专用codec承诺 | 不把MySQL扩展套用此模式 | 当前Oracle数组绑定不是这些类型 | O2；需新增wire/type证据与需求才纳入 |
-| T19 客户端SQL编码 | utf8mb4/mb3、ASCII、latin1、GB2312、GBK、GB18030/2022、DEC8、TIS620、SJIS、Big5、HKSCS/31 | 相同解析白名单，实际初始化受租户限制 | ClientCharacterSet；未列名字发送前拒绝 | GB2312 使用严格 20936 映射；Oracle SJIS/Big5失败保留；UTF16结果支持不等于SQL输入支持 |
-| T20 结果/national编码 | 映射UTF8、UTF16/LE及已实现单/多字节collation（含GB2312 24/86） | 普通结果与national独立规则 | ResultCharacterSet、NationalCharacterSet | 未知collation/坏字节拒绝；UJIS/EUCKR等仍未覆盖，真实GB2312 roundtrip待验收 |
+| T19 客户端SQL编码 | utf8mb4/mb3、ASCII、latin1、GB2312、GBK、GB18030/2022、DEC8、TIS620、EUCKR、SJIS、Big5、HKSCS/31 | 相同解析白名单，实际初始化受租户限制 | ClientCharacterSet；未列名字发送前拒绝 | GB2312/EUCKR 使用严格映射；UJIS/EUCJPMS等仍是候选；Oracle SJIS/Big5失败保留 |
+| T20 结果/national编码 | 映射UTF8、UTF16/LE及已实现单/多字节collation（含GB2312 24/86、EUCKR 19/85） | 普通结果与national独立规则 | ResultCharacterSet、NationalCharacterSet | 未知collation/坏字节拒绝；UJIS/EUCJPMS等仍未覆盖，两族真实roundtrip待验收 |
 
 类型依据O2/O4、J2/J3/J6；实际约束在[ResultColumn](../src/OceanBaseConnector/Internal/Protocol/ResultColumn.cs)、
 [PreparedParameters](../src/OceanBaseConnector/Internal/Protocol/PreparedParameters.cs)和各codec中。

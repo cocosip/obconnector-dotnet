@@ -20,7 +20,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             ("latin1", "é€", "E980"), ("gb2312", "中文丨", "D6D0CEC4D8AD"), ("gbk", "中文", "D6D0CEC4"),
             ("gb18030", "ḿ\ue7c7😀", "A8BC8135F4379439FC36"),
             ("gb18030_2022", "龴\ue81e\ufe10", "FE5982359037A6D9"),
-            ("dec8", "¤ŒŸ", "A8D7DD"), ("tis620", "กฺ฿", "A1DADF"),
+            ("dec8", "¤ŒŸ", "A8D7DD"), ("tis620", "กฺ฿", "A1DADF"), ("euckr", "한글", "C7D1B1DB"),
             ("sjis", "日本語", "93FA967B8CEA"), ("big5", "中•∼", "A4A4A145A1E3"),
             ("hkscs", "\uf308Ā中", "88458856A4A4"), ("hkscs31", "\U0002010cĀ中", "88458856A4A4"),
         };

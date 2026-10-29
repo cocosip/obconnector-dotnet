@@ -154,6 +154,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("gb18030_2022", "gb18030_2022")]
         [InlineData("dec8", "dec8")]
         [InlineData("tis620", "tis620")]
+        [InlineData("euckr", "euckr")]
         [InlineData("sjis", "sjis")]
         [InlineData("big5", "big5")]
         [InlineData("hkscs", "hkscs")]
@@ -189,6 +190,18 @@ namespace OceanBaseConnector.UnitTests
             var result = ResultCharacterSet.Resolve(24, out var width);
             Assert.Equal(2u, width);
             Assert.Equal("中文丨", result.GetString(Convert.FromHexString("D6D0CEC4D8AD")));
+        }
+
+        [Fact]
+        public void EucKrUsesStrictOceanBaseMapping()
+        {
+            var eucKr = ClientCharacterSet.Parse("euckr");
+            Assert.Equal(Convert.FromHexString("C7D1B1DB"), eucKr.GetBytes("한글"));
+            Assert.Throws<EncoderFallbackException>(() => eucKr.GetBytes("\u0081"));
+
+            var eucKrResult = ResultCharacterSet.Resolve(19, out var eucKrWidth);
+            Assert.Equal(2u, eucKrWidth);
+            Assert.Equal("한글", eucKrResult.GetString(Convert.FromHexString("C7D1B1DB")));
         }
     }
 }

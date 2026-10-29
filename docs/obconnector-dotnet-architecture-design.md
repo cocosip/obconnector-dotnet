@@ -569,6 +569,7 @@ require real validation.
 | MySQL latin1 (Windows-1252) | 5, 8, 15, 31, 47, 48, 49, 94, 329, 344, 359 | 1 |
 | GB2312 | 24, 86 | 2 |
 | GBK | 28, 87, 326, 341, 356 | 2 |
+| EUCKR | 19, 85 | 2 |
 | GB18030-2005 | 248, 249, 251, 328, 343, 358 | 4 |
 | GB18030-2022 | 216–222, 330, 345, 360 | 4 |
 | UTF-16 big endian | 54, 55, 101–124, 327, 342, 357 | 4 |
@@ -580,16 +581,17 @@ OceanBase IDs follow `v4.3.5_CE` charset definitions; GB2312 24/86 is additional
 `v4.4.2_CE` header because that charset was introduced after the older baseline. Legacy UTF8MB3 IDs
 additionally follow MySQL's [33/83 definitions](https://github.com/mysql/mysql-server/blob/mysql-8.0.44/strings/ctype-utf8.cc)
 and [192–215 definitions](https://github.com/mysql/mysql-server/blob/mysql-8.0.40/strings/ctype-uca.cc#L6085).
-The official `System.Text.Encoding.CodePages` dependency supplies CP1252/20936/936/54936 without
-process-global `Encoding.RegisterProvider`. GB2312 uses CP20936 and rejects GBK-only characters;
-it is not a CP936 alias. MySQL latin1 includes CP1252 C1 mappings; it is not ISO-8859-1. GBK/GB18030
+The official `System.Text.Encoding.CodePages` dependency supplies CP1252/20936/936/54936/51949
+without process-global `Encoding.RegisterProvider`. GB2312 uses CP20936 and rejects GBK-only characters;
+it is not a CP936 alias. EUCKR uses CP51949 with OceanBase's 81–FE lead and 41–5A/61–7A/81–FE
+trail ranges. MySQL latin1 includes CP1252 C1 mappings; it is not ISO-8859-1. GBK/GB18030
 reject illegal single bytes 80/FF and malformed/truncated multibyte input. GB18030 corrects CP54936's
 older mapping: A8BC decodes U+1E3F and 8135F437 decodes U+E7C7, including streamed reads. A BOM is
 a returned character, not stripped as a transport marker.
 
-The GB2312 source basis is the official
+The GB2312/EUCKR source basis is the official
 [v4.4.2_CE header](https://github.com/oceanbase/oceanbase/blob/e859d1b9c9a6d11d856f4fed5b6385f1a6795820/deps/oblib/src/lib/charset/ob_charset.h#L50-L146).
-The .NET mapping is local byte-exact evidence only; Java 2.4.14's generic character-encoding path
+The .NET mappings are local byte-exact evidence only; Java 2.4.14's generic character-encoding path
 and the server header do not replace a live tenant roundtrip.
 
 GB18030-2022 applies the18 reversible PUA/assigned-scalar swaps specified by
@@ -919,7 +921,7 @@ Pure Output/ReturnValue parameters send a protocol NULL placeholder. The declare
 Complex LOB inputs require negotiated `Use Lob Locators=true`. Named object/collection members use content payloads: `byte[]` for BLOB and `string` for CLOB, including nested named elements; CLOB content uses strict UTF-8 because the named LONG_BLOB parser bypasses client charset conversion. Anonymous scalar BLOB/CLOB arrays instead accept matching `OceanBaseLob` handles from the same connection, physical session, transaction and epoch. Handles are revalidated at value creation and execution, remain caller-owned and are never opened or disposed by binding. NULL members and empty payloads/collections retain their framing. A named LOB result handle cannot be directly rebound as a named input: the server parses that member as payload bytes, so locator values are explicitly rejected before target SQL. Read its content explicitly and create a fresh payload value if needed; no implicit external-LOB materialization is performed. These two wire formats are deliberately distinct.
 
 <a id="complex-national-members"></a>
-NCHAR/NVARCHAR2 members retain distinct layouts (208/207), including nested named objects/collections and scalar factory arrays. `CreateValue` validates shape, Unicode and byte budgets without I/O; encoding is selected again at execution. Complex national inputs use the trusted **connection** character set, unlike standalone national scalar parameters. This input resolver now accepts all configured strict client encodings, including UTF8MB3 and the eleven non-UTF8 families, while retaining legacy UTF8/UTF16 behavior. Ordinary VARCHAR2/CHAR members use the [selected client encoding](client-character-sets.md), default UTF-8. ExecuteArray uses the same encoding path and existing explicit-transaction, row-count and partial-failure contract.
+NCHAR/NVARCHAR2 members retain distinct layouts (208/207), including nested named objects/collections and scalar factory arrays. `CreateValue` validates shape, Unicode and byte budgets without I/O; encoding is selected again at execution. Complex national inputs use the trusted **connection** character set, unlike standalone national scalar parameters. This input resolver now accepts all configured strict client encodings, including UTF8MB3 and the thirteen non-UTF8 families, while retaining legacy UTF8/UTF16 behavior. Ordinary VARCHAR2/CHAR members use the [selected client encoding](client-character-sets.md), default UTF-8. ExecuteArray uses the same encoding path and existing explicit-transaction, row-count and partial-failure contract.
 
 Managed client initialization shares mode-specific SQL between fresh Open and pool reset: MySQL
 uses the Connector/J-compatible SET NAMES statement; Oracle sets client, connection and results

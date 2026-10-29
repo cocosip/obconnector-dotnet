@@ -9,7 +9,7 @@ alias. Names are case insensitive and canonicalized; `utf8` means `utf8mb3`.
 | `utf8mb4` (default) | Existing strict UTF-8 behavior, including supplementary characters |
 | `utf8mb3`, `ascii`, `latin1` | No supplementary characters in mb3; ASCII is 7-bit; MySQL latin1 uses CP1252 |
 | `gb2312`, `gbk`, `gb18030`, `gb18030_2022` | GB2312 uses the strict OceanBase mapping; GB18030 uses the 2005 mapping unless 2022 is selected |
-| `dec8`, `tis620`, `sjis`, `big5`, `hkscs`, `hkscs31` | Existing pinned server mappings, with ASCII syntax preserved for input |
+| `dec8`, `tis620`, `euckr`, `sjis`, `big5`, `hkscs`, `hkscs31` | Existing pinned server mappings, with ASCII syntax preserved for input |
 
 UTF-16/LE, binary and unknown names fail configuration validation before networking. Encoders
 reject malformed Unicode, unmappable characters and aliases that do not decode to the original
@@ -93,7 +93,7 @@ the encoding of the actual payload. Unrepresentable target SQL or ordinary param
 prevalidation before target preparation/execution.
 
 MySQL string client-prepare fallback accepts the existing UTF-8 families and explicitly configured
-non-UTF8 input names in the table above, including GBK, both GB18030 revisions, SJIS, Big5 and
+non-UTF8 input names in the table above, including GB2312, GBK, both GB18030 revisions, EUCKR, SJIS, Big5 and
 HKSCS/HKSCS31. Each fallback reads actual client/connection/collation/sql_mode
 state. Both non-UTF8 input names must match the configured family; the collation must belong to it.
 Strict configured encoding rejects unrepresentable text. Existing quote/backslash escaping, NUL
@@ -140,16 +140,17 @@ Oracle text multi-statements instead encode explicit NChar/NVarchar2 inputs as A
 literals, so their values can contain characters outside the selected client charset. Ordinary
 SQL text still requires representability. Input validation and the total SQL packet budget remain;
 result decoding still requires fresh trusted national state. Explicit national/result names now also
-use the thirteen existing strict mapped encodings; absent names retain Unicode-only collation fallback.
+use the fourteen existing strict mapped encodings; absent names retain Unicode-only collation fallback.
 See the [national input evidence](compatibility.md). Complex national input members use
 the trusted connection charset, now resolving all configured client names through the strict client
-encoder, including explicit utf8mb3 and the eleven non-UTF8 families. Legacy UTF8/UTF16 handling
+encoder, including explicit utf8mb3 and the thirteen non-UTF8 families. Legacy UTF8/UTF16 handling
 is preserved. Nested members, scalar factory arrays and ExecuteArray share this input path;
 unrepresentable text fails before target execution. PL complex output shares the explicit national
 resolver; stored national members still require AL16UTF16. See the [scalar encoding evidence](compatibility.md).
 Named/nested PL outputs, named-object storage and anonymous array DML additionally have a
 [392-case direct acceptance matrix](compatibility.md)
-covering the twelve names in that historical matrix plus UTF8/UTF16; the GB2312 addition has separate local coverage; other storage encodings and deployments remain open.
+covering the twelve names in that historical matrix plus UTF8/UTF16; the GB2312/EUCKR additions
+have separate local coverage; other storage encodings and deployments remain open.
 CLOB write buffers use ordinary string parameters and therefore
 inherit the selected client encoding. The complete WriteText input is checked for representability
 before its first write chunk, using bounded chunks for encoding checks; a rejected suffix leaves
@@ -175,14 +176,14 @@ and remaining extended metadata are not expanded by this option.
 
 ## Evidence boundary
 
-Byte-exact loopback fixtures cover all thirteen non-default names in both compatibility modes,
+Byte-exact loopback fixtures cover all fourteen non-default names in both compatibility modes,
 sync/async text and server preparation, UTF-8 results/identifiers, EOF variants and pool restoration.
 Additional local regressions cover trust invalidation, procedure outputs, staged data, generated XA
 controls, nested complex/array encodings, byte budgets and strict alias rejection. Five product assets
 are consumed in one .NET10 process; this does not establish five independent runtimes.
 
 The initial client-encoding module used local fixtures only. The JSON extension adds exact bytes
-for all thirteen non-default names, both row protocols and sync/async, plus five-asset consumption.
+for all fourteen non-default names, both row protocols and sync/async, plus five-asset consumption.
 Its opt-in MySQL tests check JSON storage, escaped supplementary values, SQL NULL versus JSON null,
 invalid input and subsequent command reuse. The current real attempt failed all ten cases while
 reading the initial greeting, before authentication or JSON SQL; both existing default-charset
@@ -196,6 +197,11 @@ The GB2312 extension has local byte-exact client/result mapping tests for both m
 rejection of a GBK-only character. It uses OceanBase 4.4.2 charset IDs 24/86 and .NET code page
 20936. No real 4.4.2.2 GB2312 tenant or collation roundtrip was available, so this does not close
 the live deployment portion of the charset matrix.
+
+The EUCKR extension has local byte-exact client/result mapping tests for both modes and strict
+validation of OceanBase's EUC-KR byte ranges. It uses OceanBase 4.4.2 charset IDs 19/85 and .NET
+code page 51949. No live tenant roundtrip was available; UJIS, EUCJPMS and the remaining newer names
+remain candidates because the available .NET code page does not reproduce OceanBase's full UJIS table.
 
 The single-byte fallback extension has local byte-exact automatic-fallback fixtures and five-asset
 consumption. Explicit read-only MySQL 4.4.2.2 checks pass all four families in sync/async mode with
@@ -212,7 +218,7 @@ SQL_MODE. This extends local automatic-fallback support, not actual server1295/p
 SQL_MODE/collation/version profile. See its
 [module record](compatibility.md).
 
-The complex-national extension adds exact synthetic input bytes for all thirteen non-default names,
+The complex-national extension adds exact synthetic input bytes for all fourteen non-default names,
 both prepare paths, sync/async and five-asset consumption. Explicit Oracle4.4.2.2 array-input
 checks pass36/48: ASCII, latin1, DEC8, TIS620, GBK, both GB18030 revisions and HKSCS/HKSCS31,
 each with NCHAR/NVARCHAR2, sync/async, exact read-back and SQL NULL. Each case rolls back and drops

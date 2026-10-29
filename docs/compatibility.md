@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | OceanBase4.4.2.2 MySQL直连、Windows、TLS Disabled | CRUD/类型/事务/池/LOCAL INFILE/批处理等子集；新增专项各有记录 | 全版本、全部API/负载/故障组合，不承诺原生MySQL兼容 |
 | OceanBase4.4.2.2 Oracle直连、Windows、TLS Disabled | PL输出/LOB/复杂值/数组/XA/字符集等子集；同时保留真实失败 | 下表服务端/权限与形状失败，全版本/全部组合，不承诺原生Oracle兼容 |
-| GB2312 客户端/结果映射 | 两模式本地字节 fixture、严格 CP20936、collation 24/86 | 真实 4.4.2.2 租户 roundtrip、其他版本/代理仍未验收 |
+| GB2312/EUCKR 客户端/结果映射 | 两模式本地字节 fixture、严格 CP20936/51949、collation 24/86/19/85 | 真实 4.4.2.2 租户 roundtrip、其他版本/代理仍未验收 |
 | 真实TLS/企业CA/mTLS/撤销/轮换 | **当前两种模式真实环境未开TLS，未验收** | 必须保留matrix.tls-authentication deferred；自签名SslStream只属本地证据 |
 | 认证plugin/KDC/凭据服务 | native账号直连与本地客户端分支 | 非native正负认证、平台协商、实际轮换；Java插件注册不是OB部署证明 |
 | OBProxy/ODP、真正多节点、OCP/TNS服务 | 本地parser与受控单上游客户端路由 | 真实发现服务、节点/代理故障、后端reset/迁移，单上游中继不是HA |

@@ -12,6 +12,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private static readonly Encoding Gbk = new ChineseEncoding(936);
         private static readonly Encoding Gb18030 = new ChineseEncoding(54936);
         private static readonly Encoding Gb180302022 = new ChineseEncoding(54936, revision2022: true);
+        private static readonly Encoding EucKr = new EucEncoding();
         private static readonly Encoding Sjis = new SjisEncoding();
         private static readonly Lazy<Encoding> Big5 = new Lazy<Encoding>(() => new Big5Encoding());
         private static readonly Lazy<Encoding> Hkscs = new Lazy<Encoding>(() => new HkscsEncoding(false));
@@ -57,6 +58,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     maximumBytesPerCharacter = 1; return SingleByteResultEncoding.Dec8;
                 case 18: case 89: case 332: case 347: case 362:
                     maximumBytesPerCharacter = 1; return SingleByteResultEncoding.Tis620;
+                case 19: case 85:
+                    maximumBytesPerCharacter = 2; return EucKr;
                 case 11:
                 case 65:
                 case 331:

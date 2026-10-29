@@ -1,4 +1,4 @@
-# 2026-10-30 范围走查、代码清理与 GB2312 阶段
+# 2026-10-30 范围走查、代码清理与字符集阶段
 
 当前阶段基线`f7f3d38`，当前分支。先以Java2.4.14固定源码和OceanBase官方V4.3.5文档重整范围，
 再核对本地调用链、测试与导出。未将两种兼容模式解释为原生MySQL/Oracle完整实现。
@@ -25,15 +25,16 @@ TLS/认证、LOB/复杂类型、XA、OB20、发现/池均有真实实现，未�
 模拟服务器继续写剩余行/EOF时收到ConnectionReset/ConnectionAborted，最终等待Completion将其误报为失败。
 只在负例断言已通过后接受这两类明确的IO断连；正常场景、其他错误及超时仍失败。产品执行逻辑未改。
 
-## GB2312 阶段
+## GB2312/EUCKR 阶段
 
-OceanBase `v4.4.2_CE` 新增 GB2312 charset 与 collation 24/86；本阶段为两种兼容模式补充
-严格客户端和结果映射。客户端使用 code page 20936，明确拒绝 GBK-only 字符；结果解码共享同一
-严格编码，未知和坏字节仍拒绝。Java 2.4.14 与服务端源码只作为范围依据，未把本地 fixture 当作
-真实租户验收；GB2312 的真实 4.4.2.2 roundtrip 仍保留为未验收项。
+OceanBase `v4.4.2_CE` 新增 GB2312/EUCKR charset 与 collation 24/86、19/85；本阶段为两种
+兼容模式补充严格客户端和结果映射。客户端使用 code page 20936/51949，
+明确拒绝超出 OceanBase 字节范围的输入；结果解码共享同一严格编码，未知和坏字节仍拒绝。Java
+2.4.14 与服务端源码只作为范围依据，未把本地 fixture 当作真实租户验收；三族真实 4.4.2.2
+roundtrip 仍保留为未验收项。
 
-本阶段新增 `gb2312` 配置名、collation 24/86 结果映射、双模式字节 fixture 和负向 roundtrip
-测试；UJIS/EUCKR/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7 未因相近系统编码而伪造支持。
+本阶段新增 `gb2312`、`euckr` 配置名、collation 映射、双模式字节 fixture 和负向
+roundtrip 测试；UJIS/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7 未因相近系统编码而伪造支持。
 
 ## 本次本地证据
 

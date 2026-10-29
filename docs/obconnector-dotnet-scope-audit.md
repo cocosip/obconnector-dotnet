@@ -19,9 +19,9 @@ V4.3.5，固定提交 `2a5ae3a23a51729d065cec716508eb26cb064106`。文档版本�
 以下为 OceanBase 官方仓库原文，本次核对使用以上固定提交。文档并非完整的4.4.2.2实库支持证明。
 本阶段另核对 `v4.4.2_CE` 固定提交 `e859d1b9c9a6d11d856f4fed5b6385f1a6795820` 的
 `ob_charset.h`：GB2312、UJIS、EUCKR、EUCJPMS、CP932、CP850、HP8、MACROMAN、SWE7
-在该版本才进入服务端 charset 枚举；因此本阶段只补有严格 .NET 映射证据的 GB2312，其他名称
-仍保留为候选差距。Java 2.4.14 的字符编码路径支持通过名称选择 JVM charset，但不提供这些
-OceanBase 新表的独立互操作证明。
+在该版本才进入服务端 charset 枚举；因此本阶段补有严格 .NET 映射证据的 GB2312、EUCKR，
+UJIS 及其他名称仍保留为候选差距。Java 2.4.14 的字符编码路径支持通过名称选择 JVM charset，但不提供
+这些 OceanBase 新表的独立互操作证明。
 
 | ID | 文档 | 范围约束 |
 | --- | --- | --- |
