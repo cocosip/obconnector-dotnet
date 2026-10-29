@@ -7,11 +7,11 @@ using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.IO;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using OceanBaseConnector;
 #if NET8_0_OR_GREATER
-using System.IO;
 using System.Runtime.Loader;
 #endif
 
@@ -172,6 +172,25 @@ public static class PackageConsumer
         if (!condition) throw new InvalidOperationException("Package consumer failed: " + contract);
     }
 
+    public static int VerifyLive()
+    {
+        if (Environment.GetEnvironmentVariable("OB_REQUIRE_INTEGRATION") != "1")
+        { Console.Error.WriteLine("Live package checks require OB_REQUIRE_INTEGRATION=1."); return 1; }
+        try
+        {
+            var encoding = new UTF8Encoding(false, true);
+            var mysql = encoding.GetString(Convert.FromBase64String(Console.ReadLine() ?? ""));
+            var oracle = encoding.GetString(Convert.FromBase64String(Console.ReadLine() ?? ""));
+            LiveScenarios.ValidateProfile(false, mysql); LiveScenarios.ValidateProfile(true, oracle);
+            LiveScenarios.Verify(false, mysql); LiveScenarios.Verify(true, oracle);
+            Console.WriteLine("PASS live package scenarios=8");
+            return 0;
+        }
+        catch (InvalidOperationException error) when (error.Message.StartsWith("Live package ", StringComparison.Ordinal))
+        { Console.Error.WriteLine(error.Message); return 1; }
+        catch { Console.Error.WriteLine("Live package input or execution failed; details suppressed."); return 1; }
+    }
+
 #if NET8_0_OR_GREATER
     public static void Main(string[] arguments)
     {
@@ -182,15 +201,19 @@ public static class PackageConsumer
 #else
         const int targetRuntime = 10;
 #endif
-        var expectedRuntime = arguments.Length == 0 ? targetRuntime : 10;
+        var live = arguments.Length > 0 && arguments[arguments.Length - 1] == "--live";
+        var loadOther = arguments.Length > (live ? 1 : 0);
+        var expectedRuntime = loadOther ? 10 : targetRuntime;
         Check(Environment.Version.Major == expectedRuntime, "Expected runtime major " + expectedRuntime);
+        if (live && !loadOther) { Environment.ExitCode = VerifyLive(); return; }
         if (arguments.Length == 0) { Console.WriteLine(Verify()); return; }
         var path = Path.GetFullPath(arguments[0]);
         var context = new ConsumerContext(Path.GetDirectoryName(path)!);
         try
         {
             var consumer = context.LoadFromAssemblyPath(path).GetType(nameof(PackageConsumer))!;
-            Console.WriteLine(consumer.GetMethod(nameof(Verify))!.Invoke(null, null));
+            if (live) Environment.ExitCode = (int)consumer.GetMethod(nameof(VerifyLive))!.Invoke(null, null)!;
+            else Console.WriteLine(consumer.GetMethod(nameof(Verify))!.Invoke(null, null));
         }
         finally { context.Unload(); }
     }

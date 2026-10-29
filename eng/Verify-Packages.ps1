@@ -2,12 +2,22 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$PackageDirectory,
-    [switch]$VerifyNetFramework
+    [switch]$VerifyNetFramework,
+    [switch]$VerifyLive
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ($VerifyNetFramework -and !$IsWindows) { throw '-VerifyNetFramework requires Windows and the .NET Framework 4.8 targeting pack.' }
+$liveProfiles = @()
+if ($VerifyLive) {
+    if ($env:OB_REQUIRE_INTEGRATION -ne '1') { throw '-VerifyLive requires OB_REQUIRE_INTEGRATION=1.' }
+    foreach ($variable in @('OB_MYSQL_CONNECTION_STRING', 'OB_ORACLE_CONNECTION_STRING')) {
+        $value = [Environment]::GetEnvironmentVariable($variable)
+        if ([string]::IsNullOrWhiteSpace($value)) { throw "-VerifyLive requires $variable." }
+        $liveProfiles += $value
+    }
+}
 $repository = Split-Path $PSScriptRoot -Parent
 $feed = (Resolve-Path -LiteralPath $PackageDirectory).Path
 [xml]$rootProperties = Get-Content -LiteralPath (Join-Path $repository 'Directory.Build.props') -Raw
@@ -32,6 +42,42 @@ function Test-MinimumVersion([string]$range, [string]$minimum) {
 function Invoke-Dotnet([string[]]$arguments) {
     & dotnet @arguments
     if ($LASTEXITCODE -ne 0) { throw "dotnet failed ($LASTEXITCODE): $($arguments -join ' ')" }
+}
+
+function Invoke-LiveConsumer([string]$executable, [string[]]$arguments) {
+    $start = [Diagnostics.ProcessStartInfo]::new($executable)
+    foreach ($argument in $arguments) { $start.ArgumentList.Add($argument) }
+    $start.UseShellExecute = $false; $start.CreateNoWindow = $true
+    $start.RedirectStandardInput = $true; $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
+    $process = [Diagnostics.Process]::Start($start)
+    try {
+        $deadline = [Diagnostics.Stopwatch]::StartNew()
+        $output = $process.StandardOutput.ReadToEndAsync(); $errors = $process.StandardError.ReadToEndAsync()
+        $encoded = foreach ($profile in $liveProfiles) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($profile)) }
+        $delivery = $process.StandardInput.WriteLineAsync([string]::Join([Environment]::NewLine, $encoded))
+        $deliveryClosed = $false
+        while (!$deliveryClosed -or !$process.HasExited) {
+            if ($deadline.Elapsed.TotalSeconds -gt 180) { $process.Kill($true); throw 'Live package consumer exceeded its deadline; cleanup is unconfirmed.' }
+            if (!$deliveryClosed -and $delivery.IsCompleted) {
+                try { [void]$delivery.GetAwaiter().GetResult(); $process.StandardInput.Close(); $deliveryClosed = $true }
+                catch { throw 'Live package consumer input failed; cleanup is unconfirmed.' }
+            }
+            if ($process.WaitForExit(250) -and !$deliveryClosed) { [Threading.Thread]::Sleep(10) }
+        }
+        $lines = @($output.GetAwaiter().GetResult() -split '\r?\n' | Where-Object { $_ -ne '' })
+        $expected = foreach ($mode in @('MySql', 'Oracle')) {
+            foreach ($execution in @('sync', 'async')) {
+                foreach ($reading in @('buffered', 'sequential')) { "PASS live $mode $execution $reading cleanup" }
+            }
+        }
+        $expected += 'PASS live package scenarios=8'
+        $valid = $lines.Count -eq $expected.Count
+        if ($valid) { for ($i = 0; $i -lt $expected.Count; $i++) { if ($lines[$i] -cne $expected[$i]) { $valid = $false; break } } }
+        if ($process.ExitCode -ne 0 -or !$valid -or $errors.GetAwaiter().GetResult().Length -ne 0) {
+            throw 'Live package consumer failed; raw child output suppressed to protect connection details. Cleanup is not certified.'
+        }
+        $lines | ForEach-Object { Write-Host $_ }
+    } finally { if (!$process.HasExited) { $process.Kill($true) }; $process.Dispose() }
 }
 
 foreach ($id in $packages) {
@@ -168,6 +214,7 @@ Write-ConsumerFile 'PackageConsumer.csproj' @'
 '@
 Copy-Item -LiteralPath (Join-Path $repository 'tests/PackageConsumer/Program.cs') -Destination $run
 Copy-Item -LiteralPath (Join-Path $repository 'tests/PackageConsumer/ProtocolScenarios.cs') -Destination $run
+Copy-Item -LiteralPath (Join-Path $repository 'tests/PackageConsumer/LiveScenarios.cs') -Destination $run
 $projectPath = Join-Path $run 'PackageConsumer.csproj'
 Invoke-Dotnet @('restore', $projectPath, '--configfile', (Join-Path $run 'NuGet.Config'), '--packages', (Join-Path $run 'packages'), '-p:NuGetAudit=false')
 $restored = Get-Content -LiteralPath (Join-Path $run 'obj/project.assets.json') -Raw | ConvertFrom-Json
@@ -188,9 +235,11 @@ foreach ($target in $targets) {
 Invoke-Dotnet @('build', $projectPath, '-c', 'Release', '--no-restore', '-m:1')
 foreach ($target in $targets[2..4]) {
     Invoke-Dotnet @((Join-Path $run "bin/Release/$target/PackageConsumer.dll"))
+    if ($VerifyLive) { Invoke-LiveConsumer 'dotnet' @((Join-Path $run "bin/Release/$target/PackageConsumer.dll"), '--live') }
 }
 foreach ($target in $targets[0..1]) {
     Invoke-Dotnet @((Join-Path $run 'bin/Release/net10.0/PackageConsumer.dll'), (Join-Path $run "bin/Release/$target/PackageConsumer.dll"))
+    if ($VerifyLive) { Invoke-LiveConsumer 'dotnet' @((Join-Path $run 'bin/Release/net10.0/PackageConsumer.dll'), (Join-Path $run "bin/Release/$target/PackageConsumer.dll"), '--live') }
 }
 if ($VerifyNetFramework) {
     $frameworkDirectory = Join-Path $run 'framework-host'
@@ -220,12 +269,13 @@ using Microsoft.Win32;
 
 internal static class Program
 {
-    private static int Main()
+    private static int Main(string[] arguments)
     {
         try
         {
             if (!RuntimeInformation.FrameworkDescription.StartsWith(".NET Framework", StringComparison.Ordinal))
                 throw new InvalidOperationException("The sample must run on the desktop CLR.");
+            if (arguments.Length == 1 && arguments[0] == "--live") return PackageConsumer.VerifyLive();
             Console.WriteLine(PackageConsumer.Verify());
             using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full");
             Console.WriteLine("Host=" + RuntimeInformation.FrameworkDescription + " Release=" + key?.GetValue("Release"));
@@ -261,5 +311,6 @@ internal static class Program
     Invoke-Dotnet @('build', $frameworkProject, '-c', 'Release', '--no-restore', '-m:1')
     & (Join-Path $frameworkDirectory 'bin/Release/net48/FrameworkHost.exe')
     if ($LASTEXITCODE -ne 0) { throw "Framework package consumer failed ($LASTEXITCODE)." }
+    if ($VerifyLive) { Invoke-LiveConsumer (Join-Path $frameworkDirectory 'bin/Release/net48/FrameworkHost.exe') @('--live') }
 }
 Write-Host "Package verification passed. Retained consumers, packages and restore graphs: $run"

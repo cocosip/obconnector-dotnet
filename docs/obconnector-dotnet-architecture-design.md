@@ -4,6 +4,25 @@ For a basic query, see the [README](../README.md). For tested server profiles, s
 
 The [Connector/J architecture outline](obconnector-j-architecture-outline.md) is retained as the protocol and behavior reference. Its Java feature inventory does not establish .NET support; unverified and unsupported combinations are listed in Compatibility.
 
+## Package verification
+
+`eng/Verify-Packages.ps1 -PackageDirectory <feed>` verifies restored nupkg assets
+and synthetic loopback protocol scenarios. Add `-VerifyNetFramework` to execute
+the Standard2.0 asset through a net48 host on the installed desktop CLR.
+Default verification does not open real database connections, even if live
+environment variables are present.
+
+The separate `-VerifyLive` path also requires `OB_REQUIRE_INTEGRATION=1` and both
+`OB_MYSQL_CONNECTION_STRING` / `OB_ORACLE_CONNECTION_STRING`. Supply these in the
+calling environment; the verifier does not load secrets. Both direct profiles
+must use TLS Disabled, compatible ExpectedMode and positive timeouts. Child
+hosts receive profiles on stdin, and raw child errors are suppressed. The
+selected public-API storage/transaction/read/error/reopen scenarios must all
+pass with independent table cleanup; a deadline kill cannot certify cleanup.
+`eng/Test-PackageLiveRunner.ps1` checks blocked stdin and completed-delivery
+output with synthetic child processes, without database access.
+See the [live package evidence and limits](history/2026-10-29-package-live-consumption.md).
+
 ## Protocol diagnostic unloading
 
 Protocol event recursion is suppressed per physical thread with ThreadLocal<bool>; it does not flow into

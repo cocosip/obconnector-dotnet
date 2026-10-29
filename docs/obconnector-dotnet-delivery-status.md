@@ -15,6 +15,7 @@
 
 | 项目 | 状态 | 证据 / 剩余门禁 |
 | --- | --- | --- |
+| Windows实库NuGet消费 | 已完成本轮子集验收 | 五资产及Framework4.8.1 host共48/48双模式公开包场景通过并独立清理；默认包入口六host复验通过（故意无效实库配置仍不执行live），完整默认单测8466/8466、修复专项21/21、DI14/14、runner自检2/2、五目标Release零警告/错误；一次独立最终走查提出两项Important，均RED→GREEN修复，无遗留Critical/Important。见[模块记录](history/2026-10-29-package-live-consumption.md)。完整生态/部署矩阵不关闭 |
 | MySQL多语句BIT/YEAR输入 | 已实现并完成本轮验收 | 官方Java数值字面量及独立存储对照；完整默认单测8445/8445、扩大相关单测5519/5519、多语句消费者132/132（新增12项）、双模式多语句/流实库361/361（新增MySQL28项）、DI14/14，均零失败/跳过；五目标最终顺序Release构建零警告/错误、独立最终走查无遗留。表达式保持数值类型，目标列负责BIT/YEAR转换，普通fallback仍拒绝。见[模块证据](history/2026-10-29-multi-statement-bit-year-input.md) |
 | Oracle普通文本客户端字面量 | 已实现并完成本轮验收 | 保留VARCHAR2并扩展NUL/长值，避免固定CAST截断；补官方值前空格修正大NUL单条形状，五目标Release零警告/错误、扩大相关单测5692/5692、DI14/14、Consumer162/162、双模式多语句/流实库333/333（新增50/50）、完整默认单测8425/8425，均零失败/跳过；独立走查、文档修正及最后实库发现的separator差异RED→GREEN已记录，无遗留审查项。大NUL多语句超时仍属官方Java复现的服务端边界。见[模块证据](history/2026-10-29-oracle-text-literals.md) |
 | Oracle大byte[]客户端字面量 | 已实现并完成本轮验收 | 已删除共享2000字节客户端限制，保留HEXTORAW/RAW身份、快照与展开SQL预算；相关单测215/215、DI14/14、双模式多语句/流实库283/283（新增30项），五目标Release零警告/错误；Consumer扩大回归1171/1171、独立最终走查无遗留；完整默认单测8399/8399，零失败、零跳过。见[模块证据](history/2026-10-29-oracle-large-binary-literals.md) |

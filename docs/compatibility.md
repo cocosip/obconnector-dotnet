@@ -1010,16 +1010,21 @@ The cleanup failure was an attempted DROP of the table whose CREATE failed. The 
 
 ## Deferred acceptance cases
 
-Three `matrix.*` entries in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs)
-have explicit `DeferredReason` values. They report skips, not successful validation.
+Only `matrix.tls-authentication` in [DatabaseCases.cs](../tests/OceanBaseConnector.Acceptance/DatabaseCases.cs)
+still has an unconditional `DeferredReason`. It reports a skip, not successful validation.
 `types.zero-date-policy` is executable behind the separate opt-in described above;
 `matrix.pool-reset` is also executable and is listed separately below.
 
 | Case | Missing validation / implementation |
 | --- | --- |
 | `matrix.tls-authentication` | Trusted certificate chains, hostnames, plugin combinations and negative authentication profiles. TLS-disabled acceptance does not validate VerifyFull. |
-| `matrix.ob20-trace-negotiation` | Actual server OB20/full-link-trace negotiation and trace output. Ordinary SQL success does not prove either was negotiated. |
-| `matrix.topology-failover` | Controlled discovery, endpoint failures and routing on real deployments. |
+
+OB20/trace and controlled topology now have executable profile cases in
+[Ob20Trace](../tests/OceanBaseConnector.Acceptance/DatabaseCases.Ob20Trace.cs) and
+[Topology](../tests/OceanBaseConnector.Acceptance/DatabaseCases.Topology.cs).
+Executable cases do not establish actual OB20 negotiation or independent
+cluster/discovery/OBProxy failover acceptance; ordinary SQL fallback and
+controlled single-upstream routing cannot close those gates.
 
 `matrix.pool-reset` forces a one-session pool, changes the session time zone, closes the
 borrower, and requires the next MySQL or Oracle borrower to observe the original time zone.
@@ -1085,6 +1090,14 @@ See the [complex acceptance scope](history/2026-10-29-complex-national-encoding-
 [original scalar module evidence](history/2026-10-29-national-character-encodings.md).
 
 ## Runtime and integration coverage
+
+The explicit Windows live nupkg path now verifies selected public-API storage,
+local transactions, exact decimal/text/binary/NULL results, errors and pooled
+reopen through all five assets, plus a net48 host on installed Framework 4.8.1.
+All 48 case executions passed with independent cleanup, alongside eight loopback
+scenarios per host. Profiles are direct OceanBase 4.4.2.2 with TLS Disabled;
+pooled reopen does not prove physical-session identity. Default verification
+stays loopback-only. See the [module evidence](history/2026-10-29-package-live-consumption.md).
 
 Local fixture and package checks cover different baselines and do not replace database validation. The integration suite (connection and identity gates: direct/OBProxy mode checks, TLS-name rejection, unsupported-plugin and autocommit-disabled rejection, plus the full functional suites) has not been established as passing; it runs only against a configured external database and is skipped everywhere else.
 

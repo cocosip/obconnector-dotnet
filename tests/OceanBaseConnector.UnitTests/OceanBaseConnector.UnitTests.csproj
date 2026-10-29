@@ -26,6 +26,7 @@
   <ItemGroup>
     <Compile Include="../Shared/Unit/**/*.cs" LinkBase="Shared" />
     <Compile Include="../Shared/TransportTestMode.cs" Link="Shared/TransportTestMode.cs" />
+    <Compile Include="../PackageConsumer/LiveScenarios.cs" Link="PackageConsumer/LiveScenarios.cs" />
   </ItemGroup>
 
 </Project>

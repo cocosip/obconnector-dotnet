@@ -66,20 +66,23 @@
 | 顺序Batch / INSERT rewrite | 已实现 | 顺序执行、Oracle array binding、opt-in MySQL INSERT合并及失败归属；MySQL直连6/6验证默认值/触发器、提交/回滚及重复组的prefix/suffix边界，见[证据](history/2026-10-28-batch-rewrite-live-semantics.md) | 更多触发器/默认表达式/警告、性能和部分失败组合待验收 |
 | Multi-send / 独立bulk | 明确不支持 | 尚无 Java/OceanBase 流水线/独立bulk协议依据 | 不列为默认开发项 |
 | 现有诊断 | 已实现 | 日志/Activity/Meter、池等待/租约、建连阶段、慢命令、协议帧/协商、会话I/O/源流读取 | 其他未定义等待点不列为功能缺口；真实负载、资源曲线和监听开销待验收 |
-| TFM / 包消费 | 已实现（Windows验收） | 五资产nupkg内容、依赖组、五目标资产选择及包消费者协议样例均通过；net8.0、net9.0、net10.0分别在对应运行时执行，netstandard2.0/2.1由net10 host加载，并由面向`net48`的host在已安装.NET Framework 4.8.1上加载netstandard2.0通过，见[包消费记录](history/2026-10-28-package-consumption.md) | 单一Windows主机不等于非Windows或完整生态承诺矩阵；其他平台仍缺 |
+| TFM / 包消费 | 已实现（Windows子集验收） | 五资产nupkg内容、依赖组、资产选择及协议样例通过；net8/9/10各自运行时、Standard2.0/2.1由net10 host加载及net48 host在已安装Framework4.8.1上共六host；新增双模式公开包实库48/48并独立清理，见[实库记录](history/2026-10-29-package-live-consumption.md)及[原包记录](history/2026-10-28-package-consumption.md) | 单一Windows主机及所选API不等于完整生态；非Windows/ORM/完整实库消费者及其他部署仍缺，池化重开不证明同物理会话复用 |
 | 完整发布验收 | 未完成 | 双模式直连4.4.2.2、Windows/.NET10、TLS disabled的若干专项已有报告 | OBProxy、真实TLS/auth、完整资源/故障/版本/平台矩阵及发布审查未闭合 |
 
 ## 当前开发项与门禁
 
 | 项目 | 当前进度 | 尚未完成 |
 | --- | --- | --- |
+| Windows实库NuGet消费（P2-05） | 五资产及Framework4.8.1 host共48/48直连公开包场景及每host8项回环场景通过；默认入口六host复验通过；完整默认单测8466/8466、修复专项21/21、DI14/14、runner自检2/2及五目标Release零警告/错误；一次独立最终走查的两项Important均RED→GREEN修复，见[模块记录](history/2026-10-29-package-live-consumption.md) | 非Windows/完整API/ORM/其他部署仍开放；池化重开不证明同物理会话复用；未知CREATE/清理失败注入未执行 |
 | Consumer CI耗时优化 | **已调整**：普通 PR/分支 push 不执行 consumer；仅 tag 的 Windows 发布腿运行 acceptance；行为矩阵保留 `netstandard2.0`、`netstandard2.1`、`net10.0` 三类实现路径，五资产依赖/目标面契约仍保留 | 安全拆分时默认消费者完整2,860/2,860通过，证书/TLS已独立到不参与CI的SecurityTests；本次数组提示消费者专项另见对应记录。远程CI耗时尚未验证，完整安全套件仍待显式环境执行 |
 | OB20/trace显式验收（P2-06） | **已提交，部分实库验收**：代码/文档见`bc020e2`、`c5b4c07`；专项/runner **88/88**，Release零警告/错误；直连4.4.2.2双模式 `declined-ob20` 各6通过 | 用户租户实际协商为 `Layer=mysql`，显式 `ob20` 各2项按契约失败；真实 OB20/trace、OBProxy、TLS/auth 和完整单测环境门禁仍未闭合。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |
 | 验收占位 | 已提交基线仅保留TLS/auth DeferredReason；OB20/trace已替换为可执行profile | 实际服务端未启用OB20时必须保留失败，不能用普通MySQL fallback关闭OB20门禁 |
 
-最新交付模块为 MySQL 多语句 BIT/YEAR 输入：复用严格类型/声明校验和精确数值字面量，覆盖UInt64高位/最大值、YEAR0及边界、typed NULL、独立存储和目标列溢出的事务边界；完整默认单测8445/8445、扩大相关单测5519/5519、公开DLL多语句消费者132/132、双模式多语句/流实库361/361（新增MySQL28/28）、DI14/14均零失败/跳过；五目标最终顺序Release零警告/错误，独立最终走查无遗留。表达式保持数值元数据，普通fallback及Oracle模式仍拒绝，完整矩阵不关闭，见[模块证据](history/2026-10-29-multi-statement-bit-year-input.md)。
+最新交付模块为 Windows 实库 NuGet 包消费子集：实际恢复两包并验证资产/依赖，六个 host 共48/48双模式实库场景通过且独立清理，默认入口复验保持回环；完整单测8466/8466、修复专项21/21、DI14/14和runner自检2/2通过，五目标Release零警告/错误；一次独立最终走查的两项Important均经RED→GREEN修复。完整平台/生态/部署矩阵仍开放，见[模块证据](history/2026-10-29-package-live-consumption.md)。
 
-此前交付模块为 Oracle 普通文本客户端字面量：共享REPLACE保留VARCHAR2、空值与trailing-space语义，删除NUL/4000字节客户端限制，补官方值前空格避免大NUL单条解析失败；扩大相关单测5692/5692、Consumer162/162、双模式多语句/流实库333/333（新增50/50）、DI14/14及完整默认单测8425/8425通过，均零失败/跳过，五目标Release零警告/错误；独立走查、文档证据修正及最后实库差异RED→GREEN记录完整。目标列限制和大NUL多语句的官方Java超时仍保留，真实1295 fallback及性能等价性未验证，见[模块证据](history/2026-10-29-oracle-text-literals.md)。
+此前交付模块为 MySQL 多语句 BIT/YEAR 输入：复用严格类型/声明校验和精确数值字面量，覆盖UInt64高位/最大值、YEAR0及边界、typed NULL、独立存储和目标列溢出的事务边界；完整默认单测8445/8445、扩大相关单测5519/5519、公开DLL多语句消费者132/132、双模式多语句/流实库361/361（新增MySQL28/28）、DI14/14均零失败/跳过；五目标最终顺序Release零警告/错误，独立最终走查无遗留。表达式保持数值元数据，普通fallback及Oracle模式仍拒绝，完整矩阵不关闭，见[模块证据](history/2026-10-29-multi-statement-bit-year-input.md)。
+
+更早交付模块为 Oracle 普通文本客户端字面量：共享REPLACE保留VARCHAR2、空值与trailing-space语义，删除NUL/4000字节客户端限制，补官方值前空格避免大NUL单条解析失败；扩大相关单测5692/5692、Consumer162/162、双模式多语句/流实库333/333（新增50/50）、DI14/14及完整默认单测8425/8425通过，均零失败/跳过，五目标Release零警告/错误；独立走查、文档证据修正及最后实库差异RED→GREEN记录完整。目标列限制和大NUL多语句的官方Java超时仍保留，真实1295 fallback及性能等价性未验证，见[模块证据](history/2026-10-29-oracle-text-literals.md)。
 
 此前交付模块为 Oracle 大byte[]客户端字面量：保留HEXTORAW/RAW身份，删除共享2000字节客户端限制，覆盖多语句及受1295/HY000门禁的普通fallback；相关单测215/215、扩大Consumer回归1171/1171、新增Oracle直连30/30及双模式多语句/流回归283/283、DI14/14，五目标Release零警告/错误，完整默认单测8399/8399；独立最终走查无遗留。目标RAW列限制保留，真正实库1295 fallback未验证，见[模块证据](history/2026-10-29-oracle-large-binary-literals.md)。此前交付模块为多语句二进制Stream输入：相关单测547/547、公开DLL多语句消费者96/96、新增双模式独立存储及源失败46/46、既有多语句/流实库回归253/253和DI14/14通过，五目标Release零警告/错误；完整默认单测8384/8384、独立最终走查无遗留，见[模块证据](history/2026-10-29-multi-statement-stream-input.md)。此前 national 复杂编码十四种设置的命名/嵌套OUT/INOUT、对象存储、匿名数组DML及拒绝边界392/392，连同标量最终440/440，见[验收证据](history/2026-10-29-complex-national-encoding-acceptance.md)。
 
@@ -97,4 +100,4 @@
 
 ## 测试执行边界（2026-10-28）
 
-真实数据库只由显式启用的 IntegrationTests/验收控制台访问。生成/导入证书、TLS/mTLS握手、TLS认证及TLS消费者用例移至独立 [SecurityTests](../tests/OceanBaseConnector.SecurityTests/README.md)，该项目不在主解决方案或普通/tag CI中。默认UnitTests与ConsumerTests保留纯配置、协议及TCP覆盖；混合矩阵按编译入口分别使用TCP/TLS行，不以跳过安全用例冒充验收通过。证据见[拆分记录](history/2026-10-28-security-test-isolation.md)。真实服务端TLS支持仍未验收。
+真实数据库只由显式启用的 IntegrationTests/验收控制台以及独立 `-VerifyLive` 包消费入口访问。生成/导入证书、TLS/mTLS握手、TLS认证及TLS消费者用例移至独立 [SecurityTests](../tests/OceanBaseConnector.SecurityTests/README.md)，该项目不在主解决方案或普通/tag CI中。默认UnitTests与ConsumerTests保留纯配置、协议及TCP覆盖；混合矩阵按编译入口分别使用TCP/TLS行，不以跳过安全用例冒充验收通过。证据见[拆分记录](history/2026-10-28-security-test-isolation.md)。真实服务端TLS支持仍未验收。
