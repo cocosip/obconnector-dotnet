@@ -116,7 +116,11 @@ string wire type253. Unrepresentable text fails prevalidation before target prep
 ASCII JSON escapes can represent characters outside the selected charset. The driver preserves
 JSON text rather than parsing or serializing it. SQL NULL remains distinct from JSON text `null`.
 Oracle mode and nonzero Precision/Scale remain rejected, including for SQL NULL. JSON results
-retain strict UTF-8 decoding. Server preparation/fallback restrictions above still apply.
+retain strict UTF-8 decoding. Opt-in ordinary client fallback accepts explicit JSON Input after a
+complete automatic-Prepare1295/HY000 response, using fresh charset/collation/SQL_MODE facts and
+ordinary string escaping. Typed SQL NULL needs no literal-state query; raw NUL with
+NO_BACKSLASH_ESCAPES remains rejected. Size retains the existing string hint semantics and does
+not truncate the JSON. See [fallback evidence and limits](history/2026-10-29-mysql-json-fallback.md).
 
 The fixed server's
 [ObJsonTC result branch](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/observer/mysql/obsm_utils.cpp)

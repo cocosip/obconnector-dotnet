@@ -8,6 +8,22 @@ because the server negotiated `Layer=mysql`. This is real fallback evidence, not
 trace collector compatibility. Dated module records below retain their historical counts and
 limitations; the [current matrix](obconnector-dotnet-progress.md) tracks the latest gates.
 
+## 2026-10-29 MySQL JSON client prepare fallback
+
+Explicit MySQL JSON Input now joins the existing opt-in single-statement fallback after a
+validated automatic-Prepare1295/HY000 response. It reuses ordinary string literals, strict
+configured encoding and fresh charset/collation/SQL_MODE discovery on each refusal. JSON null
+and SQL NULL stay distinct; malformed JSON is sent for server validation without retry.
+No parser, CAST, API or dependency is added. Output, explicit Prepare, cursor, stream and other
+existing exclusions remain; raw NUL with NO_BACKSLASH_ESCAPES remains rejected.
+
+Direct .NET acceptance covers six charsets, both SQL modes, independent storage reads and
+transactions through an injected exact-Prepare refusal, not a native-server1295 reproduction.
+Official Java2.4.14 client-text storage passes in default mode for UTF-8/GB18030/latin1;
+its three NO_BACKSLASH_ESCAPES probes fail1064 with a stale cached false escape flag.
+The .NET tests verify its existing fresh-query behavior instead. See [module evidence and
+final gates](history/2026-10-29-mysql-json-fallback.md); other deployments remain open.
+
 ## 2026-10-29 MySQL BIT/YEAR client prepare fallback
 
 Opt-in single-statement fallback accepts explicit BIT/YEAR inputs through exact

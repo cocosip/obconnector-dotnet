@@ -73,6 +73,7 @@
 
 | 项目 | 当前进度 | 尚未完成 |
 | --- | --- | --- |
+| MySQL JSON普通客户端回退（P1-08） | 已交付；完整默认单测8529/8529，一次独立最终走查无Critical/Important/Minor；复用严格字符串编码及逐次会话状态查询；相关单测78/78、公开DLL84/84（新增24项）、新增JSON实库36/36及扩大JSON/BIT/YEAR直连142/142、DI14/14，五目标Release零警告/错误，见[模块记录](history/2026-10-29-mysql-json-fallback.md) | 注入1295不等于原生拒绝；其他部署/故障/负载矩阵开放 |
 | MySQL BIT/YEAR普通客户端回退（P1-08） | 已交付精确数值及既有门禁；完整默认单测8518/8518、相关98/98、公开DLL78/78（新增24项）及既有类型/多语句消费者24/24、中继拒绝+真实存储/事务16/16及扩大实库44/44、DI14/14、五目标Release零警告/错误；一次独立最终走查无Critical/Important/Minor，见[模块记录](history/2026-10-29-mysql-bit-year-fallback.md) | 中继注入1295不等于租户原生1295；其他部署、故障、负载矩阵仍开放 |
 | Oracle二进制INOUT流（P1-06） | 已交付既有PrepareExecute分片路径；完整默认单测8502/8502、相关176/176、夹具修正后专项101/101、公开DLL消费者54/54（新增36项）、最终直连87/87（新增Oracle37项）、DI14/14及五目标Release零警告/错误；一次独立最终走查的唯一Important夹具问题已RED→GREEN修复，无遗留问题，见[模块记录](history/2026-10-29-oracle-inout-stream.md) | 输出遵循实际元数据，当前匿名包装为CHAR十六进制；真实OB20/OBProxy/TLS、其他版本/平台、阻塞源及完整资源/故障矩阵仍开放 |
 | Windows实库NuGet消费（P2-05） | 五资产及Framework4.8.1 host共48/48直连公开包场景及每host8项回环场景通过；默认入口六host复验通过；完整默认单测8466/8466、修复专项21/21、DI14/14、runner自检2/2及五目标Release零警告/错误；一次独立最终走查的两项Important均RED→GREEN修复，见[模块记录](history/2026-10-29-package-live-consumption.md) | 非Windows/完整API/ORM/其他部署仍开放；池化重开不证明同物理会话复用；未知CREATE/清理失败注入未执行 |
@@ -80,9 +81,11 @@
 | OB20/trace显式验收（P2-06） | **已提交，部分实库验收**：代码/文档见`bc020e2`、`c5b4c07`；专项/runner **88/88**，Release零警告/错误；直连4.4.2.2双模式 `declined-ob20` 各6通过 | 用户租户实际协商为 `Layer=mysql`，显式 `ob20` 各2项按契约失败；真实 OB20/trace、OBProxy、TLS/auth 和完整单测环境门禁仍未闭合。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |
 | 验收占位 | 已提交基线仅保留TLS/auth DeferredReason；OB20/trace已替换为可执行profile | 实际服务端未启用OB20时必须保留失败，不能用普通MySQL fallback关闭OB20门禁 |
 
-最新交付模块为 MySQL BIT/YEAR 普通客户端回退：复用既有精确数值和校验，完整默认单测8518/8518、公开DLL78/78及既有类型/多语句消费者24/24、实库回归44/44（新增中继拒绝+真实存储/事务16项）、DI14/14及五目标Release零警告/错误；一次独立最终走查无遗留问题。官方Java单语句文本存储已通过，当前租户原生1295未复现，见[模块记录](history/2026-10-29-mysql-bit-year-fallback.md)。完整功能/部署矩阵仍开放。
+最新交付模块为 MySQL JSON 普通客户端回退：复用严格字符串编码与每次拒绝后的会话状态查询，完整默认单测8529/8529、相关78/78、公开DLL84/84、扩大JSON/BIT/YEAR直连142/142（新增JSON36项）、DI14/14及五目标Release零警告/错误；一次独立最终走查无Critical/Important/Minor，见[模块记录](history/2026-10-29-mysql-json-fallback.md)。原生1295及完整部署/故障/负载矩阵仍开放。
 
-此前交付模块为 MySQL 多语句 BIT/YEAR 输入：复用严格类型/声明校验和精确数值字面量，覆盖UInt64高位/最大值、YEAR0及边界、typed NULL、独立存储和目标列溢出的事务边界；完整默认单测8445/8445、扩大相关单测5519/5519、公开DLL多语句消费者132/132、双模式多语句/流实库361/361（新增MySQL28/28）、DI14/14均零失败/跳过；五目标最终顺序Release零警告/错误，独立最终走查无遗留。表达式保持数值元数据，普通fallback及Oracle模式仍拒绝，完整矩阵不关闭，见[模块证据](history/2026-10-29-multi-statement-bit-year-input.md)。
+此前交付模块为 MySQL BIT/YEAR 普通客户端回退：复用既有精确数值和校验，完整默认单测8518/8518、公开DLL78/78及既有类型/多语句消费者24/24、实库回归44/44（新增中继拒绝+真实存储/事务16项）、DI14/14及五目标Release零警告/错误；一次独立最终走查无遗留问题。官方Java单语句文本存储已通过，当前租户原生1295未复现，见[模块记录](history/2026-10-29-mysql-bit-year-fallback.md)。完整功能/部署矩阵仍开放。
+
+此前交付模块为 MySQL 多语句 BIT/YEAR 输入：复用严格类型/声明校验和精确数值字面量，覆盖UInt64高位/最大值、YEAR0及边界、typed NULL、独立存储和目标列溢出的事务边界；完整默认单测8445/8445、扩大相关单测5519/5519、公开DLL多语句消费者132/132、双模式多语句/流实库361/361（新增MySQL28/28）、DI14/14均零失败/跳过；五目标最终顺序Release零警告/错误，独立最终走查无遗留。表达式保持数值元数据，Oracle模式仍拒绝；普通fallback已由后续模块补齐，完整矩阵不关闭，见[模块证据](history/2026-10-29-multi-statement-bit-year-input.md)。
 
 更早交付模块为 Oracle 普通文本客户端字面量：共享REPLACE保留VARCHAR2、空值与trailing-space语义，删除NUL/4000字节客户端限制，补官方值前空格避免大NUL单条解析失败；扩大相关单测5692/5692、Consumer162/162、双模式多语句/流实库333/333（新增50/50）、DI14/14及完整默认单测8425/8425通过，均零失败/跳过，五目标Release零警告/错误；独立走查、文档证据修正及最后实库差异RED→GREEN记录完整。目标列限制和大NUL多语句的官方Java超时仍保留，真实1295 fallback及性能等价性未验证，见[模块证据](history/2026-10-29-oracle-text-literals.md)。
 

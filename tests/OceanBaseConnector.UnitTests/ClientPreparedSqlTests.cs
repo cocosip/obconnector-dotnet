@@ -134,8 +134,8 @@ namespace OceanBaseConnector.UnitTests
         [Fact]
         public void MultiStatementJsonRetainsModeMetadataAndFallbackRestrictions()
         {
-            Assert.Throws<NotSupportedException>(() => Build("select ?", OceanBaseCompatibilityMode.MySql,
-                new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Value = DBNull.Value }));
+            Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle,
+                new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.Json, Value = DBNull.Value }));
             Assert.Throws<NotSupportedException>(() => BuildMulti("select :p; select 1 from dual", OceanBaseCompatibilityMode.Oracle,
                 new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.Json, Value = DBNull.Value }));
             foreach (var parameter in new[]
