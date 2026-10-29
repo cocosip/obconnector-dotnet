@@ -41,11 +41,11 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(OceanBaseDbType.Bit)]
         [InlineData(OceanBaseDbType.Year)]
-        public void MySqlBitYearInputsRetainModeAndOrdinaryFallbackRefusals(OceanBaseDbType type)
+        public void MySqlBitYearInputsRetainOracleModeRefusals(OceanBaseDbType type)
         {
             var parameters = new OceanBaseParameterCollection();
             parameters.Add(new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = type, Value = DBNull.Value });
-            Assert.Throws<NotSupportedException>(() => ClientPreparedSql.Build(ParameterBindingPlan.Create("SELECT ?", OceanBaseCompatibilityMode.MySql, parameters), OceanBaseCompatibilityMode.MySql));
+            Assert.Throws<NotSupportedException>(() => ClientPreparedSql.Build(ParameterBindingPlan.Create("SELECT :p FROM DUAL", OceanBaseCompatibilityMode.Oracle, parameters), OceanBaseCompatibilityMode.Oracle));
             Assert.Throws<NotSupportedException>(() => ClientPreparedSql.Build(ParameterBindingPlan.Create("SELECT :p FROM DUAL; SELECT :p FROM DUAL", OceanBaseCompatibilityMode.Oracle, parameters), OceanBaseCompatibilityMode.Oracle, multiStatement: true));
         }
     }

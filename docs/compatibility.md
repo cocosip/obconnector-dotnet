@@ -8,6 +8,18 @@ because the server negotiated `Layer=mysql`. This is real fallback evidence, not
 trace collector compatibility. Dated module records below retain their historical counts and
 limitations; the [current matrix](obconnector-dotnet-progress.md) tracks the latest gates.
 
+## 2026-10-29 MySQL BIT/YEAR client prepare fallback
+
+Opt-in single-statement fallback accepts explicit BIT/YEAR inputs through exact
+numeric literals after a complete automatic-Prepare1295/HY000 response. Existing
+mode/value/declaration checks, NULL, snapshots, transactions and no-replay rules
+remain. Numeric expression metadata is not BIT/YEAR column metadata. Official
+Java single-statement text storage passed; the direct .NET fallback acceptance
+uses a relay-injected Prepare refusal with real downstream storage/transaction
+verification. Native1295 was not reproduced on this tenant. See [module evidence
+and final gates](history/2026-10-29-mysql-bit-year-fallback.md). Other deployments,
+target conversions and fault/load matrices remain open.
+
 ## 2026-10-28 Pool cross-borrower isolation acceptance
 
 The direct MySQL and Oracle profiles against OceanBase 4.4.2.2 passed the selected pool-isolation
