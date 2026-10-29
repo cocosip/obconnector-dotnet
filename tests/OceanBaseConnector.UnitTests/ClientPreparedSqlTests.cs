@@ -152,6 +152,39 @@ namespace OceanBaseConnector.UnitTests
                         Value = new OceanBaseTimestamp(new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Unspecified), 123456789) }));
         }
 
+        [Fact]
+        public void MultiStatementIntervalsKeepExactValuesAndDeclaredPrecisions()
+        {
+            Assert.Equal("select (INTERVAL '-012-03' YEAR(3) TO MONTH); select (INTERVAL '+004 05:06:07.123456789' DAY(3) TO SECOND(9)); select (NULL)",
+                BuildMulti("select :ym; select :ds; select :empty", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "ym", Precision = 3,
+                        Value = new OceanBaseIntervalYearToMonth(true, 12, 3) },
+                    new OceanBaseParameter { ParameterName = "ds", OceanBaseDbType = OceanBaseDbType.IntervalDayToSecond,
+                        Value = new OceanBaseIntervalDayToSecond(false, 4, 5, 6, 7, 123456789, 3) },
+                    new OceanBaseParameter { ParameterName = "empty", OceanBaseDbType = OceanBaseDbType.IntervalYearToMonth, Value = DBNull.Value }));
+            Assert.Equal("select (INTERVAL '+000000000-00' YEAR(9) TO MONTH); select (INTERVAL '-02 03:04:05.123' DAY(2) TO SECOND(3))",
+                BuildMulti("select :ym; select :ds", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "ym", OceanBaseDbType = OceanBaseDbType.IntervalYearToMonth,
+                        Value = new OceanBaseIntervalYearToMonth(false, 0, 0) },
+                    new OceanBaseParameter { ParameterName = "ds", Precision = 2, Scale = 3,
+                        Value = new OceanBaseIntervalDayToSecond(true, 2, 3, 4, 5, 123000000) }));
+        }
+
+        [Fact]
+        public void MultiStatementIntervalsRetainValidationAndFallbackRestrictions()
+        {
+            var ym = new OceanBaseParameter { ParameterName = "p", Value = new OceanBaseIntervalYearToMonth(false, 12, 3) };
+            var ds = new OceanBaseParameter { ParameterName = "p", Value = new OceanBaseIntervalDayToSecond(false, 4, 5, 6, 7, 123456789) };
+            Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, ym.Snapshot()));
+            Assert.Throws<NotSupportedException>(() => BuildMulti("select ?; select 1", OceanBaseCompatibilityMode.MySql, ym.Snapshot()));
+            ym.Precision = 1;
+            Assert.ThrowsAny<ArgumentException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle, ym.Snapshot()));
+            ds.Scale = 6;
+            Assert.ThrowsAny<ArgumentException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle, ds));
+            ym.OceanBaseDbType = OceanBaseDbType.IntervalYearToMonth; ym.Precision = 10; ym.Value = DBNull.Value;
+            Assert.Throws<NotSupportedException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle, ym));
+        }
+
         private sealed record LiteralProbe(string Text) : IFormattable
         {
             public override string ToString() => Text;

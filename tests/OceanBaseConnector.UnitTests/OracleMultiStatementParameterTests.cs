@@ -123,6 +123,35 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
+        public async Task OracleIntervalMultiStatementsUseTypedLiterals(bool asynchronous)
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "insert into t values ((INTERVAL '-012-03' YEAR(3) TO MONTH)); update t set v=(INTERVAL '+004 05:06:07.123456789' DAY(3) TO SECOND(9))");
+                await channel.WritePacketAsync(Ok(2, 14)); await channel.WritePacketAsync(Ok(3));
+                channel.BeginCommand(); await Query(channel, "after interval multi parameters");
+                await channel.WritePacketAsync(Ok(1));
+            }, multiStatements: true);
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Multi Statements=true");
+            try
+            {
+                await connection.OpenAsync(); using var command = connection.CreateCommand();
+                command.CommandText = "insert into t values (:ym); update t set v=:ds";
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "ym", Precision = 3,
+                    Value = new OceanBaseIntervalYearToMonth(true, 12, 3) });
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "ds", OceanBaseDbType = OceanBaseDbType.IntervalDayToSecond,
+                    Value = new OceanBaseIntervalDayToSecond(false, 4, 5, 6, 7, 123456789, 3) });
+                Assert.Equal(5, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+                command.Parameters.Clear(); command.CommandText = "after interval multi parameters";
+                Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task OracleParameterizedMultiStatementsRejectUnsupportedInputsBeforeSending(bool asynchronous)
         {
             var server = Server(async channel =>

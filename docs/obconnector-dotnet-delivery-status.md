@@ -1,6 +1,6 @@
 # 交付状态摘要
 
-更新：2026-10-28。范围审计基线为`89a304d`；P2-01 DataAdapter/CommandBuilder已移除；本轮交付及门禁以下表为准，历史流水按需读取。
+更新：2026-10-29。范围审计基线为`89a304d`；P2-01 DataAdapter/CommandBuilder已移除；本轮交付及门禁以下表为准，历史流水按需读取。
 
 | 阅读目的 | 文档 |
 | --- | --- |
@@ -43,6 +43,7 @@
 | Oracle参数化文本多语句 | 已实现并完成本轮验收 | Java双模式对照确认客户端绑定支持；新增正常用例6项RED→GREEN，相关单测47/47、公开DLL消费者12/12、当时双模式直连组24/24（新增Oracle参数8项）、完整默认单测8063/8063、DI14/14，五资产Release零警告/错误，独立最终走查无遗留；详见[记录](history/2026-10-28-oracle-multi-statement-parameters.md)。MySQL普通输入本轮已补，其他边界见矩阵 |
 | MySQL参数化文本多语句 | 已实现并完成本轮验收 | 官方Java/实库对照；6项RED→GREEN、相关单测232/232、双模式公开DLL消费者24/24、双模式实库组78/78（新增MySQL54项，含12种非默认客户端字符集）、完整默认单测8102/8102（0失败、0跳过）、DI14/14、五资产Release零警告/错误，独立最终走查无待修发现；MySQL字符串保持值/collation/coercibility并支持NUL和SQL_MODE切换，解析字符集须稳定，详见[记录](history/2026-10-28-mysql-multi-statement-parameters.md) |
 | 多语句时间参数输入 | 已实现并完成本轮回归 | MySQL DATE/DATETIME/TIMESTAMP/TIME 与 Oracle DATE/TIMESTAMP 客户端字面量，复用已有精度/范围校验；同步/异步 MySQL/Oracle 文本执行和精确 SQL 回归 5/5 通过，见[记录](history/2026-10-28-multi-statement-temporal-input.md) |
+| Oracle多语句INTERVAL输入 | 已实现并完成本轮验收 | 官方Java文本路径与实库对照确认；支持两种精确区间、推断/显式类型、typed NULL和声明精度；完整默认单测8111/8111、公开DLL消费者36/36、双模式多语句实库90/90、DI14/14，五资产Release零警告/错误，独立走查无遗留；沙箱文件替换限制及复验见[记录](history/2026-10-29-multi-statement-interval-input.md) |
 | 生产级完整验收 | 未完成 | 完整资源/并发、真实OBProxy/TLS/auth/HA/版本/平台/运行时及发布审查 |
 
 ## 优先处理的明确缺实现

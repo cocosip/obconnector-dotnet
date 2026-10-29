@@ -49,17 +49,31 @@ namespace OceanBaseConnector.Internal.Sql
             if (parameter.Direction != ParameterDirection.Input) throw Unsupported();
             var provider = parameter.OceanBaseDbType;
             var temporal = multiStatement && IsClientTemporal(parameter);
+            var interval = multiStatement && (provider == OceanBaseDbType.IntervalYearToMonth || provider == OceanBaseDbType.IntervalDayToSecond ||
+                !provider.HasValue && parameter.DbType == DbType.Object && (parameter.Value is OceanBaseIntervalYearToMonth || parameter.Value is OceanBaseIntervalDayToSecond));
             if (provider.HasValue && provider != OceanBaseDbType.Null && provider != OceanBaseDbType.Decimal &&
                 provider != OceanBaseDbType.String && provider != OceanBaseDbType.Binary && provider != OceanBaseDbType.Boolean &&
-                (provider < OceanBaseDbType.SByte || provider > OceanBaseDbType.Double) && !temporal) throw Unsupported();
+                (provider < OceanBaseDbType.SByte || provider > OceanBaseDbType.Double) && !temporal && !interval) throw Unsupported();
             var type = parameter.DbType;
             if (type != DbType.String && type != DbType.AnsiString && type != DbType.StringFixedLength && type != DbType.AnsiStringFixedLength &&
                 type != DbType.Binary && type != DbType.Boolean && type != DbType.Decimal &&
                 type != DbType.SByte && type != DbType.Byte && type != DbType.Int16 && type != DbType.UInt16 &&
                 type != DbType.Int32 && type != DbType.UInt32 && type != DbType.Int64 && type != DbType.UInt64 &&
-                type != DbType.Single && type != DbType.Double && !temporal && provider != OceanBaseDbType.Null) throw Unsupported();
+                type != DbType.Single && type != DbType.Double && !temporal && !interval && provider != OceanBaseDbType.Null) throw Unsupported();
             var value = parameter.Value;
             if (value == null || value == DBNull.Value) return "NULL";
+            if (interval)
+            {
+                if (value is OceanBaseIntervalYearToMonth ym)
+                {
+                    ym = new OceanBaseIntervalYearToMonth(ym.IsNegative, ym.Years, ym.Months, parameter.Precision == 0 ? ym.LeadingPrecision : parameter.Precision);
+                    return "INTERVAL '" + ym + "' YEAR(" + ym.LeadingPrecision.ToString(CultureInfo.InvariantCulture) + ") TO MONTH";
+                }
+                var ds = (OceanBaseIntervalDayToSecond)value;
+                ds = new OceanBaseIntervalDayToSecond(ds.IsNegative, ds.Days, ds.Hours, ds.Minutes, ds.Seconds, ds.Nanosecond,
+                    parameter.Precision == 0 ? ds.LeadingPrecision : parameter.Precision, parameter.DeclaredScale ?? ds.Scale);
+                return "INTERVAL '" + ds + "' DAY(" + ds.LeadingPrecision.ToString(CultureInfo.InvariantCulture) + ") TO SECOND(" + ds.Scale.ToString(CultureInfo.InvariantCulture) + ")";
+            }
             if (value is string text)
             {
                 if (mode == OceanBaseCompatibilityMode.MySql) return multiStatement ? context!.MultiStatementLiteral(text) : context!.Literal(text);

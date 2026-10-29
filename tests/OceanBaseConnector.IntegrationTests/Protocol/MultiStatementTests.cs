@@ -33,6 +33,11 @@ public sealed class MultiStatementTests
         from sequential in new[] { false, true }
         select row.Concat(new object[] { sequential }).ToArray();
 
+    public static IEnumerable<object[]> OracleIntervalRows() =>
+        from row in OracleParameterRows()
+        from sample in new[] { 0, 1, 2 }
+        select row.Concat(new object[] { sample }).ToArray();
+
     public static IEnumerable<object[]> MySqlParameterRows() =>
         from row in MySqlRows()
         from collation in new[] { "utf8mb4_general_ci", "utf8mb4_bin", "utf8mb4_unicode_ci" }
@@ -58,6 +63,44 @@ public sealed class MultiStatementTests
             new[] { "hkscs31", "功\U0002010c", "A55C8845" },
         }
         select row.Concat(sample.Cast<object>()).ToArray();
+
+    [IntegrationTheory]
+    [MemberData(nameof(OracleIntervalRows))]
+    public async Task OracleIntervalParametersPreserveStoredValuesAndMultipleResults(string profileName, bool asynchronous, bool sequential, int sample)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = CreateConnection(db, enabled: true);
+        await Open(connection, asynchronous);
+        var table = await db.TableAsync(connection,
+            "id INTEGER PRIMARY KEY, ym INTERVAL YEAR(9) TO MONTH, ds INTERVAL DAY(9) TO SECOND(9)", CancellationToken.None);
+        var session = connection.GetOpenSession();
+        using var command = db.Command(connection, "INSERT INTO " + table + " VALUES (1, :ym, :ds); INSERT INTO " + table + " VALUES (2, :empty, :empty)");
+        var ymValue = sample == 2 ? default : new OceanBaseIntervalYearToMonth(sample == 0, 12, 3);
+        var dsValue = sample == 2 ? default : new OceanBaseIntervalDayToSecond(sample == 1, 4, 5, 6, 7, sample == 0 ? 123456789 : 123000000, 3);
+        var ym = DatabaseContext.Parameter(command, "ym", ymValue); if (sample != 2) ym.Precision = 3;
+        var ds = DatabaseContext.Parameter(command, "ds", dsValue); if (sample == 1) ds.Scale = 3;
+        ds.OceanBaseDbType = OceanBaseDbType.IntervalDayToSecond;
+        var empty = DatabaseContext.Parameter(command, "empty", DBNull.Value); empty.OceanBaseDbType = OceanBaseDbType.IntervalYearToMonth;
+        Assert.Equal(2, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+        command.Parameters.Clear(); command.CommandText = "SELECT ym, ds FROM " + table + " WHERE id=1; SELECT ym, ds FROM " + table + " WHERE id=2";
+        var behavior = sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default;
+        using (var reader = asynchronous ? await command.ExecuteReaderAsync(behavior) : command.ExecuteReader(behavior))
+        {
+            Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+            var yearMonth = reader.GetFieldValue<OceanBaseIntervalYearToMonth>(0);
+            Assert.Equal(ymValue.IsNegative, yearMonth.IsNegative); Assert.Equal(ymValue.Years, yearMonth.Years); Assert.Equal(ymValue.Months, yearMonth.Months);
+            var daySecond = reader.GetFieldValue<OceanBaseIntervalDayToSecond>(1);
+            Assert.Equal(dsValue.IsNegative, daySecond.IsNegative); Assert.Equal(dsValue.Days, daySecond.Days); Assert.Equal(dsValue.Hours, daySecond.Hours);
+            Assert.Equal(dsValue.Minutes, daySecond.Minutes); Assert.Equal(dsValue.Seconds, daySecond.Seconds); Assert.Equal(dsValue.Nanosecond, daySecond.Nanosecond);
+            Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+            Assert.True(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+            Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read()); Assert.True(reader.IsDBNull(0)); Assert.True(reader.IsDBNull(1));
+            Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+            Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+        }
+        Assert.Same(session, connection.GetOpenSession());
+        Assert.Equal(2, await db.CountAsync(connection, table, CancellationToken.None));
+    }
 
     [IntegrationTheory]
     [MemberData(nameof(MySqlCharsetRows))]

@@ -1,6 +1,6 @@
 # 开发进度与功能矩阵
 
-更新：2026-10-28。范围审计基线：`89a304d`；DataAdapter/CommandBuilder已移除；本轮模块及证据以下表为准。
+更新：2026-10-29。范围审计基线：`89a304d`；DataAdapter/CommandBuilder已移除；本轮模块及证据以下表为准。
 
 **已实现**表示支持“已支持范围”一列且有本地回归，不等于所有部署均已验收。**部分实现**表示仍有明确缺口；**未实现**表示当前不支持；**开发中**不计交付。实库结果只覆盖记录的 profile。
 原清单的23个审计编号保留用于追溯，P2-01 已移出当前范围；其余工作包不能整体关闭，也不按提交数/单测数计算完成率。
@@ -48,7 +48,7 @@
 | 普通OB20 / trace | 已实现 | 普通帧、校验、legacy/modern trace编解码及协商诊断；显式 profile 会拒绝服务端实际降级 | 用户租户实测协商为 MySQL，未提供实际 OB20/trace 帧；OBProxy、服务器策略和 trace 发送仍待专用环境 |
 | OB20压缩 | 明确不支持 | 非零uncompressed length仍拒绝 | 先取得客户端链路/版本/capability 依据，否则不实现 |
 | Proxy reroute | 明确不支持 | 当前拒绝相关响应标志 | 没有明确目标/TLS/租户及未知结果契约前不实现 |
-| 文本多语句 | 部分实现 | 默认关闭，显式开启后文本多结果；Oracle命名/MySQL位置普通标量输入（数字/字符串/二进制/NULL）及 MySQL DATE/DATETIME/TIMESTAMP/TIME、Oracle DATE/TIMESTAMP；MySQL字符串支持NUL和SQL_MODE切换，保持literal collation/coercibility；双模式直连组78/78（新增MySQL54项）及时间参数同步/异步本地回归通过，见[MySQL参数](history/2026-10-28-mysql-multi-statement-parameters.md)、[Oracle参数](history/2026-10-28-oracle-multi-statement-parameters.md)、[时间参数](history/2026-10-28-multi-statement-temporal-input.md)和[门禁修复](history/2026-10-28-multi-statement-client-policy.md) | MySQL字符串要求稳定解析字符集，显式SET字符集/动态执行/CALL/quoted SET标识符组合拒绝，任意函数/触发器隐式改变字符集不承诺；时区时间、Prepare/cursor/输出、stream/复杂输入仍拒绝，其余形状继续分类 |
+| 文本多语句 | 部分实现 | 默认关闭，显式开启后文本多结果；Oracle命名/MySQL位置普通标量输入（数字/字符串/二进制/NULL）及 MySQL DATE/DATETIME/TIMESTAMP/TIME、Oracle DATE/TIMESTAMP/INTERVAL YEAR TO MONTH/INTERVAL DAY TO SECOND；MySQL字符串支持NUL和SQL_MODE切换，保持literal collation/coercibility；双模式多语句直连组90/90（含新增区间12项）及时间参数同步/异步本地回归通过，见[MySQL参数](history/2026-10-28-mysql-multi-statement-parameters.md)、[Oracle参数](history/2026-10-28-oracle-multi-statement-parameters.md)、[时间参数](history/2026-10-28-multi-statement-temporal-input.md)、[区间输入](history/2026-10-29-multi-statement-interval-input.md)和[门禁修复](history/2026-10-28-multi-statement-client-policy.md) | MySQL字符串要求稳定解析字符集，显式SET字符集/动态执行/CALL/quoted SET标识符组合拒绝，任意函数/触发器隐式改变字符集不承诺；时区时间、Prepare/cursor/输出、stream/复杂输入仍拒绝，其余形状继续分类 |
 | LOCAL INFILE | 已实现 | 显式授权、应用流输入、安全边界、同步/异步；大于1MiB分块及源失败恢复4/4直连验收见[证据](history/2026-10-28-local-infile-chunked-acceptance.md)；异步源等待期间真实取消/超时2/2，见[中断记录](history/2026-10-28-local-infile-interruption.md)；CanRead为false或抛错时也释放工厂源流，新增直连4/4，见[修复记录](history/2026-10-28-local-infile-validation-ownership.md)；超出64MiB逻辑包上限的本地协议同步/异步回归2/2，见[上限记录](history/2026-10-28-local-infile-overlimit.md) | 代理策略、同步源阻塞及其他中断/协议组合待验收 |
 | TLS/mTLS | 已实现 | 平台校验、自定义回调、客户端证书、池身份隔离、撤销选项 | 企业CA、负向握手、轮换和跨平台撤销未完整验收 |
 | 认证/凭据轮换 | 已实现 | 已有认证插件路径；每次Open提供凭据、版本轮换、过期/取消和旧会话退休 | 真实插件、凭据服务及KDC矩阵未验收 |
