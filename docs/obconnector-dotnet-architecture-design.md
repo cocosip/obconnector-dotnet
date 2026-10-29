@@ -276,6 +276,16 @@ join the ambient single-resource transaction. The source command timeout is the 
 connection batches keep caller-owned connection behavior. Standard assets expose no modern batch API.
 See [local evidence and remaining acceptance](history/obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
 
+### MySQL BIT/YEAR inputs in text multi-statements
+
+Explicit Bit/Year Input providers use the existing invariant UInt64/UInt16 numeric literals only
+when text multi-statements are enabled. PreparedParameters retains MySQL-only mode, bit-width,
+year-range and declaration checks, including for typed NULL. No literal-state query is needed.
+Target BIT/YEAR columns perform numeric conversion; expression results retain numeric metadata.
+Ordinary single-command client fallback still refuses these explicit providers. Snapshots, expanded
+SQL budgets and execution/transaction refusal gates remain shared with other scalar inputs.
+See the [OceanBase/Java and direct-test evidence](history/2026-10-29-multi-statement-bit-year-input.md).
+
 ### Oracle national inputs in text multi-statements
 
 Explicit NChar/NVarchar2 Input parameters use OceanBase Unicode literals: each validated UTF-16

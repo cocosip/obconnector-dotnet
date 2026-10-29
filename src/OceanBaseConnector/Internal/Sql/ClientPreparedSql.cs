@@ -55,7 +55,8 @@ namespace OceanBaseConnector.Internal.Sql
             if (provider.HasValue && provider != OceanBaseDbType.Null && provider != OceanBaseDbType.Decimal &&
                 provider != OceanBaseDbType.String && provider != OceanBaseDbType.Binary && provider != OceanBaseDbType.Boolean &&
                 (provider < OceanBaseDbType.SByte || provider > OceanBaseDbType.Double) && !temporal && !interval &&
-                !(multiStatement && (provider == OceanBaseDbType.Json || provider == OceanBaseDbType.NChar || provider == OceanBaseDbType.NVarchar2))) throw Unsupported();
+                !(multiStatement && (provider == OceanBaseDbType.Json || provider == OceanBaseDbType.Bit || provider == OceanBaseDbType.Year ||
+                    provider == OceanBaseDbType.NChar || provider == OceanBaseDbType.NVarchar2))) throw Unsupported();
             var type = parameter.DbType;
             if (type != DbType.String && type != DbType.AnsiString && type != DbType.StringFixedLength && type != DbType.AnsiStringFixedLength &&
                 type != DbType.Binary && type != DbType.Boolean && type != DbType.Decimal &&
