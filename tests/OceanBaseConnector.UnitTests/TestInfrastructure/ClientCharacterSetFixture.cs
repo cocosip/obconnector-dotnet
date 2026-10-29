@@ -17,7 +17,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
         internal static readonly (string Name, string Text, string Hex)[] Samples =
         {
             ("utf8mb3", "中é", "E4B8ADC3A9"), ("ascii", "ABC", "414243"),
-            ("latin1", "é€", "E980"), ("gbk", "中文", "D6D0CEC4"),
+            ("latin1", "é€", "E980"), ("gb2312", "中文丨", "D6D0CEC4D8AD"), ("gbk", "中文", "D6D0CEC4"),
             ("gb18030", "ḿ\ue7c7😀", "A8BC8135F4379439FC36"),
             ("gb18030_2022", "龴\ue81e\ufe10", "FE5982359037A6D9"),
             ("dec8", "¤ŒŸ", "A8D7DD"), ("tis620", "กฺ฿", "A1DADF"),

@@ -148,6 +148,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("UTF8MB4", "utf8mb4")]
         [InlineData("ascii", "ascii")]
         [InlineData("latin1", "latin1")]
+        [InlineData("gb2312", "gb2312")]
         [InlineData("gbk", "gbk")]
         [InlineData("gb18030", "gb18030")]
         [InlineData("gb18030_2022", "gb18030_2022")]
@@ -176,5 +177,18 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("latin1;SET autocommit=0")]
         public void UnsupportedInputCharsetFailsBeforeOpening(string name)
             => Assert.Throws<ArgumentException>(() => new OceanBaseConnectionStringBuilder { ["Character Set"] = name });
+
+        [Fact]
+        public void Gb2312UsesStrictOceanBaseMapping()
+        {
+            var encoding = ClientCharacterSet.Parse("gb2312");
+            Assert.Equal("gb2312", encoding.Name);
+            Assert.Equal(Convert.FromHexString("D6D0CEC4D8AD"), encoding.GetBytes("中文丨"));
+            Assert.Throws<EncoderFallbackException>(() => encoding.GetBytes("龘"));
+
+            var result = ResultCharacterSet.Resolve(24, out var width);
+            Assert.Equal(2u, width);
+            Assert.Equal("中文丨", result.GetString(Convert.FromHexString("D6D0CEC4D8AD")));
+        }
     }
 }

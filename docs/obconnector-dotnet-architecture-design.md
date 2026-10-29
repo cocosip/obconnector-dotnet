@@ -567,6 +567,7 @@ require real validation.
 | HKSCS | 152, 336, 351, 366 | 2 |
 | HKSCS31 | 153, 337, 352, 367 | 2 |
 | MySQL latin1 (Windows-1252) | 5, 8, 15, 31, 47, 48, 49, 94, 329, 344, 359 | 1 |
+| GB2312 | 24, 86 | 2 |
 | GBK | 28, 87, 326, 341, 356 | 2 |
 | GB18030-2005 | 248, 249, 251, 328, 343, 358 | 4 |
 | GB18030-2022 | 216–222, 330, 345, 360 | 4 |
@@ -575,7 +576,21 @@ require real validation.
 | UTF8MB3 | 33, 83, 192–215 | 3 |
 | UTF8MB4 | 45, 46, 224–247, 255–323 except 272/276/295/299/301/302; 325, 340, 355 | 4 |
 
-OceanBase IDs follow `v4.3.5_CE` charset definitions; legacy UTF8MB3 IDs additionally follow MySQL's [33/83 definitions](https://github.com/mysql/mysql-server/blob/mysql-8.0.44/strings/ctype-utf8.cc) and [192–215 definitions](https://github.com/mysql/mysql-server/blob/mysql-8.0.40/strings/ctype-uca.cc#L6085). The official `System.Text.Encoding.CodePages` dependency supplies CP1252/936/54936 without process-global `Encoding.RegisterProvider`. MySQL latin1 includes CP1252 C1 mappings; it is not ISO-8859-1. GBK/GB18030 reject illegal single bytes 80/FF and malformed/truncated multibyte input. GB18030 corrects CP54936's older mapping: A8BC decodes U+1E3F and 8135F437 decodes U+E7C7, including streamed reads. A BOM is a returned character, not stripped as a transport marker.
+OceanBase IDs follow `v4.3.5_CE` charset definitions; GB2312 24/86 is additionally taken from the
+`v4.4.2_CE` header because that charset was introduced after the older baseline. Legacy UTF8MB3 IDs
+additionally follow MySQL's [33/83 definitions](https://github.com/mysql/mysql-server/blob/mysql-8.0.44/strings/ctype-utf8.cc)
+and [192–215 definitions](https://github.com/mysql/mysql-server/blob/mysql-8.0.40/strings/ctype-uca.cc#L6085).
+The official `System.Text.Encoding.CodePages` dependency supplies CP1252/20936/936/54936 without
+process-global `Encoding.RegisterProvider`. GB2312 uses CP20936 and rejects GBK-only characters;
+it is not a CP936 alias. MySQL latin1 includes CP1252 C1 mappings; it is not ISO-8859-1. GBK/GB18030
+reject illegal single bytes 80/FF and malformed/truncated multibyte input. GB18030 corrects CP54936's
+older mapping: A8BC decodes U+1E3F and 8135F437 decodes U+E7C7, including streamed reads. A BOM is
+a returned character, not stripped as a transport marker.
+
+The GB2312 source basis is the official
+[v4.4.2_CE header](https://github.com/oceanbase/oceanbase/blob/e859d1b9c9a6d11d856f4fed5b6385f1a6795820/deps/oblib/src/lib/charset/ob_charset.h#L50-L146).
+The .NET mapping is local byte-exact evidence only; Java 2.4.14's generic character-encoding path
+and the server header do not replace a live tenant roundtrip.
 
 GB18030-2022 applies the18 reversible PUA/assigned-scalar swaps specified by
 [OceanBase init_gb18030_2022](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_ctype_gb18030.cc#L1427),

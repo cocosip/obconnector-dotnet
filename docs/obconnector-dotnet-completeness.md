@@ -1,6 +1,6 @@
 # 源码走查与功能缺失矩阵
 
-更新：2026-10-29；检查基线`1705c1b`。范围与编号以[能力矩阵](obconnector-dotnet-progress.md)为准，
+更新：2026-10-30；本阶段基线`f7f3d38`。范围与编号以[能力矩阵](obconnector-dotnet-progress.md)为准，
 证据来源见[范围审计](obconnector-dotnet-scope-audit.md)。本次走查不等于重新执行所有历史实库测试。
 
 分类：**缺实现**是已保留目标中的代码缺口；**受限**是已定义子集，不能默认要求任意组合；
@@ -17,7 +17,7 @@
 | G04 | T14/T15 Oracle复杂值 | 受限：文本复杂结果、复杂cursor输入、named locator回绑、未解析RETURNING身份拒绝 | ComplexValueCodec.cs；ComplexTypeContext.cs；OracleCommandPlan.cs | 对象/集合、成员方向、named/anonymous、PL输出/存储逐项证实；拒绝不当空实现删除 |
 | G05 | T12 Oracle UROWID | 部分：ROWID209已有字符串结果路径，DataTypes 已暴露结果专用元数据；UROWID独立往返仍未证实 | ResultColumn.cs:209类型；OceanBaseConnection.Schema.DataTypes；无专用public UROWID类型 | Java目录/空表metadata不足；需真实值、绑定、结果、metadata验证后声明；当前不支持ROWID参数/字面量 |
 | G06 | T05 MySQL GEOMETRY | 部分：类型255已有原始byte[]结果路径，DataTypes 已暴露结果专用元数据；不承诺参数/GIS领域API | ResultColumn.cs 类型255；OceanBaseConnection.Schema.DataTypes；PreparedParameters.cs | 原始字节/SRID和真实读写需独立验收；领域库不是当前必需 |
-| G07 | T19/T20 两模式字符集 | 候选差距：官方较新GB2312/UJIS/EUCKR/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7等未完整映射 | ClientCharacterSet.cs白名单；ResultCharacterSet.Resolve | 固定服务端版本/真实collation和严格roundtrip后扩充；未知ID继续拒绝，不套用系统近似编码 |
+| G07 | T19/T20 两模式字符集 | 部分：GB2312 已按 OceanBase 4.4.2 的 24/86 collation 做严格客户端/结果映射；UJIS/EUCKR/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7 仍是候选差距 | ClientCharacterSet.cs；ResultCharacterSet.Resolve；ClientCharacterSetTests/CharacterSetTests | GB2312 真实租户 roundtrip 仍待验收；其余字符集须逐个固定版本、确认编码表并做严格 roundtrip，未知 ID继续拒绝 |
 | G08 | T17/T18 专用新类型 | 候选差距：XMLType/SDO/ANYDATA、MySQL vector/bitmap/SQL array无专用codec承诺 | OceanBaseDbType.cs、ResultColumn/PreparedParameters、ComplexValueCodec | 先确认版本、Java或wire类型与应用需求；服务端转换成既有标量可另验，不等于原生类型支持 |
 | G09 | Q20 multi-send | 候选差距：Java已实现，.NET缺实现 | Java DefaultOptions:470–490、AbstractQueryProtocol:1287–1326；本地无选项 | 先证明目标OB部署和可测收益，定义部分失败/响应排序/资源限额；不和MariaDB bulk混淆 |
 | G10 | C10/C11/Q17 池/reset/cache | 欠验收：有实现及部分实库；任意副作用/全部资源交错未证实 | PhysicalSessionPool、PhysicalSession.PreparedStatements、SessionStateSql | 持续并发容量/超时/关闭交错、句柄/线程/内存稳定；状态不可证明时销毁 |

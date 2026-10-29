@@ -9,13 +9,16 @@ namespace OceanBaseConnector.Internal.Protocol
         private readonly Encoding _inner;
         private readonly bool _fourBytes;
         private readonly bool _revision2022;
-        internal ChineseEncoding(int codePage, bool revision2022 = false) : base(codePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback)
+        private readonly bool _gb2312;
+        internal ChineseEncoding(int codePage, bool revision2022 = false, bool gb2312 = false) : base(codePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback)
         {
             if (revision2022 && codePage != 54936) throw new ArgumentException("The 2022 revision requires GB18030.", nameof(codePage));
+            if (gb2312 && codePage != 20936) throw new ArgumentException("The GB2312 mapping requires code page 20936.", nameof(codePage));
             _inner = CodePagesEncodingProvider.Instance.GetEncoding(codePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback)
                 ?? throw new NotSupportedException("The required character encoding is unavailable.");
             _fourBytes = codePage == 54936;
             _revision2022 = revision2022;
+            _gb2312 = gb2312;
         }
 
         private int Validate(byte[] bytes, int index, int count, int state, bool flush)
@@ -29,10 +32,12 @@ namespace OceanBaseConnector.Internal.Protocol
                 {
                     case 0:
                         if (value < 0x80) continue;
-                        if (value >= 0x81 && value <= 0xfe) { state = 1; continue; }
+                        if (_gb2312 ? value >= 0xa1 && value <= 0xf7 : value >= 0x81 && value <= 0xfe)
+                        { state = 1; continue; }
                         break;
                     case 1:
-                        if (value >= 0x40 && value <= 0xfe && value != 0x7f) { state = 0; continue; }
+                        if (_gb2312 ? value >= 0xa1 && value <= 0xfe : value >= 0x40 && value <= 0xfe && value != 0x7f)
+                        { state = 0; continue; }
                         if (_fourBytes && value >= 0x30 && value <= 0x39) { state = 2; continue; }
                         break;
                     case 2:

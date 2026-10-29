@@ -23,6 +23,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 "utf8mb3" => 33,
                 "ascii" => 11,
                 "latin1" => 8,
+                "gb2312" => 24,
                 "gbk" => 28,
                 "gb18030" => 248,
                 "gb18030_2022" => 216,

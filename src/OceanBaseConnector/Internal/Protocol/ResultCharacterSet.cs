@@ -8,6 +8,7 @@ namespace OceanBaseConnector.Internal.Protocol
     {
         // MySQL latin1 uses Windows-1252, including its C1 mappings, rather than ISO-8859-1.
         private static readonly Encoding Latin1 = CodePage(1252);
+        private static readonly Encoding Gb2312 = new ChineseEncoding(20936, gb2312: true);
         private static readonly Encoding Gbk = new ChineseEncoding(936);
         private static readonly Encoding Gb18030 = new ChineseEncoding(54936);
         private static readonly Encoding Gb180302022 = new ChineseEncoding(54936, revision2022: true);
@@ -80,6 +81,9 @@ namespace OceanBaseConnector.Internal.Protocol
                 case 341:
                 case 356:
                     maximumBytesPerCharacter = 2; return Gbk;
+                case 24:
+                case 86:
+                    maximumBytesPerCharacter = 2; return Gb2312;
                 case 248: case 249: case 251: case 328: case 343: case 358: return Gb18030;
                 case 216: case 217: case 218: case 219: case 220: case 221: case 222:
                 case 330: case 345: case 360: return Gb180302022;

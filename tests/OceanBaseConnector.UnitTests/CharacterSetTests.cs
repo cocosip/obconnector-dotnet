@@ -20,6 +20,7 @@ namespace OceanBaseConnector.UnitTests
                 (new ushort[] { 152, 336, 351, 366 }, "\uf308\uf30aĀ\uffed中\0  ", "884588478856F9FEA4A4002020", 2),
                 (new ushort[] { 153, 337, 352, 367 }, "\U0002010c\U000200d1Ā\uffed中\0  ", "884588478856F9FEA4A4002020", 2),
                 (new ushort[] { 5, 8, 15, 31, 47, 48, 49, 94, 329, 344, 359 }, "é€‘Ÿ\0  ", "E980919F002020", 1),
+                (new ushort[] { 24, 86 }, "中文丨\0  ", "D6D0CEC4D8AD002020", 2),
                 (new ushort[] { 28, 87, 326, 341, 356 }, "中文\0  ", "D6D0CEC4002020", 2),
                 (new ushort[] { 248, 249, 251, 328, 343, 358 }, "中文😀\0  ", "D6D0CEC49439FC36002020", 4),
                 (new ushort[] { 216, 217, 218, 219, 220, 221, 222, 330, 345, 360 }, "ḿ\ue7c7龴\ue81e\ufe10\ue78d中😀\0  ", "A8BC8135F437FE5982359037A6D984318236D6D09439FC36002020", 4),
@@ -102,6 +103,8 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(347, "FC")]
         [InlineData(362, "FF")]
         [InlineData(28, "81")]
+        [InlineData(24, "81")]
+        [InlineData(86, "FF")]
         [InlineData(28, "80")]
         [InlineData(87, "FF")]
         [InlineData(87, "8130")]
