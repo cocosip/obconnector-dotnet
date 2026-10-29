@@ -1,6 +1,6 @@
 # 源码走查与功能缺失矩阵
 
-更新：2026-10-29；检查基线`d4d5685`。范围与编号以[能力矩阵](obconnector-dotnet-progress.md)为准，
+更新：2026-10-29；检查基线`1705c1b`。范围与编号以[能力矩阵](obconnector-dotnet-progress.md)为准，
 证据来源见[范围审计](obconnector-dotnet-scope-audit.md)。本次走查不等于重新执行所有历史实库测试。
 
 分类：**缺实现**是已保留目标中的代码缺口；**受限**是已定义子集，不能默认要求任意组合；
@@ -47,7 +47,7 @@
 | E10 | OB20/trace/标准压缩/ODP | 直连只验证declined-ob20和压缩未声明回退；强制OB20因Layer=mysql失败 | 实际双向目标帧、trace控制/采样，collector另验；真实ODP不可用单上游中继代替 |
 | E11 | MySQL零日期 | 有profile，但当前SQL_MODE前置不满足，未建表 | 合适SQL_MODE专用profile验证存储/读写，不在测试中私改租户基线 |
 
-来源和历史运行上下文集中见[真实兼容性与未验收部署](compatibility.md)及[历史证据索引](compatibility.md)。
+来源和历史运行上下文集中见[真实兼容性与未验收部署](compatibility.md)及[历史证据索引](history/README.md)。
 本次范围整理未重新证明这些服务器状态仍相同。
 
 ## 明确排除与历史ID归并
@@ -69,6 +69,6 @@ REF CURSOR输入、DataAdapter/CommandBuilder、未定义的“其他资源等�
 | P2-02/P2-03/P2-04 | Q15–Q21/M02/M03；multi-send为候选，bulk为排除 |
 | P2-05/P2-06 | R01与所有真实验收门槛，不作为功能API |
 
-旧完整性清单和暂停快照已删除，历史结论仅在[历史证据索引](compatibility.md)中保留摘要，
+旧完整性清单和暂停快照已删除，历史结论仅在[历史证据索引](history/README.md)中保留摘要，
 不再用八包/阶段编号驱动无依据开发。关闭G/E项须按[验收标准](acceptance-criteria.md)记录证据，
 失败可能揭示驱动缺陷，不能预先一概归为服务端问题。

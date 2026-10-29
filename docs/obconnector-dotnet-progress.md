@@ -1,6 +1,6 @@
 # SDK 功能、能力与支持边界矩阵
 
-更新：2026-10-29，源码基线`d4d5685`。本文件是当前功能范围的唯一入口；
+更新：2026-10-29，源码基线`1705c1b`。本文件是当前功能范围的唯一入口；
 [依据与清理决策](obconnector-dotnet-scope-audit.md)固定官方文档/Java版本并解释O/J编号，
 [缺失矩阵](obconnector-dotnet-completeness.md)列开发与验收差距，
 [验收标准](acceptance-criteria.md)定义完成条件，[兼容性](compatibility.md)保留环境阻塞。
@@ -119,4 +119,4 @@
 源码有实现仅关闭“缺实现”，不能关闭对应的真实TLS/ODP/版本/平台门槛。
 同一能力必须按输入、输出、文本、服务端prepare、回退、多语句、流/locator、同步/异步分别确认。
 精确失败、跳过、尚未实现与排除项只在[缺失矩阵](obconnector-dotnet-completeness.md)维护，
-旧23项和八工作包不再用于计算百分比。历史摘要见[历史证据索引](compatibility.md)。
+旧23项和八工作包不再用于计算百分比。历史摘要见[历史证据索引](history/README.md)。

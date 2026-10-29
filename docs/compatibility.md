@@ -40,7 +40,7 @@
 ## 证据索引
 
 当前入口只有本页、[功能矩阵](obconnector-dotnet-progress.md)、[缺失矩阵](obconnector-dotnet-completeness.md)
-和[验收标准](acceptance-criteria.md)。历史过程记录已收敛到[历史证据索引](compatibility.md)，
+和[验收标准](acceptance-criteria.md)。历史过程记录已收敛到[历史证据索引](history/README.md)，
 不再作为单独的功能或完成率入口；[安全测试入口](../tests/OceanBaseConnector.SecurityTests/README.md)仍保留。
 
 完整资源交错/长期压力、unknown outcome所有发送/执行/取消点、ambient in-doubt/管理器崩溃、
