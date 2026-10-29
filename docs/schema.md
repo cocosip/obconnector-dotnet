@@ -84,8 +84,9 @@ MySQL also lists ENUM/SET using the existing String provider identity and label-
 templates `ENUM({0})`/`SET({0})`; the argument is SQL-quoted labels, not a length. Reported result
 codes247/248 retain binary-collation bytes or strict text without parsing label lists. Accepting these
 wire codes in either mode does not add Oracle SQL declarations. MySQL GEOMETRY result code255 returns
-opaque bytes regardless of collation; it does not add a GEOMETRY inventory row, spatial parameter
-type or SQL-support claim. These result-code extensions have local evidence only.
+opaque bytes regardless of collation. `DataTypes` exposes a result-only `GEOMETRY` row with the Binary
+provider identity; parameter and literal support remain false and no spatial API or SQL declaration is
+claimed. These result-code extensions have local evidence only.
 
 Oracle ROWID result code209 likewise has local result-reading support using String and strict session
 UTF-8, independent of its reported collation. `DataTypes` exposes a result-only `ROWID` row with the

@@ -542,7 +542,9 @@ same strict string decoder, without splitting label lists, trimming or CLR enum 
 shared wire mappings do not add Oracle ENUM/SET SQL declarations. MySQL DataTypes uses String and
 `ENUM({0})`/`SET({0})` with a caller-supplied SQL label list. Wire code 255 is MySQL-only GEOMETRY:
 readers return complete opaque bytes for any collation, preserving prefixes and payload without
-SRID/WKB conversion. It adds no spatial API, geometry parameter code or GEOMETRY SQL inventory row.
+SRID/WKB conversion. The `DataTypes` collection exposes a result-only `GEOMETRY` row with the Binary
+provider identity; parameter and literal support remain disabled because no geometry parameter wire
+identity or GIS codec is implemented.
 Empty/NULL and buffered/sequential text/prepared results reuse existing framing. Server emission and
 SQL/spatial interoperability require real acceptance; local fixtures do not establish them.
 

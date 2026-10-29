@@ -16,7 +16,7 @@
 | G03 | Q11 Oracle输出/游标 | 受限：输出offset拒绝；普通cursor列形状有失败 | OracleCommandPlan.cs；QueryResult.Cursor.cs；OracleCursorOwner.cs | 正FetchSize仅提示；单独解决/确认实际cursor值形状，不能以OUT成功关闭结果列失败 |
 | G04 | T14/T15 Oracle复杂值 | 受限：文本复杂结果、复杂cursor输入、named locator回绑、未解析RETURNING身份拒绝 | ComplexValueCodec.cs；ComplexTypeContext.cs；OracleCommandPlan.cs | 对象/集合、成员方向、named/anonymous、PL输出/存储逐项证实；拒绝不当空实现删除 |
 | G05 | T12 Oracle UROWID | 部分：ROWID209已有字符串结果路径，DataTypes 已暴露结果专用元数据；UROWID独立往返仍未证实 | ResultColumn.cs:209类型；OceanBaseConnection.Schema.DataTypes；无专用public UROWID类型 | Java目录/空表metadata不足；需真实值、绑定、结果、metadata验证后声明；当前不支持ROWID参数/字面量 |
-| G06 | T05 MySQL GEOMETRY | 受限：原始byte[]结果，不承诺专用输入/GIS领域API | ResultColumn.cs 类型255、PreparedParameters.cs | 原始字节/SRID和读写需独立验收；领域库不是当前必需 |
+| G06 | T05 MySQL GEOMETRY | 部分：类型255已有原始byte[]结果路径，DataTypes 已暴露结果专用元数据；不承诺参数/GIS领域API | ResultColumn.cs 类型255；OceanBaseConnection.Schema.DataTypes；PreparedParameters.cs | 原始字节/SRID和真实读写需独立验收；领域库不是当前必需 |
 | G07 | T19/T20 两模式字符集 | 候选差距：官方较新GB2312/UJIS/EUCKR/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7等未完整映射 | ClientCharacterSet.cs白名单；ResultCharacterSet.Resolve | 固定服务端版本/真实collation和严格roundtrip后扩充；未知ID继续拒绝，不套用系统近似编码 |
 | G08 | T17/T18 专用新类型 | 候选差距：XMLType/SDO/ANYDATA、MySQL vector/bitmap/SQL array无专用codec承诺 | OceanBaseDbType.cs、ResultColumn/PreparedParameters、ComplexValueCodec | 先确认版本、Java或wire类型与应用需求；服务端转换成既有标量可另验，不等于原生类型支持 |
 | G09 | Q20 multi-send | 候选差距：Java已实现，.NET缺实现 | Java DefaultOptions:470–490、AbstractQueryProtocol:1287–1326；本地无选项 | 先证明目标OB部署和可测收益，定义部分失败/响应排序/资源限额；不和MariaDB bulk混淆 |

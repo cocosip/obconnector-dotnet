@@ -42,7 +42,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.All(table.Rows.Cast<DataRow>(), row =>
                 {
                     Assert.True((bool)row["IsNullable"]);
-                    Assert.True((bool)row["IsSupportedForParameters"] || !mysql && (string)row["TypeName"] == "ROWID");
+                    Assert.True((bool)row["IsSupportedForParameters"] || !mysql && (string)row["TypeName"] == "ROWID" || mysql && (string)row["TypeName"] == "GEOMETRY");
                     Assert.True(Enum.IsDefined(typeof(OceanBaseDbType), row["ProviderDbType"]));
                     Assert.NotNull(typeof(OceanBaseConnection).Assembly.GetType((string)row["ProviderSpecificDataType"]) ?? Type.GetType((string)row["ProviderSpecificDataType"]));
                 });
@@ -70,7 +70,9 @@ namespace OceanBaseConnector.UnitTests
                         Assert.Equal(name + "({0})", labels["CreateFormat"]); Assert.Equal("labels", labels["CreateParameters"]);
                         Assert.Equal((int)OceanBaseDbType.String, labels["ProviderDbType"]); Assert.False((bool)labels["IsLong"]);
                     }
-                    Assert.DoesNotContain("GEOMETRY", names);
+                    var geometry = DataTypeRow(table, "GEOMETRY", typeof(byte[]));
+                    Assert.False((bool)geometry["IsSupportedForParameters"]); Assert.True((bool)geometry["IsSupportedForResults"]);
+                    Assert.False((bool)geometry["IsLiteralSupported"]); Assert.Contains("255", (string)geometry["RequiredFeatures"]);
                     foreach (var prefix in new[] { "TINY", "MEDIUM", "LONG" })
                         foreach (var raw in new[] { false, true })
                         {
@@ -177,6 +179,7 @@ namespace OceanBaseConnector.UnitTests
             yield return new object[] { true, "BIT", (byte)16, 64U, (byte)0, (byte)0, (ushort)0, (ushort)63, typeof(ulong) };
             yield return new object[] { true, "YEAR", (byte)13, 4U, (byte)0, (byte)0, (ushort)0, (ushort)45, typeof(ushort) };
             yield return new object[] { true, "JSON", (byte)245, 1024U, (byte)0, (byte)0, (ushort)0, (ushort)63, typeof(string) };
+            yield return new object[] { true, "GEOMETRY", (byte)255, 120U, (byte)0, (byte)0, (ushort)0, (ushort)45, typeof(byte[]) };
             yield return new object[] { true, "ENUM", (byte)247, 120U, (byte)0, (byte)0, (ushort)0, (ushort)45, typeof(string) };
             yield return new object[] { true, "SET", (byte)248, 120U, (byte)0, (byte)0, (ushort)0, (ushort)45, typeof(string) };
             yield return new object[] { true, "DECIMAL", (byte)246, 30U, (byte)28, (byte)4, (ushort)0, (ushort)45, typeof(decimal) };

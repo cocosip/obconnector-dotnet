@@ -113,6 +113,9 @@ namespace OceanBaseConnector
                 var bits = TypeRow("BIT", OceanBaseDbType.Bit, typeof(ulong), "BIT({0})", "length"); bits["ColumnSize"] = 64L; bits["IsUnsigned"] = true;
                 var json = TypeRow("JSON", OceanBaseDbType.Json, typeof(string), "JSON");
                 json["IsLong"] = true; json["RequiredFeatures"] = "Binary or supported UTF-8 JSON result collation";
+                var geometry = TypeRow("GEOMETRY", OceanBaseDbType.Binary, typeof(byte[]));
+                geometry["IsSupportedForParameters"] = false;
+                geometry["RequiredFeatures"] = "MySQL result type code 255; opaque bytes without a GIS codec";
             }
             else
             {
