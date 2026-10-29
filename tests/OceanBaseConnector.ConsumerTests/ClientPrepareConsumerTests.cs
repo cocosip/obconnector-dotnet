@@ -19,7 +19,7 @@ namespace OceanBaseConnector.ConsumerTests
         {
             foreach (var target in ConsumerTargetMatrix.Representative)
                 foreach (var asynchronous in new[] { false, true })
-                    foreach (var kind in new[] { "standard", "ob20", "trailing" }) yield return new object[] { target, asynchronous, kind };
+                    foreach (var kind in new[] { "standard", "ob20", "trailing", "binary-standard", "binary-ob20" }) yield return new object[] { target, asynchronous, kind };
         }
 
         [Theory]
@@ -28,7 +28,9 @@ namespace OceanBaseConnector.ConsumerTests
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
-            var ob20 = kind != "standard";
+            var ob20 = kind != "standard" && kind != "binary-standard";
+            var largeBinary = kind.StartsWith("binary-", StringComparison.Ordinal);
+            var binary = largeBinary ? Enumerable.Range(0, 65536).Select(i => (byte)i).ToArray() : Array.Empty<byte>();
             var serving = Task.Run(async () =>
             {
                 using var peer = await listener.AcceptTcpClientAsync(budget.Token); var stream = peer.GetStream(); var channel = new PacketChannel(stream);
@@ -40,10 +42,13 @@ namespace OceanBaseConnector.ConsumerTests
                 await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 2, 1, response) : response, budget.Token);
                 if (kind == "trailing") { await ObserveClose(stream, budget.Token); return; }
                 if (!ob20) channel.BeginCommand();
-                var query = await ReadRequest(stream, channel, ob20, 3, budget.Token);
-                Assert.Equal(3, query[0]); Assert.Equal("update t set x=(CAST('a''\\中' AS VARCHAR2(4000)))", Encoding.UTF8.GetString(query, 1, query.Length - 1));
+                var (query, nextSequence) = ob20 ? await ReadOb20Request(stream, 3, budget.Token)
+                    : (await channel.ReadPacketAsync(budget.Token), (byte)0);
+                Assert.Equal(3, query[0]);
+                Assert.Equal(largeBinary ? "update t set x=(HEXTORAW('" + Convert.ToHexString(binary) + "'))"
+                    : "update t set x=(CAST('a''\\中' AS VARCHAR2(4000)))", Encoding.UTF8.GetString(query, 1, query.Length - 1));
                 response = Frame(1, Report(false, 1));
-                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 3, 1, response) : response, budget.Token);
+                await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 3, nextSequence, response) : response, budget.Token);
             }, budget.Token);
             var context = new AssemblyLoadContext("client-prepare-" + target, isCollectible: true);
             try
@@ -57,7 +62,7 @@ namespace OceanBaseConnector.ConsumerTests
                 var property = command.GetType().GetProperty("AllowClientSidePrepareFallback")!;
                 Assert.False((bool)property.GetValue(command)!); property.SetValue(command, true);
                 command.CommandText = "update t set x=:p";
-                var parameter = command.CreateParameter(); parameter.ParameterName = "p"; parameter.Value = "a'\\中"; command.Parameters.Add(parameter);
+                var parameter = command.CreateParameter(); parameter.ParameterName = "p"; parameter.Value = largeBinary ? binary : "a'\\中"; command.Parameters.Add(parameter);
                 if (kind == "trailing")
                 {
                     var error = await Assert.ThrowsAnyAsync<DbException>(() => asynchronous ? command.ExecuteNonQueryAsync(budget.Token) : Task.FromResult(command.ExecuteNonQuery()));
@@ -67,7 +72,12 @@ namespace OceanBaseConnector.ConsumerTests
                 else Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
                 connection.Close(); await serving.WaitAsync(budget.Token);
             }
-            finally { budget.Cancel(); listener.Stop(); context.Unload(); }
+            finally
+            {
+                budget.Cancel(); listener.Stop();
+                try { await serving; } catch { } // Observe fixture cleanup without hiding the client failure.
+                context.Unload();
+            }
         }
     }
 }

@@ -175,10 +175,37 @@ namespace OceanBaseConnector.UnitTests
                 new OceanBaseParameter { ParameterName = "p", Value = new byte[] { 0, 39, 255 } }));
 
         [Fact]
-        public void ConservativeOracleLiteralLimitsAreChecked()
+        public void ConservativeOracleStringLiteralLimitIsChecked()
         {
             Assert.Throws<ArgumentException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = new string('x', 4001) }));
-            Assert.Throws<ArgumentException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = new byte[2001] }));
+        }
+
+        [Theory]
+        [InlineData(false, 2001)]
+        [InlineData(true, 2001)]
+        [InlineData(false, 65536)]
+        [InlineData(true, 65536)]
+        [InlineData(false, 1048576)]
+        [InlineData(true, 1048576)]
+        public void OracleLargeBinaryLiteralsKeepRawExpressionIdentity(bool multiStatement, int size)
+        {
+            var bytes = new byte[size]; for (var i = 0; i < bytes.Length; i++) bytes[i] = (byte)i;
+            var parameter = new OceanBaseParameter { ParameterName = "p", Value = bytes };
+            var literal = "(HEXTORAW('" + Convert.ToHexString(bytes) + "'))";
+            Assert.Equal("SELECT " + literal + (multiStatement ? " FROM DUAL; SELECT " + literal : "") + " FROM DUAL",
+                multiStatement ? BuildMulti("SELECT :p FROM DUAL; SELECT :P FROM DUAL", OceanBaseCompatibilityMode.Oracle, parameter)
+                    : Build("SELECT :p FROM DUAL", OceanBaseCompatibilityMode.Oracle, parameter));
+            Assert.Same(bytes, parameter.Value);
+        }
+
+        [Fact]
+        public void OracleLargeBinaryLiteralsRetainIndividualAndRepeatedSqlBudgets()
+        {
+            Assert.Throws<ArgumentException>(() => Build("SELECT :p FROM DUAL", OceanBaseCompatibilityMode.Oracle,
+                new OceanBaseParameter { ParameterName = "p", Value = new byte[32 * 1024 * 1024] }));
+            var sql = string.Join("; ", System.Linq.Enumerable.Repeat("SELECT :p FROM DUAL", 33));
+            Assert.Throws<ArgumentException>(() => BuildMulti(sql, OceanBaseCompatibilityMode.Oracle,
+                new OceanBaseParameter { ParameterName = "p", Value = new byte[1024 * 1024] }));
         }
 
         [Theory]

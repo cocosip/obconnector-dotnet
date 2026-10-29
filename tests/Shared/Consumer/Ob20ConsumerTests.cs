@@ -58,17 +58,25 @@ namespace OceanBaseConnector.ConsumerTests
 
         private static async Task<byte[]> ReadRequest(Stream stream, PacketChannel channel, bool ob20, uint request, CancellationToken token)
         {
-            if (ob20)
+            return ob20 ? (await ReadOb20Request(stream, request, token)).Payload : await channel.ReadPacketAsync(token);
+        }
+
+        private static async Task<(byte[] Payload, byte NextSequence)> ReadOb20Request(Stream stream, uint request, CancellationToken token)
+        {
+            using var payload = new MemoryStream(); byte sequence = 0;
+            while (true)
             {
                 var header = new byte[31]; await stream.ReadExactlyAsync(header, token);
-                var parsed = Ob20Packet.ParseHeader(header, 1234, request, 0);
+                var parsed = Ob20Packet.ParseHeader(header, 1234, request, sequence);
                 var bytes = new byte[35 + parsed.PayloadLength]; header.CopyTo(bytes, 0);
                 await stream.ReadExactlyAsync(bytes.AsMemory(31), token);
-                var inner = Ob20Packet.Parse(bytes, 1234, request, 0).Payload.ToArray();
-                Assert.Equal(0, inner[3]); Assert.Equal(inner.Length - 4, inner[0] | inner[1] << 8 | inner[2] << 16);
-                return inner.AsSpan(4).ToArray();
+                payload.Write(Ob20Packet.Parse(bytes, 1234, request, sequence).Payload);
+                sequence = unchecked((byte)(sequence + 1));
+                if ((parsed.Flags & Ob20Packet.LastPacketFlag) != 0) break;
             }
-            return await channel.ReadPacketAsync(token);
+            var inner = payload.ToArray();
+            Assert.Equal(0, inner[3]); Assert.Equal(inner.Length - 4, inner[0] | inner[1] << 8 | inner[2] << 16);
+            return (inner.AsSpan(4).ToArray(), sequence);
         }
 
         private static async Task ObserveClose(Stream stream, CancellationToken token)

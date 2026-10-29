@@ -88,7 +88,6 @@ namespace OceanBaseConnector.Internal.Sql
             }
             if (value is byte[] binary)
             {
-                if (mode == OceanBaseCompatibilityMode.Oracle && binary.Length > 2000) throw new ArgumentException("Oracle client RAW literal exceeds 2000 bytes.");
                 var hex = Hex(binary);
                 return mode == OceanBaseCompatibilityMode.Oracle ? "HEXTORAW('" + hex + "')" : "X'" + hex + "'";
             }

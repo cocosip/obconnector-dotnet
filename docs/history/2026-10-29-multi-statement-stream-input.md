@@ -50,6 +50,8 @@
 `TestResults/java-gap-probe/`，含 `LargeStreamProbe.java`、`RunLargeStreamOracle.ps1` 和
 `large-stream-oracle.log`。凭据只经既有 user-secrets/stdin 传递，原始 stderr 不展示。
 
+后续 byte[] 的 2000 字节客户端限制已另行扩展，见[大二进制模块](2026-10-29-oracle-large-binary-literals.md)；上文保留本模块交付时的历史边界。
+
 ## 未关闭范围
 
 仅 Windows/.NET10、OceanBase 4.4.2.2 双模式直连、TLS Disabled；不代表真实 OB20/OBProxy/TLS、
