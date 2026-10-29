@@ -44,7 +44,7 @@
 | Q01 单语句text/CRUD/DDL/错误 | 核心 | 有实现 | 有实现，仅Oracle兼容SQL | OceanBaseCommand、CommandExchange、ErrPacket | O2/O3/J2；服务端SQL错误不由驱动模拟；TableDirect拒绝 |
 | Q02 参数绑定/重复占位/NULL/方向 | 核心 | 位置绑定、过程IN/OUT/INOUT | 命名绑定、标量IN/OUT/INOUT | ParameterBindingPlan、PreparedParameters、OceanBaseParameter | 参数方向与值类型分别验证；不等于全部组合支持 |
 | Q03 Prepare/PrepareAsync/重执行 | 核心 | 服务端prepare | 服务端prepare；可选PrepareExecute | PreparedStatement、OraclePrepareExecutePacket | J1/J4；版本/能力门槛不能用客户端期望替代 |
-| Q04 普通客户端prepare回退 | 可选 | 明确1295拒绝后限定标量/JSON/BIT/YEAR/时间 | 仅既有普通标量等子集 | ClientPreparedSql、CommandExchange.ClientPreparedSql | 显式Prepare/输出/cursor/stream等不回退；原生1295未复现 |
+| Q04 普通客户端prepare回退 | 可选 | 明确1295拒绝后限定标量/JSON/BIT/YEAR/时间 | 普通标量、DATE/TIMESTAMP/时区、INTERVAL、NCHAR/NVARCHAR2等已有字面量子集 | ClientPreparedSql、CommandExchange.ClientPreparedSql | 显式Prepare/输出/cursor/stream等不回退；原生1295未复现 |
 | Q05 文本多语句/参数/多结果 | 可选opt-in | 普通标量、JSON/BIT/YEAR/时间/二进制流 | 普通标量/national/时间/interval/二进制流 | ClientPreparedSql、SqlStatementBoundary | J5；Prepare/cursor/输出/复杂输入拒绝；展开SQL有界 |
 | Q06 存储过程/函数 | 核心模式差异 | 过程IN/OUT/INOUT；函数单ReturnValue+Input | PL块/过程/函数/RETURNING输出子集 | MySqlCommandPlan、OracleCommandPlan | J4；MySQL函数不混OUT，元数据/权限有条件 |
 | Q07 参数元数据派生 | 可选ADO.NET适配 | 可见唯一签名 | 可见唯一签名 | OceanBaseConnection.Parameters、RoutineParameterDerivation | 不执行目标；歧义/包内PL类型等拒绝 |
@@ -78,7 +78,7 @@
 | T07 BIT/YEAR | BIT1..64、四位YEAR | — | ulong/ushort及typed输入 | 常量数值metadata不同真实BIT/YEAR列 |
 | T08 DATE/DATETIME/TIME | 小数至6位；TIME有符号 | Oracle DATE含时间、无小数 | DateTime/TimeSpan、OceanBaseDate/DateTime | MySQL零日期需provider值访问及相容SQL_MODE；TIME极值文本/binary差异保留 |
 | T09 TIMESTAMP | 至6位与会话时区 | 至9位；TZ/LTZ | OceanBaseTimestamp、TimestampWithTimeZone、TimestampLocalTimeZone | 命名地区/二进制非空TZ名称1882阻塞，不能用文本通过覆盖 |
-| T10 INTERVAL | — | YEAR TO MONTH、DAY TO SECOND | 精确provider值、IntervalCodec | 负值/精度/NULL；普通回退仍拒绝，多语句不等于普通回退 |
+| T10 INTERVAL | — | YEAR TO MONTH、DAY TO SECOND | 精确provider值、IntervalCodec | 负值/精度/NULL；普通回退仅覆盖已有字面量子集 |
 | T11 NCHAR/NVARCHAR2 | 不套用Oracle national协议 | 标量和有依据复杂成员子集 | string+显式类型、NationalCharacterSet | 输入/结果/存储编码不同；需可信身份/编码快照 |
 | T12 ROWID/UROWID | — | 协议209解码字符串 | ROWID结果路径，无专用UROWID public类型 | UROWID目录名不证明输入/结果全链路已验收 |
 | T13 BLOB/CLOB locator | 普通BLOB byte[]/流，不用Oracle locator | locator读写/修改/回绑的限定子集 | OceanBaseLob、LobSession、LobMutation | 需PrepareExecute/locator能力；失效/旧租约/外置大值 |

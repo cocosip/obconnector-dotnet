@@ -68,9 +68,26 @@ namespace OceanBaseConnector.UnitTests
         public void CountsAndUnsupportedTypesAreNotGuessed()
         {
             Assert.Throws<ArgumentException>(() => Build("select ?, ?", OceanBaseCompatibilityMode.MySql, new OceanBaseParameter { Value = 1 }));
-            Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = new DateTime(2026, 1, 1) }));
-            Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.NVarchar2, Value = DBNull.Value }));
             Assert.ThrowsAny<ArgumentException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = "\ud800" }));
+        }
+
+        [Fact]
+        public void OracleClientFallbackSupportsExistingTemporalIntervalAndNationalLiterals()
+        {
+            Assert.Equal("select (TO_DATE('2026-01-02 03:04:05','YYYY-MM-DD HH24:MI:SS'))",
+                Build("select :p", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "p", DbType = DbType.Date, Value = new DateTime(2026, 1, 2, 3, 4, 5) }));
+            Assert.Equal("select (TIMESTAMP '2026-01-02 03:04:05.123456789')",
+                Build("select :p", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.Timestamp,
+                        Value = new OceanBaseTimestamp(new DateTime(2026, 1, 2, 3, 4, 5), 123456789) }));
+            Assert.Equal("select (INTERVAL '-012-03' YEAR(3) TO MONTH)",
+                Build("select :p", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "p", Precision = 3,
+                        Value = new OceanBaseIntervalYearToMonth(true, 12, 3) }));
+            Assert.Equal("select (u'\\4e2d')",
+                Build("select :p", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.NChar, Value = "中" }));
         }
 
         [Fact]
@@ -106,8 +123,6 @@ namespace OceanBaseConnector.UnitTests
         {
             foreach (var provider in new[] { OceanBaseDbType.NChar, OceanBaseDbType.NVarchar2 })
             {
-                Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle,
-                    new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = provider, Value = DBNull.Value }));
                 Assert.Throws<NotSupportedException>(() => BuildMulti("select ?; select 1", OceanBaseCompatibilityMode.MySql,
                     new OceanBaseParameter { OceanBaseDbType = provider, Value = DBNull.Value }));
                 Assert.Throws<System.Text.EncoderFallbackException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle,
@@ -274,7 +289,6 @@ namespace OceanBaseConnector.UnitTests
         {
             var ym = new OceanBaseParameter { ParameterName = "p", Value = new OceanBaseIntervalYearToMonth(false, 12, 3) };
             var ds = new OceanBaseParameter { ParameterName = "p", Value = new OceanBaseIntervalDayToSecond(false, 4, 5, 6, 7, 123456789) };
-            Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, ym.Snapshot()));
             Assert.Throws<NotSupportedException>(() => BuildMulti("select ?; select 1", OceanBaseCompatibilityMode.MySql, ym.Snapshot()));
             ym.Precision = 1;
             Assert.ThrowsAny<ArgumentException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle, ym.Snapshot()));
@@ -318,7 +332,6 @@ namespace OceanBaseConnector.UnitTests
         public void MultiStatementZonedTimestampsRetainModeTypePrecisionAndFallbackValidation()
         {
             var value = new OceanBaseTimestampWithTimeZone(new OceanBaseTimestamp(new DateTime(2026, 1, 2), 123456789), TimeSpan.Zero);
-            Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = value }));
             Assert.Throws<NotSupportedException>(() => BuildMulti("select ?; select 1", OceanBaseCompatibilityMode.MySql, new OceanBaseParameter { Value = value }));
             Assert.ThrowsAny<ArgumentException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = value, Scale = 6 }));
             Assert.ThrowsAny<ArgumentException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = value, DbType = DbType.DateTime2 }));

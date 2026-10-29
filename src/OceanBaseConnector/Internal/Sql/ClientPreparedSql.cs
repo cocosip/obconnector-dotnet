@@ -49,14 +49,15 @@ namespace OceanBaseConnector.Internal.Sql
         {
             if (parameter.Direction != ParameterDirection.Input) throw Unsupported();
             var provider = parameter.OceanBaseDbType;
-            var temporal = (multiStatement || mode == OceanBaseCompatibilityMode.MySql) && IsClientTemporal(parameter);
-            var interval = multiStatement && (provider == OceanBaseDbType.IntervalYearToMonth || provider == OceanBaseDbType.IntervalDayToSecond ||
+            var temporal = IsClientTemporal(parameter);
+            var interval = (mode == OceanBaseCompatibilityMode.Oracle || multiStatement) &&
+                (provider == OceanBaseDbType.IntervalYearToMonth || provider == OceanBaseDbType.IntervalDayToSecond ||
                 !provider.HasValue && parameter.DbType == DbType.Object && (parameter.Value is OceanBaseIntervalYearToMonth || parameter.Value is OceanBaseIntervalDayToSecond));
             if (provider.HasValue && provider != OceanBaseDbType.Null && provider != OceanBaseDbType.Decimal &&
                 provider != OceanBaseDbType.String && provider != OceanBaseDbType.Binary && provider != OceanBaseDbType.Boolean &&
                 provider != OceanBaseDbType.Bit && provider != OceanBaseDbType.Year && provider != OceanBaseDbType.Json &&
                 (provider < OceanBaseDbType.SByte || provider > OceanBaseDbType.Double) && !temporal && !interval &&
-                !(multiStatement && (provider == OceanBaseDbType.NChar || provider == OceanBaseDbType.NVarchar2))) throw Unsupported();
+                !(mode == OceanBaseCompatibilityMode.Oracle && (provider == OceanBaseDbType.NChar || provider == OceanBaseDbType.NVarchar2))) throw Unsupported();
             var type = parameter.DbType;
             if (type != DbType.String && type != DbType.AnsiString && type != DbType.StringFixedLength && type != DbType.AnsiStringFixedLength &&
                 type != DbType.Binary && type != DbType.Boolean && type != DbType.Decimal &&
@@ -285,6 +286,6 @@ namespace OceanBaseConnector.Internal.Sql
 
         private static ArgumentException Ambiguous() => new ArgumentException("SQL quoting or comments cannot be safely client prepared.");
         private static NotSupportedException UnstableCharacterSet() => new NotSupportedException("String-bound multi-statements cannot change the parsing character set or invoke dynamic SQL/routines; SET identifiers must be unquoted.");
-        private static NotSupportedException Unsupported() => new NotSupportedException("Client preparation supports only ordinary scalar input numbers, strings, binary and NULL.");
+        private static NotSupportedException Unsupported() => new NotSupportedException("Client preparation supports only the declared scalar input literal subset.");
     }
 }

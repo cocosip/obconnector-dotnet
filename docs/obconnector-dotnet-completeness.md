@@ -11,7 +11,7 @@
 
 | ID | 对应能力/模式 | 分类 / 现状 | 源码证据 | 关闭条件 / 下一步 |
 | --- | --- | --- | --- | --- |
-| G01 | Q04 Oracle普通prepare回退 | 受限：时间/interval/national等仍拒绝 | Internal/Sql/ClientPreparedSql.cs；CommandExchange.ClientPreparedSql | 如纳入目标，须独立确认字面量身份、编码/时区/精度和1295前提；不能用多语句支持替代 |
+| G01 | Q04 Oracle普通prepare回退 | 阶段1已补齐已有 DATE/TIMESTAMP/时区、INTERVAL、NCHAR/NVARCHAR2 字面量；仍受限于普通单语句、输入参数和无输出/cursor/复杂值 | Internal/Sql/ClientPreparedSql.cs；CommandExchange.ClientPreparedSql | 继续补充前须独立确认字面量身份、编码/时区/精度和1295前提；不能用多语句支持替代 |
 | G02 | Q05 双模式多语句 | 受限：Prepare、cursor、OUT/复杂输入不支持 | OceanBaseCommand.cs；ClientPreparedSql.cs | 当前限定输入+text结果；扩大前需模式/方向/wire证据，不默认补所有笛卡尔组合 |
 | G03 | Q11 Oracle输出/游标 | 受限：输出offset拒绝；普通cursor列形状有失败 | OracleCommandPlan.cs；QueryResult.Cursor.cs；OracleCursorOwner.cs | 正FetchSize仅提示；单独解决/确认实际cursor值形状，不能以OUT成功关闭结果列失败 |
 | G04 | T14/T15 Oracle复杂值 | 受限：文本复杂结果、复杂cursor输入、named locator回绑、未解析RETURNING身份拒绝 | ComplexValueCodec.cs；ComplexTypeContext.cs；OracleCommandPlan.cs | 对象/集合、成员方向、named/anonymous、PL输出/存储逐项证实；拒绝不当空实现删除 |

@@ -47,12 +47,17 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(OceanBaseDbType.Date)]
         [InlineData(OceanBaseDbType.DateTime)]
         [InlineData(OceanBaseDbType.Time)]
-        public void MySqlTemporalFallbackExplicitProvidersKeepTypedNullAndOracleRestriction(OceanBaseDbType provider)
+        public void TemporalFallbackExplicitProvidersKeepTypedNullInBothModes(OceanBaseDbType provider)
         {
             var parameters = new OceanBaseParameterCollection();
             parameters.Add(new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = provider, Value = DBNull.Value });
             Assert.Equal("SELECT (NULL)", ClientPreparedSql.Build(ParameterBindingPlan.Create("SELECT ?", OceanBaseCompatibilityMode.MySql, parameters), OceanBaseCompatibilityMode.MySql));
-            Assert.Throws<NotSupportedException>(() => ClientPreparedSql.Build(ParameterBindingPlan.Create("SELECT :p", OceanBaseCompatibilityMode.Oracle, parameters), OceanBaseCompatibilityMode.Oracle));
+            if (provider == OceanBaseDbType.Time)
+                Assert.Throws<NotSupportedException>(() => ClientPreparedSql.Build(
+                    ParameterBindingPlan.Create("SELECT :p", OceanBaseCompatibilityMode.Oracle, parameters), OceanBaseCompatibilityMode.Oracle));
+            else
+                Assert.Equal("SELECT (NULL)", ClientPreparedSql.Build(
+                    ParameterBindingPlan.Create("SELECT :p", OceanBaseCompatibilityMode.Oracle, parameters), OceanBaseCompatibilityMode.Oracle));
         }
     }
 
