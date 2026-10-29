@@ -21,15 +21,15 @@
 | C02 同步/异步Open/Close、factory | 核心 | 有实现 | 有实现 | OceanBaseConnection、OceanBaseProviderFactory | J2；connection组/消费者 |
 | C03 现代DataSource/DI | 可选ADO.NET适配 | 有实现 | 有实现 | OceanBaseDataSource/Builder、DependencyInjection | 仅net8/9/10资产；不是服务端新能力 |
 | C04 ChangeDatabase | 核心差异 | 有实现，需目标库权限 | 明确拒绝，不模拟切schema | OceanBaseConnection.Database | 直连alternateDatabase未配置跳过保留 |
-| C05 TLS验证/主机名/撤销 | 核心安全，部署可选 | VerifyFull默认 | VerifyFull默认 | Internal/Transport/TlsUpgrade、TlsHandshakeFlow | O7/J12；合成证据，真实环境未开TLS |
-| C06 客户端证书/mTLS | 可选 | 有实现 | 有实现 | OceanBaseConnection.ClientCertificate、TlsUpgrade | 真实mTLS/CA/过期/轮换未验收 |
+| C05 TLS验证/主机名/撤销 | 核心安全，部署可选 | VerifyFull默认 | VerifyFull默认 | Internal/Transport/TlsUpgrade、TlsHandshakeFlow | O7/J12；当前真实直连 profile 为 TLS Disabled，服务端前提缺失，暂不开发 |
+| C06 客户端证书/mTLS | 可选 | 有实现 | 有实现 | OceanBaseConnection.ClientCertificate、TlsUpgrade | 当前无 TLS/mTLS 端点；暂不开发，保留真实验收 Deferred |
 | C07 native password | 核心 | 有实现 | 有实现，共享认证协议 | AuthenticationConversation、NativePassword | J9；直连仅已配置账号，不是全部认证矩阵 |
-| C08 SHA256/caching-SHA2/old/clear/Ed25519/PAM/GSSAPI | 条件互操作分支 | 有实现，不承诺服务端均支持 | 同左 | AuthenticationConversation、GssapiAuthentication | Java注册不等于OB支持；GSSAPI仅现代资产；实际plugin/KDC欠验收 |
+| C08 SHA256/caching-SHA2/old/clear/Ed25519/PAM/GSSAPI | 条件互操作分支 | 有实现，不承诺服务端均支持 | 同左 | AuthenticationConversation、GssapiAuthentication | 当前仅 native 账号直连，无插件/KDC端点；暂不开发非native分支 |
 | C09 凭据provider与版本退休 | 可选ADO.NET适配 | 有实现 | 有实现 | IOceanBaseCredentialProvider、CredentialAcquisition、PhysicalSessionPool.Credentials | J9；每次Open取值，不是活动会话实时改密 |
 | C10 物理连接池/容量/等待/预热/清池 | 可选 | opt-in实现 | opt-in实现 | PhysicalSessionPool、OceanBaseConnection.Pooling | J11；直连子集，长期压力未完成 |
 | C11 reset/租约/资源隔离 | 核心复用正确性 | 有实现，无法证明状态则退休 | 同左，含Oracle资源 | PhysicalSession、PhysicalSessionPool | 不保证任意隐式副作用；见池隔离历史 |
-| C12 endpoint/resolver/路由身份 | 可选 | 有实现 | 有实现 | EndpointSelector、DiscoverySnapshot、IOceanBaseAddressResolver | 受控单上游路由不是独立节点HA |
-| C13 TNS/OCP/组/权重/黑名单 | 可选 | 依部署地址发现 | 同左，不使用Oracle Net | OceanBaseTnsAddressResolver、OceanBaseOcpAddressResolver | J11；真实OCP/TNS/ODP故障欠验收 |
+| C12 endpoint/resolver/路由身份 | 可选 | 有实现 | 有实现 | EndpointSelector、DiscoverySnapshot、IOceanBaseAddressResolver | 当前无真实 proxy/多节点 profile；受控单上游路由不升级为 HA，暂不开发 |
+| C13 TNS/OCP/组/权重/黑名单 | 可选 | 依部署地址发现 | 同左，不使用Oracle Net | OceanBaseTnsAddressResolver、OceanBaseOcpAddressResolver | 当前无真实 OCP/TNS/ODP 服务；暂不开发，保留 parser 和 Deferred |
 | C14 TCP重试/健康缓存 | 可选 | 建连TCP失败候选切换 | 同左 | TcpTransport、EndpointHealthCache | 不重试TLS/auth/已发SQL；TCP健康不是数据库健康 |
 | C15 自动重放/活动会话迁移 | 排除 | 不支持 | 不支持 | Broken/Close/Open安全路径 | Java有限重放不要求.NET复制；应用显式恢复 |
 | C16 配置解析/脱敏/信任材料 | 核心 | 严格键/范围/重复同义键与脱敏 | 同左 | OceanBaseConnectionStringBuilder、OceanBaseConnectionOptions | 凭据和策略隔离；RSA公钥/允许获取是认证分支选项，不替代TLS或服务端plugin支持 |
@@ -60,7 +60,7 @@
 | Q17 prepared statement cache | 可选性能 | opt-in idle LRU | 同左 | PhysicalSession.PreparedStatements | J5；DDL/reset/上下文失效；外部DDL特定错误/负载待验收 |
 | Q18 LOCAL INFILE | 可选MySQL | 显式授权+应用流 | — | CommandExchange.Payload、LocalInfile接口 | J13；服务端文件名不得直接打开本地文件；源归属/限额/中断 |
 | Q19 参数大值分片/INOUT二进制流 | 可选 | prepared上传已有实现 | prepared/PrepareExecute上传已有实现 | CommandExchange.LongData/PieceData、PreparedParameters | 多语句流先有界展开；普通回退不等价 |
-| Q20 multi-send/pipelining | 候选 | Java已有，.NET未实现 | Java路径需分模式核验 | 无产品入口 | 不是必需项，需OB版本/错误次序/收益证据后立项 |
+| Q20 multi-send/pipelining | 候选 | Java已有，.NET未实现 | Java路径需分模式核验 | 无产品入口 | 当前无目标OB服务端 profile 和收益证据，暂不开发；不等同MariaDB bulk |
 | Q21 MariaDB bulk协议 | 排除 | 无支持承诺 | — | 无产品入口 | Java说明针对MariaDB，不能冒充OceanBase批量协议 |
 | Q22 Cancel/CommandTimeout/调用者取消 | 核心 | 同步/异步命令预算与取消 | 同左 | OceanBaseCommand.Cancel、CommandExchange、PhysicalSession | 取消不保证服务器未执行；发送后状态按X04处理，完整故障顺序待验收 |
 | Q23 单会话活动操作/所有权 | 核心 | 活动操作冲突拒绝 | 同左 | PhysicalSession.Reserve/Acquire及reader/lease所有权 | 不承诺同一连接MARS或多线程共享command/parameter；跨连接并发走池 |
@@ -87,7 +87,7 @@
 | T16 LONG/LONG RAW/BFILE/NCLOB | — | 排除专用支持 | 无专用API/模拟实现 | O4明确不支持；Java别名/枚举不能扩大范围 |
 | T17 XMLType/SDO_GEOMETRY/ANYDATA | — | 服务端有条件能力，.NET专用codec未承诺 | 可使用服务端转换为已支持标量 | O8；不是现有复杂codec自动支持；列候选差距 |
 | T18 向量/位图/SQL数组 | 服务端版本相关；无专用codec承诺 | 不把MySQL扩展套用此模式 | 当前Oracle数组绑定不是这些类型 | O2；需新增wire/type证据与需求才纳入 |
-| T19 客户端SQL编码 | utf8mb4/mb3、ASCII、latin1、GB2312、GBK、GB18030/2022、DEC8、TIS620、EUCKR、SJIS、Big5、HKSCS/31 | 相同解析白名单，实际初始化受租户限制 | ClientCharacterSet；未列名字发送前拒绝 | GB2312/EUCKR 使用严格映射；UJIS/EUCJPMS等仍是候选；Oracle SJIS/Big5失败保留 |
+| T19 客户端SQL编码 | utf8mb4/mb3、ASCII、latin1、GB2312、GBK、GB18030/2022、DEC8、TIS620、EUCKR、SJIS、Big5、HKSCS/31 | 相同解析白名单，MySQL直连 SJIS/Big5 专项4/4通过 | 未列名字发送前拒绝；Oracle SJIS/Big5仍失败 | UJIS/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7 无当前服务端证据，暂不扩展 |
 | T20 结果/national编码 | 映射UTF8、UTF16/LE及已实现单/多字节collation（含GB2312 24/86、EUCKR 19/85） | 普通结果与national独立规则 | ResultCharacterSet、NationalCharacterSet | 未知collation/坏字节拒绝；UJIS/EUCJPMS等仍未覆盖，两族真实roundtrip待验收 |
 
 类型依据O2/O4、J2/J3/J6；实际约束在[ResultColumn](../src/OceanBaseConnector/Internal/Protocol/ResultColumn.cs)、

@@ -7,6 +7,24 @@
 **候选差距**有参考能力但未纳入当前目标；**欠验收**有代码而缺特定部署证据；
 **服务端/权限阻塞**必须保留失败；**排除**不进入开发积压。
 
+## 当前服务端前提判定
+
+当前真实配置只有 OceanBase 4.4.2.2 的 MySQL/Oracle 直连 profile，均为 TLS Disabled；没有
+proxy/ODP、多节点/OCP/TNS、OB20/trace 或非 native 认证/KDC profile。下列能力依赖这些服务端
+前提，当前阶段统一标记为**服务端受限，暂不开发与修复**。本地协议 fixture、Java SPI 或
+单上游 relay 只能保留边界证据，不能解除冻结。
+
+| 项目 | 当前确认 | 暂不开发的原因 |
+| --- | --- | --- |
+| TLS/mTLS/企业 CA/撤销/轮换 | 两个真实 profile 明确 TLS Disabled | 没有真实 TLS 端点和证书链，代码修改无法形成 OceanBase 验收证据 |
+| OB20/trace/压缩 OB20 | 没有 OB20 profile；强制 OB20 历史失败于服务端 `Layer=mysql` | 缺少服务端协商与双向帧，不能以本地帧 fixture 代替部署能力 |
+| OBProxy/ODP/多节点/OCP/TNS | 没有真实代理或发现服务 profile | 单上游中继不能证明 HA、后端 reset、迁移或发现服务 |
+| 非 native 认证/KDC/凭据轮换 | 当前只配置 native 账号直连 | 没有插件/KDC 正负端点，Java 插件注册不等于 OceanBase 支持 |
+| UJIS/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7 | 当前无对应 profile；SJIS/Big5 仅 MySQL 直连 4/4 通过，Oracle 历史失败保留 | 没有逐项服务端 roundtrip 和完整严格映射证据 |
+
+上述冻结不删除现有 API、拒绝校验、负向测试或 Deferred 记录；获得真实端点后再按验收标准
+重新立项。
+
 ## 代码与覆盖差距
 
 | ID | 对应能力/模式 | 分类 / 现状 | 源码证据 | 关闭条件 / 下一步 |
@@ -17,15 +35,15 @@
 | G04 | T14/T15 Oracle复杂值 | 受限：文本复杂结果、复杂cursor输入、named locator回绑、未解析RETURNING身份拒绝 | ComplexValueCodec.cs；ComplexTypeContext.cs；OracleCommandPlan.cs | 对象/集合、成员方向、named/anonymous、PL输出/存储逐项证实；拒绝不当空实现删除 |
 | G05 | T12 Oracle UROWID | 部分：ROWID209已有字符串结果路径，DataTypes 已暴露结果专用元数据；UROWID独立往返仍未证实 | ResultColumn.cs:209类型；OceanBaseConnection.Schema.DataTypes；无专用public UROWID类型 | Java目录/空表metadata不足；需真实值、绑定、结果、metadata验证后声明；当前不支持ROWID参数/字面量 |
 | G06 | T05 MySQL GEOMETRY | 部分：类型255已有原始byte[]结果路径，DataTypes 已暴露结果专用元数据；不承诺参数/GIS领域API | ResultColumn.cs 类型255；OceanBaseConnection.Schema.DataTypes；PreparedParameters.cs | 原始字节/SRID和真实读写需独立验收；领域库不是当前必需 |
-| G07 | T19/T20 两模式字符集 | 部分：GB2312、EUCKR 已按 OceanBase 4.4.2 的 collation 做严格客户端/结果映射；UJIS/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7 仍是候选差距 | ClientCharacterSet.cs；ResultCharacterSet.Resolve；EucEncoding.cs；ClientCharacterSetTests/CharacterSetTests | 已实现两族的真实租户 roundtrip 仍待验收；其余字符集须逐个固定版本、确认编码表并做严格 roundtrip，未知 ID继续拒绝 |
+| G07 | T19/T20 两模式字符集 | 部分：GB2312、EUCKR 已按 OceanBase 4.4.2 的 collation 做严格客户端/结果映射；剩余新名称服务端前提和完整映射未证实，暂不扩展 | ClientCharacterSet.cs；ResultCharacterSet.Resolve；EucEncoding.cs；ClientCharacterSetTests/CharacterSetTests | MySQL SJIS/Big5 4/4 只关闭当前直连专项；Oracle失败、其余名称和两族真实 roundtrip继续保留 |
 | G08 | T17/T18 专用新类型 | 候选差距：XMLType/SDO/ANYDATA、MySQL vector/bitmap/SQL array无专用codec承诺 | OceanBaseDbType.cs、ResultColumn/PreparedParameters、ComplexValueCodec | 先确认版本、Java或wire类型与应用需求；服务端转换成既有标量可另验，不等于原生类型支持 |
-| G09 | Q20 multi-send | 候选差距：Java已实现，.NET缺实现 | Java DefaultOptions:470–490、AbstractQueryProtocol:1287–1326；本地无选项 | 先证明目标OB部署和可测收益，定义部分失败/响应排序/资源限额；不和MariaDB bulk混淆 |
+| G09 | Q20 multi-send | 候选差距：Java已实现，.NET缺实现；当前目标没有对应服务端 profile，暂不开发 | Java DefaultOptions:470–490、AbstractQueryProtocol:1287–1326；本地无选项 | 获得目标OB版本和收益/错误排序证据后再立项；不和MariaDB bulk混淆 |
 | G10 | C10/C11/Q17 池/reset/cache | 欠验收：有实现及部分实库；任意副作用/全部资源交错未证实 | PhysicalSessionPool、PhysicalSession.PreparedStatements、SessionStateSql | 持续并发容量/超时/关闭交错、句柄/线程/内存稳定；状态不可证明时销毁 |
 | G11 | X02/X03/X04 事务与故障 | 欠验收：显式XA/PSPE/unknown有实现，故障点未全覆盖 | AmbientEnlistment、Connection.Xa*、CommandExchange.Io | in-doubt/管理器与节点/代理崩溃、取消顺序、分支恢复/无重放及独立查账 |
-| G12 | C05–C09/P02–P04/C12–C14 | 欠部署验收，非缺API | TLS/Authentication/Discovery/压缩/OB20已有路径 | 逐项补真实TLS/认证/ODP/压缩/OB20/trace/发现profile，当前环境限制不得删除 |
+| G12 | C05–C09/P02–P04/C12–C14 | 服务端受限，暂不开发与修复；现有路径保留 | TLS/Authentication/Discovery/压缩/OB20已有路径 | 提供真实 TLS/认证/ODP/压缩/OB20/trace/发现 profile 后再按验收标准开启；当前限制不得删除 |
 | G13 | M01/Q07 元数据与目录 | 受限/欠验收：唯一可见签名，包内PL类型/重载边界 | Connection.Schema.*、RoutineParameterDerivation.cs | 最小权限、大小写/引用标识符、包/重载和实际列身份；权限失败不加客户端伪造 |
 | G14 | R01 发布/平台 | 欠验收：有五资产和Windows子集记录 | csproj、Verify-Packages.ps1、ConsumerTests | 实际OS/runtime/API/包路径逐项验证，netstandard host加载不算全平台 |
-| G15 | C08 非native认证分支 | 待适用性证明，非两模式通用支持 | AuthenticationConversation、GssapiAuthentication | 原生MySQL/MariaDB插件名不能证明OB支持；真实端点/服务端文档+正负认证后才能列部署支持 |
+| G15 | C08 非native认证分支 | 服务端受限，暂不开发与修复；当前仅 native 账号直连 | AuthenticationConversation、GssapiAuthentication | 提供真实插件/KDC 端点、服务端文档和正负认证后再列部署支持；Java SPI 不能替代 |
 
 没有发现产品源码TODO/FIXME/NotImplementedException式空实现。已确认的无用途代码是A01演示类型、
 3个零引用方法和2个过时UTF-8快捷属性，删除范围与外部API影响见[清理决策](obconnector-dotnet-scope-audit.md)。

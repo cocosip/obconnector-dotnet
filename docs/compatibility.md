@@ -2,7 +2,8 @@
 
 更新：2026-10-30。本页保留当前支持声明的限制，不重复开发流水。
 范围以[能力矩阵](obconnector-dotnet-progress.md)为准，判定按[验收标准](acceptance-criteria.md)。
-下面结果来自注明日期的历史报告，本次范围整理没有重新运行实库，也没有关闭既有失败。
+下面结果来自注明日期的历史报告。本次复核只执行了现有直连 profile 的只读握手、身份和字符集
+专项，没有重跑完整实库矩阵，也没有关闭既有失败。
 
 ## 环境矩阵
 
@@ -17,6 +18,23 @@
 | 标准压缩 | 未声明CLIENT_COMPRESS时按Java回退成功 | 真正压缩帧、损坏/取消/代理/TLS组合 |
 | OB20/trace | 两模式declined-ob20回退通过；显式ob20因Layer=mysql失败 | 真正OB20双向帧、legacy/modern trace控制/采样/collector、ODP；不能称已实库支持 |
 | .NET资产/平台 | 五资产与Windows实际host所选公开包实库48/48历史记录 | 非Windows实库、完整API/ORM；netstandard经host加载不等于独立runtime |
+
+## 当前服务端前提与开发冻结
+
+本地 User Secrets 当前只有 `mysql-direct` 与 `oracle-direct` 两个直连 profile，目标为
+OceanBase 4.4.2.2；两者均明确设置 `TLS Mode=Disabled`。没有 proxy/ODP、多节点/OCP/TNS、
+OB20/trace 或非 native 认证/KDC profile。只读握手专项 4/4 通过，OB20 专项 2 项因没有
+`ob20` profile 跳过；这证明当前配置状态，不证明服务端永远不支持这些能力。
+
+因此下列项目暂时冻结开发与修复，直到提供对应的真实服务端端点、版本和正负验收数据：
+
+| 项目 | 当前证据 | 开发决定 |
+| --- | --- | --- |
+| TLS/mTLS/企业 CA/撤销/轮换 | 两个真实 profile 均为 TLS Disabled，没有证书端点 | 暂不开发；保留 TLS API、负例和 Deferred 标记 |
+| OB20/trace/压缩 OB20 | 没有 OB20 profile；历史强制 OB20 因服务端 `Layer=mysql` 失败 | 暂不开发；普通协议回退和拒绝边界继续保留 |
+| OBProxy/ODP/多节点/OCP/TNS/后端迁移 | 没有真实 proxy 或发现服务 profile；本地 relay 只验证客户端路由 | 暂不开发；本地拓扑 fixture 不升级为 HA 结论 |
+| 非 native 认证、KDC、凭据轮换 | 当前只有 native 账号直连，未提供插件/KDC 端点 | 暂不开发；Java SPI 存在不计为 OceanBase 部署能力 |
+| 剩余新字符集 | MySQL 直连 SJIS/Big5 专项 4/4 通过；Oracle SJIS/Big5 历史失败；UJIS/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7 无当前 profile | 暂不扩展；保留现有严格映射、失败和候选差距，待逐项服务端证据 |
 
 ## 未关闭失败与前提
 

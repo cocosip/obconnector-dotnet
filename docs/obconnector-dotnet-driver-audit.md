@@ -36,9 +36,21 @@ roundtrip 仍保留为未验收项。
 本阶段新增 `gb2312`、`euckr` 配置名、collation 映射、双模式字节 fixture 和负向
 roundtrip 测试；UJIS/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7 未因相近系统编码而伪造支持。
 
+## 服务端前提复核与开发冻结
+
+本次读取本地 User Secrets 和 profile 文件确认，当前只有 `mysql-direct` 与 `oracle-direct` 两个
+OceanBase 4.4.2.2 直连 profile，均为 `TLS Mode=Disabled`；没有 proxy/ODP、多节点/OCP/TNS、
+OB20/trace 或非 native 认证/KDC profile。只读握手/身份专项 4/4 通过，OB20 专项 2 项因没有
+`ob20` profile 跳过。MySQL 直连 SJIS/Big5 专项 4/4 通过；Oracle SJIS/Big5 历史失败继续保留。
+
+因此 TLS/mTLS、OB20/trace、OBProxy/ODP/多节点/发现、非 native 认证以及没有当前服务端 profile
+的剩余新字符集暂时不做开发与修复。现有代码、拒绝边界、本地 fixture 和 Deferred 记录继续保留，
+待提供启用对应能力的真实端点、版本与正负验收数据后再重新立项。矩阵的 G07/G09/G12/G15、
+E01/E10 记录已同步这一决策。
+
 ## 本次本地证据
 
-Windows，SDK10.0.403，.NET10.0.14；全部结果是本轮执行，历史实库没有重跑。
+Windows，SDK10.0.403，.NET10.0.14；本轮只执行了服务端前提复核和只读专项，没有重跑完整实库。
 
 | 门禁 | 结果 |
 | --- | --- |
@@ -49,6 +61,7 @@ Windows，SDK10.0.403，.NET10.0.14；全部结果是本轮执行，历史实库
 | 完整默认单测复跑 | 8547通过/0失败/0跳过；修正后的模拟服务器收尾竞态已关闭 |
 | 默认消费者全量 | 3477通过/0失败/0跳过；同一过滤组复跑1339/1339通过 |
 | Acceptance --list | 执行成功；保留matrix.tls-authentication deferred |
+| 真实直连前提复核 | 握手/身份4/4通过；OB20 2项因无profile跳过；MySQL SJIS/Big5 4/4通过 |
 | 限定源码格式 | 通过；测试收尾修改后单独复核 |
 | 文档检查 | 本地路径/锚点无失效；历史逐日快照已收敛为`docs/history/README.md` |
 | 独立走查 | 文档两项链接问题已修正；代码删除及测试收尾复核无剩余实质问题 |
@@ -61,5 +74,5 @@ Windows，SDK10.0.403，.NET10.0.14；全部结果是本轮执行，历史实库
 ## 验证边界
 
 最终本地验证结果随本次变更记录；历史通过数不作为本次结果。
-本次没有连接真实数据库、启用TLS或重跑SecurityTests，没有关闭[真实部署阻塞](compatibility.md)。
+本次没有启用TLS、OB20或代理/非native认证，也没有重跑SecurityTests；没有关闭[真实部署阻塞](compatibility.md)。
 旧23项/八包不再作为当前入口；历史结论只保留在[历史证据索引](history/README.md)。
