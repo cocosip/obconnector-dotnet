@@ -68,7 +68,7 @@ namespace OceanBaseConnector.ConsumerTests
                         ? mysql
                             ? json ? "insert into t values ((REPLACE('x','x',_utf8mb4 X'7B2278223A6E756C6C7D'))); update t set s=(NULL)"
                                 : "insert into t values ((REPLACE('x','x',_utf8mb4 X'71756F7465275CE4B8ADE696873B203A70'))); update t set s=(REPLACE('x','x',_utf8mb4 X'71756F7465275CE4B8ADE696873B203A70'))"
-                            : "insert into t values ((CAST('quote''\\中文; :p' AS VARCHAR2(4000)))); update t set s=(CAST('quote''\\中文; :p' AS VARCHAR2(4000)))"
+                            : "insert into t values ((REPLACE( 'quote''\\中文; :p',NULL,NULL))); update t set s=(REPLACE( 'quote''\\中文; :p',NULL,NULL))"
                         : "after public multi parameters", Encoding.UTF8.GetString(request, 1, request.Length - 1));
                     using var response = new MemoryStream();
                     response.Write(Frame(1, execution == 1 ? new byte[] { 0, 2, 0, 14, 0, 0, 0 } : Report(false, 1)));

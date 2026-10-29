@@ -81,10 +81,9 @@ namespace OceanBaseConnector.Internal.Sql
             {
                 if (mode == OceanBaseCompatibilityMode.MySql) return multiStatement ? context!.MultiStatementLiteral(text) : context!.Literal(text);
                 if (provider == OceanBaseDbType.NChar || provider == OceanBaseDbType.NVarchar2) return NationalLiteral(text);
-                if (text.IndexOf('\0') >= 0) throw new ArgumentException("Oracle client text literals cannot contain NUL.");
                 text = text.Replace("'", "''");
-                if (clientEncoding.GetByteCount(text) > 4000) throw new ArgumentException("Oracle client text literal exceeds 4000 bytes.");
-                return "CAST('" + text + "' AS VARCHAR2(4000))";
+                // Connector/J's leading value space also avoids OceanBase's long-NUL literal parser failure.
+                return "REPLACE( '" + text + "',NULL,NULL)";
             }
             if (value is byte[] binary)
             {

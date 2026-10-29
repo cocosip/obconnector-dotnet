@@ -24,8 +24,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("select :p, ':hidden ?', q'[it''s ? :hidden]', :P", "select (CAST('it''s \\ 中文' AS VARCHAR2(4000))), ':hidden ?', q'[it''s ? :hidden]', (CAST('it''s \\ 中文' AS VARCHAR2(4000)))")]
-        [InlineData("select /* ? :hidden */ :p -- ?\n", "select /* ? :hidden */ (CAST('it''s \\ 中文' AS VARCHAR2(4000))) -- ?\n")]
+        [InlineData("select :p, ':hidden ?', q'[it''s ? :hidden]', :P", "select (REPLACE( 'it''s \\ 中文',NULL,NULL)), ':hidden ?', q'[it''s ? :hidden]', (REPLACE( 'it''s \\ 中文',NULL,NULL))")]
+        [InlineData("select /* ? :hidden */ :p -- ?\n", "select /* ? :hidden */ (REPLACE( 'it''s \\ 中文',NULL,NULL)) -- ?\n")]
         public void OracleUsesOriginalBindingPositions(string sql, string expected)
             => Assert.Equal(expected, Build(sql, OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = "it's \\ 中文" }));
 
@@ -70,7 +70,6 @@ namespace OceanBaseConnector.UnitTests
             Assert.Throws<ArgumentException>(() => Build("select ?, ?", OceanBaseCompatibilityMode.MySql, new OceanBaseParameter { Value = 1 }));
             Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = new DateTime(2026, 1, 1) }));
             Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.NVarchar2, Value = DBNull.Value }));
-            Assert.Throws<ArgumentException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = "x\0y" }));
             Assert.ThrowsAny<ArgumentException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = "\ud800" }));
         }
 
@@ -175,9 +174,9 @@ namespace OceanBaseConnector.UnitTests
                 new OceanBaseParameter { ParameterName = "p", Value = new byte[] { 0, 39, 255 } }));
 
         [Fact]
-        public void ConservativeOracleStringLiteralLimitIsChecked()
+        public void OracleTextLiteralQuotesAreDoubledWithoutChangingItsValue()
         {
-            Assert.Throws<ArgumentException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = new string('x', 4001) }));
+            Assert.Equal("select (REPLACE( 'a''b',NULL,NULL))", Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = "a'b" }));
         }
 
         [Theory]

@@ -24,7 +24,7 @@ namespace OceanBaseConnector.UnitTests
                     await StatementCommand(channel, 22);
                     await channel.WritePacketAsync(UnsupportedPrepare());
                     channel.BeginCommand();
-                    await Query(channel, "select (CAST('a''; -- \\中' AS VARCHAR2(4000))), q'[?]', (" + (i + 1) + ")");
+                    await Query(channel, "select (REPLACE( 'a''; -- \\中',NULL,NULL)), q'[?]', (" + (i + 1) + ")");
                     await channel.WritePacketAsync(new byte[] { 1 });
                     await channel.WritePacketAsync(Column("n", 3));
                     await channel.WritePacketAsync(Eof());

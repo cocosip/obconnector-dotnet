@@ -132,7 +132,7 @@ namespace OceanBaseConnector.UnitTests
         {
             var server = Server(async channel =>
             {
-                await Query(channel, "insert into t values ((CAST('quote''\\中文; :p' AS VARCHAR2(4000))), (HEXTORAW('0027FF')), (NULL)); update t set n=(1.2500)");
+                await Query(channel, "insert into t values ((REPLACE( 'quote''\\中文; :p',NULL,NULL)), (HEXTORAW('0027FF')), (NULL)); update t set n=(1.2500)");
                 await channel.WritePacketAsync(Ok(2, 14));
                 await channel.WritePacketAsync(Ok(3));
             }, multiStatements: true);
@@ -261,8 +261,8 @@ namespace OceanBaseConnector.UnitTests
                 using var stream = new MemoryStream(new byte[] { 1 });
                 parameter.Value = stream; parameter.DbType = DbType.Binary; await Assert.ThrowsAsync<NotSupportedException>(execute);
                 Assert.Equal(0, stream.Position);
-                parameter.Value = "secret\0value"; parameter.DbType = DbType.String; await Assert.ThrowsAsync<ArgumentException>(execute);
-                parameter.Value = new string('x', 4001); await Assert.ThrowsAsync<ArgumentException>(execute);
+                parameter.Value = "\ud800"; parameter.DbType = DbType.String; await Assert.ThrowsAnyAsync<System.Text.EncoderFallbackException>(execute);
+                parameter.Value = new byte[] { 1 }; await Assert.ThrowsAsync<ArgumentException>(execute);
                 command.Parameters.Clear(); command.CommandText = "after rejected oracle multi parameters";
                 Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
             }
