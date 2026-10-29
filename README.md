@@ -127,6 +127,7 @@ Each resolution creates a closed transient connection owned by its container sco
 - Local transactions; .NET 8/9/10 assets also expose savepoints and sequential batches.
 - MySQL stored procedures support binary InputOutput streams through prepared SET/CALL, with caller-owned sources and outputs published after complete results. See [INOUT stream evidence](docs/history/2026-10-29-mysql-inout-stream.md).
 - Oracle extensions include stored procedures, OUT parameters, REF CURSOR, LOB locators, complex types and array binding. Procedures and output parameters require `Use Oracle Prepare Execute=true`; locator LOBs also require `Use Lob Locators=true`.
+- Oracle binary InputOutput streams use the existing prepared piece upload and retain caller ownership. Outputs follow server metadata: the verified anonymous procedure wrapper returns RAW content as CHAR hex text. See [Oracle INOUT stream evidence](docs/history/2026-10-29-oracle-inout-stream.md).
 - Complex LOB inputs support named BLOB bytes/CLOB text and anonymous BLOB/CLOB arrays of session-bound locator handles. Named locator rebinding is rejected; see the [complex type input contract](docs/obconnector-dotnet-architecture-design.md#complex-types).
 - CLOB locator parameters convert inline content in a sending copy for configured client charsets (V1; V2 on authenticated OceanBase4.4.1+). Original handles and UTF-8 readers retain their bytes; see the [charset contract](docs/client-character-sets.md).
 - Explicit XA, multiple server addresses, custom address resolution, logging, tracing and metrics.

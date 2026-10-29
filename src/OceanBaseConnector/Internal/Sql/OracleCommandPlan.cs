@@ -167,8 +167,6 @@ namespace OceanBaseConnector.Internal.Sql
             for (var i = 0; i < inputs.Length; i++)
             {
                 var parameter = original.Parameters[i];
-                if (parameter.Direction == ParameterDirection.InputOutput && parameter.Value is System.IO.Stream)
-                    throw new NotSupportedException("Stream parameters require Input direction.");
                 if (parameter.OceanBaseDbType == OceanBaseDbType.RefCursor &&
                     (parameter.Direction == ParameterDirection.Input || parameter.Direction == ParameterDirection.InputOutput || parameter.Size != 0 || parameter.Precision != 0 || parameter.Scale != 0))
                     throw new NotSupportedException("REF CURSOR parameters require Output or ReturnValue and no scalar size or precision.");

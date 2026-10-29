@@ -23,7 +23,7 @@
 
 | 功能 | 开发状态 | 已支持范围 | 还缺什么 / 验收边界 |
 | --- | --- | --- | --- |
-| Oracle Prepare和普通输出 | 部分实现 | 独立Prepare、OUT/RETURNING、普通输出及数组绑定正FetchSize提示（内部结果不分页），见[数组提示](history/2026-10-28-array-fetch-hint.md) | 输出offset仍拒绝；其余形状和部署组合待补 |
+| Oracle Prepare和普通输出 | 部分实现 | 二进制INOUT流复用prepared分片上传、输出遵循服务端元数据（当前匿名包装返回CHAR十六进制），见[记录](history/2026-10-29-oracle-inout-stream.md)；独立Prepare、OUT/RETURNING、普通输出及数组绑定正FetchSize提示（内部结果不分页），见[数组提示](history/2026-10-28-array-fetch-hint.md) | 输出offset仍拒绝；其余形状和部署组合待补 |
 | REF CURSOR输出和结果列 | 部分实现 | 输出、四字节游标ID解析、二进制复杂cursor成员及执行所有权；Oracle 直连输出/分页/释放矩阵 15/16 通过 | 当前租户准备执行 `SELECT CURSOR(...)` 返回 `902/HY000`，官方Java同样失败；文本返回CURSOR元数据但实际值不符合四字节解析，不能承诺该形状可用，见[归因](history/2026-10-28-direct-failure-triage.md)；其余部署/资源矩阵仍待验收 |
 | REF CURSOR Input/InputOutput | 明确不支持 | Java 没有对应输入绑定路径，当前 OracleCommandPlan 在发送前拒绝 | 除非取得明确的 Java/OceanBase 输入协议依据，否则不实现 |
 | 复杂类型二进制结果 | 已实现 | 嵌套object/collection、命名/匿名布局、BLOB/CLOB/cursor成员；直连 OceanBase 4.4.2.2 的 object 表列形状已通过 | collection nested-table 表列在该服务端返回600/0A000；其他真实SQL形状、版本、资源生命周期仍待验收 |
@@ -73,13 +73,13 @@
 
 | 项目 | 当前进度 | 尚未完成 |
 | --- | --- | --- |
-| MySQL二进制INOUT流（P1-05） | 已交付prepared SET分块上传；完整默认单测8478/8478、专项121/121、公开DLL消费者48/48（新增24项）、双模式过程实库50/50（新增INOUT17项）、DI14/14及五目标Release零警告/错误；一次独立最终走查无遗留问题，见[模块记录](history/2026-10-29-mysql-inout-stream.md) | Oracle INOUT流仍拒绝；真实OB20/OBProxy/TLS、其他版本/平台、阻塞源及完整资源/故障矩阵仍开放 |
+| Oracle二进制INOUT流（P1-06） | 已交付既有PrepareExecute分片路径；完整默认单测8502/8502、相关176/176、夹具修正后专项101/101、公开DLL消费者54/54（新增36项）、最终直连87/87（新增Oracle37项）、DI14/14及五目标Release零警告/错误；一次独立最终走查的唯一Important夹具问题已RED→GREEN修复，无遗留问题，见[模块记录](history/2026-10-29-oracle-inout-stream.md) | 输出遵循实际元数据，当前匿名包装为CHAR十六进制；真实OB20/OBProxy/TLS、其他版本/平台、阻塞源及完整资源/故障矩阵仍开放 |
 | Windows实库NuGet消费（P2-05） | 五资产及Framework4.8.1 host共48/48直连公开包场景及每host8项回环场景通过；默认入口六host复验通过；完整默认单测8466/8466、修复专项21/21、DI14/14、runner自检2/2及五目标Release零警告/错误；一次独立最终走查的两项Important均RED→GREEN修复，见[模块记录](history/2026-10-29-package-live-consumption.md) | 非Windows/完整API/ORM/其他部署仍开放；池化重开不证明同物理会话复用；未知CREATE/清理失败注入未执行 |
 | Consumer CI耗时优化 | **已调整**：普通 PR/分支 push 不执行 consumer；仅 tag 的 Windows 发布腿运行 acceptance；行为矩阵保留 `netstandard2.0`、`netstandard2.1`、`net10.0` 三类实现路径，五资产依赖/目标面契约仍保留 | 安全拆分时默认消费者完整2,860/2,860通过，证书/TLS已独立到不参与CI的SecurityTests；本次数组提示消费者专项另见对应记录。远程CI耗时尚未验证，完整安全套件仍待显式环境执行 |
 | OB20/trace显式验收（P2-06） | **已提交，部分实库验收**：代码/文档见`bc020e2`、`c5b4c07`；专项/runner **88/88**，Release零警告/错误；直连4.4.2.2双模式 `declined-ob20` 各6通过 | 用户租户实际协商为 `Layer=mysql`，显式 `ob20` 各2项按契约失败；真实 OB20/trace、OBProxy、TLS/auth 和完整单测环境门禁仍未闭合。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |
 | 验收占位 | 已提交基线仅保留TLS/auth DeferredReason；OB20/trace已替换为可执行profile | 实际服务端未启用OB20时必须保留失败，不能用普通MySQL fallback关闭OB20门禁 |
 
-最新交付模块为 Windows 实库 NuGet 包消费子集：实际恢复两包并验证资产/依赖，六个 host 共48/48双模式实库场景通过且独立清理，默认入口复验保持回环；完整单测8466/8466、修复专项21/21、DI14/14和runner自检2/2通过，五目标Release零警告/错误；一次独立最终走查的两项Important均经RED→GREEN修复。完整平台/生态/部署矩阵仍开放，见[模块证据](history/2026-10-29-package-live-consumption.md)。
+最新交付模块为 Oracle 二进制 INOUT 流：复用既有 PrepareExecute 分片路径，完整默认单测8502/8502、公开DLL54/54、最终直连87/87、DI14/14及五目标Release零警告/错误；一次独立最终走查的唯一Important夹具问题已RED→GREEN修复，无遗留问题。输出遵循服务端元数据，当前匿名包装为CHAR十六进制，见[模块记录](history/2026-10-29-oracle-inout-stream.md)。完整功能/部署矩阵仍开放。
 
 此前交付模块为 MySQL 多语句 BIT/YEAR 输入：复用严格类型/声明校验和精确数值字面量，覆盖UInt64高位/最大值、YEAR0及边界、typed NULL、独立存储和目标列溢出的事务边界；完整默认单测8445/8445、扩大相关单测5519/5519、公开DLL多语句消费者132/132、双模式多语句/流实库361/361（新增MySQL28/28）、DI14/14均零失败/跳过；五目标最终顺序Release零警告/错误，独立最终走查无遗留。表达式保持数值元数据，普通fallback及Oracle模式仍拒绝，完整矩阵不关闭，见[模块证据](history/2026-10-29-multi-statement-bit-year-input.md)。
 

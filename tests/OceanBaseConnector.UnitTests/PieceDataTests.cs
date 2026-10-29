@@ -269,7 +269,7 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public async Task PieceDataUnsupportedDeclarationsAndPrepareExecuteAreRejectedWithoutIo()
+        public async Task PieceDataUnsupportedDeclarationsAreRejectedWithoutIo()
         {
             var server = Server(async channel => { await StatementCommand(channel, 3); await channel.WritePacketAsync(Ok(1)); });
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
@@ -281,7 +281,7 @@ namespace OceanBaseConnector.UnitTests
                 var value = new OceanBaseParameter { ParameterName = "p", Value = source }; command.Parameters.Add(value);
                 foreach (var invalid in new Action[] { () => value.DbType = DbType.String, () => value.Size = 1, () => value.Precision = 1,
                     () => value.Scale = 1, () => value.OceanBaseDbType = OceanBaseDbType.Blob, () => command.AllowClientSidePrepareFallback = true,
-                    () => { command.CommandType = CommandType.StoredProcedure; command.CommandText = "p"; value.Direction = ParameterDirection.InputOutput; }, () => source.Dispose() })
+                    () => { command.CommandType = CommandType.StoredProcedure; command.CommandText = "p"; value.Direction = ParameterDirection.InputOutput; value.Size = 1; }, () => source.Dispose() })
                 {
                     value.ResetDbType(); value.Size = 0; value.Precision = value.Scale = 0; value.Direction = ParameterDirection.Input; command.AllowClientSidePrepareFallback = false;
                     command.CommandType = CommandType.Text; command.CommandText = "insert into t values (:p)"; invalid();

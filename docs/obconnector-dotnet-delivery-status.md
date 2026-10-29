@@ -15,6 +15,7 @@
 
 | 项目 | 状态 | 证据 / 剩余门禁 |
 | --- | --- | --- |
+| Oracle二进制INOUT流 | 已实现并完成本轮验收 | 复用PrepareExecute分片上传；输出遵循服务端元数据，当前匿名包装为CHAR十六进制。完整默认单测8502/8502、相关176/176、夹具修正后专项101/101、公开DLL54/54、最终直连87/87（新增Oracle37项，含定位器开/关独立存储核对）、DI14/14、五目标Release零警告/错误；一次独立最终走查的唯一Important夹具问题已RED→GREEN修复，无遗留问题，见[模块记录](history/2026-10-29-oracle-inout-stream.md)；其他部署/资源/故障门禁仍开放 |
 | MySQL二进制INOUT流 | 已实现并完成本轮验收 | 复用prepared SET分块上传、完整输出后发布、跨初始化/CALL流引用去重；相关单测121/121、公开DLL48/48、新增INOUT实库17/17及既有双模式过程33/33、DI14/14、五目标Release零警告/错误；完整默认单测8478/8478、一次独立最终走查无遗留问题，见[模块记录](history/2026-10-29-mysql-inout-stream.md)；其他部署/资源/故障门禁仍开放 |
 | Windows实库NuGet消费 | 已完成本轮子集验收 | 五资产及Framework4.8.1 host共48/48双模式公开包场景通过并独立清理；默认包入口六host复验通过（故意无效实库配置仍不执行live），完整默认单测8466/8466、修复专项21/21、DI14/14、runner自检2/2、五目标Release零警告/错误；一次独立最终走查提出两项Important，均RED→GREEN修复，无遗留Critical/Important。见[模块记录](history/2026-10-29-package-live-consumption.md)。完整生态/部署矩阵不关闭 |
 | MySQL多语句BIT/YEAR输入 | 已实现并完成本轮验收 | 官方Java数值字面量及独立存储对照；完整默认单测8445/8445、扩大相关单测5519/5519、多语句消费者132/132（新增12项）、双模式多语句/流实库361/361（新增MySQL28项）、DI14/14，均零失败/跳过；五目标最终顺序Release构建零警告/错误、独立最终走查无遗留。表达式保持数值类型，目标列负责BIT/YEAR转换，普通fallback仍拒绝。见[模块证据](history/2026-10-29-multi-statement-bit-year-input.md) |

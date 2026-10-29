@@ -77,7 +77,7 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public async Task PrepareExecutePieceDataRejectsInputOutputBeforeNormalization(bool asynchronous)
+        public async Task PrepareExecutePieceDataRejectsTextStreamDeclarationBeforeReading(bool asynchronous)
         {
             var server = Server(async channel => { await Query(channel, "after"); await channel.WritePacketAsync(Ok(1)); });
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Oracle Prepare Execute=true");
@@ -86,7 +86,7 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync(); using var command = connection.CreateCommand();
                 command.CommandType = CommandType.StoredProcedure; command.CommandText = "p";
-                command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", Direction = ParameterDirection.InputOutput, Value = source });
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", Direction = ParameterDirection.InputOutput, DbType = DbType.String, Value = source });
                 if (asynchronous) await Assert.ThrowsAsync<NotSupportedException>(() => command.ExecuteNonQueryAsync());
                 else Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery());
                 Assert.Equal(0, source.BytesRead); Assert.False(source.WasDisposed);

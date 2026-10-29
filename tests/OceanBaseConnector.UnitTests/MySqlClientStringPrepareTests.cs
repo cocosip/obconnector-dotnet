@@ -183,16 +183,20 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(new byte[] { (byte)count });
                 for (var i = 0; i < count; i++) await channel.WritePacketAsync(Column("s", kind == "integer" ? (byte)3 : (byte)253));
                 await channel.WritePacketAsync(Eof(2));
-                if (kind != "empty")
+                try
                 {
-                    using var row = new MemoryStream();
-                    var values = new[] { "utf8mb4", "utf8mb4", "utf8mb4_bin", kind == "oversize" ? new string('X', 4097) : "" };
-                    for (var i = 0; i < count; i++) row.Write(kind == "null" && i == 0 ? new byte[] { 251 }
-                        : WithLength(kind == "invalid-utf8" && i == 0 ? new byte[] { 255 } : Encoding.UTF8.GetBytes(values[i])));
-                    await channel.WritePacketAsync(row.ToArray());
-                    if (kind == "extra") await channel.WritePacketAsync(row.ToArray());
+                    if (kind != "empty")
+                    {
+                        using var row = new MemoryStream();
+                        var values = new[] { "utf8mb4", "utf8mb4", "utf8mb4_bin", kind == "oversize" ? new string('X', 4097) : "" };
+                        for (var i = 0; i < count; i++) row.Write(kind == "null" && i == 0 ? new byte[] { 251 }
+                            : WithLength(kind == "invalid-utf8" && i == 0 ? new byte[] { 255 } : Encoding.UTF8.GetBytes(values[i])));
+                        await channel.WritePacketAsync(row.ToArray());
+                        if (kind == "extra") await channel.WritePacketAsync(row.ToArray());
+                    }
+                    await channel.WritePacketAsync(Eof(kind == "multiple" ? (byte)10 : (byte)2));
                 }
-                await channel.WritePacketAsync(Eof(kind == "multiple" ? (byte)10 : (byte)2));
+                catch (IOException) when (kind == "oversize") { return; } // Rejection may close the socket before the scripted reply finishes.
                 if (kind == "empty")
                 {
                     channel.BeginCommand(); await Query(channel, "after empty state"); await channel.WritePacketAsync(Ok(1, 2));
@@ -210,6 +214,7 @@ namespace OceanBaseConnector.UnitTests
                 await connection.OpenAsync(); using var command = (OceanBaseCommand)connection.CreateCommand();
                 command.AllowClientSidePrepareFallback = true; command.CommandText = "select ?"; command.Parameters.Add(new OceanBaseParameter { Value = "中" });
                 var error = await Record.ExceptionAsync(() => command.ExecuteNonQueryAsync()); Assert.NotNull(error);
+                Assert.False(command.HasSentSql);
                 if (error is OceanBaseException database) Assert.False(database.IsExecutionOutcomeUnknown);
                 Assert.Equal(kind == "empty" ? ConnectionState.Open : ConnectionState.Broken, connection.State);
                 if (kind == "empty")
