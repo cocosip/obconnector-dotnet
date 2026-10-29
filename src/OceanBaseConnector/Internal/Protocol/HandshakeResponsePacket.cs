@@ -89,11 +89,6 @@ namespace OceanBaseConnector.Internal.Protocol
             return writer.ToArray();
         }
 
-        public static byte[] BuildAuthSwitchResponse(byte[] authenticationData)
-        {
-            return authenticationData;
-        }
-
         private static void WriteConnectAttributes(MemoryStream writer, string? serverHost, bool requestOb20, bool requestFullLinkTrace, bool requestLobLocators)
         {
             using var attributes = new MemoryStream();

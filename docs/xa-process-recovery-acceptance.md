@@ -41,7 +41,7 @@ Direct OceanBase4.4.2.2, Windows/.NET10.0.13, TLS disabled: each mode passes all
 plus one connection control. All eight owned tables, branches and journals are cleaned.
 Synthetic tests also cover unrelated branch preservation, a missing prepared branch,
 cancellation, completion failure with journal retention, strict input/journal rejection and
-privacy. See the [module record](history/obconnector-dotnet-progress.md#2026-10-27-xa-coordinator-process-recovery).
+privacy. See the [module record](compatibility.md).
 
 This proves one prepared/recorded-decision crash point. General coordinator interoperability,
 crashes before decision persistence or during completion acknowledgement, server failure,

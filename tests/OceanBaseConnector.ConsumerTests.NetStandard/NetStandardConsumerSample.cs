@@ -25,12 +25,6 @@ namespace OceanBaseConnector.ConsumerTests.NetStandard
 
         public static string Describe()
         {
-            if (OceanBaseTargetSurface.HasModernAdoNetApis)
-            {
-                throw new InvalidOperationException(
-                    "netstandard2.0 asset must not report modern ADO.NET APIs.");
-            }
-
             var xid = new OceanBaseXid(1, new byte[] { 1 }, Array.Empty<byte>());
             var sameXid = new OceanBaseXid(1, new byte[] { 1 }, Array.Empty<byte>());
             if (xid.FormatId != 1 || xid.GetGlobalTransactionId()[0] != 1 || xid.GetBranchQualifier().Length != 0 ||

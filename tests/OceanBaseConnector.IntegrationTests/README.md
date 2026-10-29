@@ -17,7 +17,7 @@ This suite is the engineering counterpart of the [acceptance console](../OceanBa
 The console now has separate same-client-channel reset/reuse and time-zone retirement cases.
 Its ChannelId observation complements this suite's internal physical-session/generation assertions;
 it does not prove proxy backend identity or replace the remaining resource/fault profiles. See the
-[delivery record](../../docs/history/obconnector-dotnet-progress.md#2026-10-27-same-channel-pool-reset-and-reuse-acceptance).
+[delivery record](../../docs/compatibility.md).
 
 ## Ordinary Oracle cursor columns
 
@@ -46,7 +46,7 @@ CloseConnection for empty cursors. No database objects or global configuration a
 The clean Oracle direct run has 15 passed and 1 failed. The 15 passing cases cover cursor output,
 fetch-size paging, command disposal, connection reuse, and sync/async behavior; the one failure is
 the `SELECT CURSOR(...)` result-column shape described above. Local fixture/consumer passes remain
-separate from real interoperability. See [full evidence](../../docs/history/2026-10-28-oracle-resource-cursor-acceptance.md).
+separate from real interoperability. See [full evidence](../../docs/compatibility.md).
 
 ## Running
 
@@ -102,7 +102,7 @@ Filter `FullyQualifiedName~CloseCallbackPoolTests`. Each configured profile cove
 
 Filter `FullyQualifiedName~ComplexNationalTests` on the configured Oracle profile. The suite contains 48 positive cases for NCHAR/NVARCHAR2, UTF8/UTF16 session national settings, sync/async, named objects/collections, nested members, ordinary object binary results and anonymous DML arrays. Eight additional cases assert the current rejection of complex whole-column RETURNING when response type identity cannot be resolved; these are boundary tests, not RETURNING compatibility passes. Random test objects are cleaned in dependency order; only session settings change.
 
-The related `ComplexTypeTests.ObjectAndCollectionRoundTrip` loads its descriptor after table DDL because observed DDL invalidates earlier descriptions. Its NUMBER nested-table column case retains the recorded server rejection; do not remove that failure or infer table-column support from successful collection procedure parameters. [Full current evidence and retained failures](../../docs/history/obconnector-dotnet-completeness.md#1547-2026-10-25-复杂类型-national-成员与方向编码).
+The related `ComplexTypeTests.ObjectAndCollectionRoundTrip` loads its descriptor after table DDL because observed DDL invalidates earlier descriptions. Its NUMBER nested-table column case retains the recorded server rejection; do not remove that failure or infer table-column support from successful collection procedure parameters. [Full current evidence and retained failures](../../docs/compatibility.md).
 
 ## Configuration file
 
@@ -162,15 +162,15 @@ Without a configuration file, `OB_REQUIRE_INTEGRATION=1` plus the four documente
 | SQL under OB20 framing, full-link trace | `Ob20` (needs tagged profiles) |
 | Requested standard MySQL compression with fallback to ordinary framing | `Protocol/CompressionTests` |
 
-The previous resource module records 28 new direct Oracle cases (twenty LOB, eight cursor), plus the related two-mode Connections/XA/REF CURSOR/LOB regression: 115 passed, 4 configuration skips. All twenty stored LOB locators were inline; these runs do not cover external locator network chunks/cancellation or other deployment profiles. No-opt-in results are 9 configuration passes and 98 NotExecuted. See the [exact acceptance evidence and retained fixture failures](../../docs/history/obconnector-dotnet-completeness.md#1543-2026-10-25-持久-lob-与-ref-cursor-的同端点池隔离验收).
+The previous resource module records 28 new direct Oracle cases (twenty LOB, eight cursor), plus the related two-mode Connections/XA/REF CURSOR/LOB regression: 115 passed, 4 configuration skips. All twenty stored LOB locators were inline; these runs do not cover external locator network chunks/cancellation or other deployment profiles. No-opt-in results are 9 configuration passes and 98 NotExecuted. See the [exact acceptance evidence and retained fixture failures](../../docs/compatibility.md).
 
-External persistent LOB acceptance adds four direct Oracle cases: actual inline=False BLOB100000/CLOB220000 UTF8-byte locators, exact sync/async content and healthy same-physical-session reuse. Preparation uses an independent unpooled temporary seed, freed before the pooled SELECT; no global threshold change. Final related regression119pass/4configuration skips, noopt9pass/99NotExecuted. Local eighteen in-flight interruption cases and two cleanup regressions are unit evidence; real mid-read cancellation/fault and other deployment profiles remain open. See [full external acceptance evidence](../../docs/history/obconnector-dotnet-completeness.md#1544-2026-10-25-外置持久-lob-读取与池生命周期验收).
+External persistent LOB acceptance adds four direct Oracle cases: actual inline=False BLOB100000/CLOB220000 UTF8-byte locators, exact sync/async content and healthy same-physical-session reuse. Preparation uses an independent unpooled temporary seed, freed before the pooled SELECT; no global threshold change. Final related regression119pass/4configuration skips, noopt9pass/99NotExecuted. Local eighteen in-flight interruption cases and two cleanup regressions are unit evidence; real mid-read cancellation/fault and other deployment profiles remain open. See [full external acceptance evidence](../../docs/compatibility.md).
 
 The standard compression integration case clones each selected non-OB20 profile with `Use Compression=true` and runs sync/async `SELECT 1`. The supplied direct MySQL and Oracle tenants do not advertise `CLIENT_COMPRESS`; both therefore exercise Java-compatible fallback to ordinary framing and pass. This does not establish compressed-frame, OBProxy, TLS or cross-platform interoperability.
 
-Transaction acknowledgement-loss acceptance adds sixteen direct cases (both modes/sync-async/commit-rollback/none-partial), restricted to existing TLSdisabled/noncompressed/nonOB20/single-endpoint profiles. The test relay reads a real server reply before withholding it; an unpooled observer verifies actual outcome and a Max1 fresh lease works before Clear. Its four ordinary fixture checks run without database opt-in. Expanded related suite160pass/4configuration skips INCLUDES those4local checks; noopt13pass/100NotExecuted. This does not prove server/coordinator crash or real OBProxy/TLS failure. [Full evidence](../../docs/history/obconnector-dotnet-completeness.md#1545-2026-10-25-事务响应丢失与池恢复验收), [application reconciliation](../../docs/unknown-outcome-recovery.md).
+Transaction acknowledgement-loss acceptance adds sixteen direct cases (both modes/sync-async/commit-rollback/none-partial), restricted to existing TLSdisabled/noncompressed/nonOB20/single-endpoint profiles. The test relay reads a real server reply before withholding it; an unpooled observer verifies actual outcome and a Max1 fresh lease works before Clear. Its four ordinary fixture checks run without database opt-in. Expanded related suite160pass/4configuration skips INCLUDES those4local checks; noopt13pass/100NotExecuted. This does not prove server/coordinator crash or real OBProxy/TLS failure. [Full evidence](../../docs/compatibility.md), [application reconciliation](../../docs/unknown-outcome-recovery.md).
 
-Oracle output FetchSize acceptance adds twenty direct Oracle cases: sync/async × implicit/explicit preparation × block/RETURNING/procedure/function/REF CURSOR. Internal outputs do not issue FETCH; returned three-row cursors use page1 with parent hint2 and survive command disposal. Final related suite58pass/0skip includes both-mode ordinary cursor and Oracleoffset regressions; noopt13pass/101NotExecuted. No output-result pagination or new input/column cursor shapes are claimed. See [exact evidence and retained24RED](../../docs/history/obconnector-dotnet-completeness.md#1546-2026-10-25-oracle-输出执行与-fetchsize-提示).
+Oracle output FetchSize acceptance adds twenty direct Oracle cases: sync/async × implicit/explicit preparation × block/RETURNING/procedure/function/REF CURSOR. Internal outputs do not issue FETCH; returned three-row cursors use page1 with parent hint2 and survive command disposal. Final related suite58pass/0skip includes both-mode ordinary cursor and Oracleoffset regressions; noopt13pass/101NotExecuted. No output-result pagination or new input/column cursor shapes are claimed. See [exact evidence and retained24RED](../../docs/compatibility.md).
 
 ## Isolation and cleanup
 

@@ -34,7 +34,7 @@ Stopping a relay is part of fixture cleanup, not proof that a real database node
 Direct OceanBase4.4.2.2, Windows/.NET10.0.13, TLS disabled: Oracle and MySQL each pass7/7
 (connection control plus six cases), zero failures/skips/cleanup failures, no objects created.
 
-See the [module record](history/obconnector-dotnet-progress.md#2026-10-27-controlled-topology-acceptance)
+See the [module record](compatibility.md)
 for current build, unit, real-server and independent review gates. All tests use the existing
 product APIs; this module adds no product source, public options or dependencies.
 

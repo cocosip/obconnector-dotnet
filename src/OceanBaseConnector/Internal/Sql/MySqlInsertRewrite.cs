@@ -15,8 +15,6 @@ namespace OceanBaseConnector.Internal.Sql
         private MySqlInsertRewrite(string sql, int start, int end, int semicolon, List<int> parameters)
         { _sql = sql; _start = start; _end = end; _semicolon = semicolon; _parameters = parameters; }
         internal int ParameterCount => _parameters.Count;
-        internal int TupleBytes => GetTupleBytes(ResultColumn.Utf8);
-        internal int BaseBytes => GetBaseBytes(ResultColumn.Utf8);
         internal int GetTupleBytes(Encoding encoding) => encoding.GetByteCount(_sql.Substring(_start, _end - _start));
         internal int GetBaseBytes(Encoding encoding) => encoding.GetByteCount(_sql) - (_semicolon >= 0 ? 1 : 0) + 1;
         internal string Build(int rows)

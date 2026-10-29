@@ -1,5 +1,9 @@
 # API reference
 
+Current product scope and exclusions are defined in the [capability matrix](obconnector-dotnet-progress.md),
+with [gaps](obconnector-dotnet-completeness.md) and [acceptance criteria](acceptance-criteria.md).
+This reference explains API behavior; historical module evidence does not close current deployment gates.
+
 For a basic query, see the [README](../README.md). For tested server profiles, see [Compatibility](compatibility.md).
 
 The [Connector/J architecture outline](obconnector-j-architecture-outline.md) is retained as the protocol and behavior reference. Its Java feature inventory does not establish .NET support; unverified and unsupported combinations are listed in Compatibility.
@@ -21,7 +25,7 @@ selected public-API storage/transaction/read/error/reopen scenarios must all
 pass with independent table cleanup; a deadline kill cannot certify cleanup.
 `eng/Test-PackageLiveRunner.ps1` checks blocked stdin and completed-delivery
 output with synthetic child processes, without database access.
-See the [live package evidence and limits](history/2026-10-29-package-live-consumption.md).
+See the [live package evidence and limits](compatibility.md).
 
 ## Protocol diagnostic unloading
 
@@ -30,7 +34,7 @@ another execution context. The guard does not declare a ThreadStatic field in a 
 An independent-process consumer checks old-context collection and the integrity of new-context static
 objects after the old thread exits. This addresses the reproduced diagnostic state corruption while
 preserving synchronous observer exception isolation, Activity restoration and metadata-only events.
-See the [protocol contract](protocol-diagnostics.md) and [local verification limits](history/obconnector-dotnet-completeness.md#1559-2026-10-26-可卸载诊断线程状态损坏与默认回归恢复).
+See the [protocol contract](protocol-diagnostics.md) and [local verification limits](compatibility.md).
 
 ## Connection-level server errors
 
@@ -174,7 +178,7 @@ PAM PasswordN factors are ordered numerically; a present empty factor differs fr
 
 Pools also retain resolver, credential-provider, validation-delegate and certificate reference identity, plus the certificate fingerprint. Equal delegates or objects are not interchangeable policy instances. Data sources keep separate private pools. ClearAll and empty-pool removal reuse the same canonical identity without merging private sources or reinterpreting credentials.
 
-Closed state notification starts before transaction/return cleanup. Pooled opens within that callback can complete the captured cleanup before borrowing, as described below. Complete reset, concurrency and long-running resource acceptance remain open; see [the remaining pool work](history/obconnector-dotnet-completeness.md#51-连接池和会话隔离).
+Closed state notification starts before transaction/return cleanup. Pooled opens within that callback can complete the captured cleanup before borrowing, as described below. Complete reset, concurrency and long-running resource acceptance remain open; see [the remaining pool work](compatibility.md).
 
 <a id="pool-wait-handoff"></a>
 ### Pool wait notification handoff
@@ -228,7 +232,7 @@ Classification scans all statement heads across mode-specific whitespace/comment
 
 MySQL SQL_MODE is not tracked by this pooled-state classifier; the per-fallback string snapshot does not change that policy. A backslash within quoted text is therefore treated conservatively as ambiguous and retires the session, including otherwise harmless escaped strings. Quoted named-lock calls are conservative under ANSI_QUOTES/backtick rules. The lexical classifier preserves covered common query/DML forms; a nested CTE declaration named like a lock function can still conservatively retire a safe session. It does not prove that arbitrary stored functions, triggers or other server-side code have no session effects. Such applications need verified reset behavior for their exact profile or must disable pooling. The existing COM_RESET_CONNECTION/initial-database restoration, active-resource disposal and dedicated-XA rules still apply; marking raw XA SQL does not implement coordinator recovery.
 
-This is local driver behavior, not proof of OceanBase/OBProxy reset compatibility. The remaining resource, fault, concurrent-return and real-profile acceptance requirements are tracked under P0-02 in the [completeness baseline](obconnector-dotnet-completeness.md).
+This is local driver behavior, not proof of OceanBase/OBProxy reset compatibility. The remaining resource, fault, concurrent-return and real-profile acceptance requirements are tracked under G10 in the [gap matrix](obconnector-dotnet-completeness.md).
 
 ## Commands and readers
 
@@ -239,13 +243,13 @@ This is local driver behavior, not proof of OceanBase/OBProxy reset compatibilit
 - Read all results with `Read` and `NextResult` to establish completion. Closing an unread reader destroys its unfinished session; disposing a field stream does not finish its parent reader.
 - `CommandBehavior.SequentialAccess` exposes field streams without buffering the whole result. `SingleRow` returns only the first row of the first result, even when that result is empty or only an affected count; it implies SingleResult. `SingleResult` drains later results without exposing them. `SchemaOnly` accepts text prefixes `SELECT`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `VALUES` after whitespace/comments. It obtains metadata through server preparation and never sends a target COM_QUERY, COM_STMT_EXECUTE, COM_STMT_FETCH or parameter-data upload. It accepts one text statement with input parameters only; names/order/count remain required, but values are not encoded, consumed or validated as bindings. FetchSize and offset hints are inactive. Preparation errors propagate without client-side fallback, including error 1295 when AllowClientSidePrepareFallback=true. An existing valid prepared statement is reused. The empty reader exposes prepared column metadata, HasRows=false and RecordsAffected=-1; its exchange is complete, so another connection operation is allowed. CloseConnection still closes the original logical Open lease when that reader is disposed; a later lease is protected even if pooling reuses the same physical session. Named complex columns require existing preloaded descriptions and may issue directory lookups for a missing source identity; those lookups do not execute the target. Metadata is the server prepare-time shape, which may differ from execution-time metadata. Server preparation can still incur parsing, permission checks and metadata locks; real OceanBase/OBProxy side-effect/lock/large-result acceptance remains open. Ordinary row readers retain their existing operation restrictions.
 - Positive `OceanBaseCommand.FetchSize` enables forward-only server cursor pages for ordinary queries without cursor-valued columns. Oracle internal procedure/RETURNING output rows do not use this hint; returned REF CURSOR readers have their own page size. Oracle `UseCursorOffset=true` additionally requires OceanBase >=2.2.5; it does not provide scrolling.
-- `AllowClientSidePrepareFallback=true` permits limited scalar-input text fallback only after automatic prepare returns a validated `1295/HY000`. Explicit Prepare, cursors and Oracle PrepareExecute never fall back. MySQL BIT/YEAR inputs reuse exact numeric literals and existing declaration checks; expression metadata remains numeric and target columns perform conversion. MySQL DATE/DATETIME/TIME and the existing DbType.DateTime2 mapping reuse validated exact temporal literals; TIMESTAMP target conversion follows current session time_zone. At signed TIME838:59:59.999999 this OceanBase version clips fractions in binary mode even under STRICT_ALL_TABLES, while strict text fallback rejects1292; no client clipping or execution retry is added. See [temporal fallback evidence](history/2026-10-29-mysql-temporal-fallback.md). Oracle ordinary temporal/interval/national inputs, other special types and output parameters remain excluded. See [BIT/YEAR fallback evidence](history/2026-10-29-mysql-bit-year-fallback.md). MySQL explicit Json Input also reuses ordinary string literals, strict encoding and fresh session facts; SQL NULL stays distinct from JSON text null, and syntax is server-validated. Size is a hint, not a truncation limit. See [JSON fallback evidence](history/2026-10-29-mysql-json-fallback.md). MySQL non-null strings use the [trusted state contract](#mysql-client-string-preparation). Oracle ordinary strings use REPLACE( quoted,NULL,NULL), matching the Connector/J leading value space needed by this tenant for large NUL single expressions, to keep VARCHAR2 identity and varying-space semantics without fixed CAST truncation. NUL and large values share strict encoding and the aggregate SQL budget; expression length metadata is no longer fixed at 4000. Server target-column limits remain separate. NUL multi-statement storage/results pass at 12003 characters and single expressions at 196608; two-SELECT scripts time out in .NET at 196608 characters and in official Java at 98301/196608 characters, alongside large-NUL CLOB failures. Those server-limited shapes may fail after send; there is no replay or workaround. See the [ordinary text record](history/2026-10-29-oracle-text-literals.md). Oracle byte-array inputs keep HEXTORAW('HEX') expressions without a blanket 2000-byte client cap, within the existing individual hex and aggregate 64 MiB SQL limits; target RAW column limits still apply. Large single-expression and multi-statement BLOB shapes are verified through 1 MiB, while the actual 1295-triggered fallback is verified by local fixtures only. See the [large binary record](history/2026-10-29-oracle-large-binary-literals.md). Fallback literals may appear in server SQL logs.
+- `AllowClientSidePrepareFallback=true` permits limited scalar-input text fallback only after automatic prepare returns a validated `1295/HY000`. Explicit Prepare, cursors and Oracle PrepareExecute never fall back. MySQL BIT/YEAR inputs reuse exact numeric literals and existing declaration checks; expression metadata remains numeric and target columns perform conversion. MySQL DATE/DATETIME/TIME and the existing DbType.DateTime2 mapping reuse validated exact temporal literals; TIMESTAMP target conversion follows current session time_zone. At signed TIME838:59:59.999999 this OceanBase version clips fractions in binary mode even under STRICT_ALL_TABLES, while strict text fallback rejects1292; no client clipping or execution retry is added. See [temporal fallback evidence](compatibility.md). Oracle ordinary temporal/interval/national inputs, other special types and output parameters remain excluded. See [BIT/YEAR fallback evidence](compatibility.md). MySQL explicit Json Input also reuses ordinary string literals, strict encoding and fresh session facts; SQL NULL stays distinct from JSON text null, and syntax is server-validated. Size is a hint, not a truncation limit. See [JSON fallback evidence](compatibility.md). MySQL non-null strings use the [trusted state contract](#mysql-client-string-preparation). Oracle ordinary strings use REPLACE( quoted,NULL,NULL), matching the Connector/J leading value space needed by this tenant for large NUL single expressions, to keep VARCHAR2 identity and varying-space semantics without fixed CAST truncation. NUL and large values share strict encoding and the aggregate SQL budget; expression length metadata is no longer fixed at 4000. Server target-column limits remain separate. NUL multi-statement storage/results pass at 12003 characters and single expressions at 196608; two-SELECT scripts time out in .NET at 196608 characters and in official Java at 98301/196608 characters, alongside large-NUL CLOB failures. Those server-limited shapes may fail after send; there is no replay or workaround. See the [ordinary text record](compatibility.md). Oracle byte-array inputs keep HEXTORAW('HEX') expressions without a blanket 2000-byte client cap, within the existing individual hex and aggregate 64 MiB SQL limits; target RAW column limits still apply. Large single-expression and multi-statement BLOB shapes are verified through 1 MiB, while the actual 1295-triggered fallback is verified by local fixtures only. See the [large binary record](compatibility.md). Fallback literals may appear in server SQL logs.
 
 ### CloseConnection reader ownership
 
 `CommandBehavior.CloseConnection` belongs to the logical Open lease that started the reader. Disposing a completed ordinary reader or closing a Batch reader must not close a later lease after explicit Close/Open, even when the pool reuses the same physical session object. Ordinary readers capture the connection Open generation at command start; batches capture it with the session reservation. The connection compares session identity and that generation atomically before conditional closure. Public Close/CloseAsync still close the current connection; disposal within the original lease retains its existing behavior.
 
-This rule also protects metadata-only readers and the Batch reservation-release/connection-close callback window. It does not promise arbitrary concurrent operations on one connection. Local regressions, five-asset consumers and direct OceanBase4.4.2.2 MySQL/Oracle tests cover this lease boundary; full resource, fault, load, proxy and platform acceptance remains open. See the [verification record](history/obconnector-dotnet-completeness.md#1541-2026-10-25-旧-reader-延迟关闭与池租约隔离).
+This rule also protects metadata-only readers and the Batch reservation-release/connection-close callback window. It does not promise arbitrary concurrent operations on one connection. Local regressions, five-asset consumers and direct OceanBase4.4.2.2 MySQL/Oracle tests cover this lease boundary; full resource, fault, load, proxy and platform acceptance remains open. See the [verification record](compatibility.md).
 
 ### Prepared statement cache
 
@@ -293,7 +297,7 @@ Scalar/nonquery executions drain their results. Failure and disposal also clean 
 connection. Connection/Transaction getters/setters and standalone Prepare remain unsupported. Open may
 join the ambient single-resource transaction. The source command timeout is the batch default. Normal
 connection batches keep caller-owned connection behavior. Standard assets expose no modern batch API.
-See [local evidence and remaining acceptance](history/obconnector-dotnet-completeness.md#1560-2026-10-26-batch-元数据与数据源条目创建).
+See [local evidence and remaining acceptance](compatibility.md).
 
 ### MySQL BIT/YEAR inputs in text multi-statements
 
@@ -301,9 +305,9 @@ Explicit Bit/Year Input providers use the existing invariant UInt64/UInt16 numer
 when text multi-statements are enabled. PreparedParameters retains MySQL-only mode, bit-width,
 year-range and declaration checks, including for typed NULL. No literal-state query is needed.
 Target BIT/YEAR columns perform numeric conversion; expression results retain numeric metadata.
-Ordinary single-command opt-in fallback also accepts these providers; see the [fallback record](history/2026-10-29-mysql-bit-year-fallback.md). Snapshots, expanded
+Ordinary single-command opt-in fallback also accepts these providers; see the [fallback record](compatibility.md). Snapshots, expanded
 SQL budgets and execution/transaction refusal gates remain shared with other scalar inputs.
-See the [OceanBase/Java and direct-test evidence](history/2026-10-29-multi-statement-bit-year-input.md).
+See the [OceanBase/Java and direct-test evidence](compatibility.md).
 
 ### Oracle national inputs in text multi-statements
 
@@ -318,14 +322,14 @@ National Unicode literals use their own expansion budget and do not depend on or
 unused binary national parameter encoder; binary paths retain their encoding checks. Result decoding
 still requires fresh trusted national state and supported explicit encoding mappings, including for
 later results. National input support does not widen national result/storage or complex-type scope.
-See the [OceanBase/Java and direct-test evidence](history/2026-10-29-multi-statement-national-input.md).
+See the [OceanBase/Java and direct-test evidence](compatibility.md).
 
 Explicit trusted national/result names additionally resolve through the existing strict client
 mapping for utf8mb3, ascii, latin1, gbk, gb18030, gb18030_2022, dec8, tis620, sjis, big5, hkscs and
 hkscs31. Scalar binary input and ordinary/PL national results share this resolver; streaming uses
 the underlying stateful decoder. Missing facts retain Unicode-only collation fallback and later
 results require fresh state. Stored complex members still require AL16UTF16. See the
-[encoding evidence and live scope](history/2026-10-29-national-character-encodings.md).
+[encoding evidence and live scope](compatibility.md).
 
 ### MySQL client string preparation
 
@@ -430,7 +434,7 @@ NextResult even though it will not expose another result. Early Close keeps the 
 unstarted entries are skipped. An unread current response can destroy its session. CloseConnection
 still belongs to the original logical lease; data-source batches still own that connection.
 SchemaOnly with limits may prepare hidden entries and query their metadata catalogs, but executes no
-target SQL. The batch reservation remains until reader close. See [verification and open acceptance](history/obconnector-dotnet-completeness.md#1561-2026-10-26-singlerowsingleresult-跨批次结果限制).
+target SQL. The batch reservation remains until reader close. See [verification and open acceptance](compatibility.md).
 
 ### CRUD generation scope
 
@@ -443,11 +447,11 @@ does not imply automatic update/delete generation.
 
 A readable `Stream` can be an Input parameter, a MySQL stored-procedure InputOutput parameter, or an Oracle scalar InputOutput parameter with `Use Oracle Prepare Execute=true`, inferred or explicitly `DbType.Binary`; `Size`, `Precision` and `Scale` must be zero. The driver reads from the current position to EOF without rewinding or disposing the source. A stream cannot occupy multiple binding positions.
 
-Oracle InputOutput keeps the original parameter in the output plan while normalizing its input snapshot for the existing prepared-ID piece upload. Prepare does not read the source. Outputs publish after all terminal responses and follow actual server metadata, without forced conversion to the declared input DbType. The verified RAW procedure's anonymous BEGIN wrapper returns CHAR uppercase hex text, also reproduced by official Java with the identical SQL shape; direct Java CALL returns RAW instead. Reassign the parameter to a source before another execution. Target RAW limits and Oracle empty-input-as-NULL semantics remain server-controlled. See [Oracle INOUT evidence](history/2026-10-29-oracle-inout-stream.md).
+Oracle InputOutput keeps the original parameter in the output plan while normalizing its input snapshot for the existing prepared-ID piece upload. Prepare does not read the source. Outputs publish after all terminal responses and follow actual server metadata, without forced conversion to the declared input DbType. The verified RAW procedure's anonymous BEGIN wrapper returns CHAR uppercase hex text, also reproduced by official Java with the identical SQL shape; direct Java CALL returns RAW instead. Reassign the parameter to a source before another execution. Target RAW limits and Oracle empty-input-as-NULL semantics remain server-controlled. See [Oracle INOUT evidence](compatibility.md).
 
 The encoded execution request is limited to 64 MiB; Oracle upload bytes count after hexadecimal expansion. Streams cannot be combined with array binding or client-prepare fallback. Async reads receive the command cancellation/timeout token; a source that ignores it must return before interruption completes, and the lease remains busy until then.
 
-With `Allow Multi Statements=true`, binary Input streams are encoded completely before target SQL is sent: MySQL uses X'HEX', Oracle uses 'HEX' with implicit RAW/BLOB conversion, matching Connector/J. Oracle stream expressions consequently have the quoted-hex text shape; they are not the byte-array HEXTORAW expression. Both modes count hex expansion and all other literals toward the 64 MiB SQL limit. Validation, source failure, overflow or cancellation during materialization sends no target SQL and retains a usable session when no initialization response is pending. The driver does not rewind, dispose or replay a source. See the [stream module evidence](history/2026-10-29-multi-statement-stream-input.md).
+With `Allow Multi Statements=true`, binary Input streams are encoded completely before target SQL is sent: MySQL uses X'HEX', Oracle uses 'HEX' with implicit RAW/BLOB conversion, matching Connector/J. Oracle stream expressions consequently have the quoted-hex text shape; they are not the byte-array HEXTORAW expression. Both modes count hex expansion and all other literals toward the 64 MiB SQL limit. Validation, source failure, overflow or cancellation during materialization sends no target SQL and retains a usable session when no initialization response is pending. The driver does not rewind, dispose or replay a source. See the [stream module evidence](compatibility.md).
 
 ### Exact values
 
@@ -472,7 +476,7 @@ Oracle may report precision zero and scale -1 for both a bound expression and a 
 
 Schema reports the server metadata (`NumericPrecision=null` when unknown and the advertised `NumericScale`); it does not substitute the value's scale into the column definition. Unknown-precision results remain `OceanBaseDecimal`, and typed `decimal` conversions remain exact. The value representation can change: returned text `"40"` now has coefficient 40 and value scale 0 rather than being rescaled to coefficient 4/scale -1. `GetProviderSpecificValue`, `GetValue` and typed reads agree numerically. This does not undo server-side rounding of a declared column: a server-rounded value of 40 stays 40.
 
-Direct Oracle 4.4.2.2/Windows/.NET10/TLS-disabled evidence covers prepared integer/fractional bindings and declared/cast negative scales. It does not establish other versions, OBProxy, TLS or independent-runtime compatibility. See the [module record](history/obconnector-dotnet-completeness.md#1537-2026-10-25-oracle-未知精度-number-结果读取).
+Direct Oracle 4.4.2.2/Windows/.NET10/TLS-disabled evidence covers prepared integer/fractional bindings and declared/cast negative scales. It does not establish other versions, OBProxy, TLS or independent-runtime compatibility. See the [module record](compatibility.md).
 
 ### Oracle FLOAT results with binary precision
 
@@ -665,7 +669,7 @@ deployment interoperability require real-server evidence.
 
 Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON results and CLOB reads retain their UTF-8 scope. Explicit MySQL JSON parameters use the selected strict client encoding and ordinary string binding; the server owns JSON conversion, syntax and storage. CLOB write buffers inherit the selected client parameter encoding and its representability checks; storage interoperability is not expanded. Trusted Oracle national character-set selection retains precedence; explicit names reuse the strict client mappings, while missing names retain Unicode-only collation fallback. See [client charset and cached session trust](client-character-sets.md).
 
-Real evidence is limited to direct OceanBase 4.4.2.2 MySQL mode, Windows/.NET10 with TLS disabled: six charset cases, each exercising eight text/prepared × buffered/sequential × sync/async combinations. That server rejects `SET character_set_results=utf16` and `utf16le` with 1231/42000; those two cases instead use `character_set_results=NULL` and `CONVERT` expressions, asserting string metadata and exact decoded text. This does not establish Oracle, proxy, TLS, all collation IDs, other server versions or independent-runtime compatibility. See [verification and retained failures](history/obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
+Real evidence is limited to direct OceanBase 4.4.2.2 MySQL mode, Windows/.NET10 with TLS disabled: six charset cases, each exercising eight text/prepared × buffered/sequential × sync/async combinations. That server rejects `SET character_set_results=utf16` and `utf16le` with 1231/42000; those two cases instead use `character_set_results=NULL` and `CONVERT` expressions, asserting string metadata and exact decoded text. This does not establish Oracle, proxy, TLS, all collation IDs, other server versions or independent-runtime compatibility. See [verification and retained failures](compatibility.md).
 
 ### National collation fallback
 
@@ -737,9 +741,9 @@ do not establish real DDL, derivation, rounding or old-server compatibility succ
 
 ## MySQL stored procedures
 
-Implemented from `1bb13cb`. The [module evidence](history/obconnector-dotnet-completeness.md#1530-2026-10-25-mysql-存储过程执行本地交付) separates local regression, limited direct-server runs and open deployment acceptance; the earlier development checkpoint retains original failures.
+Implemented from `1bb13cb`. The [module evidence](compatibility.md) separates local regression, limited direct-server runs and open deployment acceptance; the earlier development checkpoint retains original failures.
 
-In MySQL mode, use CommandType.StoredProcedure with a one- or two-part routine identifier, parsed and quoted as identifiers. Procedure parameters bind in collection order, irrespective of their names. Input, Output and InputOutput are accepted for procedures. A stored function accepts one ReturnValue plus Input arguments only; multiple ReturnValue parameters and Output/InputOutput mixed with a function return are rejected. The function plan prepares `SET @private = function(?)` and retrieves the result through a hidden `SELECT`; the ReturnValue is published only after that query completes. Effective CLIENT_PS_MULTI_RESULTS is required. A positive command FetchSize is accepted and its value is preserved, with or without explicit Prepare. Routine execution uses effective fetchSize=0 and cursorFlag=0; ordinary results stream normally, and internal output SELECTs remain hidden and unpaged. This does not add routine-result cursor paging. SchemaOnly and KeyInfo are rejected; explicit Prepare is supported and client-side prepare fallback is disabled. Input streams use the long-data path. Binary InputOutput streams upload through the prepared private-variable SET before CALL; duplicate stream references across SET and CALL are rejected before reading or sending. Sources retain caller ownership and current position; Prepare does not read them. Outputs publish only after all results and the hidden SELECT complete. Oracle binary InputOutput streams use the scalar PrepareExecute piece path described above. See [INOUT stream evidence](history/2026-10-29-mysql-inout-stream.md). The plan accepts at most 65535 parameters and 4096 output parameters, subject to packet limits.
+In MySQL mode, use CommandType.StoredProcedure with a one- or two-part routine identifier, parsed and quoted as identifiers. Procedure parameters bind in collection order, irrespective of their names. Input, Output and InputOutput are accepted for procedures. A stored function accepts one ReturnValue plus Input arguments only; multiple ReturnValue parameters and Output/InputOutput mixed with a function return are rejected. The function plan prepares `SET @private = function(?)` and retrieves the result through a hidden `SELECT`; the ReturnValue is published only after that query completes. Effective CLIENT_PS_MULTI_RESULTS is required. A positive command FetchSize is accepted and its value is preserved, with or without explicit Prepare. Routine execution uses effective fetchSize=0 and cursorFlag=0; ordinary results stream normally, and internal output SELECTs remain hidden and unpaged. This does not add routine-result cursor paging. SchemaOnly and KeyInfo are rejected; explicit Prepare is supported and client-side prepare fallback is disabled. Input streams use the long-data path. Binary InputOutput streams upload through the prepared private-variable SET before CALL; duplicate stream references across SET and CALL are rejected before reading or sending. Sources retain caller ownership and current position; Prepare does not read them. Outputs publish only after all results and the hidden SELECT complete. Oracle binary InputOutput streams use the scalar PrepareExecute piece path described above. See [INOUT stream evidence](compatibility.md). The plan accepts at most 65535 parameters and 4096 output parameters, subject to packet limits.
 
 For procedure outputs, one transient binary-prepared SET initializes private per-command user variables on every execution: Output starts at SQL NULL and InputOutput uses its input snapshot. The binary-prepared CALL binds Input values and refers to these variables for outputs. For functions, the prepared SET is the business execution itself and binds only the Input arguments. After the terminal CALL or function response, a private text SELECT retrieves outputs; this result is hidden and excluded from affected-row totals. Outputs follow the SELECT column metadata and normal decoding, including user-variable temporal/string behavior; the declared parameter DbType does not force an output conversion. Values publish together only after a valid single-row output response completes successfully. Errors or cancellation preserve prior output values; the driver does not replay the procedure or function.
 
@@ -767,7 +771,7 @@ The driver never automatically replays sent SQL or moves an active transaction t
 
 ### Ambient transactions
 
-Local single-resource implementation and verification are recorded in the [module evidence](history/obconnector-dotnet-completeness.md#1527-2026-10-25-ambient-单资源事务与初始化取消本地交付). The earlier development checkpoint retains the original failures; real deployment acceptance remains open.
+Local single-resource implementation and verification are recorded in the [module evidence](compatibility.md). The earlier development checkpoint retains the original failures; real deployment acceptance remains open.
 
 Open inside TransactionScope automatically enlists; EnlistTransaction explicitly enlists an already open, idle connection. EnlistTransaction(null), inactive transactions and conflicting local/XA/ambient contexts are rejected. Reenlisting the same logical transaction, including a clone, is idempotent on its active connection. A second database resource is rejected with NotSupportedException before its local transaction SQL, including when it names the same server. Failed automatic enlistment closes that logical connection; rejecting a second resource during explicit enlistment leaves that connection available outside the scope. An initialization error can instead break the physical session. Existing promotable or distributed resources cannot be joined, and subsequent promotion requests are rejected. This is local single-resource participation through IPromotableSinglePhaseNotification, with no durable prepare, multi-database atomic commit or distributed recovery.
 
@@ -855,7 +859,7 @@ it does not silently fetch all rows. CloseConnection still closes only the origi
 Parent-command disposal, cursor single use and transaction/session ownership are unchanged. SchemaOnly,
 KeyInfo and unknown flags reject before taking the cursor; a corrected call can still open it once.
 These flags apply to output and binary or text result-column cursors through the same public object.
-They do not add cursor Input/InputOutput. See [evidence and open acceptance](history/obconnector-dotnet-completeness.md#1562-2026-10-26-ref-cursor-结果限制).
+They do not add cursor Input/InputOutput. See [evidence and open acceptance](compatibility.md).
 
 <a id="oracle-standalone-prepare"></a>
 ### Oracle standalone preparation
@@ -873,7 +877,7 @@ Local fixtures and five-asset consumers cover preparation, ownership and failure
 
 Oracle text OUT/RETURNING and stored procedure/function execution accept a positive command FetchSize with or without explicit Prepare. The property remains unchanged. FetchSize controls a server cursor's page size; the internal output row is returned in the execution response with cursorFlag=0, so the output plan does not issue COM_STMT_FETCH or page its internal outputs. Any ordinary additional result sets keep their existing streaming behavior. This does not add output-result pagination or new result shapes.
 
-Returned OceanBaseRefCursor objects retain their own GetDataReader(fetchSize) / GetDataReaderAsync(fetchSize) page size (default128), independently of the parent command hint; command disposal does not close an outstanding returned cursor. Output values still publish atomically only after validated completion of all responses; known errors, cancellation and early close retain their existing behavior and never replay the command. Ordinary query cursor paging is unchanged. ExecuteArray also accepts a positive FetchSize hint without paging its internal batch results or changing rowCount. UseCursorOffset on an Oracle output or array execution plan remains unsupported and rejects before version/target traffic. MySQL stored routines now also accept positive non-paging hints, while SchemaOnly/KeyInfo remain rejected; binary MySQL INOUT streams now use the prepared SET upload path described above. See [routine hint evidence](history/2026-10-28-mysql-routine-fetch-hint.md) and [module evidence and limits](history/obconnector-dotnet-completeness.md#1546-2026-10-25-oracle-输出执行与-fetchsize-提示).
+Returned OceanBaseRefCursor objects retain their own GetDataReader(fetchSize) / GetDataReaderAsync(fetchSize) page size (default128), independently of the parent command hint; command disposal does not close an outstanding returned cursor. Output values still publish atomically only after validated completion of all responses; known errors, cancellation and early close retain their existing behavior and never replay the command. Ordinary query cursor paging is unchanged. ExecuteArray also accepts a positive FetchSize hint without paging its internal batch results or changing rowCount. UseCursorOffset on an Oracle output or array execution plan remains unsupported and rejects before version/target traffic. MySQL stored routines now also accept positive non-paging hints, while SchemaOnly/KeyInfo remain rejected; binary MySQL INOUT streams now use the prepared SET upload path described above. See [routine hint evidence](compatibility.md) and [module evidence and limits](compatibility.md).
 
 ### LOBs
 
@@ -904,11 +908,11 @@ separately with quoted canonical names. Four-setting verification and later trus
 append FROM DUAL in Oracle mode. Validation, full-response consumption and failed-restoration
 retirement remain required. Explicit Oracle checks confirm nine configured encodings for national
 array inputs; UTF8MB3 remapping and SJIS/Big5 failures remain documented deployment restrictions in
-[Compatibility](compatibility.md#2026-10-27-complex-national-client-encoding).
+[Compatibility](compatibility.md).
 
 PL complex OUT/INOUT values use the result snapshot's session national encoding. Ordinary binary named complex columns retain database national storage encoding: loading a type containing national members additionally reads `NLS_DATABASE_PARAMETERS` for `NLS_NCHAR_CHARACTERSET` on the same reserved session/transaction, with the existing timeout and cancellation source. Currently only `AL16UTF16` is accepted, using strict UTF-16 big endian without BOM insertion/removal. A valid single-row response is consumed before an unsupported value is rejected; failed loading does not publish that type. Other database national encodings require separate wire evidence and implementation.
 
-The subsequent [explicit-encoding acceptance](history/2026-10-29-complex-national-encoding-acceptance.md)
+The subsequent [explicit-encoding acceptance](compatibility.md)
 covers fourteen national settings for named/nested OUT/INOUT and anonymous array DML, plus ordinary
 named-object table reads. This validates session output encoding independently of AL16UTF16 storage;
 it does not validate stored nested-table columns or any other database national storage encoding.
@@ -934,7 +938,7 @@ DDL executed by another connection or hidden in procedures, anonymous blocks, fu
 
 ### Array binding
 
-Use `ExecuteArray(rowCount)` / `ExecuteArrayAsync(...)` with PrepareExecute and an explicitly bound transaction. Row count is 1–65535. Input/InputOutput parameters are factory arrays of that length; Output/ReturnValue declares a factory array type. SELECT and DDL are unsupported. Positive `FetchSize` is accepted as a hint, preserving its value; array DML/PL uses cursorFlag=0, iterationCount=2 and no COM_STMT_FETCH. `UseCursorOffset` remains unsupported. See [Java comparison and regression evidence](history/2026-10-28-array-fetch-hint.md).
+Use `ExecuteArray(rowCount)` / `ExecuteArrayAsync(...)` with PrepareExecute and an explicitly bound transaction. Row count is 1–65535. Input/InputOutput parameters are factory arrays of that length; Output/ReturnValue declares a factory array type. SELECT and DDL are unsupported. Positive `FetchSize` is accepted as a hint, preserving its value; array DML/PL uses cursorFlag=0, iterationCount=2 and no COM_STMT_FETCH. `UseCursorOffset` remains unsupported. See [Java comparison and regression evidence](compatibility.md).
 
 Inspect `ArrayBindingResult.Items` for zero-based Succeeded/Failed/Unknown results. Row errors return Failed; protocol or terminal errors throw and can leave partial results in `command.ArrayBindingResult`. Item success does not commit. OUT/RETURNING can return several rows per input; output `Value` becomes `object[][]` only after complete success. Reset InputOutput to a factory value before executing again.
 
@@ -944,7 +948,7 @@ Inspect `ArrayBindingResult.Items` for zero-based Succeeded/Failed/Unknown resul
 
 Business commands require an active XA branch and no local `Transaction`. Local transactions and database switching are rejected in XA mode. Close does not complete a branch. XA return codes use `OceanBaseException.XaErrorCode`, separately from `ServerErrorCode`; coordinator recovery is the application's responsibility. A separate [opt-in process recovery harness](xa-process-recovery-acceptance.md) tests one prepared/recorded-decision coordinator crash point; it is not a product coordinator.
 
-With pooling enabled, XA dedication persists even before Start and after Commit/Rollback. Close destroys the dedicated physical session instead of resetting it into the ordinary pool. A reopened logical connection cannot reuse an old resource; all sync/async resource methods reject it. After Close, prepared branches require explicit recovery/completion by the application on a separate session; Close is not a confirmed business rollback. [Scoped pool acceptance and remaining failure matrix](history/obconnector-dotnet-completeness.md#516-xa-专用会话的池隔离).
+With pooling enabled, XA dedication persists even before Start and after Commit/Rollback. Close destroys the dedicated physical session instead of resetting it into the ordinary pool. A reopened logical connection cannot reuse an old resource; all sync/async resource methods reject it. After Close, prepared branches require explicit recovery/completion by the application on a separate session; Close is not a confirmed business rollback. [Scoped pool acceptance and remaining failure matrix](compatibility.md).
 
 ## Schema, address resolution and diagnostics
 
@@ -956,7 +960,7 @@ All five assets expose `IOceanBaseCredentialProvider? OceanBaseConnection.Creden
 
 Return trusted addresses for the same tenant in `Server` syntax. Failed, invalid or canceled discovery cannot fall back to an idle session or configured address. A pooled Open with a custom resolver applies `Connection Timeout` across resolution, waiting, prewarming, probe and handshake; zero removes this total timeout. Caller cancellation and Close interrupt discovery/waiting; late async resolver results cannot open a connection. Candidates are retried only after TCP connection failure. TLS/authentication failures do not switch endpoints.
 
-Ordinary pooled connections share only when the effective configuration identity, resolver reference identity, credential-provider reference identity, TLS validation callback reference identity, and client certificate reference identity plus SHA-256 DER fingerprint all match; overridden value equality does not merge policies. Changing a closed connection's resolver, provider, validation callback or client certificate selects its matching pool on the next Open. Each data source retains its own private pool even if these policy objects are shared with another source; source connections keep their captured provider. The resolver and provider remain caller-owned and must be concurrency-safe. See P0-06 in the [completeness baseline](obconnector-dotnet-completeness.md).
+Ordinary pooled connections share only when the effective configuration identity, resolver reference identity, credential-provider reference identity, TLS validation callback reference identity, and client certificate reference identity plus SHA-256 DER fingerprint all match; overridden value equality does not merge policies. Changing a closed connection's resolver, provider, validation callback or client certificate selects its matching pool on the next Open. Each data source retains its own private pool even if these policy objects are shared with another source; source connections keep their captured provider. The resolver and provider remain caller-owned and must be concurrency-safe. See G10/G12 in the [gap matrix](obconnector-dotnet-completeness.md).
 
 ### TLS client certificates
 
@@ -1161,7 +1165,7 @@ remains available when group limits are zero; malformed snapshots still fail bef
 
 A local block replaces the complete inherited blacklist; it does not merge fields. ADDRESS takes precedence over ADDRESS_LIST, then DESCRIPTION. Omitted fields use NORMAL/TIMEOUT50 defaults, including an empty local block. An omitted block inherits, or has no policy when no ancestor supplies one. The immutable address occurrence carries its explicit policy through weighted, rotation and health ordering, including repeated host/port occurrences. The DESCRIPTION attempt ceiling remains shared. Equal effective policy values and exact endpoints share history across occurrences and groups; different policies isolate history. A success clears only the successful attempt's effective policy. Reloading policies does not mutate an earlier Open snapshot or invalidate healthy idle membership by itself.
 
-This local-policy contract is defined by the .NET driver. Fixed Java reference6adc311 leaves local blacklist parsing disabled and its group configuration unused; it is not Java runtime parity evidence. See [implementation and evidence](history/obconnector-dotnet-completeness.md#1563-2026-10-26-发现分组黑名单覆盖).
+This local-policy contract is defined by the .NET driver. Fixed Java reference6adc311 leaves local blacklist parsing disabled and its group configuration unused; it is not Java runtime parity evidence. See [implementation and evidence](compatibility.md).
 
 ```text
 APP=(DESCRIPTION=(OBLB_STRATEGY=ROTATION)(OBLB_RETRY_ALL_DOWNS=6)

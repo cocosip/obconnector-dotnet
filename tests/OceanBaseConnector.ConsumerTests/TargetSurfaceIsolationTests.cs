@@ -13,7 +13,6 @@ using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
-using OceanBaseConnector;
 
 namespace OceanBaseConnector.ConsumerTests
 {
@@ -26,8 +25,14 @@ namespace OceanBaseConnector.ConsumerTests
     /// </summary>
     public sealed class TargetSurfaceIsolationTests
     {
-        private static readonly string ModernTypeName = "OceanBaseConnector.OceanBaseModernApis";
-        private static readonly string BaselineTypeName = "OceanBaseConnector.OceanBaseTargetSurface";
+        private static readonly string[] ModernTypeNames =
+        {
+            "OceanBaseConnector.OceanBaseDataSource",
+            "OceanBaseConnector.OceanBaseDataSourceBuilder",
+            "OceanBaseConnector.OceanBaseBatch",
+            "OceanBaseConnector.OceanBaseBatchCommand",
+            "OceanBaseConnector.OceanBaseBatchCommandCollection",
+        };
 
         private static IReadOnlySet<string> ReadPublicTypeNames(string assemblyPath)
         {
@@ -81,8 +86,6 @@ namespace OceanBaseConnector.ConsumerTests
                 var builder = Activator.CreateInstance(type, "Server=localhost;User ID=sample;Password=baseline-secret")!;
                 var sanitized = (string)type.GetMethod("ToSanitizedConnectionString")!.Invoke(builder, new object[] { false })!;
                 Assert.DoesNotContain("baseline-secret", sanitized);
-                var property = assembly.GetType(BaselineTypeName)!.GetProperty("HasModernAdoNetApis")!;
-                Assert.Equal(false, property.GetValue(null));
             }
             finally { context.Unload(); }
         }
@@ -95,10 +98,7 @@ namespace OceanBaseConnector.ConsumerTests
             var path = RepositoryLocator.GetProductAssemblyPath(target);
             var typeNames = ReadPublicTypeNames(path);
 
-            Assert.DoesNotContain(ModernTypeName, typeNames);
-            Assert.DoesNotContain("OceanBaseConnector.OceanBaseDataSource", typeNames);
-            Assert.DoesNotContain("OceanBaseConnector.OceanBaseDataSourceBuilder", typeNames);
-            Assert.Contains(BaselineTypeName, typeNames);
+            foreach (var typeName in ModernTypeNames) Assert.DoesNotContain(typeName, typeNames);
         }
 
         [Theory]
@@ -188,10 +188,7 @@ namespace OceanBaseConnector.ConsumerTests
                 var path = RepositoryLocator.GetProductAssemblyPath(targetFramework);
                 var typeNames = ReadPublicTypeNames(path);
 
-                Assert.Contains(ModernTypeName, typeNames);
-                Assert.Contains("OceanBaseConnector.OceanBaseDataSource", typeNames);
-                Assert.Contains("OceanBaseConnector.OceanBaseDataSourceBuilder", typeNames);
-                Assert.Contains(BaselineTypeName, typeNames);
+                foreach (var typeName in ModernTypeNames) Assert.Contains(typeName, typeNames);
             }
         }
 
@@ -210,20 +207,25 @@ namespace OceanBaseConnector.ConsumerTests
                     Assert.Equal(ConnectionState.Closed, connection.State);
                     Assert.IsAssignableFrom<DbCommand>(connection.CreateCommand());
                     Assert.IsAssignableFrom<DbParameter>(factory.CreateParameter());
+                    var modern = !tfm.StartsWith("netstandard", StringComparison.Ordinal);
+                    Assert.Equal(modern, factory.CanCreateBatch);
+                    Assert.Equal(modern, connection.CanCreateBatch);
+                    foreach (var method in new[] { "CreateBatch", "CreateBatchCommand", "CreateDataSource" })
+                        Assert.Equal(modern, factory.GetType().GetMethod(method)!.DeclaringType == factory.GetType());
+                    if (modern)
+                    {
+                        using var batch = factory.CreateBatch()!;
+                        Assert.Equal(assembly.GetType("OceanBaseConnector.OceanBaseBatch"), batch.GetType());
+                        Assert.Equal(assembly.GetType("OceanBaseConnector.OceanBaseBatchCommand"), factory.CreateBatchCommand()!.GetType());
+                        using var source = factory.CreateDataSource(connection.ConnectionString);
+                        Assert.Equal(assembly.GetType("OceanBaseConnector.OceanBaseDataSource"), source.GetType());
+                    }
                     var loggerType = typeof(Microsoft.Extensions.Logging.ILoggerFactory);
                     Assert.NotNull(connection.GetType().GetConstructor(new[] { typeof(string), loggerType }));
                     Assert.DoesNotContain(assembly.GetReferencedAssemblies(), n => n.Name == "OceanBaseConnector.DependencyInjection");
                 }
                 finally { context.Unload(); }
             }
-        }
-
-        [Fact]
-        public void RuntimeAssetMatchesModernTarget()
-        {
-            // The test host itself runs on a modern runtime and references the
-            // matching product asset, so the compiled-in const must report true.
-            Assert.True(OceanBaseTargetSurface.HasModernAdoNetApis);
         }
     }
 }

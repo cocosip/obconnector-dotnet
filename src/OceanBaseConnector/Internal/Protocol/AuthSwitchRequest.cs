@@ -20,8 +20,6 @@ namespace OceanBaseConnector.Internal.Protocol
 
         public byte[] Seed { get; }
 
-        public static bool IsAuthSwitch(byte[] payload) => payload.Length > 0 && payload[0] == 0xFE;
-
         public static AuthSwitchRequest Parse(byte[] payload)
         {
             var cursor = new ByteCursor(payload);

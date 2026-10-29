@@ -154,11 +154,6 @@ namespace OceanBaseConnector.Internal.Protocol
             }
         }
 
-        public void SkipLengthEncodedInteger()
-        {
-            ReadLengthEncodedInteger();
-        }
-
         internal long? ReadNullableLengthEncodedInteger()
         {
             EnsureAvailable(1);

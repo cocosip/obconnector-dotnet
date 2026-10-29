@@ -107,6 +107,9 @@ public sealed partial class TextCommandTests
             }
         }
         finally { connection.Close(); server.Stop(); }
-        await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        try { await server.Completion.WaitAsync(TimeSpan.FromSeconds(10)); }
+        // A verified corrupt row closes the unread response while the peer may still be writing it.
+        catch (IOException error) when (fault != "none" && error.InnerException is SocketException socket &&
+            (socket.SocketErrorCode == SocketError.ConnectionReset || socket.SocketErrorCode == SocketError.ConnectionAborted)) { }
     }
 }

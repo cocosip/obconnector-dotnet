@@ -120,7 +120,7 @@ retain strict UTF-8 decoding. Opt-in ordinary client fallback accepts explicit J
 complete automatic-Prepare1295/HY000 response, using fresh charset/collation/SQL_MODE facts and
 ordinary string escaping. Typed SQL NULL needs no literal-state query; raw NUL with
 NO_BACKSLASH_ESCAPES remains rejected. Size retains the existing string hint semantics and does
-not truncate the JSON. See [fallback evidence and limits](history/2026-10-29-mysql-json-fallback.md).
+not truncate the JSON. See [fallback evidence and limits](compatibility.md).
 
 The fixed server's
 [ObJsonTC result branch](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/src/observer/mysql/obsm_utils.cpp)
@@ -140,14 +140,14 @@ literals, so their values can contain characters outside the selected client cha
 SQL text still requires representability. Input validation and the total SQL packet budget remain;
 result decoding still requires fresh trusted national state. Explicit national/result names now also
 use the twelve existing strict mapped encodings; absent names retain Unicode-only collation fallback.
-See the [national input evidence](history/2026-10-29-multi-statement-national-input.md). Complex national input members use
+See the [national input evidence](compatibility.md). Complex national input members use
 the trusted connection charset, now resolving all configured client names through the strict client
 encoder, including explicit utf8mb3 and the eleven non-UTF8 families. Legacy UTF8/UTF16 handling
 is preserved. Nested members, scalar factory arrays and ExecuteArray share this input path;
 unrepresentable text fails before target execution. PL complex output shares the explicit national
-resolver; stored national members still require AL16UTF16. See the [scalar encoding evidence](history/2026-10-29-national-character-encodings.md).
+resolver; stored national members still require AL16UTF16. See the [scalar encoding evidence](compatibility.md).
 Named/nested PL outputs, named-object storage and anonymous array DML additionally have a
-[392-case direct acceptance matrix](history/2026-10-29-complex-national-encoding-acceptance.md)
+[392-case direct acceptance matrix](compatibility.md)
 covering these twelve names plus UTF8/UTF16; other storage encodings and deployments remain open.
 CLOB write buffers use ordinary string parameters and therefore
 inherit the selected client encoding. The complete WriteText input is checked for representability
@@ -197,24 +197,24 @@ ASCII aliases, preserving values, HEX, collation and coercibility4 under the ser
 SQL_MODE. No objects or SQL_MODE were changed. These generated-literal checks do not exercise a
 real 1295-triggered automatic fallback, DBCS, other mode/collation/version profiles or OBProxy.
 Retained failures and exact local verification are in the
-[module record](history/obconnector-dotnet-progress.md#2026-10-27-single-byte-mysql-string-fallback).
+[module record](compatibility.md).
 
 The subsequent DBCS extension adds all seven strict mappings with trail5C-adjacent quote/backslash
 samples, GB18030 four-byte values and HKSCS supplementary values. Explicit direct MySQL checks
 pass14/14 generated-literal cases plus a connection control, with ASCII aliases and unchanged
 SQL_MODE. This extends local automatic-fallback support, not actual server1295/proxy or every
 SQL_MODE/collation/version profile. See its
-[module record](history/obconnector-dotnet-progress.md#2026-10-27-dbcs-mysql-string-fallback).
+[module record](compatibility.md).
 
 The complex-national extension adds exact synthetic input bytes for all twelve non-default names,
 both prepare paths, sync/async and five-asset consumption. Explicit Oracle4.4.2.2 array-input
 checks pass36/48: ASCII, latin1, DEC8, TIS620, GBK, both GB18030 revisions and HKSCS/HKSCS31,
 each with NCHAR/NVARCHAR2, sync/async, exact read-back and SQL NULL. Each case rolls back and drops
 its generated table. That historical run had12 failures at Open before DDL. The later
-[failure investigation](history/2026-10-28-direct-failure-triage.md) identifies four as an overly strict
+[failure investigation](compatibility.md) identifies four as an overly strict
 driver UTF8MB3 state check; those four now pass, making this group40/48. The remaining8 are SJIS/Big5:
 session switching makes subsequent fixed ASCII statements fail900, independently reproduced with
 official Connector/J2.4.14. No substitution of a different input encoding is added for those families.
 These observations do not establish other versions, proxies, stored complex output, standalone
 national or live pool-reset compatibility. Retained initialization failures and final local gates
-are in the [module record](history/obconnector-dotnet-progress.md#2026-10-27-complex-national-client-encoding).
+are in the [module record](compatibility.md).
