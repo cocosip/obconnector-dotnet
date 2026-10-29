@@ -75,6 +75,34 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
+        public void MultiStatementJsonUsesTrustedStringLiteralsAndKeepsNullDistinct()
+        {
+            var parameters = new OceanBaseParameterCollection();
+            parameters.Add(new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Value = "{\"x\":null}" });
+            parameters.Add(new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Value = "null" });
+            parameters.Add(new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Value = DBNull.Value });
+            var bindings = ParameterBindingPlan.Create("select ?; select ?, ?", OceanBaseCompatibilityMode.MySql, parameters);
+            var context = MySqlLiteralContext.Parse("utf8mb4", "utf8mb4", "utf8mb4_bin", "NO_BACKSLASH_ESCAPES");
+            Assert.Equal("select (REPLACE('x','x',_utf8mb4 X'7B2278223A6E756C6C7D')); select (REPLACE('x','x',_utf8mb4 X'6E756C6C')), (NULL)",
+                ClientPreparedSql.Build(bindings, OceanBaseCompatibilityMode.MySql, context, multiStatement: true));
+        }
+
+        [Fact]
+        public void MultiStatementJsonRetainsModeMetadataAndFallbackRestrictions()
+        {
+            Assert.Throws<NotSupportedException>(() => Build("select ?", OceanBaseCompatibilityMode.MySql,
+                new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Value = DBNull.Value }));
+            Assert.Throws<NotSupportedException>(() => BuildMulti("select :p; select 1 from dual", OceanBaseCompatibilityMode.Oracle,
+                new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.Json, Value = DBNull.Value }));
+            foreach (var parameter in new[]
+            {
+                new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Precision = 1, Value = DBNull.Value },
+                new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Scale = 1, Value = DBNull.Value },
+                new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Direction = ParameterDirection.Output, Value = DBNull.Value }
+            }) Assert.Throws<NotSupportedException>(() => BuildMulti("select ?; select 1", OceanBaseCompatibilityMode.MySql, parameter));
+        }
+
+        [Fact]
         public void NumbersAreInvariantExactAndParenthesized()
         {
             var previous = CultureInfo.CurrentCulture;

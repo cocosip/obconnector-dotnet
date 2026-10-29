@@ -9,7 +9,7 @@ using Xunit;
 
 namespace OceanBaseConnector.IntegrationTests.Protocol;
 
-public sealed class MultiStatementTests
+public sealed partial class MultiStatementTests
 {
     public static IEnumerable<object[]> Rows() =>
         from profile in IntegrationEnvironment.Profiles

@@ -53,7 +53,8 @@ namespace OceanBaseConnector.Internal.Sql
                 !provider.HasValue && parameter.DbType == DbType.Object && (parameter.Value is OceanBaseIntervalYearToMonth || parameter.Value is OceanBaseIntervalDayToSecond));
             if (provider.HasValue && provider != OceanBaseDbType.Null && provider != OceanBaseDbType.Decimal &&
                 provider != OceanBaseDbType.String && provider != OceanBaseDbType.Binary && provider != OceanBaseDbType.Boolean &&
-                (provider < OceanBaseDbType.SByte || provider > OceanBaseDbType.Double) && !temporal && !interval) throw Unsupported();
+                (provider < OceanBaseDbType.SByte || provider > OceanBaseDbType.Double) && !temporal && !interval &&
+                !(multiStatement && provider == OceanBaseDbType.Json)) throw Unsupported();
             var type = parameter.DbType;
             if (type != DbType.String && type != DbType.AnsiString && type != DbType.StringFixedLength && type != DbType.AnsiStringFixedLength &&
                 type != DbType.Binary && type != DbType.Boolean && type != DbType.Decimal &&

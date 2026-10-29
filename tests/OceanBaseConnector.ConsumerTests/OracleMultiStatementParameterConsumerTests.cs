@@ -34,7 +34,12 @@ namespace OceanBaseConnector.ConsumerTests
         public Task PublicAssetsBindMySqlMultiStatementInputsWithoutServerPreparation(string target, bool asynchronous, bool ob20)
             => ScalarMultiStatementConsumer(target, asynchronous, ob20, mysql: true);
 
-        private static async Task ScalarMultiStatementConsumer(string target, bool asynchronous, bool ob20, bool mysql)
+        [Theory]
+        [MemberData(nameof(OracleMultiParameterAssets))]
+        public Task PublicAssetsBindMySqlJsonMultiStatementInputsWithoutServerPreparation(string target, bool asynchronous, bool ob20)
+            => ScalarMultiStatementConsumer(target, asynchronous, ob20, mysql: true, json: true);
+
+        private static async Task ScalarMultiStatementConsumer(string target, bool asynchronous, bool ob20, bool mysql, bool json = false)
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
@@ -61,7 +66,8 @@ namespace OceanBaseConnector.ConsumerTests
                     Assert.Equal(3, request[0]);
                     Assert.Equal(execution == 1
                         ? mysql
-                            ? "insert into t values ((REPLACE('x','x',_utf8mb4 X'71756F7465275CE4B8ADE696873B203A70'))); update t set s=(REPLACE('x','x',_utf8mb4 X'71756F7465275CE4B8ADE696873B203A70'))"
+                            ? json ? "insert into t values ((REPLACE('x','x',_utf8mb4 X'7B2278223A6E756C6C7D'))); update t set s=(NULL)"
+                                : "insert into t values ((REPLACE('x','x',_utf8mb4 X'71756F7465275CE4B8ADE696873B203A70'))); update t set s=(REPLACE('x','x',_utf8mb4 X'71756F7465275CE4B8ADE696873B203A70'))"
                             : "insert into t values ((CAST('quote''\\中文; :p' AS VARCHAR2(4000)))); update t set s=(CAST('quote''\\中文; :p' AS VARCHAR2(4000)))"
                         : "after public multi parameters", Encoding.UTF8.GetString(request, 1, request.Length - 1));
                     using var response = new MemoryStream();
@@ -81,18 +87,31 @@ namespace OceanBaseConnector.ConsumerTests
                 if (asynchronous) await connection.OpenAsync(budget.Token); else connection.Open();
                 using var command = connection.CreateCommand();
                 command.CommandText = mysql ? "insert into t values (?); update t set s=?" : "insert into t values (:p); update t set s=:P";
-                var parameter = command.CreateParameter(); parameter.ParameterName = "p"; parameter.Value = "quote'\\中文; :p";
+                var parameter = command.CreateParameter(); parameter.ParameterName = "p"; parameter.Value = json ? "{\"x\":null}" : "quote'\\中文; :p";
+                var jsonType = json ? Enum.Parse(assembly.GetType("OceanBaseConnector.OceanBaseDbType")!, "Json") : null;
+                if (json) parameter.GetType().GetProperty("OceanBaseDbType")!.SetValue(parameter, jsonType);
                 command.Parameters.Add(parameter);
-                if (mysql) { var second = command.CreateParameter(); second.Value = parameter.Value; command.Parameters.Add(second); }
+                if (mysql)
+                {
+                    var second = command.CreateParameter(); second.Value = json ? DBNull.Value : parameter.Value;
+                    if (json) second.GetType().GetProperty("OceanBaseDbType")!.SetValue(second, jsonType);
+                    command.Parameters.Add(second);
+                }
                 Assert.Equal(5, asynchronous ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
-                Assert.Equal("quote'\\中文; :p", parameter.Value);
+                Assert.Equal(json ? "{\"x\":null}" : "quote'\\中文; :p", parameter.Value);
                 command.Parameters.Clear(); command.CommandText = "after public multi parameters";
                 Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
                 if (asynchronous) await connection.CloseAsync(); else connection.Close();
                 await serving.WaitAsync(budget.Token);
             }
             catch { if (serving.IsFaulted) await serving; throw; }
-            finally { budget.Cancel(); listener.Stop(); context.Unload(); }
+            finally
+            {
+                budget.Cancel(); listener.Stop();
+                // The main path observes server errors; cleanup must preserve the original client failure.
+                try { await serving; } catch { }
+                context.Unload();
+            }
         }
     }
 }

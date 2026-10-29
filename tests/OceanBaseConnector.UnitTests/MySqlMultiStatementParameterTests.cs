@@ -8,6 +8,36 @@ namespace OceanBaseConnector.UnitTests
     public sealed partial class TextCommandTests
     {
         [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MySqlJsonMultiStatementsUseTextWithoutChangingParameterValues(bool asynchronous)
+        {
+            var server = MySqlProcedureServer(async channel =>
+            {
+                await MySqlLiteralState(channel, modes: "NO_BACKSLASH_ESCAPES");
+                channel.BeginCommand();
+                await Query(channel, "SELECT (REPLACE('x','x',_utf8mb4 X'7B2278223A22273B3F227D')); SELECT (NULL)");
+                await channel.WritePacketAsync(Ok(2, 10)); await channel.WritePacketAsync(Ok(3, 2));
+                channel.BeginCommand(); await Query(channel, "after json multi"); await channel.WritePacketAsync(Ok(1, 2));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Multi Statements=true");
+            try
+            {
+                await connection.OpenAsync(); using var command = connection.CreateCommand();
+                command.CommandText = "SELECT ?; SELECT ?";
+                var parameter = new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Value = "{\"x\":\"';?\"}" };
+                command.Parameters.Add(parameter);
+                command.Parameters.Add(new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Value = DBNull.Value });
+                Assert.Equal(5, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+                Assert.Equal("{\"x\":\"';?\"}", parameter.Value);
+                command.Parameters.Clear(); command.CommandText = "after json multi";
+                Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData(false, false)]
         [InlineData(true, false)]
         [InlineData(false, true)]
