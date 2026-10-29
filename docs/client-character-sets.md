@@ -142,6 +142,9 @@ encoder, including explicit utf8mb3 and the eleven non-UTF8 families. Legacy UTF
 is preserved. Nested members, scalar factory arrays and ExecuteArray share this input path;
 unrepresentable text fails before target execution. PL complex output shares the explicit national
 resolver; stored national members still require AL16UTF16. See the [scalar encoding evidence](history/2026-10-29-national-character-encodings.md).
+Named/nested PL outputs, named-object storage and anonymous array DML additionally have a
+[392-case direct acceptance matrix](history/2026-10-29-complex-national-encoding-acceptance.md)
+covering these twelve names plus UTF8/UTF16; other storage encodings and deployments remain open.
 CLOB write buffers use ordinary string parameters and therefore
 inherit the selected client encoding. The complete WriteText input is checked for representability
 before its first write chunk, using bounded chunks for encoding checks; a rejected suffix leaves

@@ -1079,8 +1079,10 @@ New Oracle direct scalar checks pass 48/48: twelve national settings, ordinary p
 and Oracle PrepareExecute, sync/async, independently verified storage and text/binary streamed
 results. The connection client charset remains UTF8; this does not validate SJIS/Big5 client Open.
 The server reports utf8mb3 as utf8mb4. Local related units pass 544/544, actual DLL consumers 336/336,
-and DI 14/14. New PL output encoding coverage is synthetic; no additional live PL/storage matrix
-is claimed. Full-suite/review status and retained failures are in the [module evidence](history/2026-10-29-national-character-encodings.md).
+and DI 14/14. Subsequent live complex checks pass 392/392 across fourteen settings: named/nested
+OUT/INOUT, named-object storage reads, anonymous array DML and unresolved RETURNING rejection.
+See the [complex acceptance scope](history/2026-10-29-complex-national-encoding-acceptance.md) and the
+[original scalar module evidence](history/2026-10-29-national-character-encodings.md).
 
 ## Runtime and integration coverage
 

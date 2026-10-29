@@ -2,6 +2,9 @@
 
 基线 `f011212`，继续在 master 开发；本地提交，不推送。对应 P1-08，不能关闭全部缺口。
 
+> 本文保留标量模块 `74f6497` 的证据范围。后续 PL 复杂输出的实库验收见
+> [复杂编码验收记录](2026-10-29-complex-national-encoding-acceptance.md)，不改写本模块当时的验证结果。
+
 ## 功能与协议依据
 
 官方 OceanBase Connector/J 2.4.14，源码 `6adc311ba5db8b2f19f98f3e6e4734667fdfdda1`：

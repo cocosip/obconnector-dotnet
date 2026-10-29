@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.IntegrationTests.Infrastructure;
@@ -14,11 +15,26 @@ public sealed class ComplexNationalTests
     public static IEnumerable<object[]> Profiles()
     {
         foreach (var profile in ProfileTheoryData.OraclePrepareExecuteObjects())
-            foreach (var encoding in new[] { "utf8mb4", "utf16" })
+            foreach (var encoding in new[] { "utf8mb4", "utf16" }.Concat(ComplexNationalClientEncodingTests.Samples.Select(s => s.Name)))
                 foreach (var nationalType in new[] { "NCHAR", "NVARCHAR2" })
                     foreach (var asynchronous in new[] { false, true })
                         foreach (var collection in new[] { false, true })
                             yield return new object[] { profile, encoding, nationalType, asynchronous, collection };
+    }
+
+    private static string NationalText(string encoding, string nationalType)
+    {
+        var sample = ComplexNationalClientEncodingTests.Samples.FirstOrDefault(s => s.Name == encoding);
+        var text = sample.Name == null ? (nationalType == "NCHAR" ? "中文AZ" : "中文🙂") : sample.Text;
+        return nationalType == "NCHAR" ? text + new string(' ', 4 - text.EnumerateRunes().Count()) : text;
+    }
+
+    private static async Task SetNationalAsync(DatabaseContext db, OceanBaseConnection connection, string encoding)
+    {
+        await db.ExecuteAsync(connection, "SET NCHARACTER_SET_CONNECTION = '" + encoding + "'", CancellationToken.None);
+        Assert.Equal(encoding == "utf8mb3" ? "utf8mb4" : encoding,
+            await db.ScalarAsync(connection, "SELECT @@ncharacter_set_connection FROM DUAL", CancellationToken.None));
+        Assert.Equal("utf8mb4", await db.ScalarAsync(connection, "SELECT @@character_set_connection FROM DUAL", CancellationToken.None));
     }
 
     [IntegrationTheory]
@@ -27,7 +43,7 @@ public sealed class ComplexNationalTests
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
-        await db.ExecuteAsync(connection, "SET NCHARACTER_SET_CONNECTION = '" + encoding + "'", CancellationToken.None);
+        await SetNationalAsync(db, connection, encoding);
         var name = db.NewObject("TYPE");
         await db.ExecuteAsync(connection, "CREATE TYPE " + name + (collection ? " AS TABLE OF " : " AS OBJECT (v ") + nationalType + "(4)" + (collection ? "" : ", tag NUMBER)"), CancellationToken.None);
         var procedure = db.NewObject("PROCEDURE");
@@ -36,7 +52,7 @@ public sealed class ComplexNationalTests
         var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
         var type = asynchronous ? await connection.GetComplexTypeAsync(owner, name) : connection.GetComplexType(owner, name);
         Assert.Equal(nationalType, type.Members[0].TypeName);
-        var text = nationalType == "NCHAR" ? "中文AZ" : "中文🙂";
+        var text = NationalText(encoding, nationalType);
         var value = collection ? type.CreateValue(text, null) : type.CreateValue(text, 7);
         await using (var command = db.Command(connection, procedure))
         {
@@ -69,7 +85,8 @@ public sealed class ComplexNationalTests
 
         void AssertValue(object? actual)
         {
-            var values = Assert.IsType<OceanBaseComplexValue>(actual).GetValues();
+            var result = Assert.IsType<OceanBaseComplexValue>(actual); Assert.Same(type, result.Type);
+            var values = result.GetValues();
             Assert.Equal(text, values[0]);
             if (collection) Assert.Null(values[1]);
             else DatabaseContext.EqualNumber(values[1], 7, "Ordinary member must retain its value.");
@@ -82,7 +99,7 @@ public sealed class ComplexNationalTests
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
-        await db.ExecuteAsync(connection, "SET NCHARACTER_SET_CONNECTION = '" + encoding + "'", CancellationToken.None);
+        await SetNationalAsync(db, connection, encoding);
         var childName = db.NewObject("TYPE");
         await db.ExecuteAsync(connection, "CREATE TYPE " + childName + " AS OBJECT(v " + nationalType + "(4), n NUMBER)", CancellationToken.None);
         var parentName = db.NewObject("TYPE");
@@ -96,7 +113,7 @@ public sealed class ComplexNationalTests
         var type = asynchronous ? await connection.GetComplexTypeAsync(owner, name) : connection.GetComplexType(owner, name);
         var parent = collection ? type.Members[0].ComplexType! : type;
         var child = parent.Members[0].ComplexType!;
-        var text = nationalType == "NCHAR" ? "中文AZ" : "中文🙂";
+        var text = NationalText(encoding, nationalType);
         var nested = parent.CreateValue(child.CreateValue(text, 42), " x ");
         var value = collection ? type.CreateValue(nested, null) : nested;
         await using var command = db.Command(connection, procedure); command.CommandType = CommandType.StoredProcedure;
@@ -120,8 +137,8 @@ public sealed class ComplexNationalTests
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
-        await db.ExecuteAsync(connection, "SET NCHARACTER_SET_CONNECTION = '" + encoding + "'", CancellationToken.None);
-        var text = nationalType == "NCHAR" ? "中文AZ" : "中文🙂";
+        await SetNationalAsync(db, connection, encoding);
+        var text = NationalText(encoding, nationalType);
         var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY, v " + nationalType + "(4)", CancellationToken.None);
         await using var transaction = (OceanBaseTransaction)await connection.BeginTransactionAsync();
         var type = connection.CreateArrayType(nationalType, transaction);
@@ -153,14 +170,14 @@ public sealed class ComplexNationalTests
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
-        await db.ExecuteAsync(connection, "SET NCHARACTER_SET_CONNECTION = '" + encoding + "'", CancellationToken.None);
+        await SetNationalAsync(db, connection, encoding);
         var name = db.NewObject("TYPE");
         await db.ExecuteAsync(connection, "CREATE TYPE " + name + " AS OBJECT(v " + nationalType + "(4), n NUMBER)", CancellationToken.None);
         var table = await db.TableAsync(connection, "id INTEGER, v " + name, CancellationToken.None);
         var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
         var type = await connection.GetComplexTypeAsync(owner, name);
         await using var command = db.Command(connection, "INSERT INTO " + table + " VALUES(1, :v) RETURNING v INTO :o");
-        DatabaseContext.Parameter(command, "v", type.CreateValue(nationalType == "NCHAR" ? "中文AZ" : "中文🙂", 7));
+        DatabaseContext.Parameter(command, "v", type.CreateValue(NationalText(encoding, nationalType), 7));
         var output = DatabaseContext.Parameter(command, "o", "old"); output.Direction = ParameterDirection.Output; output.ComplexType = type;
         var error = await Assert.ThrowsAsync<OceanBaseException>(() => asynchronous ? command.ExecuteNonQueryAsync() : Task.FromResult(command.ExecuteNonQuery()));
         Assert.True(error.IsExecutionOutcomeUnknown); Assert.Contains("Complex output metadata", error.InnerException!.Message);
