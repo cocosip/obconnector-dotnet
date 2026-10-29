@@ -185,6 +185,47 @@ namespace OceanBaseConnector.UnitTests
             Assert.Throws<NotSupportedException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle, ym));
         }
 
+        [Fact]
+        public void MultiStatementZonedTimestampsKeepOffsetsSourceZonesAndExactScale()
+        {
+            var timestamp = new OceanBaseTimestamp(new DateTime(2026, 1, 2, 3, 4, 5), 123000000);
+            Assert.Equal("select (TIMESTAMP '2026-01-02 03:04:05.123 -00:30'); select (TIMESTAMP '2026-01-02 03:04:05.123 +06:00'); select (CAST(FROM_TZ(TIMESTAMP '2026-01-02 03:04:05.123', '+05:45') AS TIMESTAMP(3) WITH LOCAL TIME ZONE)); select (NULL); select (NULL)",
+                BuildMulti("select :offset; select :named; select :local; select :nullz; select :nulll", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "offset", Value = new DateTimeOffset(timestamp.WholeSeconds.AddTicks(1230000), TimeSpan.FromMinutes(-30)), Scale = 3 },
+                    new OceanBaseParameter { ParameterName = "named", Value = new OceanBaseTimestampWithTimeZone(timestamp, TimeSpan.FromMinutes(345), "+06:00", "metadata"), Scale = 3 },
+                    new OceanBaseParameter { ParameterName = "local", OceanBaseDbType = OceanBaseDbType.TimestampLocalTimeZone,
+                        Value = new OceanBaseTimestampLocalTimeZone(timestamp, "+05:45"), Scale = 3 },
+                    new OceanBaseParameter { ParameterName = "nullz", OceanBaseDbType = OceanBaseDbType.TimestampWithTimeZone, Value = DBNull.Value },
+                    new OceanBaseParameter { ParameterName = "nulll", OceanBaseDbType = OceanBaseDbType.TimestampLocalTimeZone, Value = DBNull.Value }));
+            Assert.Equal("select (TIMESTAMP '2026-01-02 03:04:05.123456789 +05:45'); select (CAST(FROM_TZ(TIMESTAMP '2026-01-02 03:04:05.123456789', '+00:00') AS TIMESTAMP(9) WITH LOCAL TIME ZONE))",
+                BuildMulti("select :z; select :l", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "z", OceanBaseDbType = OceanBaseDbType.TimestampWithTimeZone,
+                        Value = new OceanBaseTimestampWithTimeZone(new OceanBaseTimestamp(timestamp.WholeSeconds, 123456789), TimeSpan.FromMinutes(345)) },
+                    new OceanBaseParameter { ParameterName = "l", Value = new OceanBaseTimestampLocalTimeZone(new OceanBaseTimestamp(timestamp.WholeSeconds, 123456789), "+00:00") }));
+        }
+
+        [Fact]
+        public void MultiStatementZonedTimestampsQuoteZoneNamesAsContent()
+        {
+            var timestamp = new OceanBaseTimestamp(new DateTime(2026, 1, 2, 3, 4, 5), 0, 0);
+            const string zone = "x');DELETE/**/FROM/**/t;--";
+            Assert.Equal("select (TIMESTAMP '2026-01-02 03:04:05 x'');DELETE/**/FROM/**/t;--'); select (CAST(FROM_TZ(TIMESTAMP '2026-01-02 03:04:05', 'x'');DELETE/**/FROM/**/t;--') AS TIMESTAMP(0) WITH LOCAL TIME ZONE))",
+                BuildMulti("select :z; select :l", OceanBaseCompatibilityMode.Oracle,
+                    new OceanBaseParameter { ParameterName = "z", Value = new OceanBaseTimestampWithTimeZone(timestamp, TimeSpan.Zero, zone) },
+                    new OceanBaseParameter { ParameterName = "l", Value = new OceanBaseTimestampLocalTimeZone(timestamp, zone) }));
+        }
+
+        [Fact]
+        public void MultiStatementZonedTimestampsRetainModeTypePrecisionAndFallbackValidation()
+        {
+            var value = new OceanBaseTimestampWithTimeZone(new OceanBaseTimestamp(new DateTime(2026, 1, 2), 123456789), TimeSpan.Zero);
+            Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = value }));
+            Assert.Throws<NotSupportedException>(() => BuildMulti("select ?; select 1", OceanBaseCompatibilityMode.MySql, new OceanBaseParameter { Value = value }));
+            Assert.ThrowsAny<ArgumentException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = value, Scale = 6 }));
+            Assert.ThrowsAny<ArgumentException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = value, DbType = DbType.DateTime2 }));
+            Assert.Throws<NotSupportedException>(() => BuildMulti("select :p; select 1", OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = DBNull.Value, OceanBaseDbType = OceanBaseDbType.TimestampWithTimeZone, Scale = 10 }));
+        }
+
         private sealed record LiteralProbe(string Text) : IFormattable
         {
             public override string ToString() => Text;

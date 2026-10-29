@@ -38,6 +38,11 @@ public sealed class MultiStatementTests
         from sample in new[] { 0, 1, 2 }
         select row.Concat(new object[] { sample }).ToArray();
 
+    public static IEnumerable<object[]> OracleZonedRows() =>
+        from row in OracleParameterRows()
+        from sample in new[] { 0, 1, 2, 3, 4 }
+        select row.Concat(new object[] { sample }).ToArray();
+
     public static IEnumerable<object[]> MySqlParameterRows() =>
         from row in MySqlRows()
         from collation in new[] { "utf8mb4_general_ci", "utf8mb4_bin", "utf8mb4_unicode_ci" }
@@ -63,6 +68,62 @@ public sealed class MultiStatementTests
             new[] { "hkscs31", "功\U0002010c", "A55C8845" },
         }
         select row.Concat(sample.Cast<object>()).ToArray();
+
+    [IntegrationTheory]
+    [MemberData(nameof(OracleZonedRows))]
+    public async Task OracleZonedParametersPreserveStorageAcrossScriptTimeZoneChanges(string profileName, bool asynchronous, bool sequential, int sample)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = CreateConnection(db, enabled: true); await Open(connection, asynchronous);
+        await db.ExecuteAsync(connection, "ALTER SESSION SET TIME_ZONE='+05:45'", CancellationToken.None);
+        var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY, z TIMESTAMP(9) WITH TIME ZONE, l TIMESTAMP(9) WITH LOCAL TIME ZONE", CancellationToken.None);
+        var timestamp = new OceanBaseTimestamp(new DateTime(2026, 1, 2, 3, 4, 5), sample == 4 ? 0 : sample == 1 ? 123000000 : sample == 2 ? 123456700 : 123456789, sample == 4 ? (byte)0 : (byte)9);
+        var offset = TimeSpan.FromMinutes(sample == 0 ? 345 : sample == 1 ? -30 : sample == 2 ? 840 : -840);
+        object zoned = sample == 2 ? new DateTimeOffset(timestamp.ToDateTime(), offset) :
+            new OceanBaseTimestampWithTimeZone(timestamp, offset, sample == 3 ? "+00:00" : null, sample == 3 ? "metadata" : null);
+        using var command = db.Command(connection, "INSERT INTO " + table + " VALUES (1,:z,:l); ALTER SESSION SET TIME_ZONE='-03:30'; INSERT INTO " + table + " VALUES (2,:z,:l); INSERT INTO " + table + " VALUES (3,:nullz,:nulll)");
+        var zoneParameter = DatabaseContext.Parameter(command, "z", zoned); if (sample == 1) zoneParameter.Scale = 3;
+        var local = DatabaseContext.Parameter(command, "l", new OceanBaseTimestampLocalTimeZone(timestamp, "+05:45"));
+        local.OceanBaseDbType = OceanBaseDbType.TimestampLocalTimeZone; if (sample == 1) local.Scale = 3;
+        DatabaseContext.Parameter(command, "nullz", DBNull.Value).OceanBaseDbType = OceanBaseDbType.TimestampWithTimeZone;
+        DatabaseContext.Parameter(command, "nulll", DBNull.Value).OceanBaseDbType = OceanBaseDbType.TimestampLocalTimeZone;
+        Assert.Equal(3, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+        Assert.Equal("-03:30", await db.ScalarAsync(connection, "SELECT SESSIONTIMEZONE FROM DUAL", CancellationToken.None));
+        await db.ExecuteAsync(connection, "ALTER SESSION SET TIME_ZONE='+05:45'", CancellationToken.None);
+        command.Parameters.Clear(); command.CommandText = "SELECT z,l FROM " + table + " WHERE id IN (1,2) ORDER BY id; SELECT z,l FROM " + table + " WHERE id=3";
+        using (var reader = asynchronous ? await command.ExecuteReaderAsync(sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default) : command.ExecuteReader(sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default))
+        {
+            for (var i = 0; i < 2; i++)
+            {
+                Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                var actualZoned = reader.GetFieldValue<OceanBaseTimestampWithTimeZone>(0);
+                Assert.Equal(timestamp.WholeSeconds, actualZoned.Timestamp.WholeSeconds); Assert.Equal(timestamp.Nanosecond, actualZoned.Timestamp.Nanosecond);
+                Assert.Equal(sample == 3 ? TimeSpan.Zero : offset, actualZoned.Offset);
+                var actualLocal = reader.GetFieldValue<OceanBaseTimestampLocalTimeZone>(1);
+                Assert.Equal(timestamp.WholeSeconds, actualLocal.Timestamp.WholeSeconds); Assert.Equal(timestamp.Nanosecond, actualLocal.Timestamp.Nanosecond);
+                Assert.Equal("+05:45", actualLocal.SessionTimeZone);
+            }
+            Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read()); Assert.True(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+            Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read()); Assert.True(reader.IsDBNull(0)); Assert.True(reader.IsDBNull(1));
+            Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read()); Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+        }
+        Assert.Equal(3, await db.CountAsync(connection, table, CancellationToken.None));
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(OracleRows))]
+    public async Task OracleZonedMultiStatementsRejectMismatchedLocalZoneBeforeSideEffects(string profileName, bool asynchronous)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = CreateConnection(db, enabled: true); await Open(connection, asynchronous);
+        await db.ExecuteAsync(connection, "ALTER SESSION SET TIME_ZONE='+05:45'", CancellationToken.None);
+        var table = await db.TableAsync(connection, "value TIMESTAMP(9) WITH LOCAL TIME ZONE", CancellationToken.None);
+        using var command = db.Command(connection, "INSERT INTO " + table + " VALUES (:p); INSERT INTO " + table + " VALUES (:p)");
+        DatabaseContext.Parameter(command, "p", new OceanBaseTimestampLocalTimeZone(new OceanBaseTimestamp(new DateTime(2026, 1, 2), 123456789), "+00:00"));
+        if (asynchronous) await Assert.ThrowsAsync<ArgumentException>(() => command.ExecuteNonQueryAsync());
+        else Assert.Throws<ArgumentException>(() => command.ExecuteNonQuery());
+        Assert.Equal(ConnectionState.Open, connection.State); Assert.Equal(0, await db.CountAsync(connection, table, CancellationToken.None));
+    }
 
     [IntegrationTheory]
     [MemberData(nameof(OracleIntervalRows))]

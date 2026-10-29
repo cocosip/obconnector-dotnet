@@ -152,6 +152,38 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
+        public async Task OracleZonedMultiStatementsKeepSessionValidationAndTypedText(bool asynchronous)
+        {
+            var server = Server(async channel =>
+            {
+                await Query(channel, "insert into t values ((TIMESTAMP '2026-01-02 03:04:05.123456789 -00:30')); update t set v=(CAST(FROM_TZ(TIMESTAMP '2026-01-02 03:04:05.123456789', '+00:00') AS TIMESTAMP(9) WITH LOCAL TIME ZONE))");
+                await channel.WritePacketAsync(Ok(2, 14)); await channel.WritePacketAsync(Ok(3));
+                channel.BeginCommand(); await Query(channel, "after zoned multi parameters"); await channel.WritePacketAsync(Ok(1));
+            }, multiStatements: true);
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Multi Statements=true");
+            try
+            {
+                await connection.OpenAsync(); using var command = connection.CreateCommand();
+                command.CommandText = "insert into t values (:z); update t set v=:l";
+                var timestamp = new OceanBaseTimestamp(new DateTime(2026, 1, 2, 3, 4, 5), 123456789);
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "z", Value = new OceanBaseTimestampWithTimeZone(timestamp, TimeSpan.FromMinutes(-30)) });
+                var local = new OceanBaseParameter { ParameterName = "l", Value = new OceanBaseTimestampLocalTimeZone(timestamp, "+05:45") };
+                command.Parameters.Add(local);
+                Func<Task> execute = () => asynchronous ? command.ExecuteNonQueryAsync() : Task.FromResult(command.ExecuteNonQuery());
+                await Assert.ThrowsAsync<ArgumentException>(execute);
+                Assert.Equal(ConnectionState.Open, connection.State);
+                local.Value = new OceanBaseTimestampLocalTimeZone(timestamp, "+00:00");
+                Assert.Equal(5, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+                command.Parameters.Clear(); command.CommandText = "after zoned multi parameters";
+                Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task OracleParameterizedMultiStatementsRejectUnsupportedInputsBeforeSending(bool asynchronous)
         {
             var server = Server(async channel =>
@@ -171,7 +203,7 @@ namespace OceanBaseConnector.UnitTests
                 command.FetchSize = 1; await Assert.ThrowsAsync<NotSupportedException>(execute); command.FetchSize = 0;
                 await Assert.ThrowsAsync<NotSupportedException>(() => asynchronous ? command.PrepareAsync() : Task.Run(command.Prepare));
                 using var stream = new MemoryStream(new byte[] { 1 });
-                parameter.Value = stream; parameter.DbType = DbType.Binary; await Assert.ThrowsAsync<ArgumentException>(execute);
+                parameter.Value = stream; parameter.DbType = DbType.Binary; await Assert.ThrowsAsync<NotSupportedException>(execute);
                 Assert.Equal(0, stream.Position);
                 parameter.Value = "secret\0value"; parameter.DbType = DbType.String; await Assert.ThrowsAsync<ArgumentException>(execute);
                 parameter.Value = new string('x', 4001); await Assert.ThrowsAsync<ArgumentException>(execute);

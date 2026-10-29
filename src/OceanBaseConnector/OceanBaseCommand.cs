@@ -295,9 +295,6 @@ namespace OceanBaseConnector
                 var bindings = mysql?.Bindings ?? oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
                 if (multiStatement && (prepareOnly || _explicitPreparation || _fetchSize > 0 || oracle != null))
                     throw new NotSupportedException("Multi-statement execution supports only scalar input parameters without Prepare or server cursors.");
-                if (multiStatement && bindings.Parameters.Length != 0 && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle)
-                    bindings = new ParameterBindingPlan(ClientPreparedSql.Build(bindings, session.Info!.Mode,
-                        clientEncoding: session.ClientEncoding, multiStatement: true), Array.Empty<OceanBaseParameter>());
                 var clientFallback = AllowClientSidePrepareFallback && !multiStatement && !prepareOnly && !schemaOnly && !keyInfo && !_explicitPreparation && _fetchSize == 0 && oracle == null && mysql == null;
                 // Stream identity must not depend on a user stream's equality implementation.
                 ConditionalWeakTable<Stream, OceanBaseParameter>? streamBindings = null;

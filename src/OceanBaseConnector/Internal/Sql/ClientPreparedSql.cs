@@ -119,10 +119,11 @@ namespace OceanBaseConnector.Internal.Sql
         private static bool IsClientTemporal(OceanBaseParameter parameter)
         {
             if (parameter.DbType != DbType.Date && parameter.DbType != DbType.DateTime &&
-                parameter.DbType != DbType.DateTime2 && parameter.DbType != DbType.Time) return false;
+                parameter.DbType != DbType.DateTime2 && parameter.DbType != DbType.Time && parameter.DbType != DbType.DateTimeOffset) return false;
             var provider = parameter.OceanBaseDbType;
             return !provider.HasValue || provider == OceanBaseDbType.OracleDate || provider == OceanBaseDbType.Timestamp ||
-                provider == OceanBaseDbType.Date || provider == OceanBaseDbType.DateTime || provider == OceanBaseDbType.Time;
+                provider == OceanBaseDbType.Date || provider == OceanBaseDbType.DateTime || provider == OceanBaseDbType.Time ||
+                provider == OceanBaseDbType.TimestampWithTimeZone || provider == OceanBaseDbType.TimestampLocalTimeZone;
         }
 
         private static string Temporal(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode)
@@ -145,6 +146,20 @@ namespace OceanBaseConnector.Internal.Sql
                         date.Minute.ToString("D2", CultureInfo.InvariantCulture) + ":" + date.Second.ToString("D2", CultureInfo.InvariantCulture) +
                         Fraction(date.Microsecond, scale, 6);
                 return "'" + text + "'";
+            }
+            if (parameter.DbType == DbType.DateTimeOffset)
+            {
+                var zoned = parameter.Value is OceanBaseTimestampWithTimeZone providerZone ? providerZone : new OceanBaseTimestampWithTimeZone((DateTimeOffset)parameter.Value!);
+                var exact = parameter.DeclaredScale.HasValue ? new OceanBaseTimestamp(zoned.Timestamp.WholeSeconds, zoned.Timestamp.Nanosecond, parameter.DeclaredScale.Value) : zoned.Timestamp;
+                // Connector/J uses the name ahead of the offset; abbreviation is result metadata.
+                var zone = zoned.TimeZoneName ?? (zoned.Offset < TimeSpan.Zero ? "-" : "+") + zoned.Offset.Duration().ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+                return "TIMESTAMP '" + exact + " " + zone.Replace("'", "''") + "'";
+            }
+            if (parameter.Value is OceanBaseTimestampLocalTimeZone local)
+            {
+                var exact = parameter.DeclaredScale.HasValue ? new OceanBaseTimestamp(local.Timestamp.WholeSeconds, local.Timestamp.Nanosecond, parameter.DeclaredScale.Value) : local.Timestamp;
+                // Pin the source zone even if an earlier statement changes the session zone; CAST defaults to scale 6.
+                return "CAST(FROM_TZ(TIMESTAMP '" + exact + "', '" + local.SessionTimeZone.Replace("'", "''") + "') AS TIMESTAMP(" + exact.Scale.ToString(CultureInfo.InvariantCulture) + ") WITH LOCAL TIME ZONE)";
             }
             if (parameter.DbType == DbType.Date)
             {

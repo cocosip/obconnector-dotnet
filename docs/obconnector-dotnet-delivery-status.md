@@ -44,6 +44,7 @@
 | MySQL参数化文本多语句 | 已实现并完成本轮验收 | 官方Java/实库对照；6项RED→GREEN、相关单测232/232、双模式公开DLL消费者24/24、双模式实库组78/78（新增MySQL54项，含12种非默认客户端字符集）、完整默认单测8102/8102（0失败、0跳过）、DI14/14、五资产Release零警告/错误，独立最终走查无待修发现；MySQL字符串保持值/collation/coercibility并支持NUL和SQL_MODE切换，解析字符集须稳定，详见[记录](history/2026-10-28-mysql-multi-statement-parameters.md) |
 | 多语句时间参数输入 | 已实现并完成本轮回归 | MySQL DATE/DATETIME/TIMESTAMP/TIME 与 Oracle DATE/TIMESTAMP 客户端字面量，复用已有精度/范围校验；同步/异步 MySQL/Oracle 文本执行和精确 SQL 回归 5/5 通过，见[记录](history/2026-10-28-multi-statement-temporal-input.md) |
 | Oracle多语句INTERVAL输入 | 已实现并完成本轮验收 | 官方Java文本路径与实库对照确认；支持两种精确区间、推断/显式类型、typed NULL和声明精度；完整默认单测8111/8111、公开DLL消费者36/36、双模式多语句实库90/90、DI14/14，五资产Release零警告/错误，独立走查无遗留；沙箱文件替换限制及复验见[记录](history/2026-10-29-multi-statement-interval-input.md) |
+| Oracle多语句时区时间输入 | 已实现并完成本轮验收 | 支持DateTimeOffset及精确TZ/LTZ、typed NULL；保持LTZ会话校验、显式精度及中途切换时区的时间值；完整默认单测8116/8116、公开DLL消费者48/48、双模式多语句/类型实库140/140、DI14/14，五资产构建零警告/错误；独立走查后同步旧流拒绝断言，无遗留产品问题；命名地区、二进制非空名称及结果快照限制见[记录](history/2026-10-29-multi-statement-zoned-time-input.md) |
 | 生产级完整验收 | 未完成 | 完整资源/并发、真实OBProxy/TLS/auth/HA/版本/平台/运行时及发布审查 |
 
 ## 优先处理的明确缺实现
