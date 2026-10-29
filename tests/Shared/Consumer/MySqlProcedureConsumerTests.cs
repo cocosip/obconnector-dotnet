@@ -25,7 +25,12 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetExecutesMySqlProcedureAndPublishesOutputsOnClose(string target, bool async, bool ob20, bool encrypted, bool deprecated)
             => MySqlProcedureConsumerCore(target, async, ob20, encrypted, deprecated);
 
-        private static async Task MySqlProcedureConsumerCore(string target, bool async, bool ob20, bool encrypted, bool deprecated, int fetchSize = 0)
+        [Theory]
+        [MemberData(nameof(MySqlProcedureAssets))]
+        public Task EveryAssetStreamsMySqlInOutAndPublishesOutputsOnClose(string target, bool async, bool ob20, bool encrypted, bool deprecated)
+            => MySqlProcedureConsumerCore(target, async, ob20, encrypted, deprecated, inoutStream: true);
+
+        private static async Task MySqlProcedureConsumerCore(string target, bool async, bool ob20, bool encrypted, bool deprecated, int fetchSize = 0, bool inoutStream = false)
         {
             using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
@@ -60,7 +65,9 @@ namespace OceanBaseConnector.ConsumerTests
                     var setup = Encoding.UTF8.GetString(request, 1, request.Length - 1);
                     var variables = setup.Substring(4).Split(", ").Select(a => a.Split(" = ")[0]).ToArray();
                     Assert.Equal(2, variables.Length); Assert.All(variables, v => Assert.Matches("^@obc_[0-9a-f]{32}_[0-9]+$", v));
-                    await Prepare(80, 2); request = await Read(); Assert.Equal(23, request[0]); Assert.Equal(80, request[1]);
+                    await Prepare(80, 2);
+                    if (inoutStream) Assert.Equal(new byte[] { 24, 80, 0, 0, 0, 1, 0, 0, 255, 23 }, await Read());
+                    request = await Read(); Assert.Equal(23, request[0]); Assert.Equal(80, request[1]);
                     await Reply(new byte[] { 0, 0, 0, 2, 0, 0, 0 });
                     Assert.Equal(new byte[] { 25, 80, 0, 0, 0 }, await Read());
                     Assert.Equal(OceanBaseCommand.SqlPacket("CALL `p`(?, " + string.Join(", ", variables) + ")", 22), await Read());
@@ -70,8 +77,19 @@ namespace OceanBaseConnector.ConsumerTests
                     result.Add(new byte[] { 0, 0, 9, 0, 0, 0, 0, 0, 0, 0 }); result.Add(End(10)); result.Add(new byte[] { 0, 3, 0, 2, 0, 0, 0 });
                     await Reply(result.ToArray());
                     Assert.Equal(OceanBaseCommand.SqlPacket("SELECT " + string.Join(", ", variables), 3), await Read());
-                    var output = TextResult(deprecated, "42", "new");
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId, 1, output) : output, budget.Token);
+                    if (inoutStream)
+                    {
+                        var binaryColumn = Column(252); binaryColumn[12] = 63;
+                        var output = new List<byte[]> { new byte[] { 2 }, Column(8), binaryColumn };
+                        if (!deprecated) output.Add(End(2));
+                        output.Add(new byte[] { 2, 52, 50, 2, 0, 255 }); output.Add(End(2));
+                        await Reply(output.ToArray());
+                    }
+                    else
+                    {
+                        var output = TextResult(deprecated, "42", "new");
+                        await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId, 1, output) : output, budget.Token);
+                    }
                     Assert.Equal(new byte[] { 25, 81, 0, 0, 0 }, await Read());
                 }
                 await ObserveClose(stream, budget.Token);
@@ -87,17 +105,25 @@ namespace OceanBaseConnector.ConsumerTests
                 {
                     var input = create(); input.Value = 7L; collection.Add(input);
                     var output = create(); output.Direction = ParameterDirection.Output; output.Value = "old"; collection.Add(output);
-                    var inout = create(); inout.Direction = ParameterDirection.InputOutput; inout.Value = "input"; collection.Add(inout);
+                    var inout = create(); inout.Direction = ParameterDirection.InputOutput;
+                    inout.Value = inoutStream ? new MemoryStream(new byte[] { 17, 0, 255, 23 }) { Position = 1 } : "input";
+                    if (inoutStream) inout.DbType = DbType.Binary;
+                    collection.Add(inout);
                     return new[] { output, inout };
                 }
                 async Task ReadClose(DbDataReader reader, DbParameter[] parameters)
                 {
+                    using var source = parameters[1].Value as MemoryStream;
                     using (reader)
                     {
                         Assert.True(async ? await reader.ReadAsync(budget.Token) : reader.Read()); Assert.Equal(9L, reader.GetInt64(0));
-                        Assert.Equal("old", parameters[0].Value); Assert.Equal("input", parameters[1].Value);
+                        Assert.Equal("old", parameters[0].Value);
+                        if (inoutStream) Assert.Same(source, parameters[1].Value); else Assert.Equal("input", parameters[1].Value);
                         if (async) await reader.CloseAsync(); else reader.Close();
-                        Assert.Equal("42", parameters[0].Value); Assert.Equal("new", parameters[1].Value); Assert.Equal(3, reader.RecordsAffected);
+                        Assert.Equal(inoutStream ? 42L : "42", parameters[0].Value);
+                        if (inoutStream) Assert.Equal(new byte[] { 0, 255 }, Assert.IsType<byte[]>(parameters[1].Value)); else Assert.Equal("new", parameters[1].Value);
+                        Assert.Equal(3, reader.RecordsAffected);
+                        if (inoutStream) { Assert.True(source!.CanRead); Assert.Equal(source.Length, source.Position); }
                     }
                 }
                 using (var command = connection.CreateCommand())

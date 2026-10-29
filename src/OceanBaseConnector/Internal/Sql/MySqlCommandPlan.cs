@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,6 +17,14 @@ namespace OceanBaseConnector.Internal.Sql
         internal ParameterBindingPlan Bindings { get; }
         internal OceanBaseParameter[] Outputs { get; }
         internal string OutputSql { get; }
+        internal IEnumerable<OceanBaseParameter> InputParameters
+        {
+            get
+            {
+                foreach (var parameter in Bindings.Parameters) yield return parameter;
+                foreach (var parameter in _initialization.Parameters) yield return parameter;
+            }
+        }
         private readonly ParameterBindingPlan _initialization;
         private object[]? _values;
 
@@ -66,8 +73,6 @@ namespace OceanBaseConnector.Internal.Sql
                 if (parameter.Direction == ParameterDirection.Input) { sql.Append('?'); inputs.Add(copy); continue; }
                 if (parameter.Direction != ParameterDirection.Output && parameter.Direction != ParameterDirection.InputOutput)
                     throw new ArgumentException("Invalid routine parameter direction.");
-                if (parameter.Direction == ParameterDirection.InputOutput && copy.Value is Stream)
-                    throw new NotSupportedException("Stream parameters require Input direction.");
                 if (outputs.Count == 4096) throw new NotSupportedException("Too many routine output parameters.");
                 var variable = "@" + variablePrefix + "_" + outputs.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 sql.Append(variable); variables.Add(variable); assignments.Add(variable + " = ?"); outputs.Add(parameter);
@@ -91,7 +96,9 @@ namespace OceanBaseConnector.Internal.Sql
             try
             {
                 ValidateInitialization(statement);
-                exchange.Send(PreparedParameters.Execute(statement.Id, encoded));
+                var request = PreparedParameters.Execute(statement.Id, encoded);
+                exchange.SendLongData(statement.Id, _initialization.Parameters, request.Length);
+                exchange.Send(request);
                 FinishInitialization(exchange, exchange.Receive());
                 exchange.Send(PreparedStatement.ClosePacket(statement.Id), executesSql: false);
                 exchange.ResponseComplete(expectsResponse: false); closed = true;
@@ -109,7 +116,9 @@ namespace OceanBaseConnector.Internal.Sql
             try
             {
                 ValidateInitialization(statement);
-                await exchange.SendAsync(PreparedParameters.Execute(statement.Id, encoded)).ConfigureAwait(false);
+                var request = PreparedParameters.Execute(statement.Id, encoded);
+                await exchange.SendLongDataAsync(statement.Id, _initialization.Parameters, request.Length).ConfigureAwait(false);
+                await exchange.SendAsync(request).ConfigureAwait(false);
                 FinishInitialization(exchange, await exchange.ReceiveAsync(token).ConfigureAwait(false));
                 await exchange.SendAsync(PreparedStatement.ClosePacket(statement.Id), executesSql: false).ConfigureAwait(false);
                 exchange.ResponseComplete(expectsResponse: false); closed = true;

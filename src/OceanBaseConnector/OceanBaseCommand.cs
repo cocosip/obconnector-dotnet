@@ -298,7 +298,7 @@ namespace OceanBaseConnector
                 var clientFallback = AllowClientSidePrepareFallback && !multiStatement && !prepareOnly && !schemaOnly && !keyInfo && !_explicitPreparation && _fetchSize == 0 && oracle == null && mysql == null;
                 // Stream identity must not depend on a user stream's equality implementation.
                 ConditionalWeakTable<Stream, OceanBaseParameter>? streamBindings = null;
-                foreach (var parameter in bindings.Parameters)
+                foreach (var parameter in mysql?.InputParameters ?? bindings.Parameters)
                 {
                     if (schemaOnly || !(parameter.Value is Stream source)) continue;
                     streamBindings ??= new ConditionalWeakTable<Stream, OceanBaseParameter>();

@@ -59,7 +59,7 @@
 | 功能 | 开发状态 | 已支持范围 | 还缺什么 / 验收边界 |
 | --- | --- | --- | --- |
 | Command/Batch行为 | 部分实现 | Prepare-only SchemaOnly、有界KeyInfo、SingleRow/SingleResult、Batch元数据及结果限制；双模式直连已补 16 项 SchemaOnly/KeyInfo 矩阵（含组合主键、别名投影、可空唯一键和实际隐藏值读取），新增双模式 Batch SingleRow/SingleResult 同步异步 4 项直连验收，修复 MySQL 目录大小写匹配 | 完整游标/结果形状、目录权限、锁与副作用矩阵待补 |
-| MySQL过程/函数 | 已实现 | 过程集合顺序Input/Output/InputOutput；函数单ReturnValue+Input、隐藏输出和多结果；过程/函数正FetchSize提示不分页，见[提示记录](history/2026-10-28-mysql-routine-fetch-hint.md)；MySQL过程/函数直连组30/30（含正提示24项）通过 | 函数不接受Output/InputOutput混用；SchemaOnly/KeyInfo、INOUT stream仍拒绝；真实部署矩阵仍缺 |
+| MySQL过程/函数 | 已实现 | 过程集合顺序Input/Output/InputOutput；函数单ReturnValue+Input、隐藏输出和多结果；过程/函数正FetchSize提示不分页，见[提示记录](history/2026-10-28-mysql-routine-fetch-hint.md)；MySQL过程/函数直连组30/30（含正提示24项）通过；MySQL二进制INOUT流复用prepared SET分块上传，保持调用者所有权及输出原子发布，见[INOUT流记录](history/2026-10-29-mysql-inout-stream.md) | 函数不接受Output/InputOutput混用；SchemaOnly/KeyInfo仍拒绝，真实部署矩阵仍缺 |
 | Schema / 参数推导 | 已实现（直连验收部分完成） | 双模式目录、DataTypes、原子参数派生、FLOAT及INOUT归一化；本次双模式 Schema 实库用例 10 项通过，CommandBehavior 元数据补验 16 项通过，过程参数推导再通过 MySQL 2 项和 Oracle 4 项 | Oracle Views/Synonyms 建对象在当前租户返回 `1031/HY000`，不作为客户端 workaround；权限/大小写/重载/版本/代理目录待验收，见[Schema 记录](history/2026-10-28-schema-acceptance.md)和[参数推导记录](history/2026-10-28-routine-derivation-acceptance.md) |
 | DataAdapter / CommandBuilder | 已移出支持范围 | Connector/J 没有对应能力，当前 CRUD 使用显式 `OceanBaseCommand` | 不再提供 public 类型、factory 入口或自动 CRUD 生成 |
 | Statement cache | 已实现 | opt-in idle LRU、容量/关闭、上下文/DDL/reset代际失效；双模式直连4/4验证实际缓存命中、held/idle语句DDL刷新及池reset重备，见[证据](history/2026-10-28-statement-cache-live-lifecycle.md)；外部删列确认错误后条目淘汰及重建命令读取新结构4/4，见[补验](history/2026-10-28-statement-cache-external-ddl.md) | 其他外部DDL、特定reprepare错误、资源和负载报告待验收 |
@@ -73,6 +73,7 @@
 
 | 项目 | 当前进度 | 尚未完成 |
 | --- | --- | --- |
+| MySQL二进制INOUT流（P1-05） | 已交付prepared SET分块上传；完整默认单测8478/8478、专项121/121、公开DLL消费者48/48（新增24项）、双模式过程实库50/50（新增INOUT17项）、DI14/14及五目标Release零警告/错误；一次独立最终走查无遗留问题，见[模块记录](history/2026-10-29-mysql-inout-stream.md) | Oracle INOUT流仍拒绝；真实OB20/OBProxy/TLS、其他版本/平台、阻塞源及完整资源/故障矩阵仍开放 |
 | Windows实库NuGet消费（P2-05） | 五资产及Framework4.8.1 host共48/48直连公开包场景及每host8项回环场景通过；默认入口六host复验通过；完整默认单测8466/8466、修复专项21/21、DI14/14、runner自检2/2及五目标Release零警告/错误；一次独立最终走查的两项Important均RED→GREEN修复，见[模块记录](history/2026-10-29-package-live-consumption.md) | 非Windows/完整API/ORM/其他部署仍开放；池化重开不证明同物理会话复用；未知CREATE/清理失败注入未执行 |
 | Consumer CI耗时优化 | **已调整**：普通 PR/分支 push 不执行 consumer；仅 tag 的 Windows 发布腿运行 acceptance；行为矩阵保留 `netstandard2.0`、`netstandard2.1`、`net10.0` 三类实现路径，五资产依赖/目标面契约仍保留 | 安全拆分时默认消费者完整2,860/2,860通过，证书/TLS已独立到不参与CI的SecurityTests；本次数组提示消费者专项另见对应记录。远程CI耗时尚未验证，完整安全套件仍待显式环境执行 |
 | OB20/trace显式验收（P2-06） | **已提交，部分实库验收**：代码/文档见`bc020e2`、`c5b4c07`；专项/runner **88/88**，Release零警告/错误；直连4.4.2.2双模式 `declined-ob20` 各6通过 | 用户租户实际协商为 `Layer=mysql`，显式 `ob20` 各2项按契约失败；真实 OB20/trace、OBProxy、TLS/auth 和完整单测环境门禁仍未闭合。见[模块证据](history/2026-10-27-ob20-trace-acceptance.md) |

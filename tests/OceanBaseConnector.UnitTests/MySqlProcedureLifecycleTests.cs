@@ -45,7 +45,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery()); command.FetchSize = 0; command.UseCursorOffset = false;
                 Assert.Throws<NotSupportedException>(() => command.ExecuteReader(CommandBehavior.SchemaOnly));
                 Assert.Throws<NotSupportedException>(() => command.ExecuteReader(CommandBehavior.KeyInfo));
-                command.Parameters.Add(new OceanBaseParameter { Direction = ParameterDirection.InputOutput, Value = new MemoryStream() });
+                command.Parameters.Add(new OceanBaseParameter { Direction = ParameterDirection.InputOutput, DbType = DbType.String, Value = new MemoryStream() });
                 Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery()); command.Parameters.Clear();
                 command.Parameters.Add(new OceanBaseParameter { Value = Guid.Empty });
                 Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery()); command.Parameters.Clear();
