@@ -287,9 +287,16 @@ Unicode validity, Size, zero Precision/Scale and combined SQL packet limits are 
 sending the script. Expanded literals are bounded before allocation, including repeated bindings.
 Ordinary VARCHAR2/RAW literal limits do not apply to national literals. Text execution skips the
 unused binary national parameter encoder; binary paths retain their encoding checks. Result decoding
-still requires fresh trusted national state and the existing UTF-8/UTF-16 encodings, including for
+still requires fresh trusted national state and supported explicit encoding mappings, including for
 later results. National input support does not widen national result/storage or complex-type scope.
 See the [OceanBase/Java and direct-test evidence](history/2026-10-29-multi-statement-national-input.md).
+
+Explicit trusted national/result names additionally resolve through the existing strict client
+mapping for utf8mb3, ascii, latin1, gbk, gb18030, gb18030_2022, dec8, tis620, sjis, big5, hkscs and
+hkscs31. Scalar binary input and ordinary/PL national results share this resolver; streaming uses
+the underlying stateful decoder. Missing facts retain Unicode-only collation fallback and later
+results require fresh state. Stored complex members still require AL16UTF16. See the
+[encoding evidence and live scope](history/2026-10-29-national-character-encodings.md).
 
 ### MySQL client string preparation
 
@@ -623,7 +630,7 @@ Python nor source files are runtime/test dependencies. This remains ordinary-res
 SQL/parameter, national, JSON and CLOB contracts retain their scope. Actual emission/storage and
 deployment interoperability require real-server evidence.
 
-Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON results and CLOB reads retain their UTF-8 scope. Explicit MySQL JSON parameters use the selected strict client encoding and ordinary string binding; the server owns JSON conversion, syntax and storage. CLOB write buffers inherit the selected client parameter encoding and its representability checks; storage interoperability is not expanded. Trusted Oracle national character-set selection retains precedence and its existing UTF-8/UTF-16 scope. See [client charset and cached session trust](client-character-sets.md).
+Unknown collation IDs, enum holes and other unimplemented families throw NotSupportedException; malformed supported data throws DecoderFallbackException instead of replacement. MySQL ordinary character ColumnSize divides wire length by the family's maximum width; Oracle length semantics are unchanged. This is a metadata bound, not a measured string length or Unicode grapheme count. JSON results and CLOB reads retain their UTF-8 scope. Explicit MySQL JSON parameters use the selected strict client encoding and ordinary string binding; the server owns JSON conversion, syntax and storage. CLOB write buffers inherit the selected client parameter encoding and its representability checks; storage interoperability is not expanded. Trusted Oracle national character-set selection retains precedence; explicit names reuse the strict client mappings, while missing names retain Unicode-only collation fallback. See [client charset and cached session trust](client-character-sets.md).
 
 Real evidence is limited to direct OceanBase 4.4.2.2 MySQL mode, Windows/.NET10 with TLS disabled: six charset cases, each exercising eight text/prepared × buffered/sequential × sync/async combinations. That server rejects `SET character_set_results=utf16` and `utf16le` with 1231/42000; those two cases instead use `character_set_results=NULL` and `CONVERT` expressions, asserting string metadata and exact decoded text. This does not establish Oracle, proxy, TLS, all collation IDs, other server versions or independent-runtime compatibility. See [verification and retained failures](history/obconnector-dotnet-completeness.md#1532-2026-10-25-普通结果字符集).
 

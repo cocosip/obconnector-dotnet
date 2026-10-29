@@ -1067,6 +1067,21 @@ Live-source version history survives Clear; empty ordinary registry eviction res
 
 `GetSchema` provides a local implementation for 20 Oracle / 18 MySQL collections, including static DataTypes with final local unit and five-asset consumer evidence; see the [module record](history/obconnector-dotnet-completeness.md#1514-2026-10-25-datatypes-本地交付); the full [Schema contract](schema.md) lists shapes, restrictions and permission requirements. Types/Synonyms are explicitly unsupported on MySQL. Static DataTypes now reports canonical codec-supported declarations and CLR/provider representation variants, with explicit precision/scale, session/encoding/negotiation requirements and parameter/result limitations. It does not validate server DDL or add KeyInfo or a DataAdapter implementation. Automatic parameter derivation is a separate command API with the mapping limits described above. The previously committed dictionary SQL is checked against pinned OceanBase source, with protocol fixtures and five-asset catalog consumers; the final affected consumer run also executes all 16 DataTypes catalog cases on the .NET 10 host; actual dictionary parsing, privileges, collation, older versions and OBProxy still require real-server reports. The historical 2026-10-24 database passes predate this extension and do not validate it.
 
+## 2026-10-29 Explicit national encodings
+
+Explicit trusted national/result names now reuse the twelve existing strict mapped encodings,
+alongside UTF8/UTF8MB4/UTF16. Scalar binary input and ordinary national results share this resolver
+with PL complex output; stateful decoding preserves multibyte characters across streamed reads.
+Unknown names, missing fresh facts and non-Unicode collation fallback remain rejected. Stored
+complex members still require independently queried AL16UTF16.
+
+New Oracle direct scalar checks pass 48/48: twelve national settings, ordinary prepared execution
+and Oracle PrepareExecute, sync/async, independently verified storage and text/binary streamed
+results. The connection client charset remains UTF8; this does not validate SJIS/Big5 client Open.
+The server reports utf8mb3 as utf8mb4. Local related units pass 544/544, actual DLL consumers 336/336,
+and DI 14/14. New PL output encoding coverage is synthetic; no additional live PL/storage matrix
+is claimed. Full-suite/review status and retained failures are in the [module evidence](history/2026-10-29-national-character-encodings.md).
+
 ## Runtime and integration coverage
 
 Local fixture and package checks cover different baselines and do not replace database validation. The integration suite (connection and identity gates: direct/OBProxy mode checks, TLS-name rejection, unsupported-plugin and autocommit-disabled rejection, plus the full functional suites) has not been established as passing; it runs only against a configured external database and is skipped everywhere else.

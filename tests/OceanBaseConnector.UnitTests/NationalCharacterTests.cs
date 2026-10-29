@@ -31,7 +31,7 @@ namespace OceanBaseConnector.UnitTests
 
         public static IEnumerable<object[]> NationalCases()
         {
-            foreach (var name in new[] { "utf8mb4", "utf16" })
+            foreach (var name in new[] { "utf8mb4", "utf16" }.Concat(TestInfrastructure.ClientCharacterSetFixture.Samples.Select(s => s.Name)))
                 foreach (var async in new[] { false, true })
                     foreach (var binary in new[] { false, true })
                         foreach (var sequential in new[] { false, true }) yield return new object[] { name, async, binary, sequential };
@@ -44,6 +44,13 @@ namespace OceanBaseConnector.UnitTests
             var text = "\ufeff" + new string('中', 1700) + "\U0001f600  ";
             var encoding = name == "utf16" ? NationalCharacterSet.Utf16 : ResultColumn.Utf8;
             var bytes = WithLength(encoding.GetBytes(text));
+            if (name != "utf8mb4" && name != "utf16")
+            {
+                var sample = TestInfrastructure.ClientCharacterSetFixture.Samples.Single(s => s.Name == name);
+                text = new string('A', 1023) + string.Concat(Enumerable.Repeat(sample.Text, 700)) + "'\\\0  ";
+                bytes = WithLength(Enumerable.Repeat((byte)65, 1023).Concat(Enumerable.Range(0, 700).SelectMany(_ => Convert.FromHexString(sample.Hex)))
+                    .Concat(new byte[] { 39, 92, 0, 32, 32 }).ToArray());
+            }
             var server = Server(async channel =>
             {
                 var request = await ReadNationalClientCommand(channel, name);
@@ -99,6 +106,12 @@ namespace OceanBaseConnector.UnitTests
                     Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
                     command.Parameters[0].Value = DBNull.Value; command.Parameters[1].Value = null;
                     Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+                    if (name == "ascii" || name == "latin1" || name == "utf8mb3")
+                    {
+                        command.Parameters[0].Value = name == "ascii" ? "中" : "🙂";
+                        await Assert.ThrowsAsync<EncoderFallbackException>(() => asynchronous ? command.ExecuteNonQueryAsync() : Task.FromResult(command.ExecuteNonQuery()));
+                        Assert.Equal(ConnectionState.Open, connection.State);
+                    }
                 }
                 using var reuse = connection.CreateCommand(); reuse.CommandText = "reuse"; Assert.Equal(1, await reuse.ExecuteNonQueryAsync());
             }
@@ -197,7 +210,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle, settings));
             Assert.Throws<NotSupportedException>(() => ResultColumn.Parse(SchemaColumn("n", 208, 8), OceanBaseCompatibilityMode.MySql).Decode(null));
             Assert.Throws<NotSupportedException>(() => ResultColumn.Parse(SchemaColumn("n", 207, 8), OceanBaseCompatibilityMode.Oracle).Decode(new byte[] { 65 }));
-            Assert.Throws<NotSupportedException>(() => new NationalCharacterSet("gbk", "utf8mb4", "utf8mb4").ResultEncoding(45));
+            Assert.Throws<NotSupportedException>(() => new NationalCharacterSet("unknown", "utf8mb4", "utf8mb4").ResultEncoding(45));
             Assert.Throws<NotSupportedException>(() => new NationalCharacterSet("binary", "binary", "utf8mb4").ResultEncoding(63));
         }
 

@@ -32,7 +32,7 @@ namespace OceanBaseConnector.UnitTests
         public static IEnumerable<object[]> ComplexNationalCases()
         {
             foreach (var scalar in new[] { "NCHAR", "NVARCHAR2" })
-                foreach (var national in new[] { "utf8mb4", "utf16" })
+                foreach (var national in new[] { "utf8mb4", "utf16" }.Concat(TestInfrastructure.ClientCharacterSetFixture.Samples.Select(s => s.Name)))
                     foreach (var asynchronous in new[] { false, true })
                         foreach (var sequential in new[] { false, true }) yield return new object[] { scalar, national, asynchronous, sequential };
         }
@@ -41,9 +41,11 @@ namespace OceanBaseConnector.UnitTests
         [MemberData(nameof(ComplexNationalCases))]
         public async Task ComplexNationalPublicPathsKeepStorageInputAndOutputEncodingsDistinct(string scalar, string national, bool asynchronous, bool sequential)
         {
-            const string text = "\ufeff中文🙂  ";
+            var text = "\ufeff中文🙂  ";
+            var sample = TestInfrastructure.ClientCharacterSetFixture.Samples.FirstOrDefault(s => s.Name == national);
+            if (sample.Name != null) text = sample.Text;
             var stored = WithLength(NationalCharacterSet.Utf16.GetBytes(text));
-            var output = WithLength((national == "utf16" ? NationalCharacterSet.Utf16 : ResultColumn.Utf8).GetBytes(text));
+            var output = WithLength(sample.Name != null ? Convert.FromHexString(sample.Hex) : (national == "utf16" ? NationalCharacterSet.Utf16 : ResultColumn.Utf8).GetBytes(text));
             var server = Server(async channel =>
             {
                 await ComplexNationalDictionary(channel, scalar);

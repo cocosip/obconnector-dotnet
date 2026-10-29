@@ -90,5 +90,6 @@ namespace OceanBaseConnector.Internal.Protocol
         public override int GetChars(byte[] bytes, int byteIndex, int byteCount, char[] chars, int charIndex) => _inner.GetChars(bytes, byteIndex, byteCount, chars, charIndex);
         public override int GetMaxByteCount(int charCount) => _inner.GetMaxByteCount(charCount);
         public override int GetMaxCharCount(int byteCount) => _inner.GetMaxCharCount(byteCount);
+        public override Decoder GetDecoder() => _inner.GetDecoder();
     }
 }

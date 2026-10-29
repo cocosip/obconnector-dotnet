@@ -21,7 +21,7 @@ namespace OceanBaseConnector.ConsumerTests
         public static IEnumerable<object[]> Assets()
         {
             foreach (var asset in ConsumerTargetMatrix.Representative)
-                foreach (var national in new[] { "utf8mb4", "utf16" })
+                foreach (var national in new[] { "utf8mb4", "utf16" }.Concat(OceanBaseConnector.UnitTests.TestInfrastructure.ClientCharacterSetFixture.Samples.Select(s => s.Name)))
                     foreach (var binary in new[] { false, true })
                         foreach (var sequential in new[] { false, true }) yield return new object[] { asset, national, binary, sequential };
         }
@@ -34,9 +34,16 @@ namespace OceanBaseConnector.ConsumerTests
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
-            const string value = "\ufeff国字é\U0001f600  ";
+            var value = "\ufeff国字é\U0001f600  ";
             Encoding encoding = national == "utf16" ? new UnicodeEncoding(true, false, true) : new UTF8Encoding(false, true);
-            var bytes = encoding.GetBytes(value); var field = new byte[] { (byte)bytes.Length }.Concat(bytes).ToArray();
+            var bytes = encoding.GetBytes(value);
+            if (national != "utf8mb4" && national != "utf16")
+            {
+                var sample = OceanBaseConnector.UnitTests.TestInfrastructure.ClientCharacterSetFixture.Samples.Single(s => s.Name == national);
+                value = new string('A', 1023) + sample.Text + "'\\\0  ";
+                bytes = Enumerable.Repeat((byte)65, 1023).Concat(Convert.FromHexString(sample.Hex)).Concat(new byte[] { 39, 92, 0, 32, 32 }).ToArray();
+            }
+            var field = (bytes.Length < 251 ? new byte[] { (byte)bytes.Length } : new byte[] { 252, (byte)bytes.Length, (byte)(bytes.Length >> 8) }).Concat(bytes).ToArray();
             byte[] Metadata(byte type) => new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 110, 1, 110, 12, 54, 0, 32, 0, 0, 0, type, 0, 0, 0, 0, 0 };
             var eof = new byte[] { 254, 0, 0, 6, 0 };
             var serving = Task.Run(async () =>
@@ -102,13 +109,18 @@ namespace OceanBaseConnector.ConsumerTests
                 }
                 await serving.WaitAsync(budget.Token);
             }
-            finally { budget.Cancel(); listener.Stop(); context.Unload(); }
+            finally
+            {
+                budget.Cancel(); listener.Stop();
+                try { await serving; } catch (OperationCanceledException) when (budget.IsCancellationRequested) { }
+                finally { context.Unload(); }
+            }
         }
 
         public static IEnumerable<object[]> ComplexAssets()
         {
             foreach (var target in ConsumerTargetMatrix.Representative)
-                foreach (var national in new[] { "utf8mb4", "utf16" })
+                foreach (var national in new[] { "utf8mb4", "utf16" }.Concat(OceanBaseConnector.UnitTests.TestInfrastructure.ClientCharacterSetFixture.Samples.Select(s => s.Name)))
                     foreach (var asynchronous in new[] { false, true })
                         foreach (var type in new[] { "NCHAR", "NVARCHAR2" }) yield return new object[] { target, national, asynchronous, type };
         }
@@ -121,10 +133,12 @@ namespace OceanBaseConnector.ConsumerTests
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var greeting = Convert.FromBase64String(fixture.RootElement.GetProperty("payloadBase64").GetString()!);
-            const string value = "\ufeff中文🙂  "; var code = scalar == "NCHAR" ? (byte)208 : (byte)207;
+            var value = "\ufeff中文🙂  "; var code = scalar == "NCHAR" ? (byte)208 : (byte)207;
+            var sample = OceanBaseConnector.UnitTests.TestInfrastructure.ClientCharacterSetFixture.Samples.FirstOrDefault(s => s.Name == national);
+            if (sample.Name != null) value = sample.Text;
             var input = Encoding.UTF8.GetBytes(value);
             Encoding outputEncoding = national == "utf16" ? new UnicodeEncoding(true, false, true) : new UTF8Encoding(false, true);
-            var output = outputEncoding.GetBytes(value);
+            var output = sample.Name != null ? Convert.FromHexString(sample.Hex) : outputEncoding.GetBytes(value);
             byte[] Metadata(byte type) => new byte[] { 3, 100, 101, 102, 0, 0, 0, 1, 110, 1, 110, 12, 63, 0, 32, 0, 0, 0, type, 0, 0, 0, 0, 0 };
             var eof = new byte[] { 254, 0, 0, 6, 0 };
             var serving = Task.Run(async () =>

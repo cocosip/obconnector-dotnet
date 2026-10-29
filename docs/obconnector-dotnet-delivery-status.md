@@ -15,6 +15,7 @@
 
 | 项目 | 状态 | 证据 / 剩余门禁 |
 | --- | --- | --- |
+| 显式national标量编码/结果 | 已实现并完成本轮验收 | 十二种既有严格映射；完整单测8344/8344、相关单测544/544、公开DLL消费者336/336、Oracle新标量直连48/48、双模式既有回归230/230、DI14/14，五目标Release零警告/错误；独立最终走查无遗留。见[编码证据](history/2026-10-29-national-character-encodings.md)；新增PL编码仅合成验证，stored complex及部署矩阵仍开放 |
 | Oracle多语句national输入 | 已实现并完成本轮验收 | NChar/NVarchar2使用OceanBase Unicode字面量；相关单测413/413、公开DLL消费者120/120、双模式直连回归240/240（新增38项）、DI14/14，五目标Release零警告/错误；完整默认单测8128/8128，独立最终走查无遗留。见[模块证据](history/2026-10-29-multi-statement-national-input.md)；national结果/复杂存储及其他部署边界仍开放 |
 | MySQL多语句JSON输入 | 已实现并完成本轮验收 | 官方Java文本路径及三种编码实库对照；支持显式Json输入并区分JSON null与SQL NULL，沿用字符串编码/字符集/SQL_MODE保护；完整默认单测8120/8120、消费者相关组72/72、双模式多语句/类型/JSON字符集实库202/202、DI14/14，五目标Release零警告/错误；独立走查无遗留。见[模块证据](history/2026-10-29-multi-statement-json-input.md)；national输出/复杂存储及其他多语句/部署边界仍开放 |
 | 协议协商诊断 | 已提交`85e6fe6` | 保存的完整单测8091/8091、消费者340/340、重建专项/runner488/488；Release零警告/错误，一次最终走查无遗留 |

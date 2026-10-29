@@ -134,13 +134,15 @@ Standalone binary NCHAR/NVARCHAR2 parameters retain the independently verified n
 Oracle text multi-statements instead encode explicit NChar/NVarchar2 inputs as ASCII Unicode
 literals, so their values can contain characters outside the selected client charset. Ordinary
 SQL text still requires representability. Input validation and the total SQL packet budget remain;
-result decoding still requires fresh trusted national state and the existing UTF-8/UTF-16 scope.
+result decoding still requires fresh trusted national state. Explicit national/result names now also
+use the twelve existing strict mapped encodings; absent names retain Unicode-only collation fallback.
 See the [national input evidence](history/2026-10-29-multi-statement-national-input.md). Complex national input members use
 the trusted connection charset, now resolving all configured client names through the strict client
 encoder, including explicit utf8mb3 and the eleven non-UTF8 families. Legacy UTF8/UTF16 handling
 is preserved. Nested members, scalar factory arrays and ExecuteArray share this input path;
-unrepresentable text fails before target execution. PL complex output and stored national result
-encodings are unchanged; stored national members still require AL16UTF16. CLOB write buffers use ordinary string parameters and therefore
+unrepresentable text fails before target execution. PL complex output shares the explicit national
+resolver; stored national members still require AL16UTF16. See the [scalar encoding evidence](history/2026-10-29-national-character-encodings.md).
+CLOB write buffers use ordinary string parameters and therefore
 inherit the selected client encoding. The complete WriteText input is checked for representability
 before its first write chunk, using bounded chunks for encoding checks; a rejected suffix leaves
 the locator and handle usable. Later
