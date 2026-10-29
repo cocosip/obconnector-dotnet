@@ -103,9 +103,9 @@ namespace OceanBaseConnector
                     ? EnsurePrepared(operation, operation.ClientFallback) : null;
                 var clientMultiStatement = !operation.Binary && operation.Bindings.Parameters.Length != 0;
                 var text = (operation.Binary || clientMultiStatement) && operation.Oracle == null && statement == null
-                    ? ClientPreparedSql.Build(operation.Bindings, execution.Mode,
-                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? execution.ReadMySqlLiteralContext() : null, execution.ClientEncoding,
-                        multiStatement: clientMultiStatement) : operation.Bindings.CommandText;
+                    ? execution.BuildClientPreparedSql(operation.Bindings,
+                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? execution.ReadMySqlLiteralContext() : null,
+                        clientMultiStatement, asynchronous: false).GetAwaiter().GetResult() : operation.Bindings.CommandText;
                 if (statement != null && operation.Oracle == null) execution.ResolveComplexColumns(statement);
                 var hasCursorColumns = statement != null && operation.Oracle == null && execution.HasCursorColumns(statement);
                 ValidateCursorStatement(operation.FetchSize, statement);
@@ -185,9 +185,9 @@ namespace OceanBaseConnector
                     ? await EnsurePreparedAsync(operation, cancellationToken, operation.ClientFallback).ConfigureAwait(false) : null;
                 var clientMultiStatement = !operation.Binary && operation.Bindings.Parameters.Length != 0;
                 var text = (operation.Binary || clientMultiStatement) && operation.Oracle == null && statement == null
-                    ? ClientPreparedSql.Build(operation.Bindings, execution.Mode,
-                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? await execution.ReadMySqlLiteralContextAsync(cancellationToken).ConfigureAwait(false) : null, execution.ClientEncoding,
-                        multiStatement: clientMultiStatement) : operation.Bindings.CommandText;
+                    ? await execution.BuildClientPreparedSql(operation.Bindings,
+                        ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? await execution.ReadMySqlLiteralContextAsync(cancellationToken).ConfigureAwait(false) : null,
+                        clientMultiStatement, asynchronous: true).ConfigureAwait(false) : operation.Bindings.CommandText;
                 if (statement != null && operation.Oracle == null) await execution.ResolveComplexColumnsAsync(statement, cancellationToken).ConfigureAwait(false);
                 var hasCursorColumns = statement != null && operation.Oracle == null && execution.HasCursorColumns(statement);
                 ValidateCursorStatement(operation.FetchSize, statement);
@@ -306,7 +306,7 @@ namespace OceanBaseConnector
                     streamBindings.Add(source, parameter);
                 }
                 var streams = streamBindings != null;
-                if (streams && (clientFallback || multiStatement)) throw new NotSupportedException("Stream parameters require a single server-prepared statement without client fallback.");
+                if (streams && clientFallback) throw new NotSupportedException("Stream parameters do not support client prepare fallback.");
                 if (clientFallback || streams || multiStatement)
                 {
                     var snapshots = new OceanBaseParameter[bindings.Parameters.Length];

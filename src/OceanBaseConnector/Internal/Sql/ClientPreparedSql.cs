@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
+using System.IO;
 using System.Text;
 using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.Internal.Values;
@@ -18,7 +19,7 @@ namespace OceanBaseConnector.Internal.Sql
             return false;
         }
 
-        internal static string Build(ParameterBindingPlan bindings, OceanBaseCompatibilityMode mode, MySqlLiteralContext? context = null, Encoding? clientEncoding = null, bool multiStatement = false)
+        internal static string Build(ParameterBindingPlan bindings, OceanBaseCompatibilityMode mode, MySqlLiteralContext? context = null, Encoding? clientEncoding = null, bool multiStatement = false, Func<Stream, string>? streamLiteral = null)
         {
             clientEncoding ??= ResultColumn.Utf8;
             // Reuse all declared-type, exact conversion and packet-budget validation.
@@ -34,7 +35,7 @@ namespace OceanBaseConnector.Internal.Sql
             long bytes = clientEncoding.GetByteCount(bindings.CommandText) + 1L;
             for (var i = 0; i < positions.Length; i++)
             {
-                var literal = Literal(bindings.Parameters[i], mode, context, clientEncoding, multiStatement);
+                var literal = Literal(bindings.Parameters[i], mode, context, clientEncoding, multiStatement, streamLiteral);
                 bytes += clientEncoding.GetByteCount(literal) + 1L;
                 if (bytes > PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Client prepared SQL exceeds the packet size limit.");
                 sql.Append(bindings.CommandText, copied, positions[i] - copied).Append('(').Append(literal).Append(')');
@@ -44,7 +45,7 @@ namespace OceanBaseConnector.Internal.Sql
             return sql.Append(bindings.CommandText, copied, bindings.CommandText.Length - copied).ToString();
         }
 
-        private static string Literal(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode, MySqlLiteralContext? context, Encoding clientEncoding, bool multiStatement)
+        private static string Literal(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode, MySqlLiteralContext? context, Encoding clientEncoding, bool multiStatement, Func<Stream, string>? streamLiteral)
         {
             if (parameter.Direction != ParameterDirection.Input) throw Unsupported();
             var provider = parameter.OceanBaseDbType;
@@ -63,6 +64,7 @@ namespace OceanBaseConnector.Internal.Sql
                 type != DbType.Single && type != DbType.Double && !temporal && !interval && provider != OceanBaseDbType.Null) throw Unsupported();
             var value = parameter.Value;
             if (value == null || value == DBNull.Value) return "NULL";
+            if (value is Stream source) return multiStatement && streamLiteral != null ? streamLiteral(source) : throw Unsupported();
             if (interval)
             {
                 if (value is OceanBaseIntervalYearToMonth ym)
