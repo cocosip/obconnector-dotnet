@@ -105,7 +105,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | ID | 当前进度 | 任务 | 需要修改/核对 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；不含 OUT/cursor/复杂值，不以 `P3` 宣称全部组合完成 |
-| D-02 | `P2`；d1 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1 以外的复杂输入继续明确拒绝或单独关闭 |
+| D-02 | `P2`；a1、d1 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；本轮长 NUL 失败保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1 以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；扩大范围需要真实支持的 cursor 列和 OUT wire；不能用 PL OUT 替代 SELECT CURSOR 列 | 普通 cursor、REF CURSOR OUT、offset、释放和半读分别通过；服务端明确拒绝的形状保留失败 |
 | D-04 | `P2` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 先按 named/anonymous、输入/输出、普通列/PL、LOB/cursor 成员拆矩阵 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P2` | UROWID 和 ROWID 参数/结果闭环（G05/T12） | `ResultColumn`、`PreparedParameters`、`DataTypes`、绑定和存储读取 | 需要真实 UROWID 值、参数 wire、列 metadata；当前只有 ROWID 结果路径 | UROWID 输入、输出、普通列、metadata、NULL/边界和独立读回通过；不支持形状发送前拒绝 |
@@ -138,7 +138,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | A-02 | `P3` | PSPE、XA、unknown outcome（G11） | in-doubt、协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
 | A-03 | `P3` | Schema、目录和参数元数据（G13） | 包内 PL 类型、重载、大小写、引用标识符和最小权限边界 | 双模式最小权限、唯一/歧义签名、包/重载、视图/同义词权限错误均按服务端真实结果关闭 |
 | A-04 | `P3` | 包、TFM 和平台（G14/R01） | 当前有五资产和 Windows 子集；非 Windows、独立 runtime、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
-| A-05 | `P3` | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界，不能当成全部关闭 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
+| A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；本轮 196608 字符 NUL 单表达式 .NET/Java 均失败，详见 D-02a1 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
 
 ### 原缺失矩阵编号映射
 
@@ -257,10 +257,59 @@ D-02b～D-02d 先调查是否纳入产品范围，不代表必须实现；允许
 
 | 子项 | 进度 | 开发任务与先决条件 | 验证/关闭依据 |
 | --- | --- | --- | --- |
-| D-02a 已有输入/多结果闭环 | `P2` | 核对双模式的正常/NULL/边界、SequentialAccess、半读释放、错误前缀/未执行后缀和独立存储；只为发现的具体缺口补代码或测试 | 复用 `MultiStatementTests.*` 和对应 Unit/Consumer，记录每个新增支持组合的目标 profile 结果，不能只看总测试数 |
+| D-02a 已有输入/多结果闭环 | `P2`；a1 达到 `P4` | 核对双模式的正常/NULL/边界、SequentialAccess、半读释放、错误前缀/未执行后缀和独立存储；只为发现的具体缺口补代码或测试 | MySQL 时间脚本存储见 a1；本轮 Oracle 长 NUL 4 项失败保留，不能只看总测试数 |
 | D-02b 多语句 Prepare/server cursor | `P0`，待范围/wire | 确认服务端是否提供脚本级 statement/cursor 身份及生命周期；若只能拆成单语句，须先定义结果顺序、失败前缀与资源契约，再评估是否纳入 OceanBaseCommand | 证据成立且明确纳入范围后再实现；无支持证据时保持发送前拒绝，不把现有 DbBatch 的顺序执行当作该功能已完成 |
 | D-02c 多语句 OUT/INOUT | `P0`，待模式/方向证据 | 分别确认 MySQL 过程变量和 Oracle PrepareExecute 的脚本形状；定义输出何时发布、后续语句失败时是否可见，不能直接把 OUT 插值成输入 | sync/async、OUT/INOUT/NULL、错误后原子发布、连接复用及实库独立核对；普通单过程 OUT 成功不能关闭脚本任务 |
 | D-02d 复杂输入/locator/cursor 结果 | `P2`；d1 达到 `P4` | 确认文本脚本可表示的复杂值身份、LOB 归属和 cursor wire；分别复用 D-03/D-04 已证明的能力，避免再开发一套 codec | 命名/匿名、NULL、嵌套、半读/取消/释放和旧租约安全逐项验证；REF CURSOR 输入仍为范围排除 |
+
+#### D-02a1：MySQL 时间参数脚本的存储闭环（`P4`，2026-10-30）
+
+本轮基线 `adc5ac8`，工作区干净。D-02a 的源码已有 DATE/DATETIME/TIME 字面量；当前多语句
+实库组没有相应的独立存储用例，单语句 fallback 的中继注入不能关闭脚本验收。本模块补齐
+`MultiStatementTests.Temporal.cs`：DATE、DATETIME(6)、TIMESTAMP(6)、TIME(6) 的普通值、
+provider 值、NULL、zero-date、0/3/6 位精度，以及脚本内 sql_mode/time_zone 改变的存储语义。
+TIMESTAMP 按执行该条语句时的会话时区转换；DATETIME 不转换。zero-date 明确先设置宽松 SQL_MODE。
+
+本轮执行当前双模式整个多语句组，核对正常结果、半读释放、错误前缀和服务端边界；新增
+时间测试通过独立 UTC 连接分别 text/prepare 读回，并验证坏精度/非法值在脚本首条 SQL 前拒绝。
+本模块不新增 public API，不改变 TIME 极限裁剪、zero-date 服务端条件或原生 1295 的未关闭结论。
+已有时间字面量实现通过本模块验收，因此只补测试和本文，不为补齐测试而重复编写产品代码。
+
+- [x] 当前双模式多语句组基线及清理结果（保留 4 项失败，见下文）。
+- [x] 新增 MySQL 时间脚本的独立存储、结果 metadata、NULL/zero-date、精度/时区及发送前拒绝测试。
+- [ ] 运行新增实库组及适当本地回归，独立代码走查，处理问题后本地提交。
+- [ ] 本文记录实际范围、结果、提交号和仍未关闭项。
+
+| 检查点 | 本轮证据/状态 |
+| --- | --- |
+| 实库时间专项 | `mysql-direct` 26/26 通过，0 失败/0 跳过；24 个值用例覆盖 sync/async × Default/SequentialAccess × 0/3/6 位 × CLR/provider 值，另有 2 个拒绝用例 |
+| 独立存储断言 | DATE、DATETIME(6)、TIMESTAMP(6)、TIME(6) metadata 和精确值；独立 UTC 连接 text/显式 Prepare 两次读回。正/负 49:02:03 时间跨度、NULL、zero-date 和全表行数；原参数值及写连接可复用 |
+| 会话语义 | 脚本先使用 `+05:45`，再使用 `-03:30`；TIMESTAMP 按对应语句会话时区转 UTC，DATETIME 保留墙上时间。严格模式切换 NO_BACKSLASH_ESCAPES，zero-date 仅在显式宽松 SQL_MODE 后写入 |
+| 发送前拒绝 | NULL TIME 的 Scale=7、次微秒 TIME、UTC DateTime 分别拒绝；同连接和独立连接均确认表中 0 行，前缀 INSERT 未执行 |
+| 清理 | 所有新建表由 DatabaseContext 的 LIFO 清理完成；清理错误会使所属测试失败，没有跳过清理断言 |
+| 构建 | IntegrationTests Release 构建 0 警告/0 错误，`--no-restore --disable-build-servers -m:1 -nr:false` |
+| 本地专项 | ClientPreparedSqlTests、MySqlMultiStatementParameterTests、MySqlTemporalFallbackTests 共 43/43 通过，0 跳过；产品代码未改，本轮不重复前模块的完整 Unit/Consumer 门禁 |
+| 格式 | 新增测试文件 `dotnet format whitespace ... --verify-no-changes --no-restore` 通过；沙箱内 MSBuild 管道权限失败后在沙箱外核验 |
+| 独立代码走查 | 指出 zero-date DATETIME 只比较日期的断言不足；现比较完整 OceanBaseDateTime（含时间、微秒和 Scale），重建 0 警告/0 错误、新实库 26/26 再次通过；未发现产品代码或清理问题 |
+| 提交 | 走查后本地提交，提交号待回填 |
+
+本轮双模式整个 `MultiStatementTests` 基线为 **360 项，356 通过、4 失败、0 跳过**。
+失败全部是既有 `OracleLargeNulSingleTextExpressionsPreserveEveryCharacter` 的 sync/async ×
+Default/SequentialAccess；约 10 秒后报告响应未完整消费、执行结果未知。独立重跑仍为 0/4 通过。
+它执行 196608 字符的 `a\0b` 单表达式，两次执行中第一次即失败；不是新增 MySQL 时间用例失败。
+
+同一目标的 Java Connector/J 2.4.14 对照也在约 10 秒后抛出 `SQLNonTransientConnectionException`
+（08000）：`REPLACE(` 后有/无空格 × 单 SELECT/双 SELECT 共 4 个形状均失败。
+Java 使用 text、UTF-8、allowMultiQueries 和 10 秒 socket timeout；不是通过放宽 .NET 超时或删改断言
+取得结果。此前文档记录的单表达式成功保留为历史证据，**不能继续代表当前环境已通过**。
+两个客户端同失败尚不足以定位根因，需继续核对服务端执行、会话/网络状态及版本变化；暂不归因
+为 .NET 缺陷或已确认的服务端限制，也不放开/收紧公共能力声明。
+
+本地忽略目录保留 `TestResults/roadmap/d02a-temporal-live.trx`、`d02a-local.trx`、
+`d02a-live-baseline.trx`、`d02a-long-nul-recheck.trx` 及 `d02a-java-nul-recheck.log`。
+仅 MySQL 时间脚本子项达到 `P4`；D-02/D-02a 保持 `P2`，长 NUL 转交 A-05 继续复核。
+下一步先追查该失败，再核对 Oracle 时间脚本的独立存储覆盖；真实 TLS/ODP/OB20/KDC、其他
+OS/runtime、长期负载、原生 1295 及 TIME 极限仍未验收，不以本子项通过关闭它们。
 
 #### D-02d1：命名 OBJECT 的标量输入（`P4`，2026-10-30）
 
