@@ -120,15 +120,15 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-09 | `P0` | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 没有确认的通用 SQLXML/XMLType codec | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
 | D-10 | `P0` | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 没有确认的通用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 先记录可实现形状或阻塞结论；实现时输入/结果/NULL/SRID/非法几何有明确行为；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0` | ANYDATA PL 形状调查与有条件 codec（T17） | 服务端 PL/系统类型，不能默认作为普通持久列；Java 没有确认普通列 codec | 先确定 PL 参数/返回值形状和可枚举内部类型；确认是否值得提供 public API | 先记录可实现形状或阻塞结论；实现仅限明确的 PL 形状；内部未知类型拒绝，不增加任意对象兜底 |
-| D-12 | `P0`（官方功能已核实） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；目标部署、Java 专用路径和 wire 尚未验收；Oracle ARRAY 归 D-04 | 锁定 OB 版本、模式、DDL、列/参数 wire、Java 路径和真实 profile | 每个子项分别记录 `支持/服务端拒绝/版本条件/无证据`；专用 API/codec 仅实现证据成立的形状 |
+| D-12 | `P2`（a/c 已确认通用路径，b 待服务端） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；当前 4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，复用 String 路径；Oracle ARRAY 归 D-04 | 锁定 OB 版本、模式、DDL、列/参数 wire、Java 路径和真实 profile | a/c 的通用 String 路径有独立实库证据；b 需服务端版本/DDL/wire 证据；不新增未经证实的专用 codec |
 
 D-12 分为以下三个子任务，状态都维护在本文，父项只有在所有子项结论闭合后才能关闭：
 
 | 子项 | 进度/已确认 | 具体开发与验证范围 | 当前缺口 |
 | --- | --- | --- | --- |
-| D-12a VECTOR/SPARSEVECTOR | `P0`；官方类型、列 DDL、NaN/Inf 限制和稀疏向量版本已核实 | 确认维度/元素精度、NULL、空值、坏值、text/binary 列身份；评估显式 provider 类型、绑定、结果及存储独立读回；稠密/稀疏分开 | 目标 profile、参数/结果 wire、大小预算及 Java 专用路径待确认 |
+| D-12a VECTOR（当前版本稠密） | `P4`，4.4.2.2 MySQL 直连通用 String 子集 | `VECTOR(3)` DDL、NULL/文本值、参数绑定、显式/隐式 Prepare、结果 metadata 和独立读回；Java 2.4.14 同样返回 `CHAR`/`String` | 当前版本没有专用 wire/type code；`SPARSEVECTOR` 在目标服务端返回 1064，保留为版本边界 |
 | D-12b RoaringBitmap | `P0`；官方无符号整数集合与 64 位能力已核实 | 确认列 DDL、输入/输出格式、整数边界、集合语义、NULL/空集合/坏数据；确定是否暴露原始 bytes 或 provider 值并补独立读回 | 目标 profile、序列化版本、wire 类型与严格校验待确认；不能复用 BIT 数值契约 |
-| D-12c MySQL ARRAY | `P0`；官方 ARRAY/[] 列、元素子集、最多六层嵌套和无默认值限制已核实 | 确认元素类型/NULL/空数组/嵌套、参数/结果 metadata、text/binary；定义独立于 Oracle ARRAY 的绑定和解码，补存储及拒绝边界 | 目标 profile、类型描述/元素 wire、Java 专用路径待确认；不能用 Oracle 类型码 161 代替 |
+| D-12c MySQL ARRAY | `P4`，4.4.2.2 MySQL 直连通用 String 子集 | `ARRAY(INT)` DDL、NULL/文本值、参数绑定、显式/隐式 Prepare、结果 metadata 和独立读回；Java 2.4.14 同样返回 `CHAR`/`String` | 当前版本没有专用 wire/type code；嵌套元素、专用参数 metadata 和其他版本仍待确认，不能用 Oracle 类型码 161 代替 |
 
 ### 第三阶段：已有代码的部署和故障验收
 
@@ -937,6 +937,31 @@ DATA_PRECISION（此处为字符集形态1/2）冒充字符长度。需另核服
 且给Decimal类型编号赋CLR int；修正为既有显式/隐式Prepare组合和decimal编号，不扩大产品wire。
 Unit和Integration并发构建共用产品输出曾报CS2012文件锁；之后相关构建/测试顺序执行，
 这次构建错误不计入测试结果，未重启任何仍在执行的测试。
+
+### D-12a / D-12c：VECTOR 与 MySQL ARRAY 的当前版本通用文本路径（2026-10-30，指定 profile 已验收）
+
+本轮先用同一 MySQL 租户、同一账号和 OceanBase 4.4.2.2 做 Java 2.4.14 对照，再决定是否增加
+专用 provider 类型。Java 探针 `TestResults/java-gap-probe/vector-java.log` 的结果为：
+
+- `CREATE TABLE (... VECTOR(3))` 和 `CREATE TABLE (... ARRAY(INT))` 成功；
+- 两列查询的 JDBC metadata 都是 JDBC type `CHAR`、type name `CHAR`、Java class `String`；
+- 直接写入 `'[1,2,3]'` 成功并按同样文本读回；`ARRAY[1,2,3]` 语法返回 1064；
+- `SPARSEVECTOR(3)` DDL 返回 1064，`TO_VECTOR('[1,2,3]')` 返回 1305；
+- 因此本版本没有可证明的专用 vector/array wire 或 Java 专用 codec。新增专用 enum、二进制
+  parser 或自动把字符串解析成数值向量会扩大契约并可能掩盖版本差异，本轮不做。
+
+现有 .NET CHAR/String 路径已经能够绑定和读取这两个服务端列类型。本轮加入
+`VectorArrayStringWireTests`，覆盖直连 profile 的 sync/async × implicit/explicit Prepare，
+验证 DDL、NULL、文本参数、结果 metadata（`CHAR`/`String`）、行顺序和独立连接读回；
+`d12-vector-array-live-direct.trx` 为 **4/4，无 skip**。这里的“完成”是当前版本通用文本子集的
+验收，不是所有 VECTOR/ARRAY 版本、稀疏向量、嵌套元素或专用 API 已支持。
+
+本子模块无产品源码改动；测试和本条证据用于防止后续把服务端专用类型误解为缺失的专用 codec。
+D-12 父项保持 `P2`，D-12b 继续 `P0 / 待服务端`，待部署方提供支持 `SPARSEVECTOR` 或专用
+binary wire 的版本和 profile 后再评估是否需要产品实现。
+
+独立 fresh-context 只读走查无 Critical/Important/Minor；格式核验和 `git diff --check` 已通过，
+本节待随测试一起本地提交。
 
 ## 依据
 
