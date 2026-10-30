@@ -920,7 +920,7 @@ scale；真实负scale（含-1/-84）和已声明精度继续严格校验，MySQ
 | Java 2.4.14 对照 | 同一租户/账号/版本：`AttributionProbe` 读取 NUMBER precision=NULL/scale=-85，Java `ParameterMetaData` 报 precision=0/scale=-85；IN/OUT/INOUT 六组值（NULL、7.2500、38 位整数、1E-130、1E125）精确通过。Java 源码 `OceanBaseCallableParameterMetaData` 同样只读 DATA_PRECISION/DATA_SCALE，未把 -85 当固定小数位 |
 | 其他归因 | Java 与 .NET 对同一 EUCKR 初始化序列均在 `SET character_set_results` 返回 900/42000；Java 与 .NET 查询 `CHAR_LENGTH` 均返回 904/42S22，而 Java VARCHAR2 callable 成功。因此 EUCKR/CHAR_LENGTH 当前不能归为 .NET 单方缺陷，A-03b/D-07d 保持开放 |
 | 回归/构建 | `a03-number-product-build.log` 五 TFM Release 0 warning/0 error；完整 Unit 为 8696/8697（唯一失败是沙箱 File.Replace 权限，`a03-tns-unsandboxed.trx` 同测试沙箱外 1/1）；不宣称完整 Unit 全绿 |
-| 代码走查/提交 | fresh-context 独立只读走查完成，无 Critical/Important；scoped `dotnet format whitespace --verify-no-changes --no-restore` 和 `git diff --check` 通过，准备本地提交。父 A-03 仍为 `P3` |
+| 代码走查/提交 | fresh-context 独立只读走查完成，无 Critical/Important；scoped `dotnet format whitespace --verify-no-changes --no-restore` 和 `git diff --check` 通过；`a252aee`（`🐛 fix(oracle): derive unconstrained NUMBER parameters without a fixed scale`）已本地提交、未 push。A-03a 达到 `P4`，父 A-03 仍为 `P3` |
 
 本项实现只在 Oracle 数字参数同时满足 precision 缺失、scale=-85 时将 scale 归一为未知；
 真实 scale -84..127（包括 -1）、有 precision 的 -85、FLOAT/NUMBER_FLOAT 和 MySQL 规则不变。
