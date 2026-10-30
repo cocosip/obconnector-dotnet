@@ -960,8 +960,8 @@ Unit和Integration并发构建共用产品输出曾报CS2012文件锁；之后�
 D-12 父项保持 `P2`，D-12b 继续 `P0 / 待服务端`，待部署方提供支持 `SPARSEVECTOR` 或专用
 binary wire 的版本和 profile 后再评估是否需要产品实现。
 
-独立 fresh-context 只读走查无 Critical/Important/Minor；格式核验和 `git diff --check` 已通过，
-本节待随测试一起本地提交。
+独立 fresh-context 只读走查无 Critical/Important/Minor；格式核验和 `git diff --check` 已通过；
+`107c852`（`✅ test(mysql): verify vector and array string wire compatibility`）已本地提交，未 push。
 
 ## 依据
 
