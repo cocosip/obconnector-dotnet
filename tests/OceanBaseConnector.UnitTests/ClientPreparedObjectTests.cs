@@ -42,15 +42,60 @@ public sealed class ClientPreparedObjectTests
         Assert.Equal("select (\"Ow\"\"ner\".\"Ty\"\"pe\"(NULL,NULL)); select (\"Ow\"\"ner\".\"Ty\"\"pe\"(NULL,NULL))", Build(parameter));
     }
 
+    [Fact]
+    public void NestedNamedObjectsPreserveQuotedIdentityAndNullShape()
+    {
+        var child = ObjectType(0, 207);
+        var parent = new OceanBaseComplexType(null, "Parent\"Owner", "Parent\"Type", false,
+            new[] { new OceanBaseComplexMember("child", child.SchemaName, child.TypeName, child, child.Layout) });
+        var grandparent = new OceanBaseComplexType(null, "s", "root", false,
+            new[] { new OceanBaseComplexMember("parent", parent.SchemaName, parent.TypeName, parent, parent.Layout) });
+        var leaf = new OceanBaseComplexValue(child, new object?[] { 7, "中" });
+        var branch = new OceanBaseComplexValue(parent, new object?[] { leaf });
+        var parameter = new OceanBaseParameter { ParameterName = "p", Value = new OceanBaseComplexValue(grandparent, new object?[] { branch }) };
+        var literal = "\"s\".\"root\"(\"Parent\"\"Owner\".\"Parent\"\"Type\"(\"Ow\"\"ner\".\"Ty\"\"pe\"(7,u'\\4e2d')))";
+        Assert.Equal("select (" + literal + "); select (" + literal + ")", Build(parameter));
+        parameter.Value = new OceanBaseComplexValue(parent, new object?[] { null });
+        Assert.Equal("select (\"Parent\"\"Owner\".\"Parent\"\"Type\"(NULL)); select (\"Parent\"\"Owner\".\"Parent\"\"Type\"(NULL))", Build(parameter));
+        parameter.Value = new OceanBaseComplexValue(parent, new object?[] { new OceanBaseComplexValue(child, new object?[] { null, null }) });
+        literal = "\"Parent\"\"Owner\".\"Parent\"\"Type\"(\"Ow\"\"ner\".\"Ty\"\"pe\"(NULL,NULL))";
+        Assert.Equal("select (" + literal + "); select (" + literal + ")", Build(parameter));
+    }
+
     [Theory]
-    [InlineData(160)]
+    [InlineData("collection")]
+    [InlineData("anonymous")]
+    [InlineData("lob")]
+    [InlineData("cursor")]
+    public void UnsupportedNestedLayoutsRemainRejectedEvenForNullParent(string shape)
+    {
+        var child = shape == "collection" ? new OceanBaseComplexType(null, "s", "c", true, ObjectType(0).Members.ToArray())
+            : shape == "anonymous" ? new OceanBaseComplexType(null, "", "", false, ObjectType(0).Members.ToArray())
+            : ObjectType(shape == "lob" ? (byte)210 : (byte)163);
+        var parent = new OceanBaseComplexType(null, "s", "p", false,
+            new[] { new OceanBaseComplexMember("child", child.SchemaName, child.TypeName, child, child.Layout) });
+        Assert.Throws<NotSupportedException>(() => Build(new OceanBaseParameter { ParameterName = "p", ComplexType = parent, Value = DBNull.Value }));
+    }
+
+    [Fact]
+    public void SharedNamedObjectDescriptorsAllowTypedNullWithoutExpandingValues()
+    {
+        var type = ObjectType(0);
+        for (var depth = 1; depth < 32; depth++)
+        {
+            var member = new OceanBaseComplexMember("child", type.SchemaName, type.TypeName, type, type.Layout);
+            type = new OceanBaseComplexType(null, "s", "t" + depth, false, new[] { member, member });
+        }
+        Assert.Equal("select (NULL); select (NULL)", Build(new OceanBaseParameter { ParameterName = "p", ComplexType = type, Value = DBNull.Value }));
+    }
+
+    [Theory]
     [InlineData(210)]
     [InlineData(211)]
     [InlineData(163)]
     public void UnsupportedMemberLayoutsRemainRejectedEvenForNullObject(int code)
     {
-        var member = code == 160 ? new OceanBaseComplexMember("child", "s", "t", ObjectType(0), ObjectType(0).Layout)
-            : ObjectType((byte)code).Members[0];
+        var member = ObjectType((byte)code).Members[0];
         var type = new OceanBaseComplexType(null, "s", "t", false, new[] { member });
         Assert.Throws<NotSupportedException>(() => Build(new OceanBaseParameter { ParameterName = "p", ComplexType = type, Value = DBNull.Value }));
     }
@@ -82,5 +127,9 @@ public sealed class ClientPreparedObjectTests
         Assert.Throws<ArgumentException>(() => Build(parameter));
         parameter.Value = new OceanBaseComplexValue(type, new object?[] { text + text, text + text });
         Assert.Throws<ArgumentException>(() => Build(parameter, sql: "select :p; select 1"));
+        var parent = new OceanBaseComplexType(null, "s", "parent", false,
+            new[] { new OceanBaseComplexMember("child", type.SchemaName, type.TypeName, type, type.Layout) });
+        parameter.Value = new OceanBaseComplexValue(parent, new object?[] { new OceanBaseComplexValue(type, new object?[] { text, text }) });
+        Assert.Throws<ArgumentException>(() => Build(parameter));
     }
 }

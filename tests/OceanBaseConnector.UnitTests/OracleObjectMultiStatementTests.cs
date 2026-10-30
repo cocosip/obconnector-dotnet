@@ -9,13 +9,23 @@ namespace OceanBaseConnector.UnitTests;
 public sealed partial class TextCommandTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ObjectScriptRejectsDdlAndStaleTypesBeforeConsumingSources(bool asynchronous)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ObjectScriptRejectsDdlAndStaleTypesBeforeConsumingSources(bool asynchronous, bool nested)
     {
         var server = Server(async channel =>
         {
-            await ComplexScalarType(channel, collection: false);
+            if (nested)
+            {
+                await ComplexDictionaryReply(channel, 71, "Owner", "Thing", true, new[] { "Owner", "Thing", "OBJECT", "1" });
+                await StatementCommand(channel, 25);
+                await ComplexDictionaryReply(channel, 72, "Owner", "Thing", false, new[] { "CHILD", "1", "Owner", "Child", "OBJECT" });
+                await StatementCommand(channel, 25);
+                await ComplexScalarType(channel, name: "Child", collection: false);
+            }
+            else await ComplexScalarType(channel, collection: false);
             channel.BeginCommand();
             await Query(channel, "after object rejection"); await channel.WritePacketAsync(Ok(1));
         }, multiStatements: true);
@@ -27,7 +37,8 @@ public sealed partial class TextCommandTests
             using var command = connection.CreateCommand();
             command.CommandText = "insert into t values(:s,:p); ALTER TYPE Thing ADD ATTRIBUTE n NUMBER";
             command.Parameters.Add(new OceanBaseParameter { ParameterName = "s", Value = source });
-            command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", Value = type.CreateValue(new byte[] { 42 }) });
+            var value = nested ? type.CreateValue(type.Members[0].ComplexType!.CreateValue(new byte[] { 42 })) : type.CreateValue(new byte[] { 42 });
+            command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", Value = value });
             Func<Task> execute = () => asynchronous ? command.ExecuteNonQueryAsync() : Task.FromResult(command.ExecuteNonQuery());
             await Assert.ThrowsAsync<NotSupportedException>(execute); Assert.Equal(0, source.Position);
             command.CommandText = "insert into t values(:s,:p); select 1";

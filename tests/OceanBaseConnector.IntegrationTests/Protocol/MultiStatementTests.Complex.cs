@@ -13,6 +13,100 @@ public sealed partial class MultiStatementTests
 {
     [IntegrationTheory]
     [MemberData(nameof(OracleRows))]
+    public async Task OracleNestedObjectScriptParametersPreserveNullShapesAndFailedPrefix(string profileName, bool asynchronous)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = CreateConnection(db, enabled: true); await Open(connection, asynchronous);
+        var childName = db.NewObject("TYPE");
+        await db.ExecuteAsync(connection, "CREATE TYPE " + childName + " AS OBJECT(n NUMBER, s NVARCHAR2(40), r RAW(8), ts TIMESTAMP(9))", CancellationToken.None);
+        var parentName = db.NewObject("TYPE");
+        await db.ExecuteAsync(connection, "CREATE TYPE " + parentName + " AS OBJECT(child " + childName + ", tag VARCHAR2(40))", CancellationToken.None);
+        var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY, v " + parentName, CancellationToken.None);
+        var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
+        var type = await connection.GetComplexTypeAsync(owner, parentName); var child = type.Members[0].ComplexType!;
+        var number = new OceanBaseDecimal(BigInteger.Parse("12345678901234567890123456789012345678", CultureInfo.InvariantCulture), 0);
+        var timestamp = new OceanBaseTimestamp(new DateTime(2026, 10, 30, 1, 2, 3), 123456789);
+        var nested = child.CreateValue(number, "国🙂", new byte[] { 0, 39, 92, 255 }, timestamp);
+        var value = type.CreateValue(nested, "'); DELETE FROM t; --");
+        var inputs = new object[] { value, DBNull.Value, type.CreateValue(null, "null child"),
+            type.CreateValue(child.CreateValue(new object?[4]), "all null child"), type.CreateValue(null, null) };
+        using var insert = db.Command(connection, "INSERT INTO " + table + " VALUES (:id,:p); UPDATE " + table + " SET v=:P WHERE id=:id");
+        var id = DatabaseContext.Parameter(insert, "id", 1);
+        var parameter = DatabaseContext.Parameter(insert, "p", value); parameter.ComplexType = type;
+        for (var i = 0; i < inputs.Length; i++)
+        {
+            id.Value = i + 1; parameter.Value = inputs[i];
+            Assert.Equal(2, asynchronous ? await insert.ExecuteNonQueryAsync() : insert.ExecuteNonQuery()); Assert.Same(inputs[i], parameter.Value);
+        }
+        insert.Parameters.Remove(id); parameter.Value = value;
+        insert.CommandText = "INSERT INTO " + table + " VALUES (6,:p); INSERT INTO " + table + " VALUES (1,:p); INSERT INTO " + table + " VALUES (7,:p)";
+        await Assert.ThrowsAsync<OceanBaseException>(() => asynchronous ? insert.ExecuteNonQueryAsync() : Task.FromResult(insert.ExecuteNonQuery()));
+        DatabaseContext.EqualNumber(await db.ScalarAsync(connection, db.SelectOne, CancellationToken.None), 1, "Nested script writer remains reusable.");
+        await using var verification = await db.OpenAsync();
+        var verificationType = await verification.GetComplexTypeAsync(owner, parentName);
+        foreach (var sequential in new[] { false, true })
+        {
+            using var query = db.Command(verification, "SELECT id,v FROM " + table + " ORDER BY id");
+            if (asynchronous) await query.PrepareAsync(); else query.Prepare();
+            using var reader = asynchronous ? await query.ExecuteReaderAsync(sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default)
+                : query.ExecuteReader(sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default);
+            Assert.Equal(parentName, reader.GetDataTypeName(1));
+            for (var i = 1; i <= 6; i++)
+            {
+                Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                DatabaseContext.EqualNumber(reader.GetValue(0), i, "The failed suffix must not persist.");
+                if (i == 2) { Assert.True(reader.IsDBNull(1)); continue; }
+                var actual = Assert.IsType<OceanBaseComplexValue>(reader.GetValue(1)); Assert.Same(verificationType, actual.Type);
+                var fields = actual.GetValues();
+                Assert.Equal(i == 3 ? "null child" : i == 4 ? "all null child" : i == 5 ? null : "'); DELETE FROM t; --", fields[1]);
+                if (i == 3 || i == 5) { Assert.Null(fields[0]); continue; }
+                var actualChild = Assert.IsType<OceanBaseComplexValue>(fields[0]); Assert.Same(verificationType.Members[0].ComplexType, actualChild.Type);
+                var members = actualChild.GetValues();
+                if (i == 4) { Assert.All(members, member => Assert.Null(member)); continue; }
+                Assert.Equal(number, members[0]); Assert.Equal("国🙂", members[1]); Assert.Equal(new byte[] { 0, 39, 92, 255 }, members[2]);
+                Assert.Equal(timestamp.ToString(), members[3]!.ToString());
+            }
+            Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+            Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+        }
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(OracleRows))]
+    public async Task OracleNestedObjectConstructorsInScriptsPreserveIndependentStorage(string profileName, bool asynchronous)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = CreateConnection(db, enabled: true); await Open(connection, asynchronous);
+        var childName = db.NewObject("TYPE");
+        await db.ExecuteAsync(connection, "CREATE TYPE " + childName + " AS OBJECT(n NUMBER, s NVARCHAR2(40), r RAW(8), ts TIMESTAMP(9))", CancellationToken.None);
+        var parentName = db.NewObject("TYPE");
+        await db.ExecuteAsync(connection, "CREATE TYPE " + parentName + " AS OBJECT(child " + childName + ", tag VARCHAR2(40))", CancellationToken.None);
+        var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY, v " + parentName, CancellationToken.None);
+        var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
+        var prefix = "\"" + owner.Replace("\"", "\"\"") + "\".\"";
+        var child = prefix + childName + "\""; var parent = prefix + parentName + "\"";
+        using (var insert = db.Command(connection, "INSERT INTO " + table + " VALUES (1," + parent + "(" + child + "(7,u'\\4e2d',HEXTORAW('00FF'),TIMESTAMP '2026-10-30 01:02:03.123456789'),'tag')); INSERT INTO " + table + " VALUES (2," + parent + "(NULL,'null child'))"))
+            Assert.Equal(2, asynchronous ? await insert.ExecuteNonQueryAsync() : insert.ExecuteNonQuery());
+        await using var verification = await db.OpenAsync();
+        var type = await verification.GetComplexTypeAsync(owner, parentName);
+        using var query = db.Command(verification, "SELECT v FROM " + table + " ORDER BY id");
+        if (asynchronous) await query.PrepareAsync(); else query.Prepare();
+        using var reader = asynchronous ? await query.ExecuteReaderAsync(CommandBehavior.SequentialAccess) : query.ExecuteReader(CommandBehavior.SequentialAccess);
+        Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+        var value = Assert.IsType<OceanBaseComplexValue>(reader.GetValue(0)); Assert.Same(type, value.Type);
+        var fields = value.GetValues(); Assert.Equal("tag", fields[1]);
+        var nested = Assert.IsType<OceanBaseComplexValue>(fields[0]); Assert.Same(type.Members[0].ComplexType, nested.Type);
+        var members = nested.GetValues(); DatabaseContext.EqualNumber(members[0], 7, "Nested constructor NUMBER must persist.");
+        Assert.Equal("中", members[1]); Assert.Equal(new byte[] { 0, 255 }, members[2]);
+        Assert.Equal(new OceanBaseTimestamp(new DateTime(2026, 10, 30, 1, 2, 3), 123456789).ToString(), members[3]!.ToString());
+        Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+        fields = Assert.IsType<OceanBaseComplexValue>(reader.GetValue(0)).GetValues(); Assert.Null(fields[0]); Assert.Equal("null child", fields[1]);
+        Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+        Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(OracleRows))]
     public async Task OracleObjectScriptParametersPreserveScalarMembersNullsAndFailedPrefix(string profileName, bool asynchronous)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));

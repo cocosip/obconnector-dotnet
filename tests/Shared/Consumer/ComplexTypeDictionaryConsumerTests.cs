@@ -28,7 +28,7 @@ namespace OceanBaseConnector.ConsumerTests
                     foreach (var ob20 in new[] { false, true }) yield return new object[] { target, async, ob20 };
         }
 
-        private static async Task EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesCore(string target, bool async, bool ob20, bool encrypted, bool objectScript = false)
+        private static async Task EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesCore(string target, bool async, bool ob20, bool encrypted, bool objectScript = false, bool nestedObjectScript = false)
         {
             using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
@@ -54,17 +54,21 @@ namespace OceanBaseConnector.ConsumerTests
                     foreach (var value in values) if (value != null) { var bytes = Encoding.UTF8.GetBytes(value); memory.WriteByte((byte)bytes.Length); memory.Write(bytes); }
                     return memory.ToArray();
                 }
-                byte[] Result(bool members, bool refreshed = false)
+                byte[] Result(bool members, bool refreshed = false, bool child = false)
                 {
                     var names = members ? new[] { "MEMBER_NAME", "MEMBER_POSITION", "MEMBER_SCHEMA", "MEMBER_TYPE", "MEMBER_KIND" }
                         : new[] { "TYPE_SCHEMA", "TYPE_NAME", "TYPE_KIND", "MEMBER_COUNT" };
                     var packets = new List<byte[]> { new[] { (byte)names.Length } }; packets.AddRange(names.Select(Column));
-                    if (members) { packets.Add(Row("ID", "1", null, "NUMBER", "NUMBER")); packets.Add(Row("DATA", "2", null, refreshed ? "VARCHAR2" : "RAW", refreshed ? "VARCHAR2" : "RAW")); }
-                    else packets.Add(Row("Owner目标", "Mixed_Type", "OBJECT", "2"));
+                    if (members)
+                    {
+                        packets.Add(nestedObjectScript && !child ? Row("CHILD", "1", "Owner目标", "Child_Type", "OBJECT") : Row("ID", "1", null, "NUMBER", "NUMBER"));
+                        packets.Add(Row("DATA", "2", null, refreshed ? "VARCHAR2" : "RAW", refreshed ? "VARCHAR2" : "RAW"));
+                    }
+                    else packets.Add(Row("Owner目标", child ? "Child_Type" : "Mixed_Type", "OBJECT", "2"));
                     var eof = Report(false, 0); eof[0] = 254; packets.Add(eof);
                     return packets.SelectMany((p, i) => Frame((byte)(i + 1), p)).ToArray();
                 }
-                async Task Dictionary(uint offset, byte headerId, byte memberId, bool refreshed)
+                async Task Dictionary(uint offset, byte headerId, byte memberId, bool refreshed, bool child = false)
                 {
                     for (uint requestId = offset; requestId < offset + 6; requestId++)
                     {
@@ -82,8 +86,8 @@ namespace OceanBaseConnector.ConsumerTests
                             Assert.Equal(23, request[0]); Assert.Equal(id, request[1]);
                             var cursor = new ByteCursor(request); cursor.Skip(16);
                             Assert.Equal("Owner目标", Encoding.UTF8.GetString(cursor.ReadLengthEncodedBytes()));
-                            Assert.Equal("Mixed_Type", Encoding.UTF8.GetString(cursor.ReadLengthEncodedBytes())); Assert.False(cursor.HasRemaining);
-                            response = Result(members, refreshed);
+                            Assert.Equal(child ? "Child_Type" : "Mixed_Type", Encoding.UTF8.GetString(cursor.ReadLengthEncodedBytes())); Assert.False(cursor.HasRemaining);
+                            response = Result(members, refreshed, child);
                         }
                         else { Assert.Equal(new byte[] { 25, id, 0, 0, 0 }, request); if (!ob20) channel.BeginCommand(); continue; }
                         await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, requestId + 2, 1, response) : response, budget.Token);
@@ -91,22 +95,24 @@ namespace OceanBaseConnector.ConsumerTests
                     }
                 }
                 await Dictionary(0, 9, 10, false);
+                if (nestedObjectScript) await Dictionary(6, 11, 12, false, child: true);
                 if (objectScript)
                 {
+                    var start = nestedObjectScript ? 14u : 8u;
                     for (uint i = 0; i < 3; i++)
                     {
-                        var request = await ReadRequest(stream, channel, ob20, 8 + i, budget.Token);
+                        var request = await ReadRequest(stream, channel, ob20, start + i, budget.Token);
                         Assert.Equal(3, request[0]);
-                        var literal = i == 0 ? "\"Owner目标\".\"Mixed_Type\"(31,HEXTORAW('0102'))" : i == 1 ? "NULL" : "\"Owner目标\".\"Mixed_Type\"(NULL,NULL)";
+                        var literal = i == 0 ? "\"Owner目标\".\"Mixed_Type\"(" + (nestedObjectScript ? "\"Owner目标\".\"Child_Type\"(31,HEXTORAW('0102'))" : "31") + ",HEXTORAW('0102'))" : i == 1 ? "NULL" : "\"Owner目标\".\"Mixed_Type\"(NULL,NULL)";
                         Assert.Equal("insert into t values ((" + literal + ")); update t set v=(" + literal + ")", Encoding.UTF8.GetString(request, 1, request.Length - 1));
                         var response = Frame(1, new byte[] { 0, 1, 0, 14, 0, 0, 0 }).Concat(Frame(2, Report(false, 1))).ToArray();
-                        await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 8 + i, 1, response) : response, budget.Token);
+                        await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, start + i, 1, response) : response, budget.Token);
                         if (!ob20) channel.BeginCommand();
                     }
-                    var after = await ReadRequest(stream, channel, ob20, 11, budget.Token);
+                    var after = await ReadRequest(stream, channel, ob20, start + 3, budget.Token);
                     Assert.Equal(3, after[0]); Assert.Equal("after object script", Encoding.UTF8.GetString(after, 1, after.Length - 1));
                     var afterReply = Frame(1, Report(false, 1));
-                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 11, 1, afterReply) : afterReply, budget.Token);
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, start + 3, 1, afterReply) : afterReply, budget.Token);
                     await ObserveClose(stream, budget.Token);
                     return;
                 }
@@ -184,9 +190,24 @@ namespace OceanBaseConnector.ConsumerTests
                 Assert.Equal("Owner目标", type.GetType().GetProperty("SchemaName")!.GetValue(type));
                 Assert.Same(type, await Call(connection, async ? "GetComplexTypeAsync" : "GetComplexType", arguments));
                 var bytes = new byte[] { 1, 2 }; object?[] values = { 31, bytes };
+                object? nestedValue = null;
+                if (nestedObjectScript)
+                {
+                    var members = (System.Collections.IEnumerable)type.GetType().GetProperty("Members")!.GetValue(type)!;
+                    var member = members.Cast<object>().First(); var child = member.GetType().GetProperty("ComplexType")!.GetValue(member)!;
+                    nestedValue = (await Call(child, "CreateValue", new object?[] { new object?[] { 31, bytes } }))!;
+                    values[0] = nestedValue;
+                }
                 var value = (await Call(type, "CreateValue", new object?[] { values }))!; bytes[0] = 9; values[0] = 99;
                 var first = (object?[])(await Call(value, "GetValues", Array.Empty<object?>()))!;
-                Assert.Equal(31, first[0]); Assert.Equal(new byte[] { 1, 2 }, first[1]); ((byte[])first[1]!)[0] = 8;
+                if (nestedObjectScript)
+                {
+                    Assert.Same(nestedValue, first[0]);
+                    var nestedFields = (object?[])(await Call(first[0]!, "GetValues", Array.Empty<object?>()))!;
+                    Assert.Equal(31, nestedFields[0]); Assert.Equal(new byte[] { 1, 2 }, nestedFields[1]);
+                }
+                else Assert.Equal(31, first[0]);
+                Assert.Equal(new byte[] { 1, 2 }, first[1]); ((byte[])first[1]!)[0] = 8;
                 Assert.Equal(new byte[] { 1, 2 }, ((object?[])(await Call(value, "GetValues", Array.Empty<object?>()))!)[1]);
                 if (objectScript)
                 {

@@ -130,12 +130,17 @@ namespace OceanBaseConnector.Internal.Sql
 
         private static string ObjectLiteral(OceanBaseParameter parameter, OceanBaseComplexType type, Encoding clientEncoding)
         {
-            // shortcut: flat named objects only; add collections/nesting after separate server and ownership evidence.
-            if (type.IsCollection || type.IsAnonymous || type.SchemaName.Length == 0) throw Unsupported();
-            foreach (var member in type.Members)
-                if (member.Layout.TypeCode == 160 || member.Layout.HasLobMembers || member.Layout.HasCursorMembers) throw Unsupported();
-            if (parameter.Value == null || parameter.Value == DBNull.Value) return "NULL";
-            var values = ((OceanBaseComplexValue)parameter.Value).GetValues();
+            // shortcut: named objects only; collections and locator members need separate server evidence.
+            var validated = new HashSet<OceanBaseComplexType>();
+            void Validate(OceanBaseComplexType descriptor)
+            {
+                if (!validated.Add(descriptor)) return;
+                if (descriptor.IsCollection || descriptor.IsAnonymous || descriptor.SchemaName.Length == 0 ||
+                    descriptor.Layout.HasLobMembers || descriptor.Layout.HasCursorMembers) throw Unsupported();
+                foreach (var member in descriptor.Members)
+                    if (member.Layout.TypeCode == 160) Validate(member.ComplexType ?? throw Unsupported());
+            }
+            Validate(type);
             var sql = new StringBuilder();
             long bytes = 0;
             void Append(string text)
@@ -144,29 +149,35 @@ namespace OceanBaseConnector.Internal.Sql
                 if (bytes > PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Client prepared SQL exceeds the packet size limit.");
                 sql.Append(text);
             }
-            Append("\"" + type.SchemaName.Replace("\"", "\"\"") + "\".\"" + type.TypeName.Replace("\"", "\"\"") + "\"(");
-            for (var i = 0; i < values.Length; i++)
+            void AppendObject(OceanBaseComplexType descriptor, object? instance)
             {
-                if (i != 0) Append(",");
-                var value = values[i];
-                var code = type.Members[i].Layout.TypeCode;
-                var provider = code switch
+                if (instance == null || instance == DBNull.Value) { Append("NULL"); return; }
+                var values = ((OceanBaseComplexValue)instance).GetValues();
+                Append("\"" + descriptor.SchemaName.Replace("\"", "\"\"") + "\".\"" + descriptor.TypeName.Replace("\"", "\"\"") + "\"(");
+                for (var i = 0; i < values.Length; i++)
                 {
-                    0 => OceanBaseDbType.Decimal,
-                    253 or 254 => OceanBaseDbType.String,
-                    207 => OceanBaseDbType.NVarchar2,
-                    208 => OceanBaseDbType.NChar,
-                    203 => OceanBaseDbType.Binary,
-                    12 => OceanBaseDbType.OracleDate,
-                    202 => OceanBaseDbType.Timestamp,
-                    _ => throw Unsupported(),
-                };
-                if (code == 0 && value != null && value != DBNull.Value && !(value is OceanBaseDecimal))
-                    value = new OceanBaseDecimal(Convert.ToDecimal(value, CultureInfo.InvariantCulture));
-                Append(Literal(new OceanBaseParameter { OceanBaseDbType = provider, Value = value },
-                    OceanBaseCompatibilityMode.Oracle, null, clientEncoding, true, null));
+                    if (i != 0) Append(",");
+                    var value = values[i]; var member = descriptor.Members[i]; var code = member.Layout.TypeCode;
+                    if (code == 160) { AppendObject(member.ComplexType!, value); continue; }
+                    var provider = code switch
+                    {
+                        0 => OceanBaseDbType.Decimal,
+                        253 or 254 => OceanBaseDbType.String,
+                        207 => OceanBaseDbType.NVarchar2,
+                        208 => OceanBaseDbType.NChar,
+                        203 => OceanBaseDbType.Binary,
+                        12 => OceanBaseDbType.OracleDate,
+                        202 => OceanBaseDbType.Timestamp,
+                        _ => throw Unsupported(),
+                    };
+                    if (code == 0 && value != null && value != DBNull.Value && !(value is OceanBaseDecimal))
+                        value = new OceanBaseDecimal(Convert.ToDecimal(value, CultureInfo.InvariantCulture));
+                    Append(Literal(new OceanBaseParameter { OceanBaseDbType = provider, Value = value },
+                        OceanBaseCompatibilityMode.Oracle, null, clientEncoding, true, null));
+                }
+                Append(")");
             }
-            Append(")");
+            AppendObject(type, parameter.Value);
             return sql.ToString();
         }
 
