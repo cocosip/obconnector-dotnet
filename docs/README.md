@@ -9,6 +9,7 @@
 | [验收标准](acceptance-criteria.md) | 测试分层、最小断言、完整实库/安全/包门槛及关闭条件 |
 | [范围依据与清理决策](obconnector-dotnet-scope-audit.md) | 固定Java/官方文档版本、纠正旧结论、删除代码依据 |
 | [真实兼容性与阻塞](compatibility.md) | 当前真实环境没开TLS等未验收状态、保留失败/skip |
+| [缺失功能开发清单](obconnector-dotnet-missing-features-roadmap.md) | **后续开发唯一跟踪入口**：Java/OceanBase/.NET差异、开发任务、服务端前提、进度和关闭记录 |
 | [本次走查与清理记录](obconnector-dotnet-driver-audit.md) | 本次实际改动、验证和保留边界 |
 
 参考契约：[架构/API细节](obconnector-dotnet-architecture-design.md)、[Java结构分析](obconnector-j-architecture-outline.md)、
