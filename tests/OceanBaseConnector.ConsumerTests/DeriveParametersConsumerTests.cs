@@ -37,6 +37,17 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetDerivesAndExecutesOracleFloatWithoutDecimalPrecision(string target, bool asynchronous, string type)
             => VerifyRoutineDerivation(target, asynchronous, mysql: false, type);
 
+        public static IEnumerable<object[]> OracleUnconstrainedNumberDerivationAssets()
+        {
+            foreach (var target in ConsumerTargetMatrix.Representative)
+                foreach (var asynchronous in new[] { false, true }) yield return new object[] { target, asynchronous };
+        }
+
+        [Theory]
+        [MemberData(nameof(OracleUnconstrainedNumberDerivationAssets))]
+        public Task EveryAssetDerivesAndExecutesOracleUnconstrainedNumber(string target, bool asynchronous)
+            => VerifyRoutineDerivation(target, asynchronous, mysql: false, unconstrainedNumber: true);
+
         public static IEnumerable<object[]> GeometryDerivationAssets()
         {
             foreach (var target in ConsumerTargetMatrix.Representative)
@@ -50,8 +61,9 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetDerivesGeometryRoutineArgumentsAsBinary(string target, bool asynchronous, string type)
             => VerifyRoutineDerivation(target, asynchronous, mysql: true, geometryType: type);
 
-        private static async Task VerifyRoutineDerivation(string target, bool asynchronous, bool mysql, string? floatType = null, string? geometryType = null)
+        private static async Task VerifyRoutineDerivation(string target, bool asynchronous, bool mysql, string? floatType = null, string? geometryType = null, bool unconstrainedNumber = false)
         {
+            var variableScale = floatType != null || unconstrainedNumber;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
             var serving = Task.Run(async () =>
@@ -94,8 +106,8 @@ namespace OceanBaseConnector.ConsumerTests
                     if (arguments)
                     {
                         names = names.Concat(new[] { "PARAMETER_NAME", "ORDINAL_POSITION", "PARAMETER_MODE", "DATA_TYPE", "DATA_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION", "TYPE_OWNER", "TYPE_NAME", "TYPE_SUBNAME", "TYPE_DECLARATION", "CHARACTER_LENGTH", "DECLARED_PRECISION", "DECLARED_SCALE" }).ToArray();
-                        row = row.Concat(new[] { "amount", "1", "INOUT", geometryType ?? floatType ?? (mysql ? "decimal" : "NUMBER"), null, geometryType != null ? null : floatType != null ? "126" : "3",
-                            geometryType != null ? null : floatType != null ? "-85" : mysql ? "1" : "-2", null, null, null, null, geometryType ?? (mysql ? "decimal(3,1)" : null), null, null, null }).ToArray();
+                        row = row.Concat(new[] { "amount", "1", "INOUT", geometryType ?? floatType ?? (mysql ? "decimal" : "NUMBER"), null, geometryType != null || unconstrainedNumber ? null : floatType != null ? "126" : "3",
+                            geometryType != null ? null : variableScale ? "-85" : mysql ? "1" : "-2", null, null, null, null, geometryType ?? (mysql ? "decimal(3,1)" : null), null, null, null }).ToArray();
                     }
                     await channel.WritePacketAsync(new[] { (byte)names.Length }, budget.Token);
                     foreach (var name in names) await channel.WritePacketAsync(Column(name), budget.Token);
@@ -111,7 +123,7 @@ namespace OceanBaseConnector.ConsumerTests
                         await channel.WritePacketAsync(payload.ToArray(), budget.Token);
                     }
                     await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);
-                    if (arguments && floatType != null)
+                    if (arguments && variableScale)
                     {
                         var encoded = PreparedParameters.Encode(new[] { new OceanBaseParameter { Value = 7.2500m } }, OceanBaseCompatibilityMode.Oracle);
                         Assert.Equal(OraclePrepareExecutePacket.Build(0, "BEGIN owner.proc(?); END;", 1, encoded), await Read());
@@ -135,7 +147,7 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target)); var connectionType = assembly.GetType("OceanBaseConnector.OceanBaseConnection")!;
                 using var connection = (DbConnection)Activator.CreateInstance(connectionType)!;
-                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Use Oracle Prepare Execute={floatType != null}";
+                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode=Disabled;Use Oracle Prepare Execute={variableScale}";
                 if (asynchronous) await connection.OpenAsync(budget.Token); else connection.Open();
                 if (mysql)
                 {
@@ -159,8 +171,8 @@ namespace OceanBaseConnector.ConsumerTests
                 }
                 await Derive(); var parameter = Assert.IsAssignableFrom<DbParameter>(command.Parameters[0]);
                 Assert.NotSame(original, parameter); Assert.Equal("amount", parameter.ParameterName); Assert.Equal(ParameterDirection.InputOutput, parameter.Direction);
-                Assert.Equal(floatType != null || geometryType != null ? 0 : 3, parameter.Precision);
-                Assert.Equal(floatType != null || geometryType != null ? (int?)null : mysql ? 1 : -2, parameter.GetType().GetProperty("DecimalScale")!.GetValue(parameter)); Assert.Equal(DBNull.Value, parameter.Value);
+                Assert.Equal(variableScale || geometryType != null ? 0 : 3, parameter.Precision);
+                Assert.Equal(variableScale || geometryType != null ? (int?)null : mysql ? 1 : -2, parameter.GetType().GetProperty("DecimalScale")!.GetValue(parameter)); Assert.Equal(DBNull.Value, parameter.Value);
                 if (geometryType != null)
                 {
                     Assert.Equal(DbType.Binary, parameter.DbType); Assert.Equal(0, parameter.Size);
@@ -169,7 +181,7 @@ namespace OceanBaseConnector.ConsumerTests
                     var geometry = Assert.Single(dataTypes.Rows.Cast<DataRow>(), r => (string)r["TypeName"] == "GEOMETRY");
                     Assert.True((bool)geometry["IsSupportedForParameters"]); Assert.True((bool)geometry["IsSupportedForResults"]);
                 }
-                if (floatType != null)
+                if (variableScale)
                 {
                     parameter.Value = 7.2500m;
                     Assert.Equal(0, asynchronous ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());

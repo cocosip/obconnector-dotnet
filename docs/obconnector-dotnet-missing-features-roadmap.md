@@ -889,6 +889,55 @@ national 分开验收，失败先固定阶段/错误码，只有定位到驱动�
 通过的验收测试伪记成产品红/绿。D-07父项保持P2，其余名称、二进制collation的逐项实库、
 代理/TLS/OB20、其他版本/平台和复杂national成员仍未验收。
 
+### A-03a：Oracle 未约束 NUMBER 参数推导（2026-10-30，指定 profile 已验收）
+
+基线 `399cb6d`，初始工作区干净。使用 writing-plans/TDD 的逐步验证流程，计划直接维护于此。
+`a03-probe.log` 已复核当前Oracle 4.4.2.2目录：未约束NUMBER的三个方向均为 precision=NULL、
+scale=-85；FLOAT为126/-85且已有专门处理。NUMBER的-85是未约束标记，不应写入参数的真实
+DecimalScale（合法最小值-84）。仅在Oracle数字参数precision缺失、scale恰为-85时保留未知
+scale；真实负scale（含-1/-84）和已声明精度继续严格校验，MySQL规则不变。无需新增API。
+
+- [x] `DeriveParametersMetadataTests` 补IN/OUT/INOUT/RETURN与NULL/-85元数据等价绑定的红灯；
+  固定真实负scale、错误precision/scale以及MySQL拒绝不被放宽。
+- [x] 在 `RoutineParameterDerivation.Map` 的数字目录映射归一化单一未约束标记，运行红/绿。
+- [x] 复用公开DLL目录消费者验证三个代表资产的sync/async NUMBER推导与执行，保留原子失败。
+- [x] 新增Oracle过程/函数真实Derive，显式/隐式Prepare、sync/async、NULL/高精度、
+  OUT/INOUT/ReturnValue、Prepare不执行、失败保留输出、同会话恢复和独立存储读回。
+- [x] 相关回归、构建/格式及fresh-context独立只读走查通过后本地提交，回填提交号与边界。
+
+影响范围：共享目录映射、既有Unit与公开DLL消费者、Oracle实库夹具及契约事实；所有调用者
+（DeriveParameters同步/异步）共用Map，普通GetSchema仍返回真实目录值，不伪造服务端元数据。
+没有改变数值wire、数值范围或输出发布规则。回归重点是错误地把合法负scale全部当作未知、
+把FLOAT二进制精度当小数精度，以及把MySQL缺少精度视作合法。
+
+#### A-03a 验收记录与归因
+
+| 检查 | 结果 |
+| --- | --- |
+| 单元红绿 | `a03-number-red.trx` 初始 14 项中 4 项因 `-85` 被拒；修复后 `a03-number-unit-green.trx` 154/154 |
+| 消费者 | `a03-number-consumer-red.trx` 6 项初始全红；修复后 `a03-number-consumer-green.trx` 84/84，覆盖 3 个代表资产和 sync/async 合成协议 |
+| 目标实库 | `a03-number-live-red.trx` 8 项初始全红；`a03-number-live-final.trx` 30/30，含新增 `NumberDerivationTests` 8 项（过程/函数、显式/隐式 Prepare、sync/async）及既有 FLOAT/ROWID/参数回归；OceanBase 4.4.2.2 Oracle 直连、Windows、TLS Disabled |
+| Java 2.4.14 对照 | 同一租户/账号/版本：`AttributionProbe` 读取 NUMBER precision=NULL/scale=-85，Java `ParameterMetaData` 报 precision=0/scale=-85；IN/OUT/INOUT 六组值（NULL、7.2500、38 位整数、1E-130、1E125）精确通过。Java 源码 `OceanBaseCallableParameterMetaData` 同样只读 DATA_PRECISION/DATA_SCALE，未把 -85 当固定小数位 |
+| 其他归因 | Java 与 .NET 对同一 EUCKR 初始化序列均在 `SET character_set_results` 返回 900/42000；Java 与 .NET 查询 `CHAR_LENGTH` 均返回 904/42S22，而 Java VARCHAR2 callable 成功。因此 EUCKR/CHAR_LENGTH 当前不能归为 .NET 单方缺陷，A-03b/D-07d 保持开放 |
+| 回归/构建 | `a03-number-product-build.log` 五 TFM Release 0 warning/0 error；完整 Unit 为 8696/8697（唯一失败是沙箱 File.Replace 权限，`a03-tns-unsandboxed.trx` 同测试沙箱外 1/1）；不宣称完整 Unit 全绿 |
+| 代码走查/提交 | fresh-context 独立只读走查完成，无 Critical/Important；scoped `dotnet format whitespace --verify-no-changes --no-restore` 和 `git diff --check` 通过，准备本地提交。父 A-03 仍为 `P3` |
+
+本项实现只在 Oracle 数字参数同时满足 precision 缺失、scale=-85 时将 scale 归一为未知；
+真实 scale -84..127（包括 -1）、有 precision 的 -85、FLOAT/NUMBER_FLOAT 和 MySQL 规则不变。
+普通 GetSchema/ProcedureParameters 仍保留服务端原始 -85，不伪造目录值。修复不改变 wire、
+范围或输出原子发布规则。
+
+字符目录另保留A-03b：本轮探针枚举ALL_ARGUMENTS列，确无CHAR_LENGTH/CHAR_USED；VARCHAR2、
+CHAR、NVARCHAR2、NCHAR的DATA_LENGTH均NULL，字符长度查询实际报904/42S22。现有账号拥有
+本次过程CREATE/执行及ALL_ARGUMENTS可见性，不能据此推断另一账号的最小权限；不将字节数或
+DATA_PRECISION（此处为字符集形态1/2）冒充字符长度。需另核服务端描述/版本及最小权限后决定
+是否可推导Size=0，A-03父项和该字符子项不因NUMBER修复而关闭。
+
+执行修正：Oracle StoredProcedure契约要求PrepareExecute=true，初版夹具误将false用于过程输出，
+且给Decimal类型编号赋CLR int；修正为既有显式/隐式Prepare组合和decimal编号，不扩大产品wire。
+Unit和Integration并发构建共用产品输出曾报CS2012文件锁；之后相关构建/测试顺序执行，
+这次构建错误不计入测试结果，未重启任何仍在执行的测试。
+
 ## 依据
 
 - [功能能力矩阵](obconnector-dotnet-progress.md)

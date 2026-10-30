@@ -229,6 +229,8 @@ namespace OceanBaseConnector.Internal.Sql
             {
                 var precision = Integer(row, "NUMERIC_PRECISION"); var scale = Integer(row, "NUMERIC_SCALE");
                 parameter.Precision = Precision(precision, mysql ? 65 : 38);
+                // Oracle ALL_ARGUMENTS uses -85 for an unconstrained NUMBER, not a declared scale.
+                if (!mysql && !precision.HasValue && scale == -85) scale = null;
                 if (scale.HasValue)
                 {
                     if (scale < (mysql ? 0 : -84) || scale > (mysql ? 30 : 127) || mysql && parameter.Precision != 0 && scale > parameter.Precision) throw Invalid("Decimal argument scale cannot be represented.");

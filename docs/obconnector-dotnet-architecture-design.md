@@ -745,7 +745,10 @@ The operation reserves one physical session across routine, argument and named-t
 
 Supported mappings and rejection boundaries are listed in the [Schema contract](schema.md#parameter-derivation). Directory, privilege, server-version and OBProxy interoperability require separate real-server validation.
 
-Oracle FLOAT/NUMBER_FLOAT directory declarations accept binary precision1..126 or
+Oracle NUMBER/DECIMAL/NUMERIC/INTEGER rows with precision NULL and scale -85 denote an
+unconstrained NUMBER: derivation keeps Precision0 and a null DecimalScale while public
+schema metadata retains the raw -85. A declared NUMBER scale remains signed -84..127;
+the sentinel is still rejected when precision is present. Oracle FLOAT/NUMBER_FLOAT directory declarations accept binary precision1..126 or
 SQL NULL/-1 (unknown), and scale SQL NULL/-85/-1 (variable). Dimensioned DATA_TYPE
 strings and other precision/fixed-scale shapes fail. Derived Decimal parameters keep
 Precision0 and undeclared scale, using exact NUMBER246 binding; the server's FLOAT
