@@ -574,7 +574,7 @@ true/false 已确认实际生效；D-02b/c 的双模式 prepare/cursor 与 Oracl
 | 本地相关 Unit | **417/417**：cursor、offset、REF CURSOR、列/嵌套资源及 Oracle 输出计划；不是全量 Unit；`d03-local.trx` |
 | 格式 | 新文件通过 dotnet format whitespace verify；MSBuild pipe 需要沙箱外执行，`d03-format.log` 记录退出 0 |
 | 独立走查 | fresh-context reviewer `review_d03` 只读核对代码、原始报告、Java 源码与日志后通过；Properties 修正与有效选项日志另经专项复核，无待修问题 |
-| 提交 | 新增 8 项、本地检查和独立走查通过；本地提交 hash 待补记，未 push；扩大回归 30/31 中未关闭的列形状继续保持失败 |
+| 提交 | `098c655`（`test(oracle): verify output and cursor lifecycle against OceanBase`）；新增 8 项、本地检查和独立走查通过，本地提交，未 push；扩大回归 30/31 中未关闭的列形状继续保持失败 |
 
 报告在本地忽略目录 `TestResults/roadmap/d03-{lifecycle,live,local}.trx`，wire / Java 日志为
 `d03-text-wire.log`、`d03-java-shapes.log`；探针分别在 `TestResults/d03-cursor-probe/` 和
