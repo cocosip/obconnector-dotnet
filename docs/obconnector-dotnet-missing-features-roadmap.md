@@ -277,8 +277,8 @@ TIMESTAMP 按执行该条语句时的会话时区转换；DATETIME 不转换。z
 
 - [x] 当前双模式多语句组基线及清理结果（保留 4 项失败，见下文）。
 - [x] 新增 MySQL 时间脚本的独立存储、结果 metadata、NULL/zero-date、精度/时区及发送前拒绝测试。
-- [ ] 运行新增实库组及适当本地回归，独立代码走查，处理问题后本地提交。
-- [ ] 本文记录实际范围、结果、提交号和仍未关闭项。
+- [x] 运行新增实库组及适当本地回归，独立代码走查，处理问题后本地提交。
+- [x] 本文记录实际范围、结果、提交号和仍未关闭项。
 
 | 检查点 | 本轮证据/状态 |
 | --- | --- |
@@ -290,8 +290,8 @@ TIMESTAMP 按执行该条语句时的会话时区转换；DATETIME 不转换。z
 | 构建 | IntegrationTests Release 构建 0 警告/0 错误，`--no-restore --disable-build-servers -m:1 -nr:false` |
 | 本地专项 | ClientPreparedSqlTests、MySqlMultiStatementParameterTests、MySqlTemporalFallbackTests 共 43/43 通过，0 跳过；产品代码未改，本轮不重复前模块的完整 Unit/Consumer 门禁 |
 | 格式 | 新增测试文件 `dotnet format whitespace ... --verify-no-changes --no-restore` 通过；沙箱内 MSBuild 管道权限失败后在沙箱外核验 |
-| 独立代码走查 | 指出 zero-date DATETIME 只比较日期的断言不足；现比较完整 OceanBaseDateTime（含时间、微秒和 Scale），重建 0 警告/0 错误、新实库 26/26 再次通过；未发现产品代码或清理问题 |
-| 提交 | 走查后本地提交，提交号待回填 |
+| 独立代码走查 | 指出 zero-date DATETIME 只比较日期的断言不足；现比较完整 OceanBaseDateTime（含时间、微秒和 Scale），重建 0 警告/0 错误、新实库 26/26 再次通过；最终代码与本文复核无剩余阻断问题 |
+| 提交 | `54db11d`（`test(protocol): verify temporal script storage across session changes`）；本地提交，未 push |
 
 本轮双模式整个 `MultiStatementTests` 基线为 **360 项，356 通过、4 失败、0 跳过**。
 失败全部是既有 `OracleLargeNulSingleTextExpressionsPreserveEveryCharacter` 的 sync/async ×
