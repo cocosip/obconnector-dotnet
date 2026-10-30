@@ -110,7 +110,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML、根 NULL OBJECT 输出身份、复杂 RETURNING/cursor/text 仍未关闭 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/fallback 保持拒绝；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
-| D-07 | `P2` | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | GB2312/EUCKR 完成真实租户验收；UJIS 等逐项确认后再加入，不支持名称继续发送前拒绝 |
+| D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；UJIS 等逐项确认后再加入，不支持名称继续发送前拒绝 |
 
 ### 第二阶段：参考 Java 的候选实现
 
@@ -841,6 +841,53 @@ GEOMCOLLECTION 映射到 Binary、Size=0，不从目录长度伪造截断尺寸�
 D-06 父项保持 `P2`；D-06a 仅上述 SRID=0 指定直连子集达到 `P4`，D-06b 仍待服务端。
 非零 SRID、各空间子类型的真实 routine 目录签名、代理、真实 TLS/OB20、跨平台/独立 runtime
 及长期压力尚未验收，不因本轮通过而关闭。
+
+### D-07：GB2312/EUCKR 真实字符集验收（2026-10-30，目标子集已验收）
+
+基线 `4de073a`，初始工作区干净。按已授权清单的 D-07 继续，使用现有严格 CP20936/51949
+映射与两个直连 profile；不新增选项、相近 code page 兜底或依赖。客户端、普通结果和 Oracle
+national 分开验收，失败先固定阶段/错误码，只有定位到驱动缺陷才按红/绿修复产品。
+本节兼作设计、执行计划和进度账本，不另外创建计划文档。
+
+- [x] `Types/EucCharacterSetTests`：双模式直连 × 两字符集 × sync/async，验证初始化状态、
+  文本、普通 SQL/参数写入、显式 Prepare/NULL/长值、非法字符发送前拒绝及同会话恢复；
+  独立 UTF8 连接核对存储，并用 text/binary × buffered/sequential 消费全部行/EOF/NextResult。
+- [x] `Types/CharacterSetTests`：扩展 GB2312/EUCKR 的固定服务端 hex 结果，验证真实结果
+  collation 下的 text/binary 和 sync/async；客户端存储测试另用每次1字符读取覆盖长值流式
+  边界，不以客户端同编码回环代替独立读回。
+- [x] `Oracle/NationalCharacterEncodingTests`：扩展两字符集 NCHAR/NVARCHAR2 输入、NULL、
+  普通 prepare/PrepareExecute 与独立 UTF8 存储读回；复杂成员仍按 D-04 单独验收。
+- [x] 运行目标实库与相关本地回归、构建/格式；记录每个成功子集与失败，不删除失败用例。
+- [ ] fresh-context 独立只读走查；修复阻塞问题后本地提交，回填实际提交号及未关闭边界。
+
+影响范围为上述测试、本文及已有契约/兼容性事实；暂不改公共 API、凭据、服务端配置或字符集
+目录。UJIS/EUCJPMS 等剩余名称继续留在 S-05。若 Oracle 初始化被服务端拒绝，保留该失败，
+继续检查默认 UTF8 连接上的结果/national 能力；不得据此替换或跳过客户端失败。
+
+#### D-07 检查记录
+
+| 检查 | 当前结果 |
+| --- | --- |
+| 实库 | `d07-live-final.trx` **76通过/4失败/0skip，共80**：客户端16（MySQL8、Oracle GB2312 4通过，Oracle EUCKR 4失败）、结果8（新增2）、national56（新增8）。共新增26例，22通过/4失败；既有54例全部通过。仅 OceanBase 4.4.2.2 直连、Windows、TLS Disabled；不是完整Integration。此前 `d07-live-green.trx` 72/72只覆盖MySQL客户端子集，走查指出移除了Oracle复现入口，已恢复双模式，最终以80项为准 |
+| 失败边界 | Oracle 普通客户端 EUCKR 初始化在驱动身份校验阶段返回服务端 `900/42000`，4个sync/async ×显式/隐式Prepare正向用例继续保持可运行和失败；未把它计入成功，也未修改产品拒绝/验证逻辑。`d07-probe.log` 使用默认UTF8连接发送相同ASCII初始化SQL：设置client/connection成功，随后设置results=utf8mb4返回900/42000且outcome已知；GB2312三句均成功。不把此拒绝扩大为所有EUCKR服务端能力不存在 |
+| 本地 | `d07-unit.trx` 393/393，无skip；仅字符集相关Unit，产品未改动，不重复上轮完整Unit |
+| 构建 | Integration Release build 通过，日志 `d07-build.log`；测试使用 `-m:1 -nr:false -p:UseSharedCompilation=false` |
+| 格式 | 本轮3个C#文件 scoped whitespace verify 退出0，`d07-format.log`；git diff --check通过 |
+| 走查 | fresh-context `review_d07` 只读核对测试、映射和TRX：无Critical；Important 1为最终源过滤移除Oracle失败入口，已恢复且最终80项真实复验；Minor 2为旧契约页声明无实库和数量未区分新增/既有，均已修正。产品代码未改动，未发现编码实现缺陷；服务端拒绝保留为未关闭项 |
+| 提交 | 待本地提交，未push |
+
+| 子项 | 状态 / 关闭边界 |
+| --- | --- |
+| D-07a MySQL客户端/结果 | `P4`，仅当前GB2312/EUCKR直连子集；固定字节结果、长值、SQL/参数、NULL、非法字符与恢复有证据 |
+| D-07b Oracle GB2312普通客户端 | `P4`，仅上述4项直连存储/结果子集；普通结果仍按初始化契约使用UTF8 |
+| D-07c Oracle national | `P4`，GB2312/EUCKR NCHAR/NVARCHAR2指定直连子集；默认UTF8客户端、独立连接读回，不等于普通EUCKR客户端成功 |
+| D-07d Oracle EUCKR普通客户端 | `P2 / 待服务端证据与修复`；4项正向测试保持失败。需目标服务端初始化SQL成功及完整存储读回，或进一步wire证据再判断驱动是否应改初始化策略；不放宽编码/身份验证 |
+
+最初 `d07-client-first.trx` 的 Oracle GB2312 使用了不支持的 `CONNECTION_ID()` 查询，第二轮
+误用GetInt32读取Oracle NUMBER。两者均为新夹具错误，已改为既有物理会话身份和EqualNumber
+检查；最终4项GB2312通过。EUCKR的900始终独立保留。这里未新增产品实现，不把既有代码已
+通过的验收测试伪记成产品红/绿。D-07父项保持P2，其余名称、二进制collation的逐项实库、
+代理/TLS/OB20、其他版本/平台和复杂national成员仍未验收。
 
 ## 依据
 

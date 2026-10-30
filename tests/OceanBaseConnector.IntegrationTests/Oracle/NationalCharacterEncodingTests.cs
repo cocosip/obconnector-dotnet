@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.IntegrationTests.Infrastructure;
+using OceanBaseConnector.IntegrationTests.Types;
 using Xunit;
 
 namespace OceanBaseConnector.IntegrationTests.Oracle;
@@ -14,7 +15,7 @@ public sealed class NationalCharacterEncodingTests
     {
         var cases = new TheoryData<string, string, string, bool, bool>();
         foreach (var profile in ProfileTheoryData.OracleWithCreateObjects())
-            foreach (var (name, text, _) in ComplexNationalClientEncodingTests.Samples)
+            foreach (var (name, text, _) in ComplexNationalClientEncodingTests.Samples.Concat(EucCharacterSetTests.Samples))
                 foreach (var prepareExecute in new[] { false, true })
                     foreach (var asynchronous in new[] { false, true }) cases.Add(profile, name, text, prepareExecute, asynchronous);
         return cases;

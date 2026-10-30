@@ -19,6 +19,8 @@ public sealed class CharacterSetTests
             {
                 ("ascii", "4142432020", "ABC  "),
                 ("latin1", "E980919F2020", "é€‘Ÿ  "),
+                ("gb2312", "D6D0CEC4D8AD2020", "中文丨  "),
+                ("euckr", "C7D1B1DB2020", "한글  "),
                 ("gbk", "D6D0CEC42020", "中文  "),
                 ("gb18030", "A8BC8135F437D6D0CEC49439FC362020", "ḿ\ue7c7中文😀  "),
                 ("utf16", "FEFF4E2DD83DDE0000200020", "\ufeff中😀  "),

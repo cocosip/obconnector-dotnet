@@ -195,13 +195,16 @@ local client-encoding behavior, not all P1-08.
 
 The GB2312 extension has local byte-exact client/result mapping tests for both modes and strict
 rejection of a GBK-only character. It uses OceanBase 4.4.2 charset IDs 24/86 and .NET code page
-20936. No real 4.4.2.2 GB2312 tenant or collation roundtrip was available, so this does not close
-the live deployment portion of the charset matrix.
+20936. D-07 adds real 4.4.2.2 direct-profile MySQL client/result storage and Oracle national scalar
+storage evidence. The accepted scope and remaining deployment limits are in the
+[single roadmap](obconnector-dotnet-missing-features-roadmap.md), section D-07.
 
 The EUCKR extension has local byte-exact client/result mapping tests for both modes and strict
 validation of OceanBase's EUC-KR byte ranges. It uses OceanBase 4.4.2 charset IDs 19/85 and .NET
-code page 51949. No live tenant roundtrip was available; UJIS, EUCJPMS and the remaining newer names
-remain candidates because the available .NET code page does not reproduce OceanBase's full UJIS table.
+code page 51949. D-07 adds real MySQL client/result and Oracle national scalar storage evidence;
+ordinary Oracle EUCKR client initialization still returns server 900/42000 and remains an open
+boundary with runnable positive tests. UJIS, EUCJPMS and the remaining newer names remain candidates
+because the available .NET code page does not reproduce OceanBase's full UJIS table.
 
 The single-byte fallback extension has local byte-exact automatic-fallback fixtures and five-asset
 consumption. Explicit read-only MySQL 4.4.2.2 checks pass all four families in sync/async mode with
