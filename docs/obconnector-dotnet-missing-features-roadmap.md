@@ -300,7 +300,7 @@ REF CURSOR 的扩展继续由 D-03 跟踪，不重复新建任务。
 | Unit 相关回归 | **160/160**：多语句、流、Oracle 输出计划、MySQL 过程生命周期和已 Prepare 命令变为脚本的边界；Release 构建 0 warning / 0 error；不是全量 Unit |
 | 格式 | 新 C# 文件通过 `dotnet format whitespace --verify-no-changes --no-restore`；沙箱内 MSBuild pipe 拒绝访问，原命令在沙箱外通过 |
 | 独立走查 | fresh-context reviewer `review_d02bc` 只读核对源码、测试、TRX、构建和 Java 日志/字节码后通过，无待修问题；未替代实库重跑或独立格式退出码验证 |
-| 提交 | 门禁与独立走查通过；本地提交，hash 在关闭记录补记；不 push |
+| 提交 | `2c3d479`（`test(integration): verify script preparation and output boundaries`）；门禁与独立走查通过，本地提交，未 push；本条仅关闭调查模块，不关闭 b/c 功能缺口 |
 
 Java 程序、runner 和日志在本地忽略目录 `TestResults/java-gap-probe/`、
 `TestResults/roadmap/d02bc-java-{oracle,mysql,output-oracle,output-mysql}.log`；当前/初轮实库
