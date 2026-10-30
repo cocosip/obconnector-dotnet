@@ -732,7 +732,7 @@ binary row 为 `0000040131`；collection 的 NULL 位为 true，row 为 `0004013
 - [x] 实库普通 prepare / PrepareExecute、sync/async、短/长真实 ROWID、NULL 切换与独立存储读回。
 - [x] 补 PL OUT/INOUT/返回值、RETURNING、真实 UROWID 参数推导及失败后恢复；目录的其他类型边界转 A-03 跟踪。
 - [x] 公开 DLL 消费者、相关回归、五资产构建和格式检查，独立只读走查。
-- [ ] 本地提交并回填证据、提交号和未验收范围；进度仅在本文维护。
+- [x] 本地提交并回填证据、提交号和未验收范围；进度仅在本文维护。
 
 新增实库 `Oracle/UrowidTests.cs` 10 项：
 
@@ -765,7 +765,7 @@ binary row 为 `0000040131`；collection 的 NULL 位为 true，row 为 `0004013
 | 构建 | 产品五 TFM Release 构建 0 warning/0 error，`d05-product-build.log`；Integration/Unit/Consumer Release 构建成功 |
 | 格式 | 本次 9 个 C# 文件 scoped whitespace verify 退出 0，`d05-format-final.log`；沙箱内 MSBuild pipe 拒绝日志 `d05-format-{src,int,consumer}.log` 保留，沙箱外首次 scoped 检查仅报告新文件两处缩进，已修正；git diff --check 通过 |
 | 独立走查 | fresh-context `review_d05` 只读核对 wire、共享校验、输出完整响应后的原子发布、目录映射、测试和原始证据计数；无 Critical/Important。最终文档复核发现缺失矩阵有一句旧的 UROWID 目录未验收口径，已修正为 FLOAT 编号签名下真实 Derive 已验收；无剩余问题，可本地提交。reviewer 未执行实库或修改文件 |
-| 提交 | 待本地提交；未 push |
+| 提交 | `e5d6210`（`feat(oracle): support UROWID parameter bindings and outputs`）；实现、协议/实库/消费者回归及契约文档，本地提交，未 push；D-05 的上述指定直连子集达到 `P4`，整体清单仍未完成 |
 
 `d05-output-first/second/third.trx` 保留了 NUMBER/VARCHAR2 目录探测与夹具 CLR 值声明不匹配
 的失败历史，最终 FLOAT 夹具通过 `d05-output-float.trx` 后再运行扩大回归，不删除旧证据。
