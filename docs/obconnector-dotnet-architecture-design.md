@@ -949,11 +949,14 @@ Anonymous ordinary national results without a trusted storage context reject non
 
 Direct Oracle4.4.2.2 lifecycle tests additionally cover named OBJECT/nested OBJECT/collection LOB
 IN/OUT/INOUT, NULL members, caller-owned output handles after command disposal, scalar locator
-storage and anonymous DML-array rejection after disposal/commit/rollback. Root-NULL complex PL
-bindings in that output/INOUT test return 600/HY000; prior outputs remain unchanged. BLOB OBJECT
+storage and anonymous DML-array rejection after disposal/commit/rollback. Named root-NULL inputs
+use MYSQL_TYPE_NULL (6), retain descriptor ownership checks and preserve PL IS NULL through
+prepared execution and reuse. Anonymous array headers are unchanged. Direct PL NULL assignment
+and type-6 bindings return a NULL collection, but OBJECT output rows lack the outer NULL bit;
+NULL OBJECT outputs remain an open server-wire identity boundary. BLOB OBJECT
 bound members used in DML return 932/22000 although server-local objects can store the same bytes;
-the binding/DML cause remains unresolved. These are open boundaries, not successful NULL or
-general complex-member storage support. Evidence and remaining tasks are tracked in the
+the binding/DML cause remains unresolved. The input fix does not establish NULL OBJECT output
+identity or general complex-member storage support. Evidence and remaining tasks are tracked in the
 [single missing-features roadmap](obconnector-dotnet-missing-features-roadmap.md).
 
 CLOB locator parameter encoding is shared by scalar and anonymous-array inputs. It converts inline

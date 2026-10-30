@@ -140,7 +140,7 @@ namespace OceanBaseConnector.ConsumerTests
                     var typeHeader = new byte[] { 160, 0, (byte)complexName.Length }.Concat(complexName)
                         .Concat(new byte[] { 10 }).Concat(Encoding.UTF8.GetBytes("Mixed_Type")).Concat(new byte[] { 0 }).ToArray();
                     var anonymousHeader = new byte[] { 160, 0, 0, 0, 0, 203 };
-                    Assert.Equal(new byte[] { 10, 1 }.Concat(typeHeader).Concat(typeHeader).Concat(anonymousHeader).Concat(anonymousHeader)
+                    Assert.Equal(new byte[] { 10, 1 }.Concat(typeHeader).Concat(new byte[] { 6, 0 }).Concat(anonymousHeader).Concat(anonymousHeader)
                         .Concat(new byte[] { 0, 2, 51, 49, 2, 1, 2, 1, 0, 2, 8, 9 }), request.Skip(10));
                     var eof = Report(false, 0); eof[0] = 254;
                     var packets = new[] { new byte[] { 4 }, complexColumn, trailing, complexColumn, anonymousColumn,

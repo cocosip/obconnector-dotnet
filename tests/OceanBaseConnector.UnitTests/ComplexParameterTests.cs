@@ -24,8 +24,8 @@ namespace OceanBaseConnector.UnitTests
                 for (var i = 0; i < 2; i++)
                 {
                     var request = await StatementCommand(channel, 23);
-                    var expected = new byte[] { 23, 197, 0, 0, 0, 0, 1, 0, 0, 0, i == 0 ? (byte)0 : (byte)1, 1, 160, 0,
-                        5, 79, 119, 110, 101, 114, 5, 84, 104, 105, 110, 103, 0, 3, 0 }
+                    var header = i == 0 ? new byte[] { 160, 0, 5, 79, 119, 110, 101, 114, 5, 84, 104, 105, 110, 103, 0 } : new byte[] { 6, 0 };
+                    var expected = new byte[] { 23, 197, 0, 0, 0, 0, 1, 0, 0, 0, i == 0 ? (byte)0 : (byte)1, 1 }.Concat(header).Concat(new byte[] { 3, 0 })
                         .Concat(i == 1 ? Array.Empty<byte>() : collection ? new byte[] { 1, 0, 1, 42 } : new byte[] { 0, 1, 42 })
                         .Concat(new byte[] { 7, 0, 0, 0 }).ToArray();
                     Assert.Equal(expected, request); await channel.WritePacketAsync(Ok((byte)(i + 1)));
@@ -213,13 +213,14 @@ namespace OceanBaseConnector.UnitTests
 
         [Theory]
         [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
-        public void ComplexParameterHeadersPrecedeAllValuesAndPreserveTypedNull(bool collection, bool isNull)
+        public void ComplexParameterHeadersPrecedeAllValuesAndRetainNullDescriptor(bool collection, bool isNull)
         {
             var type = ComplexResultType(collection, ComplexResultScalar("A", 203));
             var value = new OceanBaseComplexValue(type, new object?[] { new byte[] { 42 } });
             var parameter = new OceanBaseParameter { ComplexType = type, Value = isNull ? DBNull.Value : value };
             var encoded = PreparedParameters.Encode(new[] { new OceanBaseParameter { Value = 7 }, parameter, new OceanBaseParameter { Value = "z" } }, OceanBaseCompatibilityMode.Oracle);
-            var expected = new byte[] { isNull ? (byte)2 : (byte)0, 1, 3, 0, 160, 0, 5, 79, 119, 110, 101, 114, 5, 84, 104, 105, 110, 103, 0, 253, 0, 7, 0, 0, 0 }
+            var header = isNull ? new byte[] { 6, 0 } : new byte[] { 160, 0, 5, 79, 119, 110, 101, 114, 5, 84, 104, 105, 110, 103, 0 };
+            var expected = new byte[] { isNull ? (byte)2 : (byte)0, 1, 3, 0 }.Concat(header).Concat(new byte[] { 253, 0, 7, 0, 0, 0 })
                 .Concat(isNull ? Array.Empty<byte>() : collection ? new byte[] { 1, 0, 1, 42 } : new byte[] { 0, 1, 42 }).Concat(new byte[] { 1, 122 }).ToArray();
             Assert.Equal(expected, encoded);
             Assert.Same(type, parameter.Snapshot().ComplexType);
@@ -276,12 +277,13 @@ namespace OceanBaseConnector.UnitTests
         public void ComplexParameterTypeHeaderUsesUtf8ByteLengthsAndLengthEncodedIdentifiers()
         {
             var type = new OceanBaseComplexType(null!, new string('界', 100), new string('型', 100), false, new[] { ComplexResultScalar("A", 203) });
-            var encoded = PreparedParameters.Encode(new[] { new OceanBaseParameter { ComplexType = type } }, OceanBaseCompatibilityMode.Oracle);
-            Assert.Equal(new byte[] { 1, 1, 160, 0, 252, 44, 1 }, encoded.Take(7));
+            var value = new OceanBaseComplexValue(type, new object?[] { null });
+            var encoded = PreparedParameters.Encode(new[] { new OceanBaseParameter { ComplexType = type, Value = value } }, OceanBaseCompatibilityMode.Oracle);
+            Assert.Equal(new byte[] { 0, 1, 160, 0, 252, 44, 1 }, encoded.Take(7));
             Assert.Equal(Encoding.UTF8.GetBytes(type.SchemaName), encoded.Skip(7).Take(300));
             Assert.Equal(new byte[] { 252, 44, 1 }, encoded.Skip(307).Take(3));
             Assert.Equal(Encoding.UTF8.GetBytes(type.TypeName), encoded.Skip(310).Take(300));
-            Assert.Equal(0, encoded[610]); Assert.Equal(611, encoded.Length);
+            Assert.Equal(0, encoded[610]); Assert.Equal(1, encoded[611]); Assert.Equal(612, encoded.Length);
         }
 
         [Fact]

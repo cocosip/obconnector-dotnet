@@ -28,7 +28,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (parameters[i].Value == null || parameters[i].Value == DBNull.Value)
                 {
                     nulls[i / 8] |= (byte)(1 << (i % 8));
-                    if (complexTypes[i] == null) types[i] = 6;
+                    // Named NULLs use MYSQL_TYPE_NULL; the descriptor still validates ownership.
+                    if (complexTypes[i]?.IsAnonymous != true) types[i] = 6;
                 }
             }
             using var stream = new MemoryStream();

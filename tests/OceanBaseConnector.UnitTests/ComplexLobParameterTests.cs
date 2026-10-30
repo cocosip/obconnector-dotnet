@@ -68,6 +68,7 @@ namespace OceanBaseConnector.UnitTests
                             : shape == "nested" ? new byte[] { 2, 2, 0 } : new byte[] { 2, 2 };
                         var encoded = new byte[] { (byte)nullValue, 1, 160, 0 }.Concat(header)
                             .Concat(nullValue == 1 ? Array.Empty<byte>() : body.Concat(WithLength(shape == "array" ? locator : payloads[Array.IndexOf(locators, locator)]))).ToArray();
+                        if (nullValue == 1 && (shape == "object" || shape == "collection")) encoded = new byte[] { 1, 1, 6, 0 };
                         if (prepareExecute)
                         {
                             var request = await StatementCommand(channel, 0xa1);

@@ -23,7 +23,7 @@ public sealed class ComplexLobLifecycleTests
 
     [IntegrationTheory]
     [MemberData(nameof(NamedCases))]
-    public async Task NamedOutputLobsSurviveNullMembersRootNullRejectionAndCommandDisposal(string profileName, bool character, string shape, bool asynchronous)
+    public async Task NamedOutputLobsPreserveCollectionNullAndExposeObjectNullBoundary(string profileName, bool character, string shape, bool asynchronous)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         var builder = db.Profile.CreateBuilder(); builder.Pooling = false;
@@ -41,7 +41,8 @@ public sealed class ComplexLobLifecycleTests
         var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY,v " + scalar + ",b RAW(4)", CancellationToken.None);
         var procedure = db.NewObject("PROCEDURE");
         await db.ExecuteAsync(connection, "CREATE PROCEDURE " + procedure + "(p IN " + name + ",q OUT " + name + ",r IN OUT " + name + ",b IN RAW) IS BEGIN " +
-            "IF b<>HEXTORAW('2A') THEN RAISE_APPLICATION_ERROR(-20001,'Input mismatch'); END IF; q:=r; r:=p; END;", CancellationToken.None);
+            "IF b<>HEXTORAW('2A') THEN RAISE_APPLICATION_ERROR(-20001,'Input mismatch'); END IF; " +
+            "IF p IS NULL AND r IS NOT NULL THEN RAISE_APPLICATION_ERROR(-20002,'INOUT NULL mismatch'); END IF; q:=r; r:=p; END;", CancellationToken.None);
         var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
         var type = await connection.GetComplexTypeAsync(owner, name);
         var session = connection.GetOpenSession();
@@ -65,22 +66,12 @@ public sealed class ComplexLobLifecycleTests
                 input.Value = nullRoot ? DBNull.Value : Value(type, shape, null);
                 inout.Value = nullRoot ? DBNull.Value : Value(type, shape, null);
                 source.Position = 0;
-                if (nullRoot)
-                {
-                    var previousOutput = output.Value; var previousInout = inout.Value;
-                    var error = await Assert.ThrowsAsync<OceanBaseException>(async () =>
-                    {
-                        if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
-                    });
-                    Assert.Equal(600, error.ServerErrorCode); Assert.Equal("HY000", error.SqlState);
-                    Assert.False(error.IsExecutionOutcomeUnknown); Assert.True(command.HasSentSql);
-                    Assert.Same(previousOutput, output.Value); Assert.Same(previousInout, inout.Value);
-                    continue;
-                }
                 if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
                 Assert.Equal(1, source.Position);
                 foreach (var actual in new[] { output.Value, inout.Value })
-                    Assert.Null(MemberValue(Assert.IsType<OceanBaseComplexValue>(actual), type, shape));
+                    if (nullRoot && shape == "collection") Assert.IsType<DBNull>(actual);
+                    // Current server output normalizes NULL OBJECT roots, including nested objects.
+                    else Assert.Null(MemberValue(Assert.IsType<OceanBaseComplexValue>(actual), type, shape));
             }
         }
         using var oldLob = Member(returned, type, shape);

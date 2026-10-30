@@ -107,7 +107,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；不含 OUT/cursor/复杂值，不以 `P3` 宣称全部组合完成 |
 | D-02 | `P2`；a1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1～d3 以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
-| D-04 | `P2`；a1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；BLOB OBJECT 成员 DML、根 NULL、复杂 RETURNING/cursor/text 仍未关闭 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
+| D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML、根 NULL OBJECT 输出身份、复杂 RETURNING/cursor/text 仍未关闭 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P2` | UROWID 和 ROWID 参数/结果闭环（G05/T12） | `ResultColumn`、`PreparedParameters`、`DataTypes`、绑定和存储读取 | 需要真实 UROWID 值、参数 wire、列 metadata；当前只有 ROWID 结果路径 | UROWID 输入、输出、普通列、metadata、NULL/边界和独立读回通过；不支持形状发送前拒绝 |
 | D-06 | `P2` | GEOMETRY 输入和结果边界（G06/T05） | 类型推断、参数绑定、结果 metadata、原始 bytes/SRID 行为 | 需要真实 MySQL GEOMETRY 列、值格式和版本约束；领域空间 API 另行评估 | 原始字节和 SRID 行为有明确契约；参数/结果/NULL/坏值有测试；若无稳定 wire，只保留结果-only |
 | D-07 | `P2` | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | GB2312/EUCKR 完成真实租户验收；UJIS 等逐项确认后再加入，不支持名称继续发送前拒绝 |
@@ -590,7 +590,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 
 | 子项 | 进度 | 当前范围与下一步 |
 | --- | --- | --- |
-| D-04a 命名 LOB 成员 | `P2`；a1 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a2：BLOB OBJECT 成员 DML 返回 932；a3：根 NULL 复杂绑定返回 600；两项保留待 wire/归因。命名 locator 回绑仍拒绝，不隐式读取外部 LOB |
+| D-04a 命名 LOB 成员 | `P2`；a1/a3.1 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT 根 NULL 输出不保留身份。a2：BLOB OBJECT 成员 DML 返回 932；仍待 wire/归因。命名 locator 回绑仍拒绝，不隐式读取外部 LOB |
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P2 / 待证据` | 已知返回 metadata 无法匹配精确类型，保留旧输出及 unknown-outcome 处理；取得实际列身份/wire 后再考虑实现，不只凭参数声明猜解码 |
 | D-04d 复杂 cursor 成员 | `P2 / 待证据` | 本地四字节结果解析已有；实际可创建类型、完整 child FETCH 与所有权尚需确认，输入仍拒绝；D-03 的普通列失败不能证明此形状 |
@@ -613,8 +613,8 @@ OceanBase 4.4.2.2 Oracle 直连、Windows、TLS Disabled：
 - 命名输出 12 项：OBJECT、嵌套 OBJECT、collection × BLOB/CLOB × sync/async。IN 与
   INOUT 使用不同内容，逐一验证 OUT/INOUT 身份及内容；较大值超过 90 KB，CLOB 含补充字符。
   同 command 重执行验证 NULL 成员（collection 的两个 NULL 元素不当成空集合）。整个根值
-  NULL 的调用当前返回 `600/HY000`，负向断言只确认旧输出不变、outcome 已知、会话仍可用，
-  **不计为根 NULL 支持**。父命令释放后，先用返回 locator 作**普通标量参数**写入持久列，
+  NULL 的调用在此基线返回 `600/HY000`，当时负向断言只确认旧输出不变、outcome 已知、会话仍可用，
+  **不计为根 NULL 支持**；后续 a3.1 已修复输入，a3.2 继续跟踪输出身份。父命令释放后，先用返回 locator 作**普通标量参数**写入持久列，
   再读两个旧输出；独立连接显式 Prepare + SequentialAccess 核对存储 LOB、RAW 标记及行数。
   返回 locator 继续不能用来构造命名 LOB 输入；每个 handle/stream 由调用方释放。
 - 匿名数组 12 项：BLOB/CLOB × sync/async × dispose/commit/rollback。失效前创建数组快照，
@@ -628,7 +628,7 @@ OceanBase 4.4.2.2 Oracle 直连、Windows、TLS Disabled：
 | 子项 | 证据与归类 | 下一步开发任务 / 关闭条件 |
 | --- | --- | --- |
 | D-04a2 BLOB OBJECT 绑定成员直接用于 DML | 最初 12 项存储探测 8 通过、4 失败：BLOB OBJECT/嵌套 OBJECT 在过程 INSERT 成员时报 `932/22000`；CLOB 三形状和 BLOB collection 成功。3 字节/90007 字节、直接成员/局部变量两种 bind 写法都失败；相同类型的服务端本地 RAW 构造或真实临时 BLOB 构造写入成功。PL GETLENGTH、对象复制与不含 DML 的复杂输出成功；TO_BLOB 转换也未解决 bind DML 失败。不是“服务端没有 BLOB OBJECT”，当前不能仅据这些观测确定是驱动 wire 还是服务端 bind/DML 转换缺口 | `P2 / 待 wire 与归因`。固定列/参数内部身份，补官方客户端/服务端解码依据与真实独立读回；再决定修正 writer 或明确版本阻塞。不自动改写用户 SQL，不靠 DBMS_LOB 长度调用成功声明持久存储支持 |
-| D-04a3 根 NULL 复杂 PL 绑定 | 新 NULL 扩展探测 12/12 在根 NULL 调用报 `600/HY000`，成员 NULL 调用通过。适用于本轮同 command 的 OBJECT/嵌套 OBJECT/collection、BLOB/CLOB 与 OUT/INOUT 组合；不能推导所有 NULL 输入/方向都失败 | `P2 / 待 wire 与归因`。将 IN/INOUT、首执行/重执行、PrepareExecute/普通 prepare 和服务端本地 NULL 分离，确定 NULL identity/direction 合约；有成功目标 shape 后再修复，不用文本脚本 NULL 成功替代 PL bind 验收 |
+| D-04a3 根 NULL 复杂 PL 绑定 | 初始 NULL 扩展探测 12/12 在根 NULL 调用报 `600/HY000`，成员 NULL 调用通过。后续已定位命名 NULL 的 type 160 编码缺陷并修复为 type 6；输出身份另行分离，见下节证据 | a3.1 `P4`：命名根 NULL 输入及指定 collection NULL 输出子集；a3.2 `P2 / 待服务端输出身份`：本地直接赋 NULL 和正确 NULL bind 都收到未置 NULL 位的 OBJECT 结果，不能从全 NULL 属性猜测根身份 |
 
 固定 Java 源码 `6adc311` 的 `ComplexUtil.storeComplexAttrData` 没有 TYPE_BLOB/TYPE_CLOB
 writer 分支，default 拒绝；其 OBJECT/collection 输出测试含 LOB，并不证明相同的 payload
@@ -654,6 +654,67 @@ bind wire 的归因证据，也不对未知服务端形状增加猜测性编码�
 本轮未验收复杂 RETURNING、复杂 cursor/text、DDL/reset 交错、跨平台/全资产消费者、长期压力、
 真实 TLS/ODP/OB20/KDC；D-04/D-04a/D-04b 父项保持 `P2`。后续从 a2/a3 的类型身份和 NULL
 wire 分解入手，或按 c/d/e 的先决证据推进，仍只在本文记录进度。
+
+#### D-04a3 续：命名根 NULL 的输入 wire 与输出身份
+
+基线 `06f35c2`，工作区初始干净。固定 Java `BasePrepareStatement.setNull` 的 JDBC 重载
+使用 `NullParameter()`，发送 type 6、不发送复杂身份；当前 .NET 对命名 NULL 仍发送 type 160
+及身份。Java 新实库对照中 NUMBER/BLOB/CLOB × OBJECT/collection/嵌套 OBJECT ×
+PrepareExecute=false/true 共 18 个配置，过程内 `p IS NULL` 均为真；collection 的 NULL 输出
+也保留，但 OBJECT/嵌套 OBJECT 的 getObject/wasNull 未报告 NULL，不能据此关闭输出身份。
+Properties 每次 clone，日志记录有效选项，按阶段检查结果，不用探针退出 0 当作全部通过。
+
+本轮先确认并修复命名根 NULL **输入编码**，保留同一 public ComplexType 的会话/事务/缓存和
+模式验证。不改匿名数组的 wire，不猜测 OBJECT NULL 输出；若输入和输出证据不同，分别更新
+子任务，D-04 父项不关闭。计划仍在本文：
+
+- [x] 对照所有 Encode 调用、NULL header 测试、Java NULL 参数及执行编码。
+- [x] 新实库输入回归（null/DBNull、首执行/值切换、普通 prepare/PrepareExecute）及本地协议回归先失败。
+- [x] 依据对照仅修复共享编码，维护负向会话/字典/LOB negotiation 校验；确认旧输出测试的实际返回形状。
+- [x] 相关 Unit、公开 DLL、目标实库、构建及格式检查；独立只读走查通过（本地提交见下表）。
+- [ ] 将最终证据、提交号和仍未支持的输出身份写回本文。
+
+修复只改 `PreparedParameters.Encode` 的一个条件：命名复杂输入为 null/DBNull 时发送 type 6，
+不写无值的 type 160 身份；ComplexType 仍保存在参数快照，原有 Oracle 模式、会话、事务、
+缓存、类型匹配和 LOB 协商校验仍执行。非 NULL 命名值、匿名数组（含匿名根 NULL）及纯 OUT
+的编码契约不变；没有新增 API、选项、SQL 重写、回退或重放。所有 Encode 调用已核对。
+
+新增 `Oracle/ComplexNullInputTests.cs`：24 项组合覆盖 NUMBER/BLOB/CLOB、OBJECT/collection/
+嵌套 OBJECT、sync/async；普通 prepare 只验收 NUMBER，LOB 保持 PrepareExecute/locator
+协商前提。显式 Prepare 无 DML，随后同 command 四次切换 CLR null、非 NULL 全 NULL 成员值、
+DBNull、非 NULL 全 NULL 成员值，独立连接显式 Prepare + SequentialAccess 读回四行 id 和
+服务端 `p IS NULL` 标志 `1/0/1/0`，物理会话不变。首次和重执行根 NULL 输入均不再报 600。
+
+既有 12 项 LOB 生命周期用例更新为正确的 NULL 输入语义：过程在修改 OUT/INOUT 之前确认
+根 NULL 的 p 与 r 均满足 IS NULL，collection 的 OUT/INOUT 返回 DBNull；OBJECT/嵌套 OBJECT
+仍返回非 NULL 的对象图及 NULL LOB 叶子。这一断言记录 a3.2 的现存失败边界，**不是 NULL
+OBJECT 输出身份已保留**。旧 LOB handle 在这些重执行及父命令释放后仍可读取/绑定标量存储。
+
+原始 wire 探针进一步使用 NUMBER 成员的三种形状、服务端直接 `p:=NULL` / type 6 bind 两种
+赋值方式，6 项都读完最终响应：OBJECT/嵌套 OBJECT 的输出列 type 160、外层 NULL 位为 false，
+binary row 为 `0000040131`；collection 的 NULL 位为 true，row 为 `00040131`。末列值 1
+证明 PL 内 p IS NULL 成立。这发生在 .NET 值解码之前，与 Java OBJECT/collection 观察一致；
+不能把属性 NULL 位当外层 NULL 位，也不能将所有全 NULL 对象改成 DBNull。a3.2 保留到目标
+服务端能给出可区分的结果 wire；不以本轮输入修复关闭它。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| 红/绿 | 新输入初次 36 项中，18 个 PrepareExecute 配置在目标执行失败，另 18 个在连接夹具中先因 locator/PrepareExecute 选项冲突失败；后者不计协议证据。修正夹具并按前提列出 24 项后全部通过。本地 8 项更新断言初次 6 失败（NULL header），修复后通过；原多字节标识符用例改用非 NULL、成员 NULL 的对象继续核对完整 identity 长度 |
+| 目标实库回归 | **62/62**，无 skip：新输入 24、LOB 生命周期 24、既有复杂 LOB 输入 12、collection PL 输出 2；`d04-null-live-final.trx`。OBJECT NULL 输出边界仍如上，不作为身份成功 |
+| 本地相关 Unit | **1085/1085**，无 skip；`d04-null-local-final.trx`。含 typed NULL、旧描述、LOB 协商、输出身份/原子发布及匿名数组回归；不是完整 Unit |
+| 公开 DLL | **12/12** 普通/OB20 合成协议 + **12/12** 共享合成 TLS，代表资产 × sync/async；typed named NULL 明确检查 type 6、anonymous NULL 仍检查原 header；`d04-null-{consumer,security}.trx`。本地证书需要沙箱外执行，不是实库 TLS/OB20 证据 |
+| 构建 | 五资产产品、Integration/Unit/Consumer/Security Release 均 0 warning / 0 error；`d04-null-*-build.log` 及 `d04-null-build.log` |
+| 格式 | 五个 C# 文件 whitespace verify 退出 0；既有 ComplexParameterTests.cs 全文件仍有 48 个旧行格式诊断，逐行与 HEAD 对照均在未改变的行，新增/改动行未报格式问题，未全文件重排；`d04-null-format{,-baseline,-scoped}.log`。git diff --check 通过 |
+| 独立走查 | fresh-context reviewer `review_d04_null` 只读核对全部 Encode 调用、描述/会话/LOB 校验、普通 prepare 与 PrepareExecute 的 NULL 切换、输出 metadata 所有权、架构/本文边界及原始 TRX；无待修问题，同意本地提交；未运行实库或修改文件 |
+| 提交 | 待本地提交后回填；不 push |
+
+调查证据在忽略目录 `d04-null-java{,-detailed}.log`、`d04-null-wire.log` 与
+`TestResults/d04-null-wire-probe/`；Java runner 固定版本、每次 clone Properties、有效选项均有记录。
+原 `d04-null-red.trx`、`d04-null-output.trx`、`d04-null-live.trx`、
+`d04-null-local{,-red}.trx` 和初次格式报告全部保留，不以最终通过删除输入/输出失败历史。
+本模块只将 a3.1 的上述输入和 collection 输出子集置为 `P4`，a3.2 及 D-04 父项不关闭。
+未重跑完整 Unit/Consumer、所有 OS/runtime、真实代理/TLS/OB20/KDC、长期压力；BLOB OBJECT
+成员 DML、复杂 RETURNING/cursor/text、匿名 PL 等剩余任务仍需后续开发与证据。
 
 ## 依据
 
