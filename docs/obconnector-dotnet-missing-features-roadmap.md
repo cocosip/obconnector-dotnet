@@ -106,7 +106,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | --- | --- | --- | --- | --- | --- |
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；不含 OUT/cursor/复杂值，不以 `P3` 宣称全部组合完成 |
 | D-02 | `P2`；a1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1～d3 以外的复杂输入继续明确拒绝或单独关闭 |
-| D-03 | `P2` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；扩大范围需要真实支持的 cursor 列和 OUT wire；不能用 PL OUT 替代 SELECT CURSOR 列 | 普通 cursor、REF CURSOR OUT、offset、释放和半读分别通过；服务端明确拒绝的形状保留失败 |
+| D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
 | D-04 | `P2` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 先按 named/anonymous、输入/输出、普通列/PL、LOB/cursor 成员拆矩阵 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P2` | UROWID 和 ROWID 参数/结果闭环（G05/T12） | `ResultColumn`、`PreparedParameters`、`DataTypes`、绑定和存储读取 | 需要真实 UROWID 值、参数 wire、列 metadata；当前只有 ROWID 结果路径 | UROWID 输入、输出、普通列、metadata、NULL/边界和独立读回通过；不支持形状发送前拒绝 |
 | D-06 | `P2` | GEOMETRY 输入和结果边界（G06/T05） | 类型推断、参数绑定、结果 metadata、原始 bytes/SRID 行为 | 需要真实 MySQL GEOMETRY 列、值格式和版本约束；领域空间 API 另行评估 | 原始字节和 SRID 行为有明确契约；参数/结果/NULL/坏值有测试；若无稳定 wire，只保留结果-only |
@@ -272,7 +272,7 @@ OceanBase 4.4.2.2 直连 profile（Windows、TLS Disabled），不能外推其�
 | --- | --- | --- |
 | 双模式 `SELECT ?; SELECT ?`（Oracle 每句带 `FROM DUAL`） | `useServerPrepStmts=true`、`emulateUnsupportedPstmts=false`；普通 prepareStatement 与显式 serverPrepareStatement 都在 prepare 阶段失败：MySQL `1235/0A000`，Oracle `600/0A000`；单 SELECT 对照均成功，实际类为 ServerSidePreparedStatement、参数数为 1 | 当前 profile 缺脚本级 server prepare 前提，保留 .NET 显式 Prepare 拒绝；Java protocol 的 `prepare` 字节码确认发送命令 22、完整 SQL 后读取 prepare 响应 |
 | 相同脚本加 `useCursorFetch=true` / FetchSize=1 | server prepare 仍在上述阶段失败；显式 clientPrepareStatement 可返回两个精确结果，但实际类仍为 ClientSidePreparedStatement | 客户端脚本加 FetchSize 不构成脚本 cursor 支持；当前没有脚本 statement/cursor 生命周期证据，保留拒绝 |
-| Oracle 一个 `BEGIN ? := 7; ? := 9; END;` | `useOraclePrepareExecute=false/true` 两项均返回 7、9；连续两个 `BEGIN…END; BEGIN…END;` 在 prepareCall 阶段报 `900/42000` | 单 PL 块内多条赋值已经可用，归 D-03；不改边界扫描器拆 PL 内部分号；带程序单元前缀的完整语法及非法尾部仍由服务端验证 |
+| Oracle 一个 `BEGIN ? := 7; ? := 9; END;` | `useOraclePrepareExecute=false/true` 两项均返回 7、9；连续两个 `BEGIN…END; BEGIN…END;` 都报 `900/42000`：false 在 prepareCall，true 在 execute（D-03 复核生效选项后更正） | 单 PL 块内多条赋值已经可用，归 D-03；不改边界扫描器拆 PL 内部分号；带程序单元前缀的完整语法及非法尾部仍由服务端验证 |
 | 双模式单过程与两个 `CALL p(?)` 的 callable 对照 | 单 CALL INOUT 从 7 变 8，独立连接读到 1 行；双 CALL 在 Java prepareCall 阶段抛 IndexOutOfBoundsException，独立连接读到 0 行；过程/表清理通过 | 这是 Java 客户端形状失败，不能声称 OceanBase 不支持过程或用户变量，也不能作为可移植的脚本 OUT 实现 |
 | MySQL text 脚本 `SET` 用户变量、两个 CALL、最后 SELECT | Java 读到 8、1，独立连接验证两行；.NET 现有 text 路径也通过，见下 | SQL 用户变量和 reader 结果已有可用子集；这没有向 OceanBaseParameter 发布 OUT/INOUT，typed 脚本输出仍缺契约 |
 
@@ -514,6 +514,75 @@ Oracle NUMBER 的失败已修正；没有修改产品 NUMBER 返回类型或删�
 **本子模块已完成并达到 `P4`；D-02/D-02d 父项仍为 `P2`，整体开发清单未完成。**
 后续先核对 D-02a 的既有输入/结果闭环，再按 D-02b～d 的服务端/wire 前提逐项推进；新增
 集合、嵌套和复杂 text 结果支持前，各自补独立证据，继续在本文记录，不新增并行进度文档。
+
+### D-03：输出与 cursor 的剩余形状核对（2026-10-30）
+
+基线 `985cad4`，初始工作区干净。本轮未修改产品源码；核对普通 cursor 列的完整读取，
+为已有 PL 输出/REF CURSOR 生命周期补齐实库验证，并纠正架构文档中“尚未连接服务端”的
+旧描述。以下进度只适用于当前 OceanBase 4.4.2.2 Oracle 直连、Windows、TLS Disabled：
+
+| 子项 | 进度 | 本轮结论 / 下一步 |
+| --- | --- | --- |
+| D-03a 普通 SELECT CURSOR 列 | `P2 / 待服务端形状` | 本地四字节 binary/text 解析已有；当前单值 binary 执行报 902，多行父值可返回但 FETCH 报 1002。text 十进制解析不足以得到可读 child，保持拒绝；取得完整可读取形状及生命周期证据后再扩展 |
+| D-03b OUT / REF CURSOR offset | `P0 / 待范围与 wire` | command 输出计划仍拒绝 UseCursorOffset；返回的 REF CURSOR 用独立普通 FETCH。Java CursorResultSet 在构造时对 RefCursor 排除 offset，RefCursor 走 cursorFetchInternal；没有可直接移植的输出 offset 成功证据。不新增滚动 API；若纳入须先定义归属、位置、版本和服务端契约 |
+| D-03c 已有输出/普通 cursor 的生命周期 | `P4`，仅下述子集 | 新增 sync/async、显式/隐式 Prepare、极小/极大父 FetchSize、NULL INOUT、输出 offset 发送前拒绝、服务端后段错误后的原子输出与恢复执行；普通 cursor/offset 和已有 REF CURSOR 释放/结果限制回归见报告；不关闭 a/b 或全部参数类型组合 |
+
+#### D-03a/b 的服务端与 Java 证据
+
+- 官方 Java 2.4.14 显式 serverPrepareStatement，`useOraclePrepareExecute=false/true` 分别
+  运行：单常量子查询在 execute 报 `902/HY000`；带 `UNION ALL ... ORDER BY` 的两行子查询
+  能返回父行与非空 cursor 对象，但**真正读取 child** 报 `1002/HY000`。仅检查 getObject
+  非空或列 metadata 会误报支持；本轮没有关闭既有列失败。
+- Java text 对照使用显式 ClientSidePreparedStatement，避免普通 Statement 在 Oracle 模式
+  默认 FetchSize 下自动选择 server prepare。单常量形状读到十进制字符串 `7`（与子查询常量
+  相同），多行形状读到十字节十进制值；通过同一 Java protocol 以返回数字发送普通 FETCH，
+  两者均报 `1002/HY000`。这一步是调查 wire，不是 Java 已提供 text cursor API 的声明。
+- .NET 公共 API 探针也确认：显式 Prepare 后单值形状 execute 报 `902/HY000`，多行形状
+  child FETCH 报 `1002/HY000`；这与本轮既有列测试的失败及 Java 读取阶段一致。
+  忽略目录探针直接读取 COM_QUERY 行：多行子查询 metadata 类型 163、字段长度十字节，
+  不是四字节 ID。两个常量样本 × autocommit 开/关四项，按返回数字直接发送 FETCH 均报
+  `1002/HY000`。没有增加十进制猜测解码或对 ID 改位的补丁。
+- 同一 Java profile 的单 PL 块 `OPEN ... FOR` 返回两行 REF CURSOR 成功；只能证明 PL 形状。
+  固定 Java 源码 `6adc311` 的 `CursorResultSet` / `RefCursor`、protocol 普通/offset FETCH
+  也已对照；RefCursor 明确排除父类 offset 选择，不能从普通 SELECT offset 推导输出支持。
+
+Java 证据采集在本轮补核了连接选项：驱动解析会回写 Properties，探针每次连接改用独立
+clone，并记录 effectivePrepareExecute/effectiveServerPrep 等布尔值后重跑。D-03 上述
+true/false 已确认实际生效；D-02b/c 的双模式 prepare/cursor 与 Oracle callable 对照也重跑，
+拒绝/成功结论不变，但连续 PL 块在 PrepareExecute=true 的错误阶段应为 execute，已更正
+上表原有的 prepareCall 记录。旧日志保留为 `*-before-clone.log`，不再用它证明选项组合。
+
+#### D-03c 的实库闭环
+
+新增 `Oracle/RefCursorLifecycleTests.cs`，8 项分别组合 sync/async、显式/隐式 Prepare、
+父 FetchSize=1/Int32.MaxValue。每项使用自建过程、表和独立 observer，最终按依赖顺序清理：
+
+1. NULL 与普通 INOUT 各执行一次。先打开 command 的 UseCursorOffset，确认拒绝且输入流未读、
+   HasSentSql=false、输出保持原值、没有新行；关闭 offset 后在同 command/物理连接执行。
+   显式 Prepare 不消费流、不插入行；成功后 INOUT 为 1/8，child 独立 FetchSize=1 读完 1/2/3。
+2. 过程先 INSERT、修改 INOUT、OPEN cursor，再故意重复 INSERT 导致服务端错误 `1`。确认错误
+   outcome 已知、旧标量和 cursor 参数值均保留、同一物理连接可复用，独立查询没有失败调用
+   的新增行；没有把“输出未发布”误当成所有存储过程的通用无副作用保证。
+3. 修正同 command 的输入后重新执行，INOUT 为 11；释放父 command 后读取并释放 child。
+   独立显式 Prepare 查询逐行核对三次成功调用的 id/RAW 字节，最后原连接 SELECT 1 成功。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| IntegrationTests / Unit Release 构建 | 均为 0 warning / 0 error；本轮无产品源码/API 改动，不另称五资产全量验收 |
+| 新增实库生命周期组 | **8/8**，无 skip，清理通过；`d03-lifecycle.trx` |
+| 扩大 Oracle 实库回归 | **30/31**，无 skip；新增 8 项、既有 REF CURSOR、标量/RETURNING/过程与普通/offset cursor。唯一失败仍为既有 PreparedCursorColumnSurvivesParentCommandDisposal 的列形状；不删用例、不改断言、不以 PL OUT 覆盖 |
+| 本地相关 Unit | **417/417**：cursor、offset、REF CURSOR、列/嵌套资源及 Oracle 输出计划；不是全量 Unit；`d03-local.trx` |
+| 格式 | 新文件通过 dotnet format whitespace verify；MSBuild pipe 需要沙箱外执行，`d03-format.log` 记录退出 0 |
+| 独立走查 | fresh-context reviewer `review_d03` 只读核对代码、原始报告、Java 源码与日志后通过；Properties 修正与有效选项日志另经专项复核，无待修问题 |
+| 提交 | 新增 8 项、本地检查和独立走查通过；本地提交 hash 待补记，未 push；扩大回归 30/31 中未关闭的列形状继续保持失败 |
+
+报告在本地忽略目录 `TestResults/roadmap/d03-{lifecycle,live,local}.trx`，wire / Java 日志为
+`d03-text-wire.log`、`d03-java-shapes.log`；探针分别在 `TestResults/d03-cursor-probe/` 和
+`TestResults/java-gap-probe/CursorShapeProbe.java`。最初 Java 探针只检查父对象，已改为读取
+child 并固定显式 client 工厂；初始观察不作为成功证据。
+本轮没有验证其他版本/平台、OBProxy、TLS/OB20/KDC、长期资源压力或所有 OUT 类型组合。
+下一模块进入 D-04，按已支持的 named/anonymous、输入/输出、普通列/PL 与 LOB 成员拆分，
+不重复实现 D-02d1～d3，也不以 PL 成功关闭 nested-table 列存储。
 
 ## 依据
 

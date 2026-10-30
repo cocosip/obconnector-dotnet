@@ -846,10 +846,15 @@ statement when applicable; SchemaOnly only returns metadata and allocates no cur
 
 Fixed Connector/J6adc311 has public JDBC4ResultSet.getObject -> getComplexCursor -> four-byte binary
 decoding, which supports the identifier wire design; its text row implementation still returns no cursor.
-The .NET text path is therefore a local protocol extension and remains unverified against actual SQL.
-Current oracle-direct attempts fail before the greeting and do not execute SQL. REF CURSOR Input/InputOutput and
-the unsupported complex input/text-result shapes remain explicitly rejected; other output shapes and real
-database/OBProxy/TLS/platform/runtime acceptance remain open.
+The .NET four-byte text path remains a local protocol extension. On the current OceanBase 4.4.2.2
+Oracle direct profile, a single-constant SELECT CURSOR fails binary execution with 902/HY000; a
+UNION ALL child can return parent metadata and a handle, but child FETCH fails with 1002/HY000 in
+official Java. Raw text rows contain decimal characters rather than a four-byte identifier; attempting
+FETCH with the returned number also fails with 1002/HY000, including with autocommit disabled.
+Decimal text parsing is therefore not enabled. PL REF CURSOR output is a separate verified shape.
+See the [D-03 scope and evidence](obconnector-dotnet-missing-features-roadmap.md).
+REF CURSOR Input/InputOutput and unsupported complex input/text-result shapes remain explicitly
+rejected; other output shapes and OBProxy/TLS/platform/runtime acceptance remain open.
 
 ### Procedures and REF CURSOR
 
