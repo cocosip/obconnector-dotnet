@@ -671,8 +671,8 @@ Properties 每次 clone，日志记录有效选项，按阶段检查结果，不
 - [x] 对照所有 Encode 调用、NULL header 测试、Java NULL 参数及执行编码。
 - [x] 新实库输入回归（null/DBNull、首执行/值切换、普通 prepare/PrepareExecute）及本地协议回归先失败。
 - [x] 依据对照仅修复共享编码，维护负向会话/字典/LOB negotiation 校验；确认旧输出测试的实际返回形状。
-- [x] 相关 Unit、公开 DLL、目标实库、构建及格式检查；独立只读走查通过（本地提交见下表）。
-- [ ] 将最终证据、提交号和仍未支持的输出身份写回本文。
+- [x] 相关 Unit、公开 DLL、目标实库、构建及格式检查；独立只读走查通过后本地提交。
+- [x] 将最终证据、提交号和仍未支持的输出身份写回本文。
 
 修复只改 `PreparedParameters.Encode` 的一个条件：命名复杂输入为 null/DBNull 时发送 type 6，
 不写无值的 type 160 身份；ComplexType 仍保存在参数快照，原有 Oracle 模式、会话、事务、
@@ -706,7 +706,7 @@ binary row 为 `0000040131`；collection 的 NULL 位为 true，row 为 `0004013
 | 构建 | 五资产产品、Integration/Unit/Consumer/Security Release 均 0 warning / 0 error；`d04-null-*-build.log` 及 `d04-null-build.log` |
 | 格式 | 五个 C# 文件 whitespace verify 退出 0；既有 ComplexParameterTests.cs 全文件仍有 48 个旧行格式诊断，逐行与 HEAD 对照均在未改变的行，新增/改动行未报格式问题，未全文件重排；`d04-null-format{,-baseline,-scoped}.log`。git diff --check 通过 |
 | 独立走查 | fresh-context reviewer `review_d04_null` 只读核对全部 Encode 调用、描述/会话/LOB 校验、普通 prepare 与 PrepareExecute 的 NULL 切换、输出 metadata 所有权、架构/本文边界及原始 TRX；无待修问题，同意本地提交；未运行实库或修改文件 |
-| 提交 | 待本地提交后回填；不 push |
+| 提交 | `322c388`（`fix(oracle): encode named complex null inputs as MYSQL_TYPE_NULL`）；输入修复、24 项实库回归、既有 NULL header/生命周期断言及架构事实同步；本地提交，未 push；a3.1 指定子集为 `P4`，a3.2 和 D-04 父项仍为 `P2` |
 
 调查证据在忽略目录 `d04-null-java{,-detailed}.log`、`d04-null-wire.log` 与
 `TestResults/d04-null-wire-probe/`；Java runner 固定版本、每次 clone Properties、有效选项均有记录。
