@@ -376,7 +376,7 @@ NULL 标量/内部集合元素、非 NULL OBJECT（包括全 NULL 属性对象�
 
 - [x] 核对服务端类型/持久列/PL 调用及独立存储范围。
 - [x] 对可实现形状建立参数红灯，实现后验证空值、预算、方向/身份/DDL/流保护。
-- [ ] 构建、专项、实库、独立走查、修正及本地提交，在本文记录实际证据。
+- [x] 构建、专项、实库、独立走查、修正及本地提交，在本文记录实际证据。
 
 客户端改动只涉及现有构造器：集合元素使用同一个元素描述，递归保留完整类型引用、描述去重
 和共享字节预算。空集合展开为 `"schema"."type"()`，NULL 集合展开为 NULL，两者不混淆；
@@ -395,7 +395,8 @@ NULL 标量/内部集合元素、非 NULL OBJECT（包括全 NULL 属性对象�
 | 公开 DLL | 48/48 通过：新集合 12、nested OBJECT 12、flat OBJECT 12、既有 dictionary 12，代表资产 × sync/async × 普通/OB20 合成协议；精确 RAW 集合构造、NULL/empty、不可变快照、缓存失效和复用 |
 | 构建/工具/共享夹具 | 五资产 Release 和 SecurityTests 构建均 0 警告/0 错误；五个 C# 文件 whitespace 核验通过。既有共享 encrypted dictionary 12/12 通过（沙箱外本地证书），不是实库 TLS 支持证据 |
 | 最终实库专项 | 20/20 通过，0 跳过：新 NUMBER 构造 2、四种集合参数 8、NULL OBJECT 发送前拒绝 2、原 flat/nested OBJECT 回归 8；不含历史失败探测，失败证据单独保留 |
-| 独立走查/提交 | 最终代码、本文及 API 行复核无剩余阻断；核对红/绿、身份失败探测和 Java binary 对照，支持边界与证据一致；提交号待回填 |
+| 独立走查 | 最终代码、本文及 API 行复核无剩余阻断；核对红/绿、身份失败探测和 Java binary 对照，支持边界与证据一致 |
+| 提交 | `52f454d`（`feat(command): expand named Oracle collection inputs in text scripts`）；本地提交，未 push |
 
 当前仍未关闭的集合缺口如下，不计入本子项通过：
 
