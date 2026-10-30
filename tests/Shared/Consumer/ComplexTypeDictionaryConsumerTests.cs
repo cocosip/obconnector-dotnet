@@ -28,7 +28,7 @@ namespace OceanBaseConnector.ConsumerTests
                     foreach (var ob20 in new[] { false, true }) yield return new object[] { target, async, ob20 };
         }
 
-        private static async Task EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesCore(string target, bool async, bool ob20, bool encrypted, bool objectScript = false, bool nestedObjectScript = false)
+        private static async Task EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesCore(string target, bool async, bool ob20, bool encrypted, bool objectScript = false, bool nestedObjectScript = false, bool collectionScript = false)
         {
             using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
@@ -61,10 +61,14 @@ namespace OceanBaseConnector.ConsumerTests
                     var packets = new List<byte[]> { new[] { (byte)names.Length } }; packets.AddRange(names.Select(Column));
                     if (members)
                     {
-                        packets.Add(nestedObjectScript && !child ? Row("CHILD", "1", "Owner目标", "Child_Type", "OBJECT") : Row("ID", "1", null, "NUMBER", "NUMBER"));
-                        packets.Add(Row("DATA", "2", null, refreshed ? "VARCHAR2" : "RAW", refreshed ? "VARCHAR2" : "RAW"));
+                        if (child && collectionScript) packets.Add(Row(null, "1", null, "RAW", "RAW"));
+                        else
+                        {
+                            packets.Add(nestedObjectScript && !child ? Row("CHILD", "1", "Owner目标", "Child_Type", collectionScript ? "COLLECTION" : "OBJECT") : Row("ID", "1", null, "NUMBER", "NUMBER"));
+                            packets.Add(Row("DATA", "2", null, refreshed ? "VARCHAR2" : "RAW", refreshed ? "VARCHAR2" : "RAW"));
+                        }
                     }
-                    else packets.Add(Row("Owner目标", child ? "Child_Type" : "Mixed_Type", "OBJECT", "2"));
+                    else packets.Add(Row("Owner目标", child ? "Child_Type" : "Mixed_Type", child && collectionScript ? "COLLECTION" : "OBJECT", child && collectionScript ? null : "2"));
                     var eof = Report(false, 0); eof[0] = 254; packets.Add(eof);
                     return packets.SelectMany((p, i) => Frame((byte)(i + 1), p)).ToArray();
                 }
@@ -77,7 +81,7 @@ namespace OceanBaseConnector.ConsumerTests
                         if (relative % 3 == 0)
                         {
                             Assert.Equal(22, request[0]); var sql = Encoding.UTF8.GetString(request, 1, request.Length - 1);
-                            Assert.Contains(members ? "ALL_TYPE_ATTRS" : "ALL_TYPES", sql); Assert.DoesNotContain("Owner目标", sql); Assert.DoesNotContain("Mixed_Type", sql);
+                            Assert.Contains(members ? child && collectionScript ? "ALL_COLL_TYPES" : "ALL_TYPE_ATTRS" : "ALL_TYPES", sql); Assert.DoesNotContain("Owner目标", sql); Assert.DoesNotContain("Mixed_Type", sql);
                             response = Frame(1, new byte[] { 0, id, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0 })
                                 .Concat(Frame(2, Column("p"))).Concat(Frame(3, Column("p"))).ToArray();
                         }
@@ -103,7 +107,8 @@ namespace OceanBaseConnector.ConsumerTests
                     {
                         var request = await ReadRequest(stream, channel, ob20, start + i, budget.Token);
                         Assert.Equal(3, request[0]);
-                        var literal = i == 0 ? "\"Owner目标\".\"Mixed_Type\"(" + (nestedObjectScript ? "\"Owner目标\".\"Child_Type\"(31,HEXTORAW('0102'))" : "31") + ",HEXTORAW('0102'))" : i == 1 ? "NULL" : "\"Owner目标\".\"Mixed_Type\"(NULL,NULL)";
+                        var literal = collectionScript ? i == 0 ? "\"Owner目标\".\"Child_Type\"(HEXTORAW('0102'),NULL,HEXTORAW('0304'))" : i == 1 ? "NULL" : "\"Owner目标\".\"Child_Type\"()"
+                            : i == 0 ? "\"Owner目标\".\"Mixed_Type\"(" + (nestedObjectScript ? "\"Owner目标\".\"Child_Type\"(31,HEXTORAW('0102'))" : "31") + ",HEXTORAW('0102'))" : i == 1 ? "NULL" : "\"Owner目标\".\"Mixed_Type\"(NULL,NULL)";
                         Assert.Equal("insert into t values ((" + literal + ")); update t set v=(" + literal + ")", Encoding.UTF8.GetString(request, 1, request.Length - 1));
                         var response = Frame(1, new byte[] { 0, 1, 0, 14, 0, 0, 0 }).Concat(Frame(2, Report(false, 1))).ToArray();
                         await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, start + i, 1, response) : response, budget.Token);
@@ -190,12 +195,12 @@ namespace OceanBaseConnector.ConsumerTests
                 Assert.Equal("Owner目标", type.GetType().GetProperty("SchemaName")!.GetValue(type));
                 Assert.Same(type, await Call(connection, async ? "GetComplexTypeAsync" : "GetComplexType", arguments));
                 var bytes = new byte[] { 1, 2 }; object?[] values = { 31, bytes };
-                object? nestedValue = null;
+                object? nestedValue = null; object? nestedType = null;
                 if (nestedObjectScript)
                 {
                     var members = (System.Collections.IEnumerable)type.GetType().GetProperty("Members")!.GetValue(type)!;
-                    var member = members.Cast<object>().First(); var child = member.GetType().GetProperty("ComplexType")!.GetValue(member)!;
-                    nestedValue = (await Call(child, "CreateValue", new object?[] { new object?[] { 31, bytes } }))!;
+                    var member = members.Cast<object>().First(); nestedType = member.GetType().GetProperty("ComplexType")!.GetValue(member)!;
+                    nestedValue = (await Call(nestedType, "CreateValue", new object?[] { collectionScript ? new object?[] { bytes, null, new byte[] { 3, 4 } } : new object?[] { 31, bytes } }))!;
                     values[0] = nestedValue;
                 }
                 var value = (await Call(type, "CreateValue", new object?[] { values }))!; bytes[0] = 9; values[0] = 99;
@@ -204,7 +209,8 @@ namespace OceanBaseConnector.ConsumerTests
                 {
                     Assert.Same(nestedValue, first[0]);
                     var nestedFields = (object?[])(await Call(first[0]!, "GetValues", Array.Empty<object?>()))!;
-                    Assert.Equal(31, nestedFields[0]); Assert.Equal(new byte[] { 1, 2 }, nestedFields[1]);
+                    if (collectionScript) { Assert.Equal(new byte[] { 1, 2 }, nestedFields[0]); Assert.Null(nestedFields[1]); Assert.Equal(new byte[] { 3, 4 }, nestedFields[2]); }
+                    else { Assert.Equal(31, nestedFields[0]); Assert.Equal(new byte[] { 1, 2 }, nestedFields[1]); }
                 }
                 else Assert.Equal(31, first[0]);
                 Assert.Equal(new byte[] { 1, 2 }, first[1]); ((byte[])first[1]!)[0] = 8;
@@ -214,8 +220,9 @@ namespace OceanBaseConnector.ConsumerTests
                     using var command = connection.CreateCommand();
                     command.CommandText = "insert into t values (:p); update t set v=:P";
                     var parameter = command.CreateParameter(); parameter.ParameterName = "p";
-                    parameter.GetType().GetProperty("ComplexType")!.SetValue(parameter, type); command.Parameters.Add(parameter);
-                    foreach (var input in new[] { value, DBNull.Value, (await Call(type, "CreateValue", new object?[] { new object?[] { null, null } }))! })
+                    var parameterType = collectionScript ? nestedType! : type;
+                    parameter.GetType().GetProperty("ComplexType")!.SetValue(parameter, parameterType); command.Parameters.Add(parameter);
+                    foreach (var input in new[] { collectionScript ? nestedValue! : value, DBNull.Value, (await Call(parameterType, "CreateValue", new object?[] { collectionScript ? Array.Empty<object?>() : new object?[] { null, null } }))! })
                     {
                         parameter.Value = input;
                         Assert.Equal(2, async ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());

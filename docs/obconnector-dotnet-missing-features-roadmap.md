@@ -105,7 +105,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | ID | 当前进度 | 任务 | 需要修改/核对 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；不含 OUT/cursor/复杂值，不以 `P3` 宣称全部组合完成 |
-| D-02 | `P2`；a1、d1、d2 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1/d2 以外的复杂输入继续明确拒绝或单独关闭 |
+| D-02 | `P2`；a1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1～d3 以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；扩大范围需要真实支持的 cursor 列和 OUT wire；不能用 PL OUT 替代 SELECT CURSOR 列 | 普通 cursor、REF CURSOR OUT、offset、释放和半读分别通过；服务端明确拒绝的形状保留失败 |
 | D-04 | `P2` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 先按 named/anonymous、输入/输出、普通列/PL、LOB/cursor 成员拆矩阵 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P2` | UROWID 和 ROWID 参数/结果闭环（G05/T12） | `ResultColumn`、`PreparedParameters`、`DataTypes`、绑定和存储读取 | 需要真实 UROWID 值、参数 wire、列 metadata；当前只有 ROWID 结果路径 | UROWID 输入、输出、普通列、metadata、NULL/边界和独立读回通过；不支持形状发送前拒绝 |
@@ -260,7 +260,7 @@ D-02b～D-02d 先调查是否纳入产品范围，不代表必须实现；允许
 | D-02a 已有输入/多结果闭环 | `P2`；a1 达到 `P4` | 核对双模式的正常/NULL/边界、SequentialAccess、半读释放、错误前缀/未执行后缀和独立存储；只为发现的具体缺口补代码或测试 | MySQL 时间脚本存储见 a1；历史 Oracle 长 NUL 4 项失败及本轮恢复均保留，详见 A-05，不能只看总测试数 |
 | D-02b 多语句 Prepare/server cursor | `P0`，待范围/wire | 确认服务端是否提供脚本级 statement/cursor 身份及生命周期；若只能拆成单语句，须先定义结果顺序、失败前缀与资源契约，再评估是否纳入 OceanBaseCommand | 证据成立且明确纳入范围后再实现；无支持证据时保持发送前拒绝，不把现有 DbBatch 的顺序执行当作该功能已完成 |
 | D-02c 多语句 OUT/INOUT | `P0`，待模式/方向证据 | 分别确认 MySQL 过程变量和 Oracle PrepareExecute 的脚本形状；定义输出何时发布、后续语句失败时是否可见，不能直接把 OUT 插值成输入 | sync/async、OUT/INOUT/NULL、错误后原子发布、连接复用及实库独立核对；普通单过程 OUT 成功不能关闭脚本任务 |
-| D-02d 复杂输入/locator/cursor 结果 | `P2`；d1、d2 达到 `P4` | 确认文本脚本可表示的复杂值身份、LOB 归属和 cursor wire；分别复用 D-03/D-04 已证明的能力，避免再开发一套 codec | 命名 OBJECT 及嵌套输入见 d1/d2；集合/匿名/LOB/cursor/text 复杂结果仍未关闭，REF CURSOR 输入仍为范围排除 |
+| D-02d 复杂输入/locator/cursor 结果 | `P2`；d1～d3 达到 `P4` | 确认文本脚本可表示的复杂值身份、LOB 归属和 cursor wire；分别复用 D-03/D-04 已证明的能力，避免再开发一套 codec | 命名 OBJECT/嵌套/集合输入见 d1～d3；集合子树 NULL OBJECT、列存储、匿名/LOB/cursor/text 复杂结果仍未关闭，REF CURSOR 输入仍为范围排除 |
 
 #### D-02a1：MySQL 时间参数脚本的存储闭环（`P4`，2026-10-30）
 
@@ -363,6 +363,54 @@ OUT、fallback 和 text 复杂结果仍未关闭。子项达到 `P4` 不替代 D
 183/36/8 不代替全量门禁，历史长 NUL 失败及本轮恢复通过记录均保留。
 红/绿及回归证据保留于忽略目录 `TestResults/roadmap/d02d2-*.trx`；下一步调查集合构造在 PL 和
 列存储中的服务端范围，nested-table 列的历史失败不得用已有 Oracle array binding 替代。
+
+#### D-02d3：命名集合文本脚本输入（`P4`，2026-10-30）
+
+基线 `135fbfe`。先分别验证命名集合类型、持久列和 `CALL` 脚本构造：已有 Oracle 二进制
+PL 数组/集合绑定不能替代这些证据。当前 `CALL` 接收集合构造并能把成员写入普通表，因此复用
+现有命名描述、不可变值、标量字面量和共享 SQL 字节预算扩展输入；支持集合 NULL、空集合、
+NULL 标量/内部集合元素、非 NULL OBJECT（包括全 NULL 属性对象）和嵌套构造。
+**集合子树中的 NULL OBJECT 继续拒绝**，不能因服务端把它变成全 NULL 属性对象而宣称身份保留。
+未证实的列存储、嵌套形状或程序块解析不通过放宽扫描器解决。
+匿名数组、LOB/cursor、OUT、普通 fallback 和显式 Prepare 仍不在本模块范围。
+
+- [x] 核对服务端类型/持久列/PL 调用及独立存储范围。
+- [x] 对可实现形状建立参数红灯，实现后验证空值、预算、方向/身份/DDL/流保护。
+- [ ] 构建、专项、实库、独立走查、修正及本地提交，在本文记录实际证据。
+
+客户端改动只涉及现有构造器：集合元素使用同一个元素描述，递归保留完整类型引用、描述去重
+和共享字节预算。空集合展开为 `"schema"."type"()`，NULL 集合展开为 NULL，两者不混淆；
+没有新 API/选项/依赖，也没有修改语句扫描器、拆分程序块、增加重试或放开普通 fallback。
+
+| 检查点 | 本轮证据/状态 |
+| --- | --- |
+| 服务端先决证据 | 手写 NUMBER 集合 CALL 脚本实库 2/2 通过，独立 binary/SequentialAccess 读回成员顺序、NULL 集合、空集合和 NULL 元素 |
+| Java 范围对照 | 固定 Connector/J 2.4.14：NUMBER、OBJECT 元素、集合元素三种类型创建和 PL 构造均通过；三种持久集合列均 600/0A000，所有探测对象清理成功，未把 PL 成功当列存储通过 |
+| 参数红/绿 | 新 builder 2 项、四种实库形状 × sync/async 共 8 项在实现前均因原 NotSupportedException 失败；最终支持/负向范围全部通过 |
+| 实库存储闭环 | NUMBER 38 位精确数、负值、NVARCHAR2 补充字符/引号/尾空格、OBJECT 元素及集合元素；重复绑定/重复执行、NULL/empty 根集合、NULL 标量/内部集合、全 NULL 属性对象。独立连接 text/Prepare + SequentialAccess 逐行核对顺序、形状及精确值 |
+| 错误前缀和会话 | ID=4 的 CALL 成功，ID=1 的重复键错误阻止 ID=5 的 CALL；独立读回只含成功前缀；同写会话可复用。表、过程、类型均由 DatabaseContext 清理，清理错误使测试失败 |
+| NULL OBJECT 身份证据 | 首次新实库 10 项中 8 通过、2 失败：集合的 NULL OBJECT 在 PL 中报告非 NULL；固定 SQL 构造的 binary 读取再复核 0/2 通过，实际变成全 NULL 属性对象。Java NULL/CAST 同样不保留身份，TREAT 返回 932/22001；另经 ServerSidePreparedStatement + ObArray/ObStruct 读回，NULL 和全 NULL 属性元素都成为非 NULL 全 NULL 属性对象，与 .NET 一致；未用这些形状宣称成功 |
+| NULL OBJECT 拒绝 | 直接或间接位于集合子树中的 NULL OBJECT 在首次展开时明确拒绝；实库 sync/async 均确认流 Position=0、独立表 count=0、连接仍可用。将元素改成非 NULL 全 NULL 属性对象后，原命令成功、流消费 1 字节、两行持久化 |
+| 本地专项 | 184/184 通过，0 跳过；涵盖新增集合、多元素/嵌套元素、NULL/empty、完整引用、既有预算/DDL/旧描述/流及 32 层共享描述回归 |
+| 公开 DLL | 48/48 通过：新集合 12、nested OBJECT 12、flat OBJECT 12、既有 dictionary 12，代表资产 × sync/async × 普通/OB20 合成协议；精确 RAW 集合构造、NULL/empty、不可变快照、缓存失效和复用 |
+| 构建/工具/共享夹具 | 五资产 Release 和 SecurityTests 构建均 0 警告/0 错误；五个 C# 文件 whitespace 核验通过。既有共享 encrypted dictionary 12/12 通过（沙箱外本地证书），不是实库 TLS 支持证据 |
+| 最终实库专项 | 20/20 通过，0 跳过：新 NUMBER 构造 2、四种集合参数 8、NULL OBJECT 发送前拒绝 2、原 flat/nested OBJECT 回归 8；不含历史失败探测，失败证据单独保留 |
+| 独立走查/提交 | 最终代码、本文及 API 行复核无剩余阻断；核对红/绿、身份失败探测和 Java binary 对照，支持边界与证据一致；提交号待回填 |
+
+当前仍未关闭的集合缺口如下，不计入本子项通过：
+
+| 缺口 | 状态 | 重新开启条件 |
+| --- | --- | --- |
+| 持久 nested-table 列 | `待服务端` | 目标版本的列 DDL、实际存储及独立 binary 身份证据；当前三种列创建均失败 |
+| 集合子树 NULL OBJECT | `待服务端/待证据` | 构造值和 PL/二进制结果都能区分 NULL 对象与全 NULL 属性对象；确认后再移除发送前拒绝，不先增加 CAST/TREAT workaround |
+| 匿名集合、LOB/cursor、输出及 text 复杂结果 | 归原 D-02d/D-03/D-04 | 逐项参数方向、locator 所有权和结果 wire 证据，不能由命名 CALL 输入替代 |
+
+证据保留于忽略目录 `TestResults/roadmap/d02d3-*.trx`、`d02d3-java-shapes.log`、
+`d02d3-java-object-null.log`、`d02d3-java-binary-object-null.log`。NULL OBJECT 的失败探测报告为 `d02d3-object-null.trx`；随后改为
+验证产品发送前拒绝的负向用例，未改写失败探测报告或跳过失败来扩大支持声明。
+本轮只跑相关专项，没有重跑完整 Unit/Consumer、全部多语句组、其他 OS/runtime、真实 TLS/ODP/OB20/KDC
+或长期负载。D-02/D-02d/D-04 父项保持未完成；下一步核对 D-02b/c 的服务端协议/方向前提，
+不继续为已有服务器失败的集合形状增加猜测性实现。
 
 #### D-02d1：命名 OBJECT 的标量输入（`P4`，2026-10-30）
 

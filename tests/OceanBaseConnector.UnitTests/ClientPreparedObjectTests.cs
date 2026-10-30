@@ -63,14 +63,12 @@ public sealed class ClientPreparedObjectTests
     }
 
     [Theory]
-    [InlineData("collection")]
     [InlineData("anonymous")]
     [InlineData("lob")]
     [InlineData("cursor")]
     public void UnsupportedNestedLayoutsRemainRejectedEvenForNullParent(string shape)
     {
-        var child = shape == "collection" ? new OceanBaseComplexType(null, "s", "c", true, ObjectType(0).Members.ToArray())
-            : shape == "anonymous" ? new OceanBaseComplexType(null, "", "", false, ObjectType(0).Members.ToArray())
+        var child = shape == "anonymous" ? new OceanBaseComplexType(null, "", "", false, ObjectType(0).Members.ToArray())
             : ObjectType(shape == "lob" ? (byte)210 : (byte)163);
         var parent = new OceanBaseComplexType(null, "s", "p", false,
             new[] { new OceanBaseComplexMember("child", child.SchemaName, child.TypeName, child, child.Layout) });
@@ -101,7 +99,7 @@ public sealed class ClientPreparedObjectTests
     }
 
     [Fact]
-    public void CollectionsFallbackOutputAndDdlRemainRejected()
+    public void AnonymousCollectionsFallbackOutputAndDdlRemainRejected()
     {
         var type = ObjectType(0);
         var parameter = new OceanBaseParameter { ParameterName = "p", ComplexType = type, Value = DBNull.Value };
@@ -110,12 +108,55 @@ public sealed class ClientPreparedObjectTests
         parameter.Direction = ParameterDirection.InputOutput;
         Assert.Throws<NotSupportedException>(() => Build(parameter));
         parameter.Direction = ParameterDirection.Input;
-        parameter.ComplexType = new OceanBaseComplexType(null, "s", "t", true, type.Members.ToArray());
+        parameter.ComplexType = new OceanBaseComplexType(null, "", "", true, type.Members.ToArray());
         Assert.Throws<NotSupportedException>(() => Build(parameter));
         parameter.ComplexType = type;
         Assert.Throws<NotSupportedException>(() => ClientPreparedSql.Build(
             ParameterBindingPlan.Create("select ?; select ?", OceanBaseCompatibilityMode.MySql,
                 new OceanBaseParameterCollection { parameter.Snapshot(), parameter.Snapshot() }), OceanBaseCompatibilityMode.MySql, multiStatement: true));
+    }
+
+    [Fact]
+    public void NamedCollectionsPreserveNullEmptyAndNestedElementShapes()
+    {
+        var numbers = new OceanBaseComplexType(null, "s\"x", "Numbers\"", true, ObjectType(0).Members.ToArray());
+        var parameter = new OceanBaseParameter { ParameterName = "p", ComplexType = numbers, Value = new OceanBaseComplexValue(numbers, new object?[] { 7, null, -9 }) };
+        var literal = "\"s\"\"x\".\"Numbers\"\"\"(7,NULL,-9)";
+        Assert.Equal("select (" + literal + "); select (" + literal + ")", Build(parameter));
+        parameter.Value = new OceanBaseComplexValue(numbers, Array.Empty<object?>());
+        Assert.Equal("select (\"s\"\"x\".\"Numbers\"\"\"()); select (\"s\"\"x\".\"Numbers\"\"\"())", Build(parameter));
+        parameter.Value = DBNull.Value;
+        Assert.Equal("select (NULL); select (NULL)", Build(parameter));
+
+        var member = new OceanBaseComplexMember(null, numbers.SchemaName, numbers.TypeName, numbers, numbers.Layout);
+        var outer = new OceanBaseComplexType(null, "s", "Outer", true, new[] { member });
+        parameter.ComplexType = outer;
+        parameter.Value = new OceanBaseComplexValue(outer, new object?[] { new OceanBaseComplexValue(numbers, new object?[] { 7 }), null, new OceanBaseComplexValue(numbers, Array.Empty<object?>()) });
+        literal = "\"s\".\"Outer\"(\"s\"\"x\".\"Numbers\"\"\"(7),NULL,\"s\"\"x\".\"Numbers\"\"\"())";
+        Assert.Equal("select (" + literal + "); select (" + literal + ")", Build(parameter));
+    }
+
+    [Fact]
+    public void NamedCollectionElementsCanBeNamedObjectsAndObjectMembersCanBeCollections()
+    {
+        var child = ObjectType(207, 203);
+        var collection = new OceanBaseComplexType(null, "s", "Objects", true,
+            new[] { new OceanBaseComplexMember(null, child.SchemaName, child.TypeName, child, child.Layout) });
+        var parent = new OceanBaseComplexType(null, "s", "Parent", false,
+            new[] { new OceanBaseComplexMember("items", "s", "Objects", collection, collection.Layout) });
+        var item = new OceanBaseComplexValue(child, new object?[] { "中", new byte[] { 0, 255 } });
+        var items = new OceanBaseComplexValue(collection, new object?[] { item, new OceanBaseComplexValue(child, new object?[] { null, null }) });
+        var parameter = new OceanBaseParameter { ParameterName = "p", Value = new OceanBaseComplexValue(parent, new object?[] { items }) };
+        var literal = "\"s\".\"Parent\"(\"s\".\"Objects\"(\"Ow\"\"ner\".\"Ty\"\"pe\"(u'\\4e2d',HEXTORAW('00FF')),\"Ow\"\"ner\".\"Ty\"\"pe\"(NULL,NULL)))";
+        Assert.Equal("select (" + literal + "); select (" + literal + ")", Build(parameter));
+        parameter.Value = new OceanBaseComplexValue(collection, new object?[] { null });
+        Assert.Throws<NotSupportedException>(() => Build(parameter));
+        var wrapper = new OceanBaseComplexType(null, "s", "Wrapper", false,
+            new[] { new OceanBaseComplexMember("child", child.SchemaName, child.TypeName, child, child.Layout) });
+        var wrappers = new OceanBaseComplexType(null, "s", "Wrappers", true,
+            new[] { new OceanBaseComplexMember(null, "s", "Wrapper", wrapper, wrapper.Layout) });
+        parameter.Value = new OceanBaseComplexValue(wrappers, new object?[] { new OceanBaseComplexValue(wrapper, new object?[] { null }) });
+        Assert.Throws<NotSupportedException>(() => Build(parameter));
     }
 
     [Fact]

@@ -55,7 +55,7 @@ namespace OceanBaseConnector.Internal.Sql
             var complex = PreparedParameters.GetComplexType(parameter);
             if (complex != null)
                 return mode == OceanBaseCompatibilityMode.Oracle && multiStatement
-                    ? ObjectLiteral(parameter, complex, clientEncoding) : throw Unsupported();
+                    ? ComplexLiteral(parameter, complex, clientEncoding) : throw Unsupported();
             var provider = parameter.OceanBaseDbType;
             var temporal = IsClientTemporal(parameter);
             var interval = (mode == OceanBaseCompatibilityMode.Oracle || multiStatement) &&
@@ -128,14 +128,14 @@ namespace OceanBaseConnector.Internal.Sql
             throw new ArgumentException("The client literal value does not match its declared DbType.");
         }
 
-        private static string ObjectLiteral(OceanBaseParameter parameter, OceanBaseComplexType type, Encoding clientEncoding)
+        private static string ComplexLiteral(OceanBaseParameter parameter, OceanBaseComplexType type, Encoding clientEncoding)
         {
-            // shortcut: named objects only; collections and locator members need separate server evidence.
+            // shortcut: named constructors only; anonymous and locator members need separate server evidence.
             var validated = new HashSet<OceanBaseComplexType>();
             void Validate(OceanBaseComplexType descriptor)
             {
                 if (!validated.Add(descriptor)) return;
-                if (descriptor.IsCollection || descriptor.IsAnonymous || descriptor.SchemaName.Length == 0 ||
+                if (descriptor.IsAnonymous || descriptor.SchemaName.Length == 0 ||
                     descriptor.Layout.HasLobMembers || descriptor.Layout.HasCursorMembers) throw Unsupported();
                 foreach (var member in descriptor.Members)
                     if (member.Layout.TypeCode == 160) Validate(member.ComplexType ?? throw Unsupported());
@@ -149,16 +149,22 @@ namespace OceanBaseConnector.Internal.Sql
                 if (bytes > PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Client prepared SQL exceeds the packet size limit.");
                 sql.Append(text);
             }
-            void AppendObject(OceanBaseComplexType descriptor, object? instance)
+            void AppendValue(OceanBaseComplexType descriptor, object? instance, bool inCollection = false)
             {
-                if (instance == null || instance == DBNull.Value) { Append("NULL"); return; }
+                if (instance == null || instance == DBNull.Value)
+                {
+                    // shortcut: server constructors materialize NULL objects inside collections; require identity evidence before allowing them.
+                    if (inCollection && !descriptor.IsCollection)
+                        throw new NotSupportedException("Text constructors cannot preserve NULL object identity inside collections.");
+                    Append("NULL"); return;
+                }
                 var values = ((OceanBaseComplexValue)instance).GetValues();
                 Append("\"" + descriptor.SchemaName.Replace("\"", "\"\"") + "\".\"" + descriptor.TypeName.Replace("\"", "\"\"") + "\"(");
                 for (var i = 0; i < values.Length; i++)
                 {
                     if (i != 0) Append(",");
-                    var value = values[i]; var member = descriptor.Members[i]; var code = member.Layout.TypeCode;
-                    if (code == 160) { AppendObject(member.ComplexType!, value); continue; }
+                    var value = values[i]; var member = descriptor.Members[descriptor.IsCollection ? 0 : i]; var code = member.Layout.TypeCode;
+                    if (code == 160) { AppendValue(member.ComplexType!, value, inCollection || descriptor.IsCollection); continue; }
                     var provider = code switch
                     {
                         0 => OceanBaseDbType.Decimal,
@@ -177,7 +183,7 @@ namespace OceanBaseConnector.Internal.Sql
                 }
                 Append(")");
             }
-            AppendObject(type, parameter.Value);
+            AppendValue(type, parameter.Value);
             return sql.ToString();
         }
 
