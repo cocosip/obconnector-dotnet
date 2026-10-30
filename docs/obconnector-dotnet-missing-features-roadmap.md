@@ -603,7 +603,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 - [x] 验证命名 LOB 成员的嵌套、输出与独立存储闭环，记录真实成功/失败形状。
 - [x] 验证匿名数组旧 locator 的执行前拒绝及修正后同会话恢复。
 - [x] 运行相关构建/测试，独立只读代码走查；只为证据成立的子集更新进度。
-- [ ] 本地提交，将提交号和未关闭边界写回本文。
+- [x] 本地提交，将提交号和未关闭边界写回本文。
 
 #### D-04a1 / b1：已实现 LOB 子集的实库生命周期
 
@@ -643,7 +643,7 @@ bind wire 的归因证据，也不对未知服务端形状增加猜测性编码�
 | 本地相关 Unit | 1085/1085，无 skip：Complex/LOB 相关组；Unit Release 构建 0 warning / 0 error；`d04-local.trx` / `d04-unit-build.log`，不是完整 Unit |
 | 格式 | 新文件 dotnet format whitespace verify 通过；MSBuild pipe 需要沙箱外运行，`d04-format.log` 记录退出 0 |
 | 独立走查 | fresh-context reviewer `review_d04` 只读核对新测试、拥有者源码、原始通过/失败报告与 Java writer 分支；无阻断问题，批准本地提交；未运行实库或更改工作区 |
-| 提交 | 待本地提交，不 push |
+| 提交 | `7c75a14`（`test(oracle): verify complex LOB output and array lifecycles`）；新生命周期测试和事实边界记录，本地提交，未 push；无产品源码/API 变化 |
 
 原始失败保留在忽略目录 `TestResults/roadmap/d04-named-{first,codes}.trx`、`d04-null-first.trx`
 及 `d04-live.trx`，不能用最终 40/40 抹去这些未支持形状。`d04-blob-shapes.log` /
