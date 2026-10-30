@@ -858,7 +858,7 @@ national 分开验收，失败先固定阶段/错误码，只有定位到驱动�
 - [x] `Oracle/NationalCharacterEncodingTests`：扩展两字符集 NCHAR/NVARCHAR2 输入、NULL、
   普通 prepare/PrepareExecute 与独立 UTF8 存储读回；复杂成员仍按 D-04 单独验收。
 - [x] 运行目标实库与相关本地回归、构建/格式；记录每个成功子集与失败，不删除失败用例。
-- [ ] fresh-context 独立只读走查；修复阻塞问题后本地提交，回填实际提交号及未关闭边界。
+- [x] fresh-context 独立只读走查；修复阻塞问题后本地提交，回填实际提交号及未关闭边界。
 
 影响范围为上述测试、本文及已有契约/兼容性事实；暂不改公共 API、凭据、服务端配置或字符集
 目录。UJIS/EUCJPMS 等剩余名称继续留在 S-05。若 Oracle 初始化被服务端拒绝，保留该失败，
@@ -874,7 +874,7 @@ national 分开验收，失败先固定阶段/错误码，只有定位到驱动�
 | 构建 | Integration Release build 通过，日志 `d07-build.log`；测试使用 `-m:1 -nr:false -p:UseSharedCompilation=false` |
 | 格式 | 本轮3个C#文件 scoped whitespace verify 退出0，`d07-format.log`；git diff --check通过 |
 | 走查 | fresh-context `review_d07` 只读核对测试、映射和TRX：无Critical；Important 1为最终源过滤移除Oracle失败入口，已恢复且最终80项真实复验；Minor 2为旧契约页声明无实库和数量未区分新增/既有，均已修正。产品代码未改动，未发现编码实现缺陷；服务端拒绝保留为未关闭项 |
-| 提交 | 待本地提交，未push |
+| 提交 | `97a8e13`（`test(types): verify GB2312 and EUCKR storage and retain Oracle rejection`）；测试和契约事实同步，本地提交，未push；未改产品实现，未关闭D-07父项或4项服务端失败 |
 
 | 子项 | 状态 / 关闭边界 |
 | --- | --- |
