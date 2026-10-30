@@ -784,7 +784,7 @@ D-05 为 `P4`（上述目标直连 profile 的功能验收完成），长期压�
   prepare、text/binary 及 buffered/sequential 读取，用独立连接核对最终存储。
 - [x] 按实库证据补齐参数目录和 DataTypes 元数据，先失败后通过的回归及公开 DLL 消费者。
 - [x] 非零 SRID 调查：确认当前 SRS 目录仅 0，4326/3857/4490 返回 3548/SR001，保留 b 待服务端。
-- [ ] 构建、格式、相关回归及独立只读走查通过后本地提交，回填进度与未关闭边界。
+- [x] 构建、格式、相关回归及独立只读走查通过后本地提交，回填进度与未关闭边界。
 
 | 子项 | 当前状态 | 任务 / 关闭边界 |
 | --- | --- | --- |
@@ -829,7 +829,7 @@ GEOMCOLLECTION 映射到 Binary、Size=0，不从目录长度伪造截断尺寸�
 | 构建 | 产品五 TFM Release 0 warning/0 error，`d06-product-build-final.log`；Integration/Unit/Consumer Release 构建成功。忽略目录 SRS 探针初次 restore 因 NuGet漏洞源不可用报NU1900，后续build/执行成功；不算产品构建警告 |
 | 格式 | 本轮6个C#文件 scoped whitespace verify 退出0，`d06-format-final.log`；首次发现的新 switch labels 空白已修正；git diff --check 通过 |
 | 独立走查 | fresh-context `review_d06` 只读核对产品映射、Binary/type252 编码、type255 解码、参数快照、成功后原子发布输出、失败保留旧输出、测试与原始TRX/SRS/格式证据；Critical=0、Important=0。唯一Minor为最终验收记录未回填，已修正；可本地提交。reviewer 未执行实库或修改文件 |
-| 提交 | 待本地提交并回填实际提交号；未push |
+| 提交 | `735a24b`（`feat(mysql): derive spatial parameters and verify geometry byte roundtrips`）；实现、协议/实库/消费者回归及契约文档，本地提交，未push；D-06a 的上述指定直连子集达到 `P4`，D-06父项保持 `P2`，整体清单仍未完成 |
 
 非零 SRID 初始失败在 `d06-raw-first.trx` / `d06-raw-seed.trx`，目录与三个非零 SRS 探针在
 `TestResults/roadmap/d06-srs-probe.log` 和 `TestResults/d06-srs-probe/`。最初正向夹具使用4326
