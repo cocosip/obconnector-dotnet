@@ -109,7 +109,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
 | D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML、根 NULL OBJECT 输出身份、复杂 RETURNING/cursor/text 仍未关闭 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/fallback 保持拒绝；跨部署、长期压力与 A-03 目录边界仍保留 |
-| D-06 | `P2` | GEOMETRY 输入和结果边界（G06/T05） | 类型推断、参数绑定、结果 metadata、原始 bytes/SRID 行为 | 需要真实 MySQL GEOMETRY 列、值格式和版本约束；领域空间 API 另行评估 | 原始字节和 SRID 行为有明确契约；参数/结果/NULL/坏值有测试；若无稳定 wire，只保留结果-only |
+| D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
 | D-07 | `P2` | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | GB2312/EUCKR 完成真实租户验收；UJIS 等逐项确认后再加入，不支持名称继续发送前拒绝 |
 
 ### 第二阶段：参考 Java 的候选实现
@@ -771,6 +771,76 @@ binary row 为 `0000040131`；collection 的 NULL 位为 true，row 为 `0004013
 的失败历史，最终 FLOAT 夹具通过 `d05-output-float.trx` 后再运行扩大回归，不删除旧证据。
 D-05 为 `P4`（上述目标直连 profile 的功能验收完成），长期压力、代理、真实 TLS/OB20/KDC、
 跨平台/独立 runtime 未验收；client literal/fallback 继续明确拒绝，不在本模块扩大范围。
+
+### D-06：MySQL GEOMETRY 的原始字节与 SRID（2026-10-30，a 指定子集验收，b 待服务端）
+
+基线 `9a209e2`，初始工作区干净。现有结果 type255 为 `byte[]` / ProviderType.Binary；
+服务端参数 type255 和 BLOB 均走 length-encoded bytes，结果 `geometry_cell_str` 移除服务端
+内部版本头后返回 SRID + WKB。先验证现有 Binary 参数的直接存储语义，再决定是否需要新的
+参数身份；不添加没有使用需求的 GIS 对象模型或坐标转换。计划/设计/证据仍只维护在本文。
+
+- [x] 目标 MySQL profile 验证 GEOMETRY DDL、真实结果 metadata 与 SRID + WKB 字节布局。
+- [x] SRID=0 输入/结果覆盖多个几何类型、NULL、长数据、错误值和同会话恢复；普通/显式
+  prepare、text/binary 及 buffered/sequential 读取，用独立连接核对最终存储。
+- [x] 按实库证据补齐参数目录和 DataTypes 元数据，先失败后通过的回归及公开 DLL 消费者。
+- [x] 非零 SRID 调查：确认当前 SRS 目录仅 0，4326/3857/4490 返回 3548/SR001，保留 b 待服务端。
+- [ ] 构建、格式、相关回归及独立只读走查通过后本地提交，回填进度与未关闭边界。
+
+| 子项 | 当前状态 | 任务 / 关闭边界 |
+| --- | --- | --- |
+| D-06a 原始二进制、SRID=0 | `P4`，指定直连子集 | 本轮补齐空间参数目录与实库闭环，使用现有 Binary/type252 输入、type255 结果；OceanBase 4.4.2.2 MySQL 直连、Windows、TLS Disabled 验收完成；不新增重复的专用 enum/parser |
+| D-06b 非零 SRID/SRS | `P0 / 待服务端` | 当前 `INFORMATION_SCHEMA.ST_SPATIAL_REFERENCE_SYSTEMS` 只返回 SRID=0；服务端 ST_GeomFromText 在客户端绑定之前已拒绝 4326/3857/4490。需要部署方提供真实 SRS 数据及版本/权限前提，之后验证合法非零值、未知 SRS 拒绝、axis order、输入/结果与独立存储；不改写 SRID 为0，不自动导入/更改服务端目录 |
+
+#### 实现与实库范围
+
+既有 Binary 参数可直接存储完整 GEOMETRY 结果字节，稳定 wire 已成立；参数不必使用专用
+type255。产品只改两个拥有者：`RoutineParameterDerivation` 将 MySQL GEOMETRY、POINT、
+LINESTRING、POLYGON、MULTIPOINT、MULTILINESTRING、MULTIPOLYGON、GEOMETRYCOLLECTION /
+GEOMCOLLECTION 映射到 Binary、Size=0，不从目录长度伪造截断尺寸；`DataTypes.GEOMETRY`
+改为报告参数支持、保留 Binary 结果身份。普通 byte[] 的既有推断、包预算、快照、NULL、
+流、客户端 hex 字面量和结果 decode 均复用，不改变 Oracle SDO_GEOMETRY 范围。
+
+新增 `MySql/GeometryTests.cs` 10 项（sync/async × 显式/隐式 Prepare，以及2项 relay fallback）：
+
+- 4项原始存储：七种基础几何形状、空 GEOMETRYCOLLECTION 和300点 LINESTRING，全部 SRID=0；
+  raw 与服务端 ST_SRID/ST_AsBinary 交叉核对，同时用手写 POINT(1 2) hex 固定25字节布局。
+  Size=1 不截断，较长样本跨251字节前缀。同 command 先 CLR null、九个样本，再尝试空 bytes、
+  仅4字节头、截断 POINT、无 SRID 的WKB，服务端拒绝且 outcome 已知、存储行数未增；修正为
+  DBNull 后同一物理会话继续。独立 observer 用 text/binary × buffered/sequential 共4条读取
+  路径逐行核对 id、完整 bytes、SRS/WKB 和两端 NULL，并消费 EOF/NextResult。
+- 4项目录与输出：真实 CREATE PROCEDURE / CREATE FUNCTION、DeriveParameters 得到 Binary，
+  覆盖 IN/OUT/INOUT/ReturnValue。Prepare 不执行DML或发布输出；过程反复切换 NULL/POINT，
+  先赋 OUT/INOUT 再重复主键失败（1062）时旧输出保持、同会话修正后成功；独立连接显式
+  Prepare + SequentialAccess 核对五行。函数 POINT/NULL/POINT 返回 bytes，无隐式类型转换。
+  真实过程/函数目录签名为通用 GEOMETRY；九种目录名称由 Unit/consumer 验证映射，七种几何
+  值在 GEOMETRY 列中验收，不据此声称各空间子类型 routine DDL 均已实库验收。
+- 2项 fallback：使用现有 relay 只注入 prepare 1295；Binary 仍用已有 hex literal 路径。四次
+  NULL/POINT 切换、坏空 bytes 拒绝与恢复，总计6次拒绝/6次prepare/0次转发prepare，独立查询
+  仅五行、逐字节一致；这不是目标服务端原生拒绝 prepare 的证据。
+
+#### 检查与未关闭边界
+
+| 检查 | 当前结果 |
+| --- | --- |
+| 红/绿 | `d06-metadata-red.trx` 13失败/4通过：9个空间目录类型缺映射、4个MySQL DataTypes参数支持仍false；最小修复后 `d06-metadata-green.trx` 17/17 |
+| 实库 | `d06-live-final.trx` **42/42**，无skip：Geometry 10、MySqlParameterDerivation 2、TypeRoundTrip 13、MySqlInOutStream 17；仅 OceanBase 4.4.2.2 MySQL 直连、Windows、TLS Disabled |
+| 完整 Unit | `d06-unit-full.trx` **8683/8683**，无skip；完整命令约9分钟。期间抓取诊断时 ConnectRetryTests.ExhaustedRoundsAttemptEveryCandidateAndReportTheLastEndpoint 仍在TCP等待，随后正常完成，不据此登记挂死缺陷或重跑替代原结果 |
+| 公开 DLL | `d06-consumer.trx` **138/138**，无skip；新增空间目录54（3个代表资产 × sync/async × 9个目录名称），既有目录/Oracle FLOAT24、ENUM/SET/GEOMETRY读取60；均为本地合成协议，不是实库OB20/TLS |
+| 构建 | 产品五 TFM Release 0 warning/0 error，`d06-product-build-final.log`；Integration/Unit/Consumer Release 构建成功。忽略目录 SRS 探针初次 restore 因 NuGet漏洞源不可用报NU1900，后续build/执行成功；不算产品构建警告 |
+| 格式 | 本轮6个C#文件 scoped whitespace verify 退出0，`d06-format-final.log`；首次发现的新 switch labels 空白已修正；git diff --check 通过 |
+| 独立走查 | fresh-context `review_d06` 只读核对产品映射、Binary/type252 编码、type255 解码、参数快照、成功后原子发布输出、失败保留旧输出、测试与原始TRX/SRS/格式证据；Critical=0、Important=0。唯一Minor为最终验收记录未回填，已修正；可本地提交。reviewer 未执行实库或修改文件 |
+| 提交 | 待本地提交并回填实际提交号；未push |
+
+非零 SRID 初始失败在 `d06-raw-first.trx` / `d06-raw-seed.trx`，目录与三个非零 SRS 探针在
+`TestResults/roadmap/d06-srs-probe.log` 和 `TestResults/d06-srs-probe/`。最初正向夹具使用4326
+在造种阶段即失败，SRID=0 验收从 `d06-raw-zero.trx` 开始，未把非零失败改写成成功。
+完整Unit运行期间另一次针对同输出目录的增量构建遭遇 xunit DLL 文件锁失败；未计测试结果，
+原始完整运行持续到8683/8683终态，没有因观察超时重启。完整Unit诊断日志保留在忽略目录，
+本轮生成的两份诊断dump已清理。
+
+D-06 父项保持 `P2`；D-06a 仅上述 SRID=0 指定直连子集达到 `P4`，D-06b 仍待服务端。
+非零 SRID、各空间子类型的真实 routine 目录签名、代理、真实 TLS/OB20、跨平台/独立 runtime
+及长期压力尚未验收，不因本轮通过而关闭。
 
 ## 依据
 

@@ -542,11 +542,16 @@ same strict string decoder, without splitting label lists, trimming or CLR enum 
 shared wire mappings do not add Oracle ENUM/SET SQL declarations. MySQL DataTypes uses String and
 `ENUM({0})`/`SET({0})` with a caller-supplied SQL label list. Wire code 255 is MySQL-only GEOMETRY:
 readers return complete opaque bytes for any collation, preserving prefixes and payload without
-SRID/WKB conversion. The `DataTypes` collection exposes a result-only `GEOMETRY` row with the Binary
-provider identity; parameter and literal support remain disabled because no geometry parameter wire
-identity or GIS codec is implemented.
-Empty/NULL and buffered/sequential text/prepared results reuse existing framing. Server emission and
-SQL/spatial interoperability require real acceptance; local fixtures do not establish them.
+SRID/WKB conversion. The `DataTypes.GEOMETRY` row keeps Binary identity and now advertises parameters:
+existing Binary/type252 parameters can assign the complete four-byte little-endian SRID + WKB result
+to a spatial column. The server validates geometry and resolves its SRS; the driver does not treat
+WKB alone or text as this raw representation. No extra enum, GIS model or parser is needed. Routine
+GEOMETRY and spatial subtype arguments derive Binary with Size=0, retaining the existing MySQL
+output publishing and NULL behavior. Creation/literal hints for GEOMETRY itself remain unspecified;
+the ordinary Binary hex fallback has separate real storage coverage. Empty geometry collections are
+valid byte payloads, whereas an empty byte array is not a geometry. Text/prepared buffered/sequential
+results share existing framing. SRID=0 has target direct-profile evidence; nonzero SRS and deployment
+combinations remain tracked in D-06 of the [single roadmap](obconnector-dotnet-missing-features-roadmap.md).
 
 Oracle ROWID result code209 returns an unchanged string through the existing String provider identity.
 It uses the strict session UTF-8 decoder, including when binary or unknown collation is reported;

@@ -114,8 +114,7 @@ namespace OceanBaseConnector
                 var json = TypeRow("JSON", OceanBaseDbType.Json, typeof(string), "JSON");
                 json["IsLong"] = true; json["RequiredFeatures"] = "Binary or supported UTF-8 JSON result collation";
                 var geometry = TypeRow("GEOMETRY", OceanBaseDbType.Binary, typeof(byte[]));
-                geometry["IsSupportedForParameters"] = false;
-                geometry["RequiredFeatures"] = "MySQL result type code 255; opaque bytes without a GIS codec";
+                geometry["RequiredFeatures"] = "MySQL result type code 255; Binary parameters carry four-byte little-endian SRID plus WKB; server validates geometry and SRS";
             }
             else
             {

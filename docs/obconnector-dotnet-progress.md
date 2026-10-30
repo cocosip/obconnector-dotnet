@@ -73,7 +73,7 @@
 | T02 DECIMAL/NUMBER/FLOAT | DECIMAL至65精度/30 scale约束 | NUMBER至38精度、负scale；FLOAT二进制精度 | decimal或OceanBaseDecimal；DecimalCodec | CLR decimal装不下不能静默截断；Oracle未知精度保持值 |
 | T03 浮点 | FLOAT/DOUBLE | BINARY_FLOAT/BINARY_DOUBLE | float/double | 特殊值/极值和协商分别验证，不用NUMBER路径代替 |
 | T04 普通字符/二进制 | CHAR/VARCHAR/TEXT/BINARY/VARBINARY/BLOB | CHAR/VARCHAR2/RAW及已支持文本/二进制 | string/byte[]、流；严格编码 | Oracle空串/NUL/RAW目标限制；长NUL脚本超时保留 |
-| T05 ENUM/SET/GEOMETRY | ENUM/SET字符串；GEOMETRY原始byte[] | — | ResultColumn已有结果解码；无几何领域API | GEOMETRY专用输入/SRID/往返未承诺，不能称完整GIS支持 |
+| T05 ENUM/SET/GEOMETRY | ENUM/SET字符串；GEOMETRY原始byte[]输入/结果 | — | 复用Binary参数、type255结果；空间过程参数目录映射；无GIS领域API | SRID=0直连往返见D-06；目标SRS目录仅0，非零SRID与其他部署未验收 |
 | T06 JSON | 显式Json输入、UTF8/binary结果字符串 | 无专用Oracle JSON codec承诺，可执行服务端SQL转换 | OceanBaseDbType.Json、字符串 | JSON null不同SQL NULL；服务端校验，非DOM解析库 |
 | T07 BIT/YEAR | BIT1..64、四位YEAR | — | ulong/ushort及typed输入 | 常量数值metadata不同真实BIT/YEAR列 |
 | T08 DATE/DATETIME/TIME | 小数至6位；TIME有符号 | Oracle DATE含时间、无小数 | DateTime/TimeSpan、OceanBaseDate/DateTime | MySQL零日期需provider值访问及相容SQL_MODE；TIME极值文本/binary差异保留 |

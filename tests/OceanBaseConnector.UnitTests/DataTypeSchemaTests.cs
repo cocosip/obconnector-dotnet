@@ -71,7 +71,7 @@ namespace OceanBaseConnector.UnitTests
                         Assert.Equal((int)OceanBaseDbType.String, labels["ProviderDbType"]); Assert.False((bool)labels["IsLong"]);
                     }
                     var geometry = DataTypeRow(table, "GEOMETRY", typeof(byte[]));
-                    Assert.False((bool)geometry["IsSupportedForParameters"]); Assert.True((bool)geometry["IsSupportedForResults"]);
+                    Assert.True((bool)geometry["IsSupportedForParameters"]); Assert.True((bool)geometry["IsSupportedForResults"]);
                     Assert.False((bool)geometry["IsLiteralSupported"]); Assert.Contains("255", (string)geometry["RequiredFeatures"]);
                     foreach (var prefix in new[] { "TINY", "MEDIUM", "LONG" })
                         foreach (var raw in new[] { false, true })

@@ -169,6 +169,17 @@ namespace OceanBaseConnector.Internal.Sql
                     case "TIME": parameter.OceanBaseDbType = OceanBaseDbType.Time; SetScale(parameter, Integer(row, "DATETIME_PRECISION"), 6); break;
                     case "CHAR": case "VARCHAR": case "TINYTEXT": case "TEXT": case "MEDIUMTEXT": case "LONGTEXT": case "ENUM": case "SET": parameter.OceanBaseDbType = OceanBaseDbType.String; sized = true; break;
                     case "BINARY": case "VARBINARY": case "TINYBLOB": case "BLOB": case "MEDIUMBLOB": case "LONGBLOB": parameter.OceanBaseDbType = OceanBaseDbType.Binary; sized = binary = true; break;
+                    case "GEOMETRY":
+                    case "POINT":
+                    case "LINESTRING":
+                    case "POLYGON":
+                    case "MULTIPOINT":
+                    case "MULTILINESTRING":
+                    case "MULTIPOLYGON":
+                    case "GEOMETRYCOLLECTION":
+                    case "GEOMCOLLECTION":
+                        // Spatial arguments carry SRID + WKB; catalogue length is not a fixed Size.
+                        parameter.OceanBaseDbType = OceanBaseDbType.Binary; break;
                     default: throw Invalid("The MySQL argument type is not supported.");
                 }
             }

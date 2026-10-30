@@ -84,9 +84,17 @@ MySQL also lists ENUM/SET using the existing String provider identity and label-
 templates `ENUM({0})`/`SET({0})`; the argument is SQL-quoted labels, not a length. Reported result
 codes247/248 retain binary-collation bytes or strict text without parsing label lists. Accepting these
 wire codes in either mode does not add Oracle SQL declarations. MySQL GEOMETRY result code255 returns
-opaque bytes regardless of collation. `DataTypes` exposes a result-only `GEOMETRY` row with the Binary
-provider identity; parameter and literal support remain false and no spatial API or SQL declaration is
-claimed. These result-code extensions have local evidence only.
+opaque bytes regardless of collation. `DataTypes.GEOMETRY` retains the Binary provider identity and
+now reports parameter support: `DbType.Binary` / `OceanBaseDbType.Binary` carries the complete result
+bytes back to a spatial column (four-byte little-endian SRID followed by WKB), using the existing
+length-encoded BLOB parameter wire. Plain WKB from `ST_AsBinary` excludes the SRID prefix and cannot
+be used as this raw value without a server constructor such as `ST_GeomFromWKB`. Geometry validity
+and SRS availability are checked by the server. No client GIS model, coordinate conversion or SRID
+rewriting is added. Routine geometry/spatial subtype arguments derive Binary with Size=0; outputs
+retain raw bytes. Creation/literal hints for GEOMETRY itself remain unspecified/false; existing Binary
+hex fallback is tested when assigned to a GEOMETRY column. The target profile currently has only
+SRID=0 in its SRS catalogue; nonzero SRIDs remain unverified. See D-06 in the
+[single development roadmap](obconnector-dotnet-missing-features-roadmap.md) for evidence and limits.
 
 Oracle ROWID/UROWID result code209 uses String and strict session UTF-8, independent of its reported
 collation. Existing result metadata remains `ROWID` / ProviderType.String, preserving identifier text
