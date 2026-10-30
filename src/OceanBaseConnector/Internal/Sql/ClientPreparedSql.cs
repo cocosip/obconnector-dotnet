@@ -24,6 +24,10 @@ namespace OceanBaseConnector.Internal.Sql
             clientEncoding ??= ResultColumn.Utf8;
             // Reuse all declared-type, exact conversion and packet-budget validation.
             _ = PreparedParameters.Encode(bindings.Parameters, mode, validateOnly: true, clientEncoding: clientEncoding);
+            if (multiStatement && SqlStatementBoundary.InvalidatesComplexTypes(bindings.CommandText, mode))
+                foreach (var parameter in bindings.Parameters)
+                    if (PreparedParameters.GetComplexType(parameter) != null)
+                        throw new NotSupportedException("Complex input scripts cannot contain DDL that invalidates their type descriptions.");
             var strings = RequiresMySqlLiteralContext(bindings, mode);
             if (strings && context == null) throw new NotSupportedException("MySQL client string preparation requires a trusted session collation.");
             if (strings) context!.ValidateText(bindings.CommandText);
@@ -48,6 +52,10 @@ namespace OceanBaseConnector.Internal.Sql
         private static string Literal(OceanBaseParameter parameter, OceanBaseCompatibilityMode mode, MySqlLiteralContext? context, Encoding clientEncoding, bool multiStatement, Func<Stream, string>? streamLiteral)
         {
             if (parameter.Direction != ParameterDirection.Input) throw Unsupported();
+            var complex = PreparedParameters.GetComplexType(parameter);
+            if (complex != null)
+                return mode == OceanBaseCompatibilityMode.Oracle && multiStatement
+                    ? ObjectLiteral(parameter, complex, clientEncoding) : throw Unsupported();
             var provider = parameter.OceanBaseDbType;
             var temporal = IsClientTemporal(parameter);
             var interval = (mode == OceanBaseCompatibilityMode.Oracle || multiStatement) &&
@@ -118,6 +126,48 @@ namespace OceanBaseConnector.Internal.Sql
                 value is int || value is uint || value is long || value is ulong)
                 return ((IFormattable)value).ToString(null, CultureInfo.InvariantCulture);
             throw new ArgumentException("The client literal value does not match its declared DbType.");
+        }
+
+        private static string ObjectLiteral(OceanBaseParameter parameter, OceanBaseComplexType type, Encoding clientEncoding)
+        {
+            // shortcut: flat named objects only; add collections/nesting after separate server and ownership evidence.
+            if (type.IsCollection || type.IsAnonymous || type.SchemaName.Length == 0) throw Unsupported();
+            foreach (var member in type.Members)
+                if (member.Layout.TypeCode == 160 || member.Layout.HasLobMembers || member.Layout.HasCursorMembers) throw Unsupported();
+            if (parameter.Value == null || parameter.Value == DBNull.Value) return "NULL";
+            var values = ((OceanBaseComplexValue)parameter.Value).GetValues();
+            var sql = new StringBuilder();
+            long bytes = 0;
+            void Append(string text)
+            {
+                bytes += clientEncoding.GetByteCount(text);
+                if (bytes > PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Client prepared SQL exceeds the packet size limit.");
+                sql.Append(text);
+            }
+            Append("\"" + type.SchemaName.Replace("\"", "\"\"") + "\".\"" + type.TypeName.Replace("\"", "\"\"") + "\"(");
+            for (var i = 0; i < values.Length; i++)
+            {
+                if (i != 0) Append(",");
+                var value = values[i];
+                var code = type.Members[i].Layout.TypeCode;
+                var provider = code switch
+                {
+                    0 => OceanBaseDbType.Decimal,
+                    253 or 254 => OceanBaseDbType.String,
+                    207 => OceanBaseDbType.NVarchar2,
+                    208 => OceanBaseDbType.NChar,
+                    203 => OceanBaseDbType.Binary,
+                    12 => OceanBaseDbType.OracleDate,
+                    202 => OceanBaseDbType.Timestamp,
+                    _ => throw Unsupported(),
+                };
+                if (code == 0 && value != null && value != DBNull.Value && !(value is OceanBaseDecimal))
+                    value = new OceanBaseDecimal(Convert.ToDecimal(value, CultureInfo.InvariantCulture));
+                Append(Literal(new OceanBaseParameter { OceanBaseDbType = provider, Value = value },
+                    OceanBaseCompatibilityMode.Oracle, null, clientEncoding, true, null));
+            }
+            Append(")");
+            return sql.ToString();
         }
 
         private static string NationalLiteral(string text)

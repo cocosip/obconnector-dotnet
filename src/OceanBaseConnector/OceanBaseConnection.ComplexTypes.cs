@@ -249,7 +249,17 @@ namespace OceanBaseConnector
                             case "NCHAR": code = 208; break;
                             case "RAW": code = 203; break;
                             case "DATE": code = 12; break;
-                            case "TIMESTAMP": code = 202; break;
+                            case "TIMESTAMP":
+                            case "TIMESTAMP(0)":
+                            case "TIMESTAMP(1)":
+                            case "TIMESTAMP(2)":
+                            case "TIMESTAMP(3)":
+                            case "TIMESTAMP(4)":
+                            case "TIMESTAMP(5)":
+                            case "TIMESTAMP(6)":
+                            case "TIMESTAMP(7)":
+                            case "TIMESTAMP(8)":
+                            case "TIMESTAMP(9)": code = 202; break;
                             case "BLOB": code = 210; break;
                             case "CLOB": code = 211; break;
                             case "CURSOR": code = 163; break;

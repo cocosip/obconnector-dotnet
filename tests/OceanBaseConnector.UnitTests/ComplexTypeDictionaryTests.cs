@@ -461,6 +461,9 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("CHAR", 2)]
         [InlineData("DATE", 3)]
         [InlineData("TIMESTAMP", 4)]
+        [InlineData("TIMESTAMP(0)", 4)]
+        [InlineData("TIMESTAMP(6)", 4)]
+        [InlineData("TIMESTAMP(9)", 4)]
         public async Task ComplexDictionaryConstructsOnlyPreciselyTypedScalarMembers(string scalar, int valueKind)
         {
             var server = Server(async channel => await ComplexScalarType(channel, scalar: scalar));

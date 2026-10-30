@@ -28,7 +28,7 @@ namespace OceanBaseConnector.ConsumerTests
                     foreach (var ob20 in new[] { false, true }) yield return new object[] { target, async, ob20 };
         }
 
-        private static async Task EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesCore(string target, bool async, bool ob20, bool encrypted)
+        private static async Task EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesCore(string target, bool async, bool ob20, bool encrypted, bool objectScript = false)
         {
             using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
@@ -91,6 +91,25 @@ namespace OceanBaseConnector.ConsumerTests
                     }
                 }
                 await Dictionary(0, 9, 10, false);
+                if (objectScript)
+                {
+                    for (uint i = 0; i < 3; i++)
+                    {
+                        var request = await ReadRequest(stream, channel, ob20, 8 + i, budget.Token);
+                        Assert.Equal(3, request[0]);
+                        var literal = i == 0 ? "\"Owner目标\".\"Mixed_Type\"(31,HEXTORAW('0102'))" : i == 1 ? "NULL" : "\"Owner目标\".\"Mixed_Type\"(NULL,NULL)";
+                        Assert.Equal("insert into t values ((" + literal + ")); update t set v=(" + literal + ")", Encoding.UTF8.GetString(request, 1, request.Length - 1));
+                        var response = Frame(1, new byte[] { 0, 1, 0, 14, 0, 0, 0 }).Concat(Frame(2, Report(false, 1))).ToArray();
+                        await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 8 + i, 1, response) : response, budget.Token);
+                        if (!ob20) channel.BeginCommand();
+                    }
+                    var after = await ReadRequest(stream, channel, ob20, 11, budget.Token);
+                    Assert.Equal(3, after[0]); Assert.Equal("after object script", Encoding.UTF8.GetString(after, 1, after.Length - 1));
+                    var afterReply = Frame(1, Report(false, 1));
+                    await stream.WriteAsync(ob20 ? Ob20Packet.Build(1234, 11, 1, afterReply) : afterReply, budget.Token);
+                    await ObserveClose(stream, budget.Token);
+                    return;
+                }
                 var prepared = await ReadRequest(stream, channel, ob20, 8, budget.Token); Assert.Equal(22, prepared[0]);
                 var preparedReply = Frame(1, new byte[] { 0, 19, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0 })
                     .Concat(Frame(2, Column("p"))).Concat(Frame(3, Column("p"))).Concat(Frame(4, Column("p"))).Concat(Frame(5, Column("p"))).ToArray();
@@ -148,7 +167,7 @@ namespace OceanBaseConnector.ConsumerTests
             {
                 var assembly = context.LoadFromAssemblyPath(RepositoryLocator.GetProductAssemblyPath(target));
                 using var connection = (DbConnection)Activator.CreateInstance(assembly.GetType("OceanBaseConnector.OceanBaseConnection")!)!;
-                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode={(encrypted ? "Required" : "Disabled")};Use Oracle Prepare Execute=true;Use OB20={ob20}";
+                connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode={(encrypted ? "Required" : "Disabled")};Use Oracle Prepare Execute=true;Use OB20={ob20};Allow Multi Statements={objectScript}";
                 if (async) await connection.OpenAsync(budget.Token); else connection.Open();
                 async Task<object?> Call(object receiver, string name, object?[] arguments)
                 {
@@ -169,6 +188,24 @@ namespace OceanBaseConnector.ConsumerTests
                 var first = (object?[])(await Call(value, "GetValues", Array.Empty<object?>()))!;
                 Assert.Equal(31, first[0]); Assert.Equal(new byte[] { 1, 2 }, first[1]); ((byte[])first[1]!)[0] = 8;
                 Assert.Equal(new byte[] { 1, 2 }, ((object?[])(await Call(value, "GetValues", Array.Empty<object?>()))!)[1]);
+                if (objectScript)
+                {
+                    using var command = connection.CreateCommand();
+                    command.CommandText = "insert into t values (:p); update t set v=:P";
+                    var parameter = command.CreateParameter(); parameter.ParameterName = "p";
+                    parameter.GetType().GetProperty("ComplexType")!.SetValue(parameter, type); command.Parameters.Add(parameter);
+                    foreach (var input in new[] { value, DBNull.Value, (await Call(type, "CreateValue", new object?[] { new object?[] { null, null } }))! })
+                    {
+                        parameter.Value = input;
+                        Assert.Equal(2, async ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
+                    }
+                    await Call(connection, "ClearComplexTypeCache", new object?[] { null });
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => async ? command.ExecuteNonQueryAsync(budget.Token) : Task.FromResult(command.ExecuteNonQuery()));
+                    command.Parameters.Clear(); command.CommandText = "after object script";
+                    Assert.Equal(1, async ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
+                    connection.Close(); await serving.WaitAsync(budget.Token);
+                    return;
+                }
                 var arrayType = connection.GetType().GetMethod("CreateArrayType", new[] { typeof(string), assembly.GetType("OceanBaseConnector.OceanBaseTransaction")! })!
                     .Invoke(connection, new object?[] { "RAW", null })!;
                 var arrayValue = (await Call(arrayType, "CreateValue", new object?[] { new object?[] { new byte[] { 8, 9 } } }))!;

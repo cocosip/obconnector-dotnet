@@ -294,7 +294,7 @@ namespace OceanBaseConnector
                 if (oracle != null && cursorOffset) throw new NotSupportedException("Oracle output execution does not support offset fetch.");
                 var bindings = mysql?.Bindings ?? oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
                 if (multiStatement && (prepareOnly || _explicitPreparation || _fetchSize > 0 || oracle != null))
-                    throw new NotSupportedException("Multi-statement execution supports only scalar input parameters without Prepare or server cursors.");
+                    throw new NotSupportedException("Multi-statement execution supports only input parameters without Prepare or server cursors.");
                 var clientFallback = AllowClientSidePrepareFallback && !multiStatement && !prepareOnly && !schemaOnly && !keyInfo && !_explicitPreparation && _fetchSize == 0 && oracle == null && mysql == null;
                 // Stream identity must not depend on a user stream's equality implementation.
                 ConditionalWeakTable<Stream, OceanBaseParameter>? streamBindings = null;

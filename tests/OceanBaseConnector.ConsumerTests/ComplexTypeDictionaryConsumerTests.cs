@@ -24,6 +24,11 @@ namespace OceanBaseConnector.ConsumerTests
 
         [Theory]
         [MemberData(nameof(ComplexDictionaryAssets))]
+        public Task EveryAssetExpandsNamedObjectScriptInputsWithoutBinaryPrepare(string target, bool async, bool ob20)
+            => EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesCore(target, async, ob20, encrypted: false, objectScript: true);
+
+        [Theory]
+        [MemberData(nameof(ComplexDictionaryAssets))]
         public Task EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValues(string target, bool async, bool ob20)
             => EveryAssetLoadsExactComplexDictionaryAndCreatesImmutableValuesCore(target, async, ob20, encrypted: false);
     }
