@@ -13,6 +13,45 @@ namespace OceanBaseConnector.UnitTests
             => new byte[] { 255, (byte)code, (byte)(code >> 8), 35, (byte)state[0], (byte)state[1], (byte)state[2], (byte)state[3], (byte)state[4], 115 };
 
         [Theory]
+        [InlineData(false, OceanBaseDbType.NChar, "unsupported")]
+        [InlineData(true, OceanBaseDbType.NChar, "unsupported")]
+        [InlineData(false, OceanBaseDbType.NVarchar2, "unsupported")]
+        [InlineData(true, OceanBaseDbType.NVarchar2, "unsupported")]
+        [InlineData(false, OceanBaseDbType.NChar, "ascii")]
+        [InlineData(true, OceanBaseDbType.NChar, "ascii")]
+        [InlineData(false, OceanBaseDbType.NVarchar2, "latin1")]
+        [InlineData(true, OceanBaseDbType.NVarchar2, "latin1")]
+        public async Task OracleNationalFallbackUsesUnicodeLiteralsWithoutBinaryParameterEncoding(bool asynchronous, OceanBaseDbType type, string national)
+        {
+            var server = Server(async channel =>
+            {
+                for (var i = 0; i < 2; i++)
+                {
+                    await StatementCommand(channel, 22);
+                    await channel.WritePacketAsync(UnsupportedPrepare());
+                    channel.BeginCommand();
+                    await Query(channel, "UPDATE t SET n=(u'\\4e2d\\d83d\\de42\\0027\\005c\\0000')");
+                    await channel.WritePacketAsync(Ok(2));
+                }
+                channel.BeginCommand(); await Query(channel, "after national fallback"); await channel.WritePacketAsync(Ok(1));
+            }, nationalCharacterSet: national);
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync(); using var command = (OceanBaseCommand)connection.CreateCommand();
+                command.AllowClientSidePrepareFallback = true; command.CommandText = "UPDATE t SET n=:n";
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "n", OceanBaseDbType = type, Value = "中🙂'\\\0" });
+                for (var i = 0; i < 2; i++)
+                    Assert.Equal(2, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+                Assert.Equal(ConnectionState.Open, connection.State);
+                command.Parameters.Clear(); command.CommandText = "after national fallback";
+                Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData(false)]
         [InlineData(true)]
         public async Task ClientPrepareFallbackUsesTextRowsAndRetriesPrepareForEachExecution(bool asynchronous)
