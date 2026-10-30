@@ -947,6 +947,15 @@ The configured direct OceanBase 4.4.2.2 server demonstrates UTF-8 connection inp
 
 Anonymous ordinary national results without a trusted storage context reject non-NULL member decoding; metadata, empty collections and NULL members can be read. Factory scalar arrays support declared PL outputs in local fixtures; real anonymous-array acceptance in this module covers DML iterations, not every PL signature. Complex whole-column `RETURNING` with unresolved source type identity remains rejected with unknown execution outcome and a broken session; keep the old output value and reconcile the write. Do not infer this support from successful scalar RETURNING or PL output tests. For complex BLOB/CLOB results, binary named results require `Use Lob Locators=true` and create `OceanBaseLob` handles bound to the current physical session, transaction and reader epoch; anonymous collection metadata accepts the same member codes, and local synchronous/asynchronous BLOB/CLOB materialization is covered. The handle is created only when the member is non-NULL and materialized; buffered/sequential skip paths consume locator bytes without allocating a handle. Binary complex REF CURSOR members use the same owner and lifetime rules as top-level cursor columns, including buffered/sequential skip and child fetch; complex cursor input remains rejected because its bind wire contract is not established. Named content inputs (including InputOutput) and anonymous scalar locator inputs follow the distinct contracts above. CLOB reads retain the UTF-8 contract; inline locator parameter content is converted separately as described below. Real nested-table table-column limitations, cycles, text complex results and the remaining deployment matrix stay open.
 
+Direct Oracle4.4.2.2 lifecycle tests additionally cover named OBJECT/nested OBJECT/collection LOB
+IN/OUT/INOUT, NULL members, caller-owned output handles after command disposal, scalar locator
+storage and anonymous DML-array rejection after disposal/commit/rollback. Root-NULL complex PL
+bindings in that output/INOUT test return 600/HY000; prior outputs remain unchanged. BLOB OBJECT
+bound members used in DML return 932/22000 although server-local objects can store the same bytes;
+the binding/DML cause remains unresolved. These are open boundaries, not successful NULL or
+general complex-member storage support. Evidence and remaining tasks are tracked in the
+[single missing-features roadmap](obconnector-dotnet-missing-features-roadmap.md).
+
 CLOB locator parameter encoding is shared by scalar and anonymous-array inputs. It converts inline
 UTF-8 content into the strict client encoding in a bounded copy, updating V1 payload size and V2
 external/disk byte sizes while preserving identity, extension and rowkey bytes. Original handles
