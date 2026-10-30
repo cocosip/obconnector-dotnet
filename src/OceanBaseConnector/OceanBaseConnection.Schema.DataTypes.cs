@@ -134,6 +134,8 @@ namespace OceanBaseConnector
                 var rowid = TypeRow("ROWID", OceanBaseDbType.String, typeof(string));
                 rowid["IsSupportedForParameters"] = false;
                 rowid["RequiredFeatures"] = "Oracle result type code 209; returned as strict session text";
+                var urowid = TypeRow("UROWID", OceanBaseDbType.Urowid, typeof(string));
+                urowid["RequiredFeatures"] = "Oracle type code 209; base64 text parameter/result wire";
                 Text("CHAR", OceanBaseDbType.String, fixedLength: true);
                 Text("VARCHAR2", OceanBaseDbType.String)["IsBestMatch"] = true;
                 Text("NCHAR", OceanBaseDbType.NChar, fixedLength: true)["RequiredFeatures"] = "Trusted national character set";

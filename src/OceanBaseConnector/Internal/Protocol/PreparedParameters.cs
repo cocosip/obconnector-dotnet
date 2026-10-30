@@ -252,6 +252,14 @@ namespace OceanBaseConnector.Internal.Protocol
                         throw new ArgumentException("A Null parameter cannot contain a non-null value.");
                     return 6;
                 }
+                if (providerType == OceanBaseDbType.Urowid)
+                {
+                    if (mode != OceanBaseCompatibilityMode.Oracle || parameter.Precision != 0 || parameter.Scale != 0)
+                        throw new NotSupportedException("UROWID parameters require Oracle mode and zero Precision/Scale.");
+                    if (parameter.Value != null && parameter.Value != DBNull.Value && parameter.Value is not string)
+                        throw new ArgumentException("A UROWID parameter requires its base64 text value.");
+                    return 209;
+                }
             }
             var decimalScale = parameter.DeclaredDecimalScale.GetValueOrDefault();
             if (parameter.DbType == DbType.Decimal && (parameter.Precision > (mode == OceanBaseCompatibilityMode.Oracle ? 38 : 65) || decimalScale < (mode == OceanBaseCompatibilityMode.Oracle ? -84 : 0) || decimalScale > (mode == OceanBaseCompatibilityMode.Oracle ? 127 : 30)))

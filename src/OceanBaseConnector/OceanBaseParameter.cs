@@ -115,6 +115,7 @@ namespace OceanBaseConnector
                 case global::OceanBaseConnector.OceanBaseDbType.NChar:
                 case global::OceanBaseConnector.OceanBaseDbType.NVarchar2:
                 case global::OceanBaseConnector.OceanBaseDbType.String: return DbType.String;
+                case global::OceanBaseConnector.OceanBaseDbType.Urowid: return DbType.String;
                 case global::OceanBaseConnector.OceanBaseDbType.Binary: return DbType.Binary;
                 case global::OceanBaseConnector.OceanBaseDbType.DateTime: return DbType.DateTime;
                 case global::OceanBaseConnector.OceanBaseDbType.Time: return DbType.Time;

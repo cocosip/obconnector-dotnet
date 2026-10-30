@@ -88,11 +88,16 @@ opaque bytes regardless of collation. `DataTypes` exposes a result-only `GEOMETR
 provider identity; parameter and literal support remain false and no spatial API or SQL declaration is
 claimed. These result-code extensions have local evidence only.
 
-Oracle ROWID result code209 likewise has local result-reading support using String and strict session
-UTF-8, independent of its reported collation. `DataTypes` exposes a result-only `ROWID` row with the
-same String provider identity; parameter and literal support remain false because no dedicated ROWID
-parameter wire identity is implemented. It preserves identifier text and wire length metadata. UROWID
-and MySQL results remain outside this mapping.
+Oracle ROWID/UROWID result code209 uses String and strict session UTF-8, independent of its reported
+collation. Existing result metadata remains `ROWID` / ProviderType.String, preserving identifier text
+and wire length. The result-only `DataTypes.ROWID` row retains that identity. `DataTypes.UROWID` adds
+the explicit `OceanBaseDbType.Urowid` parameter identity (`DbType.String`): non-NULL string inputs
+use type209 with length-encoded base64 text; null/DBNull uses type6. The server validates the ID.
+Precision/Scale must be zero; Size is a hint and never truncates. MySQL mode, non-string inputs and
+client literal/fallback are rejected. Oracle ROWID/UROWID routine arguments derive this explicit
+parameter type; OUT/INOUT/ReturnValue and RETURNING require PrepareExecute. Result metadata does not
+change to the new parameter enum. Acceptance and remaining limits are tracked in the
+[single development roadmap](obconnector-dotnet-missing-features-roadmap.md).
 
 NUMBER/DECIMAL each have two rows with the same SQL name and provider identity. The System.Decimal row covers precision 1..28 with 0 <= scale <= precision; otherwise an unknown/nonpositive precision, precision above 28, negative scale or scale above precision selects OceanBaseDecimal. The wide rows retain mode codec limits: Oracle precision <=38, metadata scale -84..127; MySQL precision <=65, scale 0..30 and scale <= precision. Overlapping bounds are intentional; ResultTypeCondition selects the normal reader representation, while ProviderSpecificDataType always reports the exact provider representation. Oracle TIMESTAMP similarly has DateTime for scale 0..7 and OceanBaseTimestamp for scale 8..9. MySQL zero-date shapes require provider-specific date access; ordinary DateTime conversion retains its existing checks.
 

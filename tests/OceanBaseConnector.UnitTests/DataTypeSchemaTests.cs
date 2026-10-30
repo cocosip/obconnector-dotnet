@@ -89,6 +89,10 @@ namespace OceanBaseConnector.UnitTests
                     var rowid = DataTypeRow(table, "ROWID", typeof(string));
                     Assert.False((bool)rowid["IsSupportedForParameters"]); Assert.True((bool)rowid["IsSupportedForResults"]);
                     Assert.False((bool)rowid["IsLiteralSupported"]); Assert.Contains("209", (string)rowid["RequiredFeatures"]);
+                    var urowid = DataTypeRow(table, "UROWID", typeof(string));
+                    Assert.Equal((int)OceanBaseDbType.Urowid, urowid["ProviderDbType"]);
+                    Assert.True((bool)urowid["IsSupportedForParameters"]); Assert.True((bool)urowid["IsSupportedForResults"]);
+                    Assert.False((bool)urowid["IsLiteralSupported"]); Assert.Contains("209", (string)urowid["RequiredFeatures"]);
                     var cursor = DataTypeRow(table, "REF CURSOR", typeof(OceanBaseRefCursor));
                     Assert.False((bool)cursor["IsSupportedForResults"]); Assert.Equal("Output,ReturnValue", cursor["ParameterDirections"]);
                     Assert.Equal(DBNull.Value, cursor["CreateFormat"]); Assert.Equal(DBNull.Value, cursor["LiteralPrefix"]);

@@ -206,6 +206,9 @@ namespace OceanBaseConnector.Internal.Sql
                     case "REF CURSOR":
                         parameter.OceanBaseDbType = OceanBaseDbType.RefCursor;
                         if (parameter.Direction != ParameterDirection.Output && parameter.Direction != ParameterDirection.ReturnValue) throw Invalid("Input REF CURSOR parameters are not supported."); break;
+                    case "ROWID":
+                    case "UROWID":
+                        parameter.OceanBaseDbType = OceanBaseDbType.Urowid; break;
                     case "BLOB": parameter.OceanBaseDbType = OceanBaseDbType.Blob; break;
                     case "CLOB": parameter.OceanBaseDbType = OceanBaseDbType.Clob; break;
                     default: throw Invalid("The Oracle argument type requires an unsupported or missing type descriptor.");

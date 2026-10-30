@@ -553,9 +553,14 @@ It uses the strict session UTF-8 decoder, including when binary or unknown colla
 the identifier is not parsed or normalized. Text/prepared buffered/sequential readers share the
 ordinary length-encoded path, with empty and NULL values preserved. MySQL rejects this code. The
 `DataTypes` collection exposes a result-only `ROWID` row with the same String provider identity;
-parameter and literal support remain disabled because no dedicated ROWID parameter wire identity is
-implemented. UROWID, actual server metadata, ROWID SQL/parameter behavior and deployment compatibility
-require real validation.
+its result identity remains compatible. Explicit `OceanBaseDbType.Urowid` parameters map to DbType.String,
+using type209 plus length-encoded base64 text (NULL uses type6); the server validates the identifier.
+The shared strict text writer and packet budget apply without truncation. Oracle-only mode,
+zero Precision/Scale and string values are validated before send. Routine ROWID/UROWID arguments
+derive this type; PrepareExecute outputs reuse metadata-driven scalar decoding and atomic publishing.
+`DataTypes.UROWID` describes the explicit parameter identity; returned code209 columns retain
+`ROWID` / ProviderType.String. No client literal/fallback is added. See D-05 in the
+[single development roadmap](obconnector-dotnet-missing-features-roadmap.md) for real acceptance and limits.
 
 | Result family | Accepted collation IDs | Maximum bytes per character |
 | --- | --- | ---: |

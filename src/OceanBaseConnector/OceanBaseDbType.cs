@@ -37,5 +37,7 @@ namespace OceanBaseConnector
         Clob,
         Array,
         Struct,
+        /// <summary>Oracle UROWID/ROWID text used with the type-209 parameter wire.</summary>
+        Urowid,
     }
 }

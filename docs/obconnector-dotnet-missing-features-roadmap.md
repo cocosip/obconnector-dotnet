@@ -108,7 +108,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-02 | `P2`；a1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1～d3 以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
 | D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML、根 NULL OBJECT 输出身份、复杂 RETURNING/cursor/text 仍未关闭 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
-| D-05 | `P2` | UROWID 和 ROWID 参数/结果闭环（G05/T12） | `ResultColumn`、`PreparedParameters`、`DataTypes`、绑定和存储读取 | 需要真实 UROWID 值、参数 wire、列 metadata；当前只有 ROWID 结果路径 | UROWID 输入、输出、普通列、metadata、NULL/边界和独立读回通过；不支持形状发送前拒绝 |
+| D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/fallback 保持拒绝；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2` | GEOMETRY 输入和结果边界（G06/T05） | 类型推断、参数绑定、结果 metadata、原始 bytes/SRID 行为 | 需要真实 MySQL GEOMETRY 列、值格式和版本约束；领域空间 API 另行评估 | 原始字节和 SRID 行为有明确契约；参数/结果/NULL/坏值有测试；若无稳定 wire，只保留结果-only |
 | D-07 | `P2` | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | GB2312/EUCKR 完成真实租户验收；UJIS 等逐项确认后再加入，不支持名称继续发送前拒绝 |
 
@@ -136,7 +136,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | --- | --- | --- | --- | --- |
 | A-01 | `P3` | 池、reset、租约和 prepared cache（G10） | 长期并发、资源交错、清池、句柄/线程/内存稳定性未证实 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
 | A-02 | `P3` | PSPE、XA、unknown outcome（G11） | in-doubt、协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
-| A-03 | `P3` | Schema、目录和参数元数据（G13） | 包内 PL 类型、重载、大小写、引用标识符和最小权限边界 | 双模式最小权限、唯一/歧义签名、包/重载、视图/同义词权限错误均按服务端真实结果关闭 |
+| A-03 | `P3` | Schema、目录和参数元数据（G13） | 包内 PL 类型、重载、大小写、引用标识符和最小权限；D-05 新增无约束 NUMBER scale/VARCHAR2 字符长度目录复核，见执行记录 | 双模式最小权限、唯一/歧义签名、包/重载、视图/同义词权限错误及新增目录边界均按服务端真实结果关闭 |
 | A-04 | `P3` | 包、TFM 和平台（G14/R01） | 当前有五资产和 Windows 子集；非 Windows、独立 runtime、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
 | A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；196608 字符 NUL 单表达式从 .NET 0/4 恢复 4/4，原因未定，见执行记录 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
 
@@ -715,6 +715,62 @@ binary row 为 `0000040131`；collection 的 NULL 位为 true，row 为 `0004013
 本模块只将 a3.1 的上述输入和 collection 输出子集置为 `P4`，a3.2 及 D-04 父项不关闭。
 未重跑完整 Unit/Consumer、所有 OS/runtime、真实代理/TLS/OB20/KDC、长期压力；BLOB OBJECT
 成员 DML、复杂 RETURNING/cursor/text、匿名 PL 等剩余任务仍需后续开发与证据。
+
+### D-05：UROWID 参数与结果闭环（2026-10-30）
+
+基线 `ae40dba`。D-04a2 继续核对服务端命名成员 deserialize 与 Java writer；Java
+`ComplexUtil.storeComplexAttrData` 未提供 BLOB/CLOB writer，没有足够证据选择新的成员编码。
+本轮不改 D-04 产品代码、不关闭 a2，转入 D-05 的有证据范围。
+
+服务端 `MYSQL_TYPE_OB_UROWID=209` 参数路径读取 length-encoded base64 文本，再由
+`ObURowIDData::decode2urowid` 校验；结果路径同样返回 base64 文本。复用现有严格文本编码
+和包预算，增加显式 `OceanBaseDbType.Urowid`，不猜测 UROWID 私有格式。普通字符串不会自动
+推断成 UROWID。旧结果 `ROWID` / ProviderType.String 保持兼容，新增 DataTypes.UROWID 表示
+显式参数身份；client literal/fallback 不在本模块支持范围。
+
+- [x] 确认 type 209 参数/结果 wire，补协议、NULL、模式/声明、严格编码及目录映射测试。
+- [x] 实库普通 prepare / PrepareExecute、sync/async、短/长真实 ROWID、NULL 切换与独立存储读回。
+- [x] 补 PL OUT/INOUT/返回值、RETURNING、真实 UROWID 参数推导及失败后恢复；目录的其他类型边界转 A-03 跟踪。
+- [x] 公开 DLL 消费者、相关回归、五资产构建和格式检查，独立只读走查。
+- [ ] 本地提交并回填证据、提交号和未验收范围；进度仅在本文维护。
+
+新增实库 `Oracle/UrowidTests.cs` 10 项：
+
+- 输入 4 项组合普通 prepare/PrepareExecute 与 sync/async。自建不同长度主键源表取得真实
+  ROWID（长值超过 251 字符），同一显式 Prepare command 依次绑定 CLR null、短值、DBNull、
+  长值，再绑定坏值 `invalid!`。确认服务端明确拒绝、outcome 已知、独立存储没有坏值行，
+  换回有效值可在同一物理会话继续插入。独立连接分别用普通查询与显式 Prepare，逐行核对
+  id/NULL/完整文本并消费 EOF；Size=1 不截断，结果 metadata 仍是 ROWID/string。
+- 输出 6 项组合过程/函数/RETURNING 与 sync/async，使用真实长 ROWID。过程/函数通过真实
+  DeriveParameters 得到 UROWID 的 IN/OUT/INOUT/ReturnValue；显式 Prepare 不插入数据、不发布
+  输出。同一 command 四次切换 NULL/非 NULL，逐一核对输出。过程先修改 OUT/INOUT 再因重复
+  主键失败，旧输出全部保留；修正 id 后在同一物理会话成功。独立连接显式 Prepare +
+  SequentialAccess 核对最终五行（NULL/非 NULL），失败调用不增加行。
+
+#### A-03 的新增目录复核任务（未关闭）
+
+早期 UROWID 过程夹具的编号参数使用无约束 NUMBER 时，DeriveParameters 报
+`Decimal argument scale cannot be represented`；改为 VARCHAR2 时，读取字符长度目录的第二条
+查询被当前服务端拒绝。这不是 UROWID wire 的失败，也不能仅据这些异常断定服务器没有该类型。
+两项均并入 A-03：固定实际 NUMERIC_SCALE、CHAR_LENGTH 可用性/查询错误码和最小权限，补独立
+回归后决定映射或版本拒绝。最终夹具使用已有验收的 FLOAT 编号，**保留真实 UROWID 参数推导**，
+未关闭上述其他类型的目录边界。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| 本地红/绿 | 显式 API 初次编译缺枚举；Precision 声明与 ROWID/UROWID 目录映射分别先失败后修复；`d05-local-red.trx`、`d05-metadata-red.trx` 和 `d05-metadata-green.trx`。首个实库夹具未消费 EOF 导致连接不可用，补全消费后再验收，不据此改产品代码 |
+| 目标实库回归 | **68/68**，无 skip：新增 UROWID 10、FloatDerivation 4、StandalonePrepare 30、ComplexNullInput 24；`d05-live-final.trx`。仅 OceanBase 4.4.2.2 Oracle 直连、Windows、TLS Disabled |
+| 本地相关 Unit | **594/594**，无 skip；参数、Schema/DataTypes、OracleCommandPlan、ROWID 相关组，`d05-local.trx`；不是完整 Unit |
+| 公开 DLL | **24/24**：新增绑定 12（3 个代表资产 × sync/async × 普通/OB20 合成协议），旧 ROWID 结果 12（3 个代表资产 × text/binary × buffered/sequential）；`d05-consumer.trx`。合成长度边界文本不是服务端有效 ID，真实值证据来自上述实库；不称真实 OB20 验收 |
+| 构建 | 产品五 TFM Release 构建 0 warning/0 error，`d05-product-build.log`；Integration/Unit/Consumer Release 构建成功 |
+| 格式 | 本次 9 个 C# 文件 scoped whitespace verify 退出 0，`d05-format-final.log`；沙箱内 MSBuild pipe 拒绝日志 `d05-format-{src,int,consumer}.log` 保留，沙箱外首次 scoped 检查仅报告新文件两处缩进，已修正；git diff --check 通过 |
+| 独立走查 | fresh-context `review_d05` 只读核对 wire、共享校验、输出完整响应后的原子发布、目录映射、测试和原始证据计数；无 Critical/Important。最终文档复核发现缺失矩阵有一句旧的 UROWID 目录未验收口径，已修正为 FLOAT 编号签名下真实 Derive 已验收；无剩余问题，可本地提交。reviewer 未执行实库或修改文件 |
+| 提交 | 待本地提交；未 push |
+
+`d05-output-first/second/third.trx` 保留了 NUMBER/VARCHAR2 目录探测与夹具 CLR 值声明不匹配
+的失败历史，最终 FLOAT 夹具通过 `d05-output-float.trx` 后再运行扩大回归，不删除旧证据。
+D-05 为 `P4`（上述目标直连 profile 的功能验收完成），长期压力、代理、真实 TLS/OB20/KDC、
+跨平台/独立 runtime 未验收；client literal/fallback 继续明确拒绝，不在本模块扩大范围。
 
 ## 依据
 
