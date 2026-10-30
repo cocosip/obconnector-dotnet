@@ -44,7 +44,7 @@
 | 本文任务 | Java 2.4.14 已有能力 | 仍需独立确认的部分 |
 | --- | --- | --- |
 | D-01 | client/server prepare、`emulateUnsupportedPstmts` 回退和模式专用参数字面量 | .NET 的精确 1295/HY000、安全边界和每种字面量仍按自身契约验收 |
-| D-02 | 多语句、多结果、客户端参数展开及多种 batch 路径 | 不代表多语句可任意混用 Prepare、cursor、OUT 或复杂输入 |
+| D-02 | 多语句、多结果、客户端参数展开及多种 batch 路径 | b/c 本轮复核：目标服务端拒绝脚本 server prepare；本轮 Java callable 脚本未得到成功证据；MySQL 用户变量结果不等于参数 OUT |
 | D-03 | cursor fetch、REF CURSOR、标量 OUT/INOUT、带条件的 offset | 不代表 SELECT CURSOR 列形状、OUT offset 或 REF CURSOR 输入都支持 |
 | D-04 | ObStruct/ObArray、复杂描述、LOB/cursor 读取及限定 writer | 不代表所有 named/anonymous 成员和 locator 回绑都已实现 |
 | D-05 | ROWID 类型 209 的字符串结果路径 | 不能据此认定 UROWID 参数/结果已闭环 |
@@ -258,9 +258,55 @@ D-02b～D-02d 先调查是否纳入产品范围，不代表必须实现；允许
 | 子项 | 进度 | 开发任务与先决条件 | 验证/关闭依据 |
 | --- | --- | --- | --- |
 | D-02a 已有输入/多结果闭环 | `P2`；a1 达到 `P4` | 核对双模式的正常/NULL/边界、SequentialAccess、半读释放、错误前缀/未执行后缀和独立存储；只为发现的具体缺口补代码或测试 | MySQL 时间脚本存储见 a1；历史 Oracle 长 NUL 4 项失败及本轮恢复均保留，详见 A-05，不能只看总测试数 |
-| D-02b 多语句 Prepare/server cursor | `P0`，待范围/wire | 确认服务端是否提供脚本级 statement/cursor 身份及生命周期；若只能拆成单语句，须先定义结果顺序、失败前缀与资源契约，再评估是否纳入 OceanBaseCommand | 证据成立且明确纳入范围后再实现；无支持证据时保持发送前拒绝，不把现有 DbBatch 的顺序执行当作该功能已完成 |
-| D-02c 多语句 OUT/INOUT | `P0`，待模式/方向证据 | 分别确认 MySQL 过程变量和 Oracle PrepareExecute 的脚本形状；定义输出何时发布、后续语句失败时是否可见，不能直接把 OUT 插值成输入 | sync/async、OUT/INOUT/NULL、错误后原子发布、连接复用及实库独立核对；普通单过程 OUT 成功不能关闭脚本任务 |
+| D-02b 多语句 Prepare/server cursor | `P0 / 待服务端`；本轮调查完成，功能未实现 | 双模式目标 profile 在 prepare 阶段拒绝脚本，保留发送前拒绝；重新开启须有脚本级 statement/cursor 身份与生命周期证据；若改为客户端拆分，先明确其产品范围及顺序、失败前缀与资源契约 | 本轮 Java 对照与 .NET 拒绝边界见下；不把客户端参数展开、FetchSize hint 或现有 DbBatch 的顺序执行当作该功能完成 |
+| D-02c 多语句 OUT/INOUT | `P0 / 待范围与输出契约`；本轮调查完成，功能未实现 | 普通脚本参数 OUT/INOUT 保留拒绝；Oracle 单 PL 块输出沿用 D-03；MySQL 用户变量可显式作为结果读取，已有路径不重复开发；尚无可移植的 Java callable 脚本成功证据 | 如纳入 typed 脚本输出，先定义发布时机、后续错误可见性、变量/资源生命周期和真实 wire；再做 sync/async、OUT/INOUT/NULL、原子发布、复用与独立存储；Java 客户端报错不归为服务端拒绝 |
 | D-02d 复杂输入/locator/cursor 结果 | `P2`；d1～d3 达到 `P4` | 确认文本脚本可表示的复杂值身份、LOB 归属和 cursor wire；分别复用 D-03/D-04 已证明的能力，避免再开发一套 codec | 命名 OBJECT/嵌套/集合输入见 d1～d3；集合子树 NULL OBJECT、列存储、匿名/LOB/cursor/text 复杂结果仍未关闭，REF CURSOR 输入仍为范围排除 |
+
+#### D-02b/c：脚本 Prepare、cursor 与输出的证据核对（调查完成，2026-10-30）
+
+基线 `501c59b`，初始工作区干净。本轮保持产品拒绝保护，新增实库回归和 Java 对照证据；
+调查完成不等于功能完成，b/c 保持 `P0`，D-02 父项仍为 `P2`。所有结论限于当前两个
+OceanBase 4.4.2.2 直连 profile（Windows、TLS Disabled），不能外推其他版本、代理或部署。
+
+| 调查形状 | 官方 Java 2.4.14 本轮结果 | 开发结论 |
+| --- | --- | --- |
+| 双模式 `SELECT ?; SELECT ?`（Oracle 每句带 `FROM DUAL`） | `useServerPrepStmts=true`、`emulateUnsupportedPstmts=false`；普通 prepareStatement 与显式 serverPrepareStatement 都在 prepare 阶段失败：MySQL `1235/0A000`，Oracle `600/0A000`；单 SELECT 对照均成功，实际类为 ServerSidePreparedStatement、参数数为 1 | 当前 profile 缺脚本级 server prepare 前提，保留 .NET 显式 Prepare 拒绝；Java protocol 的 `prepare` 字节码确认发送命令 22、完整 SQL 后读取 prepare 响应 |
+| 相同脚本加 `useCursorFetch=true` / FetchSize=1 | server prepare 仍在上述阶段失败；显式 clientPrepareStatement 可返回两个精确结果，但实际类仍为 ClientSidePreparedStatement | 客户端脚本加 FetchSize 不构成脚本 cursor 支持；当前没有脚本 statement/cursor 生命周期证据，保留拒绝 |
+| Oracle 一个 `BEGIN ? := 7; ? := 9; END;` | `useOraclePrepareExecute=false/true` 两项均返回 7、9；连续两个 `BEGIN…END; BEGIN…END;` 在 prepareCall 阶段报 `900/42000` | 单 PL 块内多条赋值已经可用，归 D-03；不改边界扫描器拆 PL 内部分号；带程序单元前缀的完整语法及非法尾部仍由服务端验证 |
+| 双模式单过程与两个 `CALL p(?)` 的 callable 对照 | 单 CALL INOUT 从 7 变 8，独立连接读到 1 行；双 CALL 在 Java prepareCall 阶段抛 IndexOutOfBoundsException，独立连接读到 0 行；过程/表清理通过 | 这是 Java 客户端形状失败，不能声称 OceanBase 不支持过程或用户变量，也不能作为可移植的脚本 OUT 实现 |
+| MySQL text 脚本 `SET` 用户变量、两个 CALL、最后 SELECT | Java 读到 8、1，独立连接验证两行；.NET 现有 text 路径也通过，见下 | SQL 用户变量和 reader 结果已有可用子集；这没有向 OceanBaseParameter 发布 OUT/INOUT，typed 脚本输出仍缺契约 |
+
+D-02c 因此不能统称“服务端没有 OUT”：MySQL 过程和用户变量可用，Oracle 单程序单元输出
+也可用。缺口是**任意脚本的参数输出计划与发布契约**，当前没有足够的参考/wire 证据把普通
+脚本 OUT 纳入实现。若今后采用客户端编排，需要先确认输出映射、失败后是否发布、用户变量
+隔离、取消和释放规则；本轮不新增选项、拆分器或把 Output 参数改为 Input。单 PL 输出/
+REF CURSOR 的扩展继续由 D-03 跟踪，不重复新建任务。
+
+本轮在 `MultiStatementTests.Preparation.cs` 新增以下实库验证：
+
+- 双模式 × sync/async × Prepare、FetchSize、OUT、INOUT、NULL INOUT，共 20 项。输入流在
+  脚本前缀 INSERT 中；拒绝后断言流位置 0、HasSentSql=false、输出值未变、独立连接计数 0；
+  随后复用同一 command/物理连接执行单 INSERT，原流读到末尾，独立计数为 1。
+- MySQL sync/async 共 2 项。整数 Input 初始化用户变量，包含 NULL INOUT 过程变量；按顺序
+  消费四个 SET/CALL 空结果后读取最后 SELECT 的 8、1，Input 值保持 7，独立显式 Prepare
+  查询验证两行。再让中间 CALL 触发 `1062`，断言已成功的前缀行保留、后缀没有执行、错误
+  outcome 已知且原连接可复用；不对失败后的 typed 输出发布或变量值作额外支持声明。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| IntegrationTests Release 构建 | 0 warning / 0 error |
+| 目标实库 | **23/23**：新增 22 项加既有 Oracle 单 PL 块标量 OUT/INOUT 1 项；没有 skip，清理通过 |
+| 初轮结果 | 20/22；两项用户变量测试误把第一个 SET 空结果当作最终 SELECT，按既有 reader 契约补齐 NextResult 后通过；没有修改产品行为来规避失败 |
+| Unit 相关回归 | **160/160**：多语句、流、Oracle 输出计划、MySQL 过程生命周期和已 Prepare 命令变为脚本的边界；Release 构建 0 warning / 0 error；不是全量 Unit |
+| 格式 | 新 C# 文件通过 `dotnet format whitespace --verify-no-changes --no-restore`；沙箱内 MSBuild pipe 拒绝访问，原命令在沙箱外通过 |
+| 独立走查 | fresh-context reviewer `review_d02bc` 只读核对源码、测试、TRX、构建和 Java 日志/字节码后通过，无待修问题；未替代实库重跑或独立格式退出码验证 |
+| 提交 | 门禁与独立走查通过；本地提交，hash 在关闭记录补记；不 push |
+
+Java 程序、runner 和日志在本地忽略目录 `TestResults/java-gap-probe/`、
+`TestResults/roadmap/d02bc-java-{oracle,mysql,output-oracle,output-mysql}.log`；当前/初轮实库
+报告分别为 `d02bc-live.trx`、`d02bc-live-initial.trx`。没有增加新的任务文档。
+本轮没有重跑全仓、完整多语句组、长期负载、其他平台/版本或真实 TLS/OB20/ODP/KDC。
+下一模块进入 D-03，先对照现有输出/cursor 子集及服务端拒绝形状，避免重复实现已支持的 PL。
 
 #### D-02a1：MySQL 时间参数脚本的存储闭环（`P4`，2026-10-30）
 
