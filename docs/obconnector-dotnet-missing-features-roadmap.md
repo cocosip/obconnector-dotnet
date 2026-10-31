@@ -120,14 +120,14 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
 | D-10 | `P0`；服务端形状已固定，wire/契约未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 先记录可实现形状或阻塞结论；实现时输入/结果/NULL/SRID/非法几何有明确行为；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0`；PL-only 形状已固定，wire/公共 API 未闭合 | ANYDATA PL 形状调查与有条件 codec（T17） | 服务端明确仅支持 PL，不能作为表列或永久存储；Java 没有 ANYDATA 专用 codec | 先确定 PL 参数/返回值形状和可枚举内部类型；确认是否值得提供 public API | 先记录可实现形状或阻塞结论；实现仅限明确的 PL 形状；内部未知类型拒绝，不增加任意对象兜底 |
-| D-12 | `P2`（a/c 已确认通用路径，b 待服务端） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；当前 4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，复用 String 路径；Oracle ARRAY 归 D-04 | 锁定 OB 版本、模式、DDL、列/参数 wire、Java 路径和真实 profile | a/c 的通用 String 路径有独立实库证据；b 需服务端版本/DDL/wire 证据；不新增未经证实的专用 codec |
+| D-12 | `P2`（a/c 已确认通用路径，b 官方形状已确认但目标 profile 待证据） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；当前 4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，复用 String 路径；Oracle ARRAY 归 D-04 | 锁定 OB 版本、模式、DDL、列/参数 wire、Java 路径和真实 profile | a/c 的通用 String 路径有独立实库证据；b 需服务端版本/DDL/wire 证据；不新增未经证实的专用 codec |
 
 D-12 分为以下三个子任务，状态都维护在本文，父项只有在所有子项结论闭合后才能关闭：
 
 | 子项 | 进度/已确认 | 具体开发与验证范围 | 当前缺口 |
 | --- | --- | --- | --- |
 | D-12a VECTOR（当前版本稠密） | `P4`，4.4.2.2 MySQL 直连通用 String 子集 | `VECTOR(3)` DDL、NULL/文本值、参数绑定、显式/隐式 Prepare、结果 metadata 和独立读回；Java 2.4.14 同样返回 `CHAR`/`String` | 当前版本没有专用 wire/type code；`SPARSEVECTOR` 在目标服务端返回 1064，保留为版本边界 |
-| D-12b RoaringBitmap | `P0`；官方无符号整数集合与 64 位能力已核实 | 确认列 DDL、输入/输出格式、整数边界、集合语义、NULL/空集合/坏数据；确定是否暴露原始 bytes 或 provider 值并补独立读回 | 目标 profile、序列化版本、wire 类型与严格校验待确认；不能复用 BIT 数值契约 |
+| D-12b RoaringBitmap | `P0`；官方 DDL/函数/二进制形状已确认，目标 profile 未验收 | 确认列 DDL、输入/输出格式、整数边界、集合语义、NULL/空集合/坏数据；确定是否暴露原始 bytes 或 provider 值并补独立读回 | 目标 profile、序列化版本、wire 类型与严格校验待确认；不能复用 BIT 数值契约 |
 | D-12c MySQL ARRAY | `P4`，4.4.2.2 MySQL 直连通用 String 子集 | `ARRAY(INT)` DDL、NULL/文本值、参数绑定、显式/隐式 Prepare、结果 metadata 和独立读回；Java 2.4.14 同样返回 `CHAR`/`String` | 当前版本没有专用 wire/type code；嵌套元素、专用参数 metadata 和其他版本仍待确认，不能用 Oracle 类型码 161 代替 |
 
 ### 第三阶段：已有代码的部署和故障验收
@@ -1072,6 +1072,26 @@ NCHAR/NVARCHAR2、浮点和 UROWID 等多种内部类型；访问类型不匹配
 OBJECT/COLLECTION 和失败后的输出发布规则定义可测试契约；不把 ANYDATA 当作普通列或任意对象
 兜底。
 
+### D-12b：RoaringBitmap wire 形状调查（2026-10-31，`P0`）
+
+官方 MySQL 模式文档[位图类型概述][O11-roaring-overview]和[列定义示例][O11-roaring-ddl]
+已经把服务端形状固定下来：`ROARINGBITMAP` 是存储无符号整数集合的独立类型，支持 64 位整数；
+列 DDL 形如 `ROARINGBITMAP`，值可以由 `rb_from_string('1,2,3')` 或十六进制字节串构造，
+客户端查询默认显示二进制结果（文档示例为 `0x010303010000000200000003000000`）。官方
+函数还提供 `rb_build_varbinary`/`rb_to_varbinary`、`rb_to_string`、`rb_to_array` 以及
+集合运算和基数函数。由此可以确认它不是 `BIT(1..64)` 的数值别名，也不是 VECTOR/ARRAY
+的文本列。
+
+固定版 Connector/J 2.4.14 的 `ColumnType` 没有 RoaringBitmap 专用枚举或类型码；当前没有
+确认其对 `ROARINGBITMAP` 列/参数的专用 metadata、序列化版本或独立测试。固定版 .NET 也
+没有 RoaringBitmap provider type；通用 `Binary` 只有在目标服务端把该列实际暴露成兼容的
+binary/varbinary wire 时才可能复用，当前没有目标 4.4.2.2 profile 证据，不能提前承诺。
+
+调查结论：D-12b 仍为 `P0 / 待目标 profile 与 wire`。下一步需要同一 MySQL 版本和租户完成
+DDL、NULL/空集合、`rb_from_string`、raw bytes、`rb_to_string`/`rb_to_array`、无符号和
+64 位边界、坏序列化及独立读回；在这些证据前不新增 enum、RoaringBitmap parser 或把它映射
+成 BIT/JSON/String。
+
 ## 依据
 
 - [功能能力矩阵](obconnector-dotnet-progress.md)
@@ -1093,3 +1113,5 @@ OBJECT/COLLECTION 和失败后的输出发布规则定义可测试契约；不�
 [J6-complex-connection]: https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/OceanBaseConnection.java
 [J6-complex-type]: https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/extend/datatype/ComplexDataType.java
 [J6-complex-util]: https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/extend/datatype/ComplexUtil.java
+[O11-roaring-overview]: https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/zh-CN/700.reference/500.sql-reference/100.sql-syntax/200.common-tenant-of-mysql-mode/100.basic-elements-of-mysql-mode/100.data-type-of-mysql-mode/1000.roaring-bitmap-data-type-of-mysql-mode/100.roaring-bitmap-data-type-overview-of-mysql-mode.md
+[O11-roaring-ddl]: https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/zh-CN/700.reference/500.sql-reference/100.sql-syntax/200.common-tenant-of-mysql-mode/100.basic-elements-of-mysql-mode/100.data-type-of-mysql-mode/1000.roaring-bitmap-data-type-of-mysql-mode/200.create-roaring-bitmap-columns-of-mysql-mode.md
