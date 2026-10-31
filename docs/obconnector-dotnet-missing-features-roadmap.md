@@ -1081,7 +1081,11 @@ Q20 范围或其他部署。
 `XMLTYPE('<a>患者</a>')` 插入和 `XMLSERIALIZE(DOCUMENT x AS CLOB)` 均成功；普通 `SELECT x` 的复杂列
 metadata 把类型名报告为 `XMLTYPE`，但 `ALL_TAB_COLUMNS` 返回的 `DATA_TYPE_OWNER` 为空。客户端已将该
 ownerless 形状从内部协议错误改为明确的 `NotSupportedException`，而序列化结果按现有 `CLOB` locator
-路径读取成功。该证据确认的是客户端边界和可用转换路径，不是 XMLType 原生 wire codec。
+路径读取成功。进一步用同一租户、同一版本的 Connector/J 2.4.14 做普通查询和 server-prepare
+对照：JDBC metadata 都是 `1111/COMPLEX`、Java 类 `ComplexData`；非空 XML 行的 `getObject()`
+仍为 null、`getBytes()` 长度为 0，只有 NULL 行报告 `wasNull=true`。该证据确认的是两种客户端
+都没有可用的 XMLType payload 解码路径和现有的服务端转换路径，不是 XMLType 原生 wire codec，
+也不能把 Java 的空值行为当成 .NET 应复制的结果语义。
 
 调查结论：D-09 仍为 `P0 / 待 wire 与形状`，本轮不新增 `OceanBaseDbType.Xml`，也不把它
 猜测映射成 String、BLOB 或现有 OBJECT codec。重新开启实现前，需要目标 OceanBase 版本和
