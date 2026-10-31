@@ -181,6 +181,7 @@ namespace OceanBaseConnector
             internal Operation(OceanBaseBatch batch, OceanBaseConnection connection, OceanBaseTransaction? transaction, CancellationToken token, CommandBehavior behavior)
             { _batch = batch; Connection = connection; Transaction = transaction; Behavior = behavior; CallerToken = token; _cancel = CancellationTokenSource.CreateLinkedTokenSource(token); Token = _cancel.Token; }
             internal OceanBaseConnection Connection { get; }
+            internal OceanBaseBatch Batch => _batch;
             internal OceanBaseTransaction? Transaction { get; }
             internal CommandBehavior Behavior { get; }
             internal CancellationToken Token { get; }

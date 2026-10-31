@@ -57,12 +57,13 @@
 `DefaultOptions.java:470–490,553–560` 和 `AbstractQueryProtocol.java:729–732,1287–1326`，
 对应的功能是把多个 prepared 执行组织成多发送路径；它与 MariaDB
 `COM_STMT_BULK_EXECUTE` 不同。.NET 已增加默认关闭的 prepared batch multi-send 子集，覆盖
-input-only DML、基本 scalar 排空、数量/64 MiB 分组和发送状态保护；本地 loopback 已通过。
+input-only DML、基本 scalar 排空、普通 `ExecuteReader`、数量/64 MiB 分组和发送状态保护；本地 loopback 已通过。
 
 VPN 恢复后的 4.4.2.2 MySQL/Oracle 直连临时 profile 已覆盖 DML/scalar × sync/async，
-**8/8 通过**；过程中修复了客户端每个 pipelined 响应边界的 packet sequence 重置。该证据
-只把首个 input-only 子集提升到 `P4`，不外推 ExecuteReader、Oracle PrepareExecute、输出/
-LOB/cursor/array、流、text fallback、代理/OB20、收益和更大错误排序矩阵。
+**8/8 通过**；过程中修复了客户端每个 pipelined 响应边界的 packet sequence 重置。新增的
+ExecuteReader Oracle 直连 profile sync/async **2/2 通过**；当前环境未提供 MySQL profile，未外推
+MySQL reader 结果。该证据只把首个 input-only 子集提升到 `P4`，不外推 Oracle PrepareExecute、
+输出/LOB/cursor/array、流、text fallback、代理/OB20、收益和更大错误排序矩阵。
 
 ### T17 XMLType、SDO_GEOMETRY、ANYDATA
 
@@ -120,7 +121,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar 子集已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；首个子集不含 ExecuteReader、Oracle PrepareExecute、流/LOB、输出、cursor、array binding 和 text fallback |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute、流/LOB、输出、cursor、array binding 和 text fallback |
 | D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
 | D-10 | `P0`；服务端形状已固定，wire/契约未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 先记录可实现形状或阻塞结论；实现时输入/结果/NULL/SRID/非法几何有明确行为；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0`；PL-only 形状已固定，wire/公共 API 未闭合 | ANYDATA PL 形状调查与有条件 codec（T17） | 服务端明确仅支持 PL，不能作为表列或永久存储；Java 没有 ANYDATA 专用 codec | 先确定 PL 参数/返回值形状和可枚举内部类型；确认是否值得提供 public API | 先记录可实现形状或阻塞结论；实现仅限明确的 PL 形状；内部未知类型拒绝，不增加任意对象兜底 |
@@ -1006,8 +1007,10 @@ COM_STMT_EXECUTE，再按命令顺序读取 OK affected-count。错误归因到�
 响应时断开 session，取消不重放已发送请求。禁用选项继续使用原有逐命令 reader 路径。
 
 `ExecuteScalar`/`ExecuteScalarAsync` 现在也复用该路径：普通 prepared 标量结果会按命令顺序完全排空，
-只返回 batch 语义中的首个 scalar；cursor、LOB、复杂结果列仍在发送前拒绝。`ExecuteReader` 继续使用
-逐命令 reader 路径。本地 loopback 已覆盖 sync/async、两条执行先于响应、数量分组、基本 scalar
+只返回 batch 语义中的首个 scalar；cursor、LOB、复杂结果列仍在发送前拒绝。`ExecuteReader` 现在对同一
+个 input-only、普通 prepared、非 stream/LOB/cursor/output/array 的子集先发送一组执行，再按命令顺序
+读取结果；SELECT 命令的 `RecordsAffected` 仍按 ADO.NET 语义为 `-1`。本地 loopback 已覆盖 sync/async、
+两条执行先于响应、数量分组、基本 scalar
 结果、发送前 output/cursor/session-state SQL 拒绝、组内错误后 session 断开和发送后取消/unknown-outcome，
 以及超过 64 MiB 总请求预算、恰好 64 MiB 预算和 `maxCount=1` 的分组边界，共 **146/146**
 通过。`dotnet build -c Release`
@@ -1019,8 +1022,9 @@ Oracle session time zone/national character set，必要时按已解析上下文
 
 之前的实库运行被 VPN 阻塞；修复响应包序号边界后，临时 direct profile 的 MySQL/Oracle
 矩阵 **8/8 通过**（DML/scalar × sync/async，`BatchMultiSendNumber=2`）。首个子集的服务端
-错误排序、收益基线和代理/OB20 行为仍未验收；ExecuteReader、Oracle PrepareExecute、
-输出/LOB/cursor/array、流和 text fallback 也明确不在首个子集，因此这些仍是 D-08 的后续缺口。
+错误排序、收益基线和代理/OB20 行为仍未验收；Oracle PrepareExecute、输出/LOB/cursor/array、流和
+text fallback 仍明确不在首个子集，因此这些仍是 D-08 的后续缺口。新增 reader 的 Oracle 直连
+profile sync/async 2/2 已通过；本轮环境未提供 MySQL 直连 profile，未宣称 MySQL reader 实测通过。
 
 新增 `Batches/MultiSendTests.cs`，覆盖 MySQL/Oracle create-objects profile 的 input-only
 prepared DML 和 scalar 排空，sync/async 及 `BatchMultiSendNumber=2`。Oracle 用例显式关闭

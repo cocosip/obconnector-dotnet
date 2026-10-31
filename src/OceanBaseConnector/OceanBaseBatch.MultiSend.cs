@@ -11,7 +11,7 @@ namespace OceanBaseConnector
 {
     public sealed partial class OceanBaseBatch
     {
-        private bool IsBatchMultiSendRequested()
+        internal bool IsBatchMultiSendRequested()
         {
             if (_connection == null) return false;
             if (_ownsConnection)
@@ -171,12 +171,39 @@ namespace OceanBaseConnector
             return reader.RecordsAffected;
         }
 
-        private CommandExchange StartMultiSendExchange(Operation operation)
+        internal CommandExchange StartMultiSendExchange(Operation operation)
         {
             var exchange = operation.Connection.StartCommand(operation.Session!, operation.Transaction, _timeout, operation.Token,
                 release: static () => { }, owner: operation, cancellationOrigin: operation.CancellationOrigin);
             exchange.StartDiagnostics("batch.multi-send");
             return exchange;
+        }
+
+        internal static bool CanUseMultiSendReader(CommandBehavior behavior) =>
+            (behavior & ~CommandBehavior.CloseConnection) == CommandBehavior.Default;
+
+        internal void SendMultiSendGroup(Operation operation, CommandExchange exchange, byte[][] requests, ref int next, out int end)
+        {
+            end = next;
+            while (end < requests.Length && end - next < operation.Session!.BatchMultiSendNumber) end++;
+            for (var index = next; index < end; index++)
+            {
+                exchange.BatchCommand = operation.Items[index];
+                exchange.SendBatchRequest(requests[index]);
+            }
+            next = end;
+        }
+
+        internal async Task<int> SendMultiSendGroupAsync(Operation operation, CommandExchange exchange, byte[][] requests, int next, CancellationToken token)
+        {
+            var end = next;
+            while (end < requests.Length && end - next < operation.Session!.BatchMultiSendNumber) end++;
+            for (var index = next; index < end; index++)
+            {
+                exchange.BatchCommand = operation.Items[index];
+                await exchange.SendBatchRequestAsync(requests[index], token).ConfigureAwait(false);
+            }
+            return end;
         }
 
         internal static IEnumerable<(int Start, int End)> PlanMultiSendGroups(byte[][] requests, int maxCount)

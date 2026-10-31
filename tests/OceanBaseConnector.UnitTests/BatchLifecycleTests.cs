@@ -247,6 +247,47 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
+        public async Task BatchMultiSendReaderWritesAllPreparedExecutionsBeforeReadingResults(bool asynchronous)
+        {
+            var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var server = Server(async channel =>
+            {
+                await StatementCommand(channel, 22); await Prepared(channel, 90, 0, columns: 1);
+                await StatementCommand(channel, 22); await Prepared(channel, 91, 0, columns: 1);
+                Assert.Equal(90, (await StatementCommand(channel, 23))[1]);
+                Assert.Equal(91, (await StatementCommand(channel, 23))[1]);
+                sent.SetResult();
+                channel.BeginResponse();
+                await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(Column("n", 8)); await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 0, 0, 10, 0, 0, 0, 0, 0, 0, 0 }); await channel.WritePacketAsync(Eof());
+                channel.BeginResponse();
+                await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(Column("n", 8)); await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 0, 0, 20, 0, 0, 0, 0, 0, 0, 0 }); await channel.WritePacketAsync(Eof());
+                await StatementCommand(channel, 25); await StatementCommand(channel, 25);
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true;Batch Multi Send Number=2");
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch();
+                BatchItem(batch, "select first"); BatchItem(batch, "select second");
+                await using var reader = asynchronous ? await batch.ExecuteReaderAsync() : batch.ExecuteReader();
+                Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                Assert.Equal(10L, reader.GetInt64(0));
+                Assert.True(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+                Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                Assert.Equal(20L, reader.GetInt64(0));
+                Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+                Assert.Equal(-1, batch.BatchCommands[0].RecordsAffected);
+                Assert.Equal(-1, batch.BatchCommands[1].RecordsAffected);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await sent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task BatchMultiSendDrainsPreparedScalarResultsInOrder(bool asynchronous)
         {
             var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

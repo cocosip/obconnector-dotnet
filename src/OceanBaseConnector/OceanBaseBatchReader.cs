@@ -7,6 +7,8 @@ using System.Data.Common;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using OceanBaseConnector.Internal.Protocol;
+using OceanBaseConnector.Internal.Session;
 
 namespace OceanBaseConnector
 {
@@ -17,20 +19,80 @@ namespace OceanBaseConnector
         private int _index;
         private bool _closed;
         private bool _failed;
+        private CommandExchange? _multiExchange;
+        private byte[][]? _multiRequests;
+        private int _multiNext;
+        private int _multiGroupEnd;
+        private bool _multiSend;
         internal OceanBaseBatchReader(OceanBaseBatch.Operation operation) => _operation = operation;
         private CommandBehavior Behavior => _operation.Behavior & ~CommandBehavior.CloseConnection;
         private bool SingleResult => (_operation.Behavior & (CommandBehavior.SingleResult | CommandBehavior.SingleRow)) != 0;
         internal void Start()
         {
             _operation.ThrowIfCanceled();
+            if (CanUseMultiSendReader()) { StartMultiSend(); return; }
             if (_index < _operation.Commands.Length)
             { _current = _operation.Commands[_index].ExecuteReaderCore(Behavior, _operation.Token); UpdateCount(); }
         }
         internal async Task StartAsync()
         {
             _operation.ThrowIfCanceled();
+            if (CanUseMultiSendReader()) { await StartMultiSendAsync().ConfigureAwait(false); return; }
             if (_index < _operation.Commands.Length)
             { _current = await _operation.Commands[_index].ExecuteReaderAsync(Behavior, _operation.Token).ConfigureAwait(false); UpdateCount(); }
+        }
+        private bool CanUseMultiSendReader() => _operation.Commands.Length != 0 &&
+            OceanBaseBatch.CanUseMultiSendReader(_operation.Behavior) && _operation.Session?.UseBatchMultiSend == true;
+        private void StartMultiSend()
+        {
+            var requests = new byte[_operation.Commands.Length][];
+            for (var i = 0; i < requests.Length; i++) requests[i] = _operation.Commands[i].BuildBatchMultiSendRequest(_operation.Token);
+            _multiRequests = requests; _multiExchange = _operation.Batch.StartMultiSendExchange(_operation); _multiSend = true;
+            try { SendNextMultiSendGroup(); StartCurrentMultiSend(); }
+            catch (Exception error) { AbortMultiSend(error); throw; }
+        }
+        private async Task StartMultiSendAsync()
+        {
+            var requests = new byte[_operation.Commands.Length][];
+            for (var i = 0; i < requests.Length; i++) requests[i] = await _operation.Commands[i].BuildBatchMultiSendRequestAsync(_operation.Token).ConfigureAwait(false);
+            _multiRequests = requests; _multiExchange = _operation.Batch.StartMultiSendExchange(_operation); _multiSend = true;
+            try { await SendNextMultiSendGroupAsync().ConfigureAwait(false); await StartCurrentMultiSendAsync().ConfigureAwait(false); }
+            catch (Exception error) { AbortMultiSend(error); throw; }
+        }
+        private void SendNextMultiSendGroup()
+        {
+            var exchange = _multiExchange!;
+            _operation.Batch.SendMultiSendGroup(_operation, exchange, _multiRequests!, ref _multiNext, out _multiGroupEnd);
+        }
+        private async Task SendNextMultiSendGroupAsync()
+        {
+            _multiGroupEnd = await _operation.Batch.SendMultiSendGroupAsync(_operation, _multiExchange!, _multiRequests!, _multiNext, _operation.Token).ConfigureAwait(false);
+            _multiNext = _multiGroupEnd;
+        }
+        private void StartCurrentMultiSend()
+        {
+            var exchange = _multiExchange!;
+            exchange.BatchCommand = _operation.Items[_index]; exchange.BeginBatchResponse();
+            var result = new QueryResult(exchange, binary: true, completeExchange: false);
+            result.Start(); _current = new OceanBaseDataReader(exchange, result, _operation.Connection, _operation.Session!, Behavior, leaveExchangeOpen: true); UpdateCount();
+        }
+        private async Task StartCurrentMultiSendAsync()
+        {
+            var exchange = _multiExchange!;
+            exchange.BatchCommand = _operation.Items[_index]; exchange.BeginBatchResponse();
+            var result = new QueryResult(exchange, binary: true, completeExchange: false);
+            await result.StartAsync(_operation.Token).ConfigureAwait(false);
+            _current = new OceanBaseDataReader(exchange, result, _operation.Connection, _operation.Session!, Behavior, leaveExchangeOpen: true); UpdateCount();
+        }
+        private void AbortMultiSend(Exception error)
+        {
+            var exchange = _multiExchange; _multiExchange = null; _multiRequests = null; _multiSend = false; _failed = true;
+            if (exchange != null) exchange.Fail(error);
+        }
+        private void CompleteMultiSend()
+        {
+            var exchange = _multiExchange; _multiExchange = null; _multiRequests = null; _multiSend = false;
+            exchange?.Complete();
         }
         private void UpdateCount()
         {
@@ -58,6 +120,7 @@ namespace OceanBaseConnector
         public override bool NextResult()
         {
             EnsureOpen(); if (_current == null) return false;
+            if (_multiSend) return NextMultiSendResult();
             try
             {
                 while (_current != null)
@@ -75,6 +138,7 @@ namespace OceanBaseConnector
         public override async Task<bool> NextResultAsync(CancellationToken cancellationToken)
         {
             EnsureOpen(); if (_current == null) { cancellationToken.ThrowIfCancellationRequested(); return false; }
+            if (_multiSend) return await NextMultiSendResultAsync(cancellationToken).ConfigureAwait(false);
             using var registration = cancellationToken.Register(_operation.Cancel);
             _operation.ReaderToken = cancellationToken;
             try
@@ -92,6 +156,36 @@ namespace OceanBaseConnector
             catch { await CloseAsync().ConfigureAwait(false); throw; }
             finally { _operation.ReaderToken = default; }
         }
+        private bool NextMultiSendResult()
+        {
+            try
+            {
+                if (_current!.NextResult()) return true;
+                _current.Dispose(); _current = null; _index++;
+                if (_index == _operation.Commands.Length) { CompleteMultiSend(); return false; }
+                if (_index == _multiGroupEnd) SendNextMultiSendGroup();
+                StartCurrentMultiSend(); return true;
+            }
+            catch (Exception error) { AbortMultiSend(error); Close(); throw; }
+        }
+        private async Task<bool> NextMultiSendResultAsync(CancellationToken cancellationToken)
+        {
+            using var registration = cancellationToken.Register(_operation.Cancel); _operation.ReaderToken = cancellationToken;
+            try
+            {
+                if (await _current!.NextResultAsync(cancellationToken).ConfigureAwait(false)) return true;
+                await _current.DisposeAsync().ConfigureAwait(false); _current = null; _index++;
+                if (_index == _operation.Commands.Length) { CompleteMultiSend(); return false; }
+                if (_index == _multiGroupEnd)
+                {
+                    _multiGroupEnd = await _operation.Batch.SendMultiSendGroupAsync(_operation, _multiExchange!, _multiRequests!, _multiNext, cancellationToken).ConfigureAwait(false);
+                    _multiNext = _multiGroupEnd;
+                }
+                await StartCurrentMultiSendAsync().ConfigureAwait(false); return true;
+            }
+            catch (Exception error) { AbortMultiSend(error); await CloseAsync().ConfigureAwait(false); throw; }
+            finally { _operation.ReaderToken = default; }
+        }
         public override int RecordsAffected
         {
             get
@@ -104,13 +198,13 @@ namespace OceanBaseConnector
         public override void Close()
         {
             if (_closed) return; _closed = true;
-            try { _current?.Dispose(); UpdateCount(); }
+            try { _current?.Dispose(); UpdateCount(); if (_multiExchange != null) AbortMultiSend(new InvalidOperationException("The batch reader was closed with unread multi-send responses.")); }
             finally { _current = null; _operation.Dispose(); if ((_operation.Behavior & CommandBehavior.CloseConnection) != 0) _operation.Connection.CloseSession(_operation.Session!, _operation.OpenGeneration); }
         }
         public override async Task CloseAsync()
         {
             if (_closed) return; _closed = true;
-            try { if (_current != null) await _current.DisposeAsync().ConfigureAwait(false); UpdateCount(); }
+            try { if (_current != null) await _current.DisposeAsync().ConfigureAwait(false); UpdateCount(); if (_multiExchange != null) AbortMultiSend(new InvalidOperationException("The batch reader was closed with unread multi-send responses.")); }
             finally { _current = null; _operation.Dispose(); if ((_operation.Behavior & CommandBehavior.CloseConnection) != 0) await _operation.Connection.CloseSessionAsync(_operation.Session!, _operation.OpenGeneration).ConfigureAwait(false); }
         }
         protected override void Dispose(bool disposing) { if (disposing) Close(); base.Dispose(disposing); }

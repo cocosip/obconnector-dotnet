@@ -83,4 +83,40 @@ public sealed class MultiSendTests
         var scalar = asynchronous ? await batch.ExecuteScalarAsync() : batch.ExecuteScalar();
         DatabaseContext.EqualNumber(scalar, 11, "Multi-send scalar must return the first value.");
     }
+
+    [IntegrationTheory]
+    [MemberData(nameof(PreparedRows))]
+    public async Task PreparedReaderMultiSendPreservesResultOrder(string profileName, bool asynchronous)
+    {
+        var profile = IntegrationEnvironment.GetProfile(profileName);
+        var builder = profile.CreateBuilder();
+        builder.UseBatchMultiSend = true;
+        builder.BatchMultiSendNumber = 2;
+        if (profile.Oracle)
+        {
+            builder.UseOraclePrepareExecute = false;
+            builder.UseLobLocators = false;
+        }
+        await using var connection = new OceanBaseConnection(builder.ConnectionString);
+        if (asynchronous) await connection.OpenAsync(); else connection.Open();
+        await using var batch = connection.CreateBatch();
+        foreach (var value in new[] { 11, 22 })
+        {
+            var item = batch.CreateBatchCommand();
+            item.CommandText = dbScalarSql(profile, value);
+            batch.BatchCommands.Add(item);
+        }
+        await using var reader = asynchronous ? await batch.ExecuteReaderAsync() : batch.ExecuteReader();
+        Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+        DatabaseContext.EqualNumber(reader.GetValue(0), 11, "First multi-send reader result mismatch.");
+        Assert.True(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+        Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+        DatabaseContext.EqualNumber(reader.GetValue(0), 22, "Second multi-send reader result mismatch.");
+        Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+        Assert.Equal(-1, batch.BatchCommands[0].RecordsAffected);
+        Assert.Equal(-1, batch.BatchCommands[1].RecordsAffected);
+
+        static string dbScalarSql(IntegrationProfile profile, int value) =>
+            "SELECT " + value + (profile.Oracle ? " FROM DUAL" : "");
+    }
 }
