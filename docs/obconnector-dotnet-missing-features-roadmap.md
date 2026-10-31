@@ -117,7 +117,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
 | D-08 | `P2`；本地 loopback 的 input-only DML 子集已实现，目标实库待验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；当前 .NET 新增 opt-in prepared batch send，OceanBase 目标版本和错误排序尚未证实 | 目标 OB 版本、MySQL/Oracle 模式 profile、协议抓包/收益基线、取消和 unknown-outcome 规则 | 真实 profile 验证；扩展结果集、Oracle PrepareExecute、流/LOB、输出、cursor、array binding 和 text fallback 前先补 wire/生命周期证据 |
-| D-09 | `P0` | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 没有确认的通用 SQLXML/XMLType codec | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
+| D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
 | D-10 | `P0` | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 没有确认的通用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 先记录可实现形状或阻塞结论；实现时输入/结果/NULL/SRID/非法几何有明确行为；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0` | ANYDATA PL 形状调查与有条件 codec（T17） | 服务端 PL/系统类型，不能默认作为普通持久列；Java 没有确认普通列 codec | 先确定 PL 参数/返回值形状和可枚举内部类型；确认是否值得提供 public API | 先记录可实现形状或阻塞结论；实现仅限明确的 PL 形状；内部未知类型拒绝，不增加任意对象兜底 |
 | D-12 | `P2`（a/c 已确认通用路径，b 待服务端） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；当前 4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，复用 String 路径；Oracle ARRAY 归 D-04 | 锁定 OB 版本、模式、DDL、列/参数 wire、Java 路径和真实 profile | a/c 的通用 String 路径有独立实库证据；b 需服务端版本/DDL/wire 证据；不新增未经证实的专用 codec |
@@ -995,6 +995,33 @@ PrepareExecute、结果集、输出/LOB/cursor/array、text fallback 也明确�
 回归此前被缺失的 Release netstandard2.1 资产阻塞；补建产品 Release 资产后尚未重跑完整 suite，
 因此本条保持 `P2`。
 
+### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
+
+本轮先固定服务端形状，再核对 Java 和 .NET 是否已有可复用的客户端类型路径。OceanBase
+官方 Oracle 模式文档[XMLType 概述][O8-xmltype]说明：XMLType 是 XML 数据的 SQL 数据类型，可以创建 XMLType 表或视图，
+并可在 PL 存储过程中作为参数、返回值和变量使用；因此不能把它归类为“服务端不支持”。
+文档没有给出可供 ADO.NET 直接采用的通用 type code、binary writer 或 NULL/字符集契约。
+
+固定版 Connector/J 2.4.14 的对照结果如下：
+
+- `OceanBaseConnection.createSQLXML()` 直接抛出 `SQLXML type is not supported`（[源码][J2-sqlxml]）；
+- `internal/ColumnType.java` 没有 XML/XMLType 枚举或专用 type code（[源码][J3-columntype]）。未知协议类型的通用回退为
+  BLOB，不能据此证明 XMLType 的列值可以安全按 BLOB 解码；
+- 因此 Java 的 SQLXML 拒绝可以证明客户端 API 边界，不能证明 OceanBase 的 XMLType wire，
+  也不能把 SQLXML 失败扩大为“服务端没有 XMLType”。
+
+当前 .NET 的边界也仍是显式拒绝：公开 `DbType` 枚举可以保存 `DbType.Xml`，但
+`PreparedParameters` 的 type-code 和 value writer 都没有 XML 分支，执行时会抛出
+`NotSupportedException`；`OceanBaseDbType`、`ResultColumn` 和结果 metadata 也没有 XMLType
+专用身份。因此目前只有用户自行通过 XML 函数或显式 CAST 转成已支持的 String/Binary/LOB
+路径这一种可审计的服务端转换方式，不能宣称原生 XMLType 参数或结果已完成。
+
+调查结论：D-09 仍为 `P0 / 待 wire 与形状`，本轮不新增 `OceanBaseDbType.Xml`，也不把它
+猜测映射成 String、BLOB 或现有 OBJECT codec。重新开启实现前，需要目标 OceanBase 版本和
+Oracle 直连 profile 提供 XMLType 普通列与 PL 参数/输出的 metadata/type code、NULL、字符编码、
+最大值和坏值行为；其中任一形状未确认，都保持发送前拒绝。Java SQLXML 的拒绝不满足
+“服务端限制且 Java 同样失败”的关闭条件。
+
 ## 依据
 
 - [功能能力矩阵](obconnector-dotnet-progress.md)
@@ -1008,3 +1035,6 @@ PrepareExecute、结果集、输出/LOB/cursor/array、text fallback 也明确�
 [T18-bitmap]: https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/zh-CN/700.reference/500.sql-reference/100.sql-syntax/200.common-tenant-of-mysql-mode/100.basic-elements-of-mysql-mode/100.data-type-of-mysql-mode/1000.roaring-bitmap-data-type-of-mysql-mode/100.roaring-bitmap-data-type-overview-of-mysql-mode.md
 [T18-array]: https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/zh-CN/700.reference/500.sql-reference/100.sql-syntax/200.common-tenant-of-mysql-mode/100.basic-elements-of-mysql-mode/100.data-type-of-mysql-mode/1200.array-data-type-of-mysql-mode/100.array-data-type-overview-of-mysql-mode.md
 [T18-array-ddl]: https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/zh-CN/700.reference/500.sql-reference/100.sql-syntax/200.common-tenant-of-mysql-mode/100.basic-elements-of-mysql-mode/100.data-type-of-mysql-mode/1200.array-data-type-of-mysql-mode/200.create-array-columns-of-mysql-mode.md
+[O8-xmltype]: https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/zh-CN/700.reference/500.sql-reference/100.sql-syntax/300.common-tenant-of-oracle-mode/300.basic-elements-of-oracle-mode/100.built-in-data-types-of-oracle-mode/1100.xml-date-type-of-oracle-mode/100.xml-data-type-overview-of-oracle-mode.md
+[J2-sqlxml]: https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/OceanBaseConnection.java#L1778-L1785
+[J3-columntype]: https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/ColumnType.java#L69-L118

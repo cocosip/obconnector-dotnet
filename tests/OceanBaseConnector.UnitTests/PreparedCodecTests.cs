@@ -97,6 +97,16 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
+        public void XmlParametersDoNotGuessStringOrBinaryWire()
+        {
+            foreach (var value in new object?[] { "<root />", DBNull.Value })
+            {
+                var parameter = new OceanBaseParameter { DbType = DbType.Xml, Value = value };
+                Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }));
+            }
+        }
+
+        [Fact]
         public void OracleNumberUsesDecimalPublicTypeWithItsFixedWidthWireValue()
         {
             var column = ResultColumn.Parse(Column("n", 3), OceanBaseCompatibilityMode.Oracle);
