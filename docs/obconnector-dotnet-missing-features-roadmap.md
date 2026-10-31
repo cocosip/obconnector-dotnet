@@ -1081,6 +1081,12 @@ Oracle 直连 profile 提供 XMLType 普通列与 PL 参数/输出的 metadata/t
 访问、WKB/WKT 互转或 SRID 校验。已有 MySQL `GEOMETRY` type-255 支持不能复用为 Oracle
 SDO，二者的对象结构和 wire 契约不同。
 
+VPN 恢复后在当前 Oracle 4.4.2.2 直连 profile 做了最小实测：`CREATE TABLE (... SDO_GEOMETRY)`
+和 `SDO_GEOMETRY(...)` 字面量插入成功，但读取 `g.sdo_gtype`/`g.sdo_point.x` 的查询返回
+服务端 `904/42S22`。固定 Java 源码 `ComplexOracleTest` 含同形状的成功测试，但使用的是另一套
+测试端点；当前没有同一租户的 Java 运行结果，因此不能满足“服务端不支持且 Java 同样交互”的
+跳过条件，也不能把这次 .NET 结果归因于客户端解析缺陷。
+
 调查结论：D-10 保持 `P0 / 待 wire 与契约`。后续必须选定一个可验收形状（原始 BLOB 存储、
 通用 OBJECT 参数/结果，或专用 WKB/WKT API），并在目标 Oracle 直连 profile 中记录 metadata、
 NULL、SRID、非法几何、坐标上限和独立读回；在此之前不新增 SDO enum 或把 GEOMETRY bytes
