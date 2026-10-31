@@ -1,6 +1,8 @@
 using System;
 using System.Data;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.IntegrationTests.Infrastructure;
@@ -10,12 +12,68 @@ namespace OceanBaseConnector.IntegrationTests.Batches;
 
 public sealed class MultiSendTests
 {
+    public static TheoryData<string, bool> MySqlPreparedRows()
+    {
+        var rows = new TheoryData<string, bool>();
+        foreach (var profile in IntegrationEnvironment.Profiles.Where(p => !p.Oracle && p.CreateObjects && p.HasTag("direct")))
+            foreach (var asynchronous in new[] { false, true }) rows.Add(profile.Name, asynchronous);
+        return rows;
+    }
+
     public static TheoryData<string, bool> PreparedRows()
     {
         var rows = new TheoryData<string, bool>();
         foreach (var profile in IntegrationEnvironment.Profiles.Where(p => p.CreateObjects && p.HasTag("direct")))
             foreach (var asynchronous in new[] { false, true }) rows.Add(profile.Name, asynchronous);
         return rows;
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(MySqlPreparedRows))]
+    public async Task MySqlStreamMultiSendStoresAndReadsBack(string profileName, bool asynchronous)
+    {
+        var profile = IntegrationEnvironment.GetProfile(profileName);
+        var builder = profile.CreateBuilder();
+        builder.UseBatchMultiSend = true;
+        builder.BatchMultiSendNumber = 2;
+        await using var db = new DatabaseContext(new IntegrationProfile
+        {
+            Name = profile.Name,
+            Mode = profile.Mode,
+            ConnectionString = builder.ConnectionString,
+            CreateObjects = profile.CreateObjects,
+        });
+        await using var connection = await db.OpenAsync();
+        var table = await db.TableAsync(connection, "id INT PRIMARY KEY, value BLOB", CancellationToken.None);
+        using var first = new MemoryStream(Encoding.UTF8.GetBytes("stream-1"));
+        using var second = new MemoryStream(Encoding.UTF8.GetBytes("stream-2"));
+        await using (var batch = connection.CreateBatch())
+        {
+            foreach (var (id, source) in new[] { (1, first), (2, second) })
+            {
+                var item = batch.CreateBatchCommand();
+                item.CommandText = "INSERT INTO " + table + " (id, value) VALUES (?, ?)";
+                item.Parameters.Add(new OceanBaseParameter { DbType = DbType.Int32, Value = id });
+                item.Parameters.Add(new OceanBaseParameter { DbType = DbType.Binary, Value = source });
+                batch.BatchCommands.Add(item);
+            }
+            var affected = asynchronous ? await batch.ExecuteNonQueryAsync() : batch.ExecuteNonQuery();
+            Assert.Equal(2, affected);
+        }
+
+        await using var command = db.Command(connection, "SELECT id, value FROM " + table + " ORDER BY id");
+        await using var reader = asynchronous ? await command.ExecuteReaderAsync() : command.ExecuteReader();
+        var rows = 0;
+        while (asynchronous ? await reader.ReadAsync() : reader.Read())
+        {
+            var expected = Encoding.UTF8.GetBytes("stream-" + reader.GetInt32(0));
+            using var stream = reader.GetStream(1);
+            using var actual = new MemoryStream();
+            if (asynchronous) await stream.CopyToAsync(actual); else stream.CopyTo(actual);
+            Assert.Equal(expected, actual.ToArray());
+            rows++;
+        }
+        Assert.Equal(2, rows);
     }
 
     [IntegrationTheory]
