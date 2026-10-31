@@ -259,7 +259,7 @@ D-02b～D-02d 先调查是否纳入产品范围，不代表必须实现；允许
 | 子项 | 进度 | 开发任务与先决条件 | 验证/关闭依据 |
 | --- | --- | --- | --- |
 | D-02a 已有输入/多结果闭环 | `P2`；a1 达到 `P4` | 核对双模式的正常/NULL/边界、SequentialAccess、半读释放、错误前缀/未执行后缀和独立存储；只为发现的具体缺口补代码或测试 | MySQL 时间脚本存储见 a1；历史 Oracle 长 NUL 4 项失败及本轮恢复均保留，详见 A-05，不能只看总测试数 |
-| D-02b 多语句 Prepare/server cursor | `P0 / 待服务端`；本轮调查完成，功能未实现 | 双模式目标 profile 在 prepare 阶段拒绝脚本，保留发送前拒绝；重新开启须有脚本级 statement/cursor 身份与生命周期证据；若改为客户端拆分，先明确其产品范围及顺序、失败前缀与资源契约 | 本轮 Java 对照与 .NET 拒绝边界见下；不把客户端参数展开、FetchSize hint 或现有 DbBatch 的顺序执行当作该功能完成 |
+| D-02b 多语句 Prepare/server cursor | `P0 / 当前目标服务端限制`；目标双模式 profile 在 prepare 阶段拒绝脚本，Connector/J 同一 server-prepare 形状也失败，因此跳过客户端实现并保留发送前拒绝 | 只有目标版本/部署接受脚本级 statement/cursor prepare，并提供身份、顺序、失败前缀和生命周期证据时才重新开启；不把客户端参数展开、FetchSize hint 或现有 DbBatch 的顺序执行当作该功能完成 |
 | D-02c 多语句 OUT/INOUT | `P0 / 待范围与输出契约`；本轮调查完成，功能未实现 | 普通脚本参数 OUT/INOUT 保留拒绝；Oracle 单 PL 块输出沿用 D-03；MySQL 用户变量可显式作为结果读取，已有路径不重复开发；尚无可移植的 Java callable 脚本成功证据 | 如纳入 typed 脚本输出，先定义发布时机、后续错误可见性、变量/资源生命周期和真实 wire；再做 sync/async、OUT/INOUT/NULL、原子发布、复用与独立存储；Java 客户端报错不归为服务端拒绝 |
 | D-02d 复杂输入/locator/cursor 结果 | `P2`；d1～d3 达到 `P4` | 确认文本脚本可表示的复杂值身份、LOB 归属和 cursor wire；分别复用 D-03/D-04 已证明的能力，避免再开发一套 codec | 命名 OBJECT/嵌套/集合输入见 d1～d3；集合子树 NULL OBJECT、列存储、匿名/LOB/cursor/text 复杂结果仍未关闭，REF CURSOR 输入仍为范围排除 |
 
