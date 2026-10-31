@@ -51,6 +51,8 @@ namespace OceanBaseConnector.UnitTests
             yield return new object[] { "Service Principal Name", "oceanbase/other.invalid@REALM" };
             yield return new object[] { "Treat Tiny As Boolean", "false" };
             yield return new object[] { "Use Affected Rows", "true" };
+            yield return new object[] { "Use Batch Multi Send", "true" };
+            yield return new object[] { "Batch Multi Send Number", "2" };
         }
 
         [Fact]

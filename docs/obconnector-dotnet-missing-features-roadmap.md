@@ -1,6 +1,6 @@
 # OceanBase .NET 缺失功能开发清单
 
-更新：2026-10-30。本文以当前源码及范围审计固定的 OceanBase 官方文档、Connector/J 2.4.14
+更新：2026-10-31。本文以当前源码及范围审计固定的 OceanBase 官方文档、Connector/J 2.4.14
 静态对照为依据。服务端状态沿用兼容性报告，除执行记录明确列出的复验外，不代表本日重跑。
 它回答三个问题：
 
@@ -116,7 +116,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P0` | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；OceanBase 目标版本和错误排序尚未证实 | 目标 OB 版本、MySQL/Oracle 模式 profile、协议抓包/收益基线、取消和 unknown-outcome 规则 | 先完成证据任务进入 `P1`；实现须有 opt-in 选项和单会话所有权；正常/错误/取消/超时/顺序和吞吐对照通过；失败不自动重放 |
+| D-08 | `P2`；本地 loopback 的 input-only DML 子集已实现，目标实库待验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；当前 .NET 新增 opt-in prepared batch send，OceanBase 目标版本和错误排序尚未证实 | 目标 OB 版本、MySQL/Oracle 模式 profile、协议抓包/收益基线、取消和 unknown-outcome 规则 | 真实 profile 验证；扩展结果集、Oracle PrepareExecute、流/LOB、输出、cursor、array binding 和 text fallback 前先补 wire/生命周期证据 |
 | D-09 | `P0` | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 没有确认的通用 SQLXML/XMLType codec | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
 | D-10 | `P0` | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 没有确认的通用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 先记录可实现形状或阻塞结论；实现时输入/结果/NULL/SRID/非法几何有明确行为；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0` | ANYDATA PL 形状调查与有条件 codec（T17） | 服务端 PL/系统类型，不能默认作为普通持久列；Java 没有确认普通列 codec | 先确定 PL 参数/返回值形状和可枚举内部类型；确认是否值得提供 public API | 先记录可实现形状或阻塞结论；实现仅限明确的 PL 形状；内部未知类型拒绝，不增加任意对象兜底 |
@@ -975,6 +975,25 @@ binary wire 的版本和 profile 后再评估是否需要产品实现。
 
 独立 fresh-context 只读走查无 Critical/Important/Minor；格式核验和 `git diff --check` 已通过；
 `107c852`（`✅ test(mysql): verify vector and array string wire compatibility`）已本地提交，未 push。
+
+### D-08：prepared batch multi-send 的 input-only DML 子集（2026-10-31，`P2`）
+
+已新增默认关闭的 `Use Batch Multi Send` 和 `Batch Multi Send Number`（默认 100，最小 1），并将
+选项冻结到 endpoint/credential snapshot。启用后，`OceanBaseBatch.ExecuteNonQuery` 对普通文本、
+input-only、非 stream、非 cursor、非 output、非 LOB、非 array binding、非 LOCAL INFILE 且能走
+server prepared statement 的 DML 请求按数量和 64 MiB packet 上限分组：一组先写完所有
+COM_STMT_EXECUTE，再按命令顺序读取 OK affected-count。错误归因到当前 batch command；未完成
+响应时断开 session，取消不重放已发送请求。禁用选项继续使用原有逐命令 reader 路径。
+
+本地 loopback 已覆盖 sync/async、两条执行先于响应、数量分组、发送前 output 拒绝、组内错误后
+session 断开和发送后取消/unknown-outcome，共 **10/10** 通过。`dotnet build -c Release`
+的 netstandard2.0、netstandard2.1、net8.0、net9.0、net10.0 均 0 warning/0 error。
+
+当前仍不能把 D-08 记为完成：尚未在目标 OceanBase MySQL/Oracle profile 上验证真实 prepared
+multi-send wire、服务端错误排序、收益和代理/OB20 行为；ExecuteReader/Scalar、Oracle
+PrepareExecute、结果集、输出/LOB/cursor/array、text fallback 也明确不在首个子集。全量 Unit
+回归此前被缺失的 Release netstandard2.1 资产阻塞；补建产品 Release 资产后尚未重跑完整 suite，
+因此本条保持 `P2`。
 
 ## 依据
 

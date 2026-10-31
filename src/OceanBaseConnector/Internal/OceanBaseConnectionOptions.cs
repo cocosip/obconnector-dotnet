@@ -45,6 +45,8 @@ namespace OceanBaseConnector.Internal
             string servicePrincipalName = "",
             bool treatTinyAsBoolean = true,
             bool useAffectedRows = false,
+            bool useBatchMultiSend = false,
+            int batchMultiSendNumber = 100,
             bool useCompression = false,
             OceanBaseCredential? credential = null,
             int statementCacheSize = 0,
@@ -63,6 +65,8 @@ namespace OceanBaseConnector.Internal
             ServicePrincipalName = servicePrincipalName;
             TreatTinyAsBoolean = treatTinyAsBoolean;
             UseAffectedRows = useAffectedRows;
+            UseBatchMultiSend = useBatchMultiSend;
+            BatchMultiSendNumber = batchMultiSendNumber;
             UseCompression = useCompression;
             Credential = credential;
             AllowMultiStatements = allowMultiStatements;
@@ -110,7 +114,7 @@ namespace OceanBaseConnector.Internal
         internal OceanBaseConnectionOptions WithCredential(OceanBaseCredential credential) => Copy(Server, Port, credential);
         private OceanBaseConnectionOptions Copy(string server, int port, OceanBaseCredential? credential) => new OceanBaseConnectionOptions(
             server, port, credential?.UserId ?? UserId, credential?.Password ?? Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, CheckCertificateRevocation, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, credential?.AdditionalPasswords ?? AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows, UseCompression, credential, StatementCacheSize, SlowQueryThresholdMilliseconds, ConnectRetryCount, ConnectRetryIntervalSeconds, HostRecheckSeconds, ClientCharacterSet.Name);
+            TlsMode, TlsServerName, CheckCertificateRevocation, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, credential?.AdditionalPasswords ?? AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows, UseBatchMultiSend, BatchMultiSendNumber, UseCompression, credential, StatementCacheSize, SlowQueryThresholdMilliseconds, ConnectRetryCount, ConnectRetryIntervalSeconds, HostRecheckSeconds, ClientCharacterSet.Name);
 
         internal Protocol.ClientCharacterSet ClientCharacterSet { get; }
 
@@ -153,6 +157,8 @@ namespace OceanBaseConnector.Internal
         public int SlowQueryThresholdMilliseconds { get; }
         public bool TreatTinyAsBoolean { get; }
         public bool UseAffectedRows { get; }
+        public bool UseBatchMultiSend { get; }
+        public int BatchMultiSendNumber { get; }
         public bool AllowMultiStatements { get; }
         public bool AllowLocalInfile { get; }
 

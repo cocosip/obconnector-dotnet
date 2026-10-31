@@ -414,6 +414,50 @@ namespace OceanBaseConnector
             return statement == null ? null : PublishPrepared(statement, operation.Bindings.Parameters.Length, operation.Oracle);
         }
 
+#if NET8_0_OR_GREATER
+        internal byte[] BuildBatchMultiSendRequest(CancellationToken token)
+        {
+            if (CommandType != CommandType.Text || HasOutputParameters() || _fetchSize != 0 || AllowClientSidePrepareFallback)
+                throw new NotSupportedException("Batch multi-send requires input-only text commands without cursors, outputs, or fallback.");
+            foreach (OceanBaseParameter parameter in _parameters)
+                if (parameter.Value is Stream) throw new NotSupportedException("Batch multi-send does not support stream parameters.");
+
+            var operation = Start(CommandBehavior.Default, token, prepareOnly: false);
+            try
+            {
+                if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
+                    throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
+                var statement = EnsurePrepared(operation) ?? throw new NotSupportedException("Batch multi-send requires server prepared statements.");
+                if (statement.ColumnCount != 0) throw new NotSupportedException("Batch multi-send does not support result-producing commands.");
+                var request = PreparedParameters.Execute(statement.Id, operation.Parameters, cursor: false);
+                operation.Exchange.Complete();
+                return request;
+            }
+            catch (Exception error) { throw operation.Exchange.Fail(error); }
+        }
+
+        internal async Task<byte[]> BuildBatchMultiSendRequestAsync(CancellationToken token)
+        {
+            if (CommandType != CommandType.Text || HasOutputParameters() || _fetchSize != 0 || AllowClientSidePrepareFallback)
+                throw new NotSupportedException("Batch multi-send requires input-only text commands without cursors, outputs, or fallback.");
+            foreach (OceanBaseParameter parameter in _parameters)
+                if (parameter.Value is Stream) throw new NotSupportedException("Batch multi-send does not support stream parameters.");
+
+            var operation = Start(CommandBehavior.Default, token, prepareOnly: false);
+            try
+            {
+                if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
+                    throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
+                var statement = await EnsurePreparedAsync(operation, token).ConfigureAwait(false) ?? throw new NotSupportedException("Batch multi-send requires server prepared statements.");
+                if (statement.ColumnCount != 0) throw new NotSupportedException("Batch multi-send does not support result-producing commands.");
+                var request = PreparedParameters.Execute(statement.Id, operation.Parameters, cursor: false);
+                operation.Exchange.Complete();
+                return request;
+            }
+            catch (Exception error) { throw operation.Exchange.Fail(error); }
+        }
+#endif
+
         private async Task<PreparedStatement?> EnsurePreparedAsync((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset, MySqlCommandPlan? MySql) operation, CancellationToken token, bool allowFallback = false, bool useCache = true)
         {
             var retained = GetPrepared(operation.Session, operation.Bindings.Parameters.Length, operation.Oracle);

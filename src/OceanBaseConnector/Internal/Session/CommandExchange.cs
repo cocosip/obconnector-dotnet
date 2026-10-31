@@ -38,6 +38,7 @@ namespace OceanBaseConnector.Internal.Session
         private bool _refCursorCompletion;
         private int _finished;
         private int _packets;
+        private int _batchPendingResponses;
         private DriverDiagnostics.Operation? _diagnostics;
         private string? _diagnosticOperation;
         private ActivityContext _traceContext;
@@ -204,6 +205,60 @@ namespace OceanBaseConnector.Internal.Session
             catch (Exception error) { throw Fail(ReaderCanceled(error, readerToken)); }
         }
 
+        internal void SendBatchRequest(byte[] request)
+        {
+            try
+            {
+                VerifyClientCharacterSet(request[0], false, CancellationToken.None).GetAwaiter().GetResult();
+                lock (_gate)
+                {
+                    _budget.Token.ThrowIfCancellationRequested();
+                    _channel.BeginCommand();
+                    _responsePending = true;
+                    _sqlSent = true;
+                    _anySqlSent = true;
+                    _batchPendingResponses++;
+                }
+                WritePacket(request);
+            }
+            catch (Exception error) { throw Fail(error); }
+        }
+
+        internal async Task SendBatchRequestAsync(byte[] request, CancellationToken cancellationToken)
+        {
+            using var registration = cancellationToken.Register(Cancel);
+            try
+            {
+                await VerifyClientCharacterSet(request[0], true, cancellationToken).ConfigureAwait(false);
+                lock (_gate)
+                {
+                    _budget.Token.ThrowIfCancellationRequested();
+                    _channel.BeginCommand();
+                    _responsePending = true;
+                    _sqlSent = true;
+                    _anySqlSent = true;
+                    _batchPendingResponses++;
+                }
+                await WritePacketAsync(request).ConfigureAwait(false);
+            }
+            catch (Exception error) { throw Fail(ReaderCanceled(error, cancellationToken)); }
+        }
+
+        internal void CompleteBatchResponse()
+        {
+            lock (_gate)
+            {
+                _channel.CompleteResponse();
+                if (_batchPendingResponses > 0) _batchPendingResponses--;
+                if (_batchPendingResponses == 0)
+                {
+                    _responsePending = false;
+                    _sqlSent = false;
+                    _longDataPending = false;
+                }
+            }
+        }
+
         internal byte[] Receive(bool allowUnsupportedPrepare = false)
         {
             try { return CheckPacket(ReadPacket(), allowUnsupportedPrepare: allowUnsupportedPrepare); }
@@ -324,12 +379,13 @@ namespace OceanBaseConnector.Internal.Session
                 }
                 var connectionFailure = server.SqlState?.StartsWith("08", StringComparison.Ordinal) == true ||
                     (server.ErrorCode == 1927 && server.SqlState == "70100");
+                var batchHasUnconsumedResponses = Volatile.Read(ref _batchPendingResponses) > 1;
                 var error = new OceanBaseException(connectionFailure ? "The server reported a connection failure." : "The server rejected the command.",
                     server.ErrorCode, server.SqlState, isExecutionOutcomeUnknown: connectionFailure && _sqlSent);
 #if NET8_0_OR_GREATER
                 error.FailedBatchCommand = BatchCommand;
 #endif
-                if (connectionFailure)
+                if (connectionFailure || batchHasUnconsumedResponses)
                 {
                     _channel.ValidateReceivedResponseBoundary();
                     _session.Break();

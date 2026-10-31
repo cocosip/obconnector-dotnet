@@ -17,7 +17,8 @@ namespace OceanBaseConnector
     /// <c>Server RSA Public Key</c> and
     /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
     /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c>, <c>Allow Multi Statements</c>, <c>Allow Local Infile</c>, <c>Check Certificate Revocation</c>, <c>Load Balance</c>, <c>Service Principal Name</c>,
-    /// <c>Treat Tiny As Boolean</c>, <c>Character Set</c> and <c>Use Affected Rows</c>; synonyms are
+    /// <c>Treat Tiny As Boolean</c>, <c>Character Set</c>, <c>Use Affected Rows</c>,
+    /// <c>Use Batch Multi Send</c> and <c>Batch Multi Send Number</c>; synonyms are
     /// <c>Host</c>, <c>Uid</c>, <c>Pwd</c> and <c>CharacterSet</c>. PAM accepts secret <c>PasswordN</c> keys for N >= 2.
     /// Unknown keys, synonym conflicts
     /// and malformed values are rejected instead of being silently accepted.
@@ -61,6 +62,8 @@ namespace OceanBaseConnector
         public const string ServicePrincipalNameKey = "Service Principal Name";
         public const string TreatTinyAsBooleanKey = "Treat Tiny As Boolean";
         public const string UseAffectedRowsKey = "Use Affected Rows";
+        public const string UseBatchMultiSendKey = "Use Batch Multi Send";
+        public const string BatchMultiSendNumberKey = "Batch Multi Send Number";
 
         public const int DefaultPort = 2881;
         public const int DefaultConnectionTimeoutSeconds = 15;
@@ -354,6 +357,20 @@ namespace OceanBaseConnector
             set => this[UseAffectedRowsKey] = value ? "true" : "false";
         }
 
+        /// <summary>Opt in to prepared batch multi-send; disabled by default.</summary>
+        public bool UseBatchMultiSend
+        {
+            get => GetBoolean(UseBatchMultiSendKey) ?? false;
+            set => this[UseBatchMultiSendKey] = value ? "true" : "false";
+        }
+
+        /// <summary>Maximum number of prepared executions written before responses are drained.</summary>
+        public int BatchMultiSendNumber
+        {
+            get => GetInt32(BatchMultiSendNumberKey) ?? 100;
+            set => this[BatchMultiSendNumberKey] = value.ToString(CultureInfo.InvariantCulture);
+        }
+
         public override object? this[string keyword]
         {
             get
@@ -472,6 +489,8 @@ namespace OceanBaseConnector
                 ServicePrincipalName,
                 TreatTinyAsBoolean,
                 UseAffectedRows,
+                UseBatchMultiSend,
+                BatchMultiSendNumber,
                 UseCompression,
                 statementCacheSize: StatementCacheSize, slowQueryThresholdMilliseconds: SlowQueryThreshold,
                 connectRetryCount: ConnectRetryCount, connectRetryIntervalSeconds: ConnectRetryInterval, hostRecheckSeconds: HostRecheckSeconds, characterSet: CharacterSet);
@@ -517,6 +536,8 @@ namespace OceanBaseConnector
             ServicePrincipalNameKey,
             TreatTinyAsBooleanKey,
             UseAffectedRowsKey,
+            UseBatchMultiSendKey,
+            BatchMultiSendNumberKey,
         };
 
         /// <summary>
@@ -586,6 +607,8 @@ namespace OceanBaseConnector
                 [ServicePrincipalNameKey] = ServicePrincipalName,
                 [TreatTinyAsBooleanKey] = TreatTinyAsBoolean,
                 [UseAffectedRowsKey] = UseAffectedRows,
+                [UseBatchMultiSendKey] = UseBatchMultiSend,
+                [BatchMultiSendNumberKey] = BatchMultiSendNumber,
             };
             // These optional empty defaults cannot be explicitly set through our parser.
             if (Server.Length != 0) serializer[ServerKey] = Server;
@@ -691,6 +714,12 @@ namespace OceanBaseConnector
                         throw CreateKeywordError($"'{canonicalKey}' must be at least 1.", canonicalKey, includeValue: true, value: value);
                     return value;
 
+                case BatchMultiSendNumberKey:
+                    var multiSendNumber = ParseNonNegativeInt32(canonicalKey, value);
+                    if (multiSendNumber < 1)
+                        throw CreateKeywordError($"'{canonicalKey}' must be at least 1.", canonicalKey, includeValue: true, value: value);
+                    return value;
+
                 case TlsModeKey:
                     ParseEnumValue<OceanBaseTlsMode>(canonicalKey, value);
                     return value;
@@ -727,6 +756,7 @@ namespace OceanBaseConnector
                 case AllowLocalInfileKey:
                 case TreatTinyAsBooleanKey:
                 case UseAffectedRowsKey:
+                case UseBatchMultiSendKey:
                     ParseBooleanValue(canonicalKey, value);
                     return value;
 
@@ -826,6 +856,12 @@ namespace OceanBaseConnector
                     return true;
                 case "USE AFFECTED ROWS":
                     canonical = UseAffectedRowsKey;
+                    return true;
+                case "USE BATCH MULTI SEND":
+                    canonical = UseBatchMultiSendKey;
+                    return true;
+                case "BATCH MULTI SEND NUMBER":
+                    canonical = BatchMultiSendNumberKey;
                     return true;
                 case "ALLOW MULTI STATEMENTS":
                     canonical = AllowMultiStatementsKey;

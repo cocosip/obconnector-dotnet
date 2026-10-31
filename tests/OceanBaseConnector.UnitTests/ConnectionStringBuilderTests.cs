@@ -31,6 +31,41 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal(15, options.PoolWaitTimeoutSeconds);
             Assert.Equal(0, options.ConnectionIdleLifetimeSeconds);
             Assert.Equal(0, options.ConnectionLifetimeSeconds);
+            Assert.False(options.UseBatchMultiSend);
+            Assert.Equal(100, options.BatchMultiSendNumber);
+        }
+
+        [Fact]
+        public void BatchMultiSendOptionsRoundTripAndFreezeForEveryEndpoint()
+        {
+            var builder = new OceanBaseConnectionStringBuilder(
+                "Server=one,two;User ID=u;Use Batch Multi Send=true;Batch Multi Send Number=7");
+            var frozen = builder.Build();
+
+            Assert.True(builder.UseBatchMultiSend);
+            Assert.Equal(7, builder.BatchMultiSendNumber);
+            Assert.True(frozen.UseBatchMultiSend);
+            Assert.Equal(7, frozen.BatchMultiSendNumber);
+            Assert.Contains("Use Batch Multi Send=true", frozen.ToString(), StringComparison.Ordinal);
+            Assert.Contains("Batch Multi Send Number=7", frozen.ToString(), StringComparison.Ordinal);
+
+            builder.UseBatchMultiSend = false;
+            builder.BatchMultiSendNumber = 2;
+            foreach (var endpoint in frozen.Endpoints)
+            {
+                var selected = frozen.ForEndpoint(endpoint);
+                Assert.True(selected.UseBatchMultiSend);
+                Assert.Equal(7, selected.BatchMultiSendNumber);
+            }
+        }
+
+        [Theory]
+        [InlineData("Batch Multi Send Number=0")]
+        [InlineData("Batch Multi Send Number=-1")]
+        [InlineData("Batch Multi Send Number=abc")]
+        public void InvalidBatchMultiSendNumberIsRejected(string option)
+        {
+            Assert.Throws<ArgumentException>(() => new OceanBaseConnectionStringBuilder(ValidMinimal + ";" + option));
         }
 
         [Fact]

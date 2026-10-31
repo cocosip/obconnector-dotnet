@@ -56,7 +56,7 @@ namespace OceanBaseConnector
                 var connection = _connection ?? throw new InvalidOperationException("A connection is required.");
                 connection.EnsureAmbientTransaction();
                 var transaction = connection.ResolveCommandTransaction(_transaction);
-                var operation = new Operation(this, connection, token, behavior);
+                var operation = new Operation(this, connection, transaction, token, behavior);
                 try
                 {
                     operation.Session = connection.ReserveBatch(transaction, operation, out var openGeneration);
@@ -107,11 +107,13 @@ namespace OceanBaseConnector
         public override int ExecuteNonQuery()
         {
             if (_rewriteBatchedInserts) return ExecuteRewrittenNonQuery(false, CancellationToken.None).GetAwaiter().GetResult();
+            if (IsBatchMultiSendRequested()) return ExecuteMultiSendNonQuery();
             using var reader = ExecuteReader(); do { while (reader.Read()) { } } while (reader.NextResult()); return reader.RecordsAffected;
         }
         public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken = default)
         {
             if (_rewriteBatchedInserts) return await ExecuteRewrittenNonQuery(true, cancellationToken).ConfigureAwait(false);
+            if (IsBatchMultiSendRequested()) return await ExecuteMultiSendNonQueryAsync(cancellationToken).ConfigureAwait(false);
             await using var reader = await ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             do { while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) { } } while (await reader.NextResultAsync(cancellationToken).ConfigureAwait(false)); return reader.RecordsAffected;
         }
@@ -174,9 +176,10 @@ namespace OceanBaseConnector
             private bool _ended;
             private OceanBaseCommand? _active;
             private bool _ownsActive;
-            internal Operation(OceanBaseBatch batch, OceanBaseConnection connection, CancellationToken token, CommandBehavior behavior)
-            { _batch = batch; Connection = connection; Behavior = behavior; CallerToken = token; _cancel = CancellationTokenSource.CreateLinkedTokenSource(token); Token = _cancel.Token; }
+            internal Operation(OceanBaseBatch batch, OceanBaseConnection connection, OceanBaseTransaction? transaction, CancellationToken token, CommandBehavior behavior)
+            { _batch = batch; Connection = connection; Transaction = transaction; Behavior = behavior; CallerToken = token; _cancel = CancellationTokenSource.CreateLinkedTokenSource(token); Token = _cancel.Token; }
             internal OceanBaseConnection Connection { get; }
+            internal OceanBaseTransaction? Transaction { get; }
             internal CommandBehavior Behavior { get; }
             internal CancellationToken Token { get; }
             internal CancellationToken CallerToken { get; }

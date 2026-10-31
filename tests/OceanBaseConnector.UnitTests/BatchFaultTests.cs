@@ -12,6 +12,75 @@ namespace OceanBaseConnector.UnitTests
 {
     public sealed partial class TextCommandTests
     {
+        [Fact]
+        public async Task BatchMultiSendRejectsOutputParametersBeforeWriting()
+        {
+            var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)));
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true");
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch();
+                var command = BatchItem(batch, "select :value");
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "value", Direction = ParameterDirection.Output });
+                await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteNonQueryAsync());
+                Assert.Equal(-1, command.RecordsAffected);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task BatchMultiSendBreaksSessionWhenAGroupResponseFails()
+        {
+            var server = Server(async channel =>
+            {
+                for (byte id = 90; id < 93; id++)
+                {
+                    await StatementCommand(channel, 22); await Prepared(channel, id, 0);
+                }
+                await StatementCommand(channel, 23); await StatementCommand(channel, 23); await StatementCommand(channel, 23);
+                await channel.WritePacketAsync(Error());
+                try { Assert.Equal(0, await channelStreamRead(channel)); } catch (IOException) { }
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true;Batch Multi Send Number=3");
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch();
+                var first = BatchItem(batch, "one"); var second = BatchItem(batch, "two"); var third = BatchItem(batch, "three");
+                var error = await Assert.ThrowsAsync<OceanBaseException>(() => batch.ExecuteNonQueryAsync());
+                Assert.Same(first, error.BatchCommand);
+                Assert.Equal(-1, first.RecordsAffected); Assert.Equal(-1, second.RecordsAffected); Assert.Equal(-1, third.RecordsAffected);
+                Assert.Equal(ConnectionState.Broken, connection.State);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task BatchMultiSendCancellationAfterWriteDoesNotReplay()
+        {
+            var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var server = Server(async channel =>
+            {
+                await StatementCommand(channel, 22); await Prepared(channel, 90, 0);
+                await StatementCommand(channel, 23); sent.SetResult();
+                try { Assert.Equal(0, await channelStreamRead(channel)); } catch (IOException) { }
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true");
+            using var cancellation = new CancellationTokenSource();
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch(); BatchItem(batch, "one");
+                var running = batch.ExecuteNonQueryAsync(cancellation.Token);
+                await sent.Task.WaitAsync(TimeSpan.FromSeconds(10)); cancellation.Cancel();
+                var error = await Assert.ThrowsAsync<OceanBaseException>(() => running);
+                Assert.True(error.IsExecutionOutcomeUnknown);
+                Assert.Equal(ConnectionState.Broken, connection.State);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         [Theory]
         [InlineData(false, false)]
         [InlineData(false, true)]

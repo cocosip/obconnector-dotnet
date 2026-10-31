@@ -53,6 +53,8 @@ namespace OceanBaseConnector.Internal.Session
         internal bool ClientCharacterSetVerified { get { lock (_gate) return _clientCharacterSetVerified; } }
         internal void SetClientCharacterSetVerified(bool verified) { lock (_gate) _clientCharacterSetVerified = verified; }
         internal bool TreatTinyAsBoolean => _options.TreatTinyAsBoolean;
+        internal bool UseBatchMultiSend => _options.UseBatchMultiSend;
+        internal int BatchMultiSendNumber => _options.BatchMultiSendNumber;
         internal int SlowQueryThresholdMilliseconds => _options.SlowQueryThresholdMilliseconds;
         internal bool IsCredentialExpired => _options.Credential?.IsExpired == true;
         internal bool UseLobLocators => _options.UseLobLocators && Info?.Mode == OceanBaseCompatibilityMode.Oracle &&

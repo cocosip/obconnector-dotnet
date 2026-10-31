@@ -217,6 +217,59 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task BatchMultiSendWritesAllPreparedExecutionsBeforeDrainingResponses(bool asynchronous)
+        {
+            var server = Server(async channel =>
+            {
+                await StatementCommand(channel, 22); await Prepared(channel, 90, 0);
+                await StatementCommand(channel, 22); await Prepared(channel, 91, 0);
+                var first = await StatementCommand(channel, 23); Assert.Equal(90, first[1]);
+                var second = await StatementCommand(channel, 23); Assert.Equal(91, second[1]);
+                await channel.WritePacketAsync(Ok(2)); await channel.WritePacketAsync(Ok(3));
+                await StatementCommand(channel, 25); await StatementCommand(channel, 25);
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true;Batch Multi Send Number=2");
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch();
+                var first = BatchItem(batch, "one"); var second = BatchItem(batch, "two");
+                Assert.Equal(5, asynchronous ? await batch.ExecuteNonQueryAsync() : batch.ExecuteNonQuery());
+                Assert.Equal(2, first.RecordsAffected); Assert.Equal(3, second.RecordsAffected);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task BatchMultiSendSplitsGroupsAtConfiguredCount()
+        {
+            var server = Server(async channel =>
+            {
+                for (byte id = 90; id < 93; id++)
+                {
+                    await StatementCommand(channel, 22); await Prepared(channel, id, 0);
+                }
+                Assert.Equal(90, (await StatementCommand(channel, 23))[1]);
+                Assert.Equal(91, (await StatementCommand(channel, 23))[1]);
+                await channel.WritePacketAsync(Ok(2)); await channel.WritePacketAsync(Ok(3));
+                Assert.Equal(92, (await StatementCommand(channel, 23))[1]);
+                await channel.WritePacketAsync(Ok(4));
+                for (var i = 0; i < 3; i++) await StatementCommand(channel, 25);
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true;Batch Multi Send Number=2");
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch();
+                BatchItem(batch, "one"); BatchItem(batch, "two"); BatchItem(batch, "three");
+                Assert.Equal(9, await batch.ExecuteNonQueryAsync());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         [Fact]
         public async Task BatchReaderAsyncCloseReleasesReservationBeforeAwaitingTransactionRollback()
         {
