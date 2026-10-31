@@ -1092,7 +1092,8 @@ Oracle session time zone/national character set，必要时按已解析上下文
 
 之前的实库运行被 VPN 阻塞；修复响应包序号边界后，临时 direct profile 的 MySQL/Oracle
 矩阵 **12/12 通过**（DML/scalar/reader × sync/async，`BatchMultiSendNumber=2`）。首个子集的
-服务端错误排序、收益基线和代理/OB20 行为仍未验收；Oracle PrepareExecute、Oracle piece-data
+服务端已知响应的 prefix/error/suffix 边界已在 D-08c 的 MySQL/Oracle 直连 4/4 子集中验收；更大
+错误排序矩阵、收益基线和代理/OB20 行为仍未验收；Oracle PrepareExecute、Oracle piece-data
 流水化、输出/LOB/cursor/array 和 text fallback 仍明确不在首个子集，因此这些仍是 D-08 的后续缺口。reader 的 MySQL/Oracle
 直连 profile sync/async 均已通过；本轮没有把这组结果外推到代理或其他版本。
 
@@ -1123,7 +1124,7 @@ Release 构建和 netstandard2.1 构建均 0 warning / 0 error。代码提交为
 MySQL Stream 的当前 input-only multi-send 存储/读取子集提升为 `P4`；这不是对代理、OB20 或其他
 服务端版本的外推。
 
-本子集仍未关闭 Oracle piece-data 流水化、错误排序、取消、代理/OB20、
+本子集仍未关闭 Oracle piece-data 流水化、取消、代理/OB20、
 LOB/OUT/cursor/array 和 text fallback；这些继续按 D-08 后续缺口处理。
 
 #### D-08b：Oracle batch Stream 的 piece-data 安全回退（2026-11-01，`P4` 子集）
@@ -1139,7 +1140,19 @@ Oracle piece-data 已支持流水化或吞吐收益。随后新增 `MultiSendTes
 在项目 User Secrets 的 `oracle-direct` profile 中明确关闭 `UseOraclePrepareExecute` 和 `UseLobLocators`，
 覆盖 sync/async、3 字节和 90007 字节两条 BLOB Stream；真实 4.4.2.2 直连 **2/2 通过**，确认
 piece-data fallback、批量 affected-count 和独立 `GetValue`/LOB 读回。PrepareExecute 下的 Stream、
-piece-data 流水化、错误排序、代理/OB20、LOB/OUT/cursor/array 和收益基线仍待各自 profile。
+piece-data 流水化、代理/OB20、LOB/OUT/cursor/array 和收益基线仍待各自 profile。
+
+#### D-08c：真实服务端错误排序与 suffix 边界（`P4` 子集，2026-11-01）
+
+新增 `Batches/MultiSendTests.PreparedMultiSendErrorPublishesPrefixAndLeavesSuffixUnsent`，使用项目
+User Secrets 的 `mysql-direct` 与 `oracle-direct` 直连 profile，覆盖 sync/async 和
+`BatchMultiSendNumber=2`。批次先发送一条成功 INSERT 与一条重复主键 INSERT，第三条置于下一组；
+服务端错误必须归属第二条，第一条发布 `RecordsAffected=1`，错误项与下一组 suffix 保持 `-1`，
+连接继续可复用且独立计数为 2。MySQL/Oracle 各 **2/2**，合计 **4/4** 通过。
+
+该证据只关闭当前直连、input-only DML、已知响应错误的 prefix/error/suffix 子集；不外推错误
+发生在已发送组内的 unknown-outcome、取消/超时、代理/OB20、PrepareExecute、LOB/OUT/cursor/array
+或更大错误排序矩阵。它不是服务端限制归因，也不改变现有不自动重放契约。
 
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
 

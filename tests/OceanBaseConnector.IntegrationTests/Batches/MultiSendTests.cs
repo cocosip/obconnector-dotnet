@@ -247,4 +247,61 @@ public sealed class MultiSendTests
         static string dbScalarSql(IntegrationProfile profile, int value) =>
             "SELECT " + value + (profile.Oracle ? " FROM DUAL" : "");
     }
+
+    [IntegrationTheory]
+    [MemberData(nameof(PreparedRows))]
+    public async Task PreparedMultiSendErrorPublishesPrefixAndLeavesSuffixUnsent(string profileName, bool asynchronous)
+    {
+        var profile = IntegrationEnvironment.GetProfile(profileName);
+        var builder = profile.CreateBuilder();
+        builder.UseBatchMultiSend = true;
+        builder.BatchMultiSendNumber = 2;
+        if (profile.Oracle)
+        {
+            builder.UseOraclePrepareExecute = false;
+            builder.UseLobLocators = false;
+        }
+        await using var db = new DatabaseContext(new IntegrationProfile
+        {
+            Name = profile.Name,
+            Mode = profile.Mode,
+            ConnectionString = builder.ConnectionString,
+            CreateObjects = profile.CreateObjects,
+        });
+        await using var connection = await db.OpenAsync();
+        var table = await db.TableAsync(connection,
+            "id INTEGER PRIMARY KEY, value " + (db.Oracle ? "VARCHAR2(60)" : "VARCHAR(60)"), CancellationToken.None);
+        await db.ExecuteAsync(connection, "INSERT INTO " + table + " VALUES (1, 'seed')", CancellationToken.None);
+
+        await using var batch = connection.CreateBatch();
+        var first = Add(2, "first");
+        var duplicate = Add(1, "duplicate");
+        var suffix = Add(3, "suffix");
+
+        var error = await Assert.ThrowsAsync<OceanBaseException>(async () =>
+        {
+            if (asynchronous) await batch.ExecuteNonQueryAsync();
+            else batch.ExecuteNonQuery();
+        });
+
+        Assert.Same(duplicate, error.BatchCommand);
+        Assert.NotEqual(0, error.ServerErrorCode);
+        Assert.False(error.IsExecutionOutcomeUnknown);
+        Assert.Equal(1, first.RecordsAffected);
+        Assert.Equal(-1, duplicate.RecordsAffected);
+        Assert.Equal(-1, suffix.RecordsAffected);
+        Assert.Equal(2, await db.CountAsync(connection, table, CancellationToken.None));
+        DatabaseContext.EqualNumber(await db.ScalarAsync(connection, db.SelectOne, CancellationToken.None), 1,
+            "The connection must remain reusable after a known multi-send error.");
+
+        OceanBaseBatchCommand Add(int id, string value)
+        {
+            var item = batch.CreateBatchCommand();
+            item.CommandText = "INSERT INTO " + table + " VALUES (" + db.ParameterSql(":id, :value") + ")";
+            item.Parameters.Add(new OceanBaseParameter { ParameterName = "id", DbType = DbType.Int32, Value = id });
+            item.Parameters.Add(new OceanBaseParameter { ParameterName = "value", DbType = DbType.String, Value = value });
+            batch.BatchCommands.Add(item);
+            return (OceanBaseBatchCommand)item;
+        }
+    }
 }
