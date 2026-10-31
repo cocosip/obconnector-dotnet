@@ -5,12 +5,32 @@ using System.Linq;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.Internal.Sql;
+using OceanBaseConnector.Internal.Values;
 using Xunit;
 
 namespace OceanBaseConnector.UnitTests
 {
     public sealed partial class TextCommandTests
     {
+        [Fact]
+        public void NamedWholeColumnReturningAcceptsOpaqueObjectMetadataOnlyWithDeclaredType()
+        {
+            var type = ComplexResultType(false, ComplexResultScalar("A", 203));
+            var parameters = new OceanBaseParameterCollection();
+            parameters.Add(new OceanBaseParameter { ParameterName = "p", Direction = ParameterDirection.Output,
+                ComplexType = type, Value = "old" });
+            var plan = OracleCommandPlan.Create("pkg.p", CommandType.StoredProcedure, parameters);
+            var column = ResultColumn.Parse(ComplexColumn("", "", element: 255), OceanBaseCompatibilityMode.Oracle);
+
+            plan.ValidateOutputColumn(0, column);
+            Assert.Same(type, column.ComplexType);
+
+            var anonymous = new OceanBaseComplexType(null!, "", "", true,
+                new[] { new OceanBaseComplexMember(null, null, "RAW", null, new ComplexType(203)) });
+            var anonymousColumn = ResultColumn.Parse(ComplexColumn("", "", element: 255), OceanBaseCompatibilityMode.Oracle);
+            Assert.Throws<ProtocolException>(() => anonymousColumn.BindComplexOutput(anonymous));
+        }
+
         [Theory]
         [InlineData((byte)0)] [InlineData((byte)3)] [InlineData((byte)246)]
         public async Task AnonymousNumberOutputMatchesCanonicalElementLayout(byte element)

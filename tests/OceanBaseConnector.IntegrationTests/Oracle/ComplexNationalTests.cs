@@ -166,7 +166,7 @@ public sealed class ComplexNationalTests
 
     [IntegrationTheory]
     [MemberData(nameof(ReturningProfiles))]
-    public async Task NationalObjectReturningRetainsOutputWhenSourceIdentityIsUnresolved(string profileName, string encoding, string nationalType, bool asynchronous)
+    public async Task NationalObjectReturningUsesDeclaredOutputType(string profileName, string encoding, string nationalType, bool asynchronous)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
@@ -179,8 +179,10 @@ public sealed class ComplexNationalTests
         await using var command = db.Command(connection, "INSERT INTO " + table + " VALUES(1, :v) RETURNING v INTO :o");
         DatabaseContext.Parameter(command, "v", type.CreateValue(NationalText(encoding, nationalType), 7));
         var output = DatabaseContext.Parameter(command, "o", "old"); output.Direction = ParameterDirection.Output; output.ComplexType = type;
-        var error = await Assert.ThrowsAsync<OceanBaseException>(() => asynchronous ? command.ExecuteNonQueryAsync() : Task.FromResult(command.ExecuteNonQuery()));
-        Assert.True(error.IsExecutionOutcomeUnknown); Assert.Contains("Complex output metadata", error.InnerException!.Message);
-        Assert.Equal("old", output.Value); Assert.Equal(ConnectionState.Broken, connection.State);
+        Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+        var value = Assert.IsType<OceanBaseComplexValue>(output.Value);
+        Assert.Same(type, value.Type);
+        Assert.Equal(NationalText(encoding, nationalType), value.GetValues()[0]);
+        DatabaseContext.EqualNumber(value.GetValues()[1], 7, "RETURNING object member mismatch.");
     }
 }

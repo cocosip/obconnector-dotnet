@@ -599,7 +599,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 | --- | --- | --- |
 | D-04a 命名 LOB 成员 | `P2`；a1/a3.1 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT/嵌套 OBJECT 根 NULL 输出身份为当前服务端限制。a2：BLOB OBJECT 成员 DML 返回 932；仍待 wire/归因。命名 locator 回绑仍拒绝，不隐式读取外部 LOB |
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
-| D-04c 复杂 RETURNING 身份 | `P2 / 待证据` | 已知返回 metadata 无法匹配精确类型，保留旧输出及 unknown-outcome 处理；取得实际列身份/wire 后再考虑实现，不只凭参数声明猜解码 |
+| D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
 | D-04d 复杂 cursor 成员 | `P2 / 待证据` | 本地四字节结果解析已有；实际可创建类型、完整 child FETCH 与所有权尚需确认，输入仍拒绝；D-03 的普通列失败不能证明此形状 |
 | D-04e 复杂 text 结果及其余 collection 形状 | `P2 / 待证据` | text 结果仍拒绝；命名构造输入复用 D-02d1～d3。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
 
@@ -738,6 +738,27 @@ Java 无法发出同一输入形状，因此不能满足“Java 同样失败”�
 当前仍保持 `P2 / 已复现但待 wire 与归因`，不修改 `ComplexValueCodec`。这已排除之前的 VPN/握手
 阻塞，但仍不能仅凭 `932/22000` 判定是客户端 writer 还是服务端 bind/DML 转换缺口；需要固定
 成员 wire 身份并补可发出同形状的官方客户端/服务端解码对照。
+
+#### D-04c：复杂 whole-column RETURNING 的 opaque metadata（2026-10-31）
+
+新增 `Oracle/ComplexReturningTests.cs`，在 Oracle 4.4.2.2 `oracle-direct`、TLS Disabled、
+`UseOraclePrepareExecute=true` 下覆盖 named OBJECT 的 `INSERT ... RETURNING value INTO :o`，
+sync/async **2/2** 通过。服务端响应列固定为 type 160、空 schema/name、anonymous element 255；
+它没有可解析的 source identity，但输出参数已显式绑定同一会话加载的 named `ComplexType`，因此可
+安全使用该声明的完整 layout 解码。含 NCHAR/NVARCHAR2 成员的 whole-column RETURNING 另以
+14 组客户端字符集 × 两种同步方向验证，**56/56** 通过；这一路径使用类型上下文记录的存储
+national encoding，不能套用 PL output 的 session result encoding。
+
+产品修复集中在 `ResultColumn.BindComplexOutput`：只放行空 identity + element 255 + 显式
+named type 的精确形状；匿名数组、其他未知 element 和没有显式 ComplexType 的输出继续拒绝。
+新增本地协议单测覆盖该正向绑定及匿名类型拒绝；原有输出值原子发布和 unknown-outcome 保护仍保留。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| Oracle direct 实库 | `ComplexReturningTests` 2/2；`ComplexNationalTests.NationalObjectReturningUsesDeclaredOutputType` 56/56；无 skip |
+| 本地协议单测 | opaque named OBJECT 绑定/匿名类型拒绝 1/1 |
+| 构建 | IntegrationTests Release 0 warning / 0 error；NuGet 漏洞源不可达时使用 `NuGetAudit=false`，依赖已由本地缓存还原 |
+| 未关闭边界 | D-04a2 BLOB OBJECT 成员 DML、复杂 cursor/text/其他 collection 形状、跨版本/代理/TLS/长期压力仍未关闭；D-04 父项保持 `P2` |
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 

@@ -40,11 +40,13 @@ namespace OceanBaseConnector.Internal.Protocol
         internal void BindComplexOutput(OceanBaseComplexType expected)
         {
             var actual = ComplexType;
-            if (TypeCode != 160 || actual == null || (expected.IsAnonymous
+            var unresolvedWholeObject = ComplexMetadata?.Schema.Length == 0 &&
+                ComplexMetadata.Name.Length == 0 && ComplexMetadata.ElementType == 255 && !expected.IsAnonymous;
+            if (TypeCode != 160 || actual == null && !unresolvedWholeObject || actual != null && (expected.IsAnonymous
                 ? !actual.IsAnonymous || expected.Members[0].ComplexType != null || actual.Members[0].Layout.TypeCode != expected.Members[0].Layout.TypeCode
                 : !ReferenceEquals(actual, expected)))
                 throw new ProtocolException("Complex output metadata must match its declared type.");
-            ComplexType = expected; _complexOutput = true;
+            ComplexType = expected; _complexOutput = !unresolvedWholeObject;
         }
         internal void RequireComplexResult(bool binary)
         {
