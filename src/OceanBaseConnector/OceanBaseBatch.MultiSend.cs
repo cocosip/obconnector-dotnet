@@ -79,7 +79,7 @@ namespace OceanBaseConnector
             var total = 0;
             var anyAffected = false;
             var scalar = new ScalarState();
-            foreach (var group in Groups(requests, operation.Session!.BatchMultiSendNumber))
+            foreach (var group in PlanMultiSendGroups(requests, operation.Session!.BatchMultiSendNumber))
             {
                 for (var i = group.Start; i < group.End; i++)
                 {
@@ -113,7 +113,7 @@ namespace OceanBaseConnector
             var total = 0;
             var anyAffected = false;
             var scalar = new ScalarState();
-            foreach (var group in Groups(requests, operation.Session!.BatchMultiSendNumber))
+            foreach (var group in PlanMultiSendGroups(requests, operation.Session!.BatchMultiSendNumber))
             {
                 for (var i = group.Start; i < group.End; i++)
                 {
@@ -177,7 +177,7 @@ namespace OceanBaseConnector
             return exchange;
         }
 
-        private static IEnumerable<(int Start, int End)> Groups(byte[][] requests, int maxCount)
+        internal static IEnumerable<(int Start, int End)> PlanMultiSendGroups(byte[][] requests, int maxCount)
         {
             var start = 0;
             while (start < requests.Length)

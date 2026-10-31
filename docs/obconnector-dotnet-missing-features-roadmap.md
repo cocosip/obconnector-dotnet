@@ -988,7 +988,8 @@ COM_STMT_EXECUTE，再按命令顺序读取 OK affected-count。错误归因到�
 `ExecuteScalar`/`ExecuteScalarAsync` 现在也复用该路径：普通 prepared 标量结果会按命令顺序完全排空，
 只返回 batch 语义中的首个 scalar；cursor、LOB、复杂结果列仍在发送前拒绝。`ExecuteReader` 继续使用
 逐命令 reader 路径。本地 loopback 已覆盖 sync/async、两条执行先于响应、数量分组、基本 scalar
-结果、发送前 output/cursor/session-state SQL 拒绝、组内错误后 session 断开和发送后取消/unknown-outcome，共 **143/143**
+结果、发送前 output/cursor/session-state SQL 拒绝、组内错误后 session 断开和发送后取消/unknown-outcome，
+以及超过 64 MiB 总请求预算时的分组拆分，共 **144/144**
 通过。`dotnet build -c Release`
 的 netstandard2.0、netstandard2.1、net8.0、net9.0、net10.0 均 0 warning/0 error。
 
@@ -1001,6 +1002,12 @@ multi-send wire、服务端错误排序、收益和代理/OB20 行为；ExecuteR
 输出/LOB/cursor/array、流和 text fallback 也明确不在首个子集。全量 Unit
 回归此前被缺失的 Release netstandard2.1 资产阻塞；补建产品 Release 资产后尚未重跑完整 suite，
 因此本条保持 `P2`。
+
+新增 `Batches/MultiSendTests.cs`，覆盖 MySQL/Oracle create-objects profile 的 input-only
+prepared DML 和 scalar 排空，sync/async 及 `BatchMultiSendNumber=2`。Oracle 用例显式关闭
+`UseOraclePrepareExecute`，以验证本子集要求的普通 server prepared wire；本地编译通过。当前机器
+没有 `OB_INTEGRATION_CONFIG` 或四个 legacy connection string，启用 `OB_REQUIRE_INTEGRATION=1`
+后两项实库用例在 profile 加载阶段阻塞，未产生 OceanBase 通过/失败证据；D-08 仍不能提升状态。
 
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
 

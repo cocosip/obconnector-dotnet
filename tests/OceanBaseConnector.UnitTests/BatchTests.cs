@@ -1,13 +1,28 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Threading.Tasks;
+using OceanBaseConnector.Internal.Protocol;
 using Xunit;
 
 namespace OceanBaseConnector.UnitTests
 {
     public sealed partial class TextCommandTests
     {
+        [Fact]
+        public void BatchMultiSendGroupsStopAtPacketBudget()
+        {
+            var requests = new[]
+            {
+                new byte[(int)(PacketChannel.DefaultMaxPacketSize / 2) + 1],
+                new byte[(int)(PacketChannel.DefaultMaxPacketSize / 2) + 1],
+                new byte[] { 1 },
+            };
+            var groups = OceanBaseBatch.PlanMultiSendGroups(requests, 100).ToArray();
+            Assert.Equal(new[] { (0, 1), (1, 3) }, groups);
+        }
+
         private static DbBatchCommand BatchItem(DbBatch batch, string sql)
         {
             var item = batch.CreateBatchCommand(); item.CommandText = sql; batch.BatchCommands.Add(item); return item;

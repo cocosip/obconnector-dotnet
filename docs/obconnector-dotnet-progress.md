@@ -60,7 +60,7 @@
 | Q17 prepared statement cache | 可选性能 | opt-in idle LRU | 同左 | PhysicalSession.PreparedStatements | J5；DDL/reset/上下文失效；外部DDL特定错误/负载待验收 |
 | Q18 LOCAL INFILE | 可选MySQL | 显式授权+应用流 | — | CommandExchange.Payload、LocalInfile接口 | J13；服务端文件名不得直接打开本地文件；源归属/限额/中断 |
 | Q19 参数大值分片/INOUT二进制流 | 可选 | prepared上传已有实现 | prepared/PrepareExecute上传已有实现 | CommandExchange.LongData/PieceData、PreparedParameters | 多语句流先有界展开；普通回退不等价 |
-| Q20 multi-send/pipelining | 候选 | Java已有；.NET 已实现默认关闭的 prepared batch multi-send 子集 | Java路径需分模式核验 | `UseBatchMultiSend`、`OceanBaseBatch.MultiSend` | 当前仅可缓存 input-only DML/SELECT、基本 scalar 排空和上下文/副作用边界有 loopback 证据；目标 OB profile、ExecuteReader、Oracle PrepareExecute、LOB/OUT/cursor/array 和收益仍待验收；不等同 MariaDB bulk |
+| Q20 multi-send/pipelining | 候选 | Java已有；.NET 已实现默认关闭的 prepared batch multi-send 子集 | Java路径需分模式核验 | `UseBatchMultiSend`、`OceanBaseBatch.MultiSend` | 当前仅可缓存 input-only DML/SELECT、基本 scalar 排空、64 MiB 分组边界和上下文/副作用边界有 loopback 证据；MySQL/Oracle 实库矩阵已加但本机无 profile 配置；ExecuteReader、Oracle PrepareExecute、LOB/OUT/cursor/array 和收益仍待验收；不等同 MariaDB bulk |
 | Q21 MariaDB bulk协议 | 排除 | 无支持承诺 | — | 无产品入口 | Java说明针对MariaDB，不能冒充OceanBase批量协议 |
 | Q22 Cancel/CommandTimeout/调用者取消 | 核心 | 同步/异步命令预算与取消 | 同左 | OceanBaseCommand.Cancel、CommandExchange、PhysicalSession | 取消不保证服务器未执行；发送后状态按X04处理，完整故障顺序待验收 |
 | Q23 单会话活动操作/所有权 | 核心 | 活动操作冲突拒绝 | 同左 | PhysicalSession.Reserve/Acquire及reader/lease所有权 | 不承诺同一连接MARS或多线程共享command/parameter；跨连接并发走池 |
