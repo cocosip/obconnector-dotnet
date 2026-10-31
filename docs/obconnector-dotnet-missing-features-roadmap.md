@@ -524,7 +524,7 @@ Oracle NUMBER 的失败已修正；没有修改产品 NUMBER 返回类型或删�
 
 | 子项 | 进度 | 本轮结论 / 下一步 |
 | --- | --- | --- |
-| D-03a 普通 SELECT CURSOR 列 | `P2 / 待服务端形状` | 本地四字节 binary/text 解析已有；当前单值 binary 执行报 902，多行父值可返回但 FETCH 报 1002。text 十进制解析不足以得到可读 child，保持拒绝；取得完整可读取形状及生命周期证据后再扩展 |
+| D-03a 普通 SELECT CURSOR 列 | `服务端限制（当前目标版本已验收形状）` | 本地四字节 binary/text 解析已有；当前单值 binary 执行报 902，多行父值可返回但 FETCH 报 1002，Java 对同一形状同码。text 十进制解析也无法得到可读 child；当前形状跳过客户端开发，若未来 profile 提供不同可读取形状再重新评估 |
 | D-03b OUT / REF CURSOR offset | `P0 / 待范围与 wire` | command 输出计划仍拒绝 UseCursorOffset；返回的 REF CURSOR 用独立普通 FETCH。Java CursorResultSet 在构造时对 RefCursor 排除 offset，RefCursor 走 cursorFetchInternal；没有可直接移植的输出 offset 成功证据。不新增滚动 API；若纳入须先定义归属、位置、版本和服务端契约 |
 | D-03c 已有输出/普通 cursor 的生命周期 | `P4`，仅下述子集 | 新增 sync/async、显式/隐式 Prepare、极小/极大父 FetchSize、NULL INOUT、输出 offset 发送前拒绝、服务端后段错误后的原子输出与恢复执行；普通 cursor/offset 和已有 REF CURSOR 释放/结果限制回归见报告；不关闭 a/b 或全部参数类型组合 |
 
@@ -543,6 +543,8 @@ Oracle NUMBER 的失败已修正；没有修改产品 NUMBER 返回类型或删�
   忽略目录探针直接读取 COM_QUERY 行：多行子查询 metadata 类型 163、字段长度十字节，
   不是四字节 ID。两个常量样本 × autocommit 开/关四项，按返回数字直接发送 FETCH 均报
   `1002/HY000`。没有增加十进制猜测解码或对 ID 改位的补丁。
+- 因此当前目标版本已覆盖的 scalar/多行 `SELECT CURSOR` 列形状满足“服务端不支持且 Java 同样交互”的
+  归因条件，标记为服务端限制并跳过客户端开发；这不扩展到尚未观察到的其他服务端形状。
 - 同一 Java profile 的单 PL 块 `OPEN ... FOR` 返回两行 REF CURSOR 成功；只能证明 PL 形状。
   固定 Java 源码 `6adc311` 的 `CursorResultSet` / `RefCursor`、protocol 普通/offset FETCH
   也已对照；RefCursor 明确排除父类 offset 选择，不能从普通 SELECT offset 推导输出支持。

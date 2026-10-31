@@ -51,7 +51,7 @@
 | Q08 Reader/NextResult/typed getters | 核心 | 有实现 | 有实现 | OceanBaseDataReader、QueryResult、ResultColumn | metadata、NULL、精度与类型身份须一致 |
 | Q09 SequentialAccess/流式读取 | 核心资源 | 有实现 | 有实现，含LOB资源 | SequentialRow、LobReadStream、LobTextReader | 半读/取消/关闭/池租约子集验收，不等于全部资源交错 |
 | Q10 cursor fetch/page/offset | 可选 | prepared cursor分页 | prepared cursor分页，offset有条件 | QueryResult.Cursor、OracleCursorOwner | 普通cursor与PL输出不同；输出offset拒绝 |
-| Q11 REF CURSOR结果/OUT | 可选Oracle | — | 四字节cursor/OUT实现 | OceanBaseRefCursor、QueryResult.OraclePrepareExecute | J4；SELECT CURSOR列当前实库形状失败，不能整体称支持 |
+| Q11 REF CURSOR结果/OUT | 可选Oracle | — | 四字节cursor/OUT实现 | OceanBaseRefCursor、QueryResult.OraclePrepareExecute | J4；当前目标版本 `SELECT CURSOR` 列形状为服务端限制且 Java 同样失败，不能整体称支持；PL OUT/REF CURSOR 仍按独立契约验收 |
 | Q12 REF CURSOR IN/INOUT | 排除当前范围 | — | 发送前拒绝 | OracleCommandPlan/参数校验 | 无参考writer依据；不影响普通标量INOUT |
 | Q13 CommandBehavior | ADO.NET契约 | SchemaOnly/KeyInfo/SingleRow/SingleResult/CloseConnection子集 | 同左 | OceanBaseCommand.KeyInfo、KeyInfoQuery | SchemaOnly不执行、不上传；KeyInfo仅证明的单表形状扩隐藏键 |
 | Q14 DbBatch顺序执行/结果 | 可选ADO.NET适配 | 有实现 | 有实现 | OceanBaseBatch、OceanBaseBatchReader | 仅net8/9/10；失败前缀/未执行后缀清晰，不承诺原子批次 |
