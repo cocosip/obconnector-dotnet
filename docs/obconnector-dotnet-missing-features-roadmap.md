@@ -124,7 +124,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute、流/LOB、输出、cursor、array binding 和 text fallback |
 | D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
 | D-10 | `P2`；显式 Prepare 的 SDO_GEOMETRY 整列读取子集已实现并验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持整列读取的通用 OBJECT 路径；若纳入输入、WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
-| D-11 | `P0`；PL-only 形状已固定，wire/公共 API 未闭合 | ANYDATA PL 形状调查与有条件 codec（T17） | 服务端明确仅支持 PL，不能作为表列或永久存储；Java 没有 ANYDATA 专用 codec | 先确定 PL 参数/返回值形状和可枚举内部类型；确认是否值得提供 public API | 先记录可实现形状或阻塞结论；实现仅限明确的 PL 形状；内部未知类型拒绝，不增加任意对象兜底 |
+| D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
 | D-12 | `P4`（a/b/c 的当前版本通用路径已分别验收） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，RoaringBitmap 查询为 BLOB/byte[]；Oracle ARRAY 归 D-04 | 其他版本、稀疏/嵌套形状和专用 codec 需求仍需单独 profile 证据 | a/c 复用 String，b 复用 Binary 读取并通过 `rb_build_varbinary(?)` 写入；不新增未经证实的专用 codec |
 
 D-12 分为以下三个子任务，状态都维护在本文，父项只有在所有子项结论闭合后才能关闭：
@@ -1146,17 +1146,20 @@ NCHAR/NVARCHAR2、浮点和 UROWID 等多种内部类型；访问类型不匹配
 
 这意味着 ANYDATA 不能按普通持久列类型建立一个“读写 bytes”契约。固定版 Connector/J 的
 `ColumnType` 没有 ANYDATA protocol type，通用复杂值描述也只覆盖 OBJECT/COLLECTION 及已知
-成员，不等于支持 PL ANYDATA 的自描述类型和逐段访问。当前没有确认 Java 的 ANYDATA 参数、
-返回值或 `GETTYPE/GETTYPENAME` 生命周期测试。
+成员，不等于支持 PL ANYDATA 的自描述类型和逐段访问。当前 Oracle 4.4.2.2 直连 profile
+进一步执行 `SELECT SYS.ANYDATA.CONVERTVARCHAR2('患者') FROM DUAL` 和
+`SELECT SYS.ANYDATA.CONVERTNUMBER(7) FROM DUAL`：Connector/J 2.4.14 两条均返回
+`OBE-00942`；.NET 对同一 SQL 均返回 `42S02`。这确认的是目标服务端没有可调用的
+`SYS.ANYDATA` 包，满足 Java 同交互失败的服务端限制条件。
 
 当前 .NET 同样没有 ANYDATA provider type、内部类型标识或公共 PL wrapper。可审计的现有路径
 是让 SQL/PL 先调用 `SYS.ANYDATA.CONVERT*` 和 `ACCESS*`，再通过已有标量、LOB 或复杂值路径
 传输；这属于服务端转换，不关闭 ANYDATA 客户端能力缺口。
 
-调查结论：D-11 保持 `P0 / PL 形状已固定，wire 与公共 API 未闭合`。重新开启实现前，需要
-先决定是否承诺某个有限的 PL 参数/返回值集合，并为 NULL、类型名、未知内部类型、LOB、
-OBJECT/COLLECTION 和失败后的输出发布规则定义可测试契约；不把 ANYDATA 当作普通列或任意对象
-兜底。
+调查结论：D-11 在当前目标版本标记为**服务端限制，跳过客户端开发**。只有后续目标版本/租户
+能成功调用 `SYS.ANYDATA.CONVERT*`，并提供 Java/.NET 可观察的参数或返回 wire 时，才重新定义
+有限 PL 参数/返回值集合及 NULL、类型名、未知内部类型、LOB、OBJECT/COLLECTION 和失败后的
+输出发布规则；不把 ANYDATA 当作普通列或任意对象兜底。
 
 ### D-12b：RoaringBitmap wire 形状调查（2026-10-31，`P4`）
 

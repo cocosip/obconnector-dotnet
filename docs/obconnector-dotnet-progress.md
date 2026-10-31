@@ -85,7 +85,7 @@
 | T14 命名OBJECT/collection | — | 加载描述、预装类型、嵌套值子集 | OceanBaseComplexType/Value、ComplexTypeContext/Codec | 类型DDL失效；named与anonymous、输入与结果分别验收；当前 OBJECT/嵌套 OBJECT NULL 输出身份为服务端限制，collection NULL 形状另有证据 |
 | T15 复杂LOB/cursor成员 | — | 结果读取子集；命名LOB内容/匿名locator输入子集 | ComplexValueCodec、SequentialRow.Complex | 命名locator回绑/cursor输入/未解析RETURNING身份/文本复杂结果拒绝 |
 | T16 LONG/LONG RAW/BFILE/NCLOB | — | 排除专用支持 | 无专用API/模拟实现 | O4明确不支持；Java别名/枚举不能扩大范围 |
-| T17 XMLType/SDO_GEOMETRY/ANYDATA | — | 服务端有条件能力，.NET专用codec未承诺；XMLType ownerless 列形状明确拒绝 | 可使用服务端转换为已支持标量（XMLSERIALIZE→CLOB 已验证） | O8；不是现有复杂codec自动支持；XMLType/SDO/ANYDATA 原生 wire 仍待证据 |
+| T17 XMLType/SDO_GEOMETRY/ANYDATA | — | XMLType/SDO 为服务端有条件能力，.NET专用codec未承诺；ANYDATA 在当前目标租户找不到 `SYS.ANYDATA`，Java/.NET 同 SQL 失败并按服务端限制跳过 | XMLType 可使用服务端转换为已支持标量（XMLSERIALIZE→CLOB 已验证）；SDO 显式 Prepare 整列读取已有通用 OBJECT 子集 | O8；不是现有复杂codec自动支持；XMLType 原生 wire 与更广 SDO 契约仍待证据，ANYDATA 需新版本/租户提供包后重开 |
 | T18 向量/位图/SQL数组 | 服务端版本相关；无专用codec承诺 | 不把MySQL扩展套用此模式 | 当前Oracle数组绑定不是这些类型 | O2；需新增wire/type证据与需求才纳入 |
 | T19 客户端SQL编码 | utf8mb4/mb3、ASCII、latin1、GB2312、GBK、GB18030/2022、DEC8、TIS620、EUCKR、SJIS、Big5、HKSCS/31 | 相同解析白名单，MySQL直连 SJIS/Big5 专项4/4通过 | 未列名字发送前拒绝；Oracle SJIS/Big5仍失败 | UJIS/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7 无当前服务端证据，暂不扩展 |
 | T20 结果/national编码 | 映射UTF8、UTF16/LE及已实现单/多字节collation（含GB2312 24/86、EUCKR 19/85） | 普通结果与national独立规则 | ResultCharacterSet、NationalCharacterSet | 未知collation/坏字节拒绝；GB2312/EUCKR指定直连结果/national子集见D-07，当前目标 Oracle 普通 EUCKR 初始化由服务端 900 限制且 Java 同交互失败；其他版本/部署及 UJIS/EUCJPMS 等仍未覆盖 |
