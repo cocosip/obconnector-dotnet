@@ -722,7 +722,8 @@ binary row 为 `0000040131`；collection 的 NULL 位为 true，row 为 `0004013
 3/90007 字节、sync/async，并用独立连接读回 BLOB；同时补充 flat/nested named BLOB payload
 framing 的本地断言。相关 Unit/协议组 **33/33** 通过，Integration 测试成功编译并发现 8 个
 用例，但本轮 Oracle 端点在握手响应前关闭连接，未进入目标 DML，不能把该结果归因为
-`932/22000` 或服务端不支持。
+`932/22000` 或服务端不支持。端点恢复后再次以 `oracle-direct` 临时 profile 重跑，仍为
+8/8 在 `172.16.2.45:2881` 握手读包阶段断开，未新增 DML 证据。
 
 固定 Connector/J 2.4.14 证据仍显示 `ComplexUtil.storeComplexAttrData` 没有 BLOB/CLOB writer；
 Java 无法发出同一输入形状，因此不能满足“Java 同样失败”条件，也不能据此关闭 D-04a2。
