@@ -12,6 +12,66 @@ namespace OceanBaseConnector.IntegrationTests.Oracle;
 
 public sealed class ComplexLobInputTests
 {
+    public static TheoryData<string, bool, bool, int> NamedBlobDmlCases()
+    {
+        var cases = new TheoryData<string, bool, bool, int>();
+        foreach (var profileName in ProfileTheoryData.OraclePrepareExecuteObjects())
+        {
+            var profile = IntegrationEnvironment.GetProfile(profileName);
+            if (!profile.CreateBuilder().UseLobLocators) continue;
+            foreach (var nested in new[] { false, true })
+                foreach (var asynchronous in new[] { false, true })
+                    foreach (var size in new[] { 3, 90007 }) cases.Add(profile.Name, nested, asynchronous, size);
+        }
+        return cases;
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(NamedBlobDmlCases))]
+    public Task NamedBlobObjectMembersCanBeStored(string profile, bool nested, bool asynchronous, int size)
+        => VerifyNamedBlobDml(IntegrationEnvironment.GetProfile(profile), nested, asynchronous, size);
+
+    internal static async Task VerifyNamedBlobDml(IntegrationProfile profile, bool nested, bool asynchronous, int size)
+    {
+        var settings = profile.CreateBuilder();
+        if (!profile.Oracle || !profile.CreateObjects || !settings.UseLobLocators || !settings.UseOraclePrepareExecute)
+            throw new InvalidOperationException("An explicitly authorized Oracle object/PrepareExecute/LOB profile is required.");
+
+        await using var db = new DatabaseContext(profile);
+        await using var connection = await db.OpenAsync();
+        var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY, v BLOB", CancellationToken.None);
+        var childName = nested ? db.NewObject("TYPE") : null;
+        if (childName != null)
+            await db.ExecuteAsync(connection, "CREATE TYPE " + childName + " AS OBJECT (a BLOB)", CancellationToken.None);
+        var rootName = db.NewObject("TYPE");
+        await db.ExecuteAsync(connection, "CREATE TYPE " + rootName + " AS OBJECT (" + (nested ? "c " + childName : "a BLOB") + ")", CancellationToken.None);
+        var procedure = db.NewObject("PROCEDURE");
+        var member = nested ? "p.c.a" : "p.a";
+        await db.ExecuteAsync(connection, "CREATE PROCEDURE " + procedure + "(p IN " + rootName + ") IS BEGIN INSERT INTO " + table + " VALUES (1, " + member + "); END;", CancellationToken.None);
+        var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
+        var type = await connection.GetComplexTypeAsync(owner, rootName);
+        var bytes = Enumerable.Range(0, size).Select(i => (byte)(i * 31)).ToArray();
+        var value = nested ? type.CreateValue(type.Members[0].ComplexType!.CreateValue(bytes)) : type.CreateValue(bytes);
+
+        await using (var command = db.Command(connection, procedure))
+        {
+            command.CommandType = CommandType.StoredProcedure;
+            DatabaseContext.Parameter(command, "p", value);
+            if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+        }
+
+        await using var verification = await db.OpenAsync();
+        await using var query = db.Command(verification, "SELECT v FROM " + table + " WHERE id=1");
+        await using var reader = asynchronous ? await query.ExecuteReaderAsync() : query.ExecuteReader();
+        Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+        using var lob = reader.GetFieldValue<OceanBaseLob>(0);
+        using var source = lob.OpenRead();
+        using var actual = new MemoryStream();
+        if (asynchronous) await source.CopyToAsync(actual); else source.CopyTo(actual);
+        Assert.Equal(bytes, actual.ToArray());
+        Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+    }
+
     public static TheoryData<string, bool, string, bool> Cases()
     {
         var cases = new TheoryData<string, bool, string, bool>();

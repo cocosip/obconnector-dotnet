@@ -716,6 +716,18 @@ binary row 为 `0000040131`；collection 的 NULL 位为 true，row 为 `0004013
 未重跑完整 Unit/Consumer、所有 OS/runtime、真实代理/TLS/OB20/KDC、长期压力；BLOB OBJECT
 成员 DML、复杂 RETURNING/cursor/text、匿名 PL 等剩余任务仍需后续开发与证据。
 
+#### D-04a2：named BLOB OBJECT DML 回归覆盖（2026-10-31，归因未关闭）
+
+新增 `ComplexLobInputTests.NamedBlobObjectMembersCanBeStored`，覆盖 flat/nested named OBJECT、
+3/90007 字节、sync/async，并用独立连接读回 BLOB；同时补充 flat/nested named BLOB payload
+framing 的本地断言。相关 Unit/协议组 **33/33** 通过，Integration 测试成功编译并发现 8 个
+用例，但本轮 Oracle 端点在握手响应前关闭连接，未进入目标 DML，不能把该结果归因为
+`932/22000` 或服务端不支持。
+
+固定 Connector/J 2.4.14 证据仍显示 `ComplexUtil.storeComplexAttrData` 没有 BLOB/CLOB writer；
+Java 无法发出同一输入形状，因此不能满足“Java 同样失败”条件，也不能据此关闭 D-04a2。
+当前仍保持 `P2 / 待 wire 与归因`，不修改 `ComplexValueCodec`，待服务端握手恢复后重跑该组。
+
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
 基线 `ae40dba`。D-04a2 继续核对服务端命名成员 deserialize 与 Java writer；Java

@@ -11,6 +11,22 @@ namespace OceanBaseConnector.UnitTests
 {
     public sealed partial class TextCommandTests
     {
+        [Fact]
+        public void NamedBlobObjectPayloadPreservesRawBytesAtEachObjectLevel()
+        {
+            var blob = new Internal.Values.ComplexType(210);
+            var flat = new Internal.Values.ComplexType(false, blob);
+            var nested = new Internal.Values.ComplexType(false, new Internal.Values.ComplexType(false, blob));
+            var bytes = new byte[] { 0, 255, 23 };
+
+            Assert.Equal(new byte[] { 0, 3, 0, 255, 23 }, Internal.Values.ComplexValueCodec.EncodeParameter(
+                flat, new object?[] { bytes }, OceanBaseCompatibilityMode.Oracle));
+            Assert.Equal(new byte[] { 0, 0, 3, 0, 255, 23 }, Internal.Values.ComplexValueCodec.EncodeParameter(
+                nested, new object?[] { new object?[] { bytes } }, OceanBaseCompatibilityMode.Oracle));
+            Assert.Equal(new byte[] { 0, 0 }, Internal.Values.ComplexValueCodec.EncodeParameter(
+                flat, new object?[] { Array.Empty<byte>() }, OceanBaseCompatibilityMode.Oracle));
+        }
+
         [Theory]
         [InlineData("gb18030", false, false)]
         [InlineData("gb18030", true, false)]
