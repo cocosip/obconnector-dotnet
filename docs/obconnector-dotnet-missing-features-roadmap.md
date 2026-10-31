@@ -69,7 +69,7 @@ profile 证据。因此它的状态是 `P0 / 代码缺失 + 待证据`，满足�
 | 类型 | OceanBase 判断 | Java 2.4.14 判断 | .NET 判断 |
 | --- | --- | --- | --- |
 | XMLType | 服务端 Oracle 模式条件能力 | 没有确认到通用 XMLType wire/value codec；Java 的 SQLXML 路径明确拒绝 | 没有专用 codec；当前只能使用服务端转换成已支持标量 |
-| SDO_GEOMETRY | 服务端 Oracle 模式条件空间类型 | 没有确认到通用 SDO 专用 codec | 没有专用 codec、空间 API 或 SRID/WKB 契约 |
+| SDO_GEOMETRY | 服务端 Oracle 模式条件空间类型 | 有通用 OBJECT/ARRAY 复杂值路径和 `SDO_` 元数据查询特判；没有确认专用 SDO/WKB/SRID 契约 | 没有专用 codec、空间 API 或 SRID/WKB 契约 |
 | ANYDATA | 服务端 PL/系统类型，有独立限制，不能当普通持久列 | 没有确认到普通列通用 codec | 没有专用 codec；必须先确定是 PL 参数/结果还是持久列需求 |
 
 因此 T17 要加入开发清单，但第一步不是直接实现，而是先固定目标版本、可用形状、参数/结果
@@ -118,8 +118,8 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | --- | --- | --- | --- | --- | --- |
 | D-08 | `P2`；本地 loopback 的 input-only DML 子集已实现，目标实库待验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；当前 .NET 新增 opt-in prepared batch send，OceanBase 目标版本和错误排序尚未证实 | 目标 OB 版本、MySQL/Oracle 模式 profile、协议抓包/收益基线、取消和 unknown-outcome 规则 | 真实 profile 验证；扩展结果集、Oracle PrepareExecute、流/LOB、输出、cursor、array binding 和 text fallback 前先补 wire/生命周期证据 |
 | D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
-| D-10 | `P0` | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 没有确认的通用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 先记录可实现形状或阻塞结论；实现时输入/结果/NULL/SRID/非法几何有明确行为；不把 GEOMETRY bytes 冒充 SDO |
-| D-11 | `P0` | ANYDATA PL 形状调查与有条件 codec（T17） | 服务端 PL/系统类型，不能默认作为普通持久列；Java 没有确认普通列 codec | 先确定 PL 参数/返回值形状和可枚举内部类型；确认是否值得提供 public API | 先记录可实现形状或阻塞结论；实现仅限明确的 PL 形状；内部未知类型拒绝，不增加任意对象兜底 |
+| D-10 | `P0`；服务端形状已固定，wire/契约未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 先记录可实现形状或阻塞结论；实现时输入/结果/NULL/SRID/非法几何有明确行为；不把 GEOMETRY bytes 冒充 SDO |
+| D-11 | `P0`；PL-only 形状已固定，wire/公共 API 未闭合 | ANYDATA PL 形状调查与有条件 codec（T17） | 服务端明确仅支持 PL，不能作为表列或永久存储；Java 没有 ANYDATA 专用 codec | 先确定 PL 参数/返回值形状和可枚举内部类型；确认是否值得提供 public API | 先记录可实现形状或阻塞结论；实现仅限明确的 PL 形状；内部未知类型拒绝，不增加任意对象兜底 |
 | D-12 | `P2`（a/c 已确认通用路径，b 待服务端） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；当前 4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，复用 String 路径；Oracle ARRAY 归 D-04 | 锁定 OB 版本、模式、DDL、列/参数 wire、Java 路径和真实 profile | a/c 的通用 String 路径有独立实库证据；b 需服务端版本/DDL/wire 证据；不新增未经证实的专用 codec |
 
 D-12 分为以下三个子任务，状态都维护在本文，父项只有在所有子项结论闭合后才能关闭：
@@ -1022,6 +1022,56 @@ Oracle 直连 profile 提供 XMLType 普通列与 PL 参数/输出的 metadata/t
 最大值和坏值行为；其中任一形状未确认，都保持发送前拒绝。Java SQLXML 的拒绝不满足
 “服务端限制且 Java 同样失败”的关闭条件。
 
+### D-10：SDO_GEOMETRY wire 形状调查（2026-10-31，`P0`）
+
+官方 Oracle 模式文档[空间数据类型概述][O9-sdo]确认：当前版本支持二维和三维的七类
+`SDO_GEOMETRY` 对象；支持默认构造、WKB/WKT 构造以及 WKB/WKT/GeoJSON 转换函数；表列中的
+`SDO_GEOMETRY` 按 BLOB 存储。`SDO_GEOMETRY` 本身仍是包含 `SDO_GTYPE`、`SDO_SRID`、
+`SDO_POINT`、`SDO_ELEM_INFO` 和 `SDO_ORDINATES` 的 Oracle OBJECT，坐标数组上限为
+1,048,576 个元素。由此可以关闭“服务端是否存在该类型”的问题，但不能从 BLOB 存储说明
+推出 PL OBJECT 参数的 wire 或客户端领域 API。
+
+固定版 Connector/J 2.4.14 的范围比“完全没有 Java 路径”更窄：
+
+- [`OceanBaseConnection`][J6-complex-connection] 的复杂类型加载对 `SDO_` 名称尝试 SYS 所有者，
+  并提供通用 `createStruct`/`createArrayOf` 入口；
+- [`ComplexDataType`][J6-complex-type]/[`ComplexUtil`][J6-complex-util] 能编码通用 OBJECT、
+  COLLECTION 及其已知标量成员；
+- 但固定版本没有发现 SDO 专用的 WKB/WKT/SRID 值类、领域方法或独立 SDO 测试，也没有确认
+  `SDO_GEOMETRY` 列/PL 参数的实际 type code 和 NULL/非法几何行为。
+
+当前 .NET 没有 `SDO_GEOMETRY` provider type、空间 API 或 SDO 专用结果身份；已有 Oracle
+`Binary`/BLOB 路径可以承载服务端 BLOB 存储的原始字节，但这不等于支持 SDO OBJECT 的属性
+访问、WKB/WKT 互转或 SRID 校验。已有 MySQL `GEOMETRY` type-255 支持不能复用为 Oracle
+SDO，二者的对象结构和 wire 契约不同。
+
+调查结论：D-10 保持 `P0 / 待 wire 与契约`。后续必须选定一个可验收形状（原始 BLOB 存储、
+通用 OBJECT 参数/结果，或专用 WKB/WKT API），并在目标 Oracle 直连 profile 中记录 metadata、
+NULL、SRID、非法几何、坐标上限和独立读回；在此之前不新增 SDO enum 或把 GEOMETRY bytes
+冒充 SDO。
+
+### D-11：ANYDATA PL 形状调查（2026-10-31，`P0`）
+
+官方[ANYDATA 概述][O10-anydata]给出了明确的服务端边界：`ANYDATA` 是包含实例和类型描述的
+自描述类型，当前**仅支持在 PL 中使用**，不支持作为表列或永久存储，也不支持包含嵌入式 LOB
+的实例永久存储；该内容只适用于企业版 Oracle 模式。官方列出的 `CONVERT*` 构造函数和
+`ACCESS*` 成员函数覆盖 NUMBER、日期/字符、RAW/LOB、OBJECT/COLLECTION、时间戳、区间、
+NCHAR/NVARCHAR2、浮点和 UROWID 等多种内部类型；访问类型不匹配时返回 NULL。
+
+这意味着 ANYDATA 不能按普通持久列类型建立一个“读写 bytes”契约。固定版 Connector/J 的
+`ColumnType` 没有 ANYDATA protocol type，通用复杂值描述也只覆盖 OBJECT/COLLECTION 及已知
+成员，不等于支持 PL ANYDATA 的自描述类型和逐段访问。当前没有确认 Java 的 ANYDATA 参数、
+返回值或 `GETTYPE/GETTYPENAME` 生命周期测试。
+
+当前 .NET 同样没有 ANYDATA provider type、内部类型标识或公共 PL wrapper。可审计的现有路径
+是让 SQL/PL 先调用 `SYS.ANYDATA.CONVERT*` 和 `ACCESS*`，再通过已有标量、LOB 或复杂值路径
+传输；这属于服务端转换，不关闭 ANYDATA 客户端能力缺口。
+
+调查结论：D-11 保持 `P0 / PL 形状已固定，wire 与公共 API 未闭合`。重新开启实现前，需要
+先决定是否承诺某个有限的 PL 参数/返回值集合，并为 NULL、类型名、未知内部类型、LOB、
+OBJECT/COLLECTION 和失败后的输出发布规则定义可测试契约；不把 ANYDATA 当作普通列或任意对象
+兜底。
+
 ## 依据
 
 - [功能能力矩阵](obconnector-dotnet-progress.md)
@@ -1038,3 +1088,8 @@ Oracle 直连 profile 提供 XMLType 普通列与 PL 参数/输出的 metadata/t
 [O8-xmltype]: https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/zh-CN/700.reference/500.sql-reference/100.sql-syntax/300.common-tenant-of-oracle-mode/300.basic-elements-of-oracle-mode/100.built-in-data-types-of-oracle-mode/1100.xml-date-type-of-oracle-mode/100.xml-data-type-overview-of-oracle-mode.md
 [J2-sqlxml]: https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/OceanBaseConnection.java#L1778-L1785
 [J3-columntype]: https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/internal/ColumnType.java#L69-L118
+[O9-sdo]: https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/zh-CN/700.reference/500.sql-reference/100.sql-syntax/300.common-tenant-of-oracle-mode/300.basic-elements-of-oracle-mode/100.built-in-data-types-of-oracle-mode/1200.spatial-data-type-of-oracle-mode/100.spatial-data-type-overview-of-oracle-mode.md
+[O10-anydata]: https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/zh-CN/700.reference/600.pl-reference/300.pl-oracle/1400.pl-system-package-oracle/27800.anydata-type-oracle/100.anydata-type-overview-oracle.md
+[J6-complex-connection]: https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/OceanBaseConnection.java
+[J6-complex-type]: https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/extend/datatype/ComplexDataType.java
+[J6-complex-util]: https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/extend/datatype/ComplexUtil.java
