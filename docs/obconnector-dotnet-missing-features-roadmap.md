@@ -601,7 +601,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
 | D-04d 复杂 cursor 成员 | `P2`；SQL OBJECT 持久类型子形状为当前目标服务端限制，PL-only 形状仍待证据 | 同一租户 `CREATE TYPE ... AS OBJECT (c SYS_REFCURSOR)` 在 Java 返回 `PLS-00201`、.NET 返回 `42000`；两者均在类型创建阶段失败，因此跳过该持久类型子形状的客户端改动。完整 child FETCH/所有权及 PL-only 记录/返回形状尚未确认；D-03 的普通列失败不能覆盖这些形状 |
-| D-04e 复杂 text 结果及其余 collection 形状 | `P2 / 待证据` | text 结果仍拒绝；命名构造输入复用 D-02d1～d3。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
+| D-04e 复杂 text 结果及其余 collection 形状 | `P2 / 待证据` | 同租户 .NET 探针确认 text 复杂列仍在客户端拒绝；显式 Prepare 在预加载同一 type 描述后可读回。没有明确 text wire 前不实现猜测性 parser。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
 
 本模块先验证 a/b 已有实现的边界；若实库暴露缺陷，先保留失败证据、补最小回归，再决定
 共享修复。所有新增计划、结果及提交号仍记录在本文：
@@ -764,6 +764,21 @@ named type 的精确形状；匿名数组、其他未知 element 和没有显式
 | 本地协议单测 | opaque named OBJECT 绑定/匿名类型拒绝 1/1 |
 | 构建 | IntegrationTests Release 0 warning / 0 error；NuGet 漏洞源不可达时使用 `NuGetAudit=false`，依赖已由本地缓存还原 |
 | 未关闭边界 | D-04a2 BLOB OBJECT 成员 DML、复杂 cursor/text/其他 collection 形状、跨版本/代理/TLS/长期压力仍未关闭；D-04 父项保持 `P2` |
+
+#### D-04e：复杂 text 结果探针（2026-10-31）
+
+在同一 Oracle 4.4.2.2 `oracle-direct`、TLS Disabled 租户上，用临时 .NET
+Integration 探针创建随机 named OBJECT `(n NUMBER, s VARCHAR2(40))`，写入 `7/中文`，
+再分别执行无参数 text 查询和显式 `Prepare` 查询。text 查询收到 type 160 复杂列元数据后由
+客户端抛出 `NotSupportedException: Complex columns require the binary result protocol`，
+外层执行异常因此标记该连接的响应未完全消费；重新建立连接并预加载同一 type 描述后，显式
+Prepare 查询成功读回 `7/中文`。这证明当前 .NET 缺口仍是 text 结果路径，不能把 binary
+成功泛化为 text 已完成。
+
+该结果与同租户 Connector/J 观察一致：Java text Statement 也没有可用 OBJECT payload；在
+没有官方 text wire 解码依据前，不新增 text OBJECT parser，D-04e 继续保持 `P2 / 待证据`。
+临时探针已删除，未作为产品回归用例提交；持久 nested-table 列和集合 NULL OBJECT 的
+服务端边界仍按上表保留。
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
