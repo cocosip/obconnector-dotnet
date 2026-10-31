@@ -272,6 +272,8 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
+        internal void BeginBatchResponse() => _channel.BeginResponse();
+
         internal byte[] Receive(bool allowUnsupportedPrepare = false)
         {
             try { return CheckPacket(ReadPacket(), allowUnsupportedPrepare: allowUnsupportedPrepare); }

@@ -228,7 +228,8 @@ namespace OceanBaseConnector.UnitTests
                 await StatementCommand(channel, 22); await Prepared(channel, 91, 0);
                 var first = await StatementCommand(channel, 23); Assert.Equal(90, first[1]);
                 var second = await StatementCommand(channel, 23); Assert.Equal(91, second[1]);
-                await channel.WritePacketAsync(Ok(2)); await channel.WritePacketAsync(Ok(3));
+                channel.BeginResponse(); await channel.WritePacketAsync(Ok(2));
+                channel.BeginResponse(); await channel.WritePacketAsync(Ok(3));
                 await StatementCommand(channel, 25); await StatementCommand(channel, 25);
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true;Batch Multi Send Number=2");
@@ -256,8 +257,10 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(90, (await StatementCommand(channel, 23))[1]);
                 Assert.Equal(91, (await StatementCommand(channel, 23))[1]);
                 sent.SetResult();
+                channel.BeginResponse();
                 await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(Column("n", 8)); await channel.WritePacketAsync(Eof());
                 await channel.WritePacketAsync(new byte[] { 0, 0, 10, 0, 0, 0, 0, 0, 0, 0 }); await channel.WritePacketAsync(Eof());
+                channel.BeginResponse();
                 await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(Column("n", 8)); await channel.WritePacketAsync(Eof());
                 await channel.WritePacketAsync(new byte[] { 0, 0, 20, 0, 0, 0, 0, 0, 0, 0 }); await channel.WritePacketAsync(Eof());
                 await StatementCommand(channel, 25); await StatementCommand(channel, 25);
@@ -286,9 +289,10 @@ namespace OceanBaseConnector.UnitTests
                 }
                 Assert.Equal(90, (await StatementCommand(channel, 23))[1]);
                 Assert.Equal(91, (await StatementCommand(channel, 23))[1]);
-                await channel.WritePacketAsync(Ok(2)); await channel.WritePacketAsync(Ok(3));
+                channel.BeginResponse(); await channel.WritePacketAsync(Ok(2));
+                channel.BeginResponse(); await channel.WritePacketAsync(Ok(3));
                 Assert.Equal(92, (await StatementCommand(channel, 23))[1]);
-                await channel.WritePacketAsync(Ok(4));
+                channel.BeginResponse(); await channel.WritePacketAsync(Ok(4));
                 for (var i = 0; i < 3; i++) await StatementCommand(channel, 25);
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true;Batch Multi Send Number=2");

@@ -89,6 +89,7 @@ namespace OceanBaseConnector
                 for (var i = group.Start; i < group.End; i++)
                 {
                     exchange.BatchCommand = operation.Items[i];
+                    exchange.BeginBatchResponse();
                     var count = ConsumeBatchResponse(exchange, operation, captureScalar && !scalar.Set, scalar);
                     operation.Items[i].Affected = operation.Counts[i] = count;
                     if (count >= 0) { anyAffected = true; total = checked(total + count); }
@@ -123,6 +124,7 @@ namespace OceanBaseConnector
                 for (var i = group.Start; i < group.End; i++)
                 {
                     exchange.BatchCommand = operation.Items[i];
+                    exchange.BeginBatchResponse();
                     var count = await ConsumeBatchResponseAsync(exchange, operation, captureScalar && !scalar.Set, scalar).ConfigureAwait(false);
                     operation.Items[i].Affected = operation.Counts[i] = count;
                     if (count >= 0) { anyAffected = true; total = checked(total + count); }

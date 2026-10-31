@@ -124,6 +124,12 @@ namespace OceanBaseConnector.Internal.Protocol
             _diagnostics.Boundary("begin");
         }
 
+        internal void BeginResponse()
+        {
+            EnsureIdle();
+            _sequence = 1;
+        }
+
         internal bool HasStartedFrameWrite => _frameWriteStarted;
 
         public byte[] ReadPacket()

@@ -59,8 +59,10 @@
 `COM_STMT_BULK_EXECUTE` 不同。.NET 已增加默认关闭的 prepared batch multi-send 子集，覆盖
 input-only DML、基本 scalar 排空、数量/64 MiB 分组和发送状态保护；本地 loopback 已通过。
 
-OceanBase 服务端是否在目标版本、目标模式和目标连接路径上能正确处理该路径，仍没有真实
-wire 证据。因此它的状态是 `P2 / 实现子集已落地 + 实库待证据`，先保持首个子集边界。
+VPN 恢复后的 4.4.2.2 MySQL/Oracle 直连临时 profile 已覆盖 DML/scalar × sync/async，
+**8/8 通过**；过程中修复了客户端每个 pipelined 响应边界的 packet sequence 重置。该证据
+只把首个 input-only 子集提升到 `P4`，不外推 ExecuteReader、Oracle PrepareExecute、输出/
+LOB/cursor/array、流、text fallback、代理/OB20、收益和更大错误排序矩阵。
 
 ### T17 XMLType、SDO_GEOMETRY、ANYDATA
 
@@ -94,7 +96,8 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 本日已在线复核同一固定文档提交的[向量][T18-vector]、[位图][T18-bitmap]、[数组概述][T18-array]
 和[数组列 DDL][T18-array-ddl]，后者列出支持元素和最多六层嵌套。
-这确认了服务端功能存在，尚未证明当前两个 4.4.2.2 租户支持所有形状，也未确定 binary 参数/结果的类型码。
+这确认了服务端功能存在；当前两个 4.4.2.2 租户仍不代表所有形状，但本轮已在 MySQL 直连 profile
+确认 RoaringBitmap 查询为 BLOB/byte[]，并确认可通过现有 Binary 参数调用 `rb_build_varbinary`。
 
 ## 开发任务列表
 
@@ -117,18 +120,18 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P2`；本地 loopback 的 input-only DML 和基本 scalar 结果排空子集已实现，目标实库待验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；当前 .NET 新增 opt-in prepared batch send，OceanBase 目标版本和错误排序尚未证实 | 目标 OB 版本、MySQL/Oracle 模式 profile、协议抓包/收益基线、取消和 unknown-outcome 规则 | 真实 profile 验证；扩展 ExecuteReader、Oracle PrepareExecute、流/LOB、输出、cursor、array binding 和 text fallback 前先补 wire/生命周期证据 |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar 子集已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；首个子集不含 ExecuteReader、Oracle PrepareExecute、流/LOB、输出、cursor、array binding 和 text fallback |
 | D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
 | D-10 | `P0`；服务端形状已固定，wire/契约未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 先记录可实现形状或阻塞结论；实现时输入/结果/NULL/SRID/非法几何有明确行为；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0`；PL-only 形状已固定，wire/公共 API 未闭合 | ANYDATA PL 形状调查与有条件 codec（T17） | 服务端明确仅支持 PL，不能作为表列或永久存储；Java 没有 ANYDATA 专用 codec | 先确定 PL 参数/返回值形状和可枚举内部类型；确认是否值得提供 public API | 先记录可实现形状或阻塞结论；实现仅限明确的 PL 形状；内部未知类型拒绝，不增加任意对象兜底 |
-| D-12 | `P2`（a/c 已确认通用路径，b 官方形状已确认但目标 profile 待证据） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；当前 4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，复用 String 路径；Oracle ARRAY 归 D-04 | 锁定 OB 版本、模式、DDL、列/参数 wire、Java 路径和真实 profile | a/c 的通用 String 路径有独立实库证据；b 需服务端版本/DDL/wire 证据；不新增未经证实的专用 codec |
+| D-12 | `P4`（a/b/c 的当前版本通用路径已分别验收） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，RoaringBitmap 查询为 BLOB/byte[]；Oracle ARRAY 归 D-04 | 其他版本、稀疏/嵌套形状和专用 codec 需求仍需单独 profile 证据 | a/c 复用 String，b 复用 Binary 读取并通过 `rb_build_varbinary(?)` 写入；不新增未经证实的专用 codec |
 
 D-12 分为以下三个子任务，状态都维护在本文，父项只有在所有子项结论闭合后才能关闭：
 
 | 子项 | 进度/已确认 | 具体开发与验证范围 | 当前缺口 |
 | --- | --- | --- | --- |
 | D-12a VECTOR（当前版本稠密） | `P4`，4.4.2.2 MySQL 直连通用 String 子集 | `VECTOR(3)` DDL、NULL/文本值、参数绑定、显式/隐式 Prepare、结果 metadata 和独立读回；Java 2.4.14 同样返回 `CHAR`/`String` | 当前版本没有专用 wire/type code；`SPARSEVECTOR` 在目标服务端返回 1064，保留为版本边界 |
-| D-12b RoaringBitmap | `P0`；官方 DDL/函数/二进制形状已确认，目标 profile 未验收 | 确认列 DDL、输入/输出格式、整数边界、集合语义、NULL/空集合/坏数据；确定是否暴露原始 bytes 或 provider 值并补独立读回 | 目标 profile、序列化版本、wire 类型与严格校验待确认；不能复用 BIT 数值契约 |
+| D-12b RoaringBitmap | `P4`；4.4.2.2 MySQL 直连通用 Binary/SQL 函数子集 | DDL、NULL/空集合、`rb_from_string`、64 位值、raw metadata、`rb_to_string`/`rb_to_array`、`rb_build_varbinary(?)` 回绑和坏 raw 行为已验收 | 查询返回 `BLOB`/`byte[]`；直接把 `byte[]` 绑定到 `ROARINGBITMAP` 列由服务端返回 `1235/0A000`，属于服务端 prepared DML 限制；未新增专用 provider type |
 | D-12c MySQL ARRAY | `P4`，4.4.2.2 MySQL 直连通用 String 子集 | `ARRAY(INT)` DDL、NULL/文本值、参数绑定、显式/隐式 Prepare、结果 metadata 和独立读回；Java 2.4.14 同样返回 `CHAR`/`String` | 当前版本没有专用 wire/type code；嵌套元素、专用参数 metadata 和其他版本仍待确认，不能用 Oracle 类型码 161 代替 |
 
 ### 第三阶段：已有代码的部署和故障验收
@@ -725,14 +728,15 @@ OBJECT 的 `getObject/wasNull` 也未报告外层 NULL，满足“服务端不�
 
 新增 `ComplexLobInputTests.NamedBlobObjectMembersCanBeStored`，覆盖 flat/nested named OBJECT、
 3/90007 字节、sync/async，并用独立连接读回 BLOB；同时补充 flat/nested named BLOB payload
-framing 的本地断言。相关 Unit/协议组 **33/33** 通过，Integration 测试成功编译并发现 8 个
-用例，但本轮 Oracle 端点在握手响应前关闭连接，未进入目标 DML，不能把该结果归因为
-`932/22000` 或服务端不支持。端点恢复后再次以 `oracle-direct` 临时 profile 重跑，仍为
-8/8 在 `172.16.2.45:2881` 握手读包阶段断开，未新增 DML 证据。
+framing 的本地断言。相关 Unit/协议组 **33/33** 通过。VPN 恢复后以 `oracle-direct` 直连
+`172.16.2.45:2881` 重跑，8/8 均进入目标 DML 并稳定返回服务端 `932/22000`（大小、嵌套和
+sync/async 均一致），没有读回行可验收。
 
 固定 Connector/J 2.4.14 证据仍显示 `ComplexUtil.storeComplexAttrData` 没有 BLOB/CLOB writer；
 Java 无法发出同一输入形状，因此不能满足“Java 同样失败”条件，也不能据此关闭 D-04a2。
-当前仍保持 `P2 / 待 wire 与归因`，不修改 `ComplexValueCodec`，待服务端握手恢复后重跑该组。
+当前仍保持 `P2 / 已复现但待 wire 与归因`，不修改 `ComplexValueCodec`。这已排除之前的 VPN/握手
+阻塞，但仍不能仅凭 `932/22000` 判定是客户端 writer 还是服务端 bind/DML 转换缺口；需要固定
+成员 wire 身份并补可发出同形状的官方客户端/服务端解码对照。
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
@@ -983,13 +987,16 @@ Unit和Integration并发构建共用产品输出曾报CS2012文件锁；之后�
 验收，不是所有 VECTOR/ARRAY 版本、稀疏向量、嵌套元素或专用 API 已支持。
 
 本子模块无产品源码改动；测试和本条证据用于防止后续把服务端专用类型误解为缺失的专用 codec。
-D-12 父项保持 `P2`，D-12b 继续 `P0 / 待服务端`，待部署方提供支持 `SPARSEVECTOR` 或专用
-binary wire 的版本和 profile 后再评估是否需要产品实现。
+D-12 父项现提升为 `P4`。D-12b 在 4.4.2.2 直连 profile 上确认了当前可复用路径：查询以
+`BLOB`/`byte[]` 返回，`rb_from_string(?)` 和 `rb_build_varbinary(?)` 可用并可独立读回；直接
+绑定 `byte[]` 到 `ROARINGBITMAP` 列稳定返回服务端 `1235/0A000`，因此不把该服务端限制记为
+.NET 缺陷，也不新增 RoaringBitmap enum/parser。未来若服务端提供专用 prepared type，再单独
+评估 wire/API；`SPARSEVECTOR`、嵌套 ARRAY 和其他版本仍按各自边界保留。
 
 独立 fresh-context 只读走查无 Critical/Important/Minor；格式核验和 `git diff --check` 已通过；
 `107c852`（`✅ test(mysql): verify vector and array string wire compatibility`）已本地提交，未 push。
 
-### D-08：prepared batch multi-send 的 input-only DML 与 scalar 子集（2026-10-31，`P2`）
+### D-08：prepared batch multi-send 的 input-only DML 与 scalar 子集（2026-10-31，父项 `P2`；子集 `P4`）
 
 已新增默认关闭的 `Use Batch Multi Send` 和 `Batch Multi Send Number`（默认 100，最小 1），并将
 选项冻结到 endpoint/credential snapshot。启用后，`OceanBaseBatch.ExecuteNonQuery` 对普通文本、
@@ -1010,20 +1017,19 @@ COM_STMT_EXECUTE，再按命令顺序读取 OK affected-count。错误归因到�
 Oracle session time zone/national character set，必要时按已解析上下文重新编码参数；共享 exchange 使用统一
 的发送状态处理，并先发送积压的 prepared-statement close 包，避免丢失结果元数据或长期积压服务端句柄。
 
-当前仍不能把 D-08 记为完成：尚未在目标 OceanBase MySQL/Oracle profile 上验证真实 prepared
-multi-send wire、服务端错误排序、收益和代理/OB20 行为；ExecuteReader、Oracle PrepareExecute、
-输出/LOB/cursor/array、流和 text fallback 也明确不在首个子集。全量 Unit
-回归此前被缺失的 Release netstandard2.1 资产阻塞；补建产品 Release 资产后尚未重跑完整 suite，
-因此本条保持 `P2`。
+之前的实库运行被 VPN 阻塞；修复响应包序号边界后，临时 direct profile 的 MySQL/Oracle
+矩阵 **8/8 通过**（DML/scalar × sync/async，`BatchMultiSendNumber=2`）。首个子集的服务端
+错误排序、收益基线和代理/OB20 行为仍未验收；ExecuteReader、Oracle PrepareExecute、
+输出/LOB/cursor/array、流和 text fallback 也明确不在首个子集，因此这些仍是 D-08 的后续缺口。
 
 新增 `Batches/MultiSendTests.cs`，覆盖 MySQL/Oracle create-objects profile 的 input-only
 prepared DML 和 scalar 排空，sync/async 及 `BatchMultiSendNumber=2`。Oracle 用例显式关闭
 `UseOraclePrepareExecute`，以验证本子集要求的普通 server prepared wire；本地编译通过。本轮从
 User Secrets 读取 MySQL/Oracle 连接信息，并生成只包含 `mysql-direct`/`oracle-direct` 的临时
-integration config；启用 `OB_REQUIRE_INTEGRATION=1` 后，限定集成组共 **8/8 失败**，均在
-`172.16.2.45:2881` 握手读取 packet header/packet 阶段被端点关闭，未进入 prepared DML、
-scalar 或 multi-send wire。该结果是环境/端点阻塞证据，不能归因于 D-08 实现或服务端不支持；
-端点恢复后需重跑，D-08 仍不能提升状态。
+integration config；启用 `OB_REQUIRE_INTEGRATION=1` 后，限定集成组 **8/8 通过**。重跑同时
+暴露并修复了客户端响应包序号未在每个 pipelined 响应边界重置的问题；loopback 夹具现按
+MySQL 响应从序号 1 开始建模。结果只证明上述 input-only DML/scalar 子集，不外推更大
+Q20 范围或其他部署。
 
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
 
@@ -1102,7 +1108,7 @@ NCHAR/NVARCHAR2、浮点和 UROWID 等多种内部类型；访问类型不匹配
 OBJECT/COLLECTION 和失败后的输出发布规则定义可测试契约；不把 ANYDATA 当作普通列或任意对象
 兜底。
 
-### D-12b：RoaringBitmap wire 形状调查（2026-10-31，`P0`）
+### D-12b：RoaringBitmap wire 形状调查（2026-10-31，`P4`）
 
 官方 MySQL 模式文档[位图类型概述][O11-roaring-overview]和[列定义示例][O11-roaring-ddl]
 已经把服务端形状固定下来：`ROARINGBITMAP` 是存储无符号整数集合的独立类型，支持 64 位整数；
@@ -1112,15 +1118,14 @@ OBJECT/COLLECTION 和失败后的输出发布规则定义可测试契约；不�
 集合运算和基数函数。由此可以确认它不是 `BIT(1..64)` 的数值别名，也不是 VECTOR/ARRAY
 的文本列。
 
-固定版 Connector/J 2.4.14 的 `ColumnType` 没有 RoaringBitmap 专用枚举或类型码；当前没有
-确认其对 `ROARINGBITMAP` 列/参数的专用 metadata、序列化版本或独立测试。固定版 .NET 也
-没有 RoaringBitmap provider type；通用 `Binary` 只有在目标服务端把该列实际暴露成兼容的
-binary/varbinary wire 时才可能复用，当前没有目标 4.4.2.2 profile 证据，不能提前承诺。
-
-调查结论：D-12b 仍为 `P0 / 待目标 profile 与 wire`。下一步需要同一 MySQL 版本和租户完成
-DDL、NULL/空集合、`rb_from_string`、raw bytes、`rb_to_string`/`rb_to_array`、无符号和
-64 位边界、坏序列化及独立读回；在这些证据前不新增 enum、RoaringBitmap parser 或把它映射
-成 BIT/JSON/String。
+固定版 Connector/J 2.4.14 的 `ColumnType` 没有 RoaringBitmap 专用枚举或类型码；本轮也没有
+新增 .NET provider type。VPN 恢复后在 OceanBase 4.4.2.2 MySQL 直连 profile 实测：DDL 成功；
+`rb_from_string('1,2,4294967295')`、空集合、NULL 和 `18446744073709551615` 插入成功；查询
+metadata 为 `BLOB`/`System.Byte[]`，raw 长度 15，`rb_to_string` 返回原集合，`rb_to_array`
+返回 `CHAR`/`String`。现有 `DbType.Binary` 参数经 `rb_build_varbinary(?)` 可插入并独立读回；
+同一 `byte[]` 直接绑定到 `ROARINGBITMAP` 列稳定返回服务端 `1235/0A000`，坏 raw 也由服务端
+返回相同错误。该结果把直接 native prepared binding 归为服务端限制，现有 .NET Binary + SQL
+函数路径已覆盖当前版本可用子集，不新增 enum、parser 或 BIT/JSON/String 假映射。
 
 ## 依据
 
