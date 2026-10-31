@@ -75,6 +75,7 @@ namespace OceanBaseConnector
                 }
                 var exchange = new CommandExchange(session, _log, timeout, token, release, owner: owner, cancellationOrigin: cancellationOrigin, localInfileStreamFactory: _localInfileStreamFactory, openGeneration: _openGeneration)
                 { IsXa = _xaResource != null };
+                exchange.SdoGeometryTypeFactory = () => GetOrCreateSystemSdoGeometryType(session, transaction);
                 if (_complexTypeContext != null && ReferenceEquals(_complexTypeContext.Session, session) &&
                     ReferenceEquals(_complexTypeContext.Transaction, transaction) && _complexTypeContext.Epoch == _transactionEpoch && _complexTypeContext.MetadataEpoch == session.ComplexTypeEpoch)
                     exchange.ComplexTypes = _complexTypes;

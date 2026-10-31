@@ -94,6 +94,7 @@ namespace OceanBaseConnector.Internal.Session
         internal LobSession? Lobs { get; set; }
         internal OracleCursorOwner? CursorColumns { get; set; }
         internal IReadOnlyDictionary<(string, string), OceanBaseComplexType>? ComplexTypes { get; set; }
+        internal Func<OceanBaseComplexType>? SdoGeometryTypeFactory { get; set; }
         internal void EnsureReading()
         {
             if (_terminal) return;

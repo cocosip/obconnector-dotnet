@@ -124,6 +124,43 @@ namespace OceanBaseConnector
             => GetComplexTypeCore(schemaName, typeName, (OceanBaseTransaction?)command.Transaction, asynchronous, token,
                 command.SessionOwner, command.RequiredSession, command.RequiredTransactionEpoch, command.CommandTimeout, command.CancellationOrigin);
 
+        internal OceanBaseComplexType GetOrCreateSystemSdoGeometryType(PhysicalSession session, OceanBaseTransaction? transaction)
+        {
+            lock (_gate)
+            {
+                if (_complexTypes.TryGetValue(("SYS", "SDO_GEOMETRY"), out var cached)) return cached;
+                var context = EnsureComplexTypeContext(session, transaction);
+                var number = new ComplexType(0);
+                var point = new OceanBaseComplexType(context, "SYS", "SDO_POINT_TYPE", false, new[]
+                {
+                    new OceanBaseComplexMember("X", "SYS", "NUMBER", null, number),
+                    new OceanBaseComplexMember("Y", "SYS", "NUMBER", null, number),
+                    new OceanBaseComplexMember("Z", "SYS", "NUMBER", null, number)
+                });
+                var elemInfo = new OceanBaseComplexType(context, "SYS", "SDO_ELEM_INFO_ARRAY", true,
+                    new[] { new OceanBaseComplexMember(null, "SYS", "NUMBER", null, number) });
+                var ordinates = new OceanBaseComplexType(context, "SYS", "SDO_ORDINATE_ARRAY", true,
+                    new[] { new OceanBaseComplexMember(null, "SYS", "NUMBER", null, number) });
+                var geometry = new OceanBaseComplexType(context, "SYS", "SDO_GEOMETRY", false, new[]
+                {
+                    new OceanBaseComplexMember("SDO_GTYPE", "SYS", "NUMBER", null, number),
+                    new OceanBaseComplexMember("SDO_SRID", "SYS", "NUMBER", null, number),
+                    new OceanBaseComplexMember("SDO_POINT", "SYS", "SDO_POINT_TYPE", point, point.Layout),
+                    new OceanBaseComplexMember("SDO_ELEM_INFO", "SYS", "SDO_ELEM_INFO_ARRAY", elemInfo, elemInfo.Layout),
+                    new OceanBaseComplexMember("SDO_ORDINATES", "SYS", "SDO_ORDINATE_ARRAY", ordinates, ordinates.Layout)
+                });
+                var published = new Dictionary<(string, string), OceanBaseComplexType>(_complexTypes)
+                {
+                    [("SYS", "SDO_POINT_TYPE")] = point,
+                    [("SYS", "SDO_ELEM_INFO_ARRAY")] = elemInfo,
+                    [("SYS", "SDO_ORDINATE_ARRAY")] = ordinates,
+                    [("SYS", "SDO_GEOMETRY")] = geometry
+                };
+                _complexTypes = published;
+                return geometry;
+            }
+        }
+
         private async Task<OceanBaseComplexType> GetComplexTypeCore(string schemaName, string typeName, OceanBaseTransaction? transaction, bool async, CancellationToken token, object? reservationOwner = null, PhysicalSession? requiredSession = null, long? requiredEpoch = null, int? timeout = null, Func<CancellationToken>? cancellationOrigin = null)
         {
             ValidateComplexName(schemaName, nameof(schemaName)); ValidateComplexName(typeName, nameof(typeName));

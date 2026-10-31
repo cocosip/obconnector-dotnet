@@ -123,7 +123,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | --- | --- | --- | --- | --- | --- |
 | D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute、流/LOB、输出、cursor、array binding 和 text fallback |
 | D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
-| D-10 | `P0`；服务端形状已固定，wire/契约未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 先记录可实现形状或阻塞结论；实现时输入/结果/NULL/SRID/非法几何有明确行为；不把 GEOMETRY bytes 冒充 SDO |
+| D-10 | `P2`；显式 Prepare 的 SDO_GEOMETRY 整列读取子集已实现并验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持整列读取的通用 OBJECT 路径；若纳入输入、WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0`；PL-only 形状已固定，wire/公共 API 未闭合 | ANYDATA PL 形状调查与有条件 codec（T17） | 服务端明确仅支持 PL，不能作为表列或永久存储；Java 没有 ANYDATA 专用 codec | 先确定 PL 参数/返回值形状和可枚举内部类型；确认是否值得提供 public API | 先记录可实现形状或阻塞结论；实现仅限明确的 PL 形状；内部未知类型拒绝，不增加任意对象兜底 |
 | D-12 | `P4`（a/b/c 的当前版本通用路径已分别验收） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，RoaringBitmap 查询为 BLOB/byte[]；Oracle ARRAY 归 D-04 | 其他版本、稀疏/嵌套形状和专用 codec 需求仍需单独 profile 证据 | a/c 复用 String，b 复用 Binary 读取并通过 `rb_build_varbinary(?)` 写入；不新增未经证实的专用 codec |
 
@@ -1114,14 +1114,23 @@ SDO，二者的对象结构和 wire 契约不同。
 
 VPN 恢复后在当前 Oracle 4.4.2.2 直连 profile 做了最小实测：`CREATE TABLE (... SDO_GEOMETRY)`
 和 `SDO_GEOMETRY(...)` 字面量插入成功，但读取 `g.sdo_gtype`/`g.sdo_point.x` 的查询返回
-服务端 `904/42S22`。固定 Java 源码 `ComplexOracleTest` 含同形状的成功测试，但使用的是另一套
-测试端点；当前没有同一租户的 Java 运行结果，因此不能满足“服务端不支持且 Java 同样交互”的
-跳过条件，也不能把这次 .NET 结果归因于客户端解析缺陷。
+服务端 `904/42S22`。同一租户的 Connector/J 2.4.14 对照中，`SELECT g` 成功返回 JDBC
+`1111/COMPLEX` 的 `StructImpl`，`getAttributes()` 返回五个对象属性；属性访问查询仍返回
+`904/42S22`。因此当前只能把属性访问认定为服务端限制，不能把整列读取跳过。
 
-调查结论：D-10 保持 `P0 / 待 wire 与契约`。后续必须选定一个可验收形状（原始 BLOB 存储、
-通用 OBJECT 参数/结果，或专用 WKB/WKT API），并在目标 Oracle 直连 profile 中记录 metadata、
-NULL、SRID、非法几何、坐标上限和独立读回；在此之前不新增 SDO enum 或把 GEOMETRY bytes
-冒充 SDO。
+同一租户的 .NET 原始 metadata 探针进一步确认：未显式 Prepare 时列发 MySQL type `255`，值为
+`SDO_GEOMETRY(...)` 文本；显式 Prepare 时列发 Oracle complex type `160`、名字
+`SDO_GEOMETRY`，但 owner lookup 返回 NULL，旧路径随后报
+“The complex source column type owner is unavailable”。现已在该路径中限定支持 `SYS.SDO_GEOMETRY`
+的 owner 回退和系统 OBJECT/ARRAY 描述缓存；`SdoGeometryTests` 在同一 Oracle 直连 profile
+的 sync/async 两种执行方式均通过，覆盖非空对象、五个成员、嵌套 `SDO_POINT_TYPE`、NULL
+成员和 NULL 行。属性访问仍保持服务端 `904/42S22`，因此没有扩大为属性表达式支持，也不能把
+Oracle type `255` 直接当成 MySQL `GEOMETRY`。
+
+调查结论：D-10 的显式 Prepare 整列读取子集为 `P2 / 已实现并验收`，其余仍为 `P0 / 待 wire 与契约`。
+当前没有 `SDO_GEOMETRY` provider type、专用 WKB/WKT/SRID API、输入绑定、非法几何校验、坐标
+上限和独立空间语义契约；若纳入这些能力，仍需在目标 Oracle 直连 profile 中补 metadata、SRID、
+非法几何、坐标上限和独立读回证据，不新增 SDO enum 或把 GEOMETRY bytes 冒充 SDO。
 
 ### D-11：ANYDATA PL 形状调查（2026-10-31，`P0`）
 

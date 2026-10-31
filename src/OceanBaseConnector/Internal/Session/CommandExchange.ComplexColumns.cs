@@ -43,9 +43,10 @@ namespace OceanBaseConnector.Internal.Session
                     Send(request, executesSql: false);
                     var result = new QueryResult(this, binary: true, completeExchange: false);
                     result.Start();
-                    var identity = ReadComplexColumnIdentity(result, result.Read());
+                    var identity = ReadComplexColumnIdentity(result, result.Read(), IsSdoGeometry(column));
                     if (result.Read()) throw new ProtocolException("The complex source column query returned extra rows.");
                     Send(PreparedStatement.ClosePacket(lookup.Id), executesSql: false); ResponseComplete(expectsResponse: false); closed = true;
+                    if (identity.Owner.Length == 0) identity = ("SYS", identity.Name);
                     PublishComplexColumn(column, identity);
                 }
                 finally { if (!closed) lookup.Release(); }
@@ -66,9 +67,10 @@ namespace OceanBaseConnector.Internal.Session
                     await SendAsync(request, executesSql: false).ConfigureAwait(false);
                     var result = new QueryResult(this, binary: true, completeExchange: false);
                     await result.StartAsync(token).ConfigureAwait(false);
-                    var identity = ReadComplexColumnIdentity(result, await result.ReadAsync(token).ConfigureAwait(false));
+                    var identity = ReadComplexColumnIdentity(result, await result.ReadAsync(token).ConfigureAwait(false), IsSdoGeometry(column));
                     if (await result.ReadAsync(token).ConfigureAwait(false)) throw new ProtocolException("The complex source column query returned extra rows.");
                     await SendAsync(PreparedStatement.ClosePacket(lookup.Id), executesSql: false).ConfigureAwait(false); ResponseComplete(expectsResponse: false); closed = true;
+                    if (identity.Owner.Length == 0) identity = ("SYS", identity.Name);
                     PublishComplexColumn(column, identity);
                 }
                 finally { if (!closed) lookup.Release(); }
@@ -98,7 +100,7 @@ namespace OceanBaseConnector.Internal.Session
             }, OceanBaseCompatibilityMode.Oracle, clientEncoding: ClientEncoding));
         }
 
-        private static (string, string) ReadComplexColumnIdentity(QueryResult result, bool hasRow)
+        private static (string Owner, string Name) ReadComplexColumnIdentity(QueryResult result, bool hasRow, bool allowMissingOwner)
         {
             if (result.Columns.Length != 2 || !hasRow) throw new NotSupportedException("The complex source column type owner is unavailable.");
             var identity = new string[2];
@@ -108,7 +110,11 @@ namespace OceanBaseConnector.Internal.Session
                 if ((column.TypeCode != 15 && column.TypeCode != 253 && column.TypeCode != 254) || column.FieldType != typeof(string))
                     throw new ProtocolException("The complex source column query requires ordinary string columns.");
                 var bytes = result.Row![i];
-                if (bytes == null && i == 0) throw new NotSupportedException("The complex source column type owner is unavailable.");
+                if (bytes == null && i == 0)
+                {
+                    if (allowMissingOwner) { identity[i] = string.Empty; continue; }
+                    throw new NotSupportedException("The complex source column type owner is unavailable.");
+                }
                 if (bytes == null || bytes.Length == 0 || bytes.Length > 512) throw new ProtocolException("Invalid complex source column type identifier.");
                 identity[i] = ResultColumn.Utf8.GetString(bytes);
                 ValidateComplexSourceName(identity[i]);
@@ -121,10 +127,21 @@ namespace OceanBaseConnector.Internal.Session
             // Source table ownership is independent of its declared type ownership.
             if (column.ComplexMetadata!.Name.Length != 0 && identity.Name != column.ComplexMetadata.Name ||
                 ComplexTypes == null || !ComplexTypes.TryGetValue(identity, out var description))
-                throw new NotSupportedException("The complex source column requires its exact preloaded type description.");
+            {
+                if (!IsSdoGeometry(column) || identity.Owner != "SYS" || SdoGeometryTypeFactory == null)
+                    throw new NotSupportedException("The complex source column requires its exact preloaded type description.");
+                description = SdoGeometryTypeFactory();
+                var types = new Dictionary<(string, string), OceanBaseComplexType>();
+                if (ComplexTypes != null) foreach (var entry in ComplexTypes) types[entry.Key] = entry.Value;
+                types[identity] = description;
+                ComplexTypes = types;
+            }
             (SourceComplexTypes ??= new Dictionary<(string, string, string, string), OceanBaseComplexType>())
                 .Add((column.Database, column.OriginalTable, column.OriginalName, identity.Name), description);
         }
+
+        private static bool IsSdoGeometry(ResultColumn column) =>
+            string.Equals(column.ComplexMetadata?.Name, "SDO_GEOMETRY", StringComparison.OrdinalIgnoreCase);
 
         private static void ValidateComplexSourceName(string name)
         {
