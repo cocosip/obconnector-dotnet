@@ -10,6 +10,48 @@ namespace OceanBaseConnector.IntegrationTests.Oracle;
 
 public sealed class SdoGeometryTests
 {
+    public static TheoryData<string, bool> InputProfiles()
+    {
+        var data = new TheoryData<string, bool>();
+        foreach (var profileName in ProfileTheoryData.OraclePrepareExecuteObjects())
+            foreach (var asynchronous in new[] { false, true }) data.Add(profileName, asynchronous);
+        return data;
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(InputProfiles))]
+    public async Task SdoGeometryCanBeBoundAsAComplexInput(string profileName, bool asynchronous)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var table = db.NewObject("TABLE");
+        await db.ExecuteAsync(connection, "CREATE TABLE " + table + " (id NUMBER, g SDO_GEOMETRY)", CancellationToken.None);
+        var type = await connection.GetComplexTypeAsync("SYS", "SDO_GEOMETRY");
+        var elemInfo = type.Members[3].ComplexType!;
+        var ordinates = type.Members[4].ComplexType!;
+        var value = type.CreateValue(2003, null, null, elemInfo.CreateValue(1, 1003, 1), ordinates.CreateValue(0, 0, 10, 0, 10, 10, 0, 10));
+        await using (var insert = db.Command(connection, "INSERT INTO " + table + " VALUES (1, :g)"))
+        {
+            DatabaseContext.Parameter(insert, "g", value);
+            if (asynchronous) await insert.ExecuteNonQueryAsync(); else insert.ExecuteNonQuery();
+        }
+        await using var select = db.Command(connection, "SELECT g FROM " + table);
+        if (asynchronous) await select.PrepareAsync(); else select.Prepare();
+        await using var reader = asynchronous ? await select.ExecuteReaderAsync() : select.ExecuteReader();
+        Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+        var actual = Assert.IsType<OceanBaseComplexValue>(reader.GetValue(0));
+        DatabaseContext.EqualNumber(actual.GetValues()[0], 2003, "SDO_GTYPE mismatch after input binding.");
+        var actualElemInfo = Assert.IsType<OceanBaseComplexValue>(actual.GetValues()[3]).GetValues();
+        var actualOrdinates = Assert.IsType<OceanBaseComplexValue>(actual.GetValues()[4]).GetValues();
+        var expectedElemInfo = new long[] { 1, 1003, 1 };
+        var expectedOrdinates = new long[] { 0, 0, 10, 0, 10, 10, 0, 10 };
+        Assert.Equal(expectedElemInfo.Length, actualElemInfo.Length);
+        Assert.Equal(expectedOrdinates.Length, actualOrdinates.Length);
+        for (var i = 0; i < expectedElemInfo.Length; i++) DatabaseContext.EqualNumber(actualElemInfo[i], expectedElemInfo[i], "SDO_ELEM_INFO mismatch after input binding.");
+        for (var i = 0; i < expectedOrdinates.Length; i++) DatabaseContext.EqualNumber(actualOrdinates[i], expectedOrdinates[i], "SDO_ORDINATES mismatch after input binding.");
+        Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+    }
+
     public static TheoryData<string, bool> Profiles()
     {
         var data = new TheoryData<string, bool>();
