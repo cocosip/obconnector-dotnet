@@ -1140,7 +1140,8 @@ Oracle piece-data 已支持流水化或吞吐收益。随后新增 `MultiSendTes
 在项目 User Secrets 的 `oracle-direct` profile 中明确关闭 `UseOraclePrepareExecute` 和 `UseLobLocators`，
 覆盖 sync/async、3 字节和 90007 字节两条 BLOB Stream；真实 4.4.2.2 直连 **2/2 通过**，确认
 piece-data fallback、批量 affected-count 和独立 `GetValue`/LOB 读回。PrepareExecute 下的 Stream、
-piece-data 流水化、代理/OB20、LOB/OUT/cursor/array 和收益基线仍待各自 profile。
+piece-data 流水化、代理/OB20、LOB/OUT/cursor/array 和收益基线仍待各自 profile；PrepareExecute
+下的安全回退见 D-08d。
 
 #### D-08c：真实服务端错误排序与 suffix 边界（`P4` 子集，2026-11-01）
 
@@ -1153,6 +1154,18 @@ User Secrets 的 `mysql-direct` 与 `oracle-direct` 直连 profile，覆盖 sync
 该证据只关闭当前直连、input-only DML、已知响应错误的 prefix/error/suffix 子集；不外推错误
 发生在已发送组内的 unknown-outcome、取消/超时、代理/OB20、PrepareExecute、LOB/OUT/cursor/array
 或更大错误排序矩阵。它不是服务端限制归因，也不改变现有不自动重放契约。
+
+#### D-08d：Oracle PrepareExecute Stream 的安全回退（`P4` 子集，2026-11-01）
+
+新增 `Batches/MultiSendTests.OraclePrepareExecuteStreamMultiSendFallsBackToPieceData`，在项目
+User Secrets 的 `oracle-direct` profile 中同时启用 `UseBatchMultiSend`、`UseOraclePrepareExecute`
+和 `UseLobLocators`，覆盖 sync/async、3 字节和 90007 字节 BLOB Stream。测试确认含 Stream 的
+批次不会进入无响应 multi-send，而是复用逐命令 piece-data；关闭 reader 后再打开 locator，独立
+读回两条内容。真实 4.4.2.2 直连 **2/2** 通过。
+
+该子项关闭的是三项选项叠加时的客户端安全回退缺口，不宣称 PrepareExecute 下的 Stream 已支持
+流水化或吞吐收益；piece-data 流水化、错误排序扩展、代理/OB20、LOB/OUT/cursor/array 和收益
+基线仍按各自 profile 继续验收。
 
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
 
