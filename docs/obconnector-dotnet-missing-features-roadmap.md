@@ -593,7 +593,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 
 | 子项 | 进度 | 当前范围与下一步 |
 | --- | --- | --- |
-| D-04a 命名 LOB 成员 | `P2`；a1/a3.1 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT 根 NULL 输出不保留身份。a2：BLOB OBJECT 成员 DML 返回 932；仍待 wire/归因。命名 locator 回绑仍拒绝，不隐式读取外部 LOB |
+| D-04a 命名 LOB 成员 | `P2`；a1/a3.1 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT/嵌套 OBJECT 根 NULL 输出身份为当前服务端限制。a2：BLOB OBJECT 成员 DML 返回 932；仍待 wire/归因。命名 locator 回绑仍拒绝，不隐式读取外部 LOB |
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P2 / 待证据` | 已知返回 metadata 无法匹配精确类型，保留旧输出及 unknown-outcome 处理；取得实际列身份/wire 后再考虑实现，不只凭参数声明猜解码 |
 | D-04d 复杂 cursor 成员 | `P2 / 待证据` | 本地四字节结果解析已有；实际可创建类型、完整 child FETCH 与所有权尚需确认，输入仍拒绝；D-03 的普通列失败不能证明此形状 |
@@ -631,7 +631,7 @@ OceanBase 4.4.2.2 Oracle 直连、Windows、TLS Disabled：
 | 子项 | 证据与归类 | 下一步开发任务 / 关闭条件 |
 | --- | --- | --- |
 | D-04a2 BLOB OBJECT 绑定成员直接用于 DML | 最初 12 项存储探测 8 通过、4 失败：BLOB OBJECT/嵌套 OBJECT 在过程 INSERT 成员时报 `932/22000`；CLOB 三形状和 BLOB collection 成功。3 字节/90007 字节、直接成员/局部变量两种 bind 写法都失败；相同类型的服务端本地 RAW 构造或真实临时 BLOB 构造写入成功。PL GETLENGTH、对象复制与不含 DML 的复杂输出成功；TO_BLOB 转换也未解决 bind DML 失败。不是“服务端没有 BLOB OBJECT”，当前不能仅据这些观测确定是驱动 wire 还是服务端 bind/DML 转换缺口 | `P2 / 待 wire 与归因`。固定列/参数内部身份，补官方客户端/服务端解码依据与真实独立读回；再决定修正 writer 或明确版本阻塞。不自动改写用户 SQL，不靠 DBMS_LOB 长度调用成功声明持久存储支持 |
-| D-04a3 根 NULL 复杂 PL 绑定 | 初始 NULL 扩展探测 12/12 在根 NULL 调用报 `600/HY000`，成员 NULL 调用通过。后续已定位命名 NULL 的 type 160 编码缺陷并修复为 type 6；输出身份另行分离，见下节证据 | a3.1 `P4`：命名根 NULL 输入及指定 collection NULL 输出子集；a3.2 `P2 / 待服务端输出身份`：本地直接赋 NULL 和正确 NULL bind 都收到未置 NULL 位的 OBJECT 结果，不能从全 NULL 属性猜测根身份 |
+| D-04a3 根 NULL 复杂 PL 绑定 | 初始 NULL 扩展探测 12/12 在根 NULL 调用报 `600/HY000`，成员 NULL 调用通过。后续已定位命名 NULL 的 type 160 编码缺陷并修复为 type 6；输出身份另行分离，见下节证据 | a3.1 `P4`：命名根 NULL 输入及指定 collection NULL 输出子集；a3.2 `服务端限制（当前目标版本 OBJECT/嵌套 OBJECT 输出身份）`：本地与 Java 均收到未置 NULL 位的 OBJECT 结果，当前形状跳过客户端改动 |
 
 固定 Java 源码 `6adc311` 的 `ComplexUtil.storeComplexAttrData` 没有 TYPE_BLOB/TYPE_CLOB
 writer 分支，default 拒绝；其 OBJECT/collection 输出测试含 LOB，并不证明相同的 payload
@@ -697,8 +697,10 @@ OBJECT 输出身份已保留**。旧 LOB handle 在这些重执行及父命令�
 赋值方式，6 项都读完最终响应：OBJECT/嵌套 OBJECT 的输出列 type 160、外层 NULL 位为 false，
 binary row 为 `0000040131`；collection 的 NULL 位为 true，row 为 `00040131`。末列值 1
 证明 PL 内 p IS NULL 成立。这发生在 .NET 值解码之前，与 Java OBJECT/collection 观察一致；
-不能把属性 NULL 位当外层 NULL 位，也不能将所有全 NULL 对象改成 DBNull。a3.2 保留到目标
-服务端能给出可区分的结果 wire；不以本轮输入修复关闭它。
+不能把属性 NULL 位当外层 NULL 位，也不能将所有全 NULL 对象改成 DBNull。Java 对 OBJECT/嵌套
+OBJECT 的 `getObject/wasNull` 也未报告外层 NULL，满足“服务端不支持且 Java 同样交互”的归因条件；
+因此 a3.2 的这两个形状标记为当前服务端限制并跳过客户端改动。collection 的可区分 NULL 结果和
+其他复杂输出身份仍保持原边界，若未来服务端提供新的 OBJECT NULL wire，再重新评估。
 
 | 检查 | 本轮结果 |
 | --- | --- |
@@ -709,13 +711,13 @@ binary row 为 `0000040131`；collection 的 NULL 位为 true，row 为 `0004013
 | 构建 | 五资产产品、Integration/Unit/Consumer/Security Release 均 0 warning / 0 error；`d04-null-*-build.log` 及 `d04-null-build.log` |
 | 格式 | 五个 C# 文件 whitespace verify 退出 0；既有 ComplexParameterTests.cs 全文件仍有 48 个旧行格式诊断，逐行与 HEAD 对照均在未改变的行，新增/改动行未报格式问题，未全文件重排；`d04-null-format{,-baseline,-scoped}.log`。git diff --check 通过 |
 | 独立走查 | fresh-context reviewer `review_d04_null` 只读核对全部 Encode 调用、描述/会话/LOB 校验、普通 prepare 与 PrepareExecute 的 NULL 切换、输出 metadata 所有权、架构/本文边界及原始 TRX；无待修问题，同意本地提交；未运行实库或修改文件 |
-| 提交 | `322c388`（`fix(oracle): encode named complex null inputs as MYSQL_TYPE_NULL`）；输入修复、24 项实库回归、既有 NULL header/生命周期断言及架构事实同步；本地提交，未 push；a3.1 指定子集为 `P4`，a3.2 和 D-04 父项仍为 `P2` |
+| 提交 | `322c388`（`fix(oracle): encode named complex null inputs as MYSQL_TYPE_NULL`）；输入修复、24 项实库回归、既有 NULL header/生命周期断言及架构事实同步；本地提交，未 push；a3.1 指定子集为 `P4`，a3.2 的 OBJECT/嵌套 OBJECT 输出身份按当前服务端限制跳过，D-04 父项仍为 `P2` |
 
 调查证据在忽略目录 `d04-null-java{,-detailed}.log`、`d04-null-wire.log` 与
 `TestResults/d04-null-wire-probe/`；Java runner 固定版本、每次 clone Properties、有效选项均有记录。
 原 `d04-null-red.trx`、`d04-null-output.trx`、`d04-null-live.trx`、
 `d04-null-local{,-red}.trx` 和初次格式报告全部保留，不以最终通过删除输入/输出失败历史。
-本模块只将 a3.1 的上述输入和 collection 输出子集置为 `P4`，a3.2 及 D-04 父项不关闭。
+本模块只将 a3.1 的上述输入和 collection 输出子集置为 `P4`；a3.2 的 OBJECT/嵌套 OBJECT 输出身份已按当前服务端限制跳过，D-04 父项仍不关闭。
 未重跑完整 Unit/Consumer、所有 OS/runtime、真实代理/TLS/OB20/KDC、长期压力；BLOB OBJECT
 成员 DML、复杂 RETURNING/cursor/text、匿名 PL 等剩余任务仍需后续开发与证据。
 
