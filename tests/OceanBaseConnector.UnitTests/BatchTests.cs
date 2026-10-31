@@ -23,6 +23,30 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal(new[] { (0, 1), (1, 3) }, groups);
         }
 
+        [Fact]
+        public void BatchMultiSendGroupsAllowExactPacketBudget()
+        {
+            var requests = new[]
+            {
+                new byte[(int)PacketChannel.DefaultMaxPacketSize],
+                new byte[] { 1 },
+            };
+
+            var groups = OceanBaseBatch.PlanMultiSendGroups(requests, 100).ToArray();
+
+            Assert.Equal(new[] { (0, 1), (1, 2) }, groups);
+        }
+
+        [Fact]
+        public void BatchMultiSendGroupsHonorSingleRequestLimit()
+        {
+            var requests = new[] { new byte[] { 1 }, new byte[] { 2 }, new byte[] { 3 } };
+
+            var groups = OceanBaseBatch.PlanMultiSendGroups(requests, 1).ToArray();
+
+            Assert.Equal(new[] { (0, 1), (1, 2), (2, 3) }, groups);
+        }
+
         private static DbBatchCommand BatchItem(DbBatch batch, string sql)
         {
             var item = batch.CreateBatchCommand(); item.CommandText = sql; batch.BatchCommands.Add(item); return item;

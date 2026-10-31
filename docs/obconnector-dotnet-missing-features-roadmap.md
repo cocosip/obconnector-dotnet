@@ -1002,7 +1002,7 @@ COM_STMT_EXECUTE，再按命令顺序读取 OK affected-count。错误归因到�
 只返回 batch 语义中的首个 scalar；cursor、LOB、复杂结果列仍在发送前拒绝。`ExecuteReader` 继续使用
 逐命令 reader 路径。本地 loopback 已覆盖 sync/async、两条执行先于响应、数量分组、基本 scalar
 结果、发送前 output/cursor/session-state SQL 拒绝、组内错误后 session 断开和发送后取消/unknown-outcome，
-以及超过 64 MiB 总请求预算时的分组拆分，共 **144/144**
+以及超过 64 MiB 总请求预算、恰好 64 MiB 预算和 `maxCount=1` 的分组边界，共 **146/146**
 通过。`dotnet build -c Release`
 的 netstandard2.0、netstandard2.1、net8.0、net9.0、net10.0 均 0 warning/0 error。
 
