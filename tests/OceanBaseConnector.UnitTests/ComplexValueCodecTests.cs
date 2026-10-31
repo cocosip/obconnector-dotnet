@@ -19,6 +19,16 @@ namespace OceanBaseConnector.UnitTests
         private static ComplexType Array(ComplexType element) => new ComplexType(true, element);
         private static byte[] Encode(ComplexType type, params object?[] values) => ComplexValueCodec.EncodeParameter(type, values, OceanBaseCompatibilityMode.Oracle);
         private static object?[] Decode(ComplexType type, string hex) => ComplexValueCodec.DecodeResult(new ByteCursor(Convert.FromHexString(hex)), type, OceanBaseCompatibilityMode.Oracle);
+        private static OceanBaseComplexType NamedTextObject(params byte[] members)
+        {
+            var descriptors = members.Select((code, index) => new OceanBaseComplexMember("M" + index, null,
+                code == 0 ? "NUMBER" : code == 253 ? "VARCHAR2" : code == 254 ? "CHAR" : code == 207 ? "NVARCHAR2" : "NCHAR",
+                null, new ComplexType(code))).ToArray();
+            return new OceanBaseComplexType(null!, "Owner", "Thing", false, descriptors);
+        }
+
+        private static object?[] DecodeText(OceanBaseComplexType type, string text)
+            => ComplexValueCodec.DecodeTextResult(ResultColumn.Utf8.GetBytes(text), type, OceanBaseCompatibilityMode.Oracle);
 
         [Fact]
         public void ObjectDirectionsUseDifferentNullOffsetsAndKeepNextField()
@@ -128,6 +138,42 @@ namespace OceanBaseConnector.UnitTests
             var result = ComplexValueCodec.DecodeResult(new ByteCursor(encoded), type, OceanBaseCompatibilityMode.Oracle);
             Assert.Equal(number, Assert.IsType<OceanBaseDecimal>(result[0]).ToString()); Assert.Equal("\uFEFF患者😀", result[1]); Assert.Equal(" x ", result[2]);
             Assert.Equal(new byte[] { 0, 255 }, Assert.IsType<byte[]>(result[3])); Assert.Equal(stamp.ToString(), Assert.IsType<OceanBaseTimestamp>(result[4]).ToString());
+        }
+
+        [Fact]
+        public void NamedObjectTextResultsDecodeNullNumbersAndQuotedCharacters()
+        {
+            var type = NamedTextObject(0, 253, 254, 207, 208);
+            var result = DecodeText(type,
+                " Thing ( 12345678901234567890123456789012345678, NULL, 'a,b (c)', 'n''q', 'nchar' ) ");
+            Assert.Equal("12345678901234567890123456789012345678", Assert.IsType<OceanBaseDecimal>(result[0]).ToString());
+            Assert.Null(result[1]); Assert.Equal("a,b (c)", result[2]);
+            Assert.Equal("n'q", result[3]); Assert.Equal("nchar", result[4]);
+        }
+
+        [Fact]
+        public void NamedObjectTextResultsRejectUnsupportedOrMalformedShapes()
+        {
+            var type = NamedTextObject(0, 253);
+            Assert.Throws<ProtocolException>(() => DecodeText(type, "Thing(1,'unterminated)"));
+            Assert.Throws<ProtocolException>(() => DecodeText(type, "Other(1,'x')"));
+            Assert.Throws<ProtocolException>(() => DecodeText(type, "Thing(1,'x') trailing"));
+            Assert.Throws<ProtocolException>(() => DecodeText(type, "Thing(1,'x',2)"));
+            Assert.Throws<ProtocolException>(() => DecodeText(type, "Thing(123456789012345678901234567890123456789,'x')"));
+            Assert.Throws<NotSupportedException>(() => DecodeText(new OceanBaseComplexType(null!, "Owner", "Thing", true,
+                new[] { new OceanBaseComplexMember(null, null, "NUMBER", null, new ComplexType(0)) }), "Thing(1)"));
+            Assert.Throws<NotSupportedException>(() => DecodeText(new OceanBaseComplexType(null!, "Owner", "Thing", false,
+                new[] { new OceanBaseComplexMember("N", null, "CHILD", null, Object(Number)) }), "Thing(1)"));
+        }
+
+        [Fact]
+        public void NamedObjectTextResultsRejectInvalidUtf8AndOversizedPayloads()
+        {
+            var type = NamedTextObject(253);
+            Assert.Throws<DecoderFallbackException>(() => ComplexValueCodec.DecodeTextResult(
+                new byte[] { 0x54, 0x68, 0x69, 0x6E, 0x67, 0x28, 0x27, 0xC0, 0xAF, 0x27, 0x29 },
+                type, OceanBaseCompatibilityMode.Oracle));
+            Assert.Throws<ProtocolException>(() => ComplexValueCodec.DecodeTextResult(new byte[PacketChannel.DefaultMaxPacketSize], type, OceanBaseCompatibilityMode.Oracle));
         }
 
         public static IEnumerable<object[]> MalformedResults()

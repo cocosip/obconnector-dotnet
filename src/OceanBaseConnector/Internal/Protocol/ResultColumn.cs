@@ -51,7 +51,11 @@ namespace OceanBaseConnector.Internal.Protocol
         internal void RequireComplexResult(bool binary)
         {
             if (TypeCode != 160) return;
-            if (!binary) throw new NotSupportedException("Complex columns require the binary result protocol.");
+            if (!binary)
+            {
+                if (ComplexType == null) throw new NotSupportedException("Complex text results require a preloaded named object type.");
+                ComplexValueCodec.ValidateTextResult(ComplexType, Mode); _ = FieldType; return;
+            }
             _ = FieldType;
         }
         private ResultColumn(string database, string table, string originalTable, string name, string originalName,
@@ -105,7 +109,8 @@ namespace OceanBaseConnector.Internal.Protocol
 
         internal static ResultColumn Parse(byte[] payload, OceanBaseCompatibilityMode mode, string? sessionTimeZone = null, NationalCharacterSet? nationalCharacterSet = null, OceanBaseConnector.Internal.Session.LobSession? lobs = null,
             IReadOnlyDictionary<(string, string), OceanBaseComplexType>? complexTypes = null,
-            IReadOnlyDictionary<(string, string, string, string), OceanBaseComplexType>? sourceComplexTypes = null, bool treatTinyAsBoolean = true)
+            IReadOnlyDictionary<(string, string, string, string), OceanBaseComplexType>? sourceComplexTypes = null, bool treatTinyAsBoolean = true,
+            bool textResult = false)
         {
             var cursor = new ByteCursor(payload);
             cursor.ReadLengthEncodedBytes(); // Protocol catalog marker, not the database catalog name.
@@ -134,6 +139,9 @@ namespace OceanBaseConnector.Internal.Protocol
                 else if (result.ComplexMetadata.Schema.Length == 0 && sourceComplexTypes != null &&
                     sourceComplexTypes.TryGetValue((database, originalTable, originalName, result.ComplexMetadata.Name), out var sourceDescription))
                     result.ComplexType = sourceDescription;
+                else if (textResult && result.ComplexMetadata.Schema.Length == 0 && complexTypes != null &&
+                    TryFindUniqueType(complexTypes, result.ComplexMetadata.Name, out description))
+                    result.ComplexType = description;
             }
             if (cursor.HasRemaining) throw new NotSupportedException("Extended column metadata is not supported yet.");
             return result;
@@ -159,6 +167,19 @@ namespace OceanBaseConnector.Internal.Protocol
                     if (entry.Key.Item1 == Database && entry.Key.Item2 == OriginalTable && entry.Key.Item3 == OriginalName)
                     { result.ComplexType = entry.Value; break; }
             return result;
+        }
+
+        private static bool TryFindUniqueType(IReadOnlyDictionary<(string Schema, string Name), OceanBaseComplexType> types,
+            string name, out OceanBaseComplexType? result)
+        {
+            result = null;
+            foreach (var entry in types)
+            {
+                if (!string.Equals(entry.Key.Name, name, StringComparison.Ordinal)) continue;
+                if (result != null) { result = null; return false; }
+                result = entry.Value;
+            }
+            return result != null;
         }
 
         internal string DataTypeName
@@ -375,6 +396,7 @@ namespace OceanBaseConnector.Internal.Protocol
             RequireComplexResult(false);
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
+            if (TypeCode == 160) return OceanBaseComplexValue.FromResult(ComplexType!, ComplexValueCodec.DecodeTextResult(value, ComplexType!, Mode));
             if (TypeCode == 163) return (_cursors ?? throw new NotSupportedException("A REF CURSOR requires its originating execution.")).Publish(ReadCursorId(value));
             if (TypeCode == 210 || TypeCode == 211) return new OceanBaseLob(Lobs!, value, TypeCode == 211);
             if (TypeCode == 13) return YearCodec.Decode(value, false);

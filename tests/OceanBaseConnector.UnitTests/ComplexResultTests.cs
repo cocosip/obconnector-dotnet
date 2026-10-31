@@ -184,6 +184,23 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
+        public void ComplexTextMetadataResolvesAUniqueUnqualifiedPreloadedType()
+        {
+            var type = ComplexResultType(false,
+                new OceanBaseComplexMember("N", null, "NUMBER", null, new ComplexType(0)));
+            var types = new Dictionary<(string, string), OceanBaseComplexType> { [("Owner", "Thing")] = type };
+            var column = ResultColumn.Parse(ComplexColumn(schema: "", name: "Thing"),
+                OceanBaseCompatibilityMode.Oracle, complexTypes: types, textResult: true);
+            column.RequireComplexResult(false);
+            Assert.Same(type, column.ComplexType);
+
+            types[("Other", "Thing")] = type;
+            var ambiguous = ResultColumn.Parse(ComplexColumn(schema: "", name: "Thing"),
+                OceanBaseCompatibilityMode.Oracle, complexTypes: types, textResult: true);
+            Assert.Throws<NotSupportedException>(() => ambiguous.RequireComplexResult(false));
+        }
+
+        [Fact]
         public void ComplexNestedResultKeepsDescriptorsAndCopiesRawAtEveryLevel()
         {
             var child = new OceanBaseComplexType(null!, "Child", "Items", true, new[] { ComplexResultScalar("A", 203) });

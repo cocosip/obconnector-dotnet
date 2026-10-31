@@ -601,7 +601,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
 | D-04d 复杂 cursor 成员 | `P2`；SQL OBJECT 持久类型子形状为当前目标服务端限制，PL-only 形状仍待证据 | 同一租户 `CREATE TYPE ... AS OBJECT (c SYS_REFCURSOR)` 在 Java 返回 `PLS-00201`、.NET 返回 `42000`；两者均在类型创建阶段失败，因此跳过该持久类型子形状的客户端改动。完整 child FETCH/所有权及 PL-only 记录/返回形状尚未确认；D-03 的普通列失败不能覆盖这些形状 |
-| D-04e 复杂 text 结果及其余 collection 形状 | `P2 / 待证据` | 同租户 .NET 探针确认 text 复杂列仍在客户端拒绝；显式 Prepare 在预加载同一 type 描述后可读回。没有明确 text wire 前不实现猜测性 parser。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
+| D-04e 复杂 text 结果及其余 collection 形状 | `P4`（named OBJECT 标量 text 子集）；其余 `P2` | named OBJECT 的 NUMBER、VARCHAR2/CHAR、NCHAR/NVARCHAR2 标量 text 结果已实现并验收；递归 OBJECT、collection、LOB/cursor、RAW、时间成员仍明确拒绝。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
 
 本模块先验证 a/b 已有实现的边界；若实库暴露缺陷，先保留失败证据、补最小回归，再决定
 共享修复。所有新增计划、结果及提交号仍记录在本文：
@@ -765,20 +765,28 @@ named type 的精确形状；匿名数组、其他未知 element 和没有显式
 | 构建 | IntegrationTests Release 0 warning / 0 error；NuGet 漏洞源不可达时使用 `NuGetAudit=false`，依赖已由本地缓存还原 |
 | 未关闭边界 | D-04a2 BLOB OBJECT 成员 DML、复杂 cursor/text/其他 collection 形状、跨版本/代理/TLS/长期压力仍未关闭；D-04 父项保持 `P2` |
 
-#### D-04e：复杂 text 结果探针（2026-10-31）
+#### D-04e：named OBJECT 标量 text 结果（`P4` 子集，2026-10-31）
 
-在同一 Oracle 4.4.2.2 `oracle-direct`、TLS Disabled 租户上，用临时 .NET
-Integration 探针创建随机 named OBJECT `(n NUMBER, s VARCHAR2(40))`，写入 `7/中文`，
-再分别执行无参数 text 查询和显式 `Prepare` 查询。text 查询收到 type 160 复杂列元数据后由
-客户端抛出 `NotSupportedException: Complex columns require the binary result protocol`，
-外层执行异常因此标记该连接的响应未完全消费；重新建立连接并预加载同一 type 描述后，显式
-Prepare 查询成功读回 `7/中文`。这证明当前 .NET 缺口仍是 text 结果路径，不能把 binary
-成功泛化为 text 已完成。
+本轮先用同一 Oracle 4.4.2.2 `oracle-direct`、TLS Disabled 租户确认真实 wire：普通
+text 查询返回 type 160，复杂 metadata 带 type name 但 schema 为空，payload 形如
+`TYPE(7, 'a,b (c) 'q'')`；显式 Prepare 的 binary 路径继续保持原实现。这个证据足以固定
+本轮最小 grammar，但不支持把所有复杂结果形状泛化为 text 可读。
 
-该结果与同租户 Connector/J 观察一致：Java text Statement 也没有可用 OBJECT payload；在
-没有官方 text wire 解码依据前，不新增 text OBJECT parser，D-04e 继续保持 `P2 / 待证据`。
-临时探针已删除，未作为产品回归用例提交；持久 nested-table 列和集合 NULL OBJECT 的
-服务端边界仍按上表保留。
+实现只覆盖预加载的 named、非 collection OBJECT，成员限 NUMBER、VARCHAR2/CHAR、
+NCHAR/NVARCHAR2，并处理 NULL、严格 UTF-8、引号/逗号/括号、完整 payload 消费和既有包大小
+上限。无 schema 的 text metadata 只有在缓存中存在唯一同名 type 时才绑定；同名多 schema、
+缺 descriptor、anonymous/collection、nested OBJECT、RAW、时间、LOB、cursor 和尾随/畸形
+payload 均继续发送后拒绝或解码前拒绝。NULL 整列仍返回 `DBNull.Value`，NULL 成员保留为
+`null`；SequentialAccess 的 text 字段按普通 length-encoded framing 消费，binary framing
+未改变。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| 单元与协议 | `ComplexValueCodecTests` 61/61；相关 `ComplexResultTests` 含 text/descriptor 边界通过；覆盖 NUMBER/字符成员、NULL、引号/分隔符、严格 UTF-8、大小上限、唯一/歧义 type 名称和未支持布局 |
+| Oracle 实库 | `ComplexTextResultTests` **4/4** 通过，0 skip：sync/async × Default/SequentialAccess；named OBJECT 两行覆盖 NUMBER、NULL、逗号/括号/引号字符、后续 scalar 列和完整 reader 消费；连接串来自项目 User Secrets 的 `ConnectionStrings:Oracle`，未使用凭据环境变量 |
+| 清理与范围 | 随机 type/table 由 `DatabaseContext` LIFO 清理；只关闭上述 named scalar text 子集，不关闭 collection/嵌套/LOB/cursor/RAW/时间或跨版本、代理、TLS、长期压力组合 |
+
+该子集已达到 `P4`；D-04e 其余 collection/复杂成员形状仍为 `P2`，D-04 父项保持未完成。
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 

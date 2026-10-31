@@ -61,7 +61,11 @@ namespace OceanBaseConnector.Internal.Protocol
                 try
                 {
                     if (_columns[_ordinal].TypeCode == 160 && !IsBinaryNull)
-                    { _columns[_ordinal].RequireComplexResult(_binary); MaterializeComplex(false, CancellationToken.None).GetAwaiter().GetResult(); }
+                    {
+                        _columns[_ordinal].RequireComplexResult(_binary);
+                        if (_binary) MaterializeComplex(false, CancellationToken.None).GetAwaiter().GetResult();
+                        else SetLength(FieldLength());
+                    }
                     else
                     {
                         SetLength(FieldLength());
@@ -83,7 +87,11 @@ namespace OceanBaseConnector.Internal.Protocol
                 try
                 {
                     if (_columns[_ordinal].TypeCode == 160 && !IsBinaryNull)
-                    { _columns[_ordinal].RequireComplexResult(_binary); await MaterializeComplex(true, token).ConfigureAwait(false); }
+                    {
+                        _columns[_ordinal].RequireComplexResult(_binary);
+                        if (_binary) await MaterializeComplex(true, token).ConfigureAwait(false);
+                        else SetLength(await FieldLengthAsync(token).ConfigureAwait(false));
+                    }
                     else
                     {
                         SetLength(await FieldLengthAsync(token).ConfigureAwait(false));

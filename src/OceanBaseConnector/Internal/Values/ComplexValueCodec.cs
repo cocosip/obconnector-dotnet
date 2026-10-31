@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using OceanBaseConnector;
 using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.Internal.Session;
 
@@ -25,6 +26,25 @@ namespace OceanBaseConnector.Internal.Values
             return cursor.CopyConsumed(position);
         }
 
+        internal static void ValidateTextResult(OceanBaseComplexType type, OceanBaseCompatibilityMode mode)
+        {
+            if (mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Complex values require Oracle mode.");
+            if (type == null) throw new ArgumentNullException(nameof(type));
+            if (type.IsAnonymous || type.IsCollection || type.TypeName.Length == 0)
+                throw new NotSupportedException("Complex text results require a named object type.");
+            foreach (var member in type.Layout.Members)
+                if (member.TypeCode != 0 && member.TypeCode != 253 && member.TypeCode != 254 && member.TypeCode != 207 && member.TypeCode != 208)
+                    throw new NotSupportedException("The complex text result contains an unsupported member type.");
+        }
+
+        internal static object?[] DecodeTextResult(byte[] value, OceanBaseComplexType type, OceanBaseCompatibilityMode mode)
+        {
+            if (value == null) throw new ArgumentNullException(nameof(value));
+            ValidateTextResult(type, mode);
+            if (value.Length > MaximumBytes) throw new ProtocolException("Complex text data exceeds the supported byte limit.");
+            return new TextResultParser(ResultColumn.Utf8.GetString(value), type).Read();
+        }
+
         internal static byte[] EncodeParameter(ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null, bool lobLocators = false)
         {
             using var stream = new MemoryStream(); using var writer = new BinaryWriter(stream, ResultColumn.Utf8, leaveOpen: true);
@@ -42,6 +62,123 @@ namespace OceanBaseConnector.Internal.Values
             if (mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Complex values require Oracle mode.");
             if (type == null) throw new ArgumentNullException(nameof(type));
             if (type.TypeCode != 160) throw new ArgumentException("A complex value requires an object or collection layout.", nameof(type));
+        }
+
+        private sealed class TextResultParser
+        {
+            private readonly string _text;
+            private readonly OceanBaseComplexType _type;
+            private int _position;
+
+            internal TextResultParser(string text, OceanBaseComplexType type)
+            { _text = text; _type = type; }
+
+            internal object?[] Read()
+            {
+                SkipWhitespace();
+                var name = ReadTypeName();
+                if (!string.Equals(name, _type.TypeName, StringComparison.OrdinalIgnoreCase))
+                    throw Invalid("The complex text result type name does not match its metadata.");
+                SkipWhitespace(); Expect('(');
+                var values = new object?[_type.Layout.Members.Count];
+                for (var i = 0; i < values.Length; i++)
+                {
+                    SkipWhitespace(); values[i] = ReadMember(_type.Layout.Members[i]); SkipWhitespace();
+                    if (i + 1 < values.Length) Expect(',');
+                }
+                SkipWhitespace(); Expect(')'); SkipWhitespace();
+                if (_position != _text.Length) throw Invalid("Trailing complex text result data.");
+                return values;
+            }
+
+            private string ReadTypeName()
+            {
+                var start = _position;
+                while (_position < _text.Length && !char.IsWhiteSpace(_text[_position]) && _text[_position] != '(') _position++;
+                if (start == _position) throw Invalid("A complex text result is missing its type name.");
+                return _text.Substring(start, _position - start);
+            }
+
+            private object? ReadMember(ComplexType member)
+            {
+                if (ReadNull()) return null;
+                switch (member.TypeCode)
+                {
+                    case 0:
+                        var numberText = ReadBareToken();
+                        try
+                        {
+                            var number = DecimalCodec.Parse(numberText);
+                            DecimalCodec.Validate(number, OceanBaseCompatibilityMode.Oracle);
+                            return number;
+                        }
+                        catch (Exception error) when (error is FormatException || error is OverflowException)
+                        { throw new ProtocolException("Invalid complex text NUMBER member.", error); }
+                    case 253:
+                    case 254:
+                    case 207:
+                    case 208:
+                        return ReadQuoted();
+                    default: throw new NotSupportedException("The complex text result contains an unsupported member type.");
+                }
+            }
+
+            private bool ReadNull()
+            {
+                const string token = "NULL";
+                if (_position + token.Length > _text.Length || !string.Equals(_text.Substring(_position, token.Length), token, StringComparison.OrdinalIgnoreCase)) return false;
+                var end = _position + token.Length;
+                if (end < _text.Length && !char.IsWhiteSpace(_text[end]) && _text[end] != ',' && _text[end] != ')') return false;
+                _position = end; return true;
+            }
+
+            private string ReadBareToken()
+            {
+                var start = _position;
+                while (_position < _text.Length && _text[_position] != ',' && _text[_position] != ')') _position++;
+                var token = _text.Substring(start, _position - start).Trim();
+                if (token.Length == 0) throw Invalid("A complex text result is missing a scalar member.");
+                return token;
+            }
+
+            private string ReadQuoted()
+            {
+                Expect('\''); var builder = new StringBuilder();
+                while (_position < _text.Length)
+                {
+                    var character = _text[_position++];
+                    if (character != '\'') { builder.Append(character); continue; }
+                    if (IsClosingQuote()) return builder.ToString();
+                    if (_position < _text.Length && _text[_position] == '\'')
+                    {
+                        var next = _position + 1;
+                        while (next < _text.Length && char.IsWhiteSpace(_text[next])) next++;
+                        if (next >= _text.Length || _text[next] != ',' && _text[next] != ')') _position++;
+                        builder.Append('\'');
+                        continue;
+                    }
+                    builder.Append('\'');
+                }
+                throw Invalid("An unterminated complex text character member was received.");
+            }
+
+            private bool IsClosingQuote()
+            {
+                var next = _position;
+                while (next < _text.Length && char.IsWhiteSpace(_text[next])) next++;
+                return next >= _text.Length || _text[next] == ',' || _text[next] == ')';
+            }
+
+            private void Expect(char expected)
+            {
+                if (_position >= _text.Length || _text[_position] != expected) throw Invalid("Invalid complex text result delimiters.");
+                _position++;
+            }
+
+            private void SkipWhitespace()
+            { while (_position < _text.Length && char.IsWhiteSpace(_text[_position])) _position++; }
+
+            private ProtocolException Invalid(string message) => new ProtocolException(message);
         }
 
         private static object?[] Read(ByteCursor cursor, ComplexType type, int depth, ref int budget, int start, bool materialize = true, Encoding? nationalEncoding = null, LobSession? lobs = null, OracleCursorOwner? cursors = null)
