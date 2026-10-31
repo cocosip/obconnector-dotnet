@@ -108,6 +108,7 @@ namespace OceanBaseConnector.Internal.Session
                 if ((column.TypeCode != 15 && column.TypeCode != 253 && column.TypeCode != 254) || column.FieldType != typeof(string))
                     throw new ProtocolException("The complex source column query requires ordinary string columns.");
                 var bytes = result.Row![i];
+                if (bytes == null && i == 0) throw new NotSupportedException("The complex source column type owner is unavailable.");
                 if (bytes == null || bytes.Length == 0 || bytes.Length > 512) throw new ProtocolException("Invalid complex source column type identifier.");
                 identity[i] = ResultColumn.Utf8.GetString(bytes);
                 ValidateComplexSourceName(identity[i]);

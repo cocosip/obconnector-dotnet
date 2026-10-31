@@ -1052,6 +1052,12 @@ Q20 范围或其他部署。
 专用身份。因此目前只有用户自行通过 XML 函数或显式 CAST 转成已支持的 String/Binary/LOB
 路径这一种可审计的服务端转换方式，不能宣称原生 XMLType 参数或结果已完成。
 
+2026-10-31 的 Oracle 直连 profile（OceanBase 4.4.2.2）进一步固定了列形状：`CREATE TABLE (... XMLTYPE)`、
+`XMLTYPE('<a>患者</a>')` 插入和 `XMLSERIALIZE(DOCUMENT x AS CLOB)` 均成功；普通 `SELECT x` 的复杂列
+metadata 把类型名报告为 `XMLTYPE`，但 `ALL_TAB_COLUMNS` 返回的 `DATA_TYPE_OWNER` 为空。客户端已将该
+ownerless 形状从内部协议错误改为明确的 `NotSupportedException`，而序列化结果按现有 `CLOB` locator
+路径读取成功。该证据确认的是客户端边界和可用转换路径，不是 XMLType 原生 wire codec。
+
 调查结论：D-09 仍为 `P0 / 待 wire 与形状`，本轮不新增 `OceanBaseDbType.Xml`，也不把它
 猜测映射成 String、BLOB 或现有 OBJECT codec。重新开启实现前，需要目标 OceanBase 版本和
 Oracle 直连 profile 提供 XMLType 普通列与 PL 参数/输出的 metadata/type code、NULL、字符编码、
