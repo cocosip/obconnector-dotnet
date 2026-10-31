@@ -1062,19 +1062,20 @@ Oracle session time zone/national character set，必要时按已解析上下文
 的发送状态处理，并先发送积压的 prepared-statement close 包，避免丢失结果元数据或长期积压服务端句柄。
 
 之前的实库运行被 VPN 阻塞；修复响应包序号边界后，临时 direct profile 的 MySQL/Oracle
-矩阵 **8/8 通过**（DML/scalar × sync/async，`BatchMultiSendNumber=2`）。首个子集的服务端
-错误排序、收益基线和代理/OB20 行为仍未验收；Oracle PrepareExecute、输出/LOB/cursor/array、流和
-text fallback 仍明确不在首个子集，因此这些仍是 D-08 的后续缺口。新增 reader 的 Oracle 直连
-profile sync/async 2/2 已通过；本轮环境未提供 MySQL 直连 profile，未宣称 MySQL reader 实测通过。
+矩阵 **12/12 通过**（DML/scalar/reader × sync/async，`BatchMultiSendNumber=2`）。首个子集的
+服务端错误排序、收益基线和代理/OB20 行为仍未验收；Oracle PrepareExecute、输出/LOB/cursor/array、
+流和 text fallback 仍明确不在首个子集，因此这些仍是 D-08 的后续缺口。reader 的 MySQL/Oracle
+直连 profile sync/async 均已通过；本轮没有把这组结果外推到代理或其他版本。
 
 新增 `Batches/MultiSendTests.cs`，覆盖 MySQL/Oracle create-objects profile 的 input-only
-prepared DML 和 scalar 排空，sync/async 及 `BatchMultiSendNumber=2`。Oracle 用例显式关闭
-`UseOraclePrepareExecute`，以验证本子集要求的普通 server prepared wire；本地编译通过。本轮从
-User Secrets 读取 MySQL/Oracle 连接信息，并生成只包含 `mysql-direct`/`oracle-direct` 的临时
-integration config；启用 `OB_REQUIRE_INTEGRATION=1` 后，限定集成组 **8/8 通过**。重跑同时
+prepared DML、scalar 排空和 reader 顺序，sync/async 及 `BatchMultiSendNumber=2`。Oracle 用例显式
+关闭 `UseOraclePrepareExecute`，以验证本子集要求的普通 server prepared wire；本地编译通过。本轮
+从 User Secrets 读取 MySQL/Oracle 连接信息，并生成只包含 `mysql-direct`/`oracle-direct` 的临时
+integration config；启用 `OB_REQUIRE_INTEGRATION=1` 后，限定集成组 **12/12 通过**。重跑同时
 暴露并修复了客户端响应包序号未在每个 pipelined 响应边界重置的问题；loopback 夹具现按
-MySQL 响应从序号 1 开始建模。结果只证明上述 input-only DML/scalar 子集，不外推更大
-Q20 范围或其他部署。
+MySQL 响应从序号 1 开始建模。结果只证明上述 input-only DML/scalar/reader 子集，不外推更大
+Q20 范围或其他部署。fresh-context 代码走查核对了 eligible-shape 拒绝、发送前失败、响应顺序、
+unknown-outcome/cancellation 和 reader 提前关闭；未发现待修问题。
 
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
 
