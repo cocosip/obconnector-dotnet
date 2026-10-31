@@ -765,6 +765,21 @@ Connector/J 2.4.14 没有可发出同形状 BLOB OBJECT 输入的 writer，也�
 编码。源码依据：[ObRecordType::deserialize][O12-record-deserialize]、
 [ObPLDataType::deserialize][O12-pl-deserialize]、[parse_basic_param_value][O12-basic-param]。
 
+#### D-04a2 Connector/J 2.4.14 公开 API 实测（2026-11-01）
+
+为确认“Java 同样失败”条件，使用同一 Oracle 4.4.2.2 `oracle-direct`、TLS Disabled
+profile 运行 Connector/J 2.4.14。Java 能从服务端读取真实描述：根 `type=3`（OBJECT），
+唯一成员 `attrType=10`（BLOB）。随后分别使用 `Connection.createStruct(type, byte[])`，
+以及 `StructImpl` 配合 `com.oceanbase.jdbc.Blob` 构造值；两条公开构造路径都在客户端
+`ComplexUtil.storeComplexAttrData` 阶段抛出 `SQLNonTransientConnectionException:
+storeComplexAttrData exception`，异常链止于 `IOException`，目标表行数均为 0。
+
+这两个 Java 调用没有发出与 .NET 相同形状的 BLOB OBJECT DML，也没有得到服务端 `932/22000`。
+因此它们证明了 Connector/J 公开 API 的 writer 边界，却不满足“Java 发出同一交互并同样失败”
+的服务端归因条件；D-04a2 继续保持 `P2 / 已复现但待归因`，不改 `ComplexValueCodec`，也不
+标记服务端限制。原始输出保存在忽略目录 `.tmp/d04a2-java-public-api.log`，不提交凭据或
+探针源码。
+
 #### D-04c：复杂 whole-column RETURNING 的 opaque metadata（2026-10-31）
 
 新增 `Oracle/ComplexReturningTests.cs`，在 Oracle 4.4.2.2 `oracle-direct`、TLS Disabled、

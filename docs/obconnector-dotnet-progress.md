@@ -1,6 +1,6 @@
 # SDK 功能、能力与支持边界矩阵
 
-更新：2026-11-01，源码基线`a21db16`。本文件是当前功能范围的唯一入口；
+更新：2026-11-01，源码基线`c66b30e`。本文件是当前功能范围的唯一入口；
 [依据与清理决策](obconnector-dotnet-scope-audit.md)固定官方文档/Java版本并解释O/J编号，
 [缺失矩阵](obconnector-dotnet-completeness.md)列开发与验收差距，
 [验收标准](acceptance-criteria.md)定义完成条件，[兼容性](compatibility.md)保留环境阻塞。
@@ -82,8 +82,8 @@
 | T11 NCHAR/NVARCHAR2 | 不套用Oracle national协议 | 标量和有依据复杂成员子集 | string+显式类型、NationalCharacterSet | 输入/结果/存储编码不同；需可信身份/编码快照 |
 | T12 ROWID/UROWID | — | 协议209结果解码与 UROWID 参数 | ROWID结果保持String；新增 Urowid 参数类型、NULL/type209 编码、目录映射 | 直连 Oracle 4.4.2.2 的输入/输出/RETURNING 已验收；DeriveParameters 受服务端目录形状限制，见唯一路线图 |
 | T13 BLOB/CLOB locator | 普通BLOB byte[]/流，不用Oracle locator | locator读写/修改/回绑的限定子集 | OceanBaseLob、LobSession、LobMutation | 需PrepareExecute/locator能力；失效/旧租约/外置大值 |
-| T14 命名OBJECT/collection | — | 加载描述、预装类型、嵌套值子集 | OceanBaseComplexType/Value、ComplexTypeContext/Codec | 类型DDL失效；named与anonymous、输入与结果分别验收；当前 OBJECT/嵌套 OBJECT NULL 输出身份为服务端限制，collection NULL 形状另有证据 |
-| T15 复杂LOB/cursor成员 | — | 结果读取子集；命名LOB内容/匿名locator输入子集 | ComplexValueCodec、SequentialRow.Complex | 命名locator回绑/cursor输入/未解析RETURNING身份/文本复杂结果拒绝 |
+| T14 命名OBJECT/collection | — | 加载描述、预装类型、嵌套值子集 | OceanBaseComplexType/Value、ComplexTypeContext/Codec | 类型DDL失效；named与anonymous、输入与结果分别验收；当前 OBJECT/嵌套 OBJECT NULL 输出身份为服务端限制，collection NULL 形状另有证据；named BLOB 成员 DML 的 Java 公开 API 尚未形成同一交互，仍待归因 |
+| T15 复杂LOB/cursor成员 | — | 结果读取子集；命名LOB内容/匿名locator输入子集 | ComplexValueCodec、SequentialRow.Complex | Oracle named BLOB OBJECT 成员 DML 在 .NET 返回 `932/22000`；Connector/J 2.4.14 `createStruct`/`StructImpl + Blob` 在客户端 writer 失败、未发出同一交互；命名locator回绑/cursor输入/未解析RETURNING身份/文本复杂结果仍拒绝 |
 | T16 LONG/LONG RAW/BFILE/NCLOB | — | 排除专用支持 | 无专用API/模拟实现 | O4明确不支持；Java别名/枚举不能扩大范围 |
 | T17 XMLType/SDO_GEOMETRY/ANYDATA | — | XMLType 为服务端有条件能力，.NET 专用 codec 未承诺；SDO 已验收显式 Prepare 整列读取与 generic OBJECT/ARRAY 输入子集，仍无专用 codec；ANYDATA 在当前目标租户找不到 `SYS.ANYDATA`，Java/.NET 同 SQL 失败并按服务端限制跳过 | XMLType 可使用服务端转换为已支持标量（XMLSERIALIZE→CLOB 已验证）；SDO 通用 OBJECT 路径已覆盖整列读取和受限输入 | O8；不是现有复杂 codec 自动支持；XMLType 原生 wire、SDO 专用 WKB/WKT/SRID 契约与非法几何行为仍待证据，ANYDATA 需新版本/租户提供包后重开 |
 | T18 向量/位图/SQL数组 | 服务端版本相关；无专用codec承诺 | 不把MySQL扩展套用此模式 | 当前Oracle数组绑定不是这些类型 | O2；需新增wire/type证据与需求才纳入 |
