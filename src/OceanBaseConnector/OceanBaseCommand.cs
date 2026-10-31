@@ -415,12 +415,10 @@ namespace OceanBaseConnector
         }
 
 #if NET8_0_OR_GREATER
-        internal byte[] BuildBatchMultiSendRequest(CancellationToken token)
+        internal OceanBaseBatchMultiSendRequest BuildBatchMultiSendRequest(CancellationToken token)
         {
             if (CommandType != CommandType.Text || HasOutputParameters() || _fetchSize != 0 || AllowClientSidePrepareFallback)
                 throw new NotSupportedException("Batch multi-send requires input-only text commands without cursors, outputs, or fallback.");
-            foreach (OceanBaseParameter parameter in _parameters)
-                if (parameter.Value is Stream) throw new NotSupportedException("Batch multi-send does not support stream parameters.");
 
             var operation = Start(CommandBehavior.Default, token, prepareOnly: false);
             try
@@ -428,6 +426,9 @@ namespace OceanBaseConnector
                 ValidateBatchMultiSendOperation(operation);
                 if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
+                var hasStreams = HasStreamParameters(operation.Bindings.Parameters);
+                if (hasStreams && operation.Exchange.Mode != OceanBaseCompatibilityMode.MySql)
+                    throw new NotSupportedException("Batch multi-send stream parameters require MySQL long-data packets.");
                 var zone = operation.Exchange.EnsureSessionTimeZone();
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = operation.Exchange.EnsureNationalCharacterSet();
@@ -438,17 +439,15 @@ namespace OceanBaseConnector
                     : operation.Parameters;
                 var request = PreparedParameters.Execute(statement.Id, parameters, cursor: false);
                 operation.Exchange.Complete();
-                return request;
+                return new OceanBaseBatchMultiSendRequest(request, statement.Id, hasStreams ? operation.Bindings.Parameters : null);
             }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }
 
-        internal async Task<byte[]> BuildBatchMultiSendRequestAsync(CancellationToken token)
+        internal async Task<OceanBaseBatchMultiSendRequest> BuildBatchMultiSendRequestAsync(CancellationToken token)
         {
             if (CommandType != CommandType.Text || HasOutputParameters() || _fetchSize != 0 || AllowClientSidePrepareFallback)
                 throw new NotSupportedException("Batch multi-send requires input-only text commands without cursors, outputs, or fallback.");
-            foreach (OceanBaseParameter parameter in _parameters)
-                if (parameter.Value is Stream) throw new NotSupportedException("Batch multi-send does not support stream parameters.");
 
             var operation = Start(CommandBehavior.Default, token, prepareOnly: false);
             try
@@ -456,6 +455,9 @@ namespace OceanBaseConnector
                 ValidateBatchMultiSendOperation(operation);
                 if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
+                var hasStreams = HasStreamParameters(operation.Bindings.Parameters);
+                if (hasStreams && operation.Exchange.Mode != OceanBaseCompatibilityMode.MySql)
+                    throw new NotSupportedException("Batch multi-send stream parameters require MySQL long-data packets.");
                 var zone = await operation.Exchange.EnsureSessionTimeZoneAsync(token).ConfigureAwait(false);
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = await operation.Exchange.EnsureNationalCharacterSetAsync(token).ConfigureAwait(false);
@@ -466,7 +468,7 @@ namespace OceanBaseConnector
                     : operation.Parameters;
                 var request = PreparedParameters.Execute(statement.Id, parameters, cursor: false);
                 operation.Exchange.Complete();
-                return request;
+                return new OceanBaseBatchMultiSendRequest(request, statement.Id, hasStreams ? operation.Bindings.Parameters : null);
             }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }

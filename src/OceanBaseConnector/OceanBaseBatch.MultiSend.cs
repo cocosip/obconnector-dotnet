@@ -67,7 +67,7 @@ namespace OceanBaseConnector
         private (int Affected, object? Scalar) ExecuteMultiSend(Operation operation, bool captureScalar = false)
         {
             operation.ThrowIfCanceled();
-            var requests = new byte[operation.Commands.Length][];
+            var requests = new OceanBaseBatchMultiSendRequest[operation.Commands.Length];
             for (var i = 0; i < requests.Length; i++)
             {
                 operation.ThrowIfCanceled();
@@ -84,7 +84,7 @@ namespace OceanBaseConnector
                 for (var i = group.Start; i < group.End; i++)
                 {
                     exchange.BatchCommand = operation.Items[i];
-                    exchange.SendBatchRequest(requests[i]);
+                    SendMultiSendRequest(exchange, requests[i]);
                 }
                 for (var i = group.Start; i < group.End; i++)
                 {
@@ -102,7 +102,7 @@ namespace OceanBaseConnector
         private async Task<(int Affected, object? Scalar)> ExecuteMultiSendAsync(Operation operation, bool captureScalar = false)
         {
             operation.ThrowIfCanceled();
-            var requests = new byte[operation.Commands.Length][];
+            var requests = new OceanBaseBatchMultiSendRequest[operation.Commands.Length];
             for (var i = 0; i < requests.Length; i++)
             {
                 operation.ThrowIfCanceled();
@@ -119,7 +119,7 @@ namespace OceanBaseConnector
                 for (var i = group.Start; i < group.End; i++)
                 {
                     exchange.BatchCommand = operation.Items[i];
-                    await exchange.SendBatchRequestAsync(requests[i], operation.Token).ConfigureAwait(false);
+                    await SendMultiSendRequestAsync(exchange, requests[i], operation.Token).ConfigureAwait(false);
                 }
                 for (var i = group.Start; i < group.End; i++)
                 {
@@ -182,28 +182,61 @@ namespace OceanBaseConnector
         internal static bool CanUseMultiSendReader(CommandBehavior behavior) =>
             (behavior & ~CommandBehavior.CloseConnection) == CommandBehavior.Default;
 
-        internal void SendMultiSendGroup(Operation operation, CommandExchange exchange, byte[][] requests, ref int next, out int end)
+        internal void SendMultiSendGroup(Operation operation, CommandExchange exchange, OceanBaseBatchMultiSendRequest[] requests, ref int next, out int end)
         {
             end = next;
             while (end < requests.Length && end - next < operation.Session!.BatchMultiSendNumber) end++;
             for (var index = next; index < end; index++)
             {
                 exchange.BatchCommand = operation.Items[index];
-                exchange.SendBatchRequest(requests[index]);
+                SendMultiSendRequest(exchange, requests[index]);
             }
             next = end;
         }
 
-        internal async Task<int> SendMultiSendGroupAsync(Operation operation, CommandExchange exchange, byte[][] requests, int next, CancellationToken token)
+        internal async Task<int> SendMultiSendGroupAsync(Operation operation, CommandExchange exchange, OceanBaseBatchMultiSendRequest[] requests, int next, CancellationToken token)
         {
             var end = next;
             while (end < requests.Length && end - next < operation.Session!.BatchMultiSendNumber) end++;
             for (var index = next; index < end; index++)
             {
                 exchange.BatchCommand = operation.Items[index];
-                await exchange.SendBatchRequestAsync(requests[index], token).ConfigureAwait(false);
+                await SendMultiSendRequestAsync(exchange, requests[index], token).ConfigureAwait(false);
             }
             return end;
+        }
+
+        private static void SendMultiSendRequest(CommandExchange exchange, OceanBaseBatchMultiSendRequest request)
+        {
+            if (request.LongDataParameters != null)
+                exchange.SendBatchLongData(request.StatementId, request.LongDataParameters, request.Packet.Length);
+            exchange.SendBatchRequest(request.Packet);
+        }
+
+        private static async Task SendMultiSendRequestAsync(CommandExchange exchange, OceanBaseBatchMultiSendRequest request, CancellationToken token)
+        {
+            if (request.LongDataParameters != null)
+                await exchange.SendBatchLongDataAsync(request.StatementId, request.LongDataParameters, request.Packet.Length, token).ConfigureAwait(false);
+            await exchange.SendBatchRequestAsync(request.Packet, token).ConfigureAwait(false);
+        }
+
+        internal static IEnumerable<(int Start, int End)> PlanMultiSendGroups(OceanBaseBatchMultiSendRequest[] requests, int maxCount)
+        {
+            var start = 0;
+            while (start < requests.Length)
+            {
+                var end = start;
+                long bytes = 0;
+                while (end < requests.Length && end - start < maxCount)
+                {
+                    var next = checked(bytes + requests[end].Packet.Length);
+                    if (end > start && next > PacketChannel.DefaultMaxPacketSize) break;
+                    bytes = next;
+                    end++;
+                }
+                yield return (start, end);
+                start = end;
+            }
         }
 
         internal static IEnumerable<(int Start, int End)> PlanMultiSendGroups(byte[][] requests, int maxCount)

@@ -247,6 +247,46 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
+        public async Task BatchMultiSendWritesMySqlLongDataBeforeDrainingResponses(bool asynchronous)
+        {
+            var server = MySqlProcedureServer(async channel =>
+            {
+                await StatementCommand(channel, 22); await Prepared(channel, 90, 2);
+                await StatementCommand(channel, 22); await Prepared(channel, 91, 2);
+                channel.BeginCommand(); var firstLongData = await channel.ReadPacketAsync();
+                Assert.Equal(24, firstLongData[0]); Assert.Equal(90u, System.BitConverter.ToUInt32(firstLongData, 1));
+                Assert.Equal((ushort)1, System.BitConverter.ToUInt16(firstLongData, 5));
+                Assert.Equal(new byte[] { 1, 2, 3 }, firstLongData.Skip(7).ToArray());
+                Assert.Equal(90, (await StatementCommand(channel, 23))[1]);
+                channel.BeginCommand(); var secondLongData = await channel.ReadPacketAsync();
+                Assert.Equal(24, secondLongData[0]); Assert.Equal(91u, System.BitConverter.ToUInt32(secondLongData, 1));
+                Assert.Equal((ushort)1, System.BitConverter.ToUInt16(secondLongData, 5));
+                Assert.Equal(new byte[] { 4, 5, 6 }, secondLongData.Skip(7).ToArray());
+                Assert.Equal(91, (await StatementCommand(channel, 23))[1]);
+                channel.BeginResponse(); await channel.WritePacketAsync(Ok(1));
+                channel.BeginResponse(); await channel.WritePacketAsync(Ok(1));
+                await StatementCommand(channel, 25); await StatementCommand(channel, 25);
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true;Batch Multi Send Number=2");
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch();
+                var first = BatchItem(batch, "insert into t values (?, ?)");
+                first.Parameters.Add(new OceanBaseParameter { DbType = DbType.Int32, Value = 1 });
+                first.Parameters.Add(new OceanBaseParameter { DbType = DbType.Binary, Value = new MemoryStream(new byte[] { 1, 2, 3 }, false) });
+                var second = BatchItem(batch, "insert into t values (?, ?)");
+                second.Parameters.Add(new OceanBaseParameter { DbType = DbType.Int32, Value = 2 });
+                second.Parameters.Add(new OceanBaseParameter { DbType = DbType.Binary, Value = new MemoryStream(new byte[] { 4, 5, 6 }, false) });
+                Assert.Equal(2, asynchronous ? await batch.ExecuteNonQueryAsync() : batch.ExecuteNonQuery());
+                Assert.Equal(1, first.RecordsAffected); Assert.Equal(1, second.RecordsAffected);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task BatchMultiSendReaderWritesAllPreparedExecutionsBeforeReadingResults(bool asynchronous)
         {
             var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -20,7 +20,7 @@ namespace OceanBaseConnector
         private bool _closed;
         private bool _failed;
         private CommandExchange? _multiExchange;
-        private byte[][]? _multiRequests;
+        private OceanBaseBatchMultiSendRequest[]? _multiRequests;
         private int _multiNext;
         private int _multiGroupEnd;
         private bool _multiSend;
@@ -45,7 +45,7 @@ namespace OceanBaseConnector
             OceanBaseBatch.CanUseMultiSendReader(_operation.Behavior) && _operation.Session?.UseBatchMultiSend == true;
         private void StartMultiSend()
         {
-            var requests = new byte[_operation.Commands.Length][];
+            var requests = new OceanBaseBatchMultiSendRequest[_operation.Commands.Length];
             for (var i = 0; i < requests.Length; i++) requests[i] = _operation.Commands[i].BuildBatchMultiSendRequest(_operation.Token);
             _multiRequests = requests; _multiExchange = _operation.Batch.StartMultiSendExchange(_operation); _multiSend = true;
             try { SendNextMultiSendGroup(); StartCurrentMultiSend(); }
@@ -53,7 +53,7 @@ namespace OceanBaseConnector
         }
         private async Task StartMultiSendAsync()
         {
-            var requests = new byte[_operation.Commands.Length][];
+            var requests = new OceanBaseBatchMultiSendRequest[_operation.Commands.Length];
             for (var i = 0; i < requests.Length; i++) requests[i] = await _operation.Commands[i].BuildBatchMultiSendRequestAsync(_operation.Token).ConfigureAwait(false);
             _multiRequests = requests; _multiExchange = _operation.Batch.StartMultiSendExchange(_operation); _multiSend = true;
             try { await SendNextMultiSendGroupAsync().ConfigureAwait(false); await StartCurrentMultiSendAsync().ConfigureAwait(false); }
