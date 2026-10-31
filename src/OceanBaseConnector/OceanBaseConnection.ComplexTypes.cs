@@ -128,8 +128,8 @@ namespace OceanBaseConnector
         {
             lock (_gate)
             {
-                if (_complexTypes.TryGetValue(("SYS", "SDO_GEOMETRY"), out var cached)) return cached;
                 var context = EnsureComplexTypeContext(session, transaction);
+                if (_complexTypes.TryGetValue(("SYS", "SDO_GEOMETRY"), out var cached)) return cached;
                 var number = new ComplexType(0);
                 var point = new OceanBaseComplexType(context, "SYS", "SDO_POINT_TYPE", false, new[]
                 {
