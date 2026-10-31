@@ -34,20 +34,34 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(2, pairs.Count);
                 return (Assert.IsType<string>(pairs["oceanbase.connection.phase"]), Assert.IsType<string>(pairs["oceanbase.outcome"]));
             }).ToArray();
-            internal TaskCompletionSource Waiting { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
             internal string[] Phases => Samples.Select(sample => sample.Phase).ToArray();
             internal double[] Seconds => _samples.Select(sample => sample.Value).ToArray();
             internal Capture()
             {
                 _listener.InstrumentPublished = (instrument, listener) =>
-                { if (instrument.Meter.Name == "OceanBaseConnector" && (instrument.Name == MetricName || instrument.Name == "oceanbase.client.pool.waiters")) listener.EnableMeasurementEvents(instrument); };
-                _listener.SetMeasurementEventCallback<long>((_, value, _, _) => { if (value == 1) Waiting.TrySetResult(); });
+                { if (instrument.Meter.Name == "OceanBaseConnector" && instrument.Name == MetricName) listener.EnableMeasurementEvents(instrument); };
                 _listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
                     _samples.Enqueue((value, instrument.Unit, tags.ToArray())));
                 _listener.Start();
             }
             internal void Clear() => _samples.Clear();
             public void Dispose() => _listener.Dispose();
+        }
+
+        private static async Task WaitForPoolWaiter(string configuration)
+        {
+            var pool = PhysicalSessionPoolRegistry.Get(configuration);
+            try
+            {
+                var deadline = Stopwatch.StartNew();
+                while (pool.WaiterCount == 0)
+                {
+                    if (deadline.Elapsed >= TimeSpan.FromSeconds(5))
+                        throw new TimeoutException("The target connection did not enter the pool wait.");
+                    await Task.Delay(10);
+                }
+            }
+            finally { PhysicalSessionPoolRegistry.ReleaseIfEmpty(configuration, pool); }
         }
         private const string MetricName = "oceanbase.client.connection.phase.duration";
     }

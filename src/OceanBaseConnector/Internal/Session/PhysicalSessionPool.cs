@@ -53,6 +53,11 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
+        internal int WaiterCount
+        {
+            get { lock (_gate) return _waiters; }
+        }
+
         private enum RentDecision { Create, Candidate, Wait }
 
         internal PhysicalSession Rent(OceanBaseConnectionOptions options, IOceanBaseAddressResolver? resolver,

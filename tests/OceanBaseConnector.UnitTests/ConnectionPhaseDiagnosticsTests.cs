@@ -152,7 +152,7 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await Open(first, asynchronous); capture.Clear(); var pending = Open(second, asynchronous);
-                await capture.Waiting.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                await WaitForPoolWaiter(configuration);
                 if (completion == "release") { first.Close(); await pending; }
                 else if (completion == "cancel") { second.Close(); await Assert.ThrowsAnyAsync<Exception>(() => pending); }
                 else await Assert.ThrowsAsync<TimeoutException>(() => pending);
@@ -262,7 +262,7 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await Open(first, asynchronous); capture.Clear(); waitLifetime.Start(); var pending = Open(second, asynchronous);
-                await capture.Waiting.Task.WaitAsync(TimeSpan.FromSeconds(5)); first.Close(); await pending;
+                await WaitForPoolWaiter(configuration); first.Close(); await pending;
                 Assert.Equal("pool.wait", capture.Phases[0]);
                 Assert.True(beforeCleanup > TimeSpan.Zero);
                 Assert.True(capture.Seconds[0] <= beforeCleanup.TotalSeconds, "Blocked time must exclude the later cleanup callback.");
