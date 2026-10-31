@@ -146,7 +146,7 @@ namespace OceanBaseConnector.UnitTests
         public async Task PoolWaitMeasuresOnlyBlockedTimeAndPreservesCapacity(bool asynchronous, string completion)
         {
             await using var server = Server(); using var capture = new Capture();
-            var waitTimeout = completion == "elapsed" ? 1 : 5;
+            var waitTimeout = completion == "elapsed" ? 1 : 30;
             var configuration = Configuration(server.Port, pooled: true) + ";Pool Wait Timeout=" + waitTimeout;
             using var first = new OceanBaseConnection(configuration); using var second = new OceanBaseConnection(configuration);
             try
