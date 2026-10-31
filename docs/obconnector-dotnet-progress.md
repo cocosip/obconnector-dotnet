@@ -88,7 +88,7 @@
 | T17 XMLType/SDO_GEOMETRY/ANYDATA | — | 服务端有条件能力，.NET专用codec未承诺 | 可使用服务端转换为已支持标量 | O8；不是现有复杂codec自动支持；列候选差距 |
 | T18 向量/位图/SQL数组 | 服务端版本相关；无专用codec承诺 | 不把MySQL扩展套用此模式 | 当前Oracle数组绑定不是这些类型 | O2；需新增wire/type证据与需求才纳入 |
 | T19 客户端SQL编码 | utf8mb4/mb3、ASCII、latin1、GB2312、GBK、GB18030/2022、DEC8、TIS620、EUCKR、SJIS、Big5、HKSCS/31 | 相同解析白名单，MySQL直连 SJIS/Big5 专项4/4通过 | 未列名字发送前拒绝；Oracle SJIS/Big5仍失败 | UJIS/EUCJPMS/CP932/CP850/HP8/MACROMAN/SWE7 无当前服务端证据，暂不扩展 |
-| T20 结果/national编码 | 映射UTF8、UTF16/LE及已实现单/多字节collation（含GB2312 24/86、EUCKR 19/85） | 普通结果与national独立规则 | ResultCharacterSet、NationalCharacterSet | 未知collation/坏字节拒绝；GB2312/EUCKR指定直连结果/national子集见D-07，Oracle普通EUCKR客户端900仍开放；UJIS/EUCJPMS等仍未覆盖 |
+| T20 结果/national编码 | 映射UTF8、UTF16/LE及已实现单/多字节collation（含GB2312 24/86、EUCKR 19/85） | 普通结果与national独立规则 | ResultCharacterSet、NationalCharacterSet | 未知collation/坏字节拒绝；GB2312/EUCKR指定直连结果/national子集见D-07，当前目标 Oracle 普通 EUCKR 初始化由服务端 900 限制且 Java 同交互失败；其他版本/部署及 UJIS/EUCJPMS 等仍未覆盖 |
 
 类型依据O2/O4、J2/J3/J6；实际约束在[ResultColumn](../src/OceanBaseConnector/Internal/Protocol/ResultColumn.cs)、
 [PreparedParameters](../src/OceanBaseConnector/Internal/Protocol/PreparedParameters.cs)和各codec中。

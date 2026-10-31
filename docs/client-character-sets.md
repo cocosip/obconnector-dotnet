@@ -202,9 +202,11 @@ storage evidence. The accepted scope and remaining deployment limits are in the
 The EUCKR extension has local byte-exact client/result mapping tests for both modes and strict
 validation of OceanBase's EUC-KR byte ranges. It uses OceanBase 4.4.2 charset IDs 19/85 and .NET
 code page 51949. D-07 adds real MySQL client/result and Oracle national scalar storage evidence;
-ordinary Oracle EUCKR client initialization still returns server 900/42000 and remains an open
-boundary with runnable positive tests. UJIS, EUCJPMS and the remaining newer names remain candidates
-because the available .NET code page does not reproduce OceanBase's full UJIS table.
+ordinary Oracle EUCKR client initialization still returns server 900/42000. Connector/J 2.4.14
+fails the same initialization sequence, so this is a current-target server limitation and no client
+workaround is enabled. Other versions, permissions and deployment profiles remain open. UJIS,
+EUCJPMS and the remaining newer names remain candidates because the available .NET code page does
+not reproduce OceanBase's full UJIS table.
 
 The single-byte fallback extension has local byte-exact automatic-fallback fixtures and five-asset
 consumption. Explicit read-only MySQL 4.4.2.2 checks pass all four families in sync/async mode with
