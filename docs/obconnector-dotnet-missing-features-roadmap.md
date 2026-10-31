@@ -56,10 +56,11 @@
 这是 Java Connector/J 2.4.14 的真实可选能力，不是旧矩阵臆测。Java 依据是
 `DefaultOptions.java:470–490,553–560` 和 `AbstractQueryProtocol.java:729–732,1287–1326`，
 对应的功能是把多个 prepared 执行组织成多发送路径；它与 MariaDB
-`COM_STMT_BULK_EXECUTE` 不同。当前 .NET 没有选项、协议入口或执行队列，因此属于**代码缺失**。
+`COM_STMT_BULK_EXECUTE` 不同。.NET 已增加默认关闭的 prepared batch multi-send 子集，覆盖
+input-only DML、基本 scalar 排空、数量/64 MiB 分组和发送状态保护；本地 loopback 已通过。
 
-OceanBase 服务端是否在目标版本、目标模式和目标连接路径上能正确处理该路径，当前没有真实
-profile 证据。因此它的状态是 `P0 / 代码缺失 + 待证据`，满足前提后再进入实现。
+OceanBase 服务端是否在目标版本、目标模式和目标连接路径上能正确处理该路径，仍没有真实
+wire 证据。因此它的状态是 `P2 / 实现子集已落地 + 实库待证据`，先保持首个子集边界。
 
 ### T17 XMLType、SDO_GEOMETRY、ANYDATA
 
@@ -154,7 +155,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | G06 | D-06 | MySQL GEOMETRY |
 | G07 | D-07、S-05 | 字符集本地映射和真实服务端 roundtrip 分开追踪 |
 | G08 | D-09、D-10、D-11、D-12 | T17 专用类型和 T18 版本相关类型先拆证据任务 |
-| G09 | D-08 | Java multi-send，当前 .NET 代码缺失 |
+| G09 | D-08 | Java multi-send；.NET 已实现默认关闭的 prepared batch multi-send 子集，真实 profile 待验收 |
 | G10 | A-01 | 池/reset/cache 长期验收 |
 | G11 | A-02 | 事务、XA、unknown outcome 故障验收 |
 | G12 | S-01、S-02、S-03、S-05 | TLS、协议扩展、发现/HA、字符集服务端前提 |
@@ -200,7 +201,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | 类别 | 数量 | 当前结论 |
 | --- | ---: | --- |
 | 已有代码但组合受限 | 7 项（D-01～D-07） | 可以按任务逐项推进 |
-| 明确代码缺失/候选 | 5 项（D-08～D-12） | 先证据，不能直接承诺完成 |
+| 明确代码缺失/候选 | 4 项（D-09～D-12） | 先证据，不能直接承诺完成 |
 | 已实现但欠验收 | 5 项（A-01～A-05） | 需要真实部署、故障、压力或平台证据 |
 | 服务端前提阻塞 | 5 项（S-01～S-05） | 暂停代码开发，保留 Deferred/失败 |
 | 范围排除 | 一组 | 不计入完成率和开发积压 |
@@ -1005,9 +1006,12 @@ multi-send wire、服务端错误排序、收益和代理/OB20 行为；ExecuteR
 
 新增 `Batches/MultiSendTests.cs`，覆盖 MySQL/Oracle create-objects profile 的 input-only
 prepared DML 和 scalar 排空，sync/async 及 `BatchMultiSendNumber=2`。Oracle 用例显式关闭
-`UseOraclePrepareExecute`，以验证本子集要求的普通 server prepared wire；本地编译通过。当前机器
-没有 `OB_INTEGRATION_CONFIG` 或四个 legacy connection string，启用 `OB_REQUIRE_INTEGRATION=1`
-后两项实库用例在 profile 加载阶段阻塞，未产生 OceanBase 通过/失败证据；D-08 仍不能提升状态。
+`UseOraclePrepareExecute`，以验证本子集要求的普通 server prepared wire；本地编译通过。本轮从
+User Secrets 读取 MySQL/Oracle 连接信息，并生成只包含 `mysql-direct`/`oracle-direct` 的临时
+integration config；启用 `OB_REQUIRE_INTEGRATION=1` 后，限定集成组共 **8/8 失败**，均在
+`172.16.2.45:2881` 握手读取 packet header/packet 阶段被端点关闭，未进入 prepared DML、
+scalar 或 multi-send wire。该结果是环境/端点阻塞证据，不能归因于 D-08 实现或服务端不支持；
+端点恢复后需重跑，D-08 仍不能提升状态。
 
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
 
