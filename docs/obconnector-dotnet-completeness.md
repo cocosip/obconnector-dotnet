@@ -41,7 +41,7 @@ proxy/ODP、多节点/OCP/TNS、OB20/trace 或非 native 认证/KDC profile。�
 | G10 | C10/C11/Q17 池/reset/cache | 欠验收：有实现及部分实库；任意副作用/全部资源交错未证实 | PhysicalSessionPool、PhysicalSession.PreparedStatements、SessionStateSql | 持续并发容量/超时/关闭交错、句柄/线程/内存稳定；状态不可证明时销毁 |
 | G11 | X02/X03/X04 事务与故障 | 欠验收：显式XA/PSPE/unknown有实现，故障点未全覆盖 | AmbientEnlistment、Connection.Xa*、CommandExchange.Io | in-doubt/管理器与节点/代理崩溃、取消顺序、分支恢复/无重放及独立查账 |
 | G12 | C05–C09/P02–P04/C12–C14 | 服务端受限，暂不开发与修复；现有路径保留 | TLS/Authentication/Discovery/压缩/OB20已有路径 | 提供真实 TLS/认证/ODP/压缩/OB20/trace/发现 profile 后再按验收标准开启；当前限制不得删除 |
-| G13 | M01/Q07 元数据与目录 | 受限/欠验收：唯一可见签名，包内PL类型/重载边界 | Connection.Schema.*、RoutineParameterDerivation.cs | 最小权限、大小写/引用标识符、包/重载和实际列身份；权限失败不加客户端伪造 |
+| G13 | M01/Q07 元数据与目录 | 受限/欠验收：唯一可见签名，包内PL类型/重载边界；A-03b 的 `CHAR_LENGTH` 缺失已确认是当前目标服务端目录限制，Java 同样收到 `904/42S22` | Connection.Schema.*、RoutineParameterDerivation.cs | 其余最小权限、大小写/引用标识符、包/重载和实际列身份；不以 `DATA_LENGTH`/`DATA_PRECISION` 伪造字符长度 |
 | G14 | R01 发布/平台 | 欠验收：有五资产和Windows子集记录 | csproj、Verify-Packages.ps1、ConsumerTests | 实际OS/runtime/API/包路径逐项验证，netstandard host加载不算全平台 |
 | G15 | C08 非native认证分支 | 服务端受限，暂不开发与修复；当前仅 native 账号直连 | AuthenticationConversation、GssapiAuthentication | 提供真实插件/KDC 端点、服务端文档和正负认证后再列部署支持；Java SPI 不能替代 |
 
@@ -64,6 +64,7 @@ proxy/ODP、多节点/OCP/TNS、OB20/trace 或非 native 认证/KDC profile。�
 | E09 | 普通prepare fallback | 中继注入1295后真实存储通过，租户未复现原生1295 | 原生拒绝场景需独立验收，注入证据只关闭客户端分支 |
 | E10 | OB20/trace/标准压缩/ODP | 直连只验证declined-ob20和压缩未声明回退；强制OB20因Layer=mysql失败 | 实际双向目标帧、trace控制/采样，collector另验；真实ODP不可用单上游中继代替 |
 | E11 | MySQL零日期 | 有profile，但当前SQL_MODE前置不满足，未建表 | 合适SQL_MODE专用profile验证存储/读写，不在测试中私改租户基线 |
+| E12 | Oracle `ALL_ARGUMENTS.CHAR_LENGTH` | 目标 OceanBase 4.4.2.2 目录缺少 `CHAR_LENGTH`/`CHAR_USED`，直接查询返回 `904/42S22`；Java Connector/J 同一查询同码 | 提供字符长度列或稳定等价目录来源的目标版本/profile 后复核；当前跳过客户端 fallback |
 
 来源和历史运行上下文集中见[真实兼容性与未验收部署](compatibility.md)及[历史证据索引](history/README.md)。
 本次范围整理未重新证明这些服务器状态仍相同。

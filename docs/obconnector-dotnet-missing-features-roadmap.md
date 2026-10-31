@@ -137,7 +137,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | --- | --- | --- | --- | --- |
 | A-01 | `P3` | 池、reset、租约和 prepared cache（G10） | 长期并发、资源交错、清池、句柄/线程/内存稳定性未证实 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
 | A-02 | `P3` | PSPE、XA、unknown outcome（G11） | in-doubt、协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
-| A-03 | `P3` | Schema、目录和参数元数据（G13） | 包内 PL 类型、重载、大小写、引用标识符和最小权限；D-05 新增无约束 NUMBER scale/VARCHAR2 字符长度目录复核，见执行记录 | 双模式最小权限、唯一/歧义签名、包/重载、视图/同义词权限错误及新增目录边界均按服务端真实结果关闭 |
+| A-03 | `P3` | Schema、目录和参数元数据（G13） | 包内 PL 类型、重载、大小写、引用标识符和最小权限；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制 | 双模式最小权限、唯一/歧义签名、包/重载、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
 | A-04 | `P3` | 包、TFM 和平台（G14/R01） | 当前有五资产和 Windows 子集；非 Windows、独立 runtime、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
 | A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；196608 字符 NUL 单表达式从 .NET 0/4 恢复 4/4，原因未定，见执行记录 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
 
@@ -761,14 +761,14 @@ Java 无法发出同一输入形状，因此不能满足“Java 同样失败”�
   主键失败，旧输出全部保留；修正 id 后在同一物理会话成功。独立连接显式 Prepare +
   SequentialAccess 核对最终五行（NULL/非 NULL），失败调用不增加行。
 
-#### A-03 的新增目录复核任务（未关闭）
+#### A-03 的新增目录复核任务
 
 早期 UROWID 过程夹具的编号参数使用无约束 NUMBER 时，DeriveParameters 报
 `Decimal argument scale cannot be represented`；改为 VARCHAR2 时，读取字符长度目录的第二条
 查询被当前服务端拒绝。这不是 UROWID wire 的失败，也不能仅据这些异常断定服务器没有该类型。
 两项均并入 A-03：固定实际 NUMERIC_SCALE、CHAR_LENGTH 可用性/查询错误码和最小权限，补独立
 回归后决定映射或版本拒绝。最终夹具使用已有验收的 FLOAT 编号，**保留真实 UROWID 参数推导**，
-未关闭上述其他类型的目录边界。
+未关闭上述其他类型的目录边界。A-03a 已完成；A-03b 的当前目标服务端限制已单独归因，见下文。
 
 | 检查 | 本轮结果 |
 | --- | --- |
@@ -932,7 +932,7 @@ scale；真实负scale（含-1/-84）和已声明精度继续严格校验，MySQ
 | 消费者 | `a03-number-consumer-red.trx` 6 项初始全红；修复后 `a03-number-consumer-green.trx` 84/84，覆盖 3 个代表资产和 sync/async 合成协议 |
 | 目标实库 | `a03-number-live-red.trx` 8 项初始全红；`a03-number-live-final.trx` 30/30，含新增 `NumberDerivationTests` 8 项（过程/函数、显式/隐式 Prepare、sync/async）及既有 FLOAT/ROWID/参数回归；OceanBase 4.4.2.2 Oracle 直连、Windows、TLS Disabled |
 | Java 2.4.14 对照 | 同一租户/账号/版本：`AttributionProbe` 读取 NUMBER precision=NULL/scale=-85，Java `ParameterMetaData` 报 precision=0/scale=-85；IN/OUT/INOUT 六组值（NULL、7.2500、38 位整数、1E-130、1E125）精确通过。Java 源码 `OceanBaseCallableParameterMetaData` 同样只读 DATA_PRECISION/DATA_SCALE，未把 -85 当固定小数位 |
-| 其他归因 | Java 与 .NET 对同一 EUCKR 初始化序列均在 `SET character_set_results` 返回 900/42000；Java 与 .NET 查询 `CHAR_LENGTH` 均返回 904/42S22，而 Java VARCHAR2 callable 成功。因此 EUCKR/CHAR_LENGTH 当前不能归为 .NET 单方缺陷，A-03b/D-07d 保持开放 |
+| 其他归因 | Java 与 .NET 对同一 EUCKR 初始化序列均在 `SET character_set_results` 返回 900/42000；Java 与 .NET 查询 `CHAR_LENGTH` 均返回 904/42S22，而 Java VARCHAR2 callable 成功。因此 EUCKR 仍不能归为 .NET 单方缺陷并保留 D-07d；CHAR_LENGTH 已单独归为 A-03b 当前服务端目录限制 |
 | 回归/构建 | `a03-number-product-build.log` 五 TFM Release 0 warning/0 error；完整 Unit 为 8696/8697（唯一失败是沙箱 File.Replace 权限，`a03-tns-unsandboxed.trx` 同测试沙箱外 1/1）；不宣称完整 Unit 全绿 |
 | 代码走查/提交 | fresh-context 独立只读走查完成，无 Critical/Important；scoped `dotnet format whitespace --verify-no-changes --no-restore` 和 `git diff --check` 通过；`a252aee`（`🐛 fix(oracle): derive unconstrained NUMBER parameters without a fixed scale`）已本地提交、未 push。A-03a 达到 `P4`，父 A-03 仍为 `P3` |
 
@@ -941,11 +941,19 @@ scale；真实负scale（含-1/-84）和已声明精度继续严格校验，MySQ
 普通 GetSchema/ProcedureParameters 仍保留服务端原始 -85，不伪造目录值。修复不改变 wire、
 范围或输出原子发布规则。
 
-字符目录另保留A-03b：本轮探针枚举ALL_ARGUMENTS列，确无CHAR_LENGTH/CHAR_USED；VARCHAR2、
-CHAR、NVARCHAR2、NCHAR的DATA_LENGTH均NULL，字符长度查询实际报904/42S22。现有账号拥有
-本次过程CREATE/执行及ALL_ARGUMENTS可见性，不能据此推断另一账号的最小权限；不将字节数或
-DATA_PRECISION（此处为字符集形态1/2）冒充字符长度。需另核服务端描述/版本及最小权限后决定
-是否可推导Size=0，A-03父项和该字符子项不因NUMBER修复而关闭。
+#### A-03b：Oracle CHAR_LENGTH 目录的当前服务端限制（2026-10-31，跳过客户端改动）
+
+目标 OceanBase 4.4.2.2 Oracle 直连 profile 的 `ALL_ARGUMENTS` 不提供 `CHAR_LENGTH`/`CHAR_USED`；
+`VARCHAR2`、`CHAR`、`NVARCHAR2`、`NCHAR` 的 `DATA_LENGTH` 也为 NULL，直接查询字符长度返回
+`904/42S22`。现有账号拥有本次过程创建、执行及 `ALL_ARGUMENTS` 可见性，因此这不是已知的
+权限拒绝。Java Connector/J 2.4.14 在同一租户/账号对同一 `CHAR_LENGTH` 查询得到相同的
+`904/42S22`；Java 的 VARCHAR2 callable 成功不构成反证，因为该调用不依赖目录字符长度查询。
+
+客户端行为已经有明确边界：基础目录查询不依赖 `CHAR_LENGTH`；只有字符参数才发第二次长度查询，
+服务端错误原样保留，且失败不会替换调用者已有参数。`OracleDerivationLoadsCharacterLengthsOnlyForCharacterArgumentsAndKeepsSignaturesAtomic`
+专项 **14/14**、相关 Oracle 浮点/目录回归 **60/60** 通过；代码走查确认未把 `DATA_LENGTH` 字节数
+或 `DATA_PRECISION` 字符集形态冒充字符数。A-03b 标记为**当前目标服务端目录限制，跳过客户端开发**；
+只有出现提供字符长度的目标版本/权限/profile，或稳定的等价服务端目录来源，才重新评估。
 
 执行修正：Oracle StoredProcedure契约要求PrepareExecute=true，初版夹具误将false用于过程输出，
 且给Decimal类型编号赋CLR int；修正为既有显式/隐式Prepare组合和decimal编号，不扩大产品wire。

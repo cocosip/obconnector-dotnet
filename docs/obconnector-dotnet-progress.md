@@ -107,7 +107,7 @@
 | P03 OB20 | 可选协议 | 能力协商后的普通OB20 | Ob20Stream/Packet/Checksum | 显式profile实际Layer必须OB20；当前租户拒绝协商 |
 | P04 Full Link Trace | 可选协议 | legacy/modern extra-info子集 | Ob20TraceContext、ProtocolDiagnostics | 服务器sampling/control、实际帧和collector分开验收 |
 | P05 压缩OB20/proxy reroute | 排除当前范围 | 明确拒绝/无执行支持 | 协商/帧保护保留 | J7；取得独立协议依据再讨论，常量不是实现 |
-| M01 GetSchema/列元数据 | 核心+ADO.NET适配 | 双模式实际目录查询/DataTypes | Connection.Schema.*、ResultDbColumn | 权限/大小写/重载有边界，视图/同义词1031保留 |
+| M01 GetSchema/列元数据 | 核心+ADO.NET适配 | 双模式实际目录查询/DataTypes | Connection.Schema.*、ResultDbColumn | 权限/大小写/重载有边界，视图/同义词1031保留；Oracle `ALL_ARGUMENTS.CHAR_LENGTH` 在当前目标版本缺失且 Java 同样返回904，字符长度保持服务端限制 |
 | M02 日志/Activity/Meter/慢操作 | 可选运维适配 | 双模式已有实现 | DriverDiagnostics、ConnectionLog | 不记录SQL/参数/凭据；慢操作包含客户端消费，不是纯服务端耗时 |
 | M03 协商/帧/I/O/源流/池指标 | 可选运维适配 | 已有固定维度诊断 | ProtocolDiagnostics、DriverDiagnostics.* | 不定义猜测性其他等待点，监听开销/卸载/负载待验收 |
 | R01 包/TFM/平台 | 发布门槛 | 两包五资产，现代API仅net8/9/10 | csproj、eng/Verify-Packages.ps1 | netstandard由host加载不等于独立runtime；非Windows实库欠验收 |
