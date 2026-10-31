@@ -24,13 +24,15 @@ namespace OceanBaseConnector
         private readonly bool _singleRow;
         private readonly bool _singleResult;
         private readonly bool _schemaOnly;
+        private readonly bool _leaveExchangeOpen;
         private bool _singleRowReturned;
         private bool _closed;
         private KeyInfoMetadata? _keyInfo;
-        internal OceanBaseDataReader(CommandExchange query, QueryResult result, OceanBaseConnection connection, PhysicalSession session, CommandBehavior behavior, KeyInfoMetadata? keyInfo = null)
+        internal OceanBaseDataReader(CommandExchange query, QueryResult result, OceanBaseConnection connection, PhysicalSession session, CommandBehavior behavior, KeyInfoMetadata? keyInfo = null, bool leaveExchangeOpen = false)
         {
             _query = query; _result = result; _connection = connection; _session = session;
             _keyInfo = keyInfo;
+            _leaveExchangeOpen = leaveExchangeOpen;
             _closeConnection = (behavior & CommandBehavior.CloseConnection) != 0;
             _sequential = (behavior & CommandBehavior.SequentialAccess) != 0;
             _singleRow = (behavior & CommandBehavior.SingleRow) != 0;
@@ -314,7 +316,7 @@ namespace OceanBaseConnector
             try { if (_result.DrainOnClose) DrainAllResults(); }
             finally
             {
-                try { _query.Dispose(); }
+                try { if (!_leaveExchangeOpen) _query.Dispose(); }
                 finally { _result.InvalidateRows(); if (_closeConnection) _connection.CloseSession(_session, _query.OpenGeneration); }
             }
         }
@@ -327,7 +329,7 @@ namespace OceanBaseConnector
             try { if (_result.DrainOnClose) await DrainAllResultsAsync(CancellationToken.None).ConfigureAwait(false); }
             finally
             {
-                try { _query.Dispose(); }
+                try { if (!_leaveExchangeOpen) _query.Dispose(); }
                 finally { _result.InvalidateRows(); if (_closeConnection) await _connection.CloseSessionAsync(_session, _query.OpenGeneration).ConfigureAwait(false); }
             }
         }

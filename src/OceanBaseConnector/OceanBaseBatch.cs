@@ -119,12 +119,14 @@ namespace OceanBaseConnector
         }
         public override object? ExecuteScalar()
         {
+            if (IsBatchMultiSendRequested()) return ExecuteMultiSendScalar();
             using var reader = ExecuteReader(); while (reader.FieldCount == 0 && reader.NextResult()) { }
             var value = reader.FieldCount != 0 && reader.Read() ? reader.GetValue(0) : null;
             do { while (reader.Read()) { } } while (reader.NextResult()); return value;
         }
         public override async Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken = default)
         {
+            if (IsBatchMultiSendRequested()) return await ExecuteMultiSendScalarAsync(cancellationToken).ConfigureAwait(false);
             await using var reader = await ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (reader.FieldCount == 0 && await reader.NextResultAsync(cancellationToken).ConfigureAwait(false)) { }
             var value = reader.FieldCount != 0 && await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? reader.GetValue(0) : null;

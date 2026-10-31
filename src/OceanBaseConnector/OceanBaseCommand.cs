@@ -428,7 +428,7 @@ namespace OceanBaseConnector
                 if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
                 var statement = EnsurePrepared(operation) ?? throw new NotSupportedException("Batch multi-send requires server prepared statements.");
-                if (statement.ColumnCount != 0) throw new NotSupportedException("Batch multi-send does not support result-producing commands.");
+                ValidateBatchMultiSendColumns(statement);
                 var request = PreparedParameters.Execute(statement.Id, operation.Parameters, cursor: false);
                 operation.Exchange.Complete();
                 return request;
@@ -449,12 +449,21 @@ namespace OceanBaseConnector
                 if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
                 var statement = await EnsurePreparedAsync(operation, token).ConfigureAwait(false) ?? throw new NotSupportedException("Batch multi-send requires server prepared statements.");
-                if (statement.ColumnCount != 0) throw new NotSupportedException("Batch multi-send does not support result-producing commands.");
+                ValidateBatchMultiSendColumns(statement);
                 var request = PreparedParameters.Execute(statement.Id, operation.Parameters, cursor: false);
                 operation.Exchange.Complete();
                 return request;
             }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
+        }
+
+        private static void ValidateBatchMultiSendColumns(PreparedStatement statement)
+        {
+            foreach (var column in statement.Columns)
+            {
+                if (column.TypeCode == 160 || column.TypeCode == 163 || column.TypeCode == 210 || column.TypeCode == 211 || column.TypeCode >= 249 && column.TypeCode <= 252)
+                    throw new NotSupportedException("Batch multi-send does not support cursor, LOB, or complex result columns.");
+            }
         }
 #endif
 

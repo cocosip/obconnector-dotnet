@@ -26,7 +26,7 @@ namespace OceanBaseConnector
             try
             {
                 using var operation = Start(CommandBehavior.Default, CancellationToken.None);
-                return ExecuteMultiSend(operation);
+                return ExecuteMultiSend(operation).Affected;
             }
             finally { if (_ownsConnection) _connection!.Close(); }
         }
@@ -37,12 +37,34 @@ namespace OceanBaseConnector
             try
             {
                 using var operation = Start(CommandBehavior.Default, cancellationToken);
-                return await ExecuteMultiSendAsync(operation).ConfigureAwait(false);
+                return (await ExecuteMultiSendAsync(operation).ConfigureAwait(false)).Affected;
             }
             finally { if (_ownsConnection) await _connection!.CloseAsync().ConfigureAwait(false); }
         }
 
-        private int ExecuteMultiSend(Operation operation)
+        private object? ExecuteMultiSendScalar()
+        {
+            if (_ownsConnection) _connection!.Open();
+            try
+            {
+                using var operation = Start(CommandBehavior.Default, CancellationToken.None);
+                return ExecuteMultiSend(operation, captureScalar: true).Scalar;
+            }
+            finally { if (_ownsConnection) _connection!.Close(); }
+        }
+
+        private async Task<object?> ExecuteMultiSendScalarAsync(CancellationToken cancellationToken)
+        {
+            if (_ownsConnection) await _connection!.OpenAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                using var operation = Start(CommandBehavior.Default, cancellationToken);
+                return (await ExecuteMultiSendAsync(operation, captureScalar: true).ConfigureAwait(false)).Scalar;
+            }
+            finally { if (_ownsConnection) await _connection!.CloseAsync().ConfigureAwait(false); }
+        }
+
+        private (int Affected, object? Scalar) ExecuteMultiSend(Operation operation, bool captureScalar = false)
         {
             operation.ThrowIfCanceled();
             var requests = new byte[operation.Commands.Length][];
@@ -51,10 +73,12 @@ namespace OceanBaseConnector
                 operation.ThrowIfCanceled();
                 requests[i] = operation.Commands[i].BuildBatchMultiSendRequest(operation.Token);
             }
-            if (requests.Length == 0) return 0;
+            if (requests.Length == 0) return (0, null);
 
             using var exchange = StartMultiSendExchange(operation);
             var total = 0;
+            var anyAffected = false;
+            var scalar = new ScalarState();
             foreach (var group in Groups(requests, operation.Session!.BatchMultiSendNumber))
             {
                 for (var i = group.Start; i < group.End; i++)
@@ -65,21 +89,16 @@ namespace OceanBaseConnector
                 for (var i = group.Start; i < group.End; i++)
                 {
                     exchange.BatchCommand = operation.Items[i];
-                    var packet = exchange.Receive();
-                    if (!OkPacket.IsOk(packet)) throw new ProtocolException("Batch multi-send requires affected-count responses.");
-                    var ok = OkPacket.Parse(packet, exchange.Capabilities);
-                    exchange.ObserveSessionState(ok);
-                    exchange.CompleteBatchResponse();
-                    var count = checked((int)ok.AffectedRows);
+                    var count = ConsumeBatchResponse(exchange, operation, captureScalar && !scalar.Set, scalar);
                     operation.Items[i].Affected = operation.Counts[i] = count;
-                    total = checked(total + count);
+                    if (count >= 0) { anyAffected = true; total = checked(total + count); }
                 }
             }
             exchange.Complete();
-            return total;
+            return (anyAffected ? total : -1, scalar.Value);
         }
 
-        private async Task<int> ExecuteMultiSendAsync(Operation operation)
+        private async Task<(int Affected, object? Scalar)> ExecuteMultiSendAsync(Operation operation, bool captureScalar = false)
         {
             operation.ThrowIfCanceled();
             var requests = new byte[operation.Commands.Length][];
@@ -88,10 +107,12 @@ namespace OceanBaseConnector
                 operation.ThrowIfCanceled();
                 requests[i] = await operation.Commands[i].BuildBatchMultiSendRequestAsync(operation.Token).ConfigureAwait(false);
             }
-            if (requests.Length == 0) return 0;
+            if (requests.Length == 0) return (0, null);
 
             using var exchange = StartMultiSendExchange(operation);
             var total = 0;
+            var anyAffected = false;
+            var scalar = new ScalarState();
             foreach (var group in Groups(requests, operation.Session!.BatchMultiSendNumber))
             {
                 for (var i = group.Start; i < group.End; i++)
@@ -102,18 +123,50 @@ namespace OceanBaseConnector
                 for (var i = group.Start; i < group.End; i++)
                 {
                     exchange.BatchCommand = operation.Items[i];
-                    var packet = await exchange.ReceiveAsync(operation.Token).ConfigureAwait(false);
-                    if (!OkPacket.IsOk(packet)) throw new ProtocolException("Batch multi-send requires affected-count responses.");
-                    var ok = OkPacket.Parse(packet, exchange.Capabilities);
-                    exchange.ObserveSessionState(ok);
-                    exchange.CompleteBatchResponse();
-                    var count = checked((int)ok.AffectedRows);
+                    var count = await ConsumeBatchResponseAsync(exchange, operation, captureScalar && !scalar.Set, scalar).ConfigureAwait(false);
                     operation.Items[i].Affected = operation.Counts[i] = count;
-                    total = checked(total + count);
+                    if (count >= 0) { anyAffected = true; total = checked(total + count); }
                 }
             }
             exchange.Complete();
-            return total;
+            return (anyAffected ? total : -1, scalar.Value);
+        }
+
+        private sealed class ScalarState
+        {
+            internal object? Value;
+            internal bool Set;
+        }
+
+        private static int ConsumeBatchResponse(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar)
+        {
+            var result = new QueryResult(exchange, binary: true, completeExchange: false);
+            result.Start();
+            using var reader = new OceanBaseDataReader(exchange, result, operation.Connection, operation.Session!, CommandBehavior.Default, leaveExchangeOpen: true);
+            if (captureScalar)
+            {
+                while (reader.FieldCount == 0 && reader.NextResult()) { }
+                if (reader.FieldCount != 0 && reader.Read()) { scalar.Value = reader.GetValue(0); scalar.Set = true; }
+            }
+            while (reader.Read()) { }
+            while (reader.NextResult()) while (reader.Read()) { }
+            return reader.RecordsAffected;
+        }
+
+        private static async Task<int> ConsumeBatchResponseAsync(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar)
+        {
+            var result = new QueryResult(exchange, binary: true, completeExchange: false);
+            await result.StartAsync(operation.Token).ConfigureAwait(false);
+            await using var reader = new OceanBaseDataReader(exchange, result, operation.Connection, operation.Session!, CommandBehavior.Default, leaveExchangeOpen: true);
+            if (captureScalar)
+            {
+                while (reader.FieldCount == 0 && await reader.NextResultAsync(operation.Token).ConfigureAwait(false)) { }
+                if (reader.FieldCount != 0 && await reader.ReadAsync(operation.Token).ConfigureAwait(false)) { scalar.Value = reader.GetValue(0); scalar.Set = true; }
+            }
+            while (await reader.ReadAsync(operation.Token).ConfigureAwait(false)) { }
+            while (await reader.NextResultAsync(operation.Token).ConfigureAwait(false))
+                while (await reader.ReadAsync(operation.Token).ConfigureAwait(false)) { }
+            return reader.RecordsAffected;
         }
 
         private CommandExchange StartMultiSendExchange(Operation operation)

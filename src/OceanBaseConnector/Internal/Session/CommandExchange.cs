@@ -174,7 +174,28 @@ namespace OceanBaseConnector.Internal.Session
         internal bool HasSentSql { get { lock (_gate) return _anySqlSent; } }
         internal void ValidateResponseBoundary() => _channel.CompleteResponse();
         internal void ResponseComplete(bool expectsResponse = true)
-        { lock (_gate) { _channel.CompleteResponse(expectsResponse); _responsePending = false; if (_sqlSent) _longDataPending = false; _sqlSent = false; } }
+        {
+            lock (_gate)
+            {
+                _channel.CompleteResponse(expectsResponse);
+                if (_batchPendingResponses > 0)
+                {
+                    _batchPendingResponses--;
+                    if (_batchPendingResponses == 0)
+                    {
+                        _responsePending = false;
+                        if (_sqlSent) _longDataPending = false;
+                        _sqlSent = false;
+                    }
+                }
+                else
+                {
+                    _responsePending = false;
+                    if (_sqlSent) _longDataPending = false;
+                    _sqlSent = false;
+                }
+            }
+        }
 
         internal void Send(byte[] request, bool executesSql = true, int? count = null)
         {

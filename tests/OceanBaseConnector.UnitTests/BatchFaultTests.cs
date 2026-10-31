@@ -30,6 +30,27 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
+        public async Task BatchMultiSendRejectsCursorResultBeforeExecute()
+        {
+            var server = Server(async channel =>
+            {
+                await StatementCommand(channel, 22);
+                await channel.WritePacketAsync(new byte[] { 0, 90, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 });
+                await channel.WritePacketAsync(Column("cursor", 163)); await channel.WritePacketAsync(Eof());
+                Assert.Equal(90, (await StatementCommand(channel, 25))[1]);
+                Assert.Equal(0, await channelStreamRead(channel));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true");
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch(); BatchItem(batch, "select cursor");
+                await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteScalarAsync());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
         public async Task BatchMultiSendBreaksSessionWhenAGroupResponseFails()
         {
             var server = Server(async channel =>
