@@ -747,6 +747,23 @@ Java 无法发出同一输入形状，因此不能满足“Java 同样失败”�
 阻塞，但仍不能仅凭 `932/22000` 判定是客户端 writer 还是服务端 bind/DML 转换缺口；需要固定
 成员 wire 身份并补可发出同形状的官方客户端/服务端解码对照。
 
+#### D-04a2 服务端源码 wire 对照（2026-11-01）
+
+固定 OceanBase 服务端源码提交 `5e8a63d` 后，named OBJECT 的成员输入路径可以逐层对照：
+`ObRecordType::deserialize` 先跳过每个 OBJECT 的成员 NULL bitmap，再按成员顺序调用
+`ObPLDataType::deserialize`；普通 BLOB 成员由 `ObSMUtils::get_mysql_type` 映射为
+`MYSQL_TYPE_ORA_BLOB`，随后进入 `ObMPStmtExecute::parse_basic_param_value`。该分支读取
+length-encoded string；BLOB 设置 binary collation，并将 payload 包装成带 LOB header 的
+`ObLongTextType` 值。当前 `ComplexValueCodec` 的 named BLOB 编码正是同一层级的 bitmap、
+length-encoded raw bytes，不需要匿名数组的 locator/header 输入格式。
+
+因此本次源码对照没有发现 .NET writer 与服务端成员反序列化 wire 的差异；它把失败范围收窄
+到服务端接收后的 BLOB OBJECT bind/DML 转换，仍不能单独证明该转换是服务端缺陷。由于
+Connector/J 2.4.14 没有可发出同形状 BLOB OBJECT 输入的 writer，也没有满足“Java 同一交互
+失败”的对照条件，D-04a2 继续保持 `P2 / 已复现但待归因`，不标记为服务端限制、不改产品
+编码。源码依据：[ObRecordType::deserialize][O12-record-deserialize]、
+[ObPLDataType::deserialize][O12-pl-deserialize]、[parse_basic_param_value][O12-basic-param]。
+
 #### D-04c：复杂 whole-column RETURNING 的 opaque metadata（2026-10-31）
 
 新增 `Oracle/ComplexReturningTests.cs`，在 Oracle 4.4.2.2 `oracle-direct`、TLS Disabled、
@@ -1254,3 +1271,6 @@ metadata 为 `BLOB`/`System.Byte[]`，raw 长度 15，`rb_to_string` 返回原�
 [J6-complex-util]: https://github.com/oceanbase/obconnector-j/blob/6adc311ba5db8b2f19f98f3e6e4734667fdfdda1/src/main/java/com/oceanbase/jdbc/extend/datatype/ComplexUtil.java
 [O11-roaring-overview]: https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/zh-CN/700.reference/500.sql-reference/100.sql-syntax/200.common-tenant-of-mysql-mode/100.basic-elements-of-mysql-mode/100.data-type-of-mysql-mode/1000.roaring-bitmap-data-type-of-mysql-mode/100.roaring-bitmap-data-type-overview-of-mysql-mode.md
 [O11-roaring-ddl]: https://github.com/oceanbase/oceanbase-doc/blob/2a5ae3a23a51729d065cec716508eb26cb064106/zh-CN/700.reference/500.sql-reference/100.sql-syntax/200.common-tenant-of-mysql-mode/100.basic-elements-of-mysql-mode/100.data-type-of-mysql-mode/1000.roaring-bitmap-data-type-of-mysql-mode/200.create-roaring-bitmap-columns-of-mysql-mode.md
+[O12-record-deserialize]: https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/pl/ob_pl_user_type.cpp#L2267-L2352
+[O12-pl-deserialize]: https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/pl/ob_pl_type.cpp#L1182-L1267
+[O12-basic-param]: https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/observer/mysql/obmp_stmt_execute.cpp#L2360-L2700
