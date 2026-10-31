@@ -14,10 +14,21 @@ namespace OceanBaseConnector
         internal bool IsBatchMultiSendRequested()
         {
             if (_connection == null) return false;
-            if (_ownsConnection)
-                return new OceanBaseConnectionStringBuilder(_connection.ConnectionString).UseBatchMultiSend;
-            try { return _connection.GetOpenSession().UseBatchMultiSend; }
-            catch (InvalidOperationException) { return false; }
+            try { return CanUseMultiSend(_connection.GetOpenSession()); }
+            catch (InvalidOperationException)
+            {
+                return _ownsConnection && new OceanBaseConnectionStringBuilder(_connection.ConnectionString).UseBatchMultiSend;
+            }
+        }
+
+        internal bool CanUseMultiSend(PhysicalSession session) =>
+            session.UseBatchMultiSend && !(session.Info?.Mode == OceanBaseCompatibilityMode.Oracle && HasStreamParameter());
+
+        private bool HasStreamParameter()
+        {
+            foreach (OceanBaseBatchCommand command in _commands)
+                if (command.HasStreamParameter) return true;
+            return false;
         }
 
         private int ExecuteMultiSendNonQuery()
@@ -25,6 +36,7 @@ namespace OceanBaseConnector
             if (_ownsConnection) _connection!.Open();
             try
             {
+                if (_ownsConnection && !CanUseMultiSend(_connection!.GetOpenSession())) return ExecuteSequentialNonQuery();
                 using var operation = Start(CommandBehavior.Default, CancellationToken.None);
                 return ExecuteMultiSend(operation).Affected;
             }
@@ -36,6 +48,7 @@ namespace OceanBaseConnector
             if (_ownsConnection) await _connection!.OpenAsync(cancellationToken).ConfigureAwait(false);
             try
             {
+                if (_ownsConnection && !CanUseMultiSend(_connection!.GetOpenSession())) return await ExecuteSequentialNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 using var operation = Start(CommandBehavior.Default, cancellationToken);
                 return (await ExecuteMultiSendAsync(operation).ConfigureAwait(false)).Affected;
             }
@@ -47,6 +60,7 @@ namespace OceanBaseConnector
             if (_ownsConnection) _connection!.Open();
             try
             {
+                if (_ownsConnection && !CanUseMultiSend(_connection!.GetOpenSession())) return ExecuteSequentialScalar();
                 using var operation = Start(CommandBehavior.Default, CancellationToken.None);
                 return ExecuteMultiSend(operation, captureScalar: true).Scalar;
             }
@@ -58,10 +72,61 @@ namespace OceanBaseConnector
             if (_ownsConnection) await _connection!.OpenAsync(cancellationToken).ConfigureAwait(false);
             try
             {
+                if (_ownsConnection && !CanUseMultiSend(_connection!.GetOpenSession())) return await ExecuteSequentialScalarAsync(cancellationToken).ConfigureAwait(false);
                 using var operation = Start(CommandBehavior.Default, cancellationToken);
                 return (await ExecuteMultiSendAsync(operation, captureScalar: true).ConfigureAwait(false)).Scalar;
             }
             finally { if (_ownsConnection) await _connection!.CloseAsync().ConfigureAwait(false); }
+        }
+
+        private int ExecuteSequentialNonQuery()
+        {
+            using var reader = StartSequentialReader();
+            do { while (reader.Read()) { } } while (reader.NextResult());
+            return reader.RecordsAffected;
+        }
+
+        private async Task<int> ExecuteSequentialNonQueryAsync(CancellationToken token)
+        {
+            await using var reader = await StartSequentialReaderAsync(token).ConfigureAwait(false);
+            do { while (await reader.ReadAsync(token).ConfigureAwait(false)) { } }
+            while (await reader.NextResultAsync(token).ConfigureAwait(false));
+            return reader.RecordsAffected;
+        }
+
+        private object? ExecuteSequentialScalar()
+        {
+            using var reader = StartSequentialReader();
+            while (reader.FieldCount == 0 && reader.NextResult()) { }
+            var value = reader.FieldCount != 0 && reader.Read() ? reader.GetValue(0) : null;
+            do { while (reader.Read()) { } } while (reader.NextResult());
+            return value;
+        }
+
+        private async Task<object?> ExecuteSequentialScalarAsync(CancellationToken token)
+        {
+            await using var reader = await StartSequentialReaderAsync(token).ConfigureAwait(false);
+            while (reader.FieldCount == 0 && await reader.NextResultAsync(token).ConfigureAwait(false)) { }
+            var value = reader.FieldCount != 0 && await reader.ReadAsync(token).ConfigureAwait(false) ? reader.GetValue(0) : null;
+            do { while (await reader.ReadAsync(token).ConfigureAwait(false)) { } }
+            while (await reader.NextResultAsync(token).ConfigureAwait(false));
+            return value;
+        }
+
+        private OceanBaseBatchReader StartSequentialReader()
+        {
+            var operation = Start(_ownsConnection ? CommandBehavior.CloseConnection : CommandBehavior.Default, CancellationToken.None);
+            var reader = new OceanBaseBatchReader(operation); operation.Reader = reader;
+            try { reader.Start(); return reader; }
+            catch { reader.Close(); throw; }
+        }
+
+        private async Task<OceanBaseBatchReader> StartSequentialReaderAsync(CancellationToken token)
+        {
+            var operation = Start(_ownsConnection ? CommandBehavior.CloseConnection : CommandBehavior.Default, token);
+            var reader = new OceanBaseBatchReader(operation); operation.Reader = reader;
+            try { await reader.StartAsync().ConfigureAwait(false); return reader; }
+            catch { await reader.CloseAsync().ConfigureAwait(false); throw; }
         }
 
         private (int Affected, object? Scalar) ExecuteMultiSend(Operation operation, bool captureScalar = false)

@@ -22,7 +22,7 @@ namespace OceanBaseConnector.UnitTests
         private static string Configuration(int port, bool pooled = false) =>
             $"Server=127.0.0.1;Port={port};User ID=u;Password=private-password;TLS Mode=Disabled;Pooling={pooled};Max Pool Size=1";
         private static Task Open(OceanBaseConnection connection, bool asynchronous, CancellationToken token = default) =>
-            asynchronous ? connection.OpenAsync(token) : Task.Run(connection.Open, token);
+            asynchronous ? connection.OpenAsync(token) : Task.Factory.StartNew(connection.Open, token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         private sealed class Capture : IDisposable
         {
             private readonly MeterListener _listener = new MeterListener { MeasurementsCompleted = (_, _) => { } };

@@ -42,7 +42,7 @@ namespace OceanBaseConnector
             { _current = await _operation.Commands[_index].ExecuteReaderAsync(Behavior, _operation.Token).ConfigureAwait(false); UpdateCount(); }
         }
         private bool CanUseMultiSendReader() => _operation.Commands.Length != 0 &&
-            OceanBaseBatch.CanUseMultiSendReader(_operation.Behavior) && _operation.Session?.UseBatchMultiSend == true;
+            OceanBaseBatch.CanUseMultiSendReader(_operation.Behavior) && _operation.Session != null && _operation.Batch.CanUseMultiSend(_operation.Session);
         private void StartMultiSend()
         {
             var requests = new OceanBaseBatchMultiSendRequest[_operation.Commands.Length];

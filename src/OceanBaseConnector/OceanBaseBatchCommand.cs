@@ -23,6 +23,16 @@ namespace OceanBaseConnector
         public override bool CanCreateParameter => true;
         public override DbParameter CreateParameter() => new OceanBaseParameter();
 
+        internal bool HasStreamParameter
+        {
+            get
+            {
+                foreach (OceanBaseParameter parameter in _parameters)
+                    if (parameter.Value is System.IO.Stream) return true;
+                return false;
+            }
+        }
+
         internal OceanBaseCommand Snapshot(OceanBaseConnection connection, OceanBaseTransaction? transaction, int timeout, OceanBaseBatch.Operation owner, PhysicalSession session)
         {
             _command ??= new OceanBaseCommand();

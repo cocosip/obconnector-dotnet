@@ -287,6 +287,32 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
+        public async Task OracleBatchStreamUsesPieceDataFallbackWhenMultiSendIsEnabled(bool asynchronous)
+        {
+            var source = new LongDataSource(3, asynchronous);
+            var server = Server(async channel =>
+            {
+                await StatementCommand(channel, 22); await Prepared(channel, 54, 1);
+                AssertPiece(await StatementCommand(channel, 162), 54, 0, 3, 0, 3); await channel.WritePacketAsync(Ok(0));
+                Assert.Equal(54, (await StatementCommand(channel, 23))[1]); await channel.WritePacketAsync(Ok(1));
+                Assert.Equal(0, await channelStreamRead(channel));
+            });
+            await using var sourceDb = new OceanBaseDataSourceBuilder(Configuration(server.Port) + ";Use Batch Multi Send=true").Build();
+            try
+            {
+                await using var batch = sourceDb.CreateBatch();
+                var command = BatchItem(batch, "insert into t values (:p)");
+                command.Parameters.Add(new OceanBaseParameter { ParameterName = "p", DbType = DbType.Binary, Value = source });
+                Assert.Equal(1, asynchronous ? await batch.ExecuteNonQueryAsync() : batch.ExecuteNonQuery());
+                Assert.Equal(3, source.BytesRead); Assert.Equal(1, command.RecordsAffected);
+            }
+            finally { server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task BatchMultiSendReaderWritesAllPreparedExecutionsBeforeReadingResults(bool asynchronous)
         {
             var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

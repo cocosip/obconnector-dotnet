@@ -60,7 +60,8 @@
 input-only DML、基本 scalar 排空、普通 `ExecuteReader`、数量/64 MiB 分组和发送状态保护；本地 loopback 已通过。
 本轮补齐 MySQL 模式的 `Stream` 输入：每条执行前按 Connector/J 同一协议发送
 `COM_STMT_SEND_LONG_DATA`，再发送 `COM_STMT_EXECUTE`；同步/异步路径均保持先发完整组、再按顺序排空响应。
-Oracle piece-data 需要逐片确认，未纳入该流水化子集，仍在发送前拒绝。
+Oracle piece-data 需要逐片确认，未纳入该流水化子集；启用 batch multi-send 时，Oracle Stream
+输入会安全回退到已有的逐命令 piece-data 路径，不伪装成无响应流水化。
 
 VPN 恢复后的 4.4.2.2 MySQL/Oracle 直连临时 profile 已覆盖 DML/scalar × sync/async，
 **8/8 通过**；过程中修复了客户端每个 pipelined 响应边界的 packet sequence 重置。新增的
@@ -1092,7 +1093,7 @@ Oracle session time zone/national character set，必要时按已解析上下文
 之前的实库运行被 VPN 阻塞；修复响应包序号边界后，临时 direct profile 的 MySQL/Oracle
 矩阵 **12/12 通过**（DML/scalar/reader × sync/async，`BatchMultiSendNumber=2`）。首个子集的
 服务端错误排序、收益基线和代理/OB20 行为仍未验收；Oracle PrepareExecute、Oracle piece-data
-流、输出/LOB/cursor/array 和 text fallback 仍明确不在首个子集，因此这些仍是 D-08 的后续缺口。reader 的 MySQL/Oracle
+流水化、输出/LOB/cursor/array 和 text fallback 仍明确不在首个子集，因此这些仍是 D-08 的后续缺口。reader 的 MySQL/Oracle
 直连 profile sync/async 均已通过；本轮没有把这组结果外推到代理或其他版本。
 
 新增 `Batches/MultiSendTests.cs`，覆盖 MySQL/Oracle create-objects profile 的 input-only
@@ -1116,8 +1117,20 @@ prepared 执行前发送 `COM_STMT_SEND_LONG_DATA`，因此本轮把请求保存
 参数序号、完整字节和“先上传/执行、后响应”顺序，sync/async **2/2 通过**；完整 Unit **8727/8727**，
 Release 构建和 netstandard2.1 构建均 0 warning / 0 error。代码提交为 `41b566d`。
 
-本子集仍未关闭真实 MySQL profile 的 Stream 存储读回、Oracle piece-data、错误排序、取消、代理/OB20、
+本子集仍未关闭真实 MySQL profile 的 Stream 存储读回、Oracle piece-data 流水化、错误排序、取消、代理/OB20、
 LOB/OUT/cursor/array 和 text fallback；这些继续按 D-08 后续缺口处理。
+
+#### D-08b：Oracle batch Stream 的 piece-data 安全回退（2026-11-01，`P3` 子集）
+
+启用 `Use Batch Multi Send=true` 时，客户端现在先根据已协商的 session mode 和 batch 参数形状
+判断是否包含 Oracle `Stream`。该组合不进入 multi-send 的“先发完、后排空”路径，而是复用普通
+prepared 执行的 `COM_STMT_SEND_PIECE_DATA` 逐片确认流程；MySQL Stream 和普通 Oracle
+input-only batch 仍保持各自原有路径。同步/异步 DataSource-owned batch 回归 **2/2 通过**，
+确认 piece-data、execute、affected-count 和 owned session 关闭顺序均正确。
+
+这关闭的是“启用 multi-send 选项后 Oracle Stream 被无条件拒绝”的客户端能力缺口，不宣称
+Oracle piece-data 已支持流水化或吞吐收益；真实 Oracle Stream 存储读回、PrepareExecute
+输出/LOB/cursor/array、错误排序、代理/OB20 和收益基线仍待各自 profile。
 
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
 
