@@ -1,6 +1,6 @@
 # OceanBase .NET 缺失功能开发清单
 
-更新：2026-10-31。本文以当前源码及范围审计固定的 OceanBase 官方文档、Connector/J 2.4.14
+更新：2026-11-01。本文以当前源码及范围审计固定的 OceanBase 官方文档、Connector/J 2.4.14
 静态对照为依据。服务端状态沿用兼容性报告，除执行记录明确列出的复验外，不代表本日重跑。
 它回答三个问题：
 
@@ -58,6 +58,9 @@
 对应的功能是把多个 prepared 执行组织成多发送路径；它与 MariaDB
 `COM_STMT_BULK_EXECUTE` 不同。.NET 已增加默认关闭的 prepared batch multi-send 子集，覆盖
 input-only DML、基本 scalar 排空、普通 `ExecuteReader`、数量/64 MiB 分组和发送状态保护；本地 loopback 已通过。
+本轮补齐 MySQL 模式的 `Stream` 输入：每条执行前按 Connector/J 同一协议发送
+`COM_STMT_SEND_LONG_DATA`，再发送 `COM_STMT_EXECUTE`；同步/异步路径均保持先发完整组、再按顺序排空响应。
+Oracle piece-data 需要逐片确认，未纳入该流水化子集，仍在发送前拒绝。
 
 VPN 恢复后的 4.4.2.2 MySQL/Oracle 直连临时 profile 已覆盖 DML/scalar × sync/async，
 **8/8 通过**；过程中修复了客户端每个 pipelined 响应边界的 packet sequence 重置。新增的
@@ -121,7 +124,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute、流/LOB、输出、cursor、array binding 和 text fallback |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 为本地协议回归已补齐 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute、Oracle piece-data 流、LOB、输出、cursor、array binding 和 text fallback |
 | D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
 | D-10 | `P2`；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入子集已实现并验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
@@ -1071,8 +1074,8 @@ Oracle session time zone/national character set，必要时按已解析上下文
 
 之前的实库运行被 VPN 阻塞；修复响应包序号边界后，临时 direct profile 的 MySQL/Oracle
 矩阵 **12/12 通过**（DML/scalar/reader × sync/async，`BatchMultiSendNumber=2`）。首个子集的
-服务端错误排序、收益基线和代理/OB20 行为仍未验收；Oracle PrepareExecute、输出/LOB/cursor/array、
-流和 text fallback 仍明确不在首个子集，因此这些仍是 D-08 的后续缺口。reader 的 MySQL/Oracle
+服务端错误排序、收益基线和代理/OB20 行为仍未验收；Oracle PrepareExecute、Oracle piece-data
+流、输出/LOB/cursor/array 和 text fallback 仍明确不在首个子集，因此这些仍是 D-08 的后续缺口。reader 的 MySQL/Oracle
 直连 profile sync/async 均已通过；本轮没有把这组结果外推到代理或其他版本。
 
 新增 `Batches/MultiSendTests.cs`，覆盖 MySQL/Oracle create-objects profile 的 input-only
@@ -1084,6 +1087,20 @@ integration config；启用 `OB_REQUIRE_INTEGRATION=1` 后，限定集成组 **1
 MySQL 响应从序号 1 开始建模。结果只证明上述 input-only DML/scalar/reader 子集，不外推更大
 Q20 范围或其他部署。fresh-context 代码走查核对了 eligible-shape 拒绝、发送前失败、响应顺序、
 unknown-outcome/cancellation 和 reader 提前关闭；未发现待修问题。
+
+#### D-08a：MySQL batch multi-send 的 Stream 输入（2026-11-01，`P3` 子集）
+
+此前 `BuildBatchMultiSendRequest` 在发现 `Stream` 参数时直接拒绝。Connector/J 的同类路径在每条
+prepared 执行前发送 `COM_STMT_SEND_LONG_DATA`，因此本轮把请求保存为执行包、statement id 和参数快照，
+在同步/异步 multi-send 发送阶段先上传 MySQL long-data，再发送 execute。Oracle stream 继续拒绝，
+因为现有 piece-data 交互需要逐片响应，不能伪装成无响应流水化。
+
+新增 `BatchMultiSendWritesMySqlLongDataBeforeDrainingResponses`，验证两条 stream 输入的 statement id、
+参数序号、完整字节和“先上传/执行、后响应”顺序，sync/async **2/2 通过**；完整 Unit **8727/8727**，
+Release 构建和 netstandard2.1 构建均 0 warning / 0 error。代码提交为 `41b566d`。
+
+本子集仍未关闭真实 MySQL profile 的 Stream 存储读回、Oracle piece-data、错误排序、取消、代理/OB20、
+LOB/OUT/cursor/array 和 text fallback；这些继续按 D-08 后续缺口处理。
 
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
 
