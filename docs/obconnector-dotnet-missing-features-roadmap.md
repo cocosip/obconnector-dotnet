@@ -988,9 +988,13 @@ COM_STMT_EXECUTE，再按命令顺序读取 OK affected-count。错误归因到�
 `ExecuteScalar`/`ExecuteScalarAsync` 现在也复用该路径：普通 prepared 标量结果会按命令顺序完全排空，
 只返回 batch 语义中的首个 scalar；cursor、LOB、复杂结果列仍在发送前拒绝。`ExecuteReader` 继续使用
 逐命令 reader 路径。本地 loopback 已覆盖 sync/async、两条执行先于响应、数量分组、基本 scalar
-结果、发送前 output/cursor 拒绝、组内错误后 session 断开和发送后取消/unknown-outcome，共 **142/142**
+结果、发送前 output/cursor/session-state SQL 拒绝、组内错误后 session 断开和发送后取消/unknown-outcome，共 **143/143**
 通过。`dotnet build -c Release`
 的 netstandard2.0、netstandard2.1、net8.0、net9.0、net10.0 均 0 warning/0 error。
+
+本轮修正了 multi-send 与普通执行路径的边界：只有可缓存的 DML/SELECT 进入该子集；发送前会解析并校验
+Oracle session time zone/national character set，必要时按已解析上下文重新编码参数；共享 exchange 使用统一
+的发送状态处理，并先发送积压的 prepared-statement close 包，避免丢失结果元数据或长期积压服务端句柄。
 
 当前仍不能把 D-08 记为完成：尚未在目标 OceanBase MySQL/Oracle profile 上验证真实 prepared
 multi-send wire、服务端错误排序、收益和代理/OB20 行为；ExecuteReader、Oracle PrepareExecute、

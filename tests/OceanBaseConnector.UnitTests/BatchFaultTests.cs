@@ -51,6 +51,20 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
+        public async Task BatchMultiSendRejectsSessionStateSqlBeforeWriting()
+        {
+            var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)));
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true");
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch(); BatchItem(batch, "set autocommit = 1");
+                await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteNonQueryAsync());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
         public async Task BatchMultiSendBreaksSessionWhenAGroupResponseFails()
         {
             var server = Server(async channel =>
@@ -67,7 +81,7 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await connection.OpenAsync(); using var batch = connection.CreateBatch();
-                var first = BatchItem(batch, "one"); var second = BatchItem(batch, "two"); var third = BatchItem(batch, "three");
+                var first = BatchItem(batch, "insert into t values (1)"); var second = BatchItem(batch, "insert into t values (2)"); var third = BatchItem(batch, "insert into t values (3)");
                 var error = await Assert.ThrowsAsync<OceanBaseException>(() => batch.ExecuteNonQueryAsync());
                 Assert.Same(first, error.BatchCommand);
                 Assert.Equal(-1, first.RecordsAffected); Assert.Equal(-1, second.RecordsAffected); Assert.Equal(-1, third.RecordsAffected);
@@ -91,7 +105,7 @@ namespace OceanBaseConnector.UnitTests
             using var cancellation = new CancellationTokenSource();
             try
             {
-                await connection.OpenAsync(); using var batch = connection.CreateBatch(); BatchItem(batch, "one");
+                await connection.OpenAsync(); using var batch = connection.CreateBatch(); BatchItem(batch, "select 1");
                 var running = batch.ExecuteNonQueryAsync(cancellation.Token);
                 await sent.Task.WaitAsync(TimeSpan.FromSeconds(10)); cancellation.Cancel();
                 var error = await Assert.ThrowsAsync<OceanBaseException>(() => running);

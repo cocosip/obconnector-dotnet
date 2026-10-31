@@ -235,7 +235,7 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await connection.OpenAsync(); using var batch = connection.CreateBatch();
-                var first = BatchItem(batch, "one"); var second = BatchItem(batch, "two");
+                var first = BatchItem(batch, "insert into t values (1)"); var second = BatchItem(batch, "insert into t values (2)");
                 Assert.Equal(5, asynchronous ? await batch.ExecuteNonQueryAsync() : batch.ExecuteNonQuery());
                 Assert.Equal(2, first.RecordsAffected); Assert.Equal(3, second.RecordsAffected);
             }
@@ -295,7 +295,7 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await connection.OpenAsync(); using var batch = connection.CreateBatch();
-                BatchItem(batch, "one"); BatchItem(batch, "two"); BatchItem(batch, "three");
+                BatchItem(batch, "insert into t values (1)"); BatchItem(batch, "insert into t values (2)"); BatchItem(batch, "insert into t values (3)");
                 Assert.Equal(9, await batch.ExecuteNonQueryAsync());
             }
             finally { connection.Close(); server.Stop(); }

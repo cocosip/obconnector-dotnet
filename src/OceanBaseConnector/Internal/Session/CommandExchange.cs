@@ -231,15 +231,11 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 VerifyClientCharacterSet(request[0], false, CancellationToken.None).GetAwaiter().GetResult();
-                lock (_gate)
-                {
-                    _budget.Token.ThrowIfCancellationRequested();
-                    _channel.BeginCommand();
-                    _responsePending = true;
-                    _sqlSent = true;
-                    _anySqlSent = true;
-                    _batchPendingResponses++;
-                }
+                foreach (var id in _statementCloses)
+                { BeginSend(false); WritePacket(PreparedStatement.ClosePacket(id)); ResponseComplete(expectsResponse: false); }
+                _statementCloses = Array.Empty<uint>();
+                BeginSend(true);
+                lock (_gate) _batchPendingResponses++;
                 WritePacket(request);
             }
             catch (Exception error) { throw Fail(error); }
@@ -251,15 +247,11 @@ namespace OceanBaseConnector.Internal.Session
             try
             {
                 await VerifyClientCharacterSet(request[0], true, cancellationToken).ConfigureAwait(false);
-                lock (_gate)
-                {
-                    _budget.Token.ThrowIfCancellationRequested();
-                    _channel.BeginCommand();
-                    _responsePending = true;
-                    _sqlSent = true;
-                    _anySqlSent = true;
-                    _batchPendingResponses++;
-                }
+                foreach (var id in _statementCloses)
+                { BeginSend(false); await WritePacketAsync(PreparedStatement.ClosePacket(id)).ConfigureAwait(false); ResponseComplete(expectsResponse: false); }
+                _statementCloses = Array.Empty<uint>();
+                BeginSend(true);
+                lock (_gate) _batchPendingResponses++;
                 await WritePacketAsync(request).ConfigureAwait(false);
             }
             catch (Exception error) { throw Fail(ReaderCanceled(error, cancellationToken)); }

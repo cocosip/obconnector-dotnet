@@ -425,11 +425,18 @@ namespace OceanBaseConnector
             var operation = Start(CommandBehavior.Default, token, prepareOnly: false);
             try
             {
+                ValidateBatchMultiSendOperation(operation);
                 if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
+                var zone = operation.Exchange.EnsureSessionTimeZone();
+                PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
+                var national = operation.Exchange.EnsureNationalCharacterSet();
                 var statement = EnsurePrepared(operation) ?? throw new NotSupportedException("Batch multi-send requires server prepared statements.");
                 ValidateBatchMultiSendColumns(statement);
-                var request = PreparedParameters.Execute(statement.Id, operation.Parameters, cursor: false);
+                var parameters = HasNationalParameters(operation.Bindings.Parameters)
+                    ? PreparedParameters.Encode(operation.Bindings.Parameters, operation.Exchange.Mode, national, clientEncoding: operation.Exchange.ClientEncoding)
+                    : operation.Parameters;
+                var request = PreparedParameters.Execute(statement.Id, parameters, cursor: false);
                 operation.Exchange.Complete();
                 return request;
             }
@@ -446,15 +453,29 @@ namespace OceanBaseConnector
             var operation = Start(CommandBehavior.Default, token, prepareOnly: false);
             try
             {
+                ValidateBatchMultiSendOperation(operation);
                 if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
+                var zone = await operation.Exchange.EnsureSessionTimeZoneAsync(token).ConfigureAwait(false);
+                PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
+                var national = await operation.Exchange.EnsureNationalCharacterSetAsync(token).ConfigureAwait(false);
                 var statement = await EnsurePreparedAsync(operation, token).ConfigureAwait(false) ?? throw new NotSupportedException("Batch multi-send requires server prepared statements.");
                 ValidateBatchMultiSendColumns(statement);
-                var request = PreparedParameters.Execute(statement.Id, operation.Parameters, cursor: false);
+                var parameters = HasNationalParameters(operation.Bindings.Parameters)
+                    ? PreparedParameters.Encode(operation.Bindings.Parameters, operation.Exchange.Mode, national, clientEncoding: operation.Exchange.ClientEncoding)
+                    : operation.Parameters;
+                var request = PreparedParameters.Execute(statement.Id, parameters, cursor: false);
                 operation.Exchange.Complete();
                 return request;
             }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
+        }
+
+        private static void ValidateBatchMultiSendOperation((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset, MySqlCommandPlan? MySql) operation)
+        {
+            if (!SqlStatementBoundary.CanCacheStatement(operation.Bindings.CommandText, operation.Exchange.Mode) ||
+                operation.Exchange.DiscardSessionAfterExecution || operation.Exchange.InvalidatePreparedStatements || operation.Exchange.InvalidateComplexTypes)
+                throw new NotSupportedException("Batch multi-send requires cacheable DML or SELECT statements without session or type invalidation.");
         }
 
         private static void ValidateBatchMultiSendColumns(PreparedStatement statement)
