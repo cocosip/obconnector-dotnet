@@ -112,7 +112,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；不含 OUT/cursor/复杂值，不以 `P3` 宣称全部组合完成 |
 | D-02 | `P2`；a1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1～d3 以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
-| D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML、根 NULL OBJECT 输出身份、复杂 RETURNING/cursor/text 仍未关闭 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
+| D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML、根 NULL OBJECT 输出身份、PL-only 复杂 cursor/text 仍未关闭；SQL OBJECT cursor 成员已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/fallback 保持拒绝；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
 | D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；UJIS 等逐项确认后再加入，不支持名称继续发送前拒绝 |
@@ -600,11 +600,16 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 | D-04a 命名 LOB 成员 | `P2`；a1/a3.1 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT/嵌套 OBJECT 根 NULL 输出身份为当前服务端限制。a2：BLOB OBJECT 成员 DML 返回 932；仍待 wire/归因。命名 locator 回绑仍拒绝，不隐式读取外部 LOB |
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
-| D-04d 复杂 cursor 成员 | `P2 / 待证据` | 本地四字节结果解析已有；实际可创建类型、完整 child FETCH 与所有权尚需确认，输入仍拒绝；D-03 的普通列失败不能证明此形状 |
+| D-04d 复杂 cursor 成员 | `P2`；SQL OBJECT 持久类型子形状为当前目标服务端限制，PL-only 形状仍待证据 | 同一租户 `CREATE TYPE ... AS OBJECT (c SYS_REFCURSOR)` 在 Java 返回 `PLS-00201`、.NET 返回 `42000`；两者均在类型创建阶段失败，因此跳过该持久类型子形状的客户端改动。完整 child FETCH/所有权及 PL-only 记录/返回形状尚未确认；D-03 的普通列失败不能覆盖这些形状 |
 | D-04e 复杂 text 结果及其余 collection 形状 | `P2 / 待证据` | text 结果仍拒绝；命名构造输入复用 D-02d1～d3。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
 
 本模块先验证 a/b 已有实现的边界；若实库暴露缺陷，先保留失败证据、补最小回归，再决定
 共享修复。所有新增计划、结果及提交号仍记录在本文：
+
+本轮补充的 D-04d 负向对照使用同一 Oracle 4.4.2.2 直连 profile 和同一 DDL：Connector/J
+2.4.14 报 `PLS-00201: identifier 'SYS_REFCURSOR' must be declared`，.NET 返回
+`42000`。这只关闭 SQL OBJECT 持久类型的 cursor 成员路径；若后续版本提供可创建的对象或
+PL-only 记录 wire，仍需重新采集 Java/.NET 的完整 child FETCH、所有权和释放证据。
 
 - [x] 核对 codec、输出身份校验、现有实库及合成测试，确认 named payload 与 anonymous locator 的不同契约。
 - [x] 验证命名 LOB 成员的嵌套、输出与独立存储闭环，记录真实成功/失败形状。
