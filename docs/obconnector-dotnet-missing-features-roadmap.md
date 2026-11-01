@@ -1231,6 +1231,10 @@ ownerless 形状从内部协议错误改为明确的 `NotSupportedException`，�
 都没有可用的 XMLType payload 解码路径和现有的服务端转换路径，不是 XMLType 原生 wire codec，
 也不能把 Java 的空值行为当成 .NET 应复制的结果语义。
 
+2026-11-01 使用项目 User Secrets 的 `oracle-direct` profile 复核 `XmlProbeTests` **1/1** 通过；
+该复核再次确认 XMLTYPE DDL/DML、ownerless metadata 拒绝和 `XMLSERIALIZE` 的 CLOB 读取路径，
+未设置数据库凭据环境变量。
+
 调查结论：D-09 仍为 `P0 / 待 wire 与形状`，本轮不新增 `OceanBaseDbType.Xml`，也不把它
 猜测映射成 String、BLOB 或现有 OBJECT codec。重新开启实现前，需要目标 OceanBase 版本和
 Oracle 直连 profile 提供 XMLType 普通列与 PL 参数/输出的 metadata/type code、NULL、字符编码、
