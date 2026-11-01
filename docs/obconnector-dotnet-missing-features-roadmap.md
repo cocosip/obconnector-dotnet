@@ -143,7 +143,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 
 | ID | 当前进度 | 任务 | 当前缺口 | 关闭条件 |
 | --- | --- | --- | --- | --- |
-| A-01 | `P3`；Oracle 直连 10000 次借还及资源隔离 52/52 通过 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、MySQL profile 和句柄/线程/内存稳定性未证实 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
+| A-01 | `P3`；MySQL/Oracle 直连各 10000 次借还及资源隔离 52/52 通过 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、清池和句柄/线程/内存稳定性未证实 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
 | A-02 | `P3`；Oracle 直连 XA 基础生命周期 4/4 通过 | PSPE、XA、unknown outcome（G11） | in-doubt、协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
 | A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过，包重载 2/2、引用 package 标识符 2/2 通过 | Schema、目录和参数元数据（G13） | 包内 PL 类型和最小权限仍缺；大小写/引用 package 标识符已覆盖；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制 | 双模式最小权限、唯一/歧义签名、更多大小写/引用标识符、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
 | A-04 | `P3` | 包、TFM 和平台（G14/R01） | 当前有五资产和 Windows 子集；非 Windows、独立 runtime、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
@@ -1493,10 +1493,10 @@ metadata 为 `BLOB`/`System.Byte[]`，raw 长度 15，`rb_to_string` 返回原�
 | 检查 | 结果 |
 | --- | --- |
 | Oracle 4.4.2.2 `oracle-direct` | **2/2**（sync/async），10000 次借还/项，0 失败、0 跳过；物理会话数不超过 4 |
-| MySQL profile | 当前项目 User Secrets 配置只有 `oracle-direct`；显式选择 `mysql-direct` 被配置门禁拒绝，未伪造通过 |
-| 范围 | 10000 次容量/复用专项及 Oracle reader/LOB/cursor/XA 旧租约隔离 **52/52** 已通过；60 分钟交错、MySQL profile、清池和句柄/线程/内存稳定性仍未关闭 |
+| MySQL 4.4.2.2 `mysql-direct` | **2/2**（sync/async），10000 次借还/项，0 失败、0 跳过；物理会话数不超过 4 |
+| 范围 | MySQL/Oracle 10000 次容量/复用专项及 Oracle reader/LOB/cursor/XA 旧租约隔离 **52/52** 已通过；60 分钟交错、清池和句柄/线程/内存稳定性仍未关闭 |
 
-A-01 继续保持 `P3`。本轮没有产品源码改动；获得 MySQL profile 或完成长期交错运行后再提升状态。
+A-01 继续保持 `P3`。本轮没有产品源码改动；完成长期交错、清池和资源稳定性检查后再提升状态。
 
 ## 依据
 
