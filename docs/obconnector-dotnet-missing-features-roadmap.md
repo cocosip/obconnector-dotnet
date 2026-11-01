@@ -145,7 +145,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | --- | --- | --- | --- | --- |
 | A-01 | `P3`；Oracle 直连 10000 次借还专项通过 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、MySQL profile、reader/LOB/cursor/XA 旧资源和句柄/线程/内存稳定性未证实 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
 | A-02 | `P3` | PSPE、XA、unknown outcome（G11） | in-doubt、协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
-| A-03 | `P3` | Schema、目录和参数元数据（G13） | 包内 PL 类型、重载、大小写、引用标识符和最小权限；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制 | 双模式最小权限、唯一/歧义签名、包/重载、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
+| A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过 | Schema、目录和参数元数据（G13） | 包内 PL 类型、重载、大小写、引用标识符和最小权限；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制 | 双模式最小权限、唯一/歧义签名、包/重载、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
 | A-04 | `P3` | 包、TFM 和平台（G14/R01） | 当前有五资产和 Windows 子集；非 Windows、独立 runtime、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
 | A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；196608 字符 NUL 单表达式从 .NET 0/4 恢复 4/4，原因未定，见执行记录 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
 
@@ -1113,6 +1113,18 @@ scale；真实负scale（含-1/-84）和已声明精度继续严格校验，MySQ
 专项 **14/14**、相关 Oracle 浮点/目录回归 **60/60** 通过；代码走查确认未把 `DATA_LENGTH` 字节数
 或 `DATA_PRECISION` 字符集形态冒充字符数。A-03b 标记为**当前目标服务端目录限制，跳过客户端开发**；
 只有出现提供字符长度的目标版本/权限/profile，或稳定的等价服务端目录来源，才重新评估。
+
+#### A-03c：Oracle 基础目录与过程签名回归（2026-11-01，指定 profile）
+
+在同一 `oracle-direct` User Secrets profile 上重跑现有目录/过程验收，确认近期 XA、批处理和时间脚本
+改动没有污染公开元数据路径。Schema 基础集合、对象过滤、复合键/索引/外键、视图、Oracle 类型/序列、
+同义词共 **7/7** 通过；标量 OUT/INOUT、RETURNING 和过程输出加目录发现共 **3/3** 通过；未约束
+NUMBER 的过程/函数、隐式/显式 Prepare、同步/异步派生与存储共 **8/8** 通过，合计 **18/18**，
+0 失败、0 跳过。
+
+这次只增加当前验收证据，没有新增客户端功能：包内 PL 重载、最小权限和大小写/引用标识符仍没有
+足够 profile 覆盖，`CHAR_LENGTH` 继续按 A-03b 的服务端限制处理。没有把单一 Oracle profile 的
+通过结果提升为双模式或跨部署完成。
 
 执行修正：Oracle StoredProcedure契约要求PrepareExecute=true，初版夹具误将false用于过程输出，
 且给Decimal类型编号赋CLR int；修正为既有显式/隐式Prepare组合和decimal编号，不扩大产品wire。
