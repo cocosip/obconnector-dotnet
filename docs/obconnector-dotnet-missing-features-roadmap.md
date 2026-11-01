@@ -144,7 +144,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | ID | 当前进度 | 任务 | 当前缺口 | 关闭条件 |
 | --- | --- | --- | --- | --- |
 | A-01 | `P3`；Oracle 直连 10000 次借还专项通过 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、MySQL profile、reader/LOB/cursor/XA 旧资源和句柄/线程/内存稳定性未证实 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
-| A-02 | `P3` | PSPE、XA、unknown outcome（G11） | in-doubt、协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
+| A-02 | `P3`；Oracle 直连 XA 基础生命周期 4/4 通过 | PSPE、XA、unknown outcome（G11） | in-doubt、协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
 | A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过 | Schema、目录和参数元数据（G13） | 包内 PL 类型、重载、大小写、引用标识符和最小权限；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制 | 双模式最小权限、唯一/歧义签名、包/重载、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
 | A-04 | `P3` | 包、TFM 和平台（G14/R01） | 当前有五资产和 Windows 子集；非 Windows、独立 runtime、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
 | A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；196608 字符 NUL 单表达式从 .NET 0/4 恢复 4/4，原因未定，见执行记录 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
@@ -1125,6 +1125,15 @@ NUMBER 的过程/函数、隐式/显式 Prepare、同步/异步派生与存储�
 这次只增加当前验收证据，没有新增客户端功能：包内 PL 重载、最小权限和大小写/引用标识符仍没有
 足够 profile 覆盖，`CHAR_LENGTH` 继续按 A-03b 的服务端限制处理。没有把单一 Oracle profile 的
 通过结果提升为双模式或跨部署完成。
+
+#### A-02a：Oracle XA 基础生命周期回归（2026-11-01，指定 profile）
+
+在 `oracle-direct` User Secrets profile 上执行现有 XA 实库组：两阶段 Prepare/Recover 后提交或回滚
+（2 项）、单阶段提交持久性（1 项）和非法阶段转换（1 项）共 **4/4** 通过，0 失败、0 跳过。
+这确认当前 DBMS_XA 路径的基本分支状态、独立 recover 查账、决定后的数据结果和发送前状态校验仍可用。
+
+该证据不关闭 A-02：协调器/节点或代理崩溃、in-doubt 决定、取消顺序和更完整 unknown-outcome
+矩阵仍需单独故障注入；XA 单元测试中的 loopback 中断场景已在本轮完整 Unit 8740/8740 中通过。
 
 执行修正：Oracle StoredProcedure契约要求PrepareExecute=true，初版夹具误将false用于过程输出，
 且给Decimal类型编号赋CLR int；修正为既有显式/隐式Prepare组合和decimal编号，不扩大产品wire。
