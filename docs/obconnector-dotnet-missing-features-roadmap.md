@@ -1335,6 +1335,19 @@ batch command；`IsExecutionOutcomeUnknown=true`；连接进入 `Broken`；不�
 该子项不关闭 LOB/OUT/cursor/array、代理/OB20、收益基线，亦不代表
 所有网络断点和更大 unknown-outcome 矩阵已验收；这些继续保持 D-08 的后续边界。
 
+#### XA interrupted prepare CI 回归复核（2026-11-01）
+
+CI 报告中的 `XaInterruptedPrepareIsUnknownAndNeverReplayed(disconnect)` 失败对应旧的
+`Assert.False(preparing.IsCompleted)` 测试逻辑。`disconnect` 会在服务端脚本结束、调度器重新获得
+控制前完成 pending task，这个时序本身不改变 unknown-outcome 契约。提交 `7eee906` 已只放宽
+这一条时序断言；cancel、timeout、close 仍要求错误为 `IsExecutionOutcomeUnknown=true`，并保持
+连接破坏/关闭和禁止重放检查。
+
+当前源码重新编译后的该专项 **4/4** 通过；随后按 CI 的
+`dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj -c Release
+--no-restore --no-build` 完整重跑 **8741/8741**，0 失败、0 跳过。该结果只确认当前提交的测试
+和交换状态契约，不把旧 runner 的失败当作新的驱动功能缺口。
+
 #### D-08g：MySQL BLOB/TEXT binary result 的 batch reader（`P4` 子集，2026-11-01）
 
 `BuildBatchMultiSendRequest` 原先把 type `249..252` 的所有结果列与 Oracle locator/complex
