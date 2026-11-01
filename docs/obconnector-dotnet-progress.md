@@ -27,7 +27,7 @@
 | C08 SHA256/caching-SHA2/old/clear/Ed25519/PAM/GSSAPI | 条件互操作分支 | 有实现，不承诺服务端均支持 | 同左 | AuthenticationConversation、GssapiAuthentication | 当前仅 native 账号直连，无插件/KDC端点；暂不开发非native分支 |
 | C09 凭据provider与版本退休 | 可选ADO.NET适配 | 有实现 | 有实现 | IOceanBaseCredentialProvider、CredentialAcquisition、PhysicalSessionPool.Credentials | J9；每次Open取值，不是活动会话实时改密 |
 | C10 物理连接池/容量/等待/预热/清池 | 可选 | opt-in实现 | opt-in实现 | PhysicalSessionPool、OceanBaseConnection.Pooling | J11；Oracle 4.4.2.2 直连已通过 16 并发、10000 次借还的容量/复用专项；60 分钟交错及 MySQL profile 仍未验收 |
-| C11 reset/租约/资源隔离 | 核心复用正确性 | 有实现，无法证明状态则退休 | 同左，含Oracle资源 | PhysicalSession、PhysicalSessionPool | 不保证任意隐式副作用；见池隔离历史 |
+| C11 reset/租约/资源隔离 | 核心复用正确性 | 有实现，无法证明状态则退休 | 同左，含Oracle资源 | PhysicalSession、PhysicalSessionPool | Oracle reader/LOB/cursor/XA 旧租约隔离 **52/52** 通过；不保证任意隐式副作用；60 分钟交错与长期资源稳定性仍待验收 |
 | C12 endpoint/resolver/路由身份 | 可选 | 有实现 | 有实现 | EndpointSelector、DiscoverySnapshot、IOceanBaseAddressResolver | 当前无真实 proxy/多节点 profile；受控单上游路由不升级为 HA，暂不开发 |
 | C13 TNS/OCP/组/权重/黑名单 | 可选 | 依部署地址发现 | 同左，不使用Oracle Net | OceanBaseTnsAddressResolver、OceanBaseOcpAddressResolver | 当前无真实 OCP/TNS/ODP 服务；暂不开发，保留 parser 和 Deferred |
 | C14 TCP重试/健康缓存 | 可选 | 建连TCP失败候选切换 | 同左 | TcpTransport、EndpointHealthCache | 不重试TLS/auth/已发SQL；TCP健康不是数据库健康 |
