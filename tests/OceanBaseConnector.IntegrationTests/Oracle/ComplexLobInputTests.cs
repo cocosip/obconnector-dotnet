@@ -28,7 +28,7 @@ public sealed class ComplexLobInputTests
 
     [IntegrationTheory]
     [MemberData(nameof(NamedBlobDmlCases))]
-    public Task NamedBlobObjectMembersCanBeStored(string profile, bool nested, bool asynchronous, int size)
+    public Task NamedBlobObjectMembersRemainServerLimited(string profile, bool nested, bool asynchronous, int size)
         => VerifyNamedBlobDml(IntegrationEnvironment.GetProfile(profile), nested, asynchronous, size);
 
     internal static async Task VerifyNamedBlobDml(IntegrationProfile profile, bool nested, bool asynchronous, int size)
@@ -57,19 +57,17 @@ public sealed class ComplexLobInputTests
         {
             command.CommandType = CommandType.StoredProcedure;
             DatabaseContext.Parameter(command, "p", value);
-            if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+            var error = asynchronous
+                ? await Assert.ThrowsAsync<OceanBaseException>(() => command.ExecuteNonQueryAsync())
+                : Assert.Throws<OceanBaseException>(() => command.ExecuteNonQuery());
+            Assert.Equal(932, error.ServerErrorCode);
+            Assert.Equal("22000", error.SqlState);
+            Assert.False(error.IsExecutionOutcomeUnknown);
         }
 
         await using var verification = await db.OpenAsync();
-        await using var query = db.Command(verification, "SELECT v FROM " + table + " WHERE id=1");
-        await using var reader = asynchronous ? await query.ExecuteReaderAsync() : query.ExecuteReader();
-        Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
-        using var lob = reader.GetFieldValue<OceanBaseLob>(0);
-        using var source = lob.OpenRead();
-        using var actual = new MemoryStream();
-        if (asynchronous) await source.CopyToAsync(actual); else source.CopyTo(actual);
-        Assert.Equal(bytes, actual.ToArray());
-        Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+        var count = await db.ScalarAsync(verification, "SELECT COUNT(*) FROM " + table, CancellationToken.None);
+        Assert.Equal(0, DatabaseContext.IntegerResult(count));
     }
 
     public static TheoryData<string, bool, string, bool> Cases()

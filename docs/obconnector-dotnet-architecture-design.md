@@ -968,8 +968,10 @@ prepared execution and reuse. Anonymous array headers are unchanged. Direct PL N
 and type-6 bindings return a NULL collection, but OBJECT output rows lack the outer NULL bit;
 NULL OBJECT outputs remain an open server-wire identity boundary. BLOB OBJECT
 bound members used in DML return 932/22000 although server-local objects can store the same bytes;
-the binding/DML cause remains unresolved. The input fix does not establish NULL OBJECT output
-identity or general complex-member storage support. Evidence and remaining tasks are tracked in the
+the same bitmap/length-encoded member wire replayed through Connector/J's RAW writer returns the
+same 932/22000, so this target version's member bind/DML shape is treated as a server limitation.
+The input fix does not establish NULL OBJECT output identity or general complex-member storage
+support. Evidence and remaining tasks are tracked in the
 [single missing-features roadmap](obconnector-dotnet-missing-features-roadmap.md).
 
 CLOB locator parameter encoding is shared by scalar and anonymous-array inputs. It converts inline

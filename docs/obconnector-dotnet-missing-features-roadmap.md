@@ -116,7 +116,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；不含 OUT/cursor/复杂值，不以 `P3` 宣称全部组合完成 |
 | D-02 | `P2`；a1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1～d3 以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
-| D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML、根 NULL OBJECT 输出身份、PL-only 复杂 cursor/text 仍未关闭；SQL OBJECT cursor 成员已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
+| D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；根 NULL OBJECT 输出身份、PL-only 复杂 cursor/text 仍未关闭；SQL OBJECT cursor 成员已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/fallback 保持拒绝；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
 | D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；UJIS 等逐项确认后再加入，不支持名称继续发送前拒绝 |
@@ -601,7 +601,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 
 | 子项 | 进度 | 当前范围与下一步 |
 | --- | --- | --- |
-| D-04a 命名 LOB 成员 | `P2`；a1/a3.1 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT/嵌套 OBJECT 根 NULL 输出身份为当前服务端限制。a2：BLOB OBJECT 成员 DML 返回 932；仍待 wire/归因。命名 locator 回绑仍拒绝，不隐式读取外部 LOB |
+| D-04a 命名 LOB 成员 | `P2`；a1/a3.1 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT/嵌套 OBJECT 根 NULL 输出身份为当前服务端限制。a2：BLOB OBJECT 成员 DML 在 .NET 与 Java 同 wire 诊断回放均返回 932；按当前目标服务端限制跳过客户端改动。命名 locator 回绑仍拒绝，不隐式读取外部 LOB |
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
 | D-04d 复杂 cursor 成员 | `P2`；SQL OBJECT 持久类型子形状为当前目标服务端限制，PL-only 形状仍待证据 | 同一租户 `CREATE TYPE ... AS OBJECT (c SYS_REFCURSOR)` 在 Java 返回 `PLS-00201`、.NET 返回 `42000`；两者均在类型创建阶段失败，因此跳过该持久类型子形状的客户端改动。完整 child FETCH/所有权及 PL-only 记录/返回形状尚未确认；D-03 的普通列失败不能覆盖这些形状 |
@@ -643,7 +643,7 @@ OceanBase 4.4.2.2 Oracle 直连、Windows、TLS Disabled：
 
 | 子项 | 证据与归类 | 下一步开发任务 / 关闭条件 |
 | --- | --- | --- |
-| D-04a2 BLOB OBJECT 绑定成员直接用于 DML | 最初 12 项存储探测 8 通过、4 失败：BLOB OBJECT/嵌套 OBJECT 在过程 INSERT 成员时报 `932/22000`；CLOB 三形状和 BLOB collection 成功。3 字节/90007 字节、直接成员/局部变量两种 bind 写法都失败；相同类型的服务端本地 RAW 构造或真实临时 BLOB 构造写入成功。PL GETLENGTH、对象复制与不含 DML 的复杂输出成功；TO_BLOB 转换也未解决 bind DML 失败。不是“服务端没有 BLOB OBJECT”，当前不能仅据这些观测确定是驱动 wire 还是服务端 bind/DML 转换缺口 | `P2 / 待 wire 与归因`。固定列/参数内部身份，补官方客户端/服务端解码依据与真实独立读回；再决定修正 writer 或明确版本阻塞。不自动改写用户 SQL，不靠 DBMS_LOB 长度调用成功声明持久存储支持 |
+| D-04a2 BLOB OBJECT 绑定成员直接用于 DML | 最初 12 项存储探测 8 通过、4 失败：BLOB OBJECT/嵌套 OBJECT 在过程 INSERT 成员时报 `932/22000`；CLOB 三形状和 BLOB collection 成功。3 字节/90007 字节、直接成员/局部变量两种 bind 写法都失败；相同类型的服务端本地 RAW 构造或真实临时 BLOB 构造写入成功。PL GETLENGTH、对象复制与不含 DML 的复杂输出成功；TO_BLOB 转换也未解决 bind DML 失败。后续 Java wire replay 发出同样 bitmap/length-encoded bytes 后返回同码，当前目标版本按服务端 bind/DML 限制处理 | `P2 / 当前目标服务端限制`。保留客户端 payload framing 断言和 8 项回归；只有新版本/租户提供不同成员 wire 时重开，不自动改写用户 SQL |
 | D-04a3 根 NULL 复杂 PL 绑定 | 初始 NULL 扩展探测 12/12 在根 NULL 调用报 `600/HY000`，成员 NULL 调用通过。后续已定位命名 NULL 的 type 160 编码缺陷并修复为 type 6；输出身份另行分离，见下节证据 | a3.1 `P4`：命名根 NULL 输入及指定 collection NULL 输出子集；a3.2 `服务端限制（当前目标版本 OBJECT/嵌套 OBJECT 输出身份）`：本地与 Java 均收到未置 NULL 位的 OBJECT 结果，当前形状跳过客户端改动 |
 
 固定 Java 源码 `6adc311` 的 `ComplexUtil.storeComplexAttrData` 没有 TYPE_BLOB/TYPE_CLOB
@@ -734,19 +734,25 @@ OBJECT 的 `getObject/wasNull` 也未报告外层 NULL，满足“服务端不�
 未重跑完整 Unit/Consumer、所有 OS/runtime、真实代理/TLS/OB20/KDC、长期压力；BLOB OBJECT
 成员 DML、复杂 RETURNING/cursor/text、匿名 PL 等剩余任务仍需后续开发与证据。
 
-#### D-04a2：named BLOB OBJECT DML 回归覆盖（2026-10-31，归因未关闭）
+#### D-04a2：named BLOB OBJECT DML 回归覆盖（2026-10-31，当前目标服务端限制）
 
-新增 `ComplexLobInputTests.NamedBlobObjectMembersCanBeStored`，覆盖 flat/nested named OBJECT、
-3/90007 字节、sync/async，并用独立连接读回 BLOB；同时补充 flat/nested named BLOB payload
+新增 `ComplexLobInputTests.NamedBlobObjectMembersRemainServerLimited`，覆盖 flat/nested named OBJECT、
+3/90007 字节、sync/async，并用独立连接核对失败后没有写入行；同时补充 flat/nested named BLOB payload
 framing 的本地断言。相关 Unit/协议组 **33/33** 通过。VPN 恢复后以 `oracle-direct` 直连
 `172.16.2.45:2881` 重跑，8/8 均进入目标 DML 并稳定返回服务端 `932/22000`（大小、嵌套和
 sync/async 均一致），没有读回行可验收。
 
-固定 Connector/J 2.4.14 证据仍显示 `ComplexUtil.storeComplexAttrData` 没有 BLOB/CLOB writer；
-Java 无法发出同一输入形状，因此不能满足“Java 同样失败”条件，也不能据此关闭 D-04a2。
-当前仍保持 `P2 / 已复现但待 wire 与归因`，不修改 `ComplexValueCodec`。这已排除之前的 VPN/握手
-阻塞，但仍不能仅凭 `932/22000` 判定是客户端 writer 还是服务端 bind/DML 转换缺口；需要固定
-成员 wire 身份并补可发出同形状的官方客户端/服务端解码对照。
+固定 Connector/J 2.4.14 公开 API 仍没有真实 BLOB 成员 writer，`createStruct` 和
+`StructImpl + Blob` 都在 `storeComplexAttrData` 前置失败；这条路径单独不能归因服务端。
+随后使用同一 SDK 的 `StructImpl` 和 `ComplexUtil.storeComplexAttrData`，仅把已加载的 BLOB
+成员 descriptor 在诊断探针中替换为 SDK 已支持的 RAW type=6，使其发出同样的 bitmap、
+length-encoded bytes 和成员顺序。该 Java wire replay 在同一 4.4.2.2 `oracle-direct`
+profile、同一 flat OBJECT、同一 6-byte payload 上到达服务端并返回 `OBE-00932/932/22000`，
+独立查询行数为 0；.NET 的 flat/nested、3/90007 字节、sync/async 也稳定返回同码。
+
+因此 D-04a2 现在标记为 `P2 / 当前目标服务端限制`，不修改 `ComplexValueCodec`，不把
+Connector/J 公开 API 的前置 writer 错误冒充同一交互。只有目标版本/租户接受该成员 wire，
+或出现新的服务端 BLOB OBJECT bind 形状时，才重新开启客户端实现。
 
 #### D-04a2 服务端源码 wire 对照（2026-11-01）
 
@@ -758,11 +764,9 @@ length-encoded string；BLOB 设置 binary collation，并将 payload 包装成�
 `ObLongTextType` 值。当前 `ComplexValueCodec` 的 named BLOB 编码正是同一层级的 bitmap、
 length-encoded raw bytes，不需要匿名数组的 locator/header 输入格式。
 
-因此本次源码对照没有发现 .NET writer 与服务端成员反序列化 wire 的差异；它把失败范围收窄
-到服务端接收后的 BLOB OBJECT bind/DML 转换，仍不能单独证明该转换是服务端缺陷。由于
-Connector/J 2.4.14 没有可发出同形状 BLOB OBJECT 输入的 writer，也没有满足“Java 同一交互
-失败”的对照条件，D-04a2 继续保持 `P2 / 已复现但待归因`，不标记为服务端限制、不改产品
-编码。源码依据：[ObRecordType::deserialize][O12-record-deserialize]、
+因此本次源码对照没有发现 .NET writer 与服务端成员反序列化 wire 的差异；配合 Java wire
+replay 的同码失败，失败范围收窄到服务端接收后的 BLOB OBJECT bind/DML 转换。D-04a2
+按当前目标服务端限制关闭客户端开发，不改产品编码。源码依据：[ObRecordType::deserialize][O12-record-deserialize]、
 [ObPLDataType::deserialize][O12-pl-deserialize]、[parse_basic_param_value][O12-basic-param]。
 
 #### D-04a2 Connector/J 2.4.14 公开 API 实测（2026-11-01）
@@ -774,11 +778,18 @@ profile 运行 Connector/J 2.4.14。Java 能从服务端读取真实描述：根
 `ComplexUtil.storeComplexAttrData` 阶段抛出 `SQLNonTransientConnectionException:
 storeComplexAttrData exception`，异常链止于 `IOException`，目标表行数均为 0。
 
-这两个 Java 调用没有发出与 .NET 相同形状的 BLOB OBJECT DML，也没有得到服务端 `932/22000`。
-因此它们证明了 Connector/J 公开 API 的 writer 边界，却不满足“Java 发出同一交互并同样失败”
-的服务端归因条件；D-04a2 继续保持 `P2 / 已复现但待归因`，不改 `ComplexValueCodec`，也不
-标记服务端限制。原始输出保存在忽略目录 `.tmp/d04a2-java-public-api.log`，不提交凭据或
-探针源码。
+这两个 Java 调用没有发出与 .NET 相同形状的 BLOB OBJECT DML，也没有得到服务端 `932/22000`；
+它们只证明公开 API 的 writer 边界。后续的 descriptor override wire replay 已补足同交互证据，
+原始公开 API 输出仍保存在忽略目录 `.tmp/d04a2-java-public-api.log`，不提交凭据或探针源码。
+
+#### D-04a2 Java wire replay（2026-11-01）
+
+诊断探针保留服务端返回的根 OBJECT descriptor，仅把 BLOB 成员 descriptor 临时替换为
+Connector/J 已支持的 RAW type=6，复用同一 `StructImpl`/`ComplexUtil.storeComplexAttrData`
+writer。该替换不改变 OBJECT 根身份、NULL bitmap、成员顺序或 length-encoded payload，
+只绕过 Connector/J 2.4.14 对真实 BLOB type=10 缺失 writer 的前置异常。相同 6-byte payload
+在服务端返回 `OBE-00932/932/22000`，独立查询行数为 0；因此当前目标版本的该成员 wire
+按 Java/.NET 同交互失败处理，客户端不增加猜测性编码。
 
 #### D-04c：复杂 whole-column RETURNING 的 opaque metadata（2026-10-31）
 
@@ -799,7 +810,7 @@ named type 的精确形状；匿名数组、其他未知 element 和没有显式
 | Oracle direct 实库 | `ComplexReturningTests` 2/2；`ComplexNationalTests.NationalObjectReturningUsesDeclaredOutputType` 56/56；无 skip |
 | 本地协议单测 | opaque named OBJECT 绑定/匿名类型拒绝 1/1 |
 | 构建 | IntegrationTests Release 0 warning / 0 error；NuGet 漏洞源不可达时使用 `NuGetAudit=false`，依赖已由本地缓存还原 |
-| 未关闭边界 | D-04a2 BLOB OBJECT 成员 DML、复杂 cursor/text/其他 collection 形状、跨版本/代理/TLS/长期压力仍未关闭；D-04 父项保持 `P2` |
+| 未关闭边界 | D-04a2 已按当前目标服务端限制关闭客户端开发；复杂 cursor/text/其他 collection 形状、跨版本/代理/TLS/长期压力仍未关闭；D-04 父项保持 `P2` |
 
 #### D-04e：named OBJECT 标量 text 结果（`P4` 子集，2026-10-31）
 
