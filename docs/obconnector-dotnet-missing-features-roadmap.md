@@ -143,7 +143,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 
 | ID | 当前进度 | 任务 | 当前缺口 | 关闭条件 |
 | --- | --- | --- | --- | --- |
-| A-01 | `P3` | 池、reset、租约和 prepared cache（G10） | 长期并发、资源交错、清池、句柄/线程/内存稳定性未证实 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
+| A-01 | `P3`；Oracle 直连 10000 次借还专项通过 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、MySQL profile、reader/LOB/cursor/XA 旧资源和句柄/线程/内存稳定性未证实 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
 | A-02 | `P3` | PSPE、XA、unknown outcome（G11） | in-doubt、协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
 | A-03 | `P3` | Schema、目录和参数元数据（G13） | 包内 PL 类型、重载、大小写、引用标识符和最小权限；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制 | 双模式最小权限、唯一/歧义签名、包/重载、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
 | A-04 | `P3` | 包、TFM 和平台（G14/R01） | 当前有五资产和 Windows 子集；非 Windows、独立 runtime、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
@@ -1425,6 +1425,21 @@ metadata 为 `BLOB`/`System.Byte[]`，raw 长度 15，`rb_to_string` 返回原�
 同一 `byte[]` 直接绑定到 `ROARINGBITMAP` 列稳定返回服务端 `1235/0A000`，坏 raw 也由服务端
 返回相同错误。该结果把直接 native prepared binding 归为服务端限制，现有 .NET Binary + SQL
 函数路径已覆盖当前版本可用子集，不新增 enum、parser 或 BIT/JSON/String 假映射。
+
+### A-01：池容量与高并发借还专项（2026-11-01，部分验收）
+
+新增 `Connections/PoolStressTests.cs`，沿用集成测试的 User Secrets profile，不读取或写入凭据
+环境变量。每个模式分别运行同步和异步用例：16 个并发调用者、每个调用者 625 次打开/查询/释放，
+总计 10000 次借还；池上限固定为 4，并通过实际 `PhysicalSession` 身份集合确认同时复用的物理会话
+不超过上限。每次查询都走公开 `OceanBaseDataSource` 和 `OceanBaseConnection` API。
+
+| 检查 | 结果 |
+| --- | --- |
+| Oracle 4.4.2.2 `oracle-direct` | **2/2**（sync/async），10000 次借还/项，0 失败、0 跳过；物理会话数不超过 4 |
+| MySQL profile | 当前项目 User Secrets 配置只有 `oracle-direct`；显式选择 `mysql-direct` 被配置门禁拒绝，未伪造通过 |
+| 范围 | 仅关闭容量/复用的 10000 次专项；60 分钟交错、reader/LOB/cursor/XA 旧资源、清池和句柄/线程/内存稳定性仍未关闭 |
+
+A-01 继续保持 `P3`。本轮没有产品源码改动；获得 MySQL profile 或完成长期交错运行后再提升状态。
 
 ## 依据
 
