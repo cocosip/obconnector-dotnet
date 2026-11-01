@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.IntegrationTests.Infrastructure;
@@ -10,6 +12,13 @@ namespace OceanBaseConnector.IntegrationTests.Oracle;
 
 public sealed class ProcedureTests
 {
+    public static IEnumerable<object[]> PackageOverloadRows()
+    {
+        foreach (var profile in ProfileTheoryData.OraclePrepareExecuteObjects())
+            foreach (var asynchronous in new[] { false, true })
+                yield return new object[] { profile, asynchronous };
+    }
+
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.WithPrepareExecute), MemberType = typeof(ProfileTheoryData))]
     public async Task ScalarOutAndInputOutputParameters(string profileName)
@@ -65,5 +74,54 @@ public sealed class ProcedureTests
         using var parameters = await connection.GetSchemaAsync("ProcedureParameters", new string?[] { null, owner, name }, CancellationToken.None);
         Assert.Equal(1, procedures.Rows.Count);
         Assert.Equal(2, parameters.Rows.Count);
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(PackageOverloadRows))]
+    public async Task PackageOverloadsDeriveAndExecuteSelectedSignatures(string profileName, bool asynchronous)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var package = "OBI_" + Guid.NewGuid().ToString("N").Substring(0, 20).ToUpperInvariant();
+        await db.ExecuteAsync(connection,
+            "CREATE PACKAGE " + package + " AS " +
+            "PROCEDURE P(X IN NUMBER, Y OUT NUMBER); " +
+            "PROCEDURE P(X IN DATE, Y OUT DATE); END;", CancellationToken.None);
+        await db.ExecuteAsync(connection,
+            "CREATE PACKAGE BODY " + package + " AS " +
+            "PROCEDURE P(X IN NUMBER, Y OUT NUMBER) AS BEGIN Y := X + 1; END; " +
+            "PROCEDURE P(X IN DATE, Y OUT DATE) AS BEGIN Y := X; END; END;", CancellationToken.None);
+        db.RegisterCleanup("PACKAGE", package, async () =>
+        {
+            await using var cleanup = await db.OpenAsync();
+            await db.ExecuteAsync(cleanup, "DROP PACKAGE " + package, CancellationToken.None);
+        });
+
+        var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture);
+        using var directory = await connection.GetSchemaAsync("Procedures", new string?[] { null, owner, "P", null, package }, CancellationToken.None);
+        var overloads = directory.Rows.Cast<DataRow>().Select(row => Assert.IsType<string>(row["OVERLOAD"])).OrderBy(value => value).ToArray();
+        Assert.Equal(2, overloads.Length); Assert.NotEqual(overloads[0], overloads[1]);
+        foreach (var overload in overloads)
+        {
+            await using var command = db.Command(connection, package + ".P"); command.CommandType = CommandType.StoredProcedure;
+            if (asynchronous) await command.DeriveParametersAsync(overload); else command.DeriveParameters(overload);
+            Assert.Equal(2, command.Parameters.Count);
+            var input = (OceanBaseParameter)command.Parameters[0]; var output = (OceanBaseParameter)command.Parameters[1];
+            Assert.Equal(ParameterDirection.Input, input.Direction); Assert.Equal(ParameterDirection.Output, output.Direction);
+            if (input.OceanBaseDbType == OceanBaseDbType.Decimal)
+            {
+                input.Value = 41m; output.Value = DBNull.Value;
+                if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+                DatabaseContext.EqualNumber(output.Value, 42, "NUMBER package overload output mismatch.");
+            }
+            else
+            {
+                Assert.Equal(OceanBaseDbType.OracleDate, input.OceanBaseDbType);
+                var date = new DateTime(2026, 11, 1);
+                input.Value = date; output.Value = DBNull.Value;
+                if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+                Assert.Equal(date, Assert.IsType<DateTime>(output.Value));
+            }
+        }
     }
 }

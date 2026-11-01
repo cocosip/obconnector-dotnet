@@ -73,6 +73,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 if (precision == 255) Precision = 0;
                 if (Scale == -85 && type != 206) Scale = 0;
             }
+            // Oracle DATE has no fractional precision; PL output metadata may report 255 (unknown).
+            if (mode == OceanBaseCompatibilityMode.Oracle && type == 12 && Scale == -1) Scale = 0;
             if (mode == OceanBaseCompatibilityMode.Oracle && type == 3 && precision == 0 && scale == 0) Precision = 10;
         }
         internal string? SessionTimeZone { get; private set; }

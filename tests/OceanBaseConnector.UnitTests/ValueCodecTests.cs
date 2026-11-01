@@ -130,6 +130,14 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
+        public void OracleDateAcceptsUnknownWirePrecision()
+        {
+            var column = ValueColumn(12, OceanBaseCompatibilityMode.Oracle, precision: 255, scale: 255);
+            var expected = new DateTime(2024, 2, 29, 13, 14, 15);
+            Assert.Equal(expected, column.DecodeBinary(column.ReadBinaryField(new ByteCursor(new byte[] { 7, 232, 7, 2, 29, 13, 14, 15 }))));
+        }
+
+        [Fact]
         public void OracleTimestampUsesRawTwelveBytePayloadInBothRowProtocols()
         {
             var column = ValueColumn(202, OceanBaseCompatibilityMode.Oracle, scale: 7);
