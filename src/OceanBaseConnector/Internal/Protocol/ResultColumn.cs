@@ -12,6 +12,8 @@ namespace OceanBaseConnector.Internal.Protocol
         private OceanBaseConnector.Internal.Session.LobSession? Lobs { get; set; }
         internal ComplexColumnMetadata? ComplexMetadata { get; private set; }
         internal OceanBaseComplexType? ComplexType { get; private set; }
+        private bool IsXmlType => TypeCode == 160 && ComplexMetadata?.Schema.Length == 0 &&
+            string.Equals(ComplexMetadata.Name, "XMLTYPE", StringComparison.OrdinalIgnoreCase);
         private bool _complexOutput;
         private OceanBaseConnector.Internal.Session.OracleCursorOwner? _cursors;
         internal void BindCursorResult(bool binary, OceanBaseConnector.Internal.Session.OracleCursorOwner? owner)
@@ -51,6 +53,11 @@ namespace OceanBaseConnector.Internal.Protocol
         internal void RequireComplexResult(bool binary)
         {
             if (TypeCode != 160) return;
+            if (IsXmlType)
+            {
+                if (binary) throw new NotSupportedException("Binary XMLTYPE results are not supported.");
+                return;
+            }
             if (!binary)
             {
                 if (ComplexType == null) throw new NotSupportedException("Complex text results require a preloaded named object type.");
@@ -188,6 +195,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             get
             {
+                if (IsXmlType) return "XMLTYPE";
                 switch (TypeCode)
                 {
                     case 0:
@@ -240,6 +248,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             get
             {
+                if (IsXmlType) return typeof(string);
                 if (IsDecimal)
                 {
                     if (TypeCode == 206)
@@ -347,6 +356,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             get
             {
+                if (IsXmlType) return OceanBaseDbType.String;
                 if (IsDecimal) return OceanBaseDbType.Decimal;
                 switch (TypeCode)
                 {
@@ -398,6 +408,7 @@ namespace OceanBaseConnector.Internal.Protocol
             RequireComplexResult(false);
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
+            if (IsXmlType) return Utf8.GetString(value);
             if (TypeCode == 160) return OceanBaseComplexValue.FromResult(ComplexType!, ComplexValueCodec.DecodeTextResult(value, ComplexType!, Mode));
             if (TypeCode == 163) return (_cursors ?? throw new NotSupportedException("A REF CURSOR requires its originating execution.")).Publish(ReadCursorId(value));
             if (TypeCode == 210 || TypeCode == 211) return new OceanBaseLob(Lobs!, value, TypeCode == 211);
@@ -477,6 +488,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
+            if (IsXmlType) throw new NotSupportedException("Binary XMLTYPE results are not supported.");
             if (TypeCode == 160)
             {
                 var complex = new ByteCursor(value);

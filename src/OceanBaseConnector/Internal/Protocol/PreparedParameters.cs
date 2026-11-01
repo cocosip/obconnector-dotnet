@@ -300,7 +300,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 case DbType.String:
                 case DbType.AnsiString:
                 case DbType.StringFixedLength:
-                case DbType.AnsiStringFixedLength: return 253;
+                case DbType.AnsiStringFixedLength:
+                case DbType.Xml: return 253;
                 case DbType.Binary: return mode == OceanBaseCompatibilityMode.Oracle ? (ushort)203 : (ushort)252;
                 default: throw new NotSupportedException("The parameter type is not supported yet.");
             }
@@ -325,6 +326,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 case DbType.AnsiString:
                 case DbType.StringFixedLength:
                 case DbType.AnsiStringFixedLength:
+                case DbType.Xml:
                     if (!(value is string text)) break;
                     CheckLength(writer, clientEncoding.GetByteCount(text));
                     WriteBytes(writer, clientEncoding.GetBytes(text));

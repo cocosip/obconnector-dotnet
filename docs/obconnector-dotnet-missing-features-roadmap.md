@@ -76,12 +76,13 @@ MySQL reader 结果。该证据只把首个 input-only 子集提升到 `P4`，�
 
 | 类型 | OceanBase 判断 | Java 2.4.14 判断 | .NET 判断 |
 | --- | --- | --- | --- |
-| XMLType | 服务端 Oracle 模式条件能力 | 没有确认到通用 XMLType wire/value codec；Java 的 SQLXML 路径明确拒绝 | 没有专用 codec；当前只能使用服务端转换成已支持标量 |
+| XMLType | 服务端 Oracle 模式条件能力；当前目标已确认 type 160 ownerless text 与 type 253 字符参数 wire | 没有确认到通用 XMLType wire/value codec；Java 的 SQLXML 路径明确拒绝 | 已有当前版本 String wire 子集；没有 binary/复杂 XML 专用 codec |
 | SDO_GEOMETRY | 服务端 Oracle 模式条件空间类型 | 有通用 OBJECT/ARRAY 复杂值路径和 `SDO_` 元数据查询特判；没有确认专用 SDO/WKB/SRID 契约 | 没有专用 codec、空间 API 或 SRID/WKB 契约 |
 | ANYDATA | 服务端 PL/系统类型，有独立限制，不能当普通持久列 | 没有确认到普通列通用 codec | 没有专用 codec；必须先确定是 PL 参数/结果还是持久列需求 |
 
-因此 T17 要加入开发清单，但第一步不是直接实现，而是先固定目标版本、可用形状、参数/结果
-方向和 wire。当前状态是 `P0 / 待证据`。官方和 Java 范围依据见[范围审计](obconnector-dotnet-scope-audit.md)。
+因此 T17 仍需按形状拆分，不能把当前 XMLType 子集扩大成完整 codec。XMLType 的当前字符串
+wire 子集为 `P4`，binary/复杂 payload 和更多 PL 方向仍为待证据；SDO/ANYDATA 的状态见
+D-10/D-11。官方和 Java 范围依据见[范围审计](obconnector-dotnet-scope-audit.md)。
 
 ### T18 VECTOR、RoaringBitmap、MySQL ARRAY
 
@@ -126,7 +127,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
 | D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退和 1295 text fallback 的客户端子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute 下的 locator LOB、输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
-| D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
+| D-09 | `P4`；4.4.2.2 `oracle-direct` 字符串 wire 子集；完整 XML codec 仍未关闭 | XMLType wire 调查与有条件 codec（T17） | 当前 type 160 ownerless text 结果可按严格 UTF-8 映射为 String；`DbType.Xml` 参数使用已验证的 type 253 字符串 wire；Java 2.4.14 的 SQLXML API 仍明确拒绝，不能把 Java API 缺失当成服务端限制 | 当前子集已覆盖普通 XMLTYPE 列、NULL、同步/异步 DML、metadata 和 PL 函数结果；binary XMLTYPE、带 owner 的复杂 payload、坏值/最大值和更广 PL OUT wire 仍待证据 | 保持当前子集的参数/结果/NULL/metadata 契约；取得稳定 binary/复杂 XML identity 后再扩展，不把现有 String 路径冒充完整 XML codec |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
 | D-12 | `P4`（a/b/c 的当前版本通用路径已分别验收） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，RoaringBitmap 查询为 BLOB/byte[]；Oracle ARRAY 归 D-04 | 其他版本、稀疏/嵌套形状和专用 codec 需求仍需单独 profile 证据 | a/c 复用 String，b 复用 Binary 读取并通过 `rb_build_varbinary(?)` 写入；不新增未经证实的专用 codec |
@@ -1407,7 +1408,7 @@ locator 输入误报成已支持能力。
 PrepareExecute 的 OUT/cursor/array 仍需 0xa1 专用请求和结果所有权，Oracle piece-data 仍逐片
 等待确认。Connector/J 2.4.14 同样没有可移植的 piece-data 流水化依据，因此不猜测实现。
 
-### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
+### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 
 本轮先固定服务端形状，再核对 Java 和 .NET 是否已有可复用的客户端类型路径。OceanBase
 官方 Oracle 模式文档[XMLType 概述][O8-xmltype]说明：XMLType 是 XML 数据的 SQL 数据类型，可以创建 XMLType 表或视图，
@@ -1422,33 +1423,32 @@ PrepareExecute 的 OUT/cursor/array 仍需 0xa1 专用请求和结果所有权�
 - 因此 Java 的 SQLXML 拒绝可以证明客户端 API 边界，不能证明 OceanBase 的 XMLType wire，
   也不能把 SQLXML 失败扩大为“服务端没有 XMLType”。
 
-当前 .NET 的边界也仍是显式拒绝：公开 `DbType` 枚举可以保存 `DbType.Xml`，但
-`PreparedParameters` 的 type-code 和 value writer 都没有 XML 分支，执行时会抛出
-`NotSupportedException`；`OceanBaseDbType`、`ResultColumn` 和结果 metadata 也没有 XMLType
-专用身份。因此目前只有用户自行通过 XML 函数或显式 CAST 转成已支持的 String/Binary/LOB
-路径这一种可审计的服务端转换方式，不能宣称原生 XMLType 参数或结果已完成。
+当前 .NET 已补齐观察到的字符串 wire 子集：`DbType.Xml` 参数按 type 253 的字符参数写入，
+`ResultColumn` 对 type 160、ownerless `XMLTYPE` 的 text 结果按严格 UTF-8 解码为 String，
+并公开 `XMLTYPE`/String metadata；NULL 仍按 `DBNull.Value` 发布，binary XMLTYPE 继续明确拒绝。
+该实现复用现有字符串编码和参数长度边界，没有新增未经证实的专用 `OceanBaseDbType` 或
+binary/XML DOM API。
 
 2026-10-31 的 Oracle 直连 profile（OceanBase 4.4.2.2）进一步固定了列形状：`CREATE TABLE (... XMLTYPE)`、
 `XMLTYPE('<a>患者</a>')` 插入和 `XMLSERIALIZE(DOCUMENT x AS CLOB)` 均成功；普通 `SELECT x` 的复杂列
-metadata 把类型名报告为 `XMLTYPE`，但 `ALL_TAB_COLUMNS` 返回的 `DATA_TYPE_OWNER` 为空。客户端已将该
-ownerless 形状从内部协议错误改为明确的 `NotSupportedException`，而序列化结果按现有 `CLOB` locator
-路径读取成功。进一步用同一租户、同一版本的 Connector/J 2.4.14 做普通查询和 server-prepare
+metadata 把类型名报告为 `XMLTYPE`，但 `ALL_TAB_COLUMNS` 返回的 `DATA_TYPE_OWNER` 为空。现在 .NET
+对该 ownerless text 形状使用严格 UTF-8 String 路径，NULL 保持 `DBNull.Value`；序列化结果继续按现有
+`CLOB` locator 路径读取。进一步用同一租户、同一版本的 Connector/J 2.4.14 做普通查询和 server-prepare
 对照：JDBC metadata 都是 `1111/COMPLEX`、Java 类 `ComplexData`；非空 XML 行的 `getObject()`
-仍为 null、`getBytes()` 长度为 0，只有 NULL 行报告 `wasNull=true`。该证据确认的是两种客户端
-都没有可用的 XMLType payload 解码路径和现有的服务端转换路径，不是 XMLType 原生 wire codec，
-也不能把 Java 的空值行为当成 .NET 应复制的结果语义。
+仍为 null、`getBytes()` 长度为 0，只有 NULL 行报告 `wasNull=true`。该证据确认 Java 没有可用的
+XMLType payload 解码路径；.NET 当前已针对同一观察到的 ownerless text wire 提供受限 String
+路径。这仍不是完整 XMLType 原生 codec，也不能把 Java 的空值行为当成 .NET 应复制的结果语义。
 
-2026-11-01 使用项目 User Secrets 的 `oracle-direct` profile 复核 `XmlProbeTests` **1/1** 通过；
-该复核确认 XMLTYPE DDL/DML、普通列 ownerless metadata 拒绝、PL 函数返回的同类 ownerless
-形状拒绝，以及 `XMLSERIALIZE` 的 CLOB 读取路径，未设置数据库凭据环境变量。PL 函数由服务端
-成功创建并执行到结果 metadata；.NET 在发送后按“named complex result without an owner”拒绝，
-没有把它误判成服务端缺少 XMLTYPE。
+2026-11-02 使用项目 User Secrets 的 `oracle-direct` profile 复核 `XmlProbeTests` **2/2** 通过
+（异步、同步），未设置数据库凭据环境变量。回归覆盖 XMLTYPE DDL、服务端构造值、`DbType.Xml`
+非空/NULL DML、普通列的 type 160 ownerless text metadata/值、PL 函数返回的同类 text 结果，
+以及 `XMLSERIALIZE→CLOB` 的既有 locator 路径；单元测试覆盖参数 bytes、NULL、metadata、严格
+UTF-8 和 binary 结果拒绝。
 
-调查结论：D-09 仍为 `P0 / 待 wire 与形状`，本轮不新增 `OceanBaseDbType.Xml`，也不把它
-猜测映射成 String、BLOB 或现有 OBJECT codec。重新开启实现前，需要目标 OceanBase 版本和
-Oracle 直连 profile 提供 XMLType 普通列与 PL 参数/输出的 metadata/type code、NULL、字符编码、
-最大值和坏值行为；其中任一形状未确认，都保持发送前拒绝。Java SQLXML 的拒绝不满足
-“服务端限制且 Java 同样失败”的关闭条件。
+因此 D-09 的当前字符串 wire 子集达到 `P4`，但父任务仍未全部关闭。未关闭项是 binary XMLTYPE、
+带 owner 的复杂 XML payload、坏字节/最大值边界、更多 PL OUT/INOUT 形状和跨版本部署证据。
+Connector/J 2.4.14 的 SQLXML API 仍明确拒绝；这只能说明 Java 没有对应公开 API，不能把这些
+未验证形状归因为服务端限制。只有取得稳定 type identity 和完整 wire 后，才扩展现有 String 子集。
 
 ### D-10：SDO_GEOMETRY wire 形状调查（2026-11-01，`P4`）
 

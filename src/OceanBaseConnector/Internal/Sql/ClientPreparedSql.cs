@@ -68,6 +68,7 @@ namespace OceanBaseConnector.Internal.Sql
                 !(mode == OceanBaseCompatibilityMode.Oracle && (provider == OceanBaseDbType.NChar || provider == OceanBaseDbType.NVarchar2))) throw Unsupported();
             var type = parameter.DbType;
             if (type != DbType.String && type != DbType.AnsiString && type != DbType.StringFixedLength && type != DbType.AnsiStringFixedLength &&
+                type != DbType.Xml &&
                 type != DbType.Binary && type != DbType.Boolean && type != DbType.Decimal &&
                 type != DbType.SByte && type != DbType.Byte && type != DbType.Int16 && type != DbType.UInt16 &&
                 type != DbType.Int32 && type != DbType.UInt32 && type != DbType.Int64 && type != DbType.UInt64 &&

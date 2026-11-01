@@ -97,13 +97,31 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public void XmlParametersDoNotGuessStringOrBinaryWire()
+        public void XmlParametersUseTheVerifiedStringWire()
         {
-            foreach (var value in new object?[] { "<root />", DBNull.Value })
-            {
-                var parameter = new OceanBaseParameter { DbType = DbType.Xml, Value = value };
-                Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }));
-            }
+            var value = new OceanBaseParameter { DbType = DbType.Xml, Value = "<root>患者</root>" };
+            var payload = PreparedParameters.Encode(new[] { value });
+            Assert.Equal(new byte[] { 0, 1, 253, 0, 19, 60, 114, 111, 111, 116, 62, 230, 130, 163, 232, 128, 133, 60, 47, 114, 111, 111, 116, 62 }, payload);
+
+            var nullValue = new OceanBaseParameter { DbType = DbType.Xml, Value = DBNull.Value };
+            Assert.Equal(new byte[] { 1, 1, 6, 0 }, PreparedParameters.Encode(new[] { nullValue }));
+            Assert.Throws<ArgumentException>(() => PreparedParameters.Encode(new[]
+                { new OceanBaseParameter { DbType = DbType.Xml, Value = new byte[] { 1 } } }));
+        }
+
+        [Fact]
+        public void XmlTypeTextResultUsesStringMetadataAndValue()
+        {
+            var packet = ComplexColumn(schema: "", name: "XMLTYPE");
+            packet[^1] = 251;
+            var column = ResultColumn.Parse(packet, OceanBaseCompatibilityMode.Oracle, textResult: true);
+            Assert.Equal("XMLTYPE", column.DataTypeName);
+            Assert.Equal(typeof(string), column.FieldType);
+            Assert.Equal(OceanBaseDbType.String, column.ProviderType);
+            Assert.Equal("<a>患者</a>", column.Decode(System.Text.Encoding.UTF8.GetBytes("<a>患者</a>")));
+            Assert.Equal(DBNull.Value, column.Decode(null));
+            Assert.Throws<System.Text.DecoderFallbackException>(() => column.Decode(new byte[] { 0xFF }));
+            Assert.Throws<NotSupportedException>(() => column.DecodeBinary(new byte[] { 1 }));
         }
 
         [Fact]

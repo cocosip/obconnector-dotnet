@@ -21,6 +21,19 @@ public sealed class XmlProbeTests
         var table = db.NewObject("TABLE");
         await db.ExecuteAsync(connection, "CREATE TABLE " + table + " (id NUMBER, x XMLTYPE)", CancellationToken.None);
         await db.ExecuteAsync(connection, "INSERT INTO " + table + " VALUES (1, XMLTYPE('<a>患者</a>'))", CancellationToken.None);
+        await using (var insert = db.Command(connection, "INSERT INTO " + table + " VALUES (:id, :x)"))
+        {
+            DatabaseContext.Parameter(insert, "id", 2);
+            DatabaseContext.Parameter(insert, "x", "<b>绑定</b>", DbType.Xml);
+            insert.Prepare();
+            Assert.Equal(1, insert.ExecuteNonQuery());
+        }
+        await using (var nullInsert = db.Command(connection, "INSERT INTO " + table + " VALUES (:id, :x)"))
+        {
+            DatabaseContext.Parameter(nullInsert, "id", 3);
+            DatabaseContext.Parameter(nullInsert, "x", DBNull.Value, DbType.Xml);
+            Assert.Equal(1, await nullInsert.ExecuteNonQueryAsync());
+        }
         var function = "OBI_" + Guid.NewGuid().ToString("N").Substring(0, 20).ToUpperInvariant();
         db.RegisterCleanup("FUNCTION", function, async () =>
         {
@@ -36,37 +49,32 @@ public sealed class XmlProbeTests
             while (await metadataReader.ReadAsync())
                 Console.WriteLine($"XML owner lookup: {metadataReader.GetValue(0)?.ToString() ?? "NULL"} / {metadataReader.GetValue(1)?.ToString() ?? "NULL"}");
         }
-        OceanBaseException? nativeError = null;
-        try
+        await using (var nativeCommand = db.Command(connection, "SELECT x FROM " + table + " ORDER BY id"))
         {
-            await using var schemaCommand = db.Command(connection, "SELECT x FROM " + table);
-            await using var schemaReader = await schemaCommand.ExecuteReaderAsync(CommandBehavior.SchemaOnly);
-            var schema = schemaReader.GetColumnSchema()[0];
-            Console.WriteLine($"XML schema: {schema.DataTypeName} / {schema.DataType?.FullName} / {schema.ColumnName}");
+            await using var nativeReader = await nativeCommand.ExecuteReaderAsync();
+            var schema = nativeReader.GetColumnSchema()[0];
+            Assert.Equal("XMLTYPE", schema.DataTypeName);
+            Assert.Equal(typeof(string), schema.DataType);
+            Assert.Equal(typeof(string), nativeReader.GetProviderSpecificFieldType(0));
+            Assert.Equal(1, nativeReader.FieldCount);
+            Assert.True(await nativeReader.ReadAsync());
+            Assert.Equal("<a>患者</a>\n", nativeReader.GetString(0));
+            Assert.True(await nativeReader.ReadAsync());
+            Assert.Equal("<b>绑定</b>\n", nativeReader.GetString(0));
+            Assert.True(await nativeReader.ReadAsync());
+            Assert.True(nativeReader.IsDBNull(0));
+            Assert.False(await nativeReader.ReadAsync());
         }
-        catch (OceanBaseException error)
-        {
-            nativeError = error;
-            Console.WriteLine($"XML native query rejected: {error.GetType().FullName}: {error.Message}");
-        }
-        Assert.NotNull(nativeError);
-        Assert.IsType<NotSupportedException>(nativeError.InnerException);
         await connection.DisposeAsync();
         await using var functionConnection = await db.OpenAsync();
-        Exception? functionError = null;
-        try
+        await using (var functionCommand = db.Command(functionConnection, "SELECT " + function + "() FROM DUAL"))
         {
-            await using var functionCommand = db.Command(functionConnection, "SELECT " + function + "() FROM DUAL");
-            await using var functionReader = await functionCommand.ExecuteReaderAsync(CommandBehavior.SchemaOnly);
-            _ = functionReader.GetColumnSchema();
+            await using var functionReader = await functionCommand.ExecuteReaderAsync();
+            var schema = functionReader.GetColumnSchema()[0];
+            Assert.Equal("XMLTYPE", schema.DataTypeName);
+            Assert.True(await functionReader.ReadAsync());
+            Assert.Equal("<a>患者</a>\n", functionReader.GetString(0));
         }
-        catch (NotSupportedException error)
-        {
-            functionError = error;
-            Console.WriteLine($"XML PL return rejected: {error.GetType().FullName}: {error.Message}");
-        }
-        Assert.NotNull(functionError);
-        Assert.IsType<NotSupportedException>(functionError);
         await functionConnection.DisposeAsync();
         await using var serializedConnection = await db.OpenAsync();
         await using var command = db.Command(serializedConnection, "SELECT XMLSERIALIZE(DOCUMENT x AS CLOB) FROM " + table);
@@ -77,5 +85,47 @@ public sealed class XmlProbeTests
         Assert.IsType<OceanBaseLob>(reader.GetValue(0));
         Console.WriteLine($"XML serialized: {reader.GetDataTypeName(0)} / {reader.GetFieldType(0)} / {reader.GetValue(0)?.GetType().FullName ?? "NULL"}");
         while (await reader.ReadAsync()) { }
+    }
+
+    [IntegrationFact]
+    public void ProbeXmlTypeWireSync()
+    {
+        var profile = IntegrationEnvironment.Profiles.FirstOrDefault(p => p.Oracle && p.CreateObjects && p.HasTag("direct"));
+        if (profile is null) throw new InvalidOperationException("An Oracle direct createObjects profile is required.");
+        var db = new DatabaseContext(profile);
+        try
+        {
+            using var connection = db.CreateConnection();
+            connection.Open();
+            var table = db.NewObject("TABLE");
+            using (var create = db.Command(connection, "CREATE TABLE " + table + " (id NUMBER, x XMLTYPE)"))
+                create.ExecuteNonQuery();
+            using (var insert = db.Command(connection, "INSERT INTO " + table + " VALUES (:id, :x)"))
+            {
+                DatabaseContext.Parameter(insert, "id", 1);
+                DatabaseContext.Parameter(insert, "x", "<sync>同步</sync>", DbType.Xml);
+                insert.Prepare();
+                Assert.Equal(1, insert.ExecuteNonQuery());
+            }
+            using (var insertNull = db.Command(connection, "INSERT INTO " + table + " VALUES (:id, :x)"))
+            {
+                DatabaseContext.Parameter(insertNull, "id", 2);
+                DatabaseContext.Parameter(insertNull, "x", DBNull.Value, DbType.Xml);
+                Assert.Equal(1, insertNull.ExecuteNonQuery());
+            }
+            using var query = db.Command(connection, "SELECT x FROM " + table + " ORDER BY id");
+            using var reader = query.ExecuteReader();
+            Assert.Equal("XMLTYPE", reader.GetDataTypeName(0));
+            Assert.Equal(typeof(string), reader.GetFieldType(0));
+            Assert.True(reader.Read());
+            Assert.Equal("<sync>同步</sync>\n", reader.GetString(0));
+            Assert.True(reader.Read());
+            Assert.True(reader.IsDBNull(0));
+            Assert.False(reader.Read());
+        }
+        finally
+        {
+            db.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
     }
 }

@@ -84,6 +84,7 @@ namespace OceanBaseConnector.UnitTests
                 else
                 {
                     Assert.Contains("NVARCHAR2", names); Assert.Contains("ARRAY", names); Assert.Contains("OBJECT", names);
+                    Assert.Contains("XMLTYPE", names);
                     Assert.DoesNotContain("JSON", names); Assert.DoesNotContain("BIT", names);
                     Assert.DoesNotContain("ENUM", names); Assert.DoesNotContain("SET", names); Assert.DoesNotContain("GEOMETRY", names);
                     var rowid = DataTypeRow(table, "ROWID", typeof(string));
@@ -99,6 +100,7 @@ namespace OceanBaseConnector.UnitTests
                     Assert.True((bool)DataTypeRow(table, "OBJECT", typeof(OceanBaseComplexValue))["RequiresTypeName"]);
                     Assert.False((bool)DataTypeRow(table, "ARRAY", typeof(OceanBaseComplexValue))["RequiresTypeName"]);
                     Assert.Contains("Use Lob Locators", (string)DataTypeRow(table, "BLOB", typeof(OceanBaseLob))["RequiredFeatures"]);
+                    Assert.Contains("DbType.Xml", (string)DataTypeRow(table, "XMLTYPE", typeof(string))["RequiredFeatures"]);
                 }
                 using var meta = connection.GetSchema();
                 var descriptor = Assert.Single(meta.Rows.Cast<DataRow>(), row => (string)row[0] == "DataTypes");
