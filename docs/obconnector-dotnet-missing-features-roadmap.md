@@ -125,7 +125,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、Oracle Stream piece-data 回退和 1295 text fallback 的客户端子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute 下的 Stream、Oracle piece-data 流水化、LOB、输出、cursor、array binding；代理/OB20 和真实租户原生 1295 仍未验收 |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、Oracle Stream piece-data 回退和 1295 text fallback 的客户端子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute 下的 Stream、Oracle piece-data 流水化、LOB、输出、cursor、array binding；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
 | D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
@@ -605,7 +605,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
 | D-04d 复杂 cursor 成员 | `P2`；SQL OBJECT 持久类型子形状为当前目标服务端限制，PL-only 形状仍待证据 | 同一租户 `CREATE TYPE ... AS OBJECT (c SYS_REFCURSOR)` 在 Java 返回 `PLS-00201`、.NET 返回 `42000`；两者均在类型创建阶段失败，因此跳过该持久类型子形状的客户端改动。完整 child FETCH/所有权及 PL-only 记录/返回形状尚未确认；D-03 的普通列失败不能覆盖这些形状 |
-| D-04e 复杂 text 结果及其余 collection 形状 | `P4`（named OBJECT 标量/递归 OBJECT text 子集）；RAW/DATE/TIMESTAMP text 形状为当前服务端限制；其余 `P2` | named OBJECT 的 NUMBER、VARCHAR2/CHAR、NCHAR/NVARCHAR2 及递归 named OBJECT text 结果已实现并验收；当前 RAW/DATE/TIMESTAMP text wire 重复同一 RAW payload，Connector/J 同交互也返回相同字符串且 `getObject` 为 null，因此跳过客户端 parser；collection、LOB/cursor 仍明确拒绝。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
+| D-04e 复杂 text 结果及其余 collection 形状 | `P4`（named OBJECT 标量/递归 OBJECT text 子集）；RAW/DATE/TIMESTAMP text 形状为当前服务端限制；collection 构造 text 结果已确认是 String；其余 `P2` | named OBJECT 的 NUMBER、VARCHAR2/CHAR、NCHAR/NVARCHAR2 及递归 named OBJECT text 结果已实现并验收；当前 RAW/DATE/TIMESTAMP text wire 重复同一 RAW payload，Connector/J 同交互也返回相同字符串且 `getObject` 为 null，因此跳过客户端 parser；命名 collection 构造结果 metadata 为 `VARCHAR2`，.NET/Connector-J 均按 String 返回，不新增 complex parser；LOB/cursor 仍明确拒绝。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
 
 本模块先验证 a/b 已有实现的边界；若实库暴露缺陷，先保留失败证据、补最小回归，再决定
 共享修复。所有新增计划、结果及提交号仍记录在本文：
@@ -866,6 +866,12 @@ type name、成员数量、递归深度和总成员预算；collection、anonymo
 不是 .NET parser 缺少日期格式；本轮不新增 RAW/DATE/TIMESTAMP text 解析或猜测性转换，按
 “服务端不支持且 Java 同样交互”关闭该形状。后续若版本/租户提供每个成员正确身份的 text
 payload，再重新采集 Java/.NET 对照并开启 D-04e；collection、LOB/cursor text 形状仍未关闭。
+
+同一 profile 另建 `TABLE OF VARCHAR2(80)` 命名集合并执行构造查询。该结果 metadata 在 .NET
+和 Connector/J 2.4.14 中都是 `VARCHAR2`，字段值都是普通 `String`，内容为类型名加字符串成员；
+两 SDK 没有收到 type 160 collection wire。因此这是服务端选择的标量结果身份，不是 .NET
+缺少 collection text parser；持久 nested-table 列、collection NULL OBJECT 身份和 LOB/cursor
+复杂 text 结果仍按各自未关闭边界处理。
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
@@ -1241,6 +1247,19 @@ wire/生命周期证据，不外推真实租户原生 1295、代理/OB20 或其�
 
 该子项关闭的是 D-08 的客户端 text fallback 缺口；Oracle piece-data 流水化、LOB/OUT/cursor/array、
 取消/超时扩展、代理/OB20 和收益基线仍未完成。
+
+#### D-08f：已发送组的 pending response 取消归属（`P3`，2026-11-01）
+
+新增 `BatchFaultTests.BatchMultiSendPendingResponseCancellationPublishesPrefixAndUnknownSecond`，
+用 loopback 让第一条响应先成功、第二条响应保持挂起，分别覆盖 caller token、`batch.Cancel()` 和
+batch timeout。三种路径均确认第一条 `RecordsAffected=2` 已发布；第二条保持 `-1`；错误归属第二个
+batch command；`IsExecutionOutcomeUnknown=true`；连接进入 `Broken`；不会发送或重放 suffix。
+该回归 **3/3 通过**；随后完整 UnitTests **8731/8731** 通过，solution Release build 五个产品目标框架
+**0 warning/0 error**，新增测试文件的定向 whitespace 检查和 `git diff --check` 也通过。补齐的是
+客户端状态归属证据，不是服务端已执行结果的查账或自动重放。
+
+该子项不关闭 Oracle piece-data 流水化、LOB/OUT/cursor/array、代理/OB20、收益基线，亦不代表
+所有网络断点和更大 unknown-outcome 矩阵已验收；这些继续保持 D-08 的后续边界。
 
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
 

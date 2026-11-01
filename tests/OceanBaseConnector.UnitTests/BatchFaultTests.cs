@@ -117,6 +117,47 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
+        [InlineData("token")]
+        [InlineData("cancel")]
+        [InlineData("timeout")]
+        public async Task BatchMultiSendPendingResponseCancellationPublishesPrefixAndUnknownSecond(string origin)
+        {
+            var firstResponse = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var server = Server(async channel =>
+            {
+                await StatementCommand(channel, 22); await Prepared(channel, 90, 0);
+                await StatementCommand(channel, 22); await Prepared(channel, 91, 0);
+                Assert.Equal(90, (await StatementCommand(channel, 23))[1]);
+                Assert.Equal(91, (await StatementCommand(channel, 23))[1]);
+                channel.BeginResponse(); await channel.WritePacketAsync(Ok(2)); firstResponse.SetResult();
+                try { Assert.Equal(0, await channelStreamRead(channel)); } catch (IOException) { }
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true;Batch Multi Send Number=2");
+            using var cancellation = new CancellationTokenSource();
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch();
+                if (origin == "timeout") batch.Timeout = 1;
+                var first = BatchItem(batch, "select first"); var second = BatchItem(batch, "select second");
+                var execution = batch.ExecuteNonQueryAsync(cancellation.Token);
+                await firstResponse.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+                while (first.RecordsAffected != 2 && DateTime.UtcNow < deadline) await Task.Delay(10);
+                Assert.Equal(2, first.RecordsAffected);
+                if (origin == "token") cancellation.Cancel(); else if (origin == "cancel") batch.Cancel();
+                var error = await Assert.ThrowsAsync<OceanBaseException>(() => execution.WaitAsync(TimeSpan.FromSeconds(10)));
+                Assert.True(error.IsExecutionOutcomeUnknown);
+                Assert.Same(second, error.BatchCommand);
+                Assert.Equal(-1, second.RecordsAffected);
+                if (origin == "token") Assert.Equal(cancellation.Token, Assert.IsAssignableFrom<OperationCanceledException>(error.InnerException).CancellationToken);
+                if (origin == "timeout") Assert.IsType<TimeoutException>(error.InnerException);
+                Assert.Equal(ConnectionState.Broken, connection.State);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData(false, false)]
         [InlineData(false, true)]
         [InlineData(true, false)]
