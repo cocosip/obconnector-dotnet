@@ -605,7 +605,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
 | D-04d 复杂 cursor 成员 | `P2`；SQL OBJECT 持久类型子形状为当前目标服务端限制，PL-only 形状仍待证据 | 同一租户 `CREATE TYPE ... AS OBJECT (c SYS_REFCURSOR)` 在 Java 返回 `PLS-00201`、.NET 返回 `42000`；两者均在类型创建阶段失败，因此跳过该持久类型子形状的客户端改动。完整 child FETCH/所有权及 PL-only 记录/返回形状尚未确认；D-03 的普通列失败不能覆盖这些形状 |
-| D-04e 复杂 text 结果及其余 collection 形状 | `P4`（named OBJECT 标量/递归 OBJECT text 子集）；其余 `P2` | named OBJECT 的 NUMBER、VARCHAR2/CHAR、NCHAR/NVARCHAR2 及递归 named OBJECT text 结果已实现并验收；collection、LOB/cursor、RAW、时间成员仍明确拒绝。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
+| D-04e 复杂 text 结果及其余 collection 形状 | `P4`（named OBJECT 标量/递归 OBJECT text 子集）；RAW/DATE/TIMESTAMP text 形状为当前服务端限制；其余 `P2` | named OBJECT 的 NUMBER、VARCHAR2/CHAR、NCHAR/NVARCHAR2 及递归 named OBJECT text 结果已实现并验收；当前 RAW/DATE/TIMESTAMP text wire 重复同一 RAW payload，Connector/J 同交互也返回相同字符串且 `getObject` 为 null，因此跳过客户端 parser；collection、LOB/cursor 仍明确拒绝。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
 
 本模块先验证 a/b 已有实现的边界；若实库暴露缺陷，先保留失败证据、补最小回归，再决定
 共享修复。所有新增计划、结果及提交号仍记录在本文：
@@ -852,6 +852,20 @@ type name、成员数量、递归深度和总成员预算；collection、anonymo
 | Oracle 实库 | `ComplexTextResultTests` **4/4** 通过，0 skip：`oracle-direct`、sync/async × buffered/sequential；User Secrets `ConnectionStrings:Oracle`，未设置凭据环境变量 |
 | 走查边界 | 只扩展 Java 与目标 wire 已证明的递归 named OBJECT 标量叶子；collection/复杂成员、持久 nested-table 列和集合 NULL OBJECT 仍保持原拒绝/服务端边界 |
 | 提交 | `186c813`（`✨ feat(oracle): support recursive named OBJECT text results`）；D-04e 递归 named OBJECT 标量子集达到 `P4`，其余形状仍为 `P2` |
+
+#### D-04e RAW/DATE/TIMESTAMP text 成员（当前目标服务端限制，2026-11-01）
+
+为判断是否继续扩大 text parser，使用项目 User Secrets 的 `oracle-direct` profile 建立
+`OBJECT (r RAW(8), d DATE, ts TIMESTAMP(9))`，写入不同的 RAW、DATE 和 TIMESTAMP 值，
+然后读取普通 text 结果。OceanBase 4.4.2.2 返回的 payload 是同一个 RAW 字符串重复到三个成员，
+形如 `TYPE('0027FF\\0', '0027FF\\0', '0027FF\\0')`；最后一个字符串还带 NUL。该 payload
+无法证明任何 DATE/TIMESTAMP 成员身份，.NET 当前 parser 在发送后安全拒绝未支持成员。
+
+同一对象、同一租户、同一写入值用 Connector/J 2.4.14 重放：`ResultSet.getString` 返回完全
+相同的重复 RAW payload，`ResultSet.getObject` 返回 `null`。因此这是服务端 text wire 形状，
+不是 .NET parser 缺少日期格式；本轮不新增 RAW/DATE/TIMESTAMP text 解析或猜测性转换，按
+“服务端不支持且 Java 同样交互”关闭该形状。后续若版本/租户提供每个成员正确身份的 text
+payload，再重新采集 Java/.NET 对照并开启 D-04e；collection、LOB/cursor text 形状仍未关闭。
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
