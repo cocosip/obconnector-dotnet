@@ -840,6 +840,7 @@ type name、成员数量、递归深度和总成员预算；collection、anonymo
 | 红/绿 | 新增 nested 正向、collection/类型名/深度负向用例；新增后先按预期在旧 parser 红灯，修复后 `ComplexValueCodecTests` **63/63**、共享 `TextCommandTests` **5594/5594** 通过 |
 | Oracle 实库 | `ComplexTextResultTests` **4/4** 通过，0 skip：`oracle-direct`、sync/async × buffered/sequential；User Secrets `ConnectionStrings:Oracle`，未设置凭据环境变量 |
 | 走查边界 | 只扩展 Java 与目标 wire 已证明的递归 named OBJECT 标量叶子；collection/复杂成员、持久 nested-table 列和集合 NULL OBJECT 仍保持原拒绝/服务端边界 |
+| 提交 | `186c813`（`✨ feat(oracle): support recursive named OBJECT text results`）；D-04e 递归 named OBJECT 标量子集达到 `P4`，其余形状仍为 `P2` |
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
