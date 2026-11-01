@@ -247,6 +247,33 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
+        public async Task BatchMultiSendFallsBackToClientPreparedTextWhenServerPrepareIsUnsupported(bool asynchronous)
+        {
+            var server = MySqlProcedureServer(async channel =>
+            {
+                await StatementCommand(channel, 22); await channel.WritePacketAsync(UnsupportedPrepare());
+                await StatementCommand(channel, 22); await channel.WritePacketAsync(UnsupportedPrepare());
+                Assert.Equal("select (1)", System.Text.Encoding.UTF8.GetString(await StatementCommand(channel, 3), 1, 10));
+                Assert.Equal("select (2)", System.Text.Encoding.UTF8.GetString(await StatementCommand(channel, 3), 1, 10));
+                channel.BeginResponse(); await channel.WritePacketAsync(Ok(1));
+                channel.BeginResponse(); await channel.WritePacketAsync(Ok(1));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true;Batch Multi Send Number=2");
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch();
+                var first = BatchItem(batch, "select ?"); first.Parameters.Add(new OceanBaseParameter { Value = 1 });
+                var second = BatchItem(batch, "select ?"); second.Parameters.Add(new OceanBaseParameter { Value = 2 });
+                Assert.Equal(2, asynchronous ? await batch.ExecuteNonQueryAsync() : batch.ExecuteNonQuery());
+                Assert.Equal(1, first.RecordsAffected); Assert.Equal(1, second.RecordsAffected);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task BatchMultiSendWritesMySqlLongDataBeforeDrainingResponses(bool asynchronous)
         {
             var server = MySqlProcedureServer(async channel =>

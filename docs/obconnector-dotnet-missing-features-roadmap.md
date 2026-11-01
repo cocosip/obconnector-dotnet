@@ -125,7 +125,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取和 Oracle Stream piece-data 回退的真实子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute 下的 Stream、Oracle piece-data 流水化、LOB、输出、cursor、array binding 和 text fallback |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、Oracle Stream piece-data 回退和 1295 text fallback 的客户端子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute 下的 Stream、Oracle piece-data 流水化、LOB、输出、cursor、array binding；代理/OB20 和真实租户原生 1295 仍未验收 |
 | D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
@@ -1138,7 +1138,7 @@ Oracle session time zone/national character set，必要时按已解析上下文
 矩阵 **12/12 通过**（DML/scalar/reader × sync/async，`BatchMultiSendNumber=2`）。首个子集的
 服务端已知响应的 prefix/error/suffix 边界已在 D-08c 的 MySQL/Oracle 直连 4/4 子集中验收；更大
 错误排序矩阵、收益基线和代理/OB20 行为仍未验收；Oracle PrepareExecute、Oracle piece-data
-流水化、输出/LOB/cursor/array 和 text fallback 仍明确不在首个子集，因此这些仍是 D-08 的后续缺口。reader 的 MySQL/Oracle
+流水化、输出/LOB/cursor/array 仍明确不在首个子集，因此这些仍是 D-08 的后续缺口。reader 的 MySQL/Oracle
 直连 profile sync/async 均已通过；本轮没有把这组结果外推到代理或其他版本。
 
 新增 `Batches/MultiSendTests.cs`，覆盖 MySQL/Oracle create-objects profile 的 input-only
@@ -1169,7 +1169,7 @@ MySQL Stream 的当前 input-only multi-send 存储/读取子集提升为 `P4`�
 服务端版本的外推。
 
 本子集仍未关闭 Oracle piece-data 流水化、取消、代理/OB20、
-LOB/OUT/cursor/array 和 text fallback；这些继续按 D-08 后续缺口处理。
+LOB/OUT/cursor/array；这些继续按 D-08 后续缺口处理。
 
 #### D-08b：Oracle batch Stream 的 piece-data 安全回退（2026-11-01，`P4` 子集）
 
@@ -1210,6 +1210,23 @@ User Secrets 的 `oracle-direct` profile 中同时启用 `UseBatchMultiSend`、`
 该子项关闭的是三项选项叠加时的客户端安全回退缺口，不宣称 PrepareExecute 下的 Stream 已支持
 流水化或吞吐收益；piece-data 流水化、错误排序扩展、代理/OB20、LOB/OUT/cursor/array 和收益
 基线仍按各自 profile 继续验收。
+
+#### D-08e：server prepare 1295 的 batch text fallback（`P4` 子集，2026-11-01）
+
+此前 batch multi-send 在 `COM_STMT_PREPARE` 收到 `1295/HY000` 时直接拒绝，无法复用已经存在的
+client-prepared SQL 展开路径。本轮仅对无 Stream、无 output/cursor、普通 input-only text 命令开放该回退：
+每条 batch command 仍先尝试 server prepare；命中精确的 `1295/HY000` 后生成单条 `COM_QUERY`，并按
+text protocol 解析和排空对应结果。server prepared 成功路径继续使用 binary protocol，Stream fallback
+仍在发送前拒绝，避免重复消费流或伪造无响应流水化。
+
+新增 `BatchMultiSendFallsBackToClientPreparedTextWhenServerPrepareIsUnsupported`，loopback 覆盖
+两条命令先完成两次 prepare，再按顺序发送 `select (1)`/`select (2)` 并排空两个 text response，
+sync/async **2/2 通过**。本次验证还包括 BatchLifecycleTests **307/307**、完整 UnitTests
+**8733/8733** 和 solution Release build 五个产品目标框架 **0 warning/0 error**；这是客户端
+wire/生命周期证据，不外推真实租户原生 1295、代理/OB20 或其他服务端版本。
+
+该子项关闭的是 D-08 的客户端 text fallback 缺口；Oracle piece-data 流水化、LOB/OUT/cursor/array、
+取消/超时扩展、代理/OB20 和收益基线仍未完成。
 
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
 

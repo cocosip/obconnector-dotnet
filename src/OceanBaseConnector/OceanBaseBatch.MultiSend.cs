@@ -155,7 +155,7 @@ namespace OceanBaseConnector
                 {
                     exchange.BatchCommand = operation.Items[i];
                     exchange.BeginBatchResponse();
-                    var count = ConsumeBatchResponse(exchange, operation, captureScalar && !scalar.Set, scalar);
+                    var count = ConsumeBatchResponse(exchange, operation, captureScalar && !scalar.Set, scalar, requests[i].Binary);
                     operation.Items[i].Affected = operation.Counts[i] = count;
                     if (count >= 0) { anyAffected = true; total = checked(total + count); }
                 }
@@ -190,7 +190,7 @@ namespace OceanBaseConnector
                 {
                     exchange.BatchCommand = operation.Items[i];
                     exchange.BeginBatchResponse();
-                    var count = await ConsumeBatchResponseAsync(exchange, operation, captureScalar && !scalar.Set, scalar).ConfigureAwait(false);
+                    var count = await ConsumeBatchResponseAsync(exchange, operation, captureScalar && !scalar.Set, scalar, requests[i].Binary).ConfigureAwait(false);
                     operation.Items[i].Affected = operation.Counts[i] = count;
                     if (count >= 0) { anyAffected = true; total = checked(total + count); }
                 }
@@ -205,9 +205,9 @@ namespace OceanBaseConnector
             internal bool Set;
         }
 
-        private static int ConsumeBatchResponse(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar)
+        private static int ConsumeBatchResponse(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar, bool binary)
         {
-            var result = new QueryResult(exchange, binary: true, completeExchange: false);
+            var result = new QueryResult(exchange, binary, completeExchange: false);
             result.Start();
             using var reader = new OceanBaseDataReader(exchange, result, operation.Connection, operation.Session!, CommandBehavior.Default, leaveExchangeOpen: true);
             if (captureScalar)
@@ -220,9 +220,9 @@ namespace OceanBaseConnector
             return reader.RecordsAffected;
         }
 
-        private static async Task<int> ConsumeBatchResponseAsync(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar)
+        private static async Task<int> ConsumeBatchResponseAsync(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar, bool binary)
         {
-            var result = new QueryResult(exchange, binary: true, completeExchange: false);
+            var result = new QueryResult(exchange, binary, completeExchange: false);
             await result.StartAsync(operation.Token).ConfigureAwait(false);
             await using var reader = new OceanBaseDataReader(exchange, result, operation.Connection, operation.Session!, CommandBehavior.Default, leaveExchangeOpen: true);
             if (captureScalar)

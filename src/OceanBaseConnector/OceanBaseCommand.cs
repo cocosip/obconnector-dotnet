@@ -432,14 +432,25 @@ namespace OceanBaseConnector
                 var zone = operation.Exchange.EnsureSessionTimeZone();
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = operation.Exchange.EnsureNationalCharacterSet();
-                var statement = EnsurePrepared(operation) ?? throw new NotSupportedException("Batch multi-send requires server prepared statements.");
+                var statement = EnsurePrepared(operation, allowFallback: true);
+                if (statement == null)
+                {
+                    if (hasStreams) throw new NotSupportedException("Batch text fallback does not support stream parameters.");
+                    var context = ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, operation.Exchange.Mode)
+                        ? operation.Exchange.ReadMySqlLiteralContext() : null;
+                    var text = operation.Exchange.BuildClientPreparedSql(operation.Bindings, context, multiStatement: false, asynchronous: false)
+                        .GetAwaiter().GetResult();
+                    var fallback = SqlPacket(text, 3, operation.Exchange.ClientEncoding);
+                    operation.Exchange.Complete();
+                    return new OceanBaseBatchMultiSendRequest(fallback, 0, binary: false, longDataParameters: null);
+                }
                 ValidateBatchMultiSendColumns(statement);
                 var parameters = HasNationalParameters(operation.Bindings.Parameters)
                     ? PreparedParameters.Encode(operation.Bindings.Parameters, operation.Exchange.Mode, national, clientEncoding: operation.Exchange.ClientEncoding)
                     : operation.Parameters;
                 var request = PreparedParameters.Execute(statement.Id, parameters, cursor: false);
                 operation.Exchange.Complete();
-                return new OceanBaseBatchMultiSendRequest(request, statement.Id, hasStreams ? operation.Bindings.Parameters : null);
+                return new OceanBaseBatchMultiSendRequest(request, statement.Id, binary: true, hasStreams ? operation.Bindings.Parameters : null);
             }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }
@@ -461,14 +472,24 @@ namespace OceanBaseConnector
                 var zone = await operation.Exchange.EnsureSessionTimeZoneAsync(token).ConfigureAwait(false);
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = await operation.Exchange.EnsureNationalCharacterSetAsync(token).ConfigureAwait(false);
-                var statement = await EnsurePreparedAsync(operation, token).ConfigureAwait(false) ?? throw new NotSupportedException("Batch multi-send requires server prepared statements.");
+                var statement = await EnsurePreparedAsync(operation, token, allowFallback: true).ConfigureAwait(false);
+                if (statement == null)
+                {
+                    if (hasStreams) throw new NotSupportedException("Batch text fallback does not support stream parameters.");
+                    var context = ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, operation.Exchange.Mode)
+                        ? await operation.Exchange.ReadMySqlLiteralContextAsync(token).ConfigureAwait(false) : null;
+                    var text = await operation.Exchange.BuildClientPreparedSql(operation.Bindings, context, multiStatement: false, asynchronous: true).ConfigureAwait(false);
+                    var fallback = SqlPacket(text, 3, operation.Exchange.ClientEncoding);
+                    operation.Exchange.Complete();
+                    return new OceanBaseBatchMultiSendRequest(fallback, 0, binary: false, longDataParameters: null);
+                }
                 ValidateBatchMultiSendColumns(statement);
                 var parameters = HasNationalParameters(operation.Bindings.Parameters)
                     ? PreparedParameters.Encode(operation.Bindings.Parameters, operation.Exchange.Mode, national, clientEncoding: operation.Exchange.ClientEncoding)
                     : operation.Parameters;
                 var request = PreparedParameters.Execute(statement.Id, parameters, cursor: false);
                 operation.Exchange.Complete();
-                return new OceanBaseBatchMultiSendRequest(request, statement.Id, hasStreams ? operation.Bindings.Parameters : null);
+                return new OceanBaseBatchMultiSendRequest(request, statement.Id, binary: true, hasStreams ? operation.Bindings.Parameters : null);
             }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }
