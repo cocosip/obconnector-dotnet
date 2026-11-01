@@ -136,7 +136,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | 子项 | 进度/已确认 | 具体开发与验证范围 | 当前缺口 |
 | --- | --- | --- | --- |
 | D-12a VECTOR（当前版本稠密） | `P4`，4.4.2.2 MySQL 直连通用 String 子集 | `VECTOR(3)` DDL、NULL/文本值、参数绑定、显式/隐式 Prepare、结果 metadata 和独立读回；Java 2.4.14 同样返回 `CHAR`/`String` | 当前版本没有专用 wire/type code；`SPARSEVECTOR` 在目标服务端返回 1064，保留为版本边界 |
-| D-12b RoaringBitmap | `P4`；4.4.2.2 MySQL 直连通用 Binary/SQL 函数子集 | DDL、NULL/空集合、`rb_from_string`、64 位值、raw metadata、`rb_to_string`/`rb_to_array`、`rb_build_varbinary(?)` 回绑和坏 raw 行为已验收 | 查询返回 `BLOB`/`byte[]`；直接把 `byte[]` 绑定到 `ROARINGBITMAP` 列由服务端返回 `1235/0A000`，属于服务端 prepared DML 限制；未新增专用 provider type |
+| D-12b RoaringBitmap | `P4`；4.4.2.2 MySQL 直连通用 Binary/SQL 函数子集 | DDL、NULL/空集合、`rb_from_string`、64 位值、raw metadata、`rb_to_string`/`rb_to_array`、`rb_build_varbinary(?)` 回绑和坏 raw 行为已验收；真实集成回归 sync/async **2/2** | 查询返回 `BLOB`/`byte[]`；直接把 `byte[]` 绑定到 `ROARINGBITMAP` 列由服务端返回 `1235/0A000`，属于服务端 prepared DML 限制；未新增专用 provider type |
 | D-12c MySQL ARRAY | `P4`，4.4.2.2 MySQL 直连通用 String 子集 | `ARRAY(INT)` DDL、NULL/文本值、参数绑定、显式/隐式 Prepare、结果 metadata 和独立读回；Java 2.4.14 同样返回 `CHAR`/`String` | 当前版本没有专用 wire/type code；嵌套元素、专用参数 metadata 和其他版本仍待确认，不能用 Oracle 类型码 161 代替 |
 
 ### 第三阶段：已有代码的部署和故障验收
@@ -1511,6 +1511,12 @@ metadata 为 `BLOB`/`System.Byte[]`，raw 长度 15，`rb_to_string` 返回原�
 同一 `byte[]` 直接绑定到 `ROARINGBITMAP` 列稳定返回服务端 `1235/0A000`，坏 raw 也由服务端
 返回相同错误。该结果把直接 native prepared binding 归为服务端限制，现有 .NET Binary + SQL
 函数路径已覆盖当前版本可用子集，不新增 enum、parser 或 BIT/JSON/String 假映射。
+
+补充了可复现的 `MySql/RoaringBitmapTests.cs` 真实集成回归：MySQL 直连 profile 的 sync/async
+共 **2/2**，使用 User Secrets 连接串，不把凭据写入环境变量。测试覆盖 BLOB/`byte[]`
+metadata、普通集合、空集合、NULL、`uint64` 最大值、`rb_to_string`/`rb_to_array`、显式
+Prepare 的 `rb_build_varbinary(?)` 回绑，以及坏 raw 和直接 `byte[]` 绑定的已知服务端错误；
+回绑后的 raw 和集合文本由同一连接再次读回，失败调用后行数保持不变。
 
 ### A-01：池容量与高并发借还专项（2026-11-01，部分验收）
 
