@@ -63,7 +63,8 @@ namespace OceanBaseConnector.UnitTests
         public async Task ReusedPoolSessionMeasuresProbeWithoutRepeatingHandshake(bool asynchronous)
         {
             await using var server = Server(); using var capture = new Capture();
-            using var connection = new OceanBaseConnection(Configuration(server.Port, pooled: true));
+            var database = "diagnostics_" + Guid.NewGuid().ToString("N");
+            using var connection = new OceanBaseConnection(Configuration(server.Port, pooled: true, database: database));
             try
             {
                 await Open(connection, asynchronous); var session = connection.GetOpenSession();
@@ -147,7 +148,8 @@ namespace OceanBaseConnector.UnitTests
         {
             await using var server = Server(); using var capture = new Capture();
             var waitTimeout = completion == "elapsed" ? 1 : 30;
-            var configuration = Configuration(server.Port, pooled: true) + ";Pool Wait Timeout=" + waitTimeout;
+            var database = "diagnostics_" + Guid.NewGuid().ToString("N");
+            var configuration = Configuration(server.Port, pooled: true, database: database) + ";Pool Wait Timeout=" + waitTimeout;
             using var first = new OceanBaseConnection(configuration); using var second = new OceanBaseConnection(configuration);
             try
             {
@@ -225,7 +227,8 @@ namespace OceanBaseConnector.UnitTests
             await using var server = Server(); using var capture = new Capture();
             var probing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            using var connection = new OceanBaseConnection(Configuration(server.Port, pooled: true));
+            var database = "diagnostics_" + Guid.NewGuid().ToString("N");
+            using var connection = new OceanBaseConnection(Configuration(server.Port, pooled: true, database: database));
             try
             {
                 await Open(connection, asynchronous); connection.Close(); capture.Clear();
@@ -259,7 +262,8 @@ namespace OceanBaseConnector.UnitTests
                 Thread.Sleep(500);
             });
             cleanupListener.Start();
-            var configuration = Configuration(server.Port, pooled: true);
+            var database = "diagnostics_" + Guid.NewGuid().ToString("N");
+            var configuration = Configuration(server.Port, pooled: true, database: database);
             using var first = new OceanBaseConnection(configuration); using var second = new OceanBaseConnection(configuration);
             try
             {
