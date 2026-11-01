@@ -1,6 +1,6 @@
 # OceanBase .NET 缺失功能开发清单
 
-更新：2026-11-01。本文以当前源码及范围审计固定的 OceanBase 官方文档、Connector/J 2.4.14
+更新：2026-11-02。本文以当前源码及范围审计固定的 OceanBase 官方文档、Connector/J 2.4.14
 静态对照为依据。服务端状态沿用兼容性报告，除执行记录明确列出的复验外，不代表本日重跑。
 它回答三个问题：
 
@@ -888,6 +888,27 @@ payload，再重新采集 Java/.NET 对照并开启 D-04e；collection、LOB/cur
 两 SDK 没有收到 type 160 collection wire。因此这是服务端选择的标量结果身份，不是 .NET
 缺少 collection text parser；持久 nested-table 列、collection NULL OBJECT 身份和 LOB/cursor
 复杂 text 结果仍按各自未关闭边界处理。
+
+#### D-04e named OBJECT CLOB/BLOB text 结果（当前目标服务端限制，2026-11-02）
+
+为关闭复杂成员的下一种形状，使用同一 Oracle 4.4.2.2 `oracle-direct` profile 建立
+`OBJECT (child OBJECT (c CLOB, b BLOB, n NUMBER), marker NUMBER)`，通过普通 text 查询读取
+非空对象。Connector/J 2.4.14 的 metadata 为 `1111/COMPLEX`，`getObject()` 返回 `null`；
+`getString()` 返回的对象文本把 CLOB/BLOB 成员折叠成无法区分身份的重复字符串（本轮实测为
+`ROOT(CHILD('clob text', 'clob text', clob text), 9)`），`getBytes()` 也只是整个文本字段的
+字节，不提供成员 locator 或独立类型身份。
+
+同一 DDL、写入值和查询在 .NET 中预加载 named OBJECT 描述后，sync/async **2/2** 都在结果
+metadata 阶段以 `OceanBaseException` 结束，`IsExecutionOutcomeUnknown=true`，内部原因是
+复杂 text 结果包含不支持的 LOB 成员类型；连接按未完整消费响应的安全边界进入 Broken。该
+差异是两个 SDK 都没有可用的 CLOB/BLOB complex text materialization，根因是服务端 text
+payload 没有可可靠解释的成员身份，不能通过继续扩大 parser 或猜测 locator 语义修复。
+
+新增 `ComplexTextResultTests.NamedObjectLobTextResultsRemainServerLimited`，使用项目 User
+Secrets 的 `ConnectionStrings:Oracle`，覆盖 sync/async、类型描述预加载和清理；实库 **2/2**
+通过。当前版本按服务端 wire 限制跳过 CLOB/BLOB complex text parser；若后续版本提供每个成员
+正确的 type identity、NULL 和 locator/text 编码，再重新进行 Java/.NET 对照。该结论不扩展到
+binary complex LOB 路径、匿名 locator 输入或 PL-only cursor 成员。
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 

@@ -10,6 +10,15 @@ namespace OceanBaseConnector.IntegrationTests.Oracle;
 
 public sealed class ComplexTextResultTests
 {
+    public static TheoryData<string, bool> LobRows()
+    {
+        var data = new TheoryData<string, bool>();
+        foreach (var profile in ProfileTheoryData.OracleWithCreateObjects())
+            foreach (var asynchronous in new[] { false, true })
+                data.Add(profile, asynchronous);
+        return data;
+    }
+
     public static TheoryData<string, bool, bool> Rows()
     {
         var data = new TheoryData<string, bool, bool>();
@@ -61,5 +70,32 @@ public sealed class ComplexTextResultTests
         Assert.Null(second.GetValues()[0]); Assert.Null(second.GetValues()[1]); DatabaseContext.EqualNumber(reader.GetValue(1), 43, "Following NULL scalar mismatch.");
         Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
         Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(LobRows))]
+    public async Task NamedObjectLobTextResultsRemainServerLimited(string profileName, bool asynchronous)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var childTypeName = db.NewObject("TYPE");
+        await db.ExecuteAsync(connection, "CREATE TYPE " + childTypeName + " AS OBJECT (c CLOB, b BLOB, n NUMBER)", CancellationToken.None);
+        var typeName = db.NewObject("TYPE");
+        await db.ExecuteAsync(connection, "CREATE TYPE " + typeName + " AS OBJECT (child " + childTypeName + ", marker NUMBER)", CancellationToken.None);
+        var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY, value " + typeName, CancellationToken.None);
+        await db.ExecuteAsync(connection, "INSERT INTO " + table + " SELECT 1, " + typeName + "(" + childTypeName +
+            "(TO_CLOB('clob text'), TO_BLOB(HEXTORAW('00011FFF')), 7), 9) FROM DUAL", CancellationToken.None);
+        var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None))!;
+        _ = await connection.GetComplexTypeAsync(owner, childTypeName);
+        _ = await connection.GetComplexTypeAsync(owner, typeName);
+
+        await using var select = db.Command(connection, "SELECT value FROM " + table);
+        var error = asynchronous
+            ? await Assert.ThrowsAsync<OceanBaseException>(() => select.ExecuteReaderAsync())
+            : Assert.Throws<OceanBaseException>(() => select.ExecuteReader());
+        Assert.True(error.IsExecutionOutcomeUnknown);
+        Assert.Equal(ConnectionState.Broken, connection.State);
+        var cause = Assert.IsType<NotSupportedException>(error.InnerException);
+        Assert.Contains("unsupported member type", cause.Message, StringComparison.OrdinalIgnoreCase);
     }
 }
