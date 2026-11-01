@@ -125,7 +125,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、Oracle Stream piece-data 回退和 1295 text fallback 的客户端子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute 下的 Stream、Oracle piece-data 流水化、LOB、输出、cursor、array binding；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、Oracle Stream piece-data 回退和 1295 text fallback 的客户端子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute 下的 Stream、LOB、输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
 | D-09 | `P0`；官方形状已固定，wire 未闭合 | XMLType wire 调查与有条件 codec（T17） | 服务端有条件能力；Java 的 SQLXML API 明确拒绝，且固定版没有 XMLType 专用协议类型 | 明确是 PL 参数/输出、普通列还是服务端转换；确认 wire 类型和空值/字符编码 | 先记录可实现形状或阻塞结论；实现时参数、结果、NULL、坏值、版本拒绝和 metadata 一致 |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
@@ -1188,8 +1188,8 @@ Release 构建和 netstandard2.1 构建均 0 warning / 0 error。代码提交为
 MySQL Stream 的当前 input-only multi-send 存储/读取子集提升为 `P4`；这不是对代理、OB20 或其他
 服务端版本的外推。
 
-本子集仍未关闭 Oracle piece-data 流水化、取消、代理/OB20、
-LOB/OUT/cursor/array；这些继续按 D-08 后续缺口处理。
+本子集仍未关闭取消、代理/OB20、LOB/OUT/cursor/array；Oracle piece-data 流水化没有 Connector/J
+协议依据，不纳入当前 .NET 承诺，除非后续服务端给出明确的无等待确认协议。
 
 #### D-08b：Oracle batch Stream 的 piece-data 安全回退（2026-11-01，`P4` 子集）
 
@@ -1204,7 +1204,8 @@ Oracle piece-data 已支持流水化或吞吐收益。随后新增 `MultiSendTes
 在项目 User Secrets 的 `oracle-direct` profile 中明确关闭 `UseOraclePrepareExecute` 和 `UseLobLocators`，
 覆盖 sync/async、3 字节和 90007 字节两条 BLOB Stream；真实 4.4.2.2 直连 **2/2 通过**，确认
 piece-data fallback、批量 affected-count 和独立 `GetValue`/LOB 读回。PrepareExecute 下的 Stream、
-piece-data 流水化、代理/OB20、LOB/OUT/cursor/array 和收益基线仍待各自 profile；PrepareExecute
+代理/OB20、LOB/OUT/cursor/array 和收益基线仍待各自 profile；Connector/J 的 Oracle piece-data
+也逐片等待确认，没有可移植的流水化协议依据。PrepareExecute
 下的安全回退见 D-08d。
 
 #### D-08c：真实服务端错误排序与 suffix 边界（`P4` 子集，2026-11-01）
@@ -1228,8 +1229,8 @@ User Secrets 的 `oracle-direct` profile 中同时启用 `UseBatchMultiSend`、`
 读回两条内容。真实 4.4.2.2 直连 **2/2** 通过。
 
 该子项关闭的是三项选项叠加时的客户端安全回退缺口，不宣称 PrepareExecute 下的 Stream 已支持
-流水化或吞吐收益；piece-data 流水化、错误排序扩展、代理/OB20、LOB/OUT/cursor/array 和收益
-基线仍按各自 profile 继续验收。
+流水化或吞吐收益；错误排序扩展、代理/OB20、LOB/OUT/cursor/array 和收益基线仍按各自 profile
+继续验收。Connector/J 的 Oracle piece-data 也逐片等待确认，因此没有可移植的流水化协议依据。
 
 #### D-08e：server prepare 1295 的 batch text fallback（`P4` 子集，2026-11-01）
 
@@ -1245,8 +1246,8 @@ sync/async **2/2 通过**。本次验证还包括 BatchLifecycleTests **307/307*
 **8733/8733** 和 solution Release build 五个产品目标框架 **0 warning/0 error**；这是客户端
 wire/生命周期证据，不外推真实租户原生 1295、代理/OB20 或其他服务端版本。
 
-该子项关闭的是 D-08 的客户端 text fallback 缺口；Oracle piece-data 流水化、LOB/OUT/cursor/array、
-取消/超时扩展、代理/OB20 和收益基线仍未完成。
+该子项关闭的是 D-08 的客户端 text fallback 缺口；LOB/OUT/cursor/array、取消/超时扩展、代理/OB20
+和收益基线仍未完成。Oracle piece-data 流水化没有 Connector/J 协议依据，暂不作为客户端缺失实现。
 
 #### D-08f：已发送组的 pending response 取消归属（`P3`，2026-11-01）
 
@@ -1258,7 +1259,7 @@ batch command；`IsExecutionOutcomeUnknown=true`；连接进入 `Broken`；不�
 **0 warning/0 error**，新增测试文件的定向 whitespace 检查和 `git diff --check` 也通过。补齐的是
 客户端状态归属证据，不是服务端已执行结果的查账或自动重放。
 
-该子项不关闭 Oracle piece-data 流水化、LOB/OUT/cursor/array、代理/OB20、收益基线，亦不代表
+该子项不关闭 LOB/OUT/cursor/array、代理/OB20、收益基线，亦不代表
 所有网络断点和更大 unknown-outcome 矩阵已验收；这些继续保持 D-08 的后续边界。
 
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
