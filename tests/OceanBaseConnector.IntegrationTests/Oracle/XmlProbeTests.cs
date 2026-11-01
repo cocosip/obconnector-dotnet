@@ -21,6 +21,15 @@ public sealed class XmlProbeTests
         var table = db.NewObject("TABLE");
         await db.ExecuteAsync(connection, "CREATE TABLE " + table + " (id NUMBER, x XMLTYPE)", CancellationToken.None);
         await db.ExecuteAsync(connection, "INSERT INTO " + table + " VALUES (1, XMLTYPE('<a>患者</a>'))", CancellationToken.None);
+        var function = "OBI_" + Guid.NewGuid().ToString("N").Substring(0, 20).ToUpperInvariant();
+        db.RegisterCleanup("FUNCTION", function, async () =>
+        {
+            await using var cleanup = await db.OpenAsync();
+            await db.ExecuteAsync(cleanup, "DROP FUNCTION " + function, CancellationToken.None);
+        });
+        await db.ExecuteAsync(connection,
+            "CREATE FUNCTION " + function + " RETURN XMLTYPE IS BEGIN RETURN XMLTYPE('<a>患者</a>'); END;",
+            CancellationToken.None);
         await using (var metadataCommand = db.Command(connection, "SELECT DISTINCT NVL(C.DATA_TYPE_OWNER, D.REFERENCED_OWNER) AS DATA_TYPE_OWNER, C.DATA_TYPE FROM ALL_TAB_COLUMNS C LEFT JOIN ALL_DEPENDENCIES D ON C.DATA_TYPE_OWNER IS NULL AND D.OWNER = C.OWNER AND D.NAME = C.TABLE_NAME AND D.TYPE = 'TABLE' AND D.REFERENCED_TYPE = 'TYPE' AND D.REFERENCED_NAME = C.DATA_TYPE AND D.REFERENCED_LINK_NAME IS NULL WHERE C.OWNER = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') AND C.TABLE_NAME = '" + table + "' AND C.COLUMN_NAME = 'X'"))
         await using (var metadataReader = await metadataCommand.ExecuteReaderAsync())
         {
@@ -40,9 +49,25 @@ public sealed class XmlProbeTests
             nativeError = error;
             Console.WriteLine($"XML native query rejected: {error.GetType().FullName}: {error.Message}");
         }
-        await connection.DisposeAsync();
         Assert.NotNull(nativeError);
         Assert.IsType<NotSupportedException>(nativeError.InnerException);
+        await connection.DisposeAsync();
+        await using var functionConnection = await db.OpenAsync();
+        Exception? functionError = null;
+        try
+        {
+            await using var functionCommand = db.Command(functionConnection, "SELECT " + function + "() FROM DUAL");
+            await using var functionReader = await functionCommand.ExecuteReaderAsync(CommandBehavior.SchemaOnly);
+            _ = functionReader.GetColumnSchema();
+        }
+        catch (NotSupportedException error)
+        {
+            functionError = error;
+            Console.WriteLine($"XML PL return rejected: {error.GetType().FullName}: {error.Message}");
+        }
+        Assert.NotNull(functionError);
+        Assert.IsType<NotSupportedException>(functionError);
+        await functionConnection.DisposeAsync();
         await using var serializedConnection = await db.OpenAsync();
         await using var command = db.Command(serializedConnection, "SELECT XMLSERIALIZE(DOCUMENT x AS CLOB) FROM " + table);
         await using var reader = await command.ExecuteReaderAsync();

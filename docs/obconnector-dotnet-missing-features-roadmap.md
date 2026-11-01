@@ -1394,8 +1394,10 @@ ownerless 形状从内部协议错误改为明确的 `NotSupportedException`，�
 也不能把 Java 的空值行为当成 .NET 应复制的结果语义。
 
 2026-11-01 使用项目 User Secrets 的 `oracle-direct` profile 复核 `XmlProbeTests` **1/1** 通过；
-该复核再次确认 XMLTYPE DDL/DML、ownerless metadata 拒绝和 `XMLSERIALIZE` 的 CLOB 读取路径，
-未设置数据库凭据环境变量。
+该复核确认 XMLTYPE DDL/DML、普通列 ownerless metadata 拒绝、PL 函数返回的同类 ownerless
+形状拒绝，以及 `XMLSERIALIZE` 的 CLOB 读取路径，未设置数据库凭据环境变量。PL 函数由服务端
+成功创建并执行到结果 metadata；.NET 在发送后按“named complex result without an owner”拒绝，
+没有把它误判成服务端缺少 XMLTYPE。
 
 调查结论：D-09 仍为 `P0 / 待 wire 与形状`，本轮不新增 `OceanBaseDbType.Xml`，也不把它
 猜测映射成 String、BLOB 或现有 OBJECT codec。重新开启实现前，需要目标 OceanBase 版本和
