@@ -81,6 +81,7 @@ namespace OceanBaseConnector.Internal.Session
         {
             var metadata = column.ComplexMetadata;
             if (metadata == null || metadata.Schema.Length != 0) return false;
+            if (column.IsXmlType) return false;
             // Bound SELECT preparation can omit the type name as well as its owner.
             if (metadata.Name.Length == 0 && (column.Database.Length == 0 || column.OriginalTable.Length == 0 || column.OriginalName.Length == 0)) return false;
             if (SourceComplexTypes != null)

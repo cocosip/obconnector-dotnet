@@ -114,6 +114,7 @@ public sealed class XmlProbeTests
                 Assert.Equal(1, insertNull.ExecuteNonQuery());
             }
             using var query = db.Command(connection, "SELECT x FROM " + table + " ORDER BY id");
+            query.Prepare();
             using var reader = query.ExecuteReader();
             Assert.Equal("XMLTYPE", reader.GetDataTypeName(0));
             Assert.Equal(typeof(string), reader.GetFieldType(0));
@@ -127,5 +128,25 @@ public sealed class XmlProbeTests
         {
             db.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
+    }
+
+    [IntegrationFact]
+    public async Task ProbeXmlTypePreparedBinaryBoundary()
+    {
+        var profile = IntegrationEnvironment.Profiles.FirstOrDefault(p => p.Oracle && p.CreateObjects && p.HasTag("direct"));
+        if (profile is null) throw new InvalidOperationException("An Oracle direct createObjects profile is required.");
+        await using var db = new DatabaseContext(profile);
+        await using var connection = await db.OpenAsync();
+        var table = db.NewObject("TABLE");
+        await db.ExecuteAsync(connection, "CREATE TABLE " + table + " (id NUMBER, x XMLTYPE)", CancellationToken.None);
+        await db.ExecuteAsync(connection, "INSERT INTO " + table + " VALUES (1, XMLTYPE('<prepared>值</prepared>'))", CancellationToken.None);
+        await using var command = db.Command(connection, "SELECT x FROM " + table);
+        await command.PrepareAsync();
+        await using var reader = await command.ExecuteReaderAsync();
+        Assert.Equal("XMLTYPE", reader.GetDataTypeName(0));
+        Assert.Equal(typeof(string), reader.GetFieldType(0));
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal("<prepared>值</prepared>\n", reader.GetString(0));
+        Assert.False(await reader.ReadAsync());
     }
 }

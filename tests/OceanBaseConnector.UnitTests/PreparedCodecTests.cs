@@ -121,7 +121,8 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal("<a>患者</a>", column.Decode(System.Text.Encoding.UTF8.GetBytes("<a>患者</a>")));
             Assert.Equal(DBNull.Value, column.Decode(null));
             Assert.Throws<System.Text.DecoderFallbackException>(() => column.Decode(new byte[] { 0xFF }));
-            Assert.Throws<NotSupportedException>(() => column.DecodeBinary(new byte[] { 1 }));
+            Assert.Equal("<a>患者</a>", column.DecodeBinary(System.Text.Encoding.UTF8.GetBytes("<a>患者</a>")));
+            Assert.Throws<System.Text.DecoderFallbackException>(() => column.DecodeBinary(new byte[] { 0xFF }));
         }
 
         [Fact]

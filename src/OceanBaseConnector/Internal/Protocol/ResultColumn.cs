@@ -12,7 +12,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private OceanBaseConnector.Internal.Session.LobSession? Lobs { get; set; }
         internal ComplexColumnMetadata? ComplexMetadata { get; private set; }
         internal OceanBaseComplexType? ComplexType { get; private set; }
-        private bool IsXmlType => TypeCode == 160 && ComplexMetadata?.Schema.Length == 0 &&
+        internal bool IsXmlType => TypeCode == 160 && ComplexMetadata?.Schema.Length == 0 &&
             string.Equals(ComplexMetadata.Name, "XMLTYPE", StringComparison.OrdinalIgnoreCase);
         private bool _complexOutput;
         private OceanBaseConnector.Internal.Session.OracleCursorOwner? _cursors;
@@ -55,7 +55,6 @@ namespace OceanBaseConnector.Internal.Protocol
             if (TypeCode != 160) return;
             if (IsXmlType)
             {
-                if (binary) throw new NotSupportedException("Binary XMLTYPE results are not supported.");
                 return;
             }
             if (!binary)
@@ -457,6 +456,7 @@ namespace OceanBaseConnector.Internal.Protocol
         internal byte[] ReadBinaryField(ByteCursor cursor)
         {
             _ = FieldType;
+            if (IsXmlType) return cursor.ReadLengthEncodedBytes();
             if (TypeCode == 160) return ComplexValueCodec.ReadResultField(cursor, ComplexType!.Layout, Mode);
             if (IsTemporal) return TemporalCodec.ReadField(cursor, TypeCode);
             var length = BinaryFixedLength;
@@ -488,7 +488,7 @@ namespace OceanBaseConnector.Internal.Protocol
         {
             var fieldType = FieldType;
             if (value == null) return DBNull.Value;
-            if (IsXmlType) throw new NotSupportedException("Binary XMLTYPE results are not supported.");
+            if (IsXmlType) return Utf8.GetString(value);
             if (TypeCode == 160)
             {
                 var complex = new ByteCursor(value);
