@@ -379,6 +379,49 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
+        [InlineData(false, (byte)252, (ushort)63)]
+        [InlineData(true, (byte)252, (ushort)63)]
+        [InlineData(false, (byte)252, (ushort)45)]
+        [InlineData(true, (byte)252, (ushort)45)]
+        public async Task BatchMultiSendReaderMaterializesMySqlBlobAndTextResults(bool asynchronous, byte type, ushort charset)
+        {
+            var firstValue = charset == 63 ? new byte[] { 0, 1, 255, 2 } : System.Text.Encoding.UTF8.GetBytes("alpha");
+            var secondValue = charset == 63 ? new byte[] { 9, 8, 7 } : System.Text.Encoding.UTF8.GetBytes("beta");
+            var server = Server(async channel =>
+            {
+                for (byte id = 90; id < 92; id++)
+                {
+                    await StatementCommand(channel, 22);
+                    await channel.WritePacketAsync(new byte[] { 0, id, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 });
+                    await channel.WritePacketAsync(Column("value", type, charset: charset));
+                    await channel.WritePacketAsync(Eof());
+                }
+                Assert.Equal(90, (await StatementCommand(channel, 23))[1]);
+                Assert.Equal(91, (await StatementCommand(channel, 23))[1]);
+                channel.BeginResponse();
+                await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(Column("value", type, charset: charset)); await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 0, 0 }.Concat(new[] { (byte)firstValue.Length }).Concat(firstValue).ToArray()); await channel.WritePacketAsync(Eof());
+                channel.BeginResponse();
+                await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(Column("value", type, charset: charset)); await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(new byte[] { 0, 0 }.Concat(new[] { (byte)secondValue.Length }).Concat(secondValue).ToArray()); await channel.WritePacketAsync(Eof());
+                await StatementCommand(channel, 25); await StatementCommand(channel, 25);
+            }, oracle: false);
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true;Batch Multi Send Number=2");
+            try
+            {
+                await connection.OpenAsync(); using var batch = connection.CreateBatch(); BatchItem(batch, "select first"); BatchItem(batch, "select second");
+                await using var reader = asynchronous ? await batch.ExecuteReaderAsync() : batch.ExecuteReader();
+                Assert.Equal(charset == 63 ? typeof(byte[]) : typeof(string), reader.GetFieldType(0)); Assert.Equal(charset == 63 ? "BLOB" : "TEXT", reader.GetDataTypeName(0));
+                Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read()); Assert.Equal(charset == 63 ? (object)firstValue : System.Text.Encoding.UTF8.GetString(firstValue), reader.GetValue(0));
+                Assert.True(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+                Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read()); Assert.Equal(charset == 63 ? (object)secondValue : System.Text.Encoding.UTF8.GetString(secondValue), reader.GetValue(0));
+                Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData(false)]
         [InlineData(true)]
         public async Task BatchMultiSendDrainsPreparedScalarResultsInOrder(bool asynchronous)

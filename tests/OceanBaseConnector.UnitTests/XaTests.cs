@@ -331,7 +331,9 @@ namespace OceanBaseConnector.UnitTests
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => resource.StartAsync(XaId, cancellationToken: canceled.Token));
                 await XaStart(resource, true); await XaEnd(resource, true);
                 using var cancellation = new CancellationTokenSource(); var preparing = resource.PrepareAsync(XaId, cancellation.Token);
-                await requested.Task.WaitAsync(TimeSpan.FromSeconds(5)); Assert.False(preparing.IsCompleted);
+                await requested.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                // A disconnect can complete the pending task before the scheduler returns here.
+                if (interruption != "disconnect") Assert.False(preparing.IsCompleted);
                 await Assert.ThrowsAsync<InvalidOperationException>(() => resource.CommitAsync(XaId));
                 if (interruption == "cancel") cancellation.Cancel();
                 if (interruption == "close") connection.Close();

@@ -444,7 +444,7 @@ namespace OceanBaseConnector
                     operation.Exchange.Complete();
                     return new OceanBaseBatchMultiSendRequest(fallback, 0, binary: false, longDataParameters: null);
                 }
-                ValidateBatchMultiSendColumns(statement);
+                ValidateBatchMultiSendColumns(statement, operation.Exchange.Mode);
                 var parameters = HasNationalParameters(operation.Bindings.Parameters)
                     ? PreparedParameters.Encode(operation.Bindings.Parameters, operation.Exchange.Mode, national, clientEncoding: operation.Exchange.ClientEncoding)
                     : operation.Parameters;
@@ -483,7 +483,7 @@ namespace OceanBaseConnector
                     operation.Exchange.Complete();
                     return new OceanBaseBatchMultiSendRequest(fallback, 0, binary: false, longDataParameters: null);
                 }
-                ValidateBatchMultiSendColumns(statement);
+                ValidateBatchMultiSendColumns(statement, operation.Exchange.Mode);
                 var parameters = HasNationalParameters(operation.Bindings.Parameters)
                     ? PreparedParameters.Encode(operation.Bindings.Parameters, operation.Exchange.Mode, national, clientEncoding: operation.Exchange.ClientEncoding)
                     : operation.Parameters;
@@ -501,12 +501,13 @@ namespace OceanBaseConnector
                 throw new NotSupportedException("Batch multi-send requires cacheable DML or SELECT statements without session or type invalidation.");
         }
 
-        private static void ValidateBatchMultiSendColumns(PreparedStatement statement)
+        private static void ValidateBatchMultiSendColumns(PreparedStatement statement, OceanBaseCompatibilityMode mode)
         {
             foreach (var column in statement.Columns)
             {
-                if (column.TypeCode == 160 || column.TypeCode == 163 || column.TypeCode == 210 || column.TypeCode == 211 || column.TypeCode >= 249 && column.TypeCode <= 252)
-                    throw new NotSupportedException("Batch multi-send does not support cursor, LOB, or complex result columns.");
+                if (column.TypeCode == 160 || column.TypeCode == 163 || column.TypeCode == 210 || column.TypeCode == 211 ||
+                    mode != OceanBaseCompatibilityMode.MySql && column.TypeCode >= 249 && column.TypeCode <= 252)
+                    throw new NotSupportedException("Batch multi-send does not support cursor, Oracle LOB, or complex result columns.");
             }
         }
 #endif
