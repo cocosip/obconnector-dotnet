@@ -151,8 +151,10 @@ namespace OceanBaseConnector.UnitTests
             using var first = new OceanBaseConnection(configuration); using var second = new OceanBaseConnection(configuration);
             try
             {
-                await Open(first, asynchronous); capture.Clear(); var pending = Open(second, asynchronous);
-                await WaitForPoolWaiter(configuration);
+                await Open(first, asynchronous); capture.Clear();
+                var pool = PhysicalSessionPoolRegistry.Get(configuration); var baseline = pool.WaiterCount;
+                var pending = Open(second, asynchronous);
+                await WaitForPoolWaiter(configuration, baseline);
                 if (completion == "release") { first.Close(); await pending; }
                 else if (completion == "cancel") { second.Close(); await Assert.ThrowsAnyAsync<Exception>(() => pending); }
                 else await Assert.ThrowsAsync<TimeoutException>(() => pending);
@@ -261,8 +263,10 @@ namespace OceanBaseConnector.UnitTests
             using var first = new OceanBaseConnection(configuration); using var second = new OceanBaseConnection(configuration);
             try
             {
-                await Open(first, asynchronous); capture.Clear(); waitLifetime.Start(); var pending = Open(second, asynchronous);
-                await WaitForPoolWaiter(configuration); first.Close(); await pending;
+                await Open(first, asynchronous); capture.Clear(); waitLifetime.Start();
+                var pool = PhysicalSessionPoolRegistry.Get(configuration); var baseline = pool.WaiterCount;
+                var pending = Open(second, asynchronous);
+                await WaitForPoolWaiter(configuration, baseline); first.Close(); await pending;
                 Assert.Equal("pool.wait", capture.Phases[0]);
                 Assert.True(beforeCleanup > TimeSpan.Zero);
                 Assert.True(capture.Seconds[0] <= beforeCleanup.TotalSeconds, "Blocked time must exclude the later cleanup callback.");

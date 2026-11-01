@@ -48,13 +48,14 @@ namespace OceanBaseConnector.UnitTests
             public void Dispose() => _listener.Dispose();
         }
 
-        private static async Task WaitForPoolWaiter(string configuration)
+        private static async Task WaitForPoolWaiter(string configuration, int baseline)
         {
             var pool = PhysicalSessionPoolRegistry.Get(configuration);
             try
             {
                 var deadline = Stopwatch.StartNew();
-                while (pool.WaiterCount == 0)
+                // A previous waiter can outlive its test when a loopback port is reused.
+                while (pool.WaiterCount <= baseline)
                 {
                     if (deadline.Elapsed >= TimeSpan.FromSeconds(5))
                         throw new TimeoutException("The target connection did not enter the pool wait.");
