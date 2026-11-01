@@ -245,6 +245,12 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | 代码提交 | `cca74fb`（`fix(command): skip unused national encoding after prepare fallback`）；本地提交，未 push |
 | 未关闭 | 原生 1295 及目标实库字面量身份/编码/时区/精度验收；OUT、cursor、stream、复杂值不扩入普通回退 |
 
+2026-11-02 使用项目 User Secrets 的 `oracle-direct` profile 重跑 `StandalonePrepareTests` 与
+Oracle temporal script 验收，共 **38/38** 通过，覆盖同步/异步、普通/显式 Prepare、输出/REF
+CURSOR、SequentialAccess 和脚本内 session time zone 切换。该租户本次仍未返回原生
+`1295/HY000`，因此只确认已有回退代码在正向 Oracle profile 下没有回归，D-01 继续保持 `P3`，
+不把中继注入的 1295 当作原生服务端证据。
+
 红/绿及全量 TRX 保存于本地忽略目录 `TestResults/roadmap/d01-*.trx`；不把模拟 TCP、
 OB20 fixture 或历史中继注入当成本轮原生 OceanBase 证据。本轮没有验证真实 OceanBase、ODP、
 TLS/KDC、远端 CI、其他 OS 或生产负载。
