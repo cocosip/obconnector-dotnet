@@ -11,6 +11,64 @@ namespace OceanBaseConnector.IntegrationTests.Protocol;
 
 public sealed partial class MultiStatementTests
 {
+    public static IEnumerable<object[]> OracleTemporalScriptRows() =>
+        from row in OracleRows()
+        from sequential in new[] { false, true }
+        from prepared in new[] { false, true }
+        select row.Concat(new object[] { sequential, prepared }).ToArray();
+
+    [IntegrationTheory]
+    [MemberData(nameof(OracleTemporalScriptRows))]
+    public async Task OracleTemporalScriptsPreserveIndependentStorageAcrossSessionChanges(
+        string profileName, bool asynchronous, bool sequential, bool prepared)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = CreateConnection(db, enabled: true); await Open(connection, asynchronous);
+        var table = await db.TableAsync(connection,
+            "id INTEGER PRIMARY KEY, d DATE, ts TIMESTAMP(9), l TIMESTAMP(9) WITH LOCAL TIME ZONE", CancellationToken.None);
+        var timestamp = new OceanBaseTimestamp(new DateTime(2026, 11, 1, 12, 34, 56), 123456789);
+        var date = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        await db.ExecuteAsync(connection, "ALTER SESSION SET TIME_ZONE='+05:45'", CancellationToken.None);
+        using (var command = db.Command(connection,
+            "INSERT INTO " + table + " VALUES (1,:d,:ts,:l); " +
+            "ALTER SESSION SET TIME_ZONE='-03:30'; INSERT INTO " + table + " VALUES (2,:d,:ts,:l); " +
+            "INSERT INTO " + table + " VALUES (3,:nullD,:nullTs,:nullL)"))
+        {
+            var d = DatabaseContext.Parameter(command, "d", date); d.DbType = DbType.Date; d.OceanBaseDbType = OceanBaseDbType.OracleDate;
+            var ts = DatabaseContext.Parameter(command, "ts", timestamp); ts.OceanBaseDbType = OceanBaseDbType.Timestamp;
+            var l = DatabaseContext.Parameter(command, "l", new OceanBaseTimestampLocalTimeZone(timestamp, "+05:45"));
+            l.OceanBaseDbType = OceanBaseDbType.TimestampLocalTimeZone;
+            DatabaseContext.Parameter(command, "nullD", DBNull.Value).OceanBaseDbType = OceanBaseDbType.Date;
+            DatabaseContext.Parameter(command, "nullTs", DBNull.Value).OceanBaseDbType = OceanBaseDbType.Timestamp;
+            DatabaseContext.Parameter(command, "nullL", DBNull.Value).OceanBaseDbType = OceanBaseDbType.TimestampLocalTimeZone;
+            Assert.Equal(3, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
+        }
+        Assert.Equal("-03:30", await db.ScalarAsync(connection, "SELECT SESSIONTIMEZONE FROM DUAL", CancellationToken.None));
+
+        await using var verification = await db.OpenAsync();
+        await db.ExecuteAsync(verification, "ALTER SESSION SET TIME_ZONE='+05:45'", CancellationToken.None);
+        using var query = db.Command(verification, "SELECT d, ts, l FROM " + table + " ORDER BY id");
+        if (prepared) { if (asynchronous) await query.PrepareAsync(); else query.Prepare(); }
+        var behavior = sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default;
+        using var reader = asynchronous ? await query.ExecuteReaderAsync(behavior) : query.ExecuteReader(behavior);
+        Assert.Equal("DATE", reader.GetDataTypeName(0)); Assert.Equal("TIMESTAMP", reader.GetDataTypeName(1));
+        Assert.Equal("TIMESTAMP WITH LOCAL TIME ZONE", reader.GetDataTypeName(2));
+        for (var row = 1; row <= 3; row++)
+        {
+            Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+            if (row == 3) { Assert.True(reader.IsDBNull(0)); Assert.True(reader.IsDBNull(1)); Assert.True(reader.IsDBNull(2)); continue; }
+            Assert.Equal(date, reader.GetDateTime(0));
+            Assert.Equal(timestamp, reader.GetFieldValue<OceanBaseTimestamp>(1));
+            var local = reader.GetFieldValue<OceanBaseTimestampLocalTimeZone>(2);
+            Assert.Equal(timestamp, local.Timestamp); Assert.Equal("+05:45", local.SessionTimeZone);
+        }
+        Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+        Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+        Assert.Equal(3, await db.CountAsync(verification, table, CancellationToken.None));
+        DatabaseContext.EqualNumber(await db.ScalarAsync(connection, db.SelectOne, CancellationToken.None), 1,
+            "Oracle temporal script writer remains reusable.");
+    }
+
     public static IEnumerable<object[]> MySqlTemporalScriptRows() =>
         from row in MySqlRows()
         from sequential in new[] { false, true }

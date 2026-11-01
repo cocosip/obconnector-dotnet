@@ -45,7 +45,7 @@
 | Q02 参数绑定/重复占位/NULL/方向 | 核心 | 位置绑定、过程IN/OUT/INOUT | 命名绑定、标量IN/OUT/INOUT | ParameterBindingPlan、PreparedParameters、OceanBaseParameter | 参数方向与值类型分别验证；不等于全部组合支持 |
 | Q03 Prepare/PrepareAsync/重执行 | 核心 | 服务端prepare | 服务端prepare；可选PrepareExecute | PreparedStatement、OraclePrepareExecutePacket | J1/J4；版本/能力门槛不能用客户端期望替代 |
 | Q04 普通客户端prepare回退 | 可选 | 明确1295拒绝后限定标量/JSON/BIT/YEAR/时间 | 普通标量、DATE/TIMESTAMP/时区、INTERVAL、NCHAR/NVARCHAR2等已有字面量子集 | ClientPreparedSql、CommandExchange.ClientPreparedSql | 显式Prepare/输出/cursor/stream等不回退；原生1295未复现 |
-| Q05 文本多语句/参数/多结果 | 可选opt-in | 普通标量、JSON/BIT/YEAR/时间/二进制流 | 普通标量/national/时间/interval/二进制流 | ClientPreparedSql、SqlStatementBoundary | J5；Prepare/cursor/输出/复杂输入拒绝；展开SQL有界 |
+| Q05 文本多语句/参数/多结果 | 可选opt-in | 普通标量、JSON/BIT/YEAR/时间/二进制流 | 普通标量/national/时间/interval/二进制流；DATE/TIMESTAMP/LTZ 脚本存储已完成指定直连子集 | ClientPreparedSql、SqlStatementBoundary | J5；Prepare/cursor/输出/复杂输入拒绝；展开SQL有界；Oracle temporal 脚本 sync/async、SequentialAccess 与读回查询 Prepare 见 D-02a2 |
 | Q06 存储过程/函数 | 核心模式差异 | 过程IN/OUT/INOUT；函数单ReturnValue+Input | PL块/过程/函数/RETURNING输出子集 | MySqlCommandPlan、OracleCommandPlan | J4；MySQL函数不混OUT，元数据/权限有条件 |
 | Q07 参数元数据派生 | 可选ADO.NET适配 | 可见唯一签名 | 可见唯一签名 | OceanBaseConnection.Parameters、RoutineParameterDerivation | 不执行目标；歧义/包内PL类型等拒绝 |
 | Q08 Reader/NextResult/typed getters | 核心 | 有实现 | 有实现 | OceanBaseDataReader、QueryResult、ResultColumn | metadata、NULL、精度与类型身份须一致 |
