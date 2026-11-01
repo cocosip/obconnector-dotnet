@@ -1178,8 +1178,12 @@ A-03d 保持为**客户端能力缺口/待协议证据**；只有取得记录字
 
 新增 `Oracle/PackageLocalRecordTests.cs` 作为可复现边界回归：同一 User Secrets profile
 的 `ProcedureParameters` 能读到 `PL/SQL RECORD`、`TYPE_NAME=R` 和 package-local
-`TYPE_SUBNAME`，但 `DeriveParameters` 的 sync/async **2/2** 均在发送前抛出
-`NotSupportedException`，且不发布参数。该测试确认的是当前客户端契约和清晰拒绝行为，
+`TYPE_SUBNAME`。一次独立目录探针去掉驱动默认的 `DATA_LEVEL=0` 过滤后，`ALL_ARGUMENTS` 仍只有
+`X/Y` 两个顶层 `PL/SQL RECORD` 行，均为 `DATA_LEVEL=0`；`ALL_PLSQL_TYPES`、
+`ALL_PLSQL_TYPE_ATTRS` 对该 package 没有字段布局，`ALL_TYPE_ATTRS` 只返回 schema
+object 属性。因此当前目标没有可用于构造字段 payload 的目录证据。`DeriveParameters` 的
+sync/async **2/2** 均在发送前抛出 `NotSupportedException`，且不发布参数；另有 cursor 成员形状
+使 package INVALID 的服务端回归 **2/2**。该测试确认的是当前客户端契约和清晰拒绝行为，
 不是把 Java 的 `SQLFeatureNotSupportedException` 改写成服务端限制。
 
 #### A-03e：引用 package 标识符的目录与参数派生（2026-11-01，指定 profile）

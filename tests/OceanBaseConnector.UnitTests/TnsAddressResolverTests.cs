@@ -203,10 +203,27 @@ namespace OceanBaseConnector.UnitTests
             for (var i = 0; i < 8; i++)
             {
                 using var replacement = new TnsFileFixture(i % 2 == 0 ? next : old);
-                File.Replace(replacement.Path, file.Path, null);
+                ReplacePublishedFile(replacement.Path, file.Path);
             }
             await Task.WhenAll(readers);
             File.Delete(file.Path); await Assert.ThrowsAsync<FileNotFoundException>(() => resolver.ResolveAsync(CancellationToken.None));
+        }
+
+        private static void ReplacePublishedFile(string source, string destination)
+        {
+            for (var attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    File.Replace(source, destination, null);
+                    return;
+                }
+                catch (IOException error) when (attempt < 4 &&
+                    (error.HResult == unchecked((int)0x80070020) || error.HResult == unchecked((int)0x80070021)))
+                {
+                    Thread.Sleep(25);
+                }
+            }
         }
 
         [Fact]
