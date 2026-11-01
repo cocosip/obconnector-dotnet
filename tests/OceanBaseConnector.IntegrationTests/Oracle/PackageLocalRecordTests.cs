@@ -3,6 +3,7 @@ using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using OceanBaseConnector;
 using OceanBaseConnector.IntegrationTests.Infrastructure;
 using Xunit;
 
@@ -17,6 +18,39 @@ public sealed class PackageLocalRecordTests
             foreach (var asynchronous in new[] { false, true })
                 data.Add(profile, asynchronous);
         return data;
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(Cases))]
+    public async Task PackageLocalRecordWithCursorMemberIsRejectedByServer(string profileName, bool asynchronous)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var package = "OBI_" + Guid.NewGuid().ToString("N").Substring(0, 20).ToUpperInvariant();
+        db.RegisterDropCleanup("PACKAGE", package);
+        var sql = "CREATE PACKAGE " + package + " AS " +
+            "TYPE R IS RECORD (C SYS_REFCURSOR, N NUMBER); " +
+            "PROCEDURE P(V OUT R); END;";
+        using (var create = db.Command(connection, sql))
+        {
+            if (asynchronous) await create.ExecuteNonQueryAsync();
+            else create.ExecuteNonQuery();
+        }
+
+        async Task<string?> Scalar(string query)
+        {
+            using var command = db.Command(connection, query);
+            object? value;
+            if (asynchronous) value = await command.ExecuteScalarAsync();
+            else value = command.ExecuteScalar();
+            return Convert.ToString(value);
+        }
+
+        var status = await Scalar("SELECT STATUS FROM ALL_OBJECTS WHERE OBJECT_NAME='" + package + "' AND OBJECT_TYPE='PACKAGE'");
+        var errorText = await Scalar("SELECT TEXT FROM ALL_ERRORS WHERE NAME='" + package + "' AND TYPE='PACKAGE'");
+        Assert.Equal("INVALID", status);
+        Assert.Contains("-4007", errorText, StringComparison.Ordinal);
+        Assert.Contains("record is cursor type not supported", errorText, StringComparison.OrdinalIgnoreCase);
     }
 
     [IntegrationTheory]

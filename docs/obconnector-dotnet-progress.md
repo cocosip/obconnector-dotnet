@@ -47,7 +47,7 @@
 | Q04 普通客户端prepare回退 | 可选 | 明确1295拒绝后限定标量/JSON/BIT/YEAR/时间 | 普通标量、DATE/TIMESTAMP/时区、INTERVAL、NCHAR/NVARCHAR2等已有字面量子集 | ClientPreparedSql、CommandExchange.ClientPreparedSql | 显式Prepare/输出/cursor/stream等不回退；原生1295未复现 |
 | Q05 文本多语句/参数/多结果 | 可选opt-in | 普通标量、JSON/BIT/YEAR/时间/二进制流 | 普通标量/national/时间/interval/二进制流；DATE/TIMESTAMP/LTZ 脚本存储已完成指定直连子集 | ClientPreparedSql、SqlStatementBoundary | J5；Prepare/cursor/输出/复杂输入拒绝；展开SQL有界；Oracle temporal 脚本 sync/async、SequentialAccess 与读回查询 Prepare 见 D-02a2 |
 | Q06 存储过程/函数 | 核心模式差异 | 过程IN/OUT/INOUT；函数单ReturnValue+Input | PL块/过程/函数/RETURNING输出子集 | MySqlCommandPlan、OracleCommandPlan | J4；MySQL函数不混OUT，元数据/权限有条件 |
-| Q07 参数元数据派生 | 可选ADO.NET适配 | 可见唯一签名 | 可见唯一签名；package-local `PL/SQL RECORD` 目录可见但公开绑定仍无协议契约 | OceanBaseConnection.Parameters、RoutineParameterDerivation | 不执行目标；歧义/包内PL类型等拒绝；需字段描述和成功 wire 后再实现 |
+| Q07 参数元数据派生 | 可选ADO.NET适配 | 可见唯一签名 | 可见唯一签名；普通 package-local `PL/SQL RECORD` 目录可见但公开绑定仍无协议契约；含 `SYS_REFCURSOR` 成员的 PL-only RECORD 在当前目标使 package INVALID，Java/.NET 同为服务端限制 | OceanBaseConnection.Parameters、RoutineParameterDerivation | 不执行目标；歧义/包内PL类型等拒绝；普通 RECORD 需字段描述和成功 wire 后再实现；cursor 成员需新服务端形状后重开 |
 | Q08 Reader/NextResult/typed getters | 核心 | 有实现 | 有实现 | OceanBaseDataReader、QueryResult、ResultColumn | metadata、NULL、精度与类型身份须一致 |
 | Q09 SequentialAccess/流式读取 | 核心资源 | 有实现 | 有实现，含LOB资源 | SequentialRow、LobReadStream、LobTextReader | 半读/取消/关闭/池租约子集验收，不等于全部资源交错 |
 | Q10 cursor fetch/page/offset | 可选 | prepared cursor分页 | prepared cursor分页，offset有条件 | QueryResult.Cursor、OracleCursorOwner | 普通cursor与PL输出不同；输出offset拒绝 |
@@ -107,7 +107,7 @@
 | P03 OB20 | 可选协议 | 能力协商后的普通OB20 | Ob20Stream/Packet/Checksum | 显式profile实际Layer必须OB20；当前租户拒绝协商 |
 | P04 Full Link Trace | 可选协议 | legacy/modern extra-info子集 | Ob20TraceContext、ProtocolDiagnostics | 服务器sampling/control、实际帧和collector分开验收 |
 | P05 压缩OB20/proxy reroute | 排除当前范围 | 明确拒绝/无执行支持 | 协商/帧保护保留 | J7；取得独立协议依据再讨论，常量不是实现 |
-| M01 GetSchema/列元数据 | 核心+ADO.NET适配 | 双模式实际目录查询/DataTypes | Connection.Schema.*、ResultDbColumn | Oracle 直连基础目录、过程签名和未约束 NUMBER 回归 18/18 通过；package NUMBER/DATE overload 按 `OVERLOAD` 派生并执行 sync/async 4/4 通过，引用 package 标识符派生 sync/async 2/2 通过，Oracle DATE 未知 precision metadata 已归一化；package-local `PL/SQL RECORD` 目录值可读，公开绑定发送前拒绝 sync/async 2/2，.NET/Connector-J 仍无可移植 wire/API；权限/最小权限及更多标识符边界、视图/同义词1031仍保留；Oracle `ALL_ARGUMENTS.CHAR_LENGTH` 在当前目标版本缺失且 Java 同样返回904，字符长度保持服务端限制 |
+| M01 GetSchema/列元数据 | 核心+ADO.NET适配 | 双模式实际目录查询/DataTypes | Connection.Schema.*、ResultDbColumn | Oracle 直连基础目录、过程签名和未约束 NUMBER 回归 18/18 通过；package NUMBER/DATE overload 按 `OVERLOAD` 派生并执行 sync/async 4/4 通过，引用 package 标识符派生 sync/async 2/2 通过，Oracle DATE 未知 precision metadata 已归一化；普通 package-local `PL/SQL RECORD` 目录值可读，公开绑定发送前拒绝 sync/async 2/2，.NET/Connector-J 仍无可移植 wire/API；含 cursor 成员的 PL-only RECORD 当前 package INVALID，Java/.NET 同为服务端限制；权限/最小权限及更多标识符边界、视图/同义词1031仍保留；Oracle `ALL_ARGUMENTS.CHAR_LENGTH` 在当前目标版本缺失且 Java 同样返回904，字符长度保持服务端限制 |
 | M02 日志/Activity/Meter/慢操作 | 可选运维适配 | 双模式已有实现 | DriverDiagnostics、ConnectionLog | 不记录SQL/参数/凭据；慢操作包含客户端消费，不是纯服务端耗时 |
 | M03 协商/帧/I/O/源流/池指标 | 可选运维适配 | 已有固定维度诊断 | ProtocolDiagnostics、DriverDiagnostics.* | 不定义猜测性其他等待点，监听开销/卸载/负载待验收 |
 | R01 包/TFM/平台 | 发布门槛 | 两包五资产，现代API仅net8/9/10 | csproj、eng/Verify-Packages.ps1 | netstandard由host加载不等于独立runtime；非Windows实库欠验收 |
