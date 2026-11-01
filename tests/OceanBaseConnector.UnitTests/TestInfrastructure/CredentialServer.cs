@@ -54,6 +54,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
                 }
             }
             catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
+            catch (SocketException) when (_stop.IsCancellationRequested) { }
         }
         private async Task Serve(TcpClient client)
         {
