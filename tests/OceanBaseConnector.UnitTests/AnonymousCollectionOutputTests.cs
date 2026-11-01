@@ -31,6 +31,21 @@ namespace OceanBaseConnector.UnitTests
             Assert.Throws<ProtocolException>(() => anonymousColumn.BindComplexOutput(anonymous));
         }
 
+        [Fact]
+        public void XmlOutputAcceptsSystemXmlTypeMetadata()
+        {
+            var parameters = new OceanBaseParameterCollection();
+            var parameter = new OceanBaseParameter { ParameterName = "p", Direction = ParameterDirection.Output, DbType = DbType.Xml };
+            parameters.Add(parameter);
+            var plan = OracleCommandPlan.Create("pkg.p", CommandType.StoredProcedure, parameters);
+            var column = ResultColumn.Parse(ComplexColumn("SYS", "XMLTYPE"), OceanBaseCompatibilityMode.Oracle);
+
+            plan.ValidateOutputColumn(0, column);
+            plan.CaptureOutput(new[] { column }, new[] { ResultColumn.Utf8.GetBytes("<out>输出</out>\n") });
+            plan.PublishOutputs();
+            Assert.Equal("<out>输出</out>\n", parameter.Value);
+        }
+
         [Theory]
         [InlineData((byte)0)] [InlineData((byte)3)] [InlineData((byte)246)]
         public async Task AnonymousNumberOutputMatchesCanonicalElementLayout(byte element)

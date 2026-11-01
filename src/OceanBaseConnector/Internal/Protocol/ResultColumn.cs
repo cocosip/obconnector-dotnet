@@ -12,7 +12,8 @@ namespace OceanBaseConnector.Internal.Protocol
         private OceanBaseConnector.Internal.Session.LobSession? Lobs { get; set; }
         internal ComplexColumnMetadata? ComplexMetadata { get; private set; }
         internal OceanBaseComplexType? ComplexType { get; private set; }
-        internal bool IsXmlType => TypeCode == 160 && ComplexMetadata?.Schema.Length == 0 &&
+        internal bool IsXmlType => TypeCode == 160 && ComplexMetadata != null &&
+            (ComplexMetadata.Schema.Length == 0 || string.Equals(ComplexMetadata.Schema, "SYS", StringComparison.OrdinalIgnoreCase)) &&
             string.Equals(ComplexMetadata.Name, "XMLTYPE", StringComparison.OrdinalIgnoreCase);
         private bool _complexOutput;
         private OceanBaseConnector.Internal.Session.OracleCursorOwner? _cursors;

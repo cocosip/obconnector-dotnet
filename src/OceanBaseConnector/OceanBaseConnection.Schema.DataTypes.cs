@@ -159,7 +159,7 @@ namespace OceanBaseConnector
                 var cursor = TypeRow("REF CURSOR", OceanBaseDbType.RefCursor, typeof(OceanBaseRefCursor));
                 cursor["IsSupportedForResults"] = false; cursor["ParameterDirections"] = "Output,ReturnValue"; cursor["RequiredFeatures"] = "Use Oracle Prepare Execute";
                 var xml = TypeRow("XMLTYPE", OceanBaseDbType.String, typeof(string), "XMLTYPE");
-                xml["RequiredFeatures"] = "Oracle type code 160 ownerless text result; DbType.Xml parameters use the verified string wire";
+                xml["RequiredFeatures"] = "Oracle type code 160 ownerless text result or SYS.XMLTYPE metadata boundary; DbType.Xml parameters use the verified string wire";
             }
             return table;
         }

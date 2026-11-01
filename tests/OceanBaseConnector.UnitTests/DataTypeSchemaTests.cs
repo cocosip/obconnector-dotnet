@@ -100,7 +100,8 @@ namespace OceanBaseConnector.UnitTests
                     Assert.True((bool)DataTypeRow(table, "OBJECT", typeof(OceanBaseComplexValue))["RequiresTypeName"]);
                     Assert.False((bool)DataTypeRow(table, "ARRAY", typeof(OceanBaseComplexValue))["RequiresTypeName"]);
                     Assert.Contains("Use Lob Locators", (string)DataTypeRow(table, "BLOB", typeof(OceanBaseLob))["RequiredFeatures"]);
-                    Assert.Contains("DbType.Xml", (string)DataTypeRow(table, "XMLTYPE", typeof(string))["RequiredFeatures"]);
+                    var xml = (string)DataTypeRow(table, "XMLTYPE", typeof(string))["RequiredFeatures"];
+                    Assert.Contains("DbType.Xml", xml); Assert.Contains("SYS.XMLTYPE", xml);
                 }
                 using var meta = connection.GetSchema();
                 var descriptor = Assert.Single(meta.Rows.Cast<DataRow>(), row => (string)row[0] == "DataTypes");

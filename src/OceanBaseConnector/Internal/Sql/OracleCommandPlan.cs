@@ -36,6 +36,7 @@ namespace OceanBaseConnector.Internal.Sql
             var expected = _outputComplexTypes[ordinal];
             if (expected == null)
             {
+                if (Outputs[ordinal].DbType == DbType.Xml && column.IsXmlType) return;
                 if (column.TypeCode == 160) throw new NotSupportedException("A complex output requires an explicit type declaration.");
             }
             else column.BindComplexOutput(expected);

@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using OceanBaseConnector;
 using OceanBaseConnector.IntegrationTests.Infrastructure;
 using Xunit;
 
@@ -11,6 +12,39 @@ namespace OceanBaseConnector.IntegrationTests.Oracle;
 
 public sealed class XmlProbeTests
 {
+    public static TheoryData<string, bool, bool> PlRows()
+    {
+        var data = new TheoryData<string, bool, bool>();
+        foreach (var profile in IntegrationEnvironment.Profiles.Where(p => p.Oracle && p.CreateObjects && p.HasTag("direct")))
+            foreach (var asynchronous in new[] { false, true })
+                foreach (var inputOutput in new[] { false, true })
+                    data.Add(profile.Name, asynchronous, inputOutput);
+        return data;
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(PlRows))]
+    public async Task ProbeXmlTypePlOutput(string profileName, bool asynchronous, bool inputOutput)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var procedure = db.NewObject("PROCEDURE");
+        var signature = inputOutput ? "(v IN OUT XMLTYPE)" : "(v OUT XMLTYPE)";
+        var body = inputOutput ? "v := XMLTYPE('<inout>输出</inout>');" : "v := XMLTYPE('<out>输出</out>');";
+        await db.ExecuteAsync(connection, "CREATE PROCEDURE " + procedure + signature + " IS BEGIN " + body + " END;", CancellationToken.None);
+        await using var command = db.Command(connection, procedure);
+        command.CommandType = CommandType.StoredProcedure;
+        var parameter = DatabaseContext.Parameter(command, "v", inputOutput ? "<in>输入</in>" : DBNull.Value, DbType.Xml);
+        parameter.Direction = inputOutput ? ParameterDirection.InputOutput : ParameterDirection.Output;
+        var error = asynchronous
+            ? await Assert.ThrowsAsync<OceanBaseException>(() => command.ExecuteNonQueryAsync())
+            : Assert.Throws<OceanBaseException>(() => command.ExecuteNonQuery());
+        Assert.Equal(600, error.ServerErrorCode);
+        Assert.Equal(inputOutput ? "42000" : "0A000", error.SqlState);
+        Assert.False(error.IsExecutionOutcomeUnknown);
+        Assert.Equal(ConnectionState.Open, connection.State);
+    }
+
     [IntegrationFact]
     public async Task ProbeXmlTypeWire()
     {

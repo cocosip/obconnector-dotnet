@@ -126,6 +126,24 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
+        public void SysXmlTypeOutputUsesTheSameStringWire()
+        {
+            var packet = ComplexColumn(schema: "SYS", name: "XMLTYPE");
+            packet[^1] = 251;
+            var column = ResultColumn.Parse(packet, OceanBaseCompatibilityMode.Oracle, textResult: true);
+            Assert.Equal("XMLTYPE", column.DataTypeName);
+            Assert.Equal(typeof(string), column.FieldType);
+            Assert.Equal("<out>输出</out>\n", column.DecodeBinary(ResultColumn.Utf8.GetBytes("<out>输出</out>\n")));
+        }
+
+        [Fact]
+        public void NonSystemXmlTypeStillRequiresAComplexDescriptor()
+        {
+            var column = ResultColumn.Parse(ComplexColumn(schema: "APP", name: "XMLTYPE"), OceanBaseCompatibilityMode.Oracle);
+            Assert.Throws<NotSupportedException>(() => column.FieldType);
+        }
+
+        [Fact]
         public void OracleNumberUsesDecimalPublicTypeWithItsFixedWidthWireValue()
         {
             var column = ResultColumn.Parse(Column("n", 3), OceanBaseCompatibilityMode.Oracle);
