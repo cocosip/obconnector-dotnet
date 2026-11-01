@@ -1128,12 +1128,15 @@ NUMBER 的过程/函数、隐式/显式 Prepare、同步/异步派生与存储�
 
 #### A-02a：Oracle XA 基础生命周期回归（2026-11-01，指定 profile）
 
-在 `oracle-direct` User Secrets profile 上执行现有 XA 实库组：两阶段 Prepare/Recover 后提交或回滚
-（2 项）、单阶段提交持久性（1 项）和非法阶段转换（1 项）共 **4/4** 通过，0 失败、0 跳过。
+在 `oracle-direct` User Secrets profile 上执行现有事务故障实库组：两阶段 Prepare/Recover 后提交或回滚
+（2 项）、单阶段提交持久性（1 项）和非法阶段转换（1 项）共 **4/4** 通过；响应丢失后重新核对并
+更换池租约的提交/回滚矩阵 **8/8** 通过；relay 在发送前、整响应和部分响应切断的写结果矩阵 **8/8**
+通过，0 失败、0 跳过。
 这确认当前 DBMS_XA 路径的基本分支状态、独立 recover 查账、决定后的数据结果和发送前状态校验仍可用。
 
-该证据不关闭 A-02：协调器/节点或代理崩溃、in-doubt 决定、取消顺序和更完整 unknown-outcome
-矩阵仍需单独故障注入；XA 单元测试中的 loopback 中断场景已在本轮完整 Unit 8740/8740 中通过。
+这些证据合计覆盖 20 个当前可执行的真实租户/relay 故障用例，但不关闭 A-02：协调器/节点崩溃、
+真正 in-doubt 决定、取消顺序和更完整 unknown-outcome 矩阵仍需单独故障注入；XA 单元测试中的
+loopback 中断场景已在本轮完整 Unit 8740/8740 中通过。
 
 执行修正：Oracle StoredProcedure契约要求PrepareExecute=true，初版夹具误将false用于过程输出，
 且给Decimal类型编号赋CLR int；修正为既有显式/隐式Prepare组合和decimal编号，不扩大产品wire。
