@@ -30,11 +30,25 @@ namespace OceanBaseConnector.Internal.Values
         {
             if (mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("Complex values require Oracle mode.");
             if (type == null) throw new ArgumentNullException(nameof(type));
+            ValidateTextObject(type, 0);
+        }
+
+        private static void ValidateTextObject(OceanBaseComplexType type, int depth)
+        {
+            if (depth >= MaximumDepth) throw new NotSupportedException("Complex text result nesting exceeds the supported depth.");
             if (type.IsAnonymous || type.IsCollection || type.TypeName.Length == 0)
-                throw new NotSupportedException("Complex text results require a named object type.");
-            foreach (var member in type.Layout.Members)
-                if (member.TypeCode != 0 && member.TypeCode != 253 && member.TypeCode != 254 && member.TypeCode != 207 && member.TypeCode != 208)
+                throw new NotSupportedException("Complex text results require named object types.");
+            foreach (var member in type.Members)
+            {
+                if (member.Layout.TypeCode == 160)
+                {
+                    if (member.ComplexType == null) throw new NotSupportedException("The nested complex text descriptor is unavailable.");
+                    ValidateTextObject(member.ComplexType, depth + 1);
+                }
+                else if (member.Layout.TypeCode != 0 && member.Layout.TypeCode != 253 && member.Layout.TypeCode != 254 &&
+                    member.Layout.TypeCode != 207 && member.Layout.TypeCode != 208)
                     throw new NotSupportedException("The complex text result contains an unsupported member type.");
+            }
         }
 
         internal static object?[] DecodeTextResult(byte[] value, OceanBaseComplexType type, OceanBaseCompatibilityMode mode)
@@ -68,6 +82,7 @@ namespace OceanBaseConnector.Internal.Values
         {
             private readonly string _text;
             private readonly OceanBaseComplexType _type;
+            private int _memberBudget = MaximumMembers;
             private int _position;
 
             internal TextResultParser(string text, OceanBaseComplexType type)
@@ -76,18 +91,31 @@ namespace OceanBaseConnector.Internal.Values
             internal object?[] Read()
             {
                 SkipWhitespace();
+                var values = ReadObject(_type, 0);
+                SkipWhitespace();
+                if (_position != _text.Length) throw Invalid("Trailing complex text result data.");
+                return values;
+            }
+
+            private object?[] ReadObject(OceanBaseComplexType type, int depth)
+            {
+                if (depth >= MaximumDepth) throw Invalid("Complex text result nesting exceeds the supported depth.");
+                if (type.IsCollection || type.IsAnonymous || type.TypeName.Length == 0)
+                    throw new NotSupportedException("Complex text results require named object types.");
                 var name = ReadTypeName();
-                if (!string.Equals(name, _type.TypeName, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(name, type.TypeName, StringComparison.OrdinalIgnoreCase))
                     throw Invalid("The complex text result type name does not match its metadata.");
                 SkipWhitespace(); Expect('(');
-                var values = new object?[_type.Layout.Members.Count];
+                var members = type.Members.Count;
+                if (members > _memberBudget) throw Invalid("Complex text result member count exceeds the supported limit.");
+                _memberBudget -= members;
+                var values = new object?[members];
                 for (var i = 0; i < values.Length; i++)
                 {
-                    SkipWhitespace(); values[i] = ReadMember(_type.Layout.Members[i]); SkipWhitespace();
+                    SkipWhitespace(); values[i] = ReadMember(type.Members[i], depth + 1); SkipWhitespace();
                     if (i + 1 < values.Length) Expect(',');
                 }
-                SkipWhitespace(); Expect(')'); SkipWhitespace();
-                if (_position != _text.Length) throw Invalid("Trailing complex text result data.");
+                SkipWhitespace(); Expect(')');
                 return values;
             }
 
@@ -99,11 +127,14 @@ namespace OceanBaseConnector.Internal.Values
                 return _text.Substring(start, _position - start);
             }
 
-            private object? ReadMember(ComplexType member)
+            private object? ReadMember(OceanBaseComplexMember member, int depth)
             {
                 if (ReadNull()) return null;
-                switch (member.TypeCode)
+                switch (member.Layout.TypeCode)
                 {
+                    case 160:
+                        if (member.ComplexType == null) throw new NotSupportedException("The nested complex text descriptor is unavailable.");
+                        return ReadObject(member.ComplexType, depth);
                     case 0:
                         var numberText = ReadBareToken();
                         try

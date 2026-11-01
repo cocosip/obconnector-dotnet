@@ -605,7 +605,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
 | D-04d 复杂 cursor 成员 | `P2`；SQL OBJECT 持久类型子形状为当前目标服务端限制，PL-only 形状仍待证据 | 同一租户 `CREATE TYPE ... AS OBJECT (c SYS_REFCURSOR)` 在 Java 返回 `PLS-00201`、.NET 返回 `42000`；两者均在类型创建阶段失败，因此跳过该持久类型子形状的客户端改动。完整 child FETCH/所有权及 PL-only 记录/返回形状尚未确认；D-03 的普通列失败不能覆盖这些形状 |
-| D-04e 复杂 text 结果及其余 collection 形状 | `P4`（named OBJECT 标量 text 子集）；其余 `P2` | named OBJECT 的 NUMBER、VARCHAR2/CHAR、NCHAR/NVARCHAR2 标量 text 结果已实现并验收；递归 OBJECT、collection、LOB/cursor、RAW、时间成员仍明确拒绝。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
+| D-04e 复杂 text 结果及其余 collection 形状 | `P4`（named OBJECT 标量/递归 OBJECT text 子集）；其余 `P2` | named OBJECT 的 NUMBER、VARCHAR2/CHAR、NCHAR/NVARCHAR2 及递归 named OBJECT text 结果已实现并验收；collection、LOB/cursor、RAW、时间成员仍明确拒绝。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
 
 本模块先验证 a/b 已有实现的边界；若实库暴露缺陷，先保留失败证据、补最小回归，再决定
 共享修复。所有新增计划、结果及提交号仍记录在本文：
@@ -808,21 +808,38 @@ text 查询返回 type 160，复杂 metadata 带 type name 但 schema 为空，p
 `TYPE(7, 'a,b (c) 'q'')`；显式 Prepare 的 binary 路径继续保持原实现。这个证据足以固定
 本轮最小 grammar，但不支持把所有复杂结果形状泛化为 text 可读。
 
-实现只覆盖预加载的 named、非 collection OBJECT，成员限 NUMBER、VARCHAR2/CHAR、
-NCHAR/NVARCHAR2，并处理 NULL、严格 UTF-8、引号/逗号/括号、完整 payload 消费和既有包大小
-上限。无 schema 的 text metadata 只有在缓存中存在唯一同名 type 时才绑定；同名多 schema、
-缺 descriptor、anonymous/collection、nested OBJECT、RAW、时间、LOB、cursor 和尾随/畸形
-payload 均继续发送后拒绝或解码前拒绝。NULL 整列仍返回 `DBNull.Value`，NULL 成员保留为
-`null`；SequentialAccess 的 text 字段按普通 length-encoded framing 消费，binary framing
-未改变。
+实现覆盖预加载的 named、非 collection OBJECT 及递归 named OBJECT 成员，叶子限 NUMBER、
+VARCHAR2/CHAR、NCHAR/NVARCHAR2，并处理 NULL、严格 UTF-8、引号/逗号/括号、完整 payload
+消费、递归深度/成员预算和既有包大小上限。无 schema 的 text metadata 只有在缓存中存在唯一
+同名 type 时才绑定；同名多 schema、缺 descriptor、anonymous/collection、RAW、时间、LOB、
+cursor 和尾随/畸形 payload 均继续发送后拒绝或解码前拒绝。NULL 整列仍返回 `DBNull.Value`，
+NULL 成员保留为 `null`；SequentialAccess 的 text 字段按普通 length-encoded framing 消费，
+binary framing 未改变。
 
 | 检查 | 本轮结果 |
 | --- | --- |
-| 单元与协议 | `ComplexValueCodecTests` 61/61；相关 `ComplexResultTests` 含 text/descriptor 边界通过；覆盖 NUMBER/字符成员、NULL、引号/分隔符、严格 UTF-8、大小上限、唯一/歧义 type 名称和未支持布局 |
-| Oracle 实库 | `ComplexTextResultTests` **4/4** 通过，0 skip：sync/async × Default/SequentialAccess；named OBJECT 两行覆盖 NUMBER、NULL、逗号/括号/引号字符、后续 scalar 列和完整 reader 消费；连接串来自项目 User Secrets 的 `ConnectionStrings:Oracle`，未使用凭据环境变量 |
+| 单元与协议 | `ComplexValueCodecTests` **63/63**；共享 `TextCommandTests` **5594/5594** 通过；覆盖 NUMBER/字符成员、递归 OBJECT、NULL、引号/分隔符、严格 UTF-8、大小上限、深度上限、唯一/歧义 type 名称和未支持布局 |
+| Oracle 实库 | `ComplexTextResultTests` **4/4** 通过，0 skip：sync/async × Default/SequentialAccess；递归 named OBJECT 两行覆盖子对象 NUMBER、NULL、逗号/括号/引号字符、后续 scalar 列和完整 reader 消费；连接串来自项目 User Secrets 的 `ConnectionStrings:Oracle`，未使用凭据环境变量 |
 | 清理与范围 | 随机 type/table 由 `DatabaseContext` LIFO 清理；只关闭上述 named scalar text 子集，不关闭 collection/嵌套/LOB/cursor/RAW/时间或跨版本、代理、TLS、长期压力组合 |
 
 该子集已达到 `P4`；D-04e 其余 collection/复杂成员形状仍为 `P2`，D-04 父项保持未完成。
+
+#### D-04e nested OBJECT extension（2026-11-01）
+
+Connector/J 2.4.14 对同一 Oracle 4.4.2.2 直连 profile 返回递归普通 text 结果，例如
+`ROOT(CHILD(7, 'a,b (c) 'q''), 9)`。当前 .NET 原 parser 只接受根 scalar named OBJECT，
+会在 descriptor 校验阶段拒绝 nested OBJECT；这属于客户端缺失能力，不是服务端限制。
+
+`ComplexValueCodec.TextResultParser` 现在递归消费预加载的 named OBJECT descriptor，并将嵌套
+数组交给现有 `OceanBaseComplexValue.FromResult` 做精确子类型 materialization。每一层校验
+type name、成员数量、递归深度和总成员预算；collection、anonymous、RAW、时间、LOB、cursor
+和缺失/歧义 descriptor 继续拒绝。binary OBJECT、参数 writer 和 public API 未改变。
+
+| 检查 | 结果 |
+| --- | --- |
+| 红/绿 | 新增 nested 正向、collection/类型名/深度负向用例；新增后先按预期在旧 parser 红灯，修复后 `ComplexValueCodecTests` **63/63**、共享 `TextCommandTests` **5594/5594** 通过 |
+| Oracle 实库 | `ComplexTextResultTests` **4/4** 通过，0 skip：`oracle-direct`、sync/async × buffered/sequential；User Secrets `ConnectionStrings:Oracle`，未设置凭据环境变量 |
+| 走查边界 | 只扩展 Java 与目标 wire 已证明的递归 named OBJECT 标量叶子；collection/复杂成员、持久 nested-table 列和集合 NULL OBJECT 仍保持原拒绝/服务端边界 |
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 

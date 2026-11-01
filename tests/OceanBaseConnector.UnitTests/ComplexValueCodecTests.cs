@@ -152,6 +152,23 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
+        public void NamedObjectTextResultsDecodeNestedNamedObjects()
+        {
+            var child = new OceanBaseComplexType(null!, "Owner", "Child", false,
+                new[] { new OceanBaseComplexMember("N", null, "NUMBER", null, Number),
+                    new OceanBaseComplexMember("S", null, "VARCHAR2", null, Text) });
+            var root = new OceanBaseComplexType(null!, "Owner", "Root", false,
+                new[] { new OceanBaseComplexMember("CHILD", null, "Child", child, child.Layout),
+                    new OceanBaseComplexMember("ID", null, "NUMBER", null, Number) });
+
+            var result = DecodeText(root, "ROOT(CHILD(7, 'a,b (c) ''q'), 9)");
+            var nested = Assert.IsType<object?[]>(result[0]);
+            Assert.Equal("7", Assert.IsType<OceanBaseDecimal>(nested[0]).ToString());
+            Assert.Equal("a,b (c) 'q", nested[1]);
+            Assert.Equal("9", Assert.IsType<OceanBaseDecimal>(result[1]).ToString());
+        }
+
+        [Fact]
         public void NamedObjectTextResultsRejectUnsupportedOrMalformedShapes()
         {
             var type = NamedTextObject(0, 253);
@@ -160,8 +177,16 @@ namespace OceanBaseConnector.UnitTests
             Assert.Throws<ProtocolException>(() => DecodeText(type, "Thing(1,'x') trailing"));
             Assert.Throws<ProtocolException>(() => DecodeText(type, "Thing(1,'x',2)"));
             Assert.Throws<ProtocolException>(() => DecodeText(type, "Thing(123456789012345678901234567890123456789,'x')"));
-            Assert.Throws<NotSupportedException>(() => DecodeText(new OceanBaseComplexType(null!, "Owner", "Thing", true,
-                new[] { new OceanBaseComplexMember(null, null, "NUMBER", null, new ComplexType(0)) }), "Thing(1)"));
+            var collection = new OceanBaseComplexType(null!, "Owner", "Items", true,
+                new[] { new OceanBaseComplexMember(null, null, "NUMBER", null, new ComplexType(0)) });
+            var collectionRoot = new OceanBaseComplexType(null!, "Owner", "Thing", false,
+                new[] { new OceanBaseComplexMember("ITEMS", null, "Items", collection, collection.Layout) });
+            Assert.Throws<NotSupportedException>(() => DecodeText(collectionRoot, "Thing(Items(1))"));
+            var child = new OceanBaseComplexType(null!, "Owner", "Child", false,
+                new[] { new OceanBaseComplexMember("N", null, "NUMBER", null, Number) });
+            var nested = new OceanBaseComplexType(null!, "Owner", "Thing", false,
+                new[] { new OceanBaseComplexMember("CHILD", null, "Child", child, child.Layout) });
+            Assert.Throws<ProtocolException>(() => DecodeText(nested, "Thing(Other(1))"));
             Assert.Throws<NotSupportedException>(() => DecodeText(new OceanBaseComplexType(null!, "Owner", "Thing", false,
                 new[] { new OceanBaseComplexMember("N", null, "CHILD", null, Object(Number)) }), "Thing(1)"));
         }
@@ -174,6 +199,17 @@ namespace OceanBaseConnector.UnitTests
                 new byte[] { 0x54, 0x68, 0x69, 0x6E, 0x67, 0x28, 0x27, 0xC0, 0xAF, 0x27, 0x29 },
                 type, OceanBaseCompatibilityMode.Oracle));
             Assert.Throws<ProtocolException>(() => ComplexValueCodec.DecodeTextResult(new byte[PacketChannel.DefaultMaxPacketSize], type, OceanBaseCompatibilityMode.Oracle));
+        }
+
+        [Fact]
+        public void NamedObjectTextResultsRejectExcessiveNestingBeforeParsing()
+        {
+            var type = new OceanBaseComplexType(null!, "Owner", "T0", false, System.Array.Empty<OceanBaseComplexMember>());
+            for (var i = 1; i <= 32; i++)
+                type = new OceanBaseComplexType(null!, "Owner", "T" + i, false,
+                    new[] { new OceanBaseComplexMember("CHILD", null, type.TypeName, type, type.Layout) });
+
+            Assert.Throws<NotSupportedException>(() => DecodeText(type, string.Empty));
         }
 
         public static IEnumerable<object[]> MalformedResults()
