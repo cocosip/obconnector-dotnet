@@ -124,4 +124,35 @@ public sealed class ProcedureTests
             }
         }
     }
+
+    [IntegrationTheory]
+    [MemberData(nameof(PackageOverloadRows))]
+    public async Task QuotedPackageIdentifierDerivesAndExecutes(string profileName, bool asynchronous)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var name = "ObiPkg_" + Guid.NewGuid().ToString("N").Substring(0, 12);
+        await db.ExecuteAsync(connection,
+            "CREATE PACKAGE \"" + name + "\" AS PROCEDURE \"DoIt\" (P_INPUT IN NUMBER, P_OUTPUT OUT NUMBER); END;",
+            CancellationToken.None);
+        db.RegisterCleanup("PACKAGE", name, async () =>
+        {
+            await using var cleanup = await db.OpenAsync();
+            await db.ExecuteAsync(cleanup, "DROP PACKAGE \"" + name + "\"", CancellationToken.None);
+        });
+        await db.ExecuteAsync(connection,
+            "CREATE PACKAGE BODY \"" + name + "\" AS PROCEDURE \"DoIt\" (P_INPUT IN NUMBER, P_OUTPUT OUT NUMBER) AS BEGIN P_OUTPUT := P_INPUT + 1; END; END;",
+            CancellationToken.None);
+
+        using var directory = await connection.GetSchemaAsync("Procedures", new string?[] { null, null, "DoIt", null, name });
+        Assert.Single(directory.Rows.Cast<DataRow>());
+        await using var command = db.Command(connection, "\"" + name + "\".\"DoIt\"");
+        command.CommandType = CommandType.StoredProcedure;
+        if (asynchronous) await command.DeriveParametersAsync(); else command.DeriveParameters();
+        Assert.Equal(2, command.Parameters.Count);
+        command.Parameters[0].Value = 41m;
+        command.Parameters[1].Value = DBNull.Value;
+        if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+        DatabaseContext.EqualNumber(command.Parameters[1].Value, 42, "Quoted procedure output mismatch.");
+    }
 }

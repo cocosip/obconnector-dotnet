@@ -145,7 +145,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | --- | --- | --- | --- | --- |
 | A-01 | `P3`；Oracle 直连 10000 次借还及资源隔离 52/52 通过 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、MySQL profile 和句柄/线程/内存稳定性未证实 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
 | A-02 | `P3`；Oracle 直连 XA 基础生命周期 4/4 通过 | PSPE、XA、unknown outcome（G11） | in-doubt、协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
-| A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过，包重载 2/2 通过 | Schema、目录和参数元数据（G13） | 包内 PL 类型、大小写、引用标识符和最小权限；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制 | 双模式最小权限、唯一/歧义签名、大小写/引用标识符、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
+| A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过，包重载 2/2、引用 package 标识符 2/2 通过 | Schema、目录和参数元数据（G13） | 包内 PL 类型和最小权限仍缺；大小写/引用 package 标识符已覆盖；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制 | 双模式最小权限、唯一/歧义签名、更多大小写/引用标识符、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
 | A-04 | `P3` | 包、TFM 和平台（G14/R01） | 当前有五资产和 Windows 子集；非 Windows、独立 runtime、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
 | A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；196608 字符 NUL 单表达式从 .NET 0/4 恢复 4/4，原因未定，见执行记录 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
 
@@ -1149,6 +1149,15 @@ Connector/J 2.4.14 对同一目录形状可以返回两个 `PL/SQL RECORD` 参�
 A-03d 保持为**客户端能力缺口/待协议证据**；只有取得记录字段描述、输入/输出 payload
 布局和 Java 成功交互后，才重新开启实现与 sync/async、NULL、嵌套字段验收。普通
 `GetSchema` 仍返回该真实目录值，不伪造类型 owner 或 descriptor。
+
+#### A-03e：引用 package 标识符的目录与参数派生（2026-11-01，指定 profile）
+
+新增 Oracle 直连回归，创建大小写敏感的引用 package 名和引用过程名：
+`"ObiPkg_x"."DoIt"(P_INPUT IN NUMBER, P_OUTPUT OUT NUMBER)`。`Procedures` 目录按
+package/name restriction 找到唯一签名，`DeriveParameters`/`DeriveParametersAsync` 均能解析
+带双引号的两段标识符，派生参数后执行并读回 `42`；同步/异步 **2/2** 通过。该结果关闭了
+当前目标 profile 下引用 package 标识符的客户端解析缺口，但不外推未引用 Unicode 标识符、
+跨 schema 权限或双模式行为；这些仍需独立 profile 和权限证据。
 
 #### A-02a：Oracle XA 基础生命周期回归（2026-11-01，指定 profile）
 

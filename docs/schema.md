@@ -37,6 +37,8 @@ OceanBaseCommand.DeriveParameters(string? overload = null), DeriveParametersAsyn
 
 Derivation requires CommandType.StoredProcedure and an open idle connection, resolves a unique visible routine signature and reads its arguments without executing the target. It uses the current transaction, one reserved session and the parent command's per-query timeout and cancellation. Success replaces existing parameters with fresh DBNull-valued parameters; failure does not publish a partial signature. Collection membership changes are checked atomically; arbitrary concurrent edits of parameter properties are not covered. Public GetSchema result shapes are unchanged. Derivation itself does not add procedure execution or remove existing Oracle PrepareExecute/type restrictions. MySQL execution has a separate [procedure contract](obconnector-dotnet-architecture-design.md#mysql-stored-procedures).
 
+Oracle routine names may use quoted one-, two-, or three-part identifiers; quoted case is preserved while directory restrictions remain exact. The current real-profile coverage includes a quoted package and procedure name in both synchronous and asynchronous derivation.
+
 | Metadata | Derived representation and limits |
 | --- | --- |
 | Direction/order/names | IN/OUT/INOUT and function RETURN map to ParameterDirection; contiguous ordinals are required. Return name is RETURN_VALUE. Oracle names must fit current ASCII/unquoted binding rules; case-insensitive duplicates and return-name conflicts fail. MySQL names retain Unicode. |
