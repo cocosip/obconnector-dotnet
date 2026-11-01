@@ -1132,6 +1132,24 @@ A-03b 的服务端限制处理。没有把单一 Oracle profile 的通过结果�
 这项修复同时有单元回归 `OracleDateAcceptsUnknownWirePrecision` 和真实 Oracle 过程验收；只调整
 结果列 metadata 归一化，没有扩大 DATE 的小数精度契约。
 
+#### A-03d：package-local PL/SQL 类型仍缺少可移植绑定契约（2026-11-01，保留缺口）
+
+在同一 `oracle-direct` User Secrets profile 上创建 package-local `RECORD` 类型：
+`TYPE R IS RECORD (ID NUMBER, NAME VARCHAR2(20)); PROCEDURE P(X IN R, Y OUT R)`。
+Oracle `ProcedureParameters` 真实目录返回 `DATA_TYPE=PL/SQL RECORD`、`TYPE_NAME=R`、
+`TYPE_SUBNAME=<package>`，而 `TYPE_OWNER` 是带空格填充的内部数值标识（本次为 `500003`），
+并非可通过 `ALL_TYPES`/`ALL_TYPE_ATTRS` 加载的 schema object。当前 .NET `DeriveParameters`
+在发现 `TYPE_SUBNAME` 后按契约抛出 `NotSupportedException`，避免把 package-local identity
+误当成 named OBJECT。
+
+Connector/J 2.4.14 对同一目录形状可以返回两个 `PL/SQL RECORD` 参数元数据，但使用公开
+`CallableStatement` API 绑定并注册该记录时返回客户端 `SQLFeatureNotSupportedException`
+（`600/0A000`）。这证明当前证据是两个 SDK 都没有可移植的 package-local RECORD wire/API
+绑定路径，不能把失败归为 OceanBase 服务端拒绝，也不能仅凭目录行新增一个 .NET provider type。
+A-03d 保持为**客户端能力缺口/待协议证据**；只有取得记录字段描述、输入/输出 payload
+布局和 Java 成功交互后，才重新开启实现与 sync/async、NULL、嵌套字段验收。普通
+`GetSchema` 仍返回该真实目录值，不伪造类型 owner 或 descriptor。
+
 #### A-02a：Oracle XA 基础生命周期回归（2026-11-01，指定 profile）
 
 在 `oracle-direct` User Secrets profile 上执行现有事务故障实库组：两阶段 Prepare/Recover 后提交或回滚
