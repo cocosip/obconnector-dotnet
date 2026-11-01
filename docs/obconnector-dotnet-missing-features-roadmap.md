@@ -1150,6 +1150,12 @@ A-03d 保持为**客户端能力缺口/待协议证据**；只有取得记录字
 布局和 Java 成功交互后，才重新开启实现与 sync/async、NULL、嵌套字段验收。普通
 `GetSchema` 仍返回该真实目录值，不伪造类型 owner 或 descriptor。
 
+新增 `Oracle/PackageLocalRecordTests.cs` 作为可复现边界回归：同一 User Secrets profile
+的 `ProcedureParameters` 能读到 `PL/SQL RECORD`、`TYPE_NAME=R` 和 package-local
+`TYPE_SUBNAME`，但 `DeriveParameters` 的 sync/async **2/2** 均在发送前抛出
+`NotSupportedException`，且不发布参数。该测试确认的是当前客户端契约和清晰拒绝行为，
+不是把 Java 的 `SQLFeatureNotSupportedException` 改写成服务端限制。
+
 #### A-03e：引用 package 标识符的目录与参数派生（2026-11-01，指定 profile）
 
 新增 Oracle 直连回归，创建大小写敏感的引用 package 名和引用过程名：
