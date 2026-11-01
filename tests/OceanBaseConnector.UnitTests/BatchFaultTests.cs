@@ -29,6 +29,65 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task BatchMultiSendRejectsComplexInputBeforeWriting(bool asynchronous)
+        {
+            var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)));
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true");
+            try
+            {
+                await connection.OpenAsync();
+                using var batch = connection.CreateBatch();
+                var command = BatchItem(batch, "select :value");
+                var type = connection.CreateArrayType("NUMBER");
+                command.Parameters.Add(new OceanBaseParameter
+                {
+                    ParameterName = "value",
+                    ComplexType = type,
+                    Value = type.CreateValue(1)
+                });
+                if (asynchronous)
+                    await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteNonQueryAsync());
+                else
+                    Assert.Throws<NotSupportedException>(() => batch.ExecuteNonQuery());
+                Assert.Equal(-1, command.RecordsAffected);
+                Assert.Equal(ConnectionState.Open, connection.State);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task BatchMultiSendRejectsLobInputBeforeWriting(bool asynchronous)
+        {
+            var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)), lobLocators: true);
+            using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Batch Multi Send=true");
+            try
+            {
+                await connection.OpenAsync();
+                using var batch = connection.CreateBatch();
+                var command = BatchItem(batch, "select :value");
+                command.Parameters.Add(new OceanBaseParameter
+                {
+                    ParameterName = "value",
+                    OceanBaseDbType = OceanBaseDbType.Blob,
+                    Value = DBNull.Value
+                });
+                if (asynchronous)
+                    await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteNonQueryAsync());
+                else
+                    Assert.Throws<NotSupportedException>(() => batch.ExecuteNonQuery());
+                Assert.Equal(-1, command.RecordsAffected);
+                Assert.Equal(ConnectionState.Open, connection.State);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         [Fact]
         public async Task BatchMultiSendRejectsCursorResultBeforeExecute()
         {

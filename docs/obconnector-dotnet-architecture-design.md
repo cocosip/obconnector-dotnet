@@ -414,7 +414,10 @@ Opting in changes statement atomicity and autocommit boundaries, default/express
 behavior, and timeout granularity (one command budget per merged group). Per-entry semantic equivalence
 is not promised. Applications needing whole-batch atomicity must supply a transaction. Local protocol,
 fault and target-asset tests do not establish real SQL semantics, performance, proxy or deployment
-compatibility. Multi-send/pipelining and a separate bulk protocol remain unimplemented.
+compatibility. The opt-in multi-send path rejects complex/LOB input parameters before writing because
+the current COM_STMT_EXECUTE pipeline has no verified locator or complex-value wire contract; Oracle
+OUT/cursor/array and locator result columns remain outside the pipeline. A separate bulk protocol
+remains unimplemented.
 
 ### Batch result limits
 

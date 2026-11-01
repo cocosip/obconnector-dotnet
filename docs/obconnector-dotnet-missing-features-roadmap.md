@@ -1362,6 +1362,20 @@ charset）和 TEXT（字符 charset）两种 metadata，sync/async **4/4** 通�
 一致。本子集没有放开 Oracle locator、LOB text/OUT/cursor/array，也没有把 loopback 结果外推到
 代理、OB20 或其他 OceanBase 版本。
 
+#### D-08h：complex/LOB input 的 multi-send 发送前边界（`P4`，2026-11-01）
+
+走查发现 `BuildBatchMultiSendRequest{Async}` 原先只检查结果列和 OUT/cursor 形状；参数侧的
+`PreparedParameters` 虽然能够为普通 Oracle 执行编码 type 160、210/211，却没有 multi-send
+专用 wire 与 Connector/J 对照证据。若直接进入 COM_STMT_EXECUTE 流水线，会把未验收的复杂值或
+locator 输入误报成已支持能力。
+
+现在同步/异步构建请求在任何 prepare、执行包发送前拒绝 `ComplexType`、
+`OceanBaseComplexValue`、`OceanBaseLob` 和 `OceanBaseDbType.Blob/Clob` 参数。新增 loopback
+回归覆盖 Oracle anonymous complex input 与 typed LOB input，sync/async **4/4**；服务端观察到
+零命令字节，连接仍保持 Open。该改动是边界收敛，不是把复杂值或 LOB 扩入流水化；Oracle
+PrepareExecute 的 OUT/cursor/array 仍需 0xa1 专用请求和结果所有权，Oracle piece-data 仍逐片
+等待确认。Connector/J 2.4.14 同样没有可移植的 piece-data 流水化依据，因此不猜测实现。
+
 ### D-09：XMLType wire 形状调查（2026-10-31，`P0`）
 
 本轮先固定服务端形状，再核对 Java 和 .NET 是否已有可复用的客户端类型路径。OceanBase

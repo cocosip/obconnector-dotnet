@@ -424,6 +424,7 @@ namespace OceanBaseConnector
             try
             {
                 ValidateBatchMultiSendOperation(operation);
+                ValidateBatchMultiSendParameters(operation.Bindings.Parameters);
                 if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
                 var hasStreams = HasStreamParameters(operation.Bindings.Parameters);
@@ -464,6 +465,7 @@ namespace OceanBaseConnector
             try
             {
                 ValidateBatchMultiSendOperation(operation);
+                ValidateBatchMultiSendParameters(operation.Bindings.Parameters);
                 if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
                 var hasStreams = HasStreamParameters(operation.Bindings.Parameters);
@@ -508,6 +510,16 @@ namespace OceanBaseConnector
                 if (column.TypeCode == 160 || column.TypeCode == 163 || column.TypeCode == 210 || column.TypeCode == 211 ||
                     mode != OceanBaseCompatibilityMode.MySql && column.TypeCode >= 249 && column.TypeCode <= 252)
                     throw new NotSupportedException("Batch multi-send does not support cursor, Oracle LOB, or complex result columns.");
+            }
+        }
+
+        private static void ValidateBatchMultiSendParameters(OceanBaseParameter[] parameters)
+        {
+            foreach (var parameter in parameters)
+            {
+                if (parameter.OceanBaseDbType == OceanBaseDbType.Blob || parameter.OceanBaseDbType == OceanBaseDbType.Clob ||
+                    parameter.Value is OceanBaseLob || parameter.ComplexType != null || parameter.Value is OceanBaseComplexValue)
+                    throw new NotSupportedException("Batch multi-send does not support complex or LOB input parameters.");
             }
         }
 #endif
