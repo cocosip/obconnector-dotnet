@@ -4,6 +4,7 @@ using System.Data;
 using System.Text;
 using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.Internal.Session;
+using OceanBaseConnector.Internal.Values;
 
 namespace OceanBaseConnector.Internal.Sql
 {
@@ -26,24 +27,46 @@ namespace OceanBaseConnector.Internal.Sql
         internal Action<uint>? StatementCreated { get; set; }
         internal OracleCursorOwner? Cursors { get; set; }
         internal OracleArrayBindingPlan? ArrayBinding { get; private set; }
-        internal bool ScalarOutputsOnly { get; set; }
+        private bool _batchOutputs;
+        private bool _allowBatchLobs;
+        private bool _published;
         private object[]? _values;
         private readonly OceanBaseDbType?[] _outputTypes;
         private readonly OceanBaseComplexType?[] _outputComplexTypes;
 
+        internal void RequireBatchOutputs(bool allowLobOutputs)
+        {
+            for (var i = 0; i < _outputTypes.Length; i++)
+            {
+                var type = _outputTypes[i]; var complex = _outputComplexTypes[i];
+                if (type == OceanBaseDbType.RefCursor || complex != null && (complex.IsAnonymous || complex.Layout.HasCursorMembers) ||
+                    !allowLobOutputs && (type == OceanBaseDbType.Blob || type == OceanBaseDbType.Clob || complex?.Layout.HasLobMembers == true))
+                    throw new NotSupportedException("Batch multi-send RETURNING requires scalar or named complex outputs; LOBs require a retained caller connection.");
+            }
+            _batchOutputs = true; _allowBatchLobs = allowLobOutputs;
+        }
+
         internal void ValidateOutputColumn(int ordinal, ResultColumn column)
         {
-            if (ScalarOutputsOnly && (column.TypeCode == 160 || column.TypeCode == 163 || column.TypeCode == 210 || column.TypeCode == 211 ||
-                column.TypeCode >= 249 && column.TypeCode <= 252))
-                throw new NotSupportedException("Batch multi-send RETURNING requires scalar output metadata.");
             if (ArrayBinding != null) { ArrayBinding.ValidateColumn(ordinal, column); return; }
+            if ((uint)ordinal >= (uint)Outputs.Length)
+                throw new ProtocolException("Oracle output metadata does not match the bound output parameters.");
             var expected = _outputComplexTypes[ordinal];
             if (expected == null)
             {
-                if (Outputs[ordinal].DbType == DbType.Xml && column.IsXmlType) return;
-                if (column.TypeCode == 160) throw new NotSupportedException("A complex output requires an explicit type declaration.");
+                if (column.TypeCode == 160 && !(Outputs[ordinal].DbType == DbType.Xml && column.IsXmlType))
+                    throw new NotSupportedException("A complex output requires an explicit type declaration.");
             }
             else column.BindComplexOutput(expected);
+            if (_batchOutputs)
+            {
+                var declared = _outputTypes[ordinal];
+                if ((declared == OceanBaseDbType.Blob && column.TypeCode != 210) ||
+                    (declared == OceanBaseDbType.Clob && column.TypeCode != 211) ||
+                    ((column.TypeCode == 210 || column.TypeCode == 211) && declared != OceanBaseDbType.Blob && declared != OceanBaseDbType.Clob))
+                    throw new ProtocolException("LOB output metadata must match its declared BLOB or CLOB type.");
+                column.RequireBatchMultiSendResult(binary: true, _allowBatchLobs);
+            }
         }
 
         internal bool BeginResponse(OraclePrepareExecutePacket header)
@@ -78,24 +101,28 @@ namespace OceanBaseConnector.Internal.Sql
                 throw new ProtocolException("Oracle output metadata and row do not match the bound output parameters.");
             if (_values != null) throw new NotSupportedException("Scalar Oracle output parameters cannot contain multiple rows.");
             var values = new object[Outputs.Length];
-            for (var i = 0; i < values.Length; i++)
+            try
             {
-                ValidateOutputColumn(i, columns[i]);
-                var declared = _outputTypes[i];
-                if (row[i] != null && ((declared == OceanBaseDbType.Blob && columns[i].TypeCode != 210) ||
-                    (declared == OceanBaseDbType.Clob && columns[i].TypeCode != 211) ||
-                    ((columns[i].TypeCode == 210 || columns[i].TypeCode == 211) && declared != OceanBaseDbType.Blob && declared != OceanBaseDbType.Clob)))
-                    throw new ProtocolException("LOB output metadata must match its declared BLOB or CLOB type.");
-                if (declared == OceanBaseDbType.RefCursor && columns[i].TypeCode != 163 && row[i] != null)
-                    throw new ProtocolException("A REF CURSOR output requires cursor metadata.");
-                // PL outputs use precision 0 / scale -1 for an unconstrained runtime NUMBER.
-                values[i] = columns[i].TypeCode == 163 && row[i] != null
-                    ? (object)CreateCursor(Cursors, row[i]!)
-                    : row[i] != null && columns[i].IsDecimal && columns[i].Precision == 0 && columns[i].Scale == -1
-                        ? columns[i].DecodeDecimal(row[i]!, binary: true, constrain: false)
-                        : columns[i].DecodeBinary(row[i]);
+                for (var i = 0; i < values.Length; i++)
+                {
+                    ValidateOutputColumn(i, columns[i]);
+                    var declared = _outputTypes[i];
+                    if (row[i] != null && ((declared == OceanBaseDbType.Blob && columns[i].TypeCode != 210) ||
+                        (declared == OceanBaseDbType.Clob && columns[i].TypeCode != 211) ||
+                        ((columns[i].TypeCode == 210 || columns[i].TypeCode == 211) && declared != OceanBaseDbType.Blob && declared != OceanBaseDbType.Clob)))
+                        throw new ProtocolException("LOB output metadata must match its declared BLOB or CLOB type.");
+                    if (declared == OceanBaseDbType.RefCursor && columns[i].TypeCode != 163 && row[i] != null)
+                        throw new ProtocolException("A REF CURSOR output requires cursor metadata.");
+                    // PL outputs use precision 0 / scale -1 for an unconstrained runtime NUMBER.
+                    values[i] = columns[i].TypeCode == 163 && row[i] != null
+                        ? (object)CreateCursor(Cursors, row[i]!)
+                        : row[i] != null && columns[i].IsDecimal && columns[i].Precision == 0 && columns[i].Scale == -1
+                            ? columns[i].DecodeDecimal(row[i]!, binary: true, constrain: false)
+                            : columns[i].DecodeBinary(row[i]);
+                }
+                _values = values;
             }
-            _values = values;
+            catch { ComplexValueCodec.DisposeLobValues(values); throw; }
         }
 
         private static OceanBaseRefCursor CreateCursor(OracleCursorOwner? owner, byte[] value)
@@ -136,6 +163,13 @@ namespace OceanBaseConnector.Internal.Sql
             if (_values == null) throw new ProtocolException("Oracle execution completed without its bound output values.");
             foreach (var value in _values) if (value is OceanBaseRefCursor cursor) Cursors?.Publish(cursor.Id);
             for (var i = 0; i < _values.Length; i++) Outputs[i].Value = _values[i];
+            _published = true;
+        }
+
+        internal void DiscardOutputs()
+        {
+            if (!_published) ComplexValueCodec.DisposeLobValues(_values);
+            _values = null;
         }
 
         internal void ValidateOutputCompletion()

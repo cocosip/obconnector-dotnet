@@ -330,6 +330,7 @@ namespace OceanBaseConnector
                 CommandExchange? execution = null;
                 execution = connection.StartCommand(session, transaction, _timeout, token, () =>
                 {
+                    oracle?.DiscardOutputs();
                     execution?.CursorColumns?.EndExecution();
                     lock (_gate)
                     {
@@ -427,7 +428,7 @@ namespace OceanBaseConnector
                 ValidateBatchMultiSendParameters(operation.Bindings.Parameters);
                 if (operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
-                ValidateBatchMultiSendOutputs(operation.Oracle, operation.Exchange);
+                ValidateBatchMultiSendOutputs(operation.Oracle, operation.Exchange, allowLobResults);
                 var hasStreams = HasStreamParameters(operation.Bindings.Parameters);
                 if (hasStreams && operation.Exchange.Mode != OceanBaseCompatibilityMode.MySql)
                     throw new NotSupportedException("Batch multi-send stream parameters require MySQL long-data packets.");
@@ -480,7 +481,7 @@ namespace OceanBaseConnector
                 ValidateBatchMultiSendParameters(operation.Bindings.Parameters);
                 if (operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
-                ValidateBatchMultiSendOutputs(operation.Oracle, operation.Exchange);
+                ValidateBatchMultiSendOutputs(operation.Oracle, operation.Exchange, allowLobResults);
                 var hasStreams = HasStreamParameters(operation.Bindings.Parameters);
                 if (hasStreams && operation.Exchange.Mode != OceanBaseCompatibilityMode.MySql)
                     throw new NotSupportedException("Batch multi-send stream parameters require MySQL long-data packets.");
@@ -520,7 +521,7 @@ namespace OceanBaseConnector
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }
 
-        private void ValidateBatchMultiSendOutputs(OracleCommandPlan? plan, CommandExchange exchange)
+        private void ValidateBatchMultiSendOutputs(OracleCommandPlan? plan, CommandExchange exchange, bool allowLobResults)
         {
             if (plan == null) return;
             exchange.EnsureOraclePrepareExecute();
@@ -529,13 +530,10 @@ namespace OceanBaseConnector
             foreach (OceanBaseParameter parameter in _parameters)
             {
                 if (parameter.Direction == ParameterDirection.Input) continue;
-                if ((parameter.Direction != ParameterDirection.Output && parameter.Direction != ParameterDirection.InputOutput) ||
-                    PreparedParameters.GetComplexType(parameter) != null || parameter.Value is OceanBaseLob ||
-                    parameter.OceanBaseDbType == OceanBaseDbType.Blob || parameter.OceanBaseDbType == OceanBaseDbType.Clob ||
-                    parameter.OceanBaseDbType == OceanBaseDbType.RefCursor)
-                    throw new NotSupportedException("Batch multi-send RETURNING supports scalar OUT/INOUT parameters.");
+                if (parameter.Direction != ParameterDirection.Output && parameter.Direction != ParameterDirection.InputOutput)
+                    throw new NotSupportedException("Batch multi-send RETURNING requires OUT/INOUT parameters.");
             }
-            plan.ScalarOutputsOnly = true;
+            plan.RequireBatchOutputs(allowLobResults);
         }
 
         private OceanBaseBatchMultiSendRequest BuildBatchOracleOutputRequest(OracleCommandPlan plan, CommandExchange exchange,

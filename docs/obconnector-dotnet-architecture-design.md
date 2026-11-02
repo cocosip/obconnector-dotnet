@@ -434,13 +434,18 @@ the existing decoder. Source-column type lookups finish before sending the execu
 response restores only its request's source mapping, time zone and national character set snapshot.
 Both prepared and live result metadata reject unknown/anonymous layouts and cursor members; LOB
 members require the same retained connection and negotiated locator policy as root LOB results.
-Oracle DML RETURNING scalar OUT/INOUT uses the existing PrepareExecute packet and output plan in each
+Oracle DML RETURNING scalar OUT/INOUT, declared named complex values and retained-connection LOB outputs use the existing PrepareExecute packet and output plan in each
 request. An explicit prepared statement transfers to that request's live owner; preflight does not
 end it. Operation cleanup closes owners for completed, failed and partially constructed requests.
 Outputs stay hidden from reader/scalar results and publish atomically per command only after the final
 OK, output-presence and response-boundary checks, under the exchange's cancellation budget. A later
 failure preserves the successful prefix and the failed command's old outputs. Frozen declarations
-and actual output metadata reject complex/LOB/cursor types, including NULLs. DML prepare metadata may
+and actual output metadata reject anonymous layouts and cursor members; root BLOB/CLOB declarations
+must match the metadata even for NULL rows. Named complex outputs bind their declared layout before
+batch validation, including the opaque whole-column shape and EOF-only output markers. LOB outputs
+require negotiated locators and a retained caller connection. Partial decoding, terminal errors and
+cancellation dispose only unpublished handles; published outputs remain caller-owned after batch disposal.
+DML prepare metadata may
 describe OUT/INOUT as columns; both split counts and output-column count must match. This does not
 coerce NUMBER results into declared integer types or permit PL session side effects in the pipeline.
 A separate bulk protocol remains unimplemented.
@@ -936,7 +941,7 @@ With `Use Oracle Prepare Execute=true`, `Prepare()` / `PrepareAsync()` also prep
 
 Repeated Prepare before execution can reuse the same valid command-owned statement. The next Oracle execution transfers that ID to its cursor owner; returned REF CURSORs keep their parent statement alive after command disposal. Once transferred, later execution uses a fresh implicit PrepareExecute unless Prepare is called again. This is not persistent Oracle statement caching. Changed SQL, parameter-count/shape incompatibility, database, physical session, reset generation or statement epoch prevents stale reuse. Ordinary preparation retains its existing reuse rules.
 
-COM_STMT_PREPARE normally describes the full bind count. Oracle DML RETURNING can instead describe input binds as parameters and pure OUT binds as result columns. Only INSERT/UPDATE/DELETE/MERGE with exact output-column and combined counts may use this split; InputOutput and ReturnValue cannot use the split exception. PrepareExecute still sends every bind and validates its own output metadata. Stream uploads use the retained ID and occur only during execution; array execution also carries that ID. Preparation ignores FetchSize. REF CURSOR Input/InputOutput and complex cursor parameter values remain explicitly rejected without an input protocol contract; binary cursor columns and binary complex cursor members follow the ordinary cursor-column ownership contract above.
+COM_STMT_PREPARE normally describes the full bind count. Oracle DML RETURNING can instead describe input binds as parameters and OUT/INOUT binds as result columns. Only INSERT/UPDATE/DELETE/MERGE with exact output-column and combined counts may use this split; ReturnValue cannot use the split exception. PrepareExecute still sends every bind and validates its own output metadata. Stream uploads use the retained ID and occur only during execution; array execution also carries that ID. Preparation ignores FetchSize. REF CURSOR Input/InputOutput and complex cursor parameter values remain explicitly rejected without an input protocol contract; binary cursor columns and binary complex cursor members follow the ordinary cursor-column ownership contract above.
 
 Local fixtures and five-asset consumers cover preparation, ownership and failure handling. Direct Oracle4.4.2.2 tests cover synchronous/asynchronous block, RETURNING, procedure, function and REF CURSOR preparation, including no DML before execution and cursor consumption after command disposal. These results do not establish real TLS/OBProxy, other server versions, independent runtimes, or general metadata-lock compatibility.
 

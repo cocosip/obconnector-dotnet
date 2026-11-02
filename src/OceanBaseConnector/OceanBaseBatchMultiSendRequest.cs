@@ -29,7 +29,11 @@ namespace OceanBaseConnector
         private OracleCommandPlan? OraclePlan { get; }
         internal QueryResult CreateResult(CommandExchange exchange) => new QueryResult(exchange, Binary, completeExchange: false,
             oracleParameterCount: OraclePlan?.Bindings.Parameters.Length, oraclePlan: OraclePlan);
-        public void Dispose() => OraclePlan?.Cursors?.EndExecution();
+        public void Dispose()
+        {
+            OraclePlan?.DiscardOutputs();
+            OraclePlan?.Cursors?.EndExecution();
+        }
     }
 }
 #endif

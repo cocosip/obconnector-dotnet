@@ -236,7 +236,7 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(OceanBaseDbType.Blob)] [InlineData(OceanBaseDbType.Clob)] [InlineData(OceanBaseDbType.RefCursor)]
+        [InlineData(OceanBaseDbType.RefCursor)]
         public async Task BatchMultiSendReturningRejectsNullResourceDeclarationsBeforeSending(OceanBaseDbType type)
         {
             var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)), serverVersion: "4.4.2.2", lobLocators: true);
