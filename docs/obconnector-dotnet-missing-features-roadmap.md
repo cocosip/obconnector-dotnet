@@ -1642,6 +1642,36 @@ A-01 父项仍为 `P3`。持续验收工具已通过完整 Unit、双模式短�
 一小时专项结果和长期资源曲线尚未取得，不以限速后短跑或进程内指标关闭持续性验收。
 未验收真实 TLS/ODP/HA、其他 OS/runtime，也不把客户端会话关闭等同服务器资源目录逐项归零。
 
+### A-02 续：环境事务 COMMIT 回执丢失的实库闭环（2026-11-02）
+
+规格沿用 X02/A-02 和 `acceptance-criteria.md` 的 unknown-outcome、独立查账、无重放与旧资源隔离要求。
+已有 `AmbientEnlistment.SinglePhaseCommit` 和 Unit/公开 DLL 消费者会把未知 COMMIT 结果通知协调器为
+`InDoubt`，但真实 Integration 仅验证普通事务回执丢失。复用 `TransactionResponseDropProxy`，
+在读到真实 COMMIT OK 后截断整包或仅转发头部/marker；不增加产品 API、恢复协调器或新的 relay。
+
+范围：新建 `Faults/AmbientResponseLossTests.cs`；双模式 × sync/async SQL × 自动/显式 enlist ×
+整包/半包回执，共 16 项。`CommittableTransaction.Commit` 的协调器回调本身保持同步，不冒充异步提交 API。
+每项确认 PRE-COMMIT 不可见、`TransactionInDoubtException` 和底层 unknown、协调器 InDoubt、连接 Broken、
+真实 COMMIT 恰一次、独立已提交行数，以及容量 1 池新租约、旧事务晚释放、后续写入/回滚和自有对象清理。
+
+- [x] 补真实故障用例，复用现有 fixture 与私有 profiles；不以已有合成成功冒充实库证据。
+- [x] 构建与限定格式检查；A-01 持续测试期间使用独立构建输出，避免改写正在运行的程序集。
+- [x] 双模式 16 项限定用例通过；A-01 停止后执行关联故障/环境事务回归，80/80、0 skip。
+- [x] 独立走查新增测试和实库证据，无 Critical/Important；限定模块可本地提交。
+
+准备结果：独立 `OutputPath=TestResults/roadmap/a02-ambient-build/` Release 构建 0 warning/error，
+限定格式检查通过；`a02-ambient-noopt.trx` 为 36 pass / 245 skip，新实库用例在未 opt-in 时明确跳过。
+首次构建仅有测试侧条件表达式把事务推断为 `DbTransaction` 的编译错误，补显式转换后通过，
+不是产品缺陷或真实红绿。新增文件的独立只读走查无 Critical/Important；
+`a02-ambient-live.trx` 双模式新用例 **16/16**，0 skip，约 2 秒；真实 OK、InDoubt、独立数据、
+新租约/旧事务晚释放及对象清理均通过。`a02-ambient-related.trx` 的环境事务、普通事务回执丢失、
+写入边界和中断事务关联回归 **80/80**，0 skip，约 47 秒（包含上述 16 项，不重复累计）。
+最终独立只读走查已核对测试及 TRX，无 Critical/Important。产品源码无变更；A-02 父项仍为 `P3`，
+真实节点/代理或协调器崩溃、XA 持久恢复及更多部署并未因此关闭。
+限定用例调整为在持续测试期间单独 host 执行：长稳约 14 分钟时 TIME_WAIT=2877，动态端口范围
+16384，已有余量；本组仅 16 项顺序执行，不启动全量 socket-heavy 回归。后续资源曲线须注明这段
+短时负载，不能把同时运行不同进程误称完全隔离的主机基准。
+
 ### A-04 续：当前 Windows 包资产与独立运行时复验（2026-11-02）
 
 当前主机实际已安装 .NET 8.0.33 / 9.0.22 / 10.0.14，可直接复用 `eng/Verify-Packages.ps1`
