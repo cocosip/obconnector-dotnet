@@ -147,7 +147,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | A-01 | `P3`；MySQL/Oracle 直连各 10000 次借还及资源隔离 52/52 通过 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、清池和句柄/线程/内存稳定性未证实 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
 | A-02 | `P3`；MySQL/Oracle 直连 XA 生命周期、recover 和池丢弃恢复 28/28 通过 | PSPE、XA、unknown outcome（G11） | in-doubt、协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
 | A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过，包重载 2/2、引用 package 标识符 2/2 通过 | Schema、目录和参数元数据（G13） | 包内 PL 类型和最小权限仍缺；大小写/引用 package 标识符已覆盖；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制 | 双模式最小权限、唯一/歧义签名、更多大小写/引用标识符、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
-| A-04 | `P3` | 包、TFM 和平台（G14/R01） | 当前有五资产和 Windows 子集；非 Windows、独立 runtime、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
+| A-04 | `P3`；当前 Windows 包/运行时指定子集已验收 | 包、TFM 和平台（G14/R01） | 五资产、net8/net9/net10 独立 runtime、两个 netstandard 的 net10 host 及 netstandard2.0 的 net48 host 已复验；非 Windows、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
 | A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；196608 字符 NUL 单表达式从 .NET 0/4 恢复 4/4，原因未定，见执行记录 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
 
 ### 原缺失矩阵编号映射
@@ -1641,6 +1641,33 @@ A-01 继续保持 `P3`。本轮没有产品源码改动；完成长期交错、�
 A-01 父项仍为 `P3`。持续验收工具已通过完整 Unit、双模式短跑和独立走查，可作为本地代码模块提交；
 一小时专项结果和长期资源曲线尚未取得，不以限速后短跑或进程内指标关闭持续性验收。
 未验收真实 TLS/ODP/HA、其他 OS/runtime，也不把客户端会话关闭等同服务器资源目录逐项归零。
+
+### A-04 续：当前 Windows 包资产与独立运行时复验（2026-11-02）
+
+当前主机实际已安装 .NET 8.0.33 / 9.0.22 / 10.0.14，可直接复用 `eng/Verify-Packages.ps1`
+验证三个现代资产各自的 runtime；netstandard2.0/2.1 保留 net10 host 加载的身份，不当独立 runtime。
+从当前源码生成新的本地 nupkg，验证包 hash、依赖与精确资产选择；使用独立 BaseOutputPath，
+避免改写 A-01 已加载的程序集。不新增运行时安装、外部 CI、产品 API 或依赖。
+
+- [x] 当前源码 core/DI 打包，各五资产均为 0 warning/error。
+- [x] 运行现有包验证脚本，检查 net8/net9/net10 实际版本及 netstandard host；有 targeting pack 时另验 net48。
+- [x] 用现有私有 profiles 通过子进程 stdin 验证包的双模式存储/读回/清理，避免连接串进入命令行和报告。
+- [x] 独立走查包来源、运行时与实库证据的范围；无 Critical/Important，本地提交证据记录。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| 包来源 | 当前源码基线 `ff0609e`；core/DI 各五资产 Release 打包成功，0 warning/error；新包在 `TestResults/roadmap/a04-packages/`；无发布或推送 |
+| 包门禁 | `eng/Verify-Packages.ps1 -PackageDirectory TestResults/roadmap/a04-packages -VerifyNetFramework -VerifyLive` 通过；日志 `a04-package-live.log`，独立 restore graph 验证两个 package 的 SHA512、精确 TFM 资产和依赖组，不加载旧 feed 的同名包 |
+| 现代运行时 | net8.0 → 8.0.33，net9.0 → 9.0.22，net10.0 → 10.0.14；消费者校验 `Environment.Version.Major`，每项 8 个 loopback 协议场景及 8 个真实 MySQL/Oracle、sync/async、buffered/sequential 场景 |
+| netstandard host | netstandard2.0/2.1 均由 net10.0.14 host 加载；netstandard2.0 另由 .NET Framework 4.8.10008.0 / CLR 4.0.30319.42000、Release=534296 执行；这三项各 8 个 loopback + 8 个实库场景，不记作独立 netstandard runtime |
+| 实库与清理 | 共 6 组 × 8 = **48/48**，每组输出均严格匹配成功和 cleanup 标记；两模式直连 4.4.2.2、TLS Disabled；覆盖 prepared 输入、text/binary/NULL、独立事务可见性、回滚、错误恢复与池重开；async 场景仍包含同步事务步骤，不宣称全程异步事务或全部 provider API/ORM |
+| 私有配置 | 读取既有 User Secrets 及 profile 选项，按现有脚本契约在调用进程内临时提供其两个环境变量，完成后恢复；脚本通过重定向 stdin 把连接信息交给消费者，未放入命令行、文件或报告 |
+| 范围 | 本机 WSL 未安装，无可用非 Windows 执行端点；不安装系统组件或以 Windows 结果外推 Linux/macOS；A-04 父项仍为 P3 |
+| 独立走查 | 核对新包 SHA512、保留 restore graph、compile/runtime 资产、消费者源文件和日志；无 Critical/Important；`git diff --check` 通过 |
+
+完整包、消费者、依赖图在 `TestResults/package-validation/e7f7abb582c74c799d356995d5666583/`；
+日志只记录固定成功信息、资产和 runtime。包门禁与 A-02 的短时验证发生在 A-01 持续运行期间，
+应在长稳资源曲线记录中保留该背景；这不是性能基准或生产部署证据。
 
 ## 依据
 
