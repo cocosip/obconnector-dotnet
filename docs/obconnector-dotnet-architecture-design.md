@@ -436,6 +436,10 @@ Recognized ownerless/SYS.XMLTYPE results reuse the strict UTF-8 String decoder i
 If bound Prepare omits the type identity, the exact source-column catalog lookup must confirm
 XMLTYPE with an empty or SYS owner before marking that prepared column; live metadata remains
 independently validated. Other missing-owner complex types retain their existing restrictions.
+Client-prepared text fallback also accepts preloaded named OBJECT results through the ordinary
+recursive text decoder. Type identity must be exact or uniquely resolvable for ownerless metadata;
+collection/anonymous layouts and RAW, temporal, LOB or cursor text members remain unsupported.
+Each request keeps its own text/binary response mode, including mixed groups.
 Both prepared and live result metadata reject unknown/anonymous layouts and cursor members; LOB
 members require the same retained connection and negotiated locator policy as root LOB results.
 Oracle DML RETURNING scalar OUT/INOUT, declared named complex values and retained-connection LOB outputs use the existing PrepareExecute packet and output plan in each

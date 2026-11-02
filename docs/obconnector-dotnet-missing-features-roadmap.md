@@ -1725,6 +1725,32 @@ APP.XMLTYPE 不推断为系统 XML；实时响应继续独立验证已识别 XML
 本轮不重跑长稳、全库测试或已知 PL XML 输出限制；
 text 策略有单测，未新增真实 1295 fallback、XML DML/PL 输出、未知实时 XML identity 或跨版本验收。
 
+#### D-08r：multi-send 命名 OBJECT 文本结果（2026-11-02，指定受控直连子集 `P4`）
+
+已确认 D-04 已有的命名 OBJECT 标量/嵌套 text parser 被 batch 的 `!binary` 统一拒绝。
+现复用共享 `RequireComplexResult` 和既有 decoder，支持受控 1295 fallback 的命名 OBJECT 文本结果；
+保留预加载精确/唯一类型身份、collection/anonymous、RAW/日期/LOB/cursor text 成员的拒绝边界。
+不新增 codec/API/配置；调用面为 Prepare/live batch metadata 校验、reader/scalar/nonquery 排空，
+测试重点为 mixed text/binary 响应顺序、跨组、NULL/引号/中文、未知或不支持布局和连接复用。
+每条请求保留独立 text/binary 解码模式和 source-column 上下文；没有新增 codec/API/配置或顺序执行兜底。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| Red | `d08r-text-red.trx` **2/2 失败**，带/不带 owner 的已支持命名标量 OBJECT 均被 batch 策略拒绝 |
+| 新模块单测 | `d08r-text-unit-revised.trx` **15/15**、无 skip，约 0.2 秒；首组两条执行全部发出后才回复，mixed text/binary、第三条 text 跨组，sync/async 三种 API、根 NULL/成员 NULL/引号/中文、连接复用，另有 RAW/日期/LOB/cursor/collection/anonymous/歧义身份拒绝 |
+| 关联定向回归 | `d08r-text-unit-verified.trx` **324/324**、无 skip，约 5 秒；batch multi-send、既有 complex codec 和 ownerless text 身份测试 |
+| Oracle 实库 | `d08r-text-live.trx` **2/2**、无 skip，约 7 秒；4.4.2.2 `oracle-direct`，sync/async，嵌套 OBJECT / 全 NULL 成员对象、后续 scalar、三条 SELECT 跨两组、reader/scalar/nonquery 连续执行、缓存清除后保留值、同一会话复用及独立 observer 行数 |
+| 受控 fallback | 复用 `PrepareRefusalRelay` 只拒精确 Prepare；三次执行各拒第一条，断言 **3 refusals / 5 matching prepares / 2 forwarded prepares**；首条 text 与后两条真实 binary 混合，不冒充目标服务端原生 1295 |
+| 审查 | 独立只读审查本次产品/测试修改，无 Critical/Important；未运行全库或长稳 |
+
+首轮新单测 **2 pass / 6 fail**（`d08r-text-unit.trx`）是 loopback 在读 text 命令前未重置
+packet sequence；修正夹具的 `BeginCommand` 后通过，未因此改变产品协议。
+产品五 TFM、Integration Release 构建均 0 warning/error；四份文档与最终 TRX 已独立只读复核，
+无 Critical/Important，`git diff --check` 通过。
+本轮没有重新调查已知的复杂 text LOB 服务端 wire 限制；未新增坏 text payload 下的流水线错误排序矩阵、
+collection/anonymous text、复杂输入文本 literal、PL 输出、代理/OB20 或跨版本证据。
+不重跑长测、全消费者或原生 1295 探测。
+
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 
 本轮先固定服务端形状，再核对 Java 和 .NET 是否已有可复用的客户端类型路径。OceanBase
