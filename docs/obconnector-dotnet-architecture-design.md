@@ -450,7 +450,13 @@ Client-prepared text fallback also accepts preloaded named OBJECT results throug
 recursive text decoder. Type identity must be exact or uniquely resolvable for ownerless metadata;
 collection/anonymous layouts and RAW, temporal, LOB or cursor text members remain unsupported.
 Each request keeps its own text/binary response mode, including mixed groups.
-Both prepared and live result metadata reject unknown/anonymous layouts and cursor members; LOB
+Anonymous scalar collection binary results reuse the ordinary metadata layout and decoder in batch
+reader/scalar/nonquery, including root/member NULL, empty collections and retained read-only values.
+They cannot be rebound as inputs or declared batch outputs. Non-NULL national members still require
+a trusted storage encoding; anonymous query metadata alone does not provide one. Local protocol
+fixtures cover NUMBER, RAW, VARCHAR2, DATE, TIMESTAMP and negotiated BLOB/CLOB results; real anonymous
+SELECT wire acceptance remains open (D-08s).
+Both prepared and live result metadata reject unknown layouts and cursor members; LOB
 members require the same retained connection and negotiated locator policy as root LOB results.
 Oracle DML RETURNING scalar OUT/INOUT, declared named complex values and retained-connection LOB outputs use the existing PrepareExecute packet and output plan in each
 request. An explicit prepared statement transfers to that request's live owner; preflight does not

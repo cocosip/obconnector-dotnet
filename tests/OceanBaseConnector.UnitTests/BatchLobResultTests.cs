@@ -151,8 +151,13 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, "capability")] [InlineData(true, "capability")]
         [InlineData(false, "charset")] [InlineData(true, "charset")]
         [InlineData(false, "close-complex")] [InlineData(true, "close-complex")]
+        [InlineData(false, "owned-anonymous")] [InlineData(true, "owned-anonymous")]
+        [InlineData(false, "close-anonymous")] [InlineData(true, "close-anonymous")]
+        [InlineData(false, "capability-anonymous")] [InlineData(true, "capability-anonymous")]
         public async Task BatchMultiSendLobResultsValidateLifetimeAndCapabilityBeforeExecution(bool asynchronous, string boundary)
         {
+            var anonymous = boundary.EndsWith("-anonymous", StringComparison.Ordinal);
+            if (anonymous) boundary = boundary.Substring(0, boundary.Length - "-anonymous".Length);
             var complex = boundary.EndsWith("-complex", StringComparison.Ordinal);
             if (complex) boundary = boundary.Substring(0, boundary.Length - "-complex".Length);
             var server = Server(async channel =>
@@ -160,7 +165,7 @@ namespace OceanBaseConnector.UnitTests
                 if (complex) await ComplexScalarType(channel, scalar: "BLOB", collection: false);
                 await StatementCommand(channel, 22);
                 await channel.WritePacketAsync(new byte[] { 0, 90, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 });
-                await channel.WritePacketAsync(complex ? ComplexColumn() : Column("lob", 211, boundary == "charset" ? (ushort)63 : (ushort)45));
+                await channel.WritePacketAsync(anonymous ? ComplexColumn("", "", element: 211) : complex ? ComplexColumn() : Column("lob", 211, boundary == "charset" ? (ushort)63 : (ushort)45));
                 await channel.WritePacketAsync(Eof());
                 if (boundary != "owned" && boundary != "close") await StatementCommand(channel, 25);
                 Assert.Equal(0, await channelStreamRead(channel));

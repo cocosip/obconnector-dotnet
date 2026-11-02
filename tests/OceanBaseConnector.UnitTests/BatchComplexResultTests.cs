@@ -173,7 +173,7 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, "anonymous")] [InlineData(true, "anonymous")]
+        [InlineData(false, "unsupported-element")] [InlineData(true, "unsupported-element")]
         [InlineData(false, "unknown")] [InlineData(true, "unknown")]
         [InlineData(false, "lob")] [InlineData(true, "lob")]
         public async Task BatchMultiSendRejectsUnsupportedPreparedComplexResults(bool asynchronous, string kind)
@@ -183,7 +183,7 @@ namespace OceanBaseConnector.UnitTests
                 if (kind == "lob") await ComplexScalarType(channel, scalar: "CLOB", collection: false);
                 await StatementCommand(channel, 22);
                 await channel.WritePacketAsync(new byte[] { 0, 90, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 });
-                await channel.WritePacketAsync(kind == "anonymous" ? ComplexColumn(name: "") : ComplexColumn());
+                await channel.WritePacketAsync(kind == "unsupported-element" ? ComplexColumn(name: "", element: 4) : ComplexColumn());
                 await channel.WritePacketAsync(Eof());
                 Assert.Equal(90, (await StatementCommand(channel, 25))[1]);
                 Assert.Equal(0, await channelStreamRead(channel));

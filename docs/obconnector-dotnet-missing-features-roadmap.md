@@ -1777,6 +1777,26 @@ packet sequence；修正夹具的 `BeginCommand` 后通过，未因此改变产�
 collection/anonymous text、复杂输入文本 literal、PL 输出、代理/OB20 或跨版本证据。
 不重跑长测、全消费者或原生 1295 探测。
 
+#### D-08s：multi-send 匿名集合 binary 结果（2026-11-02，`P3` 本地协议子集）
+
+北京时间 17:20 前启动本模块，遵守 17:20 后不启动新模块的截止约束。
+普通 reader 已有从 metadata 构造匿名标量集合布局和 binary 解码路径，本模块删除 batch 对匿名结果的一刀切拒绝。
+复用既有解析器、分组响应、NULL/空集合、结果只读描述及 LOB 生命周期，已补齐该组合；
+保留匿名输入/输出、text、未知元素和 cursor 拒绝，LOB 仍要求协商能力且保留调用方连接。
+协议单测覆盖 NUMBER/RAW/VARCHAR2/DATE/TIMESTAMP、同步/异步三种 API、跨组、坏 count、
+LOB 释放/连接复用、半途 locator 解码失败和自有连接/CloseConnection/能力协商资源边界；
+保留的结果在清理类型缓存后可读，但匿名结果描述不可 CreateValue 或回绑；
+非 NULL NCHAR/NVARCHAR2 成员继续因缺少可信 storage encoding 而拒绝，空集合可读。
+没有已知真实匿名 SELECT wire 形状，不重复服务端探测，不以 loopback 关闭实库验收。
+
+验证：RED 5 项均因原 batch 策略拒绝而失败；首轮定向 **63/63** 通过。
+最终定向回归 **443/443** 通过、无跳过，包含新匿名结果、现有 multi-send、普通匿名集合和复杂 LOB 边界；
+证据：`TestResults/roadmap/d08s-anonymous-verified.trx`。新增 OUT/INOUT 拒绝测试的 fixture
+曾分别误用关闭连接 factory 和无 context 的结果描述，修正为打开连接的 factory descriptor 后通过，
+未因此修改产品逻辑。产品 netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0
+五 TFM Release build **0 warning / 0 error**。本模块代码、测试及四份文档已独立复审批准。
+不运行全套/长测，不推送；本模块提交后结束本轮推进，不再启动新模块。
+
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 
 本轮先固定服务端形状，再核对 Java 和 .NET 是否已有可复用的客户端类型路径。OceanBase
