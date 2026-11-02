@@ -60,12 +60,12 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public async Task BatchMultiSendRejectsLobInputBeforeWriting(bool asynchronous)
+        [InlineData(false, false)] [InlineData(true, false)]
+        [InlineData(false, true)] [InlineData(true, true)]
+        public async Task BatchMultiSendRejectsLobInputWithoutNegotiatedLocators(bool asynchronous, bool optIn)
         {
-            var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)), lobLocators: true);
-            using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Batch Multi Send=true");
+            var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)), lobLocators: !optIn);
+            using var connection = new OceanBaseConnection((optIn ? LobConfiguration(server.Port) : Configuration(server.Port)) + ";Use Batch Multi Send=true");
             try
             {
                 await connection.OpenAsync();

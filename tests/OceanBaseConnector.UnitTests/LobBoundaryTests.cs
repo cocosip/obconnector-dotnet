@@ -30,18 +30,20 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
-        public async Task LobBindingCannotMoveToAnotherPhysicalSession(bool reopen)
+        [InlineData(false, false)] [InlineData(true, false)]
+        [InlineData(false, true)] [InlineData(true, true)]
+        public async Task LobBindingCannotMoveToAnotherPhysicalSession(bool reopen, bool multiSend)
         {
             var first = Server(channel => LobQueryReply(channel, 210, InlineLob(new byte[] { 1 })), lobLocators: true);
             var second = Server(async channel => { await Query(channel, "after"); await channel.WritePacketAsync(Ok(1)); }, lobLocators: true);
-            using var original = new OceanBaseConnection(LobConfiguration(first.Port));
-            using var other = new OceanBaseConnection(LobConfiguration(second.Port));
+            var options = multiSend ? ";Use Batch Multi Send=true" : "";
+            using var original = new OceanBaseConnection(LobConfiguration(first.Port) + options);
+            using var other = new OceanBaseConnection(LobConfiguration(second.Port) + options);
             try
             {
                 await original.OpenAsync(); using var command = original.CreateCommand(); command.CommandText = "select lob_value";
                 using var lob = (OceanBaseLob)(await command.ExecuteScalarAsync())!;
-                if (reopen) { original.Close(); original.ConnectionString = LobConfiguration(second.Port); await original.OpenAsync(); }
+                if (reopen) { original.Close(); original.ConnectionString = LobConfiguration(second.Port) + options; await original.OpenAsync(); }
                 else await other.OpenAsync();
                 var target = reopen ? original : other; using var bound = target.CreateCommand(); bound.CommandText = "select :lob from dual";
                 bound.Parameters.Add(new OceanBaseParameter { ParameterName = "lob", Value = lob });
@@ -51,6 +53,15 @@ namespace OceanBaseConnector.UnitTests
                     Assert.Throws<InvalidOperationException>(() => lob.OpenRead());
                     Assert.Throws<InvalidOperationException>(() => lob.WriteBytes(0, new byte[] { 2 }, 0, 1));
                     await Assert.ThrowsAsync<InvalidOperationException>(() => lob.TruncateAsync(0));
+                }
+                if (multiSend)
+                {
+                    using var batch = target.CreateBatch();
+                    var item = BatchItem(batch, "insert into t values(:lob)");
+                    item.Parameters.Add(new OceanBaseParameter { ParameterName = "lob", Value = lob });
+                    Assert.Throws<InvalidOperationException>(() => batch.ExecuteNonQuery());
+                    lob.Dispose();
+                    await Assert.ThrowsAsync<ObjectDisposedException>(() => batch.ExecuteNonQueryAsync());
                 }
                 lob.Dispose(); Assert.Throws<ObjectDisposedException>(() => bound.ExecuteScalar());
                 using var after = target.CreateCommand(); after.CommandText = "after"; Assert.Equal(1, await after.ExecuteNonQueryAsync());

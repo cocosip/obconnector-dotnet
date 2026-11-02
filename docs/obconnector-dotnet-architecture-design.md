@@ -416,9 +416,12 @@ is not promised. Applications needing whole-batch atomicity must supply a transa
 fault and target-asset tests do not establish real SQL semantics, performance, proxy or deployment
 compatibility. The opt-in multi-send path accepts named Oracle OBJECT/collection inputs using the
 ordinary type 160 COM_STMT_EXECUTE encoding, including typed NULLs and national members. Collection
-SQL may require an explicit CAST to supply the server's prepare-time type context. Anonymous inputs,
-LOB/cursor members and locator parameters remain rejected before prepare; Oracle OUT/cursor/array
-binding and locator results remain outside the pipeline. Ordinary named complex binary results use
+SQL may require an explicit CAST to supply the server's prepare-time type context. Root BLOB/CLOB
+locator inputs reuse ordinary type 210/211 encoding without additional LOB I/O. Existing capability,
+connection/session/transaction and disposal checks still apply; handles remain caller-owned and
+1295 text fallback rejects locator materialization. Anonymous inputs and LOB/cursor members remain
+rejected before prepare; Oracle OUT/cursor/array binding and locator results remain outside the
+pipeline. Ordinary named complex binary results use
 the existing decoder. Source-column type lookups finish before sending the execution group; each
 response restores only its request's source mapping, time zone and national character set snapshot.
 Both prepared and live result metadata reject unknown/anonymous layouts and LOB/cursor members.

@@ -132,7 +132,7 @@ namespace OceanBaseConnector.UnitTests
                 if (!insideTransaction) await TransactionBegin(channel);
                 await TransactionEnd(channel, false); channel.BeginCommand(); await Query(channel, "after"); await channel.WritePacketAsync(Ok(1));
             }, lobLocators: true);
-            using var connection = new OceanBaseConnection(LobConfiguration(server.Port));
+            using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Batch Multi Send=true");
             try
             {
                 await connection.OpenAsync(); using var initial = insideTransaction ? await connection.BeginTransactionAsync() : null;
@@ -145,6 +145,12 @@ namespace OceanBaseConnector.UnitTests
                 await Assert.ThrowsAsync<InvalidOperationException>(() => lob.TruncateAsync(0));
                 using var bound = connection.CreateCommand(); bound.CommandText = "select :lob from dual"; bound.Parameters.Add(new OceanBaseParameter { ParameterName = "lob", Value = lob });
                 Assert.Throws<InvalidOperationException>(() => bound.ExecuteScalar());
+                using (var batch = connection.CreateBatch())
+                {
+                    var item = BatchItem(batch, "insert into t values(:lob)");
+                    item.Parameters.Add(new OceanBaseParameter { ParameterName = "lob", Value = lob });
+                    Assert.Throws<InvalidOperationException>(() => batch.ExecuteNonQuery());
+                }
                 using var after = connection.CreateCommand(); after.CommandText = "after"; Assert.Equal(1, after.ExecuteNonQuery());
             }
             finally { connection.Close(); server.Stop(); }
