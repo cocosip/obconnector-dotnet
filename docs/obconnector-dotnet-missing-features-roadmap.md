@@ -1702,6 +1702,29 @@ collection 输出仍只有 loopback 证据；不重跑已知 persistent nested-t
 array pipeline、OBProxy/OB20 或其他版本；没有长测、全消费者测试或部署大矩阵。
 后续仍按本文“仍未实现的具体组合”推进；无明确 wire/归属契约的项目不通过反复长测冒充开发完成。
 
+#### D-08q：multi-send XMLTYPE String 结果（2026-11-02，指定直连子集 `P4`）
+
+已确认普通查询支持的 ownerless / SYS.XMLTYPE String 结果被共享 batch 类型校验误拒绝。
+共享 batch 校验现复用既有严格 UTF-8 text/binary 解码，保留其他复杂类型、LOB、cursor 限制。
+带参数 SELECT 的 Prepare 可能同时省略类型名和 owner；复用已有精确 source-column 目录查询，
+只有目录确认 ownerless / SYS.XMLTYPE 后才标记该 prepared 列。NULL owner 的其他普通复杂类型仍拒绝，
+APP.XMLTYPE 不推断为系统 XML；实时响应继续独立验证已识别 XML metadata，不猜测未知 payload。
+
+范围覆盖准备阶段和实时响应校验、sync/async reader/scalar/nonquery 排空、NULL、严格 UTF-8、
+中文、跨组及连接复用。Oracle 4.4.2.2 `oracle-direct` **2/2**、无 skip，约 1 秒，
+`d08q-xml-live-verified.trx`：三条带参数 SELECT 跨两组，三种 API 重复执行，DbType.Xml 存储、
+独立 observer 行数及连接复用。初次 `d08q-xml-live.trx` **0/2** 暴露上述 Prepare 目录缺口，
+修复后通过，不把首次失败记为成功。
+
+最初 policy red **4/4 失败**（`d08q-xml-red.trx`），初版定向单测 **23/23**，
+扩展 source identity 回归 **56/56**。后续负向夹具曾错误要求 Broken 连接继续关闭 statement，
+并把执行前裸 NotSupportedException 限定为 OceanBaseException；只修正夹具，未改变产品错误语义。
+最终 `d08q-xml-unit-final.trx` **85/85**、无 skip、约 2 秒，覆盖 XML、source identity、
+复杂类型和资源拒绝边界；产品五 TFM 和 Integration Release 构建均 0 warning/error。
+独立只读审查核对当前模块源码、测试、四份文档及最终 TRX，无 Critical/Important；`git diff --check` 通过。
+本轮不重跑长稳、全库测试或已知 PL XML 输出限制；
+text 策略有单测，未新增真实 1295 fallback、XML DML/PL 输出、未知实时 XML identity 或跨版本验收。
+
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 
 本轮先固定服务端形状，再核对 Java 和 .NET 是否已有可复用的客户端类型路径。OceanBase

@@ -113,18 +113,25 @@ namespace OceanBaseConnector.Internal.Session
                 var bytes = result.Row![i];
                 if (bytes == null && i == 0)
                 {
-                    if (allowMissingOwner) { identity[i] = string.Empty; continue; }
-                    throw new NotSupportedException("The complex source column type owner is unavailable.");
+                    identity[i] = string.Empty;
+                    continue;
                 }
                 if (bytes == null || bytes.Length == 0 || bytes.Length > 512) throw new ProtocolException("Invalid complex source column type identifier.");
                 identity[i] = ResultColumn.Utf8.GetString(bytes);
                 ValidateComplexSourceName(identity[i]);
             }
+            if (identity[0].Length == 0 && !allowMissingOwner && identity[1] != "XMLTYPE")
+                throw new NotSupportedException("The complex source column type owner is unavailable.");
             return (identity[0], identity[1]);
         }
 
         private void PublishComplexColumn(ResultColumn column, (string Owner, string Name) identity)
         {
+            if (column.ComplexMetadata!.Name.Length == 0 && identity.Owner == "SYS" && identity.Name == "XMLTYPE")
+            {
+                column.BindSourceXmlType();
+                return;
+            }
             // Source table ownership is independent of its declared type ownership.
             if (column.ComplexMetadata!.Name.Length != 0 && identity.Name != column.ComplexMetadata.Name ||
                 ComplexTypes == null || !ComplexTypes.TryGetValue(identity, out var description))

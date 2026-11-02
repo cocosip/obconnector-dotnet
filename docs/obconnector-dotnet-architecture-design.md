@@ -432,6 +432,10 @@ restriction. Anonymous inputs, cursor members, complex text LOB results, Oracle 
 249-252 results remain outside the pipeline. Ordinary named complex binary results use
 the existing decoder. Source-column type lookups finish before sending the execution group; each
 response restores only its request's source mapping, time zone and national character set snapshot.
+Recognized ownerless/SYS.XMLTYPE results reuse the strict UTF-8 String decoder in multi-send.
+If bound Prepare omits the type identity, the exact source-column catalog lookup must confirm
+XMLTYPE with an empty or SYS owner before marking that prepared column; live metadata remains
+independently validated. Other missing-owner complex types retain their existing restrictions.
 Both prepared and live result metadata reject unknown/anonymous layouts and cursor members; LOB
 members require the same retained connection and negotiated locator policy as root LOB results.
 Oracle DML RETURNING scalar OUT/INOUT, declared named complex values and retained-connection LOB outputs use the existing PrepareExecute packet and output plan in each

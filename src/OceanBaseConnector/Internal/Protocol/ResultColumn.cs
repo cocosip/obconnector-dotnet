@@ -12,7 +12,9 @@ namespace OceanBaseConnector.Internal.Protocol
         private OceanBaseConnector.Internal.Session.LobSession? Lobs { get; set; }
         internal ComplexColumnMetadata? ComplexMetadata { get; private set; }
         internal OceanBaseComplexType? ComplexType { get; private set; }
-        internal bool IsXmlType => TypeCode == 160 && ComplexMetadata != null &&
+        private bool _sourceXmlType;
+        internal void BindSourceXmlType() => _sourceXmlType = true;
+        internal bool IsXmlType => _sourceXmlType || TypeCode == 160 && ComplexMetadata != null &&
             (ComplexMetadata.Schema.Length == 0 || string.Equals(ComplexMetadata.Schema, "SYS", StringComparison.OrdinalIgnoreCase)) &&
             string.Equals(ComplexMetadata.Name, "XMLTYPE", StringComparison.OrdinalIgnoreCase);
         private bool _complexOutput;
@@ -67,6 +69,7 @@ namespace OceanBaseConnector.Internal.Protocol
         }
         internal void RequireBatchMultiSendResult(bool binary, bool allowLobResults = false)
         {
+            if (IsXmlType) return;
             if (allowLobResults && (TypeCode == 210 || TypeCode == 211))
             {
                 _ = FieldType;
