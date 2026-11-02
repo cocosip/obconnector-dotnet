@@ -19,6 +19,13 @@ namespace OceanBaseConnector.Internal.Values
             ValidateRoot(type, mode); var budget = MaximumMembers;
             return Read(cursor, type, 0, ref budget, cursor.Remaining, nationalEncoding: nationalEncoding, lobs: lobs, cursors: cursors);
         }
+        internal static void DisposeLobValues(object? value)
+        {
+            if (value is OceanBaseLob lob) lob.Dispose();
+            else if (value is OceanBaseComplexValue complex) complex.DisposeLobValues();
+            else if (value is object?[] values)
+                foreach (var member in values) DisposeLobValues(member);
+        }
         internal static byte[] ReadResultField(ByteCursor cursor, ComplexType type, OceanBaseCompatibilityMode mode)
         {
             ValidateRoot(type, mode); var budget = MaximumMembers; var position = cursor.Position;
@@ -221,52 +228,56 @@ namespace OceanBaseConnector.Internal.Values
             // Result bitmaps reserve two bits at every nesting level, unlike parameter bitmaps.
             var bitmap = ReadBytes(cursor, ((int)count + 9) / 8, start);
             var values = materialize ? new object?[count] : System.Array.Empty<object?>();
-            for (var i = 0; i < count; i++)
+            try
             {
-                if ((bitmap[(i + 2) / 8] & 1 << ((i + 2) % 8)) != 0) continue;
-                var member = type.Members[type.IsCollection ? 0 : i];
-                if (member.TypeCode == 160)
+                for (var i = 0; i < count; i++)
                 {
-                    var nested = Read(cursor, member, depth + 1, ref budget, start, materialize, nationalEncoding, lobs, cursors);
-                    if (materialize) values[i] = nested;
-                }
-                else
-                {
-                    var length = cursor.ReadLengthEncodedInteger();
-                    if (length > int.MaxValue || member.TypeCode == 0 && length > 512)
-                        throw new ProtocolException("Invalid complex scalar length.");
-                    if (member.TypeCode == 12 || member.TypeCode == 202) TemporalCodec.ValidateFieldLength(member.TypeCode, length);
-                    if (!materialize)
+                    if ((bitmap[(i + 2) / 8] & 1 << ((i + 2) % 8)) != 0) continue;
+                    var member = type.Members[type.IsCollection ? 0 : i];
+                    if (member.TypeCode == 160)
                     {
-                        if (length > MaximumBytes - (start - cursor.Remaining)) throw new ProtocolException("Complex data exceeds the supported byte limit.");
-                        cursor.Skip((int)length); continue;
+                        var nested = Read(cursor, member, depth + 1, ref budget, start, materialize, nationalEncoding, lobs, cursors);
+                        if (materialize) values[i] = nested;
                     }
-                    var bytes = ReadBytes(cursor, (int)length, start);
-                    switch (member.TypeCode)
+                    else
                     {
-                        case 0:
-                            var number = DecimalCodec.Parse(ResultColumn.Utf8.GetString(bytes).Trim());
-                            DecimalCodec.Validate(number, OceanBaseCompatibilityMode.Oracle); values[i] = number; break;
-                        case 253: case 254: values[i] = ResultColumn.Utf8.GetString(bytes); break;
-                        case 207:
-                        case 208:
-                            values[i] = (nationalEncoding ?? throw new NotSupportedException("The complex result has no trusted national character set.")).GetString(bytes); break;
-                        case 203: values[i] = bytes; break;
-                        case 12: values[i] = TemporalCodec.DecodeBinary(12, OceanBaseCompatibilityMode.Oracle, bytes, 0); break;
-                        case 202:
-                            values[i] = TemporalCodec.DecodeTimestamp(bytes, bytes[11]); break;
-                        case 210:
-                        case 211:
-                            values[i] = new OceanBaseLob(lobs ?? throw new NotSupportedException("Complex LOB members require negotiated Oracle LOB locators."), bytes, member.TypeCode == 211); break;
-                        case 163:
-                            if (cursors == null) throw new NotSupportedException("Complex cursor members require their originating execution.");
-                            if (bytes.Length != 4) throw new ProtocolException("A cursor identifier requires four bytes.");
-                            values[i] = cursors.Publish(new ByteCursor(bytes).ReadUInt32()); break;
-                        default: throw new NotSupportedException("The complex scalar type is not supported.");
+                        var length = cursor.ReadLengthEncodedInteger();
+                        if (length > int.MaxValue || member.TypeCode == 0 && length > 512)
+                            throw new ProtocolException("Invalid complex scalar length.");
+                        if (member.TypeCode == 12 || member.TypeCode == 202) TemporalCodec.ValidateFieldLength(member.TypeCode, length);
+                        if (!materialize)
+                        {
+                            if (length > MaximumBytes - (start - cursor.Remaining)) throw new ProtocolException("Complex data exceeds the supported byte limit.");
+                            cursor.Skip((int)length); continue;
+                        }
+                        var bytes = ReadBytes(cursor, (int)length, start);
+                        switch (member.TypeCode)
+                        {
+                            case 0:
+                                var number = DecimalCodec.Parse(ResultColumn.Utf8.GetString(bytes).Trim());
+                                DecimalCodec.Validate(number, OceanBaseCompatibilityMode.Oracle); values[i] = number; break;
+                            case 253: case 254: values[i] = ResultColumn.Utf8.GetString(bytes); break;
+                            case 207:
+                            case 208:
+                                values[i] = (nationalEncoding ?? throw new NotSupportedException("The complex result has no trusted national character set.")).GetString(bytes); break;
+                            case 203: values[i] = bytes; break;
+                            case 12: values[i] = TemporalCodec.DecodeBinary(12, OceanBaseCompatibilityMode.Oracle, bytes, 0); break;
+                            case 202:
+                                values[i] = TemporalCodec.DecodeTimestamp(bytes, bytes[11]); break;
+                            case 210:
+                            case 211:
+                                values[i] = new OceanBaseLob(lobs ?? throw new NotSupportedException("Complex LOB members require negotiated Oracle LOB locators."), bytes, member.TypeCode == 211); break;
+                            case 163:
+                                if (cursors == null) throw new NotSupportedException("Complex cursor members require their originating execution.");
+                                if (bytes.Length != 4) throw new ProtocolException("A cursor identifier requires four bytes.");
+                                values[i] = cursors.Publish(new ByteCursor(bytes).ReadUInt32()); break;
+                            default: throw new NotSupportedException("The complex scalar type is not supported.");
+                        }
                     }
                 }
+                return values;
             }
-            return values;
+            catch { DisposeLobValues(values); throw; }
         }
 
         private static byte[] ReadBytes(ByteCursor cursor, int count, int start)

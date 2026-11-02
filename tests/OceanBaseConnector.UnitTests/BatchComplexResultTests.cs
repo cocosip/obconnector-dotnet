@@ -118,7 +118,7 @@ namespace OceanBaseConnector.UnitTests
                 // A forbidden live column must fail before waiting for EOF or allocating a locator.
                 try { Assert.Equal(0, await channelStreamRead(channel)); } catch (IOException) { }
             }, lobLocators: true);
-            using var connection = new OceanBaseConnection((complex ? LobConfiguration(server.Port) : Configuration(server.Port)) + ";Use Batch Multi Send=true");
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true");
             try
             {
                 await connection.OpenAsync();
@@ -188,7 +188,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(90, (await StatementCommand(channel, 25))[1]);
                 Assert.Equal(0, await channelStreamRead(channel));
             }, lobLocators: true);
-            using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Batch Multi Send=true");
+            using var connection = new OceanBaseConnection((kind == "lob" ? Configuration(server.Port) : LobConfiguration(server.Port)) + ";Use Batch Multi Send=true");
             try
             {
                 await connection.OpenAsync();

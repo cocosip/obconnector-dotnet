@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,6 +19,93 @@ public sealed class ComplexLobMultiSendTests
         from collection in new[] { false, true }
         from character in new[] { false, true }
         select new object[] { profile.Name, asynchronous, collection, character };
+
+    [IntegrationTheory]
+    [MemberData(nameof(Rows))]
+    public async Task NamedComplexLobResultsRetainCallerOwnedHandles(string profileName, bool asynchronous, bool nested, bool character)
+    {
+        var profile = IntegrationEnvironment.GetProfile(profileName);
+        var builder = profile.CreateBuilder(); builder.UseOraclePrepareExecute = true; builder.UseLobLocators = true;
+        builder.UseBatchMultiSend = true; builder.BatchMultiSendNumber = 2;
+        await using var db = new DatabaseContext(new IntegrationProfile
+        {
+            Name = profile.Name, Mode = profile.Mode, ConnectionString = builder.ConnectionString, CreateObjects = true,
+        });
+        await using var connection = await db.OpenAsync();
+        var leaf = db.NewObject("TYPE");
+        var scalar = character ? "CLOB" : "BLOB";
+        await db.ExecuteAsync(connection, "CREATE TYPE " + leaf + " AS OBJECT(a " + scalar + ",n NUMBER)", CancellationToken.None);
+        var name = leaf;
+        if (nested)
+        {
+            name = db.NewObject("TYPE");
+            await db.ExecuteAsync(connection, "CREATE TYPE " + name + " AS OBJECT(v " + leaf + ",b " + scalar + ")", CancellationToken.None);
+        }
+        var table = await db.TableAsync(connection, "id INTEGER PRIMARY KEY,value " + name, CancellationToken.None);
+        string first = character ? "TO_CLOB('患者🙂')" : "TO_BLOB(HEXTORAW('0080FF'))";
+        string last = character ? "TO_CLOB('last')" : "TO_BLOB(HEXTORAW('2A'))";
+        string other = character ? "TO_CLOB('other')" : "TO_BLOB(HEXTORAW('FF00'))";
+        var values = new[] { leaf + "(" + first + ",7)", leaf + "(NULL,7)", leaf + "(" + last + ",7)" };
+        for (var i = 0; i < 3; i++)
+        {
+            var value = nested ? name + "(" + values[i] + "," + (i == 1 ? "NULL" : other) + ")" : values[i];
+            await db.ExecuteAsync(connection, "INSERT INTO " + table + " VALUES(" + (i + 1) + "," + value + ")", CancellationToken.None);
+        }
+        var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
+        var type = await connection.GetComplexTypeAsync(owner, name);
+        using var batch = connection.CreateBatch();
+        for (var i = 1; i <= 3; i++)
+        {
+            var item = batch.CreateBatchCommand(); item.CommandText = "SELECT value FROM " + table + " WHERE id=:id";
+            item.Parameters.Add(new OceanBaseParameter { ParameterName = "id", DbType = DbType.Int32, Value = i });
+            batch.BatchCommands.Add(item);
+        }
+        var handles = new List<(OceanBaseLob Lob, string Expected)>();
+        void Retain(OceanBaseComplexValue value, int row)
+        {
+            Assert.Same(type, value.Type); var members = value.GetValues();
+            if (nested)
+            {
+                if (row == 1) Assert.Null(members[1]);
+                else handles.Add((Assert.IsType<OceanBaseLob>(members[1]), character ? "other" : "FF00"));
+                members = Assert.IsType<OceanBaseComplexValue>(members[0]).GetValues();
+            }
+            DatabaseContext.EqualNumber(members[1], 7, "Ordinary members must retain their value.");
+            if (row == 1) Assert.Null(members[0]);
+            else handles.Add((Assert.IsType<OceanBaseLob>(members[0]), character ? row == 0 ? "患者🙂" : "last" : row == 0 ? "0080FF" : "2A"));
+        }
+        try
+        {
+            using (var reader = asynchronous ? await batch.ExecuteReaderAsync() : batch.ExecuteReader())
+            {
+                for (var i = 0; i < 3; i++)
+                {
+                    Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                    Retain(reader.GetFieldValue<OceanBaseComplexValue>(0), i);
+                    if (i == 0)
+                        foreach (var (lob, _) in handles)
+                            Assert.Throws<InvalidOperationException>(() => { if (character) lob.OpenTextReader(); else lob.OpenRead(); });
+                    Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+                    Assert.Equal(i < 2, asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+                }
+            }
+            Retain(Assert.IsType<OceanBaseComplexValue>(asynchronous ? await batch.ExecuteScalarAsync() : batch.ExecuteScalar()), 0);
+            Assert.Equal(-1, asynchronous ? await batch.ExecuteNonQueryAsync() : batch.ExecuteNonQuery());
+            batch.Dispose(); connection.ClearComplexTypeCache();
+            foreach (var (lob, expected) in handles)
+            {
+                if (character) { using var source = lob.OpenTextReader(); Assert.Equal(expected, await source.ReadToEndAsync()); }
+                else
+                {
+                    using var source = lob.OpenRead(); using var target = new MemoryStream();
+                    await source.CopyToAsync(target); Assert.Equal(Convert.FromHexString(expected), target.ToArray());
+                }
+            }
+            DatabaseContext.EqualNumber(await db.ScalarAsync(connection, db.SelectOne, CancellationToken.None), 1, "Writer must remain reusable.");
+            await using var observer = await db.OpenAsync(); Assert.Equal(3, await db.CountAsync(observer, table, CancellationToken.None));
+        }
+        finally { foreach (var (lob, _) in handles) lob.Dispose(); }
+    }
 
     [IntegrationTheory]
     [MemberData(nameof(Rows))]

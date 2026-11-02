@@ -60,5 +60,9 @@ namespace OceanBaseConnector
                 else if (value is OceanBaseComplexValue nested) nested.ValidateLobBindings(connection, session, transaction, owner);
             }
         }
+        internal void DisposeLobValues()
+        {
+            foreach (var value in _values) Internal.Values.ComplexValueCodec.DisposeLobValues(value);
+        }
     }
 }

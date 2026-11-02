@@ -150,13 +150,17 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, "close")] [InlineData(true, "close")]
         [InlineData(false, "capability")] [InlineData(true, "capability")]
         [InlineData(false, "charset")] [InlineData(true, "charset")]
+        [InlineData(false, "close-complex")] [InlineData(true, "close-complex")]
         public async Task BatchMultiSendLobResultsValidateLifetimeAndCapabilityBeforeExecution(bool asynchronous, string boundary)
         {
+            var complex = boundary.EndsWith("-complex", StringComparison.Ordinal);
+            if (complex) boundary = boundary.Substring(0, boundary.Length - "-complex".Length);
             var server = Server(async channel =>
             {
+                if (complex) await ComplexScalarType(channel, scalar: "BLOB", collection: false);
                 await StatementCommand(channel, 22);
                 await channel.WritePacketAsync(new byte[] { 0, 90, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 });
-                await channel.WritePacketAsync(Column("lob", 211, boundary == "charset" ? (ushort)63 : (ushort)45));
+                await channel.WritePacketAsync(complex ? ComplexColumn() : Column("lob", 211, boundary == "charset" ? (ushort)63 : (ushort)45));
                 await channel.WritePacketAsync(Eof());
                 if (boundary != "owned" && boundary != "close") await StatementCommand(channel, 25);
                 Assert.Equal(0, await channelStreamRead(channel));
@@ -165,6 +169,7 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 if (boundary != "owned") await connection.OpenAsync();
+                if (complex) await connection.GetComplexTypeAsync("Owner", "Thing");
                 using var batch = boundary == "owned" ? new OceanBaseBatch(connection) : connection.CreateBatch();
                 BatchItem(batch, "select lob from t");
                 if (boundary == "close")

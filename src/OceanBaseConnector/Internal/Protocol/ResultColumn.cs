@@ -75,8 +75,9 @@ namespace OceanBaseConnector.Internal.Protocol
             if (TypeCode == 163 || TypeCode == 210 || TypeCode == 211 ||
                 Mode != OceanBaseCompatibilityMode.MySql && TypeCode >= 249 && TypeCode <= 252 ||
                 TypeCode == 160 && (!binary || ComplexType == null || ComplexType.IsAnonymous ||
-                    ComplexType.Layout.HasLobMembers || ComplexType.Layout.HasCursorMembers))
-                throw new NotSupportedException("Batch multi-send requires ordinary scalar or named complex results; root LOBs require a retained caller connection.");
+                    ComplexType.Layout.HasLobMembers && !allowLobResults || ComplexType.Layout.HasCursorMembers))
+                throw new NotSupportedException("Batch multi-send requires ordinary scalar or named complex results; LOBs require a retained caller connection.");
+            if (TypeCode == 160 && ComplexType!.Layout.HasLobMembers) _ = FieldType;
         }
         private ResultColumn(string database, string table, string originalTable, string name, string originalName,
             byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode, string? sessionTimeZone, NationalCharacterSet? nationalCharacterSet, bool treatTinyAsBoolean)
@@ -511,8 +512,12 @@ namespace OceanBaseConnector.Internal.Protocol
                     ? (NationalCharacterSet ?? throw new NotSupportedException("The complex output has no trusted national character set.")).ResultEncoding(Charset)
                     : ComplexType.Context?.StoredNationalEncoding;
                 var values = ComplexValueCodec.DecodeResult(complex, ComplexType.Layout, Mode, encoding, Lobs, _cursors);
-                if (complex.HasRemaining) throw new ProtocolException("Trailing complex value bytes.");
-                return OceanBaseComplexValue.FromResult(ComplexType, values);
+                try
+                {
+                    if (complex.HasRemaining) throw new ProtocolException("Trailing complex value bytes.");
+                    return OceanBaseComplexValue.FromResult(ComplexType, values);
+                }
+                catch { ComplexValueCodec.DisposeLobValues(values); throw; }
             }
             if (TypeCode == 163) return (_cursors ?? throw new NotSupportedException("A REF CURSOR requires its originating execution.")).Publish(ReadCursorId(value));
             if (TypeCode == 13) return YearCodec.Decode(value, true);

@@ -422,16 +422,18 @@ locator rebinding remains rejected. This does not remove server restrictions on 
 Root BLOB/CLOB
 locator inputs reuse ordinary type 210/211 encoding without additional LOB I/O. Existing capability,
 connection/session/transaction and disposal checks still apply; handles remain caller-owned and
-1295 text fallback rejects locator materialization. Root BLOB/CLOB locator results reuse the ordinary
+1295 text fallback rejects locator materialization. Root BLOB/CLOB and named complex binary LOB results reuse the ordinary
 decoder when the caller owns and retains the connection. Prepare and live metadata both validate
-Oracle mode, locator negotiation and CLOB charset. Streams open only after the batch reader is fully
+Oracle mode and locator negotiation; root CLOB metadata also validates charset. Streams open only after the batch reader is fully
 drained and closed; early close invalidates retained handles. Failed scalar execution disposes any
-captured LOB that was not delivered. Data-source-owned batches and CloseConnection retain the result
-restriction. Anonymous inputs, cursor members, complex LOB results, Oracle OUT/cursor/array binding and legacy Oracle
+captured LOBs, including nested members, that were not delivered. Partial complex decoding and result
+packaging failures also dispose already decoded LOBs. Data-source-owned batches and CloseConnection retain the result
+restriction. Anonymous inputs, cursor members, complex text LOB results, Oracle OUT/cursor/array binding and legacy Oracle
 249-252 results remain outside the pipeline. Ordinary named complex binary results use
 the existing decoder. Source-column type lookups finish before sending the execution group; each
 response restores only its request's source mapping, time zone and national character set snapshot.
-Both prepared and live result metadata reject unknown/anonymous layouts and LOB/cursor members.
+Both prepared and live result metadata reject unknown/anonymous layouts and cursor members; LOB
+members require the same retained connection and negotiated locator policy as root LOB results.
 A separate bulk protocol remains unimplemented.
 
 ### Batch result limits

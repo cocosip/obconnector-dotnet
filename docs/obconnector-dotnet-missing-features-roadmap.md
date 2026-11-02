@@ -126,7 +126,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的结果及命名复杂 LOB 内容输入子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自有连接/CloseConnection 的 locator 结果、复杂 LOB 结果、输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的根/命名复杂 LOB binary 结果及命名复杂 LOB 内容输入子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自有连接/CloseConnection 的 locator 结果、复杂 text LOB 结果、输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
 | D-09 | `P4`；4.4.2.2 `oracle-direct` text+binary String wire 子集；PL XMLTYPE OUT/INOUT 已确认是服务端限制；完整 XML codec 仍未关闭 | XMLType wire 调查与有条件 codec（T17） | ownerless `XMLTYPE` 已有严格 UTF-8 String wire；`SYS.XMLTYPE` metadata 已有安全的 String 消费边界；`DbType.Xml` 参数使用已验证的 type 253 字符串 wire；同一 PL OUT/INOUT 形状在 Connector/J 2.4.14 与 .NET 分别返回 `600/0A000`、`600/42000`，按服务端限制跳过客户端扩展 | 当前子集覆盖普通 XMLTYPE 列、NULL、同步/异步 DML、metadata、PL 函数结果、显式 Prepare binary 结果；带 owner 的复杂 payload、坏值/最大值和跨版本证据仍待确认；PL OUT/INOUT 当前版本不再作为待开发项 | 保持当前子集的参数/结果/NULL/metadata 契约；取得稳定复杂 XML identity 和不同服务端 wire 后再扩展，不把 PL 失败伪装成客户端成功 |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
@@ -213,7 +213,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | Oracle 输出计划 / REF CURSOR offset | D-03b | 成功 wire、位置与归属契约；Java RefCursor 也排除普通 offset 分支，不能直接套用普通 SELECT FETCH |
 | 命名复杂值中的 LOB locator 回绑及未证实的复杂成员方向 | D-04 | 可辨识的类型/locator wire 和生命周期；当前 BLOB DML、根 NULL/text/cursor 成员的已确认服务端限制另记，不作为盲改客户端的理由 |
 | package-local PL/SQL RECORD 参数派生与绑定 | A-03d | 字段目录、输入/输出 payload 及成功交互；目前 Java 公开 API 也不支持绑定，不能归为服务端拒绝 |
-| multi-send 的 anonymous/复杂 LOB 结果、关闭连接时的 locator 结果、OUT/cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
+| multi-send 的 anonymous/复杂 text LOB 结果、关闭连接时的 locator 结果、OUT/cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；保留调用方连接的复杂 LOB binary 结果见 D-08n（OBJECT 实库、collection 仅 loopback）；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
 
 完整 XML codec、SDO 专用 WKB/WKT/SRID API、稀疏向量/嵌套 ARRAY 属于额外范围或 wire/版本待确认；
 当前通用 String/Binary/OBJECT 路径已有验收，不能把“没有专用类型名”直接等同没有功能。
@@ -1572,6 +1572,32 @@ writer：BLOB 成员接受 `byte[]`，CLOB 成员接受 UTF-8 文本，发送 le
 
 报告保存在忽略目录 `TestResults/roadmap/`。未运行长测、全消费者或部署矩阵，也不把本轮
 PL 成员读取成功外推为所有直接 DML、LOB 输出或其他版本/代理组合。
+
+#### D-08n：命名复杂 LOB binary 结果（2026-11-02，保留调用方连接的 OBJECT 子集 `P4`）
+
+放开 named OBJECT/collection 的 LOB binary 结果，复用既有复杂值 decoder 与 `LobSession`，
+不增加 API 或 LOB 协议。仅限调用方持有且保留连接、已协商 locator 的场景，prepare/live
+metadata 使用相同规则。reader 排空并关闭后才允许打开成员 stream；batch 释放和描述缓存
+清除不影响已交付的 handle。nonquery 不 materialize LOB。匿名、复杂 text LOB、cursor、
+自有连接/`CloseConnection`、Oracle 249–252、OUT/array 限制继续保留。
+
+同时修复普通 command 和 batch 共用 decoder 的失败清理：后续成员解码失败、嵌套子树成功后
+父成员失败、尾部字节非法或复杂值包装失败，均递归释放尚未交付的 LOB；scalar 已捕获复杂值
+而后续响应失败时也释放全部成员，不复制 RAW 数据。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| 功能 red | 新增 **32/32** 在修改前失败；其中普通 command 的两项部分解码测试暴露既有句柄泄漏；`d08-complex-lob-result-red.trx` |
+| 定向回归 | **74/74**，无 skip，534 ms；OBJECT/collection × BLOB/CLOB × sync/async × reader/scalar/nonquery、跨两组排空、NULL/空 locator、部分/嵌套/尾部解码失败、scalar 后续 ERR、未协商及 CloseConnection 边界；`d08-complex-lob-result-verified.trx` |
+| Oracle 直连 | 4.4.2.2 `oracle-direct` 平面/嵌套 OBJECT × BLOB/CLOB × sync/async **8/8**，无 skip，约 7 秒；服务端构造整列值，三个 SELECT 跨两组，reader/scalar/nonquery、排空前拒读、batch 释放/缓存清除后内容、NULL 成员、连接复用与独立行数核对；`d08-complex-lob-result-live.trx` |
+| 构建 | 产品五 TFM 与集成项目 Release 均为 0 警告/0 错误 |
+| 独立走查 | 产品与测试无待修发现；文档将 CLOB charset 校验限定到根 CLOB metadata 后关闭一项措辞问题；确认 retained connection/locator 协商边界、递归清理与不复制 RAW；走查未替代实库验证 |
+
+collection 结果只有 loopback 证据，不计实库验收。当前 BLOB OBJECT 绑定成员直接 DML、
+根 NULL OBJECT 身份、持久 nested-table 与复杂 text 的既有服务端限制不变。中间失败报告
+`d08-complex-lob-result-final.trx` 的四项是新增夹具错误：未预加载 named 描述及假设私有连接
+可预加载描述；已修正/移除无效夹具，不归因于产品。报告保留在忽略目录 `TestResults/roadmap/`。
+未运行持续压力、全消费者或部署矩阵。
 
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 

@@ -206,7 +206,7 @@ namespace OceanBaseConnector
             internal object? Value;
             internal bool Set;
             internal bool Delivered;
-            public void Dispose() { if (!Delivered && Value is OceanBaseLob lob) lob.Dispose(); }
+            public void Dispose() { if (!Delivered) Internal.Values.ComplexValueCodec.DisposeLobValues(Value); }
         }
 
         private static int ConsumeBatchResponse(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar, bool binary)
