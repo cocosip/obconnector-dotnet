@@ -275,6 +275,10 @@ namespace OceanBaseConnector.Internal.Session
 
         internal bool IsBatchResponse { get; private set; }
         internal bool AllowBatchLobResults { get; set; }
+        internal void PublishBatchOutputs(Action publish)
+        {
+            lock (_gate) { EnsureReading(); publish(); }
+        }
         internal void BeginBatchResponse(Dictionary<(string, string, string, string), OceanBaseComplexType>? sourceComplexTypes,
             string? sessionTimeZone, NationalCharacterSet? nationalCharacterSet)
         {

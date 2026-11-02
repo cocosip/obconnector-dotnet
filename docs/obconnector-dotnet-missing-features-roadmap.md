@@ -126,7 +126,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的根/命名复杂 LOB binary 结果及命名复杂 LOB 内容输入子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自有连接/CloseConnection 的 locator 结果、复杂 text LOB 结果、输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的根/命名复杂 LOB binary 结果及命名复杂 LOB 内容输入及 Oracle DML RETURNING 标量 OUT/INOUT 子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自有连接/CloseConnection 的 locator 结果、复杂 text LOB 结果、PL/资源输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
 | D-09 | `P4`；4.4.2.2 `oracle-direct` text+binary String wire 子集；PL XMLTYPE OUT/INOUT 已确认是服务端限制；完整 XML codec 仍未关闭 | XMLType wire 调查与有条件 codec（T17） | ownerless `XMLTYPE` 已有严格 UTF-8 String wire；`SYS.XMLTYPE` metadata 已有安全的 String 消费边界；`DbType.Xml` 参数使用已验证的 type 253 字符串 wire；同一 PL OUT/INOUT 形状在 Connector/J 2.4.14 与 .NET 分别返回 `600/0A000`、`600/42000`，按服务端限制跳过客户端扩展 | 当前子集覆盖普通 XMLTYPE 列、NULL、同步/异步 DML、metadata、PL 函数结果、显式 Prepare binary 结果；带 owner 的复杂 payload、坏值/最大值和跨版本证据仍待确认；PL OUT/INOUT 当前版本不再作为待开发项 | 保持当前子集的参数/结果/NULL/metadata 契约；取得稳定复杂 XML identity 和不同服务端 wire 后再扩展，不把 PL 失败伪装成客户端成功 |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
@@ -213,7 +213,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | Oracle 输出计划 / REF CURSOR offset | D-03b | 成功 wire、位置与归属契约；Java RefCursor 也排除普通 offset 分支，不能直接套用普通 SELECT FETCH |
 | 命名复杂值中的 LOB locator 回绑及未证实的复杂成员方向 | D-04 | 可辨识的类型/locator wire 和生命周期；当前 BLOB DML、根 NULL/text/cursor 成员的已确认服务端限制另记，不作为盲改客户端的理由 |
 | package-local PL/SQL RECORD 参数派生与绑定 | A-03d | 字段目录、输入/输出 payload 及成功交互；目前 Java 公开 API 也不支持绑定，不能归为服务端拒绝 |
-| multi-send 的 anonymous/复杂 text LOB 结果、关闭连接时的 locator 结果、OUT/cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；保留调用方连接的复杂 LOB binary 结果见 D-08n（OBJECT 实库、collection 仅 loopback）；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
+| multi-send 的 anonymous/复杂 text LOB 结果、关闭连接时的 locator 结果、PL/资源输出、cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；保留调用方连接的复杂 LOB binary 结果见 D-08n（OBJECT 实库、collection 仅 loopback）；DML RETURNING 标量 OUT/INOUT 见 D-08o；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
 
 完整 XML codec、SDO 专用 WKB/WKT/SRID API、稀疏向量/嵌套 ARRAY 属于额外范围或 wire/版本待确认；
 当前通用 String/Binary/OBJECT 路径已有验收，不能把“没有专用类型名”直接等同没有功能。
@@ -1598,6 +1598,38 @@ collection 结果只有 loopback 证据，不计实库验收。当前 BLOB OBJEC
 `d08-complex-lob-result-final.trx` 的四项是新增夹具错误：未预加载 named 描述及假设私有连接
 可预加载描述；已修正/移除无效夹具，不归因于产品。报告保留在忽略目录 `TestResults/roadmap/`。
 未运行持续压力、全消费者或部署矩阵。
+
+#### D-08o：Oracle DML RETURNING 标量 OUT/INOUT（2026-11-02，指定直连子集 `P4`）
+
+复用 `OracleCommandPlan`、type `0xa1` 和 `QueryResult`，将每条 DML RETURNING 的输出计划
+接入 multi-send；三条请求可跨两个分组，先发送整组再消费响应。输出行对 reader/scalar
+保持隐藏；该条最终 OK、输出存在性和响应边界验证通过后，在取消预算锁内原子发布。后续
+命令失败保留已成功的输出前缀，失败条仍是原值；已知最后 ERR 可以复用连接，中间 ERR
+仍有待消费响应时断开。缺失输出标记必须在 `ResponseComplete` 前失败，不能把会话误判可用。
+
+显式 Prepare 的 statement ID 转交给 request 的存活 owner，预检完成不再提前结束 owner；
+批次 operation 统一清理部分构造、成功、失败和提前关闭路径。DML 的 Prepare metadata
+可能把 OUT/INOUT 都描述为列，修复既有只接受纯 OUT 的 split-count 限制；仍须同时满足
+输出列数等于输出参数数、输入参数数加列数等于绑定位置数，不放宽 PL 或错误计数。
+NUMBER 输出继续遵守既有 provider/Decimal 契约，不增加向声明整数类型的自动转换。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| 功能 red | 新增首批 **16/16** 原先因统一输出拒绝失败；`d08-returning-red.trx`。另两个显式 Prepare INOUT 用例在旧 split-count 校验下失败、两个 OUT 对照通过；`d08-returning-inout-prepare-red.trx` |
+| 定向回归 | **120/120**，无 skip，约 2 秒；新功能、OUT/INOUT wire、reader/scalar/nonquery、跨组、NULL、已知前缀/末尾 ERR、取消/超时/截断/非法 tail、缺失输出标记/多行、显式 Prepare 与重复执行、资源声明/metadata 拒绝及既有输出/Prepare 回归；`d08-returning-final.trx` |
+| Oracle 直连 | 4.4.2.2 `oracle-direct` sync/async × 显式/隐式 Prepare × OUT/INOUT **8/8**，无 skip，约 1 秒；三个 UPDATE RETURNING 跨两组，NUMBER 与 NVARCHAR2 Unicode/NULL，多输出原子发布，reader/scalar/nonquery 连续重用，独立 observer 核对实际存储及连接复用；`d08-returning-live-verified.trx` |
+| 构建 | 产品五 TFM 与重建后的集成项目 Release 均为 0 警告/0 错误 |
+| 独立走查 | 无阻塞问题；专项复核 statement owner、冻结声明与实际 metadata、terminal 前验证、每条发布及 INOUT split-count 条件 |
+
+初轮实库 **4/8** 暴露了上述 INOUT Prepare 缺陷，以及用 Int64 接受 NUMBER 后直接回绑的
+夹具假设；后者改用现有 Decimal 契约。一次 `--no-build` 复跑使用了集成项目旧输出，其
+`d08-returning-live-final.trx` 不作为修复后证据；以重建后的 `*-live-verified.trx` 为准。
+初轮单测的缺失标记问题已修复，extra-row 夹具捕获预期的对端断连；失败报告保留。
+
+本项只放开可缓存且无会话/类型失效的 Oracle DML 标量 OUT/INOUT。任意 PL/StoredProcedure、
+ReturnValue、复杂/LOB/cursor 输出和 array binding 仍未纳入流水化；声明和实际资源 metadata
+即使 NULL 也不能绕过限制。MySQL 用户变量输出、代理/OB20、跨版本与持续压力未新增验收。
+报告保存在忽略目录 `TestResults/roadmap/`；未运行长测、全消费者或部署矩阵。
 
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 

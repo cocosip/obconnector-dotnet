@@ -198,6 +198,7 @@ namespace OceanBaseConnector
             internal PhysicalSession? Session { get; set; }
             internal OceanBaseBatchCommand[] Items { get; set; } = Array.Empty<OceanBaseBatchCommand>();
             internal OceanBaseCommand[] Commands { get; set; } = Array.Empty<OceanBaseCommand>();
+            internal OceanBaseBatchMultiSendRequest[]? MultiSendRequests { get; set; }
             internal int[] Counts { get; set; } = Array.Empty<int>();
             internal OceanBaseBatchReader? Reader { get; set; }
             internal void Activate(OceanBaseCommand command, bool owned)
@@ -226,6 +227,9 @@ namespace OceanBaseConnector
                 {
                     lock (_batch.Gate)
                     {
+                        if (MultiSendRequests != null)
+                            foreach (var request in MultiSendRequests) request?.Dispose();
+                        MultiSendRequests = null;
                         Session?.ReleaseReservation(this);
                         foreach (var command in Commands)
                         {

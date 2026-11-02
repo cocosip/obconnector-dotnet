@@ -428,12 +428,21 @@ Oracle mode and locator negotiation; root CLOB metadata also validates charset. 
 drained and closed; early close invalidates retained handles. Failed scalar execution disposes any
 captured LOBs, including nested members, that were not delivered. Partial complex decoding and result
 packaging failures also dispose already decoded LOBs. Data-source-owned batches and CloseConnection retain the result
-restriction. Anonymous inputs, cursor members, complex text LOB results, Oracle OUT/cursor/array binding and legacy Oracle
+restriction. Anonymous inputs, cursor members, complex text LOB results, Oracle PL/resource outputs, cursor/array binding and legacy Oracle
 249-252 results remain outside the pipeline. Ordinary named complex binary results use
 the existing decoder. Source-column type lookups finish before sending the execution group; each
 response restores only its request's source mapping, time zone and national character set snapshot.
 Both prepared and live result metadata reject unknown/anonymous layouts and cursor members; LOB
 members require the same retained connection and negotiated locator policy as root LOB results.
+Oracle DML RETURNING scalar OUT/INOUT uses the existing PrepareExecute packet and output plan in each
+request. An explicit prepared statement transfers to that request's live owner; preflight does not
+end it. Operation cleanup closes owners for completed, failed and partially constructed requests.
+Outputs stay hidden from reader/scalar results and publish atomically per command only after the final
+OK, output-presence and response-boundary checks, under the exchange's cancellation budget. A later
+failure preserves the successful prefix and the failed command's old outputs. Frozen declarations
+and actual output metadata reject complex/LOB/cursor types, including NULLs. DML prepare metadata may
+describe OUT/INOUT as columns; both split counts and output-column count must match. This does not
+coerce NUMBER results into declared integer types or permit PL session side effects in the pipeline.
 A separate bulk protocol remains unimplemented.
 
 ### Batch result limits

@@ -133,6 +133,7 @@ namespace OceanBaseConnector
         {
             operation.ThrowIfCanceled();
             var requests = new OceanBaseBatchMultiSendRequest[operation.Commands.Length];
+            operation.MultiSendRequests = requests;
             for (var i = 0; i < requests.Length; i++)
             {
                 operation.ThrowIfCanceled();
@@ -155,7 +156,7 @@ namespace OceanBaseConnector
                 {
                     exchange.BatchCommand = operation.Items[i];
                     exchange.BeginBatchResponse(requests[i].SourceComplexTypes, requests[i].SessionTimeZone, requests[i].NationalCharacterSet);
-                    var count = ConsumeBatchResponse(exchange, operation, captureScalar && !scalar.Set, scalar, requests[i].Binary);
+                    var count = ConsumeBatchResponse(exchange, operation, captureScalar && !scalar.Set, scalar, requests[i]);
                     operation.Items[i].Affected = operation.Counts[i] = count;
                     if (count >= 0) { anyAffected = true; total = checked(total + count); }
                 }
@@ -169,6 +170,7 @@ namespace OceanBaseConnector
         {
             operation.ThrowIfCanceled();
             var requests = new OceanBaseBatchMultiSendRequest[operation.Commands.Length];
+            operation.MultiSendRequests = requests;
             for (var i = 0; i < requests.Length; i++)
             {
                 operation.ThrowIfCanceled();
@@ -191,7 +193,7 @@ namespace OceanBaseConnector
                 {
                     exchange.BatchCommand = operation.Items[i];
                     exchange.BeginBatchResponse(requests[i].SourceComplexTypes, requests[i].SessionTimeZone, requests[i].NationalCharacterSet);
-                    var count = await ConsumeBatchResponseAsync(exchange, operation, captureScalar && !scalar.Set, scalar, requests[i].Binary).ConfigureAwait(false);
+                    var count = await ConsumeBatchResponseAsync(exchange, operation, captureScalar && !scalar.Set, scalar, requests[i]).ConfigureAwait(false);
                     operation.Items[i].Affected = operation.Counts[i] = count;
                     if (count >= 0) { anyAffected = true; total = checked(total + count); }
                 }
@@ -209,9 +211,9 @@ namespace OceanBaseConnector
             public void Dispose() { if (!Delivered) Internal.Values.ComplexValueCodec.DisposeLobValues(Value); }
         }
 
-        private static int ConsumeBatchResponse(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar, bool binary)
+        private static int ConsumeBatchResponse(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar, OceanBaseBatchMultiSendRequest request)
         {
-            var result = new QueryResult(exchange, binary, completeExchange: false);
+            var result = request.CreateResult(exchange);
             result.Start();
             using var reader = new OceanBaseDataReader(exchange, result, operation.Connection, operation.Session!, CommandBehavior.Default, leaveExchangeOpen: true);
             if (captureScalar)
@@ -224,9 +226,9 @@ namespace OceanBaseConnector
             return reader.RecordsAffected;
         }
 
-        private static async Task<int> ConsumeBatchResponseAsync(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar, bool binary)
+        private static async Task<int> ConsumeBatchResponseAsync(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar, OceanBaseBatchMultiSendRequest request)
         {
-            var result = new QueryResult(exchange, binary, completeExchange: false);
+            var result = request.CreateResult(exchange);
             await result.StartAsync(operation.Token).ConfigureAwait(false);
             await using var reader = new OceanBaseDataReader(exchange, result, operation.Connection, operation.Session!, CommandBehavior.Default, leaveExchangeOpen: true);
             if (captureScalar)

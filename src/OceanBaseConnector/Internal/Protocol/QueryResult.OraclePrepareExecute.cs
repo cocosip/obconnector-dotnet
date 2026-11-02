@@ -59,9 +59,11 @@ namespace OceanBaseConnector.Internal.Protocol
                 _oraclePlan.ArrayBinding.Finish(ok.AffectedRows);
             }
             _affected = checked(System.Math.Max(0, _affected) + ok.AffectedRows);
+            if (_query.IsBatchResponse) _oraclePlan?.ValidateOutputCompletion();
             _oracleTailPending = false;
             End(ok.StatusFlags, ok);
             OracleCompletion = ok;
+            if (_query.IsBatchResponse && _oraclePlan != null) _query.PublishBatchOutputs(_oraclePlan.PublishOutputs);
         }
 
         private void ReadOracleOutput()

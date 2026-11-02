@@ -26,12 +26,16 @@ namespace OceanBaseConnector.Internal.Sql
         internal Action<uint>? StatementCreated { get; set; }
         internal OracleCursorOwner? Cursors { get; set; }
         internal OracleArrayBindingPlan? ArrayBinding { get; private set; }
+        internal bool ScalarOutputsOnly { get; set; }
         private object[]? _values;
         private readonly OceanBaseDbType?[] _outputTypes;
         private readonly OceanBaseComplexType?[] _outputComplexTypes;
 
         internal void ValidateOutputColumn(int ordinal, ResultColumn column)
         {
+            if (ScalarOutputsOnly && (column.TypeCode == 160 || column.TypeCode == 163 || column.TypeCode == 210 || column.TypeCode == 211 ||
+                column.TypeCode >= 249 && column.TypeCode <= 252))
+                throw new NotSupportedException("Batch multi-send RETURNING requires scalar output metadata.");
             if (ArrayBinding != null) { ArrayBinding.ValidateColumn(ordinal, column); return; }
             var expected = _outputComplexTypes[ordinal];
             if (expected == null)
@@ -132,6 +136,12 @@ namespace OceanBaseConnector.Internal.Sql
             if (_values == null) throw new ProtocolException("Oracle execution completed without its bound output values.");
             foreach (var value in _values) if (value is OceanBaseRefCursor cursor) Cursors?.Publish(cursor.Id);
             for (var i = 0; i < _values.Length; i++) Outputs[i].Value = _values[i];
+        }
+
+        internal void ValidateOutputCompletion()
+        {
+            if (Outputs.Length != 0 && _values == null)
+                throw new ProtocolException("Oracle execution completed without its bound output values.");
         }
 
         internal static OracleCommandPlan Create(string text, CommandType type, OceanBaseParameterCollection parameters, int arrayCount = 0)

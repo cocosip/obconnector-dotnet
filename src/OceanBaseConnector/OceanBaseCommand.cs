@@ -417,22 +417,25 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
         internal OceanBaseBatchMultiSendRequest BuildBatchMultiSendRequest(CancellationToken token, bool allowLobResults)
         {
-            if (CommandType != CommandType.Text || HasOutputParameters() || _fetchSize != 0 || AllowClientSidePrepareFallback)
-                throw new NotSupportedException("Batch multi-send requires input-only text commands without cursors, outputs, or fallback.");
+            if (CommandType != CommandType.Text || _fetchSize != 0 || AllowClientSidePrepareFallback)
+                throw new NotSupportedException("Batch multi-send requires text commands without cursors or client fallback.");
 
             var operation = Start(CommandBehavior.Default, token, prepareOnly: false);
             try
             {
                 ValidateBatchMultiSendOperation(operation);
                 ValidateBatchMultiSendParameters(operation.Bindings.Parameters);
-                if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
+                if (operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
+                ValidateBatchMultiSendOutputs(operation.Oracle, operation.Exchange);
                 var hasStreams = HasStreamParameters(operation.Bindings.Parameters);
                 if (hasStreams && operation.Exchange.Mode != OceanBaseCompatibilityMode.MySql)
                     throw new NotSupportedException("Batch multi-send stream parameters require MySQL long-data packets.");
                 var zone = operation.Exchange.EnsureSessionTimeZone();
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = operation.Exchange.EnsureNationalCharacterSet();
+                if (operation.Oracle != null)
+                    return BuildBatchOracleOutputRequest(operation.Oracle, operation.Exchange, operation.Session, operation.Parameters, zone, national);
                 var statement = EnsurePrepared(operation, allowFallback: true);
                 if (statement == null)
                 {
@@ -467,22 +470,25 @@ namespace OceanBaseConnector
 
         internal async Task<OceanBaseBatchMultiSendRequest> BuildBatchMultiSendRequestAsync(CancellationToken token, bool allowLobResults)
         {
-            if (CommandType != CommandType.Text || HasOutputParameters() || _fetchSize != 0 || AllowClientSidePrepareFallback)
-                throw new NotSupportedException("Batch multi-send requires input-only text commands without cursors, outputs, or fallback.");
+            if (CommandType != CommandType.Text || _fetchSize != 0 || AllowClientSidePrepareFallback)
+                throw new NotSupportedException("Batch multi-send requires text commands without cursors or client fallback.");
 
             var operation = Start(CommandBehavior.Default, token, prepareOnly: false);
             try
             {
                 ValidateBatchMultiSendOperation(operation);
                 ValidateBatchMultiSendParameters(operation.Bindings.Parameters);
-                if (operation.Oracle != null || operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
+                if (operation.MySql != null || operation.ClientFallback || operation.FetchSize != 0)
                     throw new NotSupportedException("Batch multi-send requires ordinary prepared input-only commands.");
+                ValidateBatchMultiSendOutputs(operation.Oracle, operation.Exchange);
                 var hasStreams = HasStreamParameters(operation.Bindings.Parameters);
                 if (hasStreams && operation.Exchange.Mode != OceanBaseCompatibilityMode.MySql)
                     throw new NotSupportedException("Batch multi-send stream parameters require MySQL long-data packets.");
                 var zone = await operation.Exchange.EnsureSessionTimeZoneAsync(token).ConfigureAwait(false);
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = await operation.Exchange.EnsureNationalCharacterSetAsync(token).ConfigureAwait(false);
+                if (operation.Oracle != null)
+                    return BuildBatchOracleOutputRequest(operation.Oracle, operation.Exchange, operation.Session, operation.Parameters, zone, national);
                 var statement = await EnsurePreparedAsync(operation, token, allowFallback: true).ConfigureAwait(false);
                 if (statement == null)
                 {
@@ -512,6 +518,41 @@ namespace OceanBaseConnector
                     operation.Exchange.SourceComplexTypes, zone, national);
             }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
+        }
+
+        private void ValidateBatchMultiSendOutputs(OracleCommandPlan? plan, CommandExchange exchange)
+        {
+            if (plan == null) return;
+            exchange.EnsureOraclePrepareExecute();
+            if (!SqlStatementBoundary.IsOracleDml(plan.Bindings.CommandText) || plan.ArrayBinding != null || plan.Outputs.Length == 0)
+                throw new NotSupportedException("Batch multi-send Oracle outputs require DML RETURNING.");
+            foreach (OceanBaseParameter parameter in _parameters)
+            {
+                if (parameter.Direction == ParameterDirection.Input) continue;
+                if ((parameter.Direction != ParameterDirection.Output && parameter.Direction != ParameterDirection.InputOutput) ||
+                    PreparedParameters.GetComplexType(parameter) != null || parameter.Value is OceanBaseLob ||
+                    parameter.OceanBaseDbType == OceanBaseDbType.Blob || parameter.OceanBaseDbType == OceanBaseDbType.Clob ||
+                    parameter.OceanBaseDbType == OceanBaseDbType.RefCursor)
+                    throw new NotSupportedException("Batch multi-send RETURNING supports scalar OUT/INOUT parameters.");
+            }
+            plan.ScalarOutputsOnly = true;
+        }
+
+        private OceanBaseBatchMultiSendRequest BuildBatchOracleOutputRequest(OracleCommandPlan plan, CommandExchange exchange,
+            PhysicalSession session, byte[] parameters, string? zone, NationalCharacterSet? national)
+        {
+            var statement = GetPrepared(session, plan.Bindings.Parameters.Length, plan);
+            if (HasNationalParameters(plan.Bindings.Parameters))
+                parameters = PreparedParameters.Encode(plan.Bindings.Parameters, exchange.Mode, national, clientEncoding: exchange.ClientEncoding);
+            var packet = OraclePrepareExecutePacket.Build(statement?.Id ?? 0, plan.Bindings.CommandText,
+                plan.Bindings.Parameters.Length, parameters, exchange.ClientEncoding);
+            var request = new OceanBaseBatchMultiSendRequest(packet, statement?.Id ?? 0, binary: true, longDataParameters: null,
+                sessionTimeZone: zone, nationalCharacterSet: national, oraclePlan: plan);
+            // The request owns the statement until its actual response, beyond this preflight exchange.
+            exchange.CursorColumns = null;
+            try { exchange.Complete(); }
+            catch { request.Dispose(); throw; }
+            return request;
         }
 
         private static void ValidateBatchMultiSendOperation((CommandExchange Exchange, PhysicalSession Session, OceanBaseConnection Connection, ParameterBindingPlan Bindings, byte[] Parameters, bool Binary, int FetchSize, OracleCommandPlan? Oracle, bool ClientFallback, bool CursorOffset, MySqlCommandPlan? MySql) operation)
@@ -577,11 +618,12 @@ namespace OceanBaseConnector
         private static bool PreparedParameterCountMatches(PreparedStatement statement, int count, OracleCommandPlan? oracle)
         {
             if (statement.ParameterCount == count) return true;
-            // Oracle DML RETURNING describes pure OUT binds as result columns during COM_STMT_PREPARE.
+            // Oracle DML RETURNING describes its OUT/INOUT binds as result columns during COM_STMT_PREPARE.
             if (oracle == null || !SqlStatementBoundary.IsOracleDml(statement.CommandText) ||
                 oracle.Outputs.Length == 0 || statement.ColumnCount != oracle.Outputs.Length ||
                 statement.ParameterCount + statement.ColumnCount != count) return false;
-            foreach (var output in oracle.Outputs) if (output.Direction != ParameterDirection.Output) return false;
+            foreach (var output in oracle.Outputs)
+                if (output.Direction != ParameterDirection.Output && output.Direction != ParameterDirection.InputOutput) return false;
             return true;
         }
 

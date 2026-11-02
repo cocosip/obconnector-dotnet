@@ -395,7 +395,7 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(ParameterDirection.InputOutput, 1, 1)]
+        [InlineData(ParameterDirection.InputOutput, 0, 1)]
         [InlineData(ParameterDirection.Output, 0, 2)]
         [InlineData(ParameterDirection.Output, 0, 1)]
         public async Task OracleStandalonePrepareDmlRejectsWrongSplitMetadata(ParameterDirection direction, ushort parameters, ushort columns)
