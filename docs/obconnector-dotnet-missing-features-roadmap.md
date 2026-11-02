@@ -114,7 +114,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | 需要修改/核对 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；不含 OUT/cursor/复杂值，不以 `P3` 宣称全部组合完成 |
+| D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；命名复杂值普通/批量受控 fallback 子集见 D-01b；不含 OUT/cursor/LOB/anonymous，不以 `P3` 宣称全部组合完成 |
 | D-02 | `P2`；a1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1～d3 以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
 | D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
@@ -288,6 +288,32 @@ TLS/KDC、远端 CI、其他 OS 或生产负载。
 下一模块是 **D-02 的范围核对**：先列清现有多语句输入/多结果子集及 Prepare、cursor、OUT、
 复杂输入的具体缺口与 wire 前提；已支持的字面量/流不重复实现，缺证据的组合保留拒绝，
 确认可实现的子项后才进入测试、实现、走查和提交。
+
+#### D-01b：命名复杂值普通/批量 client fallback 输入（2026-11-02，指定受控直连子集 `P4`）
+
+复用 D-02d 已有命名 OBJECT/collection SQL constructor，补齐普通 client-prepare 和 batch multi-send
+在精确 `1295/HY000` 后的输入路径；现有代码只允许 multi-statement 调用此 helper，属于客户端组合缺口。
+保留 opt-in、会话/事务/类型代际、严格编码、SQL 字节预算、NULL OBJECT 集合元素身份、
+anonymous/LOB/cursor/输出和流限制，不新增参数 codec、配置或资源读取。
+quoted identity、typed NULL、national、递归标量与 SQL 字节预算沿用原 helper；普通 fallback 的显式
+opt-in 及 batch 既有自动策略保持原契约，执行失败不触发 fallback 或重放。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| Red | `d01b-complex-red.trx` **2/2 失败**；已支持的命名 OBJECT/collection 构造器在普通输入模式被拒绝 |
+| 新模块 | `d01b-complex-unit-revised.trx` **24/24**、无 skip，约 1 秒；exact Unicode SQL、三个重复执行含 typed NULL、无用 national binary 编码不参与、quoted schema/type、标量字面量与递归不支持布局；共享 national 字典 fixture 新增可选 collection 形状，默认不变 |
+| 关联单测 | `d01b-complex-unit-verified.trx` **180/180**、无 skip，约 2 秒；client prepare、构造器、complex fallback、脚本、batch named 及过期数组描述符 |
+| 实库 | `d01b-complex-live-final.trx` **4/4**、无 skip，约 8 秒；4.4.2.2 `oracle-direct`，sync/async × 嵌套 OBJECT/collection。普通 fallback 四轮存储、根 NULL/空集合/全 NULL 属性、national/引号/RAW/纳秒值、CHECK 拒绝和独立无副作用查账；随后 batch 同组混合 fallback constructor 与 binary typed NULL，逐条计数及独立读回；清 cache 后旧值和 typed NULL 在新 Prepare 前拒绝，同一会话可继续使用 |
+| 受控范围 | 每项严格断言 **6 refusals / 7 matching prepares / 1 forwarded prepare**；全部真实 SQL 发至 Oracle，1295 由既有精确 Prepare relay 注入，不作为原生服务端 1295 成功 |
+| 构建与审查 | 产品五 TFM、Integration Release 构建均 0 warning/error；独立只读审查产品、测试、四份文档和最终 TRX，无 Critical/Important；`git diff --check` 通过 |
+
+初次新单测编译因测试局部变量被推断为 DbCommand 修正为 OceanBaseCommand；不计功能 red。
+`d01b-complex-unit.trx` **20 pass / 4 fail** 是 national 字典夹具遗漏存储字符集查询，复用完整 helper 后通过。
+实库前两轮均为 **2 pass / 2 fail**：首轮 collection 未创建 child TYPE 却登记 DROP，清理异常覆盖了
+此前错误；修正登记后，次轮显现夹具错误使用 `GetInt32` 读取精确 NUMBER，改用既有 `IntegerResult`
+后最终 **4/4**。报告 `d01b-complex-live.trx` / `d01b-complex-live-verified.trx` 保留，不累计为成功。
+本轮不扩展 anonymous/LOB/cursor/OUT、集合子树 NULL OBJECT 身份或复杂类型专用新 codec；
+原生 1295、复杂 fallback 的更大错误排序、PL、代理/OB20/跨版本仍未验收。未运行长测或全消费者。
 
 ### D-02：已核对的实现边界与待开发子项
 

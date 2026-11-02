@@ -54,7 +54,7 @@ namespace OceanBaseConnector.Internal.Sql
             if (parameter.Direction != ParameterDirection.Input) throw Unsupported();
             var complex = PreparedParameters.GetComplexType(parameter);
             if (complex != null)
-                return mode == OceanBaseCompatibilityMode.Oracle && multiStatement
+                return mode == OceanBaseCompatibilityMode.Oracle
                     ? ComplexLiteral(parameter, complex, clientEncoding) : throw Unsupported();
             var provider = parameter.OceanBaseDbType;
             var temporal = IsClientTemporal(parameter);
@@ -358,6 +358,6 @@ namespace OceanBaseConnector.Internal.Sql
 
         private static ArgumentException Ambiguous() => new ArgumentException("SQL quoting or comments cannot be safely client prepared.");
         private static NotSupportedException UnstableCharacterSet() => new NotSupportedException("String-bound multi-statements cannot change the parsing character set or invoke dynamic SQL/routines; SET identifiers must be unquoted.");
-        private static NotSupportedException Unsupported() => new NotSupportedException("Client preparation supports only the declared scalar input literal subset.");
+        private static NotSupportedException Unsupported() => new NotSupportedException("Client preparation requires supported scalar or named complex input literals.");
     }
 }

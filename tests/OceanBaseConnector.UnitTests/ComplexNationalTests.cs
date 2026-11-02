@@ -19,9 +19,9 @@ namespace OceanBaseConnector.UnitTests
             var request = await ReadNationalClientCommand(channel, national); Assert.Equal(code, request[0]); return request;
         }
 
-        private static async Task ComplexNationalDictionary(PacketChannel channel, string scalar, string? storage = "AL16UTF16")
+        private static async Task ComplexNationalDictionary(PacketChannel channel, string scalar, string? storage = "AL16UTF16", bool collection = false)
         {
-            await ComplexScalarType(channel, scalar: scalar, collection: false);
+            await ComplexScalarType(channel, scalar: scalar, collection: collection);
             channel.BeginCommand();
             await Query(channel, ComplexNationalStorageSql);
             await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(Column("VALUE", 253)); await channel.WritePacketAsync(Eof());

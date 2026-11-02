@@ -20,16 +20,17 @@ public sealed class ClientPreparedObjectTests
             OceanBaseCompatibilityMode.Oracle, multiStatement: multi);
     }
 
-    [Fact]
-    public void NamedObjectUsesQuotedIdentityAndExistingScalarLiterals()
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void NamedObjectUsesQuotedIdentityAndExistingScalarLiterals(bool multi)
     {
         var type = ObjectType(0, 253, 203, 207, 208, 254, 12, 202);
         var value = new OceanBaseComplexValue(type, new object?[] { 7, "x'); delete t; --", new byte[] { 0, 255 },
             "中", "文", "char", new DateTime(2026, 10, 30, 1, 2, 3),
             new OceanBaseTimestamp(new DateTime(2026, 10, 30, 1, 2, 3), 123456789, 9) });
         var literal = "\"Ow\"\"ner\".\"Ty\"\"pe\"(7,REPLACE( 'x''); delete t; --',NULL,NULL),HEXTORAW('00FF'),u'\\4e2d',u'\\6587',REPLACE( 'char',NULL,NULL),TO_DATE('2026-10-30 01:02:03','YYYY-MM-DD HH24:MI:SS'),TIMESTAMP '2026-10-30 01:02:03.123456789')";
-        Assert.Equal("select (" + literal + "); select (" + literal + ")",
-            Build(new OceanBaseParameter { ParameterName = "p", Value = value }));
+        Assert.Equal("select (" + literal + ")" + (multi ? "; select (" + literal + ")" : ""),
+            Build(new OceanBaseParameter { ParameterName = "p", Value = value }, multi, multi ? "select :p; select :P" : "select :p"));
     }
 
     [Fact]
@@ -63,16 +64,17 @@ public sealed class ClientPreparedObjectTests
     }
 
     [Theory]
-    [InlineData("anonymous")]
-    [InlineData("lob")]
-    [InlineData("cursor")]
-    public void UnsupportedNestedLayoutsRemainRejectedEvenForNullParent(string shape)
+    [InlineData("anonymous", false)] [InlineData("anonymous", true)]
+    [InlineData("lob", false)] [InlineData("lob", true)]
+    [InlineData("cursor", false)] [InlineData("cursor", true)]
+    public void UnsupportedNestedLayoutsRemainRejectedEvenForNullParent(string shape, bool multi)
     {
         var child = shape == "anonymous" ? new OceanBaseComplexType(null, "", "", false, ObjectType(0).Members.ToArray())
             : ObjectType(shape == "lob" ? (byte)210 : (byte)163);
         var parent = new OceanBaseComplexType(null, "s", "p", false,
             new[] { new OceanBaseComplexMember("child", child.SchemaName, child.TypeName, child, child.Layout) });
-        Assert.Throws<NotSupportedException>(() => Build(new OceanBaseParameter { ParameterName = "p", ComplexType = parent, Value = DBNull.Value }));
+        Assert.Throws<NotSupportedException>(() => Build(new OceanBaseParameter { ParameterName = "p", ComplexType = parent, Value = DBNull.Value },
+            multi, multi ? "select :p; select :P" : "select :p"));
     }
 
     [Fact]
@@ -99,11 +101,11 @@ public sealed class ClientPreparedObjectTests
     }
 
     [Fact]
-    public void AnonymousCollectionsFallbackOutputAndDdlRemainRejected()
+    public void AnonymousCollectionsOutputAndDdlRemainRejected()
     {
         var type = ObjectType(0);
         var parameter = new OceanBaseParameter { ParameterName = "p", ComplexType = type, Value = DBNull.Value };
-        Assert.Throws<NotSupportedException>(() => Build(parameter, multi: false, sql: "select :p"));
+        Assert.Equal("select (NULL)", Build(parameter, multi: false, sql: "select :p"));
         Assert.Throws<NotSupportedException>(() => Build(parameter, sql: "insert into t values(:p); ALTER TYPE t ADD ATTRIBUTE n NUMBER"));
         parameter.Direction = ParameterDirection.InputOutput;
         Assert.Throws<NotSupportedException>(() => Build(parameter));

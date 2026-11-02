@@ -331,6 +331,16 @@ the underlying stateful decoder. Missing facts retain Unicode-only collation fal
 results require fresh state. Stored complex members still require AL16UTF16. See the
 [encoding evidence and live scope](compatibility.md).
 
+### Oracle named complex inputs in client preparation
+
+Ordinary opt-in fallback and batch multi-send fallback reuse the existing named OBJECT/collection
+constructors after an exact Prepare refusal. Quoted type identities, recursive scalar leaves,
+national Unicode literals, typed NULLs and empty collections share the multi-statement encoder
+and SQL byte budget. Connection/session/transaction/type-generation validation still occurs before
+Prepare, including for NULL inputs. Anonymous types, LOB/cursor members, outputs, streams and NULL
+OBJECT elements inside collection subtrees retain their restrictions. This does not establish
+native server 1295 behavior; controlled-refusal evidence is recorded in D-01b.
+
 ### MySQL client string preparation
 
 Automatic prepare remains the first attempt. Only a complete first-response 1295/HY000 permits the
