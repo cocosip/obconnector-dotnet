@@ -20,10 +20,29 @@ public sealed class EucCharacterSetTests(ITestOutputHelper output)
     public static TheoryData<string, string, string, bool, bool> Cases()
     {
         var cases = new TheoryData<string, string, string, bool, bool>();
-        foreach (var profile in ProfileTheoryData.WithCreateObjects())
+        foreach (var profileName in ProfileTheoryData.WithCreateObjects())
+        {
+            var profile = IntegrationEnvironment.GetProfile(profileName);
             foreach (var (charset, sample, _) in Samples)
+            {
+                if (charset == "euckr" && profile.HasServerLimitation("oracle-euckr")) continue;
                 foreach (var prepared in new[] { false, true })
-                    foreach (var asynchronous in new[] { false, true }) cases.Add(profile, charset, sample, prepared, asynchronous);
+                    foreach (var asynchronous in new[] { false, true }) cases.Add(profileName, charset, sample, prepared, asynchronous);
+            }
+        }
+        return cases;
+    }
+
+    public static TheoryData<string, string, string, bool, bool> ServerLimitedCases()
+    {
+        var cases = new TheoryData<string, string, string, bool, bool>();
+        foreach (var profileName in ProfileTheoryData.WithCreateObjects())
+        {
+            var profile = IntegrationEnvironment.GetProfile(profileName);
+            if (profile.HasServerLimitation("oracle-euckr"))
+                foreach (var prepared in new[] { false, true })
+                    foreach (var asynchronous in new[] { false, true }) cases.Add(profileName, "euckr", "한글", prepared, asynchronous);
+        }
         return cases;
     }
 
@@ -103,4 +122,9 @@ public sealed class EucCharacterSetTests(ITestOutputHelper output)
                     Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
                 }
     }
+
+    [ServerLimitationTheory("oracle-euckr")]
+    [MemberData(nameof(ServerLimitedCases))]
+    public void OracleEuckrIsServerLimited(string profileName, string charset, string sample, bool prepared, bool asynchronous)
+        => Assert.Fail($"The {profileName}/{charset}/{sample}/prepared={prepared}/async={asynchronous} case is declared server-limited and must remain skipped.");
 }

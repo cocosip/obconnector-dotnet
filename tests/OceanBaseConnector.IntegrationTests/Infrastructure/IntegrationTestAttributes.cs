@@ -53,3 +53,25 @@ public class IntegrationTheoryAttribute : TheoryAttribute, ITraitAttribute
             Skip = $"No selected profile provides the '{capability}' capability.";
     }
 }
+
+public sealed class ServerLimitationTheoryAttribute : IntegrationTheoryAttribute
+{
+    public ServerLimitationTheoryAttribute(string limitation)
+    {
+        if (!IntegrationEnvironment.Requested) return;
+        Skip = IntegrationEnvironment.Profiles.Any(profile => profile.HasServerLimitation(limitation))
+            ? $"Server limitation '{limitation}' is confirmed for the selected profile and has matching Java evidence."
+            : $"No selected profile declares server limitation '{limitation}'.";
+    }
+}
+
+public sealed class ServerLimitationAwareTheoryAttribute : IntegrationTheoryAttribute
+{
+    public ServerLimitationAwareTheoryAttribute(string limitation, OceanBaseCompatibilityMode mode = OceanBaseCompatibilityMode.Oracle)
+    {
+        if (!IntegrationEnvironment.Requested) return;
+        var relevant = IntegrationEnvironment.Profiles.Where(profile => profile.Mode == mode).ToArray();
+        if (relevant.Length == 0 || relevant.All(profile => profile.HasServerLimitation(limitation)))
+            Skip = $"All selected profiles declare server limitation '{limitation}'.";
+    }
+}

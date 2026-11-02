@@ -17,10 +17,30 @@ public sealed class ComplexNationalClientEncodingTests
     public static TheoryData<string, string, string, string, bool> Cases()
     {
         var cases = new TheoryData<string, string, string, string, bool>();
-        foreach (var profile in ProfileTheoryData.OraclePrepareExecuteObjects())
+        foreach (var profileName in ProfileTheoryData.OraclePrepareExecuteObjects())
+        {
+            var profile = IntegrationEnvironment.GetProfile(profileName);
             foreach (var (name, text, _) in Samples)
+            {
+                if ((name == "sjis" || name == "big5") && profile.HasServerLimitation("oracle-sjis-big5")) continue;
                 foreach (var nationalType in new[] { "NCHAR", "NVARCHAR2" })
-                    foreach (var asynchronous in new[] { false, true }) cases.Add(profile, name, text, nationalType, asynchronous);
+                    foreach (var asynchronous in new[] { false, true }) cases.Add(profileName, name, text, nationalType, asynchronous);
+            }
+        }
+        return cases;
+    }
+
+    public static TheoryData<string, string, string, string, bool> ServerLimitedCases()
+    {
+        var cases = new TheoryData<string, string, string, string, bool>();
+        foreach (var profileName in ProfileTheoryData.OraclePrepareExecuteObjects())
+        {
+            var profile = IntegrationEnvironment.GetProfile(profileName);
+            if (profile.HasServerLimitation("oracle-sjis-big5"))
+                foreach (var (name, text, _) in Samples.Where(item => item.Name == "sjis" || item.Name == "big5"))
+                    foreach (var nationalType in new[] { "NCHAR", "NVARCHAR2" })
+                        foreach (var asynchronous in new[] { false, true }) cases.Add(profileName, name, text, nationalType, asynchronous);
+        }
         return cases;
     }
 
@@ -57,4 +77,9 @@ public sealed class ComplexNationalClientEncodingTests
         }
         await transaction.RollbackAsync();
     }
+
+    [ServerLimitationTheory("oracle-sjis-big5")]
+    [MemberData(nameof(ServerLimitedCases))]
+    public void OracleSjisAndBig5AreServerLimited(string profile, string charset, string text, string nationalType, bool asynchronous)
+        => Assert.Fail($"The {profile}/{charset}/{text}/{nationalType}/async={asynchronous} case is declared server-limited and must remain skipped.");
 }

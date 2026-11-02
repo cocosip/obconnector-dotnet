@@ -69,6 +69,12 @@ proxy/ODP、多节点/OCP/TNS、OB20/trace 或非 native 认证/KDC profile。�
 | E14 | Oracle named BLOB OBJECT 成员 DML | .NET 4.4.2.2 直连 flat/nested、3/90007 字节、sync/async 均到达目标 DML 后返回 `932/22000`；Connector/J 公开 BLOB writer 先失败，但同 SDK 的 RAW descriptor wire replay 发出相同 bitmap/length-encoded bytes 后也返回 `932/22000`，行数为 0 | 当前目标版本按服务端限制跳过客户端开发；若新版本/租户提供不同成员 wire，再重新比较 Java/.NET 并开启 D-04a2 |
 | E15 | Oracle named CLOB/BLOB OBJECT text 结果 | .NET 预加载 named OBJECT 描述后 sync/async **2/2** 以 unsupported complex text member 安全拒绝；Connector/J 2.4.14 同查询 metadata 为 `1111/COMPLEX`、`getObject()` 为 null，`getString()` 只有无法区分成员身份的重复文本 | 当前目标版本 text payload 没有可靠成员身份，按服务端限制跳过 parser；后续版本提供稳定 type identity/NULL/locator 编码后再重开 D-04e |
 
+Integration tests now carry these confirmed limitations as profile metadata in
+`capabilities.serverLimitations`. Discovery-time skipping is limited to the named profile
+and limitation; profiles without the declaration still execute the test and expose a changed
+server behavior. This keeps server-limited cases visible without turning an unverified failure
+into a passing client result.
+
 来源和历史运行上下文集中见[真实兼容性与未验收部署](compatibility.md)及[历史证据索引](history/README.md)。
 本次范围整理未重新证明这些服务器状态仍相同。
 

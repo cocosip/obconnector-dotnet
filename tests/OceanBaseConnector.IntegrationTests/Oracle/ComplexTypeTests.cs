@@ -17,8 +17,16 @@ public sealed class ComplexTypeTests
         foreach (var profile in IntegrationEnvironment.Profiles.Where(p => p.Oracle && p.CreateObjects))
         {
             data.Add(profile.Name, false);
-            data.Add(profile.Name, true);
+            if (!profile.HasServerLimitation("oracle-nested-table-column")) data.Add(profile.Name, true);
         }
+        return data;
+    }
+
+    public static TheoryData<string, bool> ServerLimitedCollectionRows()
+    {
+        var data = new TheoryData<string, bool>();
+        foreach (var profile in IntegrationEnvironment.Profiles.Where(p => p.Oracle && p.CreateObjects && p.HasServerLimitation("oracle-nested-table-column")))
+            data.Add(profile.Name, true);
         return data;
     }
 
@@ -60,6 +68,11 @@ public sealed class ComplexTypeTests
         }
         connection.ClearComplexTypeCache();
     }
+
+    [ServerLimitationTheory("oracle-nested-table-column")]
+    [MemberData(nameof(ServerLimitedCollectionRows))]
+    public void NestedTableColumnsAreServerLimited(string profileName, bool collection)
+        => Assert.Fail($"The {profileName} collection={collection} nested-table column case is declared server-limited and must remain skipped.");
 
     public static TheoryData<string, bool> CollectionProcedureRows()
     {

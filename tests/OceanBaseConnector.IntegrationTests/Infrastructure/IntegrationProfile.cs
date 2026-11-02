@@ -17,6 +17,7 @@ public sealed class IntegrationProfile
     public OceanBaseCompatibilityMode Mode { get; init; }
     public string ConnectionString { get; init; } = "";
     public IReadOnlySet<string> Tags { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlySet<string> ServerLimitations { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     public bool CreateObjects { get; init; }
     public string? SlowQuery { get; init; }
@@ -26,6 +27,7 @@ public sealed class IntegrationProfile
 
     public bool Oracle => Mode == OceanBaseCompatibilityMode.Oracle;
     public bool HasTag(string tag) => Tags.Contains(tag);
+    public bool HasServerLimitation(string limitation) => ServerLimitations.Contains(limitation);
 
     /// <summary>
     /// A builder with the profile's identity, options and validation applied.
@@ -128,6 +130,7 @@ internal static class IntegrationProfileConfig
             Mode = mode,
             ConnectionString = builder.ConnectionString,
             Tags = new HashSet<string>(item.Tags ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase),
+            ServerLimitations = new HashSet<string>(capabilities.ServerLimitations ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase),
             CreateObjects = capabilities.CreateObjects,
             SlowQuery = capabilities.SlowQuery,
             AlternateDatabase = capabilities.AlternateDatabase,
@@ -220,6 +223,7 @@ internal static class IntegrationProfileConfig
     private sealed class ConfigCapabilities
     {
         public bool CreateObjects { get; set; }
+        public string[]? ServerLimitations { get; set; }
         public string? SlowQuery { get; set; }
         public string? AlternateDatabase { get; set; }
         public string? UnsupportedAuthEnvironment { get; set; }

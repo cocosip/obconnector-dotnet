@@ -44,6 +44,17 @@ public sealed class IntegrationConfigurationTests
         Assert.Equal(expected, new OceanBaseConnectionStringBuilder(profile.ConnectionString).TlsMode.ToString());
     }
 
+    [Fact]
+    public void ServerLimitationsArePreservedAsProfileMetadata()
+    {
+        var json = "{\"profiles\":[{\"name\":\"direct\",\"mode\":\"Oracle\",\"connectionString\":\"" + ConnectionString +
+            "\",\"capabilities\":{\"serverLimitations\":[\"oracle-euckr\"]}}]}";
+
+        var profile = Assert.Single(IntegrationProfileConfig.Parse(json));
+        Assert.True(profile.HasServerLimitation("oracle-euckr"));
+        Assert.False(profile.HasServerLimitation("oracle-sjis-big5"));
+    }
+
     [Theory]
     [InlineData("\"name\":\"direct\",\"name\":\"other\",\"mode\":\"MySql\"")]
     [InlineData("\"name\":\"direct\",\"mode\":\"MySql\",\"Mode\":\"Oracle\"")]

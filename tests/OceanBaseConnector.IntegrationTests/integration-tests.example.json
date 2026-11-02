@@ -26,7 +26,8 @@
       },
       "capabilities": {
         "createObjects": true,
-        "slowQuery": "SELECT COUNT(*) FROM ALL_OBJECTS a, ALL_OBJECTS b, ALL_OBJECTS c"
+        "slowQuery": "SELECT COUNT(*) FROM ALL_OBJECTS a, ALL_OBJECTS b, ALL_OBJECTS c",
+        "serverLimitations": []
       }
     },
     {

@@ -56,8 +56,8 @@ public sealed class RefCursorTests
         }
     }
 
-    [IntegrationTheory]
-    [MemberData(nameof(ProfileTheoryData.WithPrepareExecute), MemberType = typeof(ProfileTheoryData))]
+    [ServerLimitationAwareTheory("oracle-select-cursor-column", OceanBaseCompatibilityMode.Oracle)]
+    [MemberData(nameof(SupportedCursorColumnProfiles))]
     public async Task PreparedCursorColumnSurvivesParentCommandDisposal(string profileName)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
@@ -78,6 +78,27 @@ public sealed class RefCursorTests
             Assert.False(await child.ReadAsync()); Assert.False(await child.NextResultAsync());
         }
     }
+
+    public static TheoryData<string> SupportedCursorColumnProfiles()
+    {
+        var data = new TheoryData<string>();
+        foreach (var profileName in ProfileTheoryData.WithPrepareExecute())
+            if (!IntegrationEnvironment.GetProfile(profileName).HasServerLimitation("oracle-select-cursor-column")) data.Add(profileName);
+        return data;
+    }
+
+    public static TheoryData<string> ServerLimitedCursorColumnProfiles()
+    {
+        var data = new TheoryData<string>();
+        foreach (var profileName in ProfileTheoryData.WithPrepareExecute())
+            if (IntegrationEnvironment.GetProfile(profileName).HasServerLimitation("oracle-select-cursor-column")) data.Add(profileName);
+        return data;
+    }
+
+    [ServerLimitationTheory("oracle-select-cursor-column")]
+    [MemberData(nameof(ServerLimitedCursorColumnProfiles))]
+    public void SelectCursorColumnsAreServerLimited(string profileName)
+        => Assert.Fail($"The {profileName} SELECT CURSOR column case is declared server-limited and must remain skipped.");
 
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.WithPrepareExecute), MemberType = typeof(ProfileTheoryData))]

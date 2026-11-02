@@ -921,6 +921,19 @@ Secrets 的 `ConnectionStrings:Oracle`，覆盖 sync/async、类型描述预加�
 binary complex LOB 路径或匿名 locator 输入；PL-only cursor 成员的当前目标形状另见 D-04d，已由
 Java/.NET 同一 `-4007` 服务端错误关闭。
 
+#### 已确认服务端限制的 Integration 契约（2026-11-02）
+
+本轮将已由 .NET 与 Connector/J 对照确认的四类当前目标服务端限制写入 Integration
+profile 的 `capabilities.serverLimitations`：Oracle EUCKR 普通客户端初始化、Oracle
+SJIS/Big5 初始化、nested-table 持久列和 `SELECT CURSOR` 列形状。测试属性在 xUnit
+发现期只跳过声明了对应限制的 profile；未声明限制的 profile 仍会执行并暴露新的服务端
+或客户端失败。多 profile 运行时，只有所有选中 profile 都声明该限制才跳过整项测试。
+
+本轮双模式限制专项结果为 **84 passed / 5 skipped / 0 failed**；这些 skip 保留了服务端
+负向证据，不把客户端能力改写成已实现。配置解析、混合 profile 行为和限制元数据保留
+均有单元回归。新版本或新租户提供不同 wire 后，应删除对应 limitation 声明并重新跑原始
+正向用例，而不是扩大 skip 条件。
+
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
 基线 `ae40dba`。D-04a2 继续核对服务端命名成员 deserialize 与 Java writer；Java

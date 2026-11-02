@@ -115,7 +115,21 @@ Point `OB_INTEGRATION_CONFIG` at a JSON file, or place `integration-tests.json` 
 | `connectionString` / `connectionStringEnvironment` / `connectionStringSecret` | Exactly one: literal text, an environment variable name, or a .NET User Secrets key. User Secrets is recommended for credentials. |
 | `tags` | Free-form labels. Suites keyed on `ob20` require that tag; `tls` tightens TLS-name assertions. |
 | `options` | Optional connection-string overrides: `useOb20`, `enableFullLinkTrace`, `useOraclePrepareExecute`, `useLobLocators`, `treatTinyAsBoolean`, `useAffectedRows`, `loadBalance`, `tlsMode`. Cross-option rules (trace requires OB20, LOB locators require prepare execute) are validated at load. |
-| `capabilities` | `createObjects` (allow DDL), `slowQuery` (SQL running > 2 s for cancel/timeout), `alternateDatabase` (MySQL ChangeDatabase), `unsupportedAuthEnvironment` / `autocommitDisabledEnvironment` (names of variables holding whole connection strings to special endpoints). Declared-but-empty environment capabilities are load errors. |
+| `capabilities` | `createObjects` (allow DDL), `slowQuery` (SQL running > 2 s for cancel/timeout), `alternateDatabase` (MySQL ChangeDatabase), `serverLimitations` (explicit, evidence-backed server limitations that should be skipped), `unsupportedAuthEnvironment` / `autocommitDisabledEnvironment` (names of variables holding whole connection strings to special endpoints). Declared-but-empty environment capabilities are load errors. |
+
+### Declared server limitations
+
+`capabilities.serverLimitations` is profile metadata, not a general skip switch. It is used only
+for a named limitation that has been reproduced against the target server and independently
+matched by the Java SDK. Tests for that exact limitation are skipped during xUnit discovery for
+profiles that declare it. A profile that does not declare the limitation still runs the test and
+surfaces a real server or client failure. When multiple profiles are selected, a limitation-aware
+test runs on every profile that does not declare the limitation; it is skipped only when all
+selected profiles declare it.
+
+The current Oracle direct profile records `oracle-euckr`, `oracle-sjis-big5`,
+`oracle-nested-table-column`, and `oracle-select-cursor-column`. These entries preserve the
+negative evidence and do not claim that the corresponding client capability is implemented.
 
 The integration test project has a `UserSecretsId`. Store connection strings outside the repository and reference them from the profile:
 
