@@ -30,7 +30,7 @@ proxy/ODP、多节点/OCP/TNS、OB20/trace 或非 native 认证/KDC profile。�
 | ID | 对应能力/模式 | 分类 / 现状 | 源码证据 | 关闭条件 / 下一步 |
 | --- | --- | --- | --- | --- |
 | G01 | Q04 Oracle普通prepare回退 | 阶段1已补齐已有 DATE/TIMESTAMP/时区、INTERVAL、NCHAR/NVARCHAR2 字面量；`oracle-direct` User Secrets 实库正向 Prepare/输出/时间脚本复核 **38/38** 通过，但本次未触发原生 `1295/HY000`；仍受限于普通单语句、输入参数和无输出/cursor/复杂值 | Internal/Sql/ClientPreparedSql.cs；CommandExchange.ClientPreparedSql | 继续补充前须独立确认字面量身份、编码/时区/精度和1295前提；不能用多语句支持替代 |
-| G02 | Q05 双模式多语句 | 受限：普通输入/多结果及 MySQL、Oracle 时间脚本存储已有直连子集；Prepare、cursor、OUT/复杂输入不支持 | OceanBaseCommand.cs；ClientPreparedSql.cs；MultiStatementTests.Temporal.cs | 当前限定输入+text结果；D-02a 的 MySQL/Oracle temporal 子集达到 P4；扩大前需模式/方向/wire证据，不默认补所有笛卡尔组合 |
+| G02 | Q05 双模式多语句 | 受限：普通输入/多结果及 MySQL、Oracle 时间脚本存储已有直连子集；Oracle 命名 OBJECT、嵌套 OBJECT 和集合输入 D-02d1～d3 已达 P4；Prepare、cursor、OUT 和其余复杂组合仍不支持 | OceanBaseCommand.cs；ClientPreparedSql.cs；MultiStatementTests.Temporal.cs | 当前限定输入+text结果；集合子树 NULL OBJECT、locator、匿名复杂值及复杂结果仍保留限制；扩大前需模式/方向/wire证据，不默认补所有笛卡尔组合 |
 | G03 | Q11 Oracle输出/游标 | 受限：输出offset拒绝；当前目标版本已验收的普通 `SELECT CURSOR` 列形状为服务端限制，Java 同样返回 902/1002 | OracleCommandPlan.cs；QueryResult.Cursor.cs；OracleCursorOwner.cs | 正FetchSize仅提示；若出现新的可读取列形状再单独验收，不能用 OUT 成功关闭当前结果列限制 |
 | G04 | T14/T15 Oracle复杂值 | 受限：当前 OBJECT/嵌套 OBJECT NULL 输出身份为服务端限制且 Java 同样不报告外层 NULL；named BLOB OBJECT 成员 DML 在 .NET 与 Java 同 wire 诊断回放均返回 `932/22000`，按当前目标服务端限制跳过客户端改动；named OBJECT 标量/递归 text 结果已支持；当前 RAW/DATE/TIMESTAMP text 成员收到服务端重复 RAW payload，Connector/J 同交互也返回相同字符串并且 `getObject` 为 null，按服务端限制跳过；命名 collection 构造的 text 结果 metadata 为 `VARCHAR2`，.NET/Connector-J 均按 String 返回，不需要 complex parser；CLOB/BLOB named OBJECT text 结果在 Java `getObject` 为 null、payload 无可靠成员身份，.NET 预加载描述后 sync/async **2/2** 安全拒绝，按当前服务端 wire 限制跳过；SQL OBJECT 与 PL-only `RECORD` 的当前 cursor 成员形状均无法形成有效对象，Java/.NET 同为服务端限制；其他复杂 cursor、named locator回绑、未解析RETURNING身份仍拒绝 | ComplexValueCodec.cs；ComplexTypeContext.cs；OracleCommandPlan.cs | 新版本/租户提供不同 BLOB 成员或复杂 text wire 时重开 D-04a2/D-04e；若出现可创建的 cursor 成员形状，重新验收 child FETCH/所有权；其余对象/集合、成员方向、named/anonymous、PL输出/存储继续逐项证实；不以属性 NULL 猜测根身份 |
 | G05 | T12 Oracle UROWID | 部分：ROWID209字符串结果保持兼容；UROWID已有显式参数、NULL/type209 wire、DataTypes 和目录映射 | ResultColumn.cs:209、PreparedParameters、RoutineParameterDerivation、Schema.DataTypes | Oracle 4.4.2.2 直连已验证普通/PrepareExecute、OUT/INOUT/ReturnValue、RETURNING、坏值拒绝与恢复；UROWID真实Derive已在FLOAT编号签名验收，NUMBER/VARCHAR2目录边界见A-03；长压、代理、跨平台未验收；literal/fallback 不支持 |
@@ -94,7 +94,7 @@ REF CURSOR输入、DataAdapter/CommandBuilder、未定义的“其他资源等�
 | P1-06/P1-07/P1-08 | Q11/Q12/T01–T20、G03–G08 |
 | P1-09/P1-10/P1-11 | C12/C13/M01/C09、G12/G13/G15 |
 | P2-01 | R02，已移除范围，不计完成 |
-| P2-02/P2-03/P2-04 | Q15–Q21/M02/M03；multi-send为候选，bulk为排除 |
+| P2-02/P2-03/P2-04 | Q15–Q21/M02/M03；multi-send 已有可选实现子集，bulk 为排除 |
 | P2-05/P2-06 | R01与所有真实验收门槛，不作为功能API |
 
 旧完整性清单和暂停快照已删除，历史结论仅在[历史证据索引](history/README.md)中保留摘要，

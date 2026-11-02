@@ -63,6 +63,42 @@ Select a subset with `OB_INTEGRATION_PROFILES` (comma-separated names) or ordina
 
 Misconfiguration fails loudly: with the opt-in set, a missing file, an unresolvable environment reference or an unknown profile name fails the run instead of silently passing.
 
+### Sustained pool/resource acceptance
+
+`PoolSoakTests` additionally requires `OB_POOL_SOAK_SECONDS` (integer 1–86400). Without it,
+the sustained test skips even when ordinary integration is enabled. Use at least `3600`
+seconds per selected profile for the A-01 duration gate; smaller values are fixture smoke tests.
+Profiles must permit object creation; Oracle additionally requires PrepareExecute and LOB locators.
+The cancellation scenario requires the profile's existing `slowQuery` capability.
+
+```powershell
+$env:OB_REQUIRE_INTEGRATION = '1'
+$env:OB_INTEGRATION_PROFILES = 'mysql-direct,oracle-direct'
+$env:OB_POOL_SOAK_SECONDS = '3600'
+dotnet test tests/OceanBaseConnector.IntegrationTests -c Release --filter FullyQualifiedName~PoolSoakTests --logger trx
+```
+
+Each profile runs 16 workers against a private MaxPoolSize=4 pool with an eight-entry prepared
+cache. Workers mix sync/async, half-read readers, server errors, pre-send and in-flight cancellation,
+transactions, streamed values, Oracle external BLOB/CLOB and REF CURSOR, and independent XA
+branches. Clear runs every two seconds; pool-wait cancellation is verified before worker execution.
+Each worker holds its lease for an additional 250 ms before returning it to bound connection churn
+and retain pool-wait contention while leaving TCP TIME_WAIT headroom. This is a correctness soak,
+not a throughput benchmark. Run it separately from other socket-heavy suites.
+One-hour runs also require at least 10000 completed rounds. The test joins workers, disposes the
+source, checks pool session/lease/waiter counts and observed session closure, then independently
+reconciles owned XA branches, rolled-back rows and unchanged LOB contents. Cleanup failures fail
+the test, and each cleanup stage is attempted even if another stage fails. Independent observer and
+XA recovery connections are reserved before the workload, so cleanup does not need new TCP ports.
+
+CSV samples appear every ten seconds under the test binary's `TestResults/pool-soak-*.csv`;
+the TRX output records the exact path, server version, OS/runtime and operation totals. Samples
+include pool counters, process handles/threads/private bytes and managed bytes. Interpret memory
+and thread curves after warmup; the fixture does not impose a hardware-independent memory SLO.
+Run this filter in its own test host so untagged pool metrics belong to this fixture. Closing all
+observed sessions proves transport retirement, not a separate server-side inventory of every
+prepared ID or locator, and does not establish TLS/proxy/HA or other runtime support.
+
 ## MySQL procedure and function FetchSize hints
 
 Filter `FullyQualifiedName~MySqlProcedureTests` with a MySQL `createObjects` profile.

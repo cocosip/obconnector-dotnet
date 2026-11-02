@@ -164,7 +164,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | G06 | D-06 | MySQL GEOMETRY |
 | G07 | D-07、S-05 | 字符集本地映射和真实服务端 roundtrip 分开追踪 |
 | G08 | D-09、D-10、D-11、D-12 | T17 专用类型和 T18 版本相关类型先拆证据任务 |
-| G09 | D-08 | Java multi-send；.NET 已实现默认关闭的 prepared batch multi-send 子集，真实 profile 待验收 |
+| G09 | D-08 | Java multi-send；.NET 已实现默认关闭的 prepared batch multi-send 子集，指定直连子集已验收，其余组合和部署仍待验收 |
 | G10 | A-01 | 池/reset/cache 长期验收 |
 | G11 | A-02 | 事务、XA、unknown outcome 故障验收 |
 | G12 | S-01、S-02、S-03、S-05 | TLS、协议扩展、发现/HA、字符集服务端前提 |
@@ -201,8 +201,8 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 建议顺序如下：
 
 1. **先审查 D-01～D-07**：这些是当前已有代码的受限组合；按各任务前提区分能直接修复的代码缺陷与需要实库/wire 的扩展，不为清空拒绝列表而盲目实现；
-2. **并行做 D-08 的证据准备和 D-09～D-12 的服务端/wire调查**：先确认是否值得实现，再建立 public API；
-3. **完成 A-01～A-05 的验收**：这些不一定增加功能，但决定现有功能能否进入支持声明；
+2. **保持 D-08～D-12 已验收子集，按缺口补证据**：D-08、D-09、D-10、D-12 已有指定直连子集，不重复开发；D-11 当前受服务端包缺失阻塞；新增方向、复杂 wire 和专用 API 先确认需求及协议；
+3. **优先收口 A-01，再完成 A-02～A-05 的验收**：先隔离运行连接池持续资源测试、判读曲线和清理，再补事务故障、元数据权限与跨平台消费者；这些不一定增加功能，但决定现有功能能否进入支持声明；
 4. **只有 S-01～S-05 获得真实前提后，才开启对应协议、认证、发现和字符集开发**。
 
 当前整体状态为：
@@ -210,7 +210,9 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | 类别 | 数量 | 当前结论 |
 | --- | ---: | --- |
 | 已有代码但组合受限 | 7 项（D-01～D-07） | 可以按任务逐项推进 |
-| 明确代码缺失/候选 | 4 项（D-09～D-12） | 先证据，不能直接承诺完成 |
+| 已实现的流水化子集 | 1 项（D-08） | 保留 input-only 边界；扩展与收益、故障、代理验收分别推进 |
+| 专用类型已有通用路径子集 | 3 项（D-09、D-10、D-12） | 已有指定版本 P4 证据；复杂 XML、空间专用契约、稀疏/嵌套及跨版本仍待证据 |
+| 类型服务端阻塞 | 1 项（D-11） | 当前缺 SYS.ANYDATA 包；取得实际 PL 参数/结果 wire 后重开 |
 | 已实现但欠验收 | 5 项（A-01～A-05） | 需要真实部署、故障、压力或平台证据 |
 | 服务端前提阻塞 | 5 项（S-01～S-05） | 暂停代码开发，保留 Deferred/失败 |
 | 范围排除 | 一组 | 不计入完成率和开发积压 |
@@ -1599,6 +1601,46 @@ Prepare 的 `rb_build_varbinary(?)` 回绑，以及坏 raw 和直接 `byte[]` �
 | 范围 | MySQL/Oracle 10000 次容量/复用专项及 Oracle reader/LOB/cursor/XA 旧租约隔离 **52/52** 已通过；60 分钟交错、清池和句柄/线程/内存稳定性仍未关闭 |
 
 A-01 继续保持 `P3`。本轮没有产品源码改动；完成长期交错、清池和资源稳定性检查后再提升状态。
+
+### A-01 续：持续资源交错验收执行计划（2026-11-02）
+
+规格沿用 `acceptance-criteria.md` 的池/资源门槛，不扩大 SDK 的协议或部署范围。
+复用 IntegrationTests 和现有 User Secrets profile；新增显式 opt-in 的持续测试，避免默认实库组隐式运行数小时。
+16 个调用者共享 MaxPoolSize=4 的私有 DataSource，交错 sync/async、prepared cache、半读 reader、
+已知错误、取消、Clear 和该模式的 LOB/cursor/XA；独立连接负责种子数据、查账与清理。
+采样进程句柄/线程/内存和驱动池 session/lease/waiter 指标；结束后验证池归零和自有分支/数据清理。
+短跑只证明工具和场景可执行，不关闭 60 分钟持续性门槛。无需增加产品 API 或依赖。
+
+- [x] 为 opt-in 时长验证、池指标采集添加本地行为测试，先确认失败再实现。
+- [x] 实现有界持续运行、资源场景、CSV 采样、故障传播和清理；补运行说明。
+- [x] 五资产构建、格式检查和双模式短跑，修复夹具中发现的问题。
+- [x] 完整本地回归、节奏/清理修正后的双模式短跑和最终独立走查；保留失败和未关闭边界。
+- [ ] 双模式至少 60 分钟专项与资源曲线判读。
+
+实现为 `Connections/PoolSoakTests*.cs` 和测试侧 duration/metrics 工具，不新增产品 API、依赖或默认开关。
+`OB_POOL_SOAK_SECONDS` 未配置时明确跳过，非法配置失败；短跑不会冒充一小时验收。
+采用独立全局 XA ID，run 前缀只用于清理归属；不让一个 worker 的 rollback 中止另一个 worker 的分支。
+保留原始失败报告，包括 MySQL BLOB 容量、未排空 streamed reader 尾包、已完成 XA 专用租约上普通 SQL
+以及并发 worker 共享全局 XA ID 的夹具失败；修正夹具而不放宽产品校验。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| 红/绿 | duration 校验初次 9 项失败、metrics 初次 1 项失败；实现后本地 13/13；原始 TRX 保留在 `TestResults/roadmap/a01-soak-*-red.trx` |
+| 限速前短跑 | `a01-soak-final.trx` **15/15**，0 skip：13 本地配置/指标 + MySQL/Oracle 各 10 秒；分别完成 2780/659 轮，pool session/lease/waiter 最终均为 0；不能外推后续节奏修正 |
+| 节奏/清理修正后短跑 | `a01-soak-paced-final.trx` **15/15**，0 skip：13 本地配置/指标 + MySQL/Oracle 各 10 秒；分别完成 140/137 轮，八种场景各至少 16 次，最终 session/lease/waiter 均为 0；独立 XA/回滚数据/LOB 内容及表清理成功 |
+| 短跑独立查账 | 自有 XA recover 无残留、DML 轮回全部回滚、外置 BLOB/CLOB 内容不变、对象清理由 DatabaseContext 完成；不是服务端 prepared/locator 目录逐项盘点 |
+| 五资产 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`，0 warning/error |
+| DI / 未 opt-in | DI **14/14**；完整 Integration no-opt **36 pass / 244 skip**，不把跳过算作实库成功 |
+| 修正后完整本地回归 | `a01-unit-unsandboxed.trx` **8749/8749**，0 skip，独占运行约 10 分钟；`a01-soak-noopt-revised.trx` **36 pass / 244 skip**；六个新增文件限定格式检查再次通过 |
+| 格式 | 六个新增 C# 文件限定 `dotnet format whitespace --verify-no-changes --no-restore` 通过；首次命名管道权限失败后沙箱外验证 |
+| 独立走查 | 已修复发现的清理中断、仅 pre-cancel、LOB 旧流提前释放/假阳性、类型与 sync/async 绑定，以及 wait-holder 失败泄漏；最终无 Important/Critical |
+| 首次一小时尝试 | 两种直连 profile 与完整 Unit 同时运行；约 1 分钟时均遇到 `AddressAlreadyInUse`，**2/2 失败**，不能计通过；TRX 为 `a01-soak-mysql-60m.trx` / `a01-soak-oracle-60m.trx` |
+| 端口冲突排查 | 主机快照有 5768 个 TIME_WAIT，动态端口范围 16384；停止并行压力后原失败 Unit 组在沙箱内外均 **8/8**，尚不能仅凭该快照确定完整根因；原全量 Unit 已中止，另行完整复验 |
+| 清理与持续负载修正 | 一张 Oracle 自有表清理因新连接失败而遗留，随后用 User Secrets 独立清理成功；持续测试改为预留 observer/recovery 连接并由 observer 删除自有表；先登记 CREATE 归属再发送，保留 unknown 失败；每轮持有租约额外 250ms，限制端口 churn 且保持等待争用，不作为吞吐基准 |
+
+A-01 父项仍为 `P3`。持续验收工具已通过完整 Unit、双模式短跑和独立走查，可作为本地代码模块提交；
+一小时专项结果和长期资源曲线尚未取得，不以限速后短跑或进程内指标关闭持续性验收。
+未验收真实 TLS/ODP/HA、其他 OS/runtime，也不把客户端会话关闭等同服务器资源目录逐项归零。
 
 ## 依据
 

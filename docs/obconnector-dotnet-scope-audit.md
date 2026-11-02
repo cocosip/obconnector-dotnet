@@ -55,7 +55,8 @@ UJIS 及其他名称仍保留为候选差距。Java 2.4.14 的字符编码路径
 | J12 | `util/DefaultOptions.java:189,258,401–428,548–551`、`internal/protocol/tls/` | TLS/keystore/CA/hostname配置有实现，仍须实际部署验收 |
 | J13 | `internal/protocol/AbstractQueryProtocol.java:2390–2433` | LOCAL INFILE有应用流/授权及批处理限制 |
 
-纠正旧结论：**multi-send是Java已有的可选优化，.NET缺失，不是无依据功能**。
+纠正旧结论：**multi-send 是 Java 已有的可选优化，不是无依据功能**。.NET 现已有默认关闭的
+prepared batch input-only 子集及指定直连验收；剩余协议组合与证据见开发清单 D-08。
 MariaDB `COM_STMT_BULK_EXECUTE` 则不进入当前目标，两者不能合并排除。
 Java没有同名DataAdapter不能证明其无用；它维持已移除状态是当前产品选择显式命令的范围决定。
 
