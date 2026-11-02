@@ -71,19 +71,25 @@ public sealed partial class PoolSoakTests(ITestOutputHelper output)
                         deadline.Token.ThrowIfCancellationRequested();
                         var asynchronous = (worker + round + round / 8) % 2 == 0;
                         await using var connection = (OceanBaseConnection)source.CreateConnection();
-                        if (asynchronous) await connection.OpenAsync(deadline.Token); else connection.Open();
-                        sessions.TryAdd(connection.GetOpenSession(), 0);
                         var scenario = round % scenarios.Length;
-                        try { await Exercise(db, connection, table, lobTable, worker, scenario, round / 8, asynchronous, branches, globalId, deadline.Token); }
+                        var phase = "open";
+                        try
+                        {
+                            if (asynchronous) await connection.OpenAsync(deadline.Token); else connection.Open();
+                            sessions.TryAdd(connection.GetOpenSession(), 0);
+                            phase = "exercise";
+                            await Exercise(db, connection, table, lobTable, worker, scenario, round / 8, asynchronous, branches, globalId, deadline.Token);
+                            Interlocked.Increment(ref scenarios[scenario]);
+                            Interlocked.Increment(ref completed[worker]);
+                            phase = "pace";
+                            // This is a correctness soak; cap connection churn so TIME_WAIT does not exhaust the host's ports.
+                            await Task.Delay(TimeSpan.FromMilliseconds(250), deadline.Token);
+                        }
                         catch (Exception error)
                         {
                             var server = error as OceanBaseException;
-                            throw new InvalidOperationException($"Worker={worker}; round={round}; scenario={scenario}; async={asynchronous}; state={connection.State}; serverCode={server?.ServerErrorCode}; xaCode={server?.XaErrorCode}.", error);
+                            throw new InvalidOperationException($"Worker={worker}; round={round}; scenario={scenario}; phase={phase}; elapsedSeconds={stopwatch.Elapsed.TotalSeconds:F3}; async={asynchronous}; state={connection.State}; pool={metrics.Snapshot()}; serverCode={server?.ServerErrorCode}; xaCode={server?.XaErrorCode}.", error);
                         }
-                        Interlocked.Increment(ref scenarios[scenario]);
-                        Interlocked.Increment(ref completed[worker]);
-                        // This is a correctness soak; cap connection churn so TIME_WAIT does not exhaust the host's ports.
-                        await Task.Delay(TimeSpan.FromMilliseconds(250), deadline.Token);
                     }
                 }
                 catch { deadline.Cancel(); throw; }

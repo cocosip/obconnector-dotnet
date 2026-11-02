@@ -200,16 +200,29 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 
 建议顺序如下：
 
-1. **先审查 D-01～D-07**：这些是当前已有代码的受限组合；按各任务前提区分能直接修复的代码缺陷与需要实库/wire 的扩展，不为清空拒绝列表而盲目实现；
-2. **保持 D-08～D-12 已验收子集，按缺口补证据**：D-08、D-09、D-10、D-12 已有指定直连子集，不重复开发；D-11 当前受服务端包缺失阻塞；新增方向、复杂 wire 和专用 API 先确认需求及协议；
-3. **优先收口 A-01，再完成 A-02～A-05 的验收**：先隔离运行连接池持续资源测试、判读曲线和清理，再补事务故障、元数据权限与跨平台消费者；这些不一定增加功能，但决定现有功能能否进入支持声明；
+1. **先定位 A-01 的持续测试失败**：单 profile 重跑，保留首次错误的阶段、经过时间与完整异常；确认根因后再决定产品修复，不能用短跑或池计数归零代替一小时通过；
+2. **按前提补 A-02～A-05 的验收**：环境事务回执丢失和 Windows 包/运行时子集本轮已验收；其余协调器/节点故障、最小权限、非 Windows 及原生 1295 等仍需对应环境，不重复补已通过的子集；
+3. **只在协议和契约明确后扩展 D 项**：D-01～D-07 已有受限实现；D-08、D-09、D-10、D-12 已有指定直连子集，D-05 的指定子集也已完成；当前没有一个可仅凭删除 NotSupported 检查就安全关闭的功能项；
 4. **只有 S-01～S-05 获得真实前提后，才开启对应协议、认证、发现和字符集开发**。
+
+仍未实现的具体组合及其开发入口如下；这些是待补契约的边界，不承诺全部组合自动纳入产品范围：
+
+| 组合缺口 | 对应任务 | 进入开发前需要补齐 |
+| --- | --- | --- |
+| 脚本级 Prepare、服务端 cursor、typed OUT/INOUT 发布 | D-02b/c | 当前脚本 prepare 被服务端拒绝；typed 输出需定义映射、失败前缀、原子发布及变量/取消/释放隔离，单 PL 块输出不是该缺口 |
+| Oracle 输出计划 / REF CURSOR offset | D-03b | 成功 wire、位置与归属契约；Java RefCursor 也排除普通 offset 分支，不能直接套用普通 SELECT FETCH |
+| 命名复杂值中的 LOB locator 回绑及未证实的复杂成员方向 | D-04 | 可辨识的类型/locator wire 和生命周期；当前 BLOB DML、根 NULL/text/cursor 成员的已确认服务端限制另记，不作为盲改客户端的理由 |
+| package-local PL/SQL RECORD 参数派生与绑定 | A-03d | 字段目录、输入/输出 payload 及成功交互；目前 Java 公开 API 也不支持绑定，不能归为服务端拒绝 |
+| multi-send 的复杂值/locator、OUT/cursor/array 扩展 | D-08 | 分组响应、错误顺序、资源归属及 unknown-outcome 契约；input-only 和安全逐命令回退子集保持现状 |
+
+完整 XML codec、SDO 专用 WKB/WKT/SRID API、稀疏向量/嵌套 ARRAY 属于额外范围或 wire/版本待确认；
+当前通用 String/Binary/OBJECT 路径已有验收，不能把“没有专用类型名”直接等同没有功能。
 
 当前整体状态为：
 
 | 类别 | 数量 | 当前结论 |
 | --- | ---: | --- |
-| 已有代码但组合受限 | 7 项（D-01～D-07） | 可以按任务逐项推进 |
+| 已有代码但组合受限 | 7 项（D-01～D-07） | 保留已验收子集；剩余按协议、版本与服务端前提逐项推进，不重复开发 P4 范围 |
 | 已实现的流水化子集 | 1 项（D-08） | 保留 input-only 边界；扩展与收益、故障、代理验收分别推进 |
 | 专用类型已有通用路径子集 | 3 项（D-09、D-10、D-12） | 已有指定版本 P4 证据；复杂 XML、空间专用契约、稀疏/嵌套及跨版本仍待证据 |
 | 类型服务端阻塞 | 1 项（D-11） | 当前缺 SYS.ANYDATA 包；取得实际 PL 参数/结果 wire 后重开 |
@@ -1668,6 +1681,32 @@ DROP 失败，覆盖了此前聚合的 worker/reconciliation 错误，这是已�
 原报告中的准确对象名和格式 `0x4F4253`/run-prefix，不清理其他测试或业务对象。
 临时清理 helper 构建仅有缓存的 NU1900 漏洞源 TLS 警告，核心测试构建/验收不受此警告替代。
 下一步以保留完整错误的版本重跑双模式长稳；A-01 继续为 `P3`。
+
+#### A-01 诊断重跑：40 秒失败与单 profile 对照（2026-11-02）
+
+基线 `1523dbd` 的两条 3600 秒诊断重跑均提前失败：
+`a01-soak-mysql-diagnostic-60m.trx` 约 39 秒、335 轮；
+`a01-soak-oracle-diagnostic-60m.trx` 约 40 秒（CSV 负载约 33 秒）、271 轮。
+这次完整保留了 worker 及关联异常；MySQL 有 Open 握手读取时 peer 关闭、池等待超时，
+Oracle 有 reader/XA Close/Open 时池等待超时及其后的取消。报告按 worker 排列，不能据此确定
+最先发生的错误或认定两种模式有相同根因。两组最终池计数归零，自有对象与 XA 分支已再次独立复查无遗留。
+
+Oracle 在 30 秒采样的 sessions=4/leases=0/waiters=12 也可能表示四个 Reset/Probe 正在进行：
+EndBorrow 早于 Reset，而 TrackBorrowed 晚于 Probe，不能把该瞬间解读为空闲容量死锁。
+独立只读走查未找到可由现有证据确定的容量泄漏或循环等待；不增加重试或放宽超时以绕过失败。
+失败后基本连通性/旧 reader 租约复验 `a01-diagnostic-connectivity.trx` 为 **16 pass / 1 skip**，
+skip 是既有 alternateDatabase 配置门槛；单独 Oracle `a01-soak-oracle-isolated-90s.trx` **1/1**、约 93 秒通过；
+加入阶段诊断后单独 MySQL `a01-soak-mysql-isolated-90s.trx` **1/1**、约 91 秒通过。
+这些对照不关闭间歇故障，也不把两个 test host 的结果等同单 profile 验收。
+
+新增的测试诊断只把 Open/场景执行/限速等待一起纳入原有 worker 异常包装，记录单调经过秒数、
+阶段和池计数，保留 inner exception；无端点/凭据/参数新日志，负载及超时保持原规格。
+该版本 Integration Release 构建 0 warning/error、限定格式和 diff 检查通过；
+`a01-phase-smoke.trx` 双模式短跑/配置/清理 **19/19**，`a01-phase-noopt.trx` **40 pass / 245 skip**。
+独立只读复核无 Critical/Important。
+下一轮以单 profile 运行，结合首个失败时间与调用栈继续定位；没有证据前不修改产品池实现。
+原 30 分钟失败曲线保存为 `TestResults/roadmap/a01-resources-failed.svg`/`.json`，明确标记 FAILED，
+不再把已终止的失败数据标为 RUNNING 或一小时成功。
 
 ### A-02 续：环境事务 COMMIT 回执丢失的实库闭环（2026-11-02）
 
