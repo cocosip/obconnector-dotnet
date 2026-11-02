@@ -65,7 +65,7 @@ namespace OceanBaseConnector.Internal.Sql
                 provider != OceanBaseDbType.String && provider != OceanBaseDbType.Binary && provider != OceanBaseDbType.Boolean &&
                 provider != OceanBaseDbType.Bit && provider != OceanBaseDbType.Year && provider != OceanBaseDbType.Json &&
                 (provider < OceanBaseDbType.SByte || provider > OceanBaseDbType.Double) && !temporal && !interval &&
-                !(mode == OceanBaseCompatibilityMode.Oracle && (provider == OceanBaseDbType.NChar || provider == OceanBaseDbType.NVarchar2))) throw Unsupported();
+                !(mode == OceanBaseCompatibilityMode.Oracle && (provider == OceanBaseDbType.NChar || provider == OceanBaseDbType.NVarchar2 || provider == OceanBaseDbType.Urowid))) throw Unsupported();
             var type = parameter.DbType;
             if (type != DbType.String && type != DbType.AnsiString && type != DbType.StringFixedLength && type != DbType.AnsiStringFixedLength &&
                 type != DbType.Xml &&
@@ -92,9 +92,13 @@ namespace OceanBaseConnector.Internal.Sql
             {
                 if (mode == OceanBaseCompatibilityMode.MySql) return multiStatement ? context!.MultiStatementLiteral(text) : context!.Literal(text);
                 if (provider == OceanBaseDbType.NChar || provider == OceanBaseDbType.NVarchar2) return NationalLiteral(text);
+                // Oracle text turns empty strings into NULL, but native UROWID binding rejects them.
+                if (provider == OceanBaseDbType.Urowid && text.Length == 0)
+                    throw new ArgumentException("An empty UROWID cannot be represented as an Oracle SQL literal.");
                 text = text.Replace("'", "''");
                 // Connector/J's leading value space also avoids OceanBase's long-NUL literal parser failure.
-                return "REPLACE( '" + text + "',NULL,NULL)";
+                var literal = "REPLACE( '" + text + "',NULL,NULL)";
+                return provider == OceanBaseDbType.Urowid ? "CHARTOROWID(" + literal + ")" : literal;
             }
             if (value is byte[] binary)
             {

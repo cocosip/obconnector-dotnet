@@ -66,13 +66,30 @@ public sealed class UrowidParameterTests
         Assert.Equal(253, PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle)[2]);
     }
 
-    [Fact]
-    public void UrowidDoesNotSilentlyBecomeAClientPreparedString()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UrowidClientTextPreservesItsTypeAndEscapesValues(bool multiStatement)
     {
         var parameters = new OceanBaseParameterCollection();
-        parameters.Add(new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.Urowid, Value = "AAAVhPAAEAAAACXAAA" });
-        var plan = ParameterBindingPlan.Create("SELECT :p FROM DUAL", OceanBaseCompatibilityMode.Oracle, parameters);
-        Assert.Throws<NotSupportedException>(() => ClientPreparedSql.Build(plan, OceanBaseCompatibilityMode.Oracle));
+        var parameter = new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.Urowid, Value = "A'); DELETE FROM t; --\\\0", Size = 1 };
+        parameters.Add(parameter);
+        var sql = multiStatement ? "SELECT :p FROM DUAL; SELECT :p FROM DUAL" : "SELECT :p FROM DUAL";
+        string Build() => ClientPreparedSql.Build(ParameterBindingPlan.Create(sql, OceanBaseCompatibilityMode.Oracle, parameters),
+            OceanBaseCompatibilityMode.Oracle, multiStatement: multiStatement);
+        var expected = "SELECT (CHARTOROWID(REPLACE( 'A''); DELETE FROM t; --\\\0',NULL,NULL))) FROM DUAL";
+        Assert.Equal(multiStatement ? expected + "; " + expected : expected, Build());
+        foreach (var value in new object?[] { null, DBNull.Value })
+        {
+            parameter.Value = value;
+            const string empty = "SELECT (NULL) FROM DUAL";
+            Assert.Equal(multiStatement ? empty + "; " + empty : empty, Build());
+        }
+        parameter.Value = ""; Assert.Throws<ArgumentException>(() => Build());
+        parameter.Value = "\ud800"; Assert.Throws<EncoderFallbackException>(() => Build());
+        parameter.Value = 1; Assert.Throws<ArgumentException>(() => Build());
+        parameter.Value = "A"; parameter.Precision = 1; Assert.Throws<NotSupportedException>(() => Build());
+        parameter.Precision = 0; parameter.Direction = ParameterDirection.Output; Assert.Throws<NotSupportedException>(() => Build());
     }
 
     [Theory]

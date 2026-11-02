@@ -118,7 +118,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-02 | `P2`；a1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1～d3 以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
 | D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
-| D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/fallback 保持拒绝；跨部署、长期压力与 A-03 目录边界仍保留 |
+| D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/多语句与受控 1295 fallback 子集见 D-05b；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
 | D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；UJIS 等逐项确认后再加入，不支持名称继续发送前拒绝 |
 
@@ -1016,7 +1016,47 @@ SJIS/Big5 初始化、nested-table 持久列和 `SELECT CURSOR` 列形状。测�
 `d05-output-first/second/third.trx` 保留了 NUMBER/VARCHAR2 目录探测与夹具 CLR 值声明不匹配
 的失败历史，最终 FLOAT 夹具通过 `d05-output-float.trx` 后再运行扩大回归，不删除旧证据。
 D-05 为 `P4`（上述目标直连 profile 的功能验收完成），长期压力、代理、真实 TLS/OB20/KDC、
-跨平台/独立 runtime 未验收；client literal/fallback 继续明确拒绝，不在本模块扩大范围。
+跨平台/独立 runtime 未验收；本节为初始二进制模块范围，后续 client literal/fallback 扩展见 D-05b。
+
+#### D-05b：UROWID 客户端文本参数（2026-11-02，指定文本子集 `P4`）
+
+目标：补齐已有 `OceanBaseDbType.Urowid` 的普通客户端 prepare 回退和多语句输入。
+目标服务端拒绝最初的 `CAST(... AS UROWID)`；已验证 `CHARTOROWID` 对短/长 ROWID、NULL、
+坏值的转换与原生 type209 相同，采用现有 Oracle 字符串转义结果外包 `CHARTOROWID(...)`，
+保留类型身份；不依赖隐式 String 转换，不增加 provider type 或选项。
+NULL 沿用现有 NULL literal；类型、方向、precision/scale、
+严格编码及 SQL 包预算仍由 `PreparedParameters` 和 `ClientPreparedSql` 统一验证。
+
+空字符串必须在文本展开时抛 `ArgumentException`，不能生成 NULL：实库证明 native type209
+拒绝空字符串，而 `CHARTOROWID('')` 返回 NULL。该保护同时覆盖多语句和自动 prepare 拒绝后的
+fallback，避免无效 UROWID 静默写成 NULL；不是更改 native binary 或普通 String 参数语义。
+`DataTypes.UROWID.IsLiteralSupported` 仍为 false，与 Oracle RAW/时间类型的函数表达式路径一致，
+不把驱动可生成的转换表达式报告为原生 literal 语法。
+
+- [x] 用真实短/长 ROWID、NULL、空字符串和坏值确认目标服务端转换行为，再决定实现。
+- [x] 在 `UrowidParameterTests` 固定显式转换、转义、NULL 与既有拒绝边界；先确认原实现失败，
+  再仅修改 `ClientPreparedSql.Literal`，复用字符串路径。
+- [x] 使用现有 `PrepareRefusalRelay` 和多语句入口验证 sync/async、独立存储、坏值失败后恢复；
+  中继只提供精确 prepare 1295，不冒充原生服务端拒绝。
+- [x] 定向测试、本次修改走查、矩阵/契约同步后本地提交；不跑长测或部署矩阵。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| 功能 red | 原实现对普通/多语句两条断言 **2/2** 因统一拒绝 Urowid 失败；`d05b-literal-red.trx` |
+| 空串 red | 初次放开后两条空串断言 **2/2** 因未抛异常失败；增加执行前拒绝后通过；`d05b-empty-red.trx` |
+| 定向单测 | **71/71**，无 skip，约 2 秒；Urowid、ClientPreparedSql、ClientPrepareFallback，覆盖转义/注入/NUL、NULL、严格编码、类型/方向/precision 校验及既有回退拒绝/取消边界；`d05b-literal-unit-verified.trx` |
+| Oracle 直连 | 4.4.2.2 `oracle-direct` **16/16**，无 skip，约 10 秒；新增转换对照 **2**、真实多语句 **2**、受控 1295 fallback **2**，以及既有 Urowid binary/输出/RETURNING **10**；`d05b-literal-live-verified.trx` |
+| 实库断言 | 短/超过 251 字节的长 ROWID、NULL/DBNull、空串和坏值边界、同 command 修正后恢复、独立连接显式 Prepare + SequentialAccess 核对全部存储；每条 fallback 共 8 次匹配 prepare/拒绝、0 次转发 prepare，无重复写入 |
+| 构建与走查 | 产品五 TFM 和集成项目最终构建均 0 警告/0 错误；本次修改独立走查无阻塞；`git diff --check` |
+
+最初 `CAST(:p AS UROWID)` 对照 **0/2**，保留 `d05b-cast-contract.trx`；随后
+`CHARTOROWID(:p)` 的短/长/NULL/坏值对照 **2/2**，`d05b-chartorowid-contract.trx`。
+首轮扩大实库 **14/16** 暴露上述空串语义差异，不以当轮文本入口成功写入 NULL 计为正确支持。
+最终报告明确证明 native 空串拒绝、直接转换为 NULL、驱动文本输入提前拒绝三者的边界。
+
+该子项只扩展 Oracle Input，不扩展 OUT/INOUT、显式 Prepare/cursor 的 fallback，也不改写
+服务端错误、重放执行或自行验证 base64 格式。原生服务端 1295、代理/TLS/OB20、跨版本与长期
+压力仍未验收；D-01 的原生 fallback 前提保持未关闭。
 
 ### D-06：MySQL GEOMETRY 的原始字节与 SRID（2026-10-30，a 指定子集验收，b 待服务端）
 
