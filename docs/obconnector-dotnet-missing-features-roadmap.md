@@ -144,8 +144,8 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 
 | ID | 当前进度 | 任务 | 当前缺口 | 关闭条件 |
 | --- | --- | --- | --- | --- |
-| A-01 | `P3`；MySQL/Oracle 直连各 10000 次借还及资源隔离 52/52 通过 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、清池和句柄/线程/内存稳定性未证实 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
-| A-02 | `P3`；MySQL/Oracle 直连 XA 生命周期、recover 和池丢弃恢复 28/28 通过 | PSPE、XA、unknown outcome（G11） | in-doubt、协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
+| A-01 | `P3`；MySQL/Oracle 直连各 10000 次借还及资源隔离 52/52 通过；新持续测试约 30 分钟失败，原因待重跑定位 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、清池和句柄/线程/内存稳定性未证实；原始异常被测试清理遮蔽的问题已修复 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
+| A-02 | `P3`；MySQL/Oracle 直连 XA 生命周期、recover 和池丢弃恢复 28/28、环境事务 COMMIT 回执丢失 16/16 通过 | PSPE、XA、unknown outcome（G11） | 环境事务 InDoubt 指定回执丢失子集已验收；协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
 | A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过，包重载 2/2、引用 package 标识符 2/2 通过 | Schema、目录和参数元数据（G13） | 包内 PL 类型和最小权限仍缺；大小写/引用 package 标识符已覆盖；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制 | 双模式最小权限、唯一/歧义签名、更多大小写/引用标识符、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
 | A-04 | `P3`；当前 Windows 包/运行时指定子集已验收 | 包、TFM 和平台（G14/R01） | 五资产、net8/net9/net10 独立 runtime、两个 netstandard 的 net10 host 及 netstandard2.0 的 net48 host 已复验；非 Windows、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
 | A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；196608 字符 NUL 单表达式从 .NET 0/4 恢复 4/4，原因未定，见执行记录 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
@@ -1641,6 +1641,33 @@ A-01 继续保持 `P3`。本轮没有产品源码改动；完成长期交错、�
 A-01 父项仍为 `P3`。持续验收工具已通过完整 Unit、双模式短跑和独立走查，可作为本地代码模块提交；
 一小时专项结果和长期资源曲线尚未取得，不以限速后短跑或进程内指标关闭持续性验收。
 未验收真实 TLS/ODP/HA、其他 OS/runtime，也不把客户端会话关闭等同服务器资源目录逐项归零。
+
+#### A-01 持续测试失败与诊断修复（2026-11-02，未通过一小时验收）
+
+两条限速 3600 秒长跑均提前失败，保留原 TRX/CSV，不标记通过：
+
+| profile | 原始报告 | 实际持续时间 / 完成轮次 | 可确认的事实 |
+| --- | --- | --- | --- |
+| mysql-direct | `a01-soak-mysql-paced-60m.trx` | 约 30 分 26 秒 / 26281 | 最终池 sessions/leases/waiters 为 0；输出只保留 worker `TimeoutException` 类型，TRX 被数据库清理异常覆盖 |
+| oracle-direct | `a01-soak-oracle-paced-60m.trx` | 约 30 分 21 秒 / 22362 | 最终池 sessions/leases/waiters 为 0；输出只保留 worker `InvalidOperationException` 类型，TRX 被数据库清理异常覆盖 |
+
+失败前客户端采样未出现持续资源增长，但不足以排除服务端或驱动缺陷；仅凭约 30 分钟的时间点，
+不能归因为预留连接空闲超时、网络或服务器。原测试的 `await using DatabaseContext` 在退出时抛出
+DROP 失败，覆盖了此前聚合的 worker/reconciliation 错误，这是已定位的测试诊断缺陷。
+
+修复仅限持续验收工具：把执行体及 setup 纳入同一数据库清理边界，执行和清理同时失败时保留两者；
+始终保留采样/清池错误，等待全部 worker 结束后补齐其余 worker 错误。原验收断言、负载和超时未放宽。
+`PoolSoakCleanupTests` 使用真实 DatabaseContext 的登记/逆序/逐项清理，覆盖执行与清理的四种成败组合：
+`a01-cleanup-red.trx` 在旧语义下 1 fail / 3 pass，修复后 `a01-cleanup-green.trx` **4/4**。
+`a01-cleanup-noopt.trx` 完整未 opt-in Integration 为 **40 pass / 245 skip**；限定格式检查通过。
+最终重建后的 `a01-cleanup-smoke-final.trx` 为 **19/19**、0 skip，包含双模式短跑及配置/清理检查。
+独立只读走查指出并已修复监控/worker 并发失败时丢失原错误的边界，复核无 Critical/Important。
+
+本轮失败所属四张表及匹配 run-prefix 的 XA 分支已通过独立连接清理；XA Recover 后先 Close/Open
+再发普通 DDL，避免误用 XA 专用会话。再次 Recover 与目录查询确认自有分支/表均无遗留；仅处理
+原报告中的准确对象名和格式 `0x4F4253`/run-prefix，不清理其他测试或业务对象。
+临时清理 helper 构建仅有缓存的 NU1900 漏洞源 TLS 警告，核心测试构建/验收不受此警告替代。
+下一步以保留完整错误的版本重跑双模式长稳；A-01 继续为 `P3`。
 
 ### A-02 续：环境事务 COMMIT 回执丢失的实库闭环（2026-11-02）
 
