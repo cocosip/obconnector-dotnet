@@ -274,6 +274,7 @@ namespace OceanBaseConnector.Internal.Session
         }
 
         internal bool IsBatchResponse { get; private set; }
+        internal bool AllowBatchLobResults { get; set; }
         internal void BeginBatchResponse(Dictionary<(string, string, string, string), OceanBaseComplexType>? sourceComplexTypes,
             string? sessionTimeZone, NationalCharacterSet? nationalCharacterSet)
         {

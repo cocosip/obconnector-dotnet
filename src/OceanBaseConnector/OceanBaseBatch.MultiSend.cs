@@ -136,14 +136,14 @@ namespace OceanBaseConnector
             for (var i = 0; i < requests.Length; i++)
             {
                 operation.ThrowIfCanceled();
-                requests[i] = operation.Commands[i].BuildBatchMultiSendRequest(operation.Token);
+                requests[i] = operation.Commands[i].BuildBatchMultiSendRequest(operation.Token, CanRetainLobResults(operation));
             }
             if (requests.Length == 0) return (0, null);
 
             using var exchange = StartMultiSendExchange(operation);
             var total = 0;
             var anyAffected = false;
-            var scalar = new ScalarState();
+            using var scalar = new ScalarState();
             foreach (var group in PlanMultiSendGroups(requests, operation.Session!.BatchMultiSendNumber))
             {
                 for (var i = group.Start; i < group.End; i++)
@@ -161,6 +161,7 @@ namespace OceanBaseConnector
                 }
             }
             exchange.Complete();
+            scalar.Delivered = true;
             return (anyAffected ? total : -1, scalar.Value);
         }
 
@@ -171,14 +172,14 @@ namespace OceanBaseConnector
             for (var i = 0; i < requests.Length; i++)
             {
                 operation.ThrowIfCanceled();
-                requests[i] = await operation.Commands[i].BuildBatchMultiSendRequestAsync(operation.Token).ConfigureAwait(false);
+                requests[i] = await operation.Commands[i].BuildBatchMultiSendRequestAsync(operation.Token, CanRetainLobResults(operation)).ConfigureAwait(false);
             }
             if (requests.Length == 0) return (0, null);
 
             using var exchange = StartMultiSendExchange(operation);
             var total = 0;
             var anyAffected = false;
-            var scalar = new ScalarState();
+            using var scalar = new ScalarState();
             foreach (var group in PlanMultiSendGroups(requests, operation.Session!.BatchMultiSendNumber))
             {
                 for (var i = group.Start; i < group.End; i++)
@@ -196,13 +197,16 @@ namespace OceanBaseConnector
                 }
             }
             exchange.Complete();
+            scalar.Delivered = true;
             return (anyAffected ? total : -1, scalar.Value);
         }
 
-        private sealed class ScalarState
+        private sealed class ScalarState : IDisposable
         {
             internal object? Value;
             internal bool Set;
+            internal bool Delivered;
+            public void Dispose() { if (!Delivered && Value is OceanBaseLob lob) lob.Dispose(); }
         }
 
         private static int ConsumeBatchResponse(CommandExchange exchange, Operation operation, bool captureScalar, ScalarState scalar, bool binary)
@@ -241,8 +245,12 @@ namespace OceanBaseConnector
             var exchange = operation.Connection.StartCommand(operation.Session!, operation.Transaction, _timeout, operation.Token,
                 release: static () => { }, owner: operation, cancellationOrigin: operation.CancellationOrigin);
             exchange.StartDiagnostics("batch.multi-send");
+            exchange.AllowBatchLobResults = CanRetainLobResults(operation);
             return exchange;
         }
+
+        internal bool CanRetainLobResults(Operation operation) =>
+            !_ownsConnection && (operation.Behavior & CommandBehavior.CloseConnection) == 0;
 
         internal static bool CanUseMultiSendReader(CommandBehavior behavior) =>
             (behavior & ~CommandBehavior.CloseConnection) == CommandBehavior.Default;

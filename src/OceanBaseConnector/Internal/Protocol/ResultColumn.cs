@@ -65,13 +65,18 @@ namespace OceanBaseConnector.Internal.Protocol
             }
             _ = FieldType;
         }
-        internal void RequireBatchMultiSendResult(bool binary)
+        internal void RequireBatchMultiSendResult(bool binary, bool allowLobResults = false)
         {
+            if (allowLobResults && (TypeCode == 210 || TypeCode == 211))
+            {
+                _ = FieldType;
+                return;
+            }
             if (TypeCode == 163 || TypeCode == 210 || TypeCode == 211 ||
                 Mode != OceanBaseCompatibilityMode.MySql && TypeCode >= 249 && TypeCode <= 252 ||
                 TypeCode == 160 && (!binary || ComplexType == null || ComplexType.IsAnonymous ||
                     ComplexType.Layout.HasLobMembers || ComplexType.Layout.HasCursorMembers))
-                throw new NotSupportedException("Batch multi-send requires ordinary scalar or named complex results without LOBs or cursors.");
+                throw new NotSupportedException("Batch multi-send requires ordinary scalar or named complex results; root LOBs require a retained caller connection.");
         }
         private ResultColumn(string database, string table, string originalTable, string name, string originalName,
             byte type, ushort charset, ushort flags, uint length, byte scale, byte precision, OceanBaseCompatibilityMode mode, string? sessionTimeZone, NationalCharacterSet? nationalCharacterSet, bool treatTinyAsBoolean)

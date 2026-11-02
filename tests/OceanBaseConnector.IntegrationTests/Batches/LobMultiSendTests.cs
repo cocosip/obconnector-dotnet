@@ -79,6 +79,47 @@ public sealed class LobMultiSendTests
                     await source.CopyToAsync(destination); Assert.Equal(bytes, destination.ToArray());
                 }
             }
+            using var results = connection.CreateBatch();
+            for (var id = 1; id <= 3; id++)
+            {
+                var item = results.CreateBatchCommand(); item.CommandText = "SELECT value FROM " + table + " WHERE id=:id";
+                item.Parameters.Add(new OceanBaseParameter { ParameterName = "id", DbType = DbType.Int32, Value = id });
+                results.BatchCommands.Add(item);
+            }
+            var handles = new List<OceanBaseLob>();
+            try
+            {
+                using (var reader = asynchronous ? await results.ExecuteReaderAsync() : results.ExecuteReader())
+                {
+                    for (var i = 0; i < 3; i++)
+                    {
+                        Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                        if (i == 1) Assert.True(reader.IsDBNull(0));
+                        else
+                        {
+                            var stored = reader.GetFieldValue<OceanBaseLob>(0); handles.Add(stored);
+                            Assert.Throws<InvalidOperationException>(() => { if (character) stored.OpenTextReader(); else stored.OpenRead(); });
+                        }
+                        Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+                        Assert.Equal(i < 2, asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+                    }
+                }
+                handles.Add(Assert.IsType<OceanBaseLob>(asynchronous ? await results.ExecuteScalarAsync() : results.ExecuteScalar()));
+                Assert.Equal(-1, asynchronous ? await results.ExecuteNonQueryAsync() : results.ExecuteNonQuery());
+                foreach (var stored in handles)
+                {
+                    if (character)
+                    {
+                        using var source = stored.OpenTextReader(); Assert.Equal(text, await source.ReadToEndAsync());
+                    }
+                    else
+                    {
+                        using var source = stored.OpenRead(); using var destination = new MemoryStream();
+                        await source.CopyToAsync(destination); Assert.Equal(bytes, destination.ToArray());
+                    }
+                }
+            }
+            finally { foreach (var stored in handles) stored.Dispose(); }
         }
         finally { await lob.FreeTemporaryAsync(CancellationToken.None); }
     }
