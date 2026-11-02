@@ -416,7 +416,10 @@ is not promised. Applications needing whole-batch atomicity must supply a transa
 fault and target-asset tests do not establish real SQL semantics, performance, proxy or deployment
 compatibility. The opt-in multi-send path accepts named Oracle OBJECT/collection inputs using the
 ordinary type 160 COM_STMT_EXECUTE encoding, including typed NULLs and national members. Collection
-SQL may require an explicit CAST to supply the server's prepare-time type context. Root BLOB/CLOB
+SQL may require an explicit CAST to supply the server's prepare-time type context. Named LOB members
+accept BLOB byte arrays or CLOB strings using the existing inline content encoding, without LOB I/O;
+locator rebinding remains rejected. This does not remove server restrictions on direct BLOB member DML.
+Root BLOB/CLOB
 locator inputs reuse ordinary type 210/211 encoding without additional LOB I/O. Existing capability,
 connection/session/transaction and disposal checks still apply; handles remain caller-owned and
 1295 text fallback rejects locator materialization. Root BLOB/CLOB locator results reuse the ordinary
@@ -424,7 +427,7 @@ decoder when the caller owns and retains the connection. Prepare and live metada
 Oracle mode, locator negotiation and CLOB charset. Streams open only after the batch reader is fully
 drained and closed; early close invalidates retained handles. Failed scalar execution disposes any
 captured LOB that was not delivered. Data-source-owned batches and CloseConnection retain the result
-restriction. Anonymous inputs, LOB/cursor members, Oracle OUT/cursor/array binding and legacy Oracle
+restriction. Anonymous inputs, cursor members, complex LOB results, Oracle OUT/cursor/array binding and legacy Oracle
 249-252 results remain outside the pipeline. Ordinary named complex binary results use
 the existing decoder. Source-column type lookups finish before sending the execution group; each
 response restores only its request's source mapping, time zone and national character set snapshot.

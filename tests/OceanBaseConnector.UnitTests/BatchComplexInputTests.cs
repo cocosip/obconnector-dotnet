@@ -87,13 +87,13 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false, "BLOB")] [InlineData(true, "BLOB")]
         [InlineData(false, "CLOB")] [InlineData(true, "CLOB")]
-        public async Task BatchMultiSendRejectsNamedLobMembersBeforePreparing(bool asynchronous, string scalar)
+        public async Task BatchMultiSendRejectsNamedLobMembersWithoutNegotiatedLocators(bool asynchronous, string scalar)
         {
             var server = Server(async channel =>
             {
                 await ComplexScalarType(channel, scalar: scalar, collection: false);
                 Assert.Equal(0, await channelStreamRead(channel));
-            }, lobLocators: true);
+            }, lobLocators: false);
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Batch Multi Send=true");
             try
             {

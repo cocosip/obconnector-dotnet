@@ -533,8 +533,8 @@ namespace OceanBaseConnector
             {
                 var complex = PreparedParameters.GetComplexType(parameter);
                 if (complex != null &&
-                    (complex.IsAnonymous || complex.Layout.HasLobMembers || complex.Layout.HasCursorMembers))
-                    throw new NotSupportedException("Batch multi-send does not support anonymous complex inputs or LOB/cursor members.");
+                    (complex.IsAnonymous || complex.Layout.HasCursorMembers))
+                    throw new NotSupportedException("Batch multi-send does not support anonymous complex inputs or cursor members.");
             }
         }
 #endif
