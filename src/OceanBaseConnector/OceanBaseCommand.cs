@@ -517,9 +517,11 @@ namespace OceanBaseConnector
         {
             foreach (var parameter in parameters)
             {
+                var complex = PreparedParameters.GetComplexType(parameter);
                 if (parameter.OceanBaseDbType == OceanBaseDbType.Blob || parameter.OceanBaseDbType == OceanBaseDbType.Clob ||
-                    parameter.Value is OceanBaseLob || parameter.ComplexType != null || parameter.Value is OceanBaseComplexValue)
-                    throw new NotSupportedException("Batch multi-send does not support complex or LOB input parameters.");
+                    parameter.Value is OceanBaseLob || complex != null &&
+                    (complex.IsAnonymous || complex.Layout.HasLobMembers || complex.Layout.HasCursorMembers))
+                    throw new NotSupportedException("Batch multi-send does not support anonymous complex inputs, LOBs, or cursor members.");
             }
         }
 #endif
