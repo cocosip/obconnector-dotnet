@@ -443,15 +443,24 @@ namespace OceanBaseConnector
                         .GetAwaiter().GetResult();
                     var fallback = SqlPacket(text, 3, operation.Exchange.ClientEncoding);
                     operation.Exchange.Complete();
-                    return new OceanBaseBatchMultiSendRequest(fallback, 0, binary: false, longDataParameters: null);
+                    return new OceanBaseBatchMultiSendRequest(fallback, 0, binary: false, longDataParameters: null,
+                        sessionTimeZone: zone, nationalCharacterSet: national);
                 }
-                ValidateBatchMultiSendColumns(statement, operation.Exchange.Mode);
+                operation.Exchange.ResolveComplexColumns(statement);
+                ValidateBatchMultiSendColumns(statement, operation.Exchange);
+                if (operation.Exchange.SourceComplexTypes != null)
+                {
+                    zone = operation.Exchange.EnsureSessionTimeZone();
+                    PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
+                    national = operation.Exchange.EnsureNationalCharacterSet();
+                }
                 var parameters = HasNationalParameters(operation.Bindings.Parameters)
                     ? PreparedParameters.Encode(operation.Bindings.Parameters, operation.Exchange.Mode, national, clientEncoding: operation.Exchange.ClientEncoding)
                     : operation.Parameters;
                 var request = PreparedParameters.Execute(statement.Id, parameters, cursor: false);
                 operation.Exchange.Complete();
-                return new OceanBaseBatchMultiSendRequest(request, statement.Id, binary: true, hasStreams ? operation.Bindings.Parameters : null);
+                return new OceanBaseBatchMultiSendRequest(request, statement.Id, binary: true, hasStreams ? operation.Bindings.Parameters : null,
+                    operation.Exchange.SourceComplexTypes, zone, national);
             }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }
@@ -483,15 +492,24 @@ namespace OceanBaseConnector
                     var text = await operation.Exchange.BuildClientPreparedSql(operation.Bindings, context, multiStatement: false, asynchronous: true).ConfigureAwait(false);
                     var fallback = SqlPacket(text, 3, operation.Exchange.ClientEncoding);
                     operation.Exchange.Complete();
-                    return new OceanBaseBatchMultiSendRequest(fallback, 0, binary: false, longDataParameters: null);
+                    return new OceanBaseBatchMultiSendRequest(fallback, 0, binary: false, longDataParameters: null,
+                        sessionTimeZone: zone, nationalCharacterSet: national);
                 }
-                ValidateBatchMultiSendColumns(statement, operation.Exchange.Mode);
+                await operation.Exchange.ResolveComplexColumnsAsync(statement, token).ConfigureAwait(false);
+                ValidateBatchMultiSendColumns(statement, operation.Exchange);
+                if (operation.Exchange.SourceComplexTypes != null)
+                {
+                    zone = await operation.Exchange.EnsureSessionTimeZoneAsync(token).ConfigureAwait(false);
+                    PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
+                    national = await operation.Exchange.EnsureNationalCharacterSetAsync(token).ConfigureAwait(false);
+                }
                 var parameters = HasNationalParameters(operation.Bindings.Parameters)
                     ? PreparedParameters.Encode(operation.Bindings.Parameters, operation.Exchange.Mode, national, clientEncoding: operation.Exchange.ClientEncoding)
                     : operation.Parameters;
                 var request = PreparedParameters.Execute(statement.Id, parameters, cursor: false);
                 operation.Exchange.Complete();
-                return new OceanBaseBatchMultiSendRequest(request, statement.Id, binary: true, hasStreams ? operation.Bindings.Parameters : null);
+                return new OceanBaseBatchMultiSendRequest(request, statement.Id, binary: true, hasStreams ? operation.Bindings.Parameters : null,
+                    operation.Exchange.SourceComplexTypes, zone, national);
             }
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }
@@ -503,14 +521,10 @@ namespace OceanBaseConnector
                 throw new NotSupportedException("Batch multi-send requires cacheable DML or SELECT statements without session or type invalidation.");
         }
 
-        private static void ValidateBatchMultiSendColumns(PreparedStatement statement, OceanBaseCompatibilityMode mode)
+        private static void ValidateBatchMultiSendColumns(PreparedStatement statement, CommandExchange exchange)
         {
             foreach (var column in statement.Columns)
-            {
-                if (column.TypeCode == 160 || column.TypeCode == 163 || column.TypeCode == 210 || column.TypeCode == 211 ||
-                    mode != OceanBaseCompatibilityMode.MySql && column.TypeCode >= 249 && column.TypeCode <= 252)
-                    throw new NotSupportedException("Batch multi-send does not support cursor, Oracle LOB, or complex result columns.");
-            }
+                column.WithContext(exchange).RequireBatchMultiSendResult(binary: true);
         }
 
         private static void ValidateBatchMultiSendParameters(OceanBaseParameter[] parameters)

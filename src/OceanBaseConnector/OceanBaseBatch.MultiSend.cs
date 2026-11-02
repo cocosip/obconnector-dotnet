@@ -154,7 +154,7 @@ namespace OceanBaseConnector
                 for (var i = group.Start; i < group.End; i++)
                 {
                     exchange.BatchCommand = operation.Items[i];
-                    exchange.BeginBatchResponse();
+                    exchange.BeginBatchResponse(requests[i].SourceComplexTypes, requests[i].SessionTimeZone, requests[i].NationalCharacterSet);
                     var count = ConsumeBatchResponse(exchange, operation, captureScalar && !scalar.Set, scalar, requests[i].Binary);
                     operation.Items[i].Affected = operation.Counts[i] = count;
                     if (count >= 0) { anyAffected = true; total = checked(total + count); }
@@ -189,7 +189,7 @@ namespace OceanBaseConnector
                 for (var i = group.Start; i < group.End; i++)
                 {
                     exchange.BatchCommand = operation.Items[i];
-                    exchange.BeginBatchResponse();
+                    exchange.BeginBatchResponse(requests[i].SourceComplexTypes, requests[i].SessionTimeZone, requests[i].NationalCharacterSet);
                     var count = await ConsumeBatchResponseAsync(exchange, operation, captureScalar && !scalar.Set, scalar, requests[i].Binary).ConfigureAwait(false);
                     operation.Items[i].Affected = operation.Counts[i] = count;
                     if (count >= 0) { anyAffected = true; total = checked(total + count); }

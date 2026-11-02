@@ -165,6 +165,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (packet.Length > 4 * 1024 * 1024 - _metadataBytes) throw new ProtocolException("Result metadata size limit exceeded.");
             _metadataBytes += packet.Length;
             var column = ResultColumn.Parse(packet, _query.Mode, SessionTimeZone, NationalCharacterSet, _query.Lobs, _query.ComplexTypes, _query.SourceComplexTypes, _query.TreatTinyAsBoolean, !IsBinary);
+            if (!parameter && _query.IsBatchResponse) column.RequireBatchMultiSendResult(IsBinary);
             if (!parameter && _oracleOutputResult) _oraclePlan!.ValidateOutputColumn(ordinal, column);
             if (!parameter) column.RequireComplexResult(IsBinary);
             if (!parameter) column.BindCursorResult(IsBinary, _query.CursorColumns);

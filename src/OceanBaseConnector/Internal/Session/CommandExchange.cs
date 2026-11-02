@@ -273,7 +273,16 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
 
-        internal void BeginBatchResponse() => _channel.BeginResponse();
+        internal bool IsBatchResponse { get; private set; }
+        internal void BeginBatchResponse(Dictionary<(string, string, string, string), OceanBaseComplexType>? sourceComplexTypes,
+            string? sessionTimeZone, NationalCharacterSet? nationalCharacterSet)
+        {
+            SourceComplexTypes = sourceComplexTypes;
+            SessionTimeZone = sessionTimeZone;
+            NationalCharacterSet = nationalCharacterSet;
+            IsBatchResponse = true;
+            _channel.BeginResponse();
+        }
 
         internal byte[] Receive(bool allowUnsupportedPrepare = false)
         {

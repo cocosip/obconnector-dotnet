@@ -418,8 +418,11 @@ compatibility. The opt-in multi-send path accepts named Oracle OBJECT/collection
 ordinary type 160 COM_STMT_EXECUTE encoding, including typed NULLs and national members. Collection
 SQL may require an explicit CAST to supply the server's prepare-time type context. Anonymous inputs,
 LOB/cursor members and locator parameters remain rejected before prepare; Oracle OUT/cursor/array
-binding and complex/locator result columns remain outside the pipeline. A separate bulk protocol
-remains unimplemented.
+binding and locator results remain outside the pipeline. Ordinary named complex binary results use
+the existing decoder. Source-column type lookups finish before sending the execution group; each
+response restores only its request's source mapping, time zone and national character set snapshot.
+Both prepared and live result metadata reject unknown/anonymous layouts and LOB/cursor members.
+A separate bulk protocol remains unimplemented.
 
 ### Batch result limits
 

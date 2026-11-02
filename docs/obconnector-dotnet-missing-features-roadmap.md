@@ -126,7 +126,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute 下的 locator LOB、输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入与普通/嵌套 OBJECT binary 结果子集也已验收 | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle PrepareExecute 下的 locator LOB、输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
 | D-09 | `P4`；4.4.2.2 `oracle-direct` text+binary String wire 子集；PL XMLTYPE OUT/INOUT 已确认是服务端限制；完整 XML codec 仍未关闭 | XMLType wire 调查与有条件 codec（T17） | ownerless `XMLTYPE` 已有严格 UTF-8 String wire；`SYS.XMLTYPE` metadata 已有安全的 String 消费边界；`DbType.Xml` 参数使用已验证的 type 253 字符串 wire；同一 PL OUT/INOUT 形状在 Connector/J 2.4.14 与 .NET 分别返回 `600/0A000`、`600/42000`，按服务端限制跳过客户端扩展 | 当前子集覆盖普通 XMLTYPE 列、NULL、同步/异步 DML、metadata、PL 函数结果、显式 Prepare binary 结果；带 owner 的复杂 payload、坏值/最大值和跨版本证据仍待确认；PL OUT/INOUT 当前版本不再作为待开发项 | 保持当前子集的参数/结果/NULL/metadata 契约；取得稳定复杂 XML identity 和不同服务端 wire 后再扩展，不把 PL 失败伪装成客户端成功 |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
@@ -1478,6 +1478,32 @@ anonymous、递归 LOB/cursor 成员、显式 LOB/locator、OUT、array binding 
 
 报告均留在忽略目录 `TestResults/roadmap/`。本轮不外推 anonymous、LOB/cursor、复杂结果、
 代理/OB20、性能收益或长期稳定性；D-08 父项保留当前限定 `P4`，不提升为 `P5`。
+
+#### D-08j：普通命名复杂结果（2026-11-02，指定 OBJECT 子集 `P4`）
+
+补齐 multi-send 的普通 named OBJECT/collection binary 结果，复用普通命令已有的来源列 owner
+解析和复杂值解码。所有目录查询在发送业务执行组前完成；每条响应只使用对应请求的来源列映射。
+prepare 和实际执行 metadata 均拒绝 anonymous、LOB/cursor 成员、locator 及未知身份，不在读取
+流水化响应期间插入目录查询。reader/scalar/nonquery 共用该路径，不扩大为 OUT、array binding
+或压力验收。named collection 的已有 binary wire 在 loopback 验证，本轮不新增持久 nested-table
+列承诺，也不将这一部分外推为当前服务端实库验收。
+
+走查发现旧流水化路径在逐次发送时消费会话上下文，导致顶层 NCHAR/NVARCHAR2 或 LTZ 与复杂列
+混合返回时丢失 national/时区。现按请求保存预检完成后的会话快照，每次开始读取响应时恢复；
+1295 文本回退同样携带快照。复杂成员继续使用其既有存储编码，不借用顶层 national 解码规则。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| 功能 red | named complex 结果的 reader/scalar/nonquery × owner/来源查询 × sync/async **12/12** 原先均因统一拒绝失败 |
+| 混合上下文 red | 顶层 national/LTZ 加入同组结果后，reader **4 失败/8 通过**，失败为缺少可信 national 上下文；报告 `d08-mixed-context-red.trx` |
+| 定向回归 | multi-send 与普通 source lookup 相关专项 **74/74**，无 skip，约 1 秒；含新增 24 项的 NULL、混合 national/LTZ、两响应来源隔离、错误归属及 prepare/live 资源拒绝；报告 `d08-mixed-context-verified.trx` |
+| Oracle 直连 | 4.4.2.2 `oracle-direct` flat/nested OBJECT × sync/async **4/4**，无 skip，约 3 秒；三条带参数 SELECT 跨两组，覆盖 national/RAW 成员、顶层 NVARCHAR2/LTZ、全 NULL 属性、三 API/缓存复用、独立连接行数及对象清理；报告 `d08-mixed-context-live.trx` |
+| 构建 | 产品五 TFM Release 与集成测试项目构建均为 0 警告/0 错误；未执行长测或全平台矩阵 |
+| 独立走查 | 已修复 national/时区快照 Important；复核无剩余问题，未重复运行测试或长测 |
+
+报告保存在 `TestResults/roadmap/`。实际执行 metadata 的拒绝发生在读行或分配 locator 前；
+未知响应身份会断开连接，不合并其他请求的来源映射，不猜测 NULL 对象的身份。代理/OB20、
+collection 的其他服务端结果形状与长期资源稳定性仍未关闭。
 
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 
