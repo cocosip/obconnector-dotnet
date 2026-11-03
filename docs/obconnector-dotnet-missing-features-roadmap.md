@@ -146,7 +146,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | --- | --- | --- | --- | --- |
 | A-01 | `P3`；MySQL/Oracle 直连各 10000 次借还及资源隔离 52/52 通过；持续运行失败根因未定，长测移至发布验收 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、清池和句柄/线程/内存稳定性未证实；原始异常被测试清理遮蔽的问题已修复 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
 | A-02 | `P3`；MySQL/Oracle 直连 XA 生命周期、recover 和池丢弃恢复 28/28、环境事务 COMMIT 回执丢失 16/16 通过 | PSPE、XA、unknown outcome（G11） | 环境事务 InDoubt 指定回执丢失子集已验收；协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
-| A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过，包重载 2/2、引用 package 标识符 2/2 通过；带空格的引用形参原名派生与过程/package/函数位置调用新增 **6/6**（A-03h） | Schema、目录和参数元数据（G13） | 包内 PL 类型和最小权限仍缺；大小写/引用 package 标识符已覆盖；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制；仅大小写不同形参的当前实库失败保留 | 双模式最小权限、唯一/歧义签名、更多大小写/引用标识符、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
+| A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过，包重载 2/2、引用 package 标识符 2/2 通过；带空格的引用形参原名派生与过程/package/函数位置调用新增 **6/6**（A-03h）；双模式函数合成返回名避让新增 **8/8**（A-03i） | Schema、目录和参数元数据（G13） | 包内 PL 类型和最小权限仍缺；大小写/引用 package 标识符已覆盖；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制；仅大小写不同形参的当前实库失败保留 | 双模式最小权限、唯一/歧义签名、更多大小写/引用标识符、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
 | A-04 | `P3`；当前 Windows 包/运行时指定子集已验收 | 包、TFM 和平台（G14/R01） | 五资产、net8/net9/net10 独立 runtime、两个 netstandard 的 net10 host 及 netstandard2.0 的 net48 host 已复验；非 Windows、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
 | A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；196608 字符 NUL 单表达式从 .NET 0/4 恢复 4/4，原因未定，见执行记录 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
 
@@ -1942,6 +1942,46 @@ surrogate、512-byte上限、精确重复、MySQL 忽略大小写及 Text 原规
 产品五 TFM 与集成项目 Release build 均 **0 warning / 0 error**，产品及测试独立复核无阻断项。
 同步能力矩阵、缺失矩阵、架构与 schema 契约；证据在忽略目录 `TestResults/roadmap/a03h-*.trx`。
 不重跑全量、长压或冻结端点；A-03 父项、CHAR_LENGTH 和 package-local RECORD 等限制仍保留。
+
+#### A-03i：函数合成返回名避让真实形参（2026-11-03，指定双模式直连子集 `P4`）
+
+源码基线 `04f6364`。双模式函数的真实形参叫 `RETURN_VALUE` 时，原先与驱动合成返回名
+共用重名集合而被拒绝派生；Oracle 仅大小写不同的标签虽可派生，却会使忽略大小写索引歧义。
+现在保留真实目录标签、方向和顺序，仅对合成返回参数分配名字：优先 `RETURN_VALUE`，若与任一
+真实形参在 OrdinalIgnoreCase 比较下冲突，则选择首个未占用的 `RETURN_VALUE_1`、
+`RETURN_VALUE_2`…，数字后缀使用 InvariantCulture。无冲突签名仍使用原名。
+调用方应按 `ParameterDirection.ReturnValue` 或首序号识别返回，不假设任意函数都固定返回名。
+
+设计/计划和结果只维护在本文。产品仅改两个文件：`RoutineParameterDerivation.OrderParameters`
+不把无服务端标签的 ordinal0 返回行加入真实名字 HashSet；`OceanBaseConnection.ReadDerivedParameters`
+在所有类型映射成功后、取消/上下文检查与原子发布之前，为新参数数组选合成名。Oracle 真实形参
+仍按 Ordinal 拒绝精确重复，MySQL 仍按 OrdinalIgnoreCase 拒绝重复；连续序号、唯一返回、参数数
+与512-byte标签边界、目录/字符长度/复杂类型身份、旧集合失败原子性均保留。
+不改执行 SQL、参数协议、真实标签或 public API，不增加配置。
+
+- [x] 双模式 exact/case/后缀冲突 RED 与普通无冲突控制；乱序目录和1024行边界。
+- [x] 完成上述两个共享点的最小修复；重复派生、首空缺后缀和原对象执行计划身份验证。
+- [x] 双模式实库 SQL 控制，再派生后隐式/显式 Prepare 重复调用、重派生和连接复用。
+- [x] 代表 DLL 消费者、五 TFM build、代码与测试独立走查；同步矩阵/schema/架构。
+- [x] 最终全部 diff、五份文档和原始 TRX 独立复核通过，无阻塞项；diff check 通过，纳入本次本地提交；不 push。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| RED | 修正夹具后的 **20例：16失败、4普通签名通过**；`a03i-return-name-red-corrected.trx`。最初新fixture调用计划未转换参数集合类型而编译失败；首轮20例中4普通控制又因未消费metadata statement close失败，已仅修正fixture；原 `a03i-return-name-red.trx` 保留，不把这些fixture失败计为产品缺口 |
+| 最终定向单元 | 派生组件 **221/221**，无skip，约3秒；含新增20例（两模式/sync/async × ordinary/exact/chain/gap/最大1024行）、目录顺序、重复派生、名字查找、真实重复拒绝、原子失败、Oracle/MySQL计划原返回对象身份及既有目录/类型/生命周期；`a03i-return-name-unit-final.trx`。前一轮较窄范围 **135/135** 不叠加计数 |
+| 双模式实库 | OceanBase4.4.2.2 MySQL/Oracle direct 最终 **16/16**，无skip，约9秒；新函数 exact/后缀碰撞 **8例**（两模式 × sync/async × 两种签名），原引用形参 **6例**、MySQL过程派生 **2例**；`a03i-return-name-live-final.trx` |
+| 实库新断言 | 直接SELECT函数的参数控制调用；真实形参原名、RETURN_VALUE_1或首空缺RETURN_VALUE_2、目录与执行顺序、返回原对象不误覆盖输入、隐式后显式Prepare重复调用、稳定重派生、旧参数detach、连接复用及FUNCTION清理 |
+| 公开DLL消费者 | **24/24**，无skip，约7秒；新函数合成冲突 **6例**及原双模式派生/原子失败12、引用标签6；netstandard2.0/2.1/net10三种代表实现资产 × sync/async。新用例核对完整PrepareExecute函数SQL/参数包、返回/输入对象、后续歧义失败保留集合；`a03i-return-name-consumer.trx` |
+| 构建/走查 | 产品五TFM与重建后的integration Release均0警告/0错误；产品、consumer/live测试及schema/架构的独立复审均无阻塞项 |
+
+首轮实库 **12/16**：MySQL新增4例已创建函数、完成SQL控制并派生成功，随后夹具把decimal
+赋给派生BIGINT参数，在发送前触发既有类型校验；修正为long后最终通过，不修改产品类型规则。
+报告 `a03i-return-name-live.trx` 与日志保留。新integration最初直接使用DbParameter.Owner的
+编译错误同样仅修正为OceanBaseParameter转换，不算协议失败。
+
+本项解除 A-03h 当时保留的合成返回名冲突限制，不扩大手工Oracle同名标签或Text占位符语法，
+不关闭包内RECORD、CHAR_LENGTH、最小权限、其他字符集/版本/部署和A-03父任务。
+未运行长测、全套消费者或平台大矩阵；证据都位于忽略目录 `TestResults/roadmap/a03i-*`。
 
 #### D-08u：multi-send 关闭连接 reader 的 LOB 读取窗口（2026-11-03，根 LOB 指定直连子集 `P4`）
 

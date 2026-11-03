@@ -85,7 +85,7 @@ namespace OceanBaseConnector.Internal.Sql
                 var direction = RequiredText(row, "PARAMETER_MODE");
                 if (ordinal < 0 || ordinal > MaximumParameters || (ordinal == 0) != (direction == "RETURN")) throw Invalid("Invalid argument position or return direction.");
                 var name = ordinal == 0 ? "RETURN_VALUE" : RequiredText(row, "PARAMETER_NAME");
-                if (!IsValidParameterLabel(name) || !names.Add(name)) throw Invalid("Argument labels are invalid or duplicated.");
+                if (!IsValidParameterLabel(name) || ordinal != 0 && !names.Add(name)) throw Invalid("Argument labels are invalid or duplicated.");
                 RequiredText(row, "DATA_TYPE"); rows.Add(row);
             }
             rows.Sort((a, b) => Integer(a, "ORDINAL_POSITION")!.Value.CompareTo(Integer(b, "ORDINAL_POSITION")!.Value));

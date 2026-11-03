@@ -53,6 +53,11 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetDerivesAndExecutesOracleQuotedParameterLabel(string target, bool asynchronous)
             => VerifyRoutineDerivation(target, asynchronous, mysql: false, unconstrainedNumber: true, parameterName: "输 入); DELETE --");
 
+        [Theory]
+        [MemberData(nameof(OracleUnconstrainedNumberDerivationAssets))]
+        public Task EveryAssetDerivesAndExecutesFunctionWithRealReturnValueLabel(string target, bool asynchronous)
+            => VerifyRoutineDerivation(target, asynchronous, mysql: false, unconstrainedNumber: true, parameterName: "RETURN_VALUE", functionReturn: true);
+
         public static IEnumerable<object[]> GeometryDerivationAssets()
         {
             foreach (var target in ConsumerTargetMatrix.Representative)
@@ -66,7 +71,7 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetDerivesGeometryRoutineArgumentsAsBinary(string target, bool asynchronous, string type)
             => VerifyRoutineDerivation(target, asynchronous, mysql: true, geometryType: type);
 
-        private static async Task VerifyRoutineDerivation(string target, bool asynchronous, bool mysql, string? floatType = null, string? geometryType = null, bool unconstrainedNumber = false, string parameterName = "amount")
+        private static async Task VerifyRoutineDerivation(string target, bool asynchronous, bool mysql, string? floatType = null, string? geometryType = null, bool unconstrainedNumber = false, string parameterName = "amount", bool functionReturn = false)
         {
             var variableScale = floatType != null || unconstrainedNumber;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -107,34 +112,41 @@ namespace OceanBaseConnector.ConsumerTests
                     await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);
                     Assert.Equal(PreparedParameters.Execute(id, PreparedParameters.Encode(values.Select(v => new OceanBaseParameter { Value = v }).ToArray(), mysql ? OceanBaseCompatibilityMode.MySql : OceanBaseCompatibilityMode.Oracle)), await Read());
                     var names = new[] { "ROUTINE_CATALOG", "ROUTINE_SCHEMA", "ROUTINE_NAME", "PACKAGE_NAME", "OVERLOAD", "SUBPROGRAM_ID", "ROUTINE_TYPE" };
-                    string?[] row = { mysql ? "db" : null, mysql ? null : "OWNER", mysql ? "proc" : "PROC", null, null, mysql ? null : "1", "PROCEDURE" };
+                    string?[] row = { mysql ? "db" : null, mysql ? null : "OWNER", mysql ? "proc" : "PROC", null, null, mysql ? null : "1", functionReturn ? "FUNCTION" : "PROCEDURE" };
                     if (arguments)
                     {
                         names = names.Concat(new[] { "PARAMETER_NAME", "ORDINAL_POSITION", "PARAMETER_MODE", "DATA_TYPE", "DATA_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION", "TYPE_OWNER", "TYPE_NAME", "TYPE_SUBNAME", "TYPE_DECLARATION", "CHARACTER_LENGTH", "DECLARED_PRECISION", "DECLARED_SCALE" }).ToArray();
-                        row = row.Concat(new[] { parameterName, "1", "INOUT", geometryType ?? floatType ?? (mysql ? "decimal" : "NUMBER"), null, geometryType != null || unconstrainedNumber ? null : floatType != null ? "126" : "3",
+                        row = row.Concat(new[] { parameterName, "1", functionReturn ? "IN" : "INOUT", geometryType ?? floatType ?? (mysql ? "decimal" : "NUMBER"), null, geometryType != null || unconstrainedNumber ? null : floatType != null ? "126" : "3",
                             geometryType != null ? null : variableScale ? "-85" : mysql ? "1" : "-2", null, null, null, null, geometryType ?? (mysql ? "decimal(3,1)" : null), null, null, null }).ToArray();
                     }
                     await channel.WritePacketAsync(new[] { (byte)names.Length }, budget.Token);
                     foreach (var name in names) await channel.WritePacketAsync(Column(name), budget.Token);
                     await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);
-                    for (var record = 0; record < (round == 2 ? 2 : 1); record++)
+                    for (var record = 0; record < (round == 2 || arguments && functionReturn ? 2 : 1); record++)
                     {
+                        var valuesRow = row;
+                        if (arguments && functionReturn && record == 1)
+                        {
+                            valuesRow = row.ToArray(); valuesRow[7] = null; valuesRow[8] = "0"; valuesRow[9] = "RETURN";
+                        }
                         using var payload = new MemoryStream(); payload.WriteByte(0);
                         var nulls = new byte[(row.Length + 9) / 8];
-                        for (var i = 0; i < row.Length; i++) if (row[i] == null) nulls[(i + 2) / 8] |= (byte)(1 << ((i + 2) % 8));
+                        for (var i = 0; i < valuesRow.Length; i++) if (valuesRow[i] == null) nulls[(i + 2) / 8] |= (byte)(1 << ((i + 2) % 8));
                         payload.Write(nulls);
-                        foreach (var value in row)
+                        foreach (var value in valuesRow)
                         { if (value == null) continue; var bytes = Encoding.UTF8.GetBytes(value); payload.WriteByte((byte)bytes.Length); payload.Write(bytes); }
                         await channel.WritePacketAsync(payload.ToArray(), budget.Token);
                     }
                     await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);
                     if (arguments && variableScale)
                     {
-                        var encoded = PreparedParameters.Encode(new[] { new OceanBaseParameter { Value = 7.2500m } }, OceanBaseCompatibilityMode.Oracle);
-                        Assert.Equal(OraclePrepareExecutePacket.Build(0, "BEGIN owner.proc(?); END;", 1, encoded), await Read());
-                        await channel.WritePacketAsync(new byte[] { 0, 91, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 1 }, budget.Token);
+                        var inputs = functionReturn ? new[] { new OceanBaseParameter { Value = DBNull.Value }, new OceanBaseParameter { Value = 7.2500m } }
+                            : new[] { new OceanBaseParameter { Value = 7.2500m } };
+                        var encoded = PreparedParameters.Encode(inputs, OceanBaseCompatibilityMode.Oracle);
+                        Assert.Equal(OraclePrepareExecutePacket.Build(0, functionReturn ? "BEGIN ? := owner.proc(?); END;" : "BEGIN owner.proc(?); END;", inputs.Length, encoded), await Read());
+                        await channel.WritePacketAsync(new byte[] { 0, 91, 0, 0, 0, 1, 0, (byte)inputs.Length, 0, 0, 0, 0, 4, 0, 0, 0, 1 }, budget.Token);
                         var number = Column("amount"); number[^6] = 206; number[^3] = 171; number[^2] = 126;
-                        await channel.WritePacketAsync(number, budget.Token);
+                        for (var i = 0; i < inputs.Length; i++) await channel.WritePacketAsync(number, budget.Token);
                         await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);
                         await channel.WritePacketAsync(number, budget.Token);
                         await channel.WritePacketAsync(new byte[] { 254, 0, 0, 6, 0 }, budget.Token);
@@ -174,8 +186,15 @@ namespace OceanBaseConnector.ConsumerTests
                     }
                     catch (TargetInvocationException error) when (error.InnerException != null) { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
                 }
-                await Derive(); var parameter = Assert.IsAssignableFrom<DbParameter>(command.Parameters[0]);
-                Assert.NotSame(original, parameter); Assert.Equal(parameterName, parameter.ParameterName); Assert.Equal(ParameterDirection.InputOutput, parameter.Direction);
+                await Derive(); var parameter = Assert.IsAssignableFrom<DbParameter>(command.Parameters[functionReturn ? 1 : 0]);
+                Assert.NotSame(original, parameter); Assert.Equal(parameterName, parameter.ParameterName); Assert.Equal(functionReturn ? ParameterDirection.Input : ParameterDirection.InputOutput, parameter.Direction);
+                if (functionReturn)
+                {
+                    Assert.Equal(2, command.Parameters.Count);
+                    Assert.Equal("RETURN_VALUE_1", command.Parameters[0].ParameterName);
+                    Assert.Equal(ParameterDirection.ReturnValue, command.Parameters[0].Direction);
+                    Assert.Same(parameter, command.Parameters["RETURN_VALUE"]);
+                }
                 Assert.Equal(variableScale || geometryType != null ? 0 : 3, parameter.Precision);
                 Assert.Equal(variableScale || geometryType != null ? (int?)null : mysql ? 1 : -2, parameter.GetType().GetProperty("DecimalScale")!.GetValue(parameter)); Assert.Equal(DBNull.Value, parameter.Value);
                 if (geometryType != null)
@@ -190,11 +209,14 @@ namespace OceanBaseConnector.ConsumerTests
                 {
                     parameter.Value = 7.2500m;
                     Assert.Equal(0, asynchronous ? await command.ExecuteNonQueryAsync(budget.Token) : command.ExecuteNonQuery());
-                    Assert.Equal("OceanBaseConnector.OceanBaseDecimal", parameter.Value!.GetType().FullName);
-                    Assert.Equal("8.5000", parameter.Value.ToString());
+                    var output = functionReturn ? command.Parameters[0] : parameter;
+                    Assert.Equal("OceanBaseConnector.OceanBaseDecimal", output.Value!.GetType().FullName);
+                    Assert.Equal("8.5000", output.Value.ToString());
+                    if (functionReturn) Assert.Equal(7.2500m, parameter.Value);
                 }
+                var retained = command.Parameters.Cast<DbParameter>().ToArray();
                 await Assert.ThrowsAsync<NotSupportedException>(Derive);
-                Assert.Same(parameter, Assert.Single(command.Parameters.Cast<DbParameter>())); Assert.Equal(ConnectionState.Open, connection.State);
+                Assert.Equal(retained, command.Parameters.Cast<DbParameter>()); Assert.Equal(ConnectionState.Open, connection.State);
                 connection.Close(); await serving.WaitAsync(budget.Token);
             }
             catch (Exception error) when (serving.IsFaulted) { throw new AggregateException(error, serving.Exception!); }

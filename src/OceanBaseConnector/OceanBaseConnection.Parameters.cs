@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
@@ -114,6 +115,15 @@ namespace OceanBaseConnector
                     complex = await GetDerivedComplexType(RoutineParameterDerivation.RequiredText(row, "TYPE_OWNER"), RoutineParameterDerivation.RequiredText(row, "TYPE_NAME"), command, asynchronous, token).ConfigureAwait(false);
                 }
                 parameters[i] = RoutineParameterDerivation.Map(row, mysql, session.TreatTinyAsBoolean, complex);
+            }
+            if (parameters.Length != 0 && parameters[0].Direction == ParameterDirection.ReturnValue)
+            {
+                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (var i = 1; i < parameters.Length; i++) names.Add(parameters[i].ParameterName);
+                var name = "RETURN_VALUE";
+                for (var suffix = 1; names.Contains(name); suffix++)
+                    name = "RETURN_VALUE_" + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                parameters[0].ParameterName = name;
             }
             token.ThrowIfCancellationRequested(); return parameters;
         }

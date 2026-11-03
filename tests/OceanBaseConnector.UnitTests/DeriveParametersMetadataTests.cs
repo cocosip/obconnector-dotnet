@@ -128,7 +128,7 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public void OracleArgumentNamesUseExactIdentityIncludingTheSyntheticReturn(bool function)
+        public void OracleRealArgumentNamesUseExactIdentityWithoutReservingTheSyntheticReturn(bool function)
         {
             using var table = Arguments(); var first = Argument(table, "NUMBER"); first["ROUTINE_TYPE"] = function ? "FUNCTION" : "PROCEDURE";
             first["PARAMETER_NAME"] = function ? "return_value" : "VALUE";
@@ -137,7 +137,8 @@ namespace OceanBaseConnector.UnitTests
             second["PARAMETER_NAME"] = function ? DBNull.Value : "value"; table.Rows.Add(second);
             Assert.Equal(2, RoutineParameterDerivation.OrderParameters(table, first, false).Length);
             first["PARAMETER_NAME"] = function ? "RETURN_VALUE" : "value";
-            Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.OrderParameters(table, first, false));
+            if (function) Assert.Equal(2, RoutineParameterDerivation.OrderParameters(table, first, false).Length);
+            else Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.OrderParameters(table, first, false));
         }
 
         [Theory]

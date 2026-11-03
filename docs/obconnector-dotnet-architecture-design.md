@@ -843,12 +843,17 @@ the first wire position. Parameter labels do not enter the generated SQL or sele
 by name. Labels retain their exact spelling, including spaces and punctuation from quoted formal names;
 they must be nonempty, valid UTF-8 within 512 bytes, contain no control characters and be distinct with
 Ordinal comparison. Derivation preserves the same exact Oracle argument identities; MySQL retains its
-OrdinalIgnoreCase duplicate check. An actual function argument named RETURN_VALUE still conflicts with
-the synthetic return label and is rejected. No Unicode normalization is performed. Invalid derived
+OrdinalIgnoreCase duplicate check for real formal parameters. The synthetic return label does not
+reserve a server argument name. No Unicode normalization is performed. Invalid derived
 labels fail before replacing the caller's collection. SQL identifiers and values retain the existing
 strict session encoding rules; an accepted label does not establish server support for its formal name.
 
-Success replaces the parameter collection with fresh DBNull-valued parameters ordered by ordinal position; a function return is first and named RETURN_VALUE. Existing parameter objects are detached and their values are not copied. Failure/cancellation leaves the original collection unpublished; concurrent member changes are detected atomically and retained. Avoid changing individual parameter properties concurrently: that is outside the membership-version guarantee. The command/session/transaction context is checked before publication, and Execute/Prepare/another derivation cannot overlap. Valid complex descriptors loaded before a later failure may remain cached.
+Success replaces the parameter collection with fresh DBNull-valued parameters ordered by ordinal position; a function return is first. Its synthetic label is RETURN_VALUE unless it conflicts with a real formal
+label under OrdinalIgnoreCase, in which case the first available RETURN_VALUE_1, RETURN_VALUE_2, etc.
+is selected using invariant decimal suffixes. Real catalog labels are unchanged; use
+ParameterDirection.ReturnValue or the first ordinal to identify the return. This applies in both modes
+and avoids ambiguity in the parameter collection's case-insensitive fallback lookup. Name selection
+occurs only after all types have mapped successfully and before atomic publication. Existing parameter objects are detached and their values are not copied. Failure/cancellation leaves the original collection unpublished; concurrent member changes are detected atomically and retained. Avoid changing individual parameter properties concurrently: that is outside the membership-version guarantee. The command/session/transaction context is checked before publication, and Execute/Prepare/another derivation cannot overlap. Valid complex descriptors loaded before a later failure may remain cached.
 
 The operation reserves one physical session across routine, argument and named-type queries. It uses CommandTimeout for each query, with no total-duration guarantee. CancellationToken, Cancel and Dispose cover the operation and query gaps; a canceled in-flight request follows the existing connection-break/unknown-outcome rules. Directory permission errors retain the server error code and SQL state. Each routine/argument directory table is bounded to 1024 rows and 4 MiB of UTF-8 string content; named descriptors retain the existing complex-type member/depth/cache bounds.
 
