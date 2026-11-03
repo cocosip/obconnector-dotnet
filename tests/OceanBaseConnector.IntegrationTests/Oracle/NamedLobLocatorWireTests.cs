@@ -45,7 +45,7 @@ public sealed class NamedLobLocatorWireTests
             var marker = new byte[] { 0, 128, 255 };
             if (asynchronous) await lob.WriteBytesAsync(0, marker, 0, marker.Length); else lob.WriteBytes(0, marker, 0, marker.Length);
             var locator = lob.BindingBytes(); Assert.True(locator.Length > 32);
-            Assert.Throws<NotSupportedException>(() => type.CreateValue(lob));
+            Assert.Same(lob, type.CreateValue(lob).GetValues()[0]);
             await using (var root = db.Command(connection, "SELECT DBMS_LOB.GETLENGTH(:p) FROM DUAL", transaction))
             {
                 root.Parameters.Add(new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.Blob, Value = lob });

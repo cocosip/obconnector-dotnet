@@ -20,9 +20,17 @@ namespace OceanBaseConnector.Internal.Sql
             for (var i = 0; i < supplied.Length; i++)
             {
                 supplied[i] = (OceanBaseParameter)parameters[i];
+            }
+            return Create(sql, mode, supplied, allowOutputs);
+        }
+
+        internal static ParameterBindingPlan Create(string sql, OceanBaseCompatibilityMode mode, OceanBaseParameter[] supplied, bool allowOutputs = false)
+        {
+            if (sql == null) throw new ArgumentNullException(nameof(sql));
+            if (supplied == null) throw new ArgumentNullException(nameof(supplied));
+            for (var i = 0; i < supplied.Length; i++)
                 if (supplied[i].Direction != ParameterDirection.Input && (!allowOutputs || mode != OceanBaseCompatibilityMode.Oracle))
                     throw new NotSupportedException("Only input parameters are supported at this stage.");
-            }
             // MySQL SQL_MODE can change quoting; only the server counts positional parameters.
             if (mode == OceanBaseCompatibilityMode.MySql) return new ParameterBindingPlan(sql, supplied);
             if (mode != OceanBaseCompatibilityMode.Oracle) throw new ArgumentOutOfRangeException(nameof(mode));
@@ -87,7 +95,7 @@ namespace OceanBaseConnector.Internal.Sql
             return new ParameterBindingPlan(text, ordered.ToArray(), positions.ToArray());
         }
 
-        private static string NormalizeName(string name)
+        internal static string NormalizeName(string name)
         {
             if (string.IsNullOrEmpty(name)) throw InvalidName();
             var start = name[0] == ':' ? 1 : 0;
@@ -127,7 +135,7 @@ namespace OceanBaseConnector.Internal.Sql
             throw Unterminated();
         }
 
-        private static bool IsIdentifierPart(char c) => OracleCommandPlan.IsNamePart(c) || c >= 128 && !char.IsWhiteSpace(c);
+        internal static bool IsIdentifierPart(char c) => OracleCommandPlan.IsNamePart(c) || c >= 128 && !char.IsWhiteSpace(c);
         private static ArgumentException InvalidName() => new ArgumentException("Oracle parameter names must use the supported unquoted name syntax.");
         private static ArgumentException Unterminated() => new ArgumentException("CommandText contains an unterminated quote or comment.");
         private static NotSupportedException UnsupportedSyntax() => new NotSupportedException("The Oracle literal or binding syntax is not supported.");

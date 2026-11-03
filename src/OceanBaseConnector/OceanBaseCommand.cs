@@ -276,9 +276,9 @@ namespace OceanBaseConnector
                     throw new InvalidOperationException("The connection's physical session changed before the operation started.");
                 var length = session.ClientEncoding.GetByteCount(text);
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
+                var multiStatement = CommandType == CommandType.Text && SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
                 var oracle = session.UseOraclePrepareExecute && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle &&
                     (arrayCount != 0 || CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters, arrayCount) : null;
-                var multiStatement = CommandType == CommandType.Text && SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
                 var mysql = CommandType == CommandType.StoredProcedure && session.Info!.Mode == OceanBaseCompatibilityMode.MySql
                     ? MySqlCommandPlan.Create(text, _parameters, _mysqlVariablePrefix ??= "obc_" + Guid.NewGuid().ToString("N"), session.ClientEncoding) : null;
                 if (multiStatement && HasOutputParameters() && session.Info!.Mode == OceanBaseCompatibilityMode.MySql)
@@ -300,7 +300,27 @@ namespace OceanBaseConnector
 #endif
                 if (oracle == null && mysql == null && CommandType != CommandType.Text) throw new NotSupportedException("Oracle stored procedures require Use Oracle Prepare Execute=true.");
                 if (oracle != null && cursorOffset) throw new NotSupportedException("Oracle output execution does not support offset fetch.");
-                var bindings = mysql?.Bindings ?? oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
+                var hasBatchCommand = false;
+#if NET8_0_OR_GREATER
+                hasBatchCommand = BatchCommand != null;
+#endif
+                var namedComplexLob = !prepareOnly && !schemaOnly && CommandType == CommandType.Text && !multiStatement && !HasOutputParameters() && !hasBatchCommand &&
+                    session.Info!.Mode == OceanBaseCompatibilityMode.Oracle;
+                ParameterBindingPlan bindings;
+                if (namedComplexLob)
+                {
+                    var supplied = new OceanBaseParameter[_parameters.Count];
+                    for (var i = 0; i < supplied.Length; i++)
+                    {
+                        supplied[i] = (OceanBaseParameter)_parameters[i];
+                        var complex = PreparedParameters.GetComplexType(supplied[i]);
+                        if (complex != null) connection.ValidateComplexType(complex, supplied[i].Value as OceanBaseComplexValue);
+                    }
+                    bindings = NamedComplexLobBinding.Rewrite(text, supplied);
+                }
+                else bindings = mysql?.Bindings ?? oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
+                if (session.ClientEncoding.GetByteCount(bindings.CommandText) >= PacketChannel.DefaultMaxPacketSize)
+                    throw new ArgumentException("Command text exceeds the packet size limit.");
                 if (multiStatement && (prepareOnly || _explicitPreparation || _fetchSize > 0 || oracle != null))
                     throw new NotSupportedException("Multi-statement execution does not support Prepare, server cursors or Oracle outputs.");
                 var clientFallback = AllowClientSidePrepareFallback && !multiStatement && !prepareOnly && !schemaOnly && !keyInfo && !_explicitPreparation && _fetchSize == 0 && oracle == null && mysql == null;

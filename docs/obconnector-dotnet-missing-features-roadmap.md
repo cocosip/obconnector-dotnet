@@ -735,7 +735,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 
 | 子项 | 进度 | 当前范围与下一步 |
 | --- | --- | --- |
-| D-04a 命名 LOB 成员 | `P2`；a1/a3.1 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT/嵌套 OBJECT 根 NULL 输出身份为当前服务端限制。a2：BLOB OBJECT 成员 DML 在 .NET 与 Java 同 wire 诊断回放均返回 932；按当前目标服务端限制跳过客户端改动。命名 locator 回绑仍拒绝，不隐式读取外部 LOB |
+| D-04a 命名 LOB 成员 | `P2`；a1/a3.1 为 `P4`；a4 已实现、实库待验 | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT/嵌套 OBJECT 根 NULL 输出身份为当前服务端限制。a2：BLOB OBJECT 成员 DML 在 .NET 与 Java 同 wire 诊断回放均返回 932；按当前目标服务端限制跳过客户端改动。a4：Oracle 单条 Text、input-only named OBJECT/collection locator 通过 SQL 构造器和隐藏根 LOB 参数自动绑定，已有本地单测，实库 profile 尚未启用；OUT/INOUT、batch、cursor、multi-statement 仍拒绝或未纳入。 |
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
 | D-04d 复杂 cursor 成员 | `P4`（当前目标形状为服务端限制）；新版本/新 wire 仍需重开 | 同一租户 `CREATE TYPE ... AS OBJECT (c SYS_REFCURSOR)` 在 Java 返回 `PLS-00201`、.NET 返回 `42000`；PL-only `RECORD (C SYS_REFCURSOR, N NUMBER)` 在 Java 与 .NET 均使 package 变为 `INVALID`，`ALL_ERRORS` 返回 `OBE-00600/-4007 attribute type of record is cursor type not supported`。两端都没有可读取的 child cursor wire，因此跳过客户端实现；若后续出现可创建的形状，再单独验收 child FETCH/所有权 |
@@ -931,10 +931,35 @@ replay 的同码失败，失败范围收窄到服务端接收后的 BLOB OBJECT 
 本次只改回归和文档；单个新C#文件空白检查通过，没有重跑产品全套/消费者/长测。
 一次性探针和两次控制输出位于忽略的 `TestResults/d04-named-locator-probe/`，无凭据或locator内容。
 
-因此，直接让named writer发送locator字节会绑定错误内容，继续保留 `CreateValue(lob)` 拒绝。
-**尚未实现**自动将命名复杂值展开成SQL构造器和独立locator绑定；后续若采用该路线，必须覆盖
+因此，直接让named writer发送locator字节会绑定错误内容；在 a4 实现前，`CreateValue(lob)` 仍拒绝。
+自动将命名复杂值展开成SQL构造器和独立locator绑定必须覆盖
 原描述/句柄的发送前身份校验、Input/INOUT/OUT映射、嵌套NULL、重复参数/包预算、Prepare/cache
 形状变化、batch与失败资源归属。本轮不能推断CLOB、collection、其他版本或所有替代wire均不可行。
+
+#### D-04h：命名复杂值 LOB locator 自动绑定（2026-11-03，代码完成、实库待验）
+
+本轮按 D-04g 已确认的可用路径实现最小自动绑定：Oracle 单条 `CommandType.Text`、无输出、
+非 batch 的 input-only named OBJECT/collection 值，如果自身或嵌套值包含 BLOB/CLOB locator，
+执行前将占位符改写为带双引号的 schema/type constructor，并把每个 locator 作为隐藏的根 BLOB/CLOB
+参数绑定。原始 `OceanBaseParameterCollection` 不被污染，重复占位符、嵌套 OBJECT、NULL 成员、
+LOB 所属连接/事务和既有类型校验继续由现有路径负责；命名 byte[]/string payload 与匿名数组 locator
+路径保持不变。为防止构造器扩展后的 SQL 超过协议上限，执行计划再次检查改写后的命令文本大小。
+
+实现范围明确排除 OUT/INOUT、multi-statement、DbBatch、cursor 成员、隐式读取 locator 内容和服务端
+`932/22000` BLOB OBJECT DML workaround。命名 locator 只在构造阶段允许保留；没有经过此改写的实际
+named complex wire 仍拒绝发送。
+
+| 检查 | 结果 |
+| --- | --- |
+| 本地 unit | 新增 constructor/隐藏参数、嵌套/NULL、quoted type name、重复占位符及拒绝路径 **4/4**；相关复杂 LOB 组 **84/84** |
+| Release 构建 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`，五个目标框架、测试/消费者资产 **0 warning / 0 error** |
+| 集成测试 | 新增 Oracle sync/async **1 个理论用例**已编译；未设置 `OB_REQUIRE_INTEGRATION=1`，按测试基础设施明确 **1 skip**，没有实库通过证据 |
+| 格式/差异 | 变更 C# 文件 scoped whitespace verify 通过；`git diff --check` 通过 |
+
+因此 a4 目前只能记为“代码完成、实库待验”，不能提升 D-04a 或 D-04 父项状态。下一步应使用已授权的
+Oracle 4.4.2.2 profile 运行该 sync/async 用例，确认独立连接存储读回、重复执行和连接复用；随后再决定
+是否扩大到 named collection 的更多成员形状或 Prepare/cache。没有实库证据前，不扩大支持矩阵，也不把
+现有服务端 `932/22000` 失败改写成客户端成功。
 
 #### D-04a2 Connector/J 2.4.14 公开 API 实测（2026-11-01）
 

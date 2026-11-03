@@ -143,7 +143,7 @@ public sealed class ComplexLobInputTests
             else
             {
                 command.CommandType = CommandType.StoredProcedure;
-                Assert.Throws<NotSupportedException>(() => named!.CreateValue(lob));
+                Assert.Same(lob, named!.CreateValue(lob).GetValues()[0]);
                 object inputValue = character ? text : bytes;
                 DatabaseContext.Parameter(command, "p", shape == "object" ? named!.CreateValue(inputValue) : named!.CreateValue(inputValue, null));
                 var length = new OceanBaseParameter { ParameterName = "n", Direction = ParameterDirection.Output, DbType = DbType.Decimal };

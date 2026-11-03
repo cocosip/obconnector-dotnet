@@ -33,7 +33,8 @@ namespace OceanBaseConnector
             if (Context == null) throw new NotSupportedException("Anonymous result descriptors cannot construct parameter values.");
             Context.Connection.ValidateComplexType(this);
             var result = new OceanBaseComplexValue(this, values);
-            ComplexValueCodec.EncodeParameter(Layout, result.WireValues(), OceanBaseCompatibilityMode.Oracle, validateOnly: true, clientEncoding: Context.Session.ClientEncoding, lobLocators: IsAnonymous);
+            ComplexValueCodec.EncodeParameter(Layout, result.WireValues(), OceanBaseCompatibilityMode.Oracle, validateOnly: true,
+                clientEncoding: Context.Session.ClientEncoding, lobLocators: IsAnonymous, allowNamedLobLocators: !IsAnonymous);
             Context.Connection.ValidateComplexType(this, result); return result;
         }
         internal ComplexType Layout { get; }

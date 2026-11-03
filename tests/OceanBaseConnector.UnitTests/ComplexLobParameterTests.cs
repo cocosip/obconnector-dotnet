@@ -126,7 +126,7 @@ namespace OceanBaseConnector.UnitTests
                     parameter.Value = DBNull.Value;
                     Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
                     if (shape == "array") Assert.Same(lob, root.CreateValue(lob).GetValues()[0]);
-                    else Assert.Throws<NotSupportedException>(() => type.CreateValue(lob));
+                    else Assert.Same(lob, type.CreateValue(lob).GetValues()[0]);
                 }
             }
             catch
@@ -161,7 +161,7 @@ namespace OceanBaseConnector.UnitTests
                 using var lob = Assert.IsType<OceanBaseLob>(await source.ExecuteScalarAsync());
                 Assert.Throws<ArgumentException>(() => type.CreateValue(new object()));
                 Assert.Throws<ArgumentException>(() => type.CreateValue(scalar == "BLOB" ? (object)"wrong kind" : new byte[] { 1 }));
-                Assert.Throws<NotSupportedException>(() => type.CreateValue(lob));
+                Assert.Same(lob, type.CreateValue(lob).GetValues()[0]);
                 var otherKind = connection.CreateArrayType(scalar == "BLOB" ? "CLOB" : "BLOB");
                 Assert.Throws<ArgumentException>(() => otherKind.CreateValue(lob));
                 var array = connection.CreateArrayType(scalar); var value = array.CreateValue(lob);
@@ -214,7 +214,7 @@ namespace OceanBaseConnector.UnitTests
                 command.Parameters.Add(parameter); Assert.Equal(1, asynchronous ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
                 using var actual = Assert.IsType<OceanBaseLob>(Assert.Single(Assert.IsType<OceanBaseComplexValue>(parameter.Value).GetValues()));
                 Assert.NotSame(original, actual); Assert.Equal(2, actual.ByteLength); Assert.Equal(character, actual.IsCharacter);
-                Assert.Throws<NotSupportedException>(() => type.CreateValue(original));
+                Assert.Same(original, type.CreateValue(original).GetValues()[0]);
                 Assert.Equal(input, original.BindingBytes());
                 using var stream = character ? (IDisposable)actual.OpenTextReader() : actual.OpenRead();
             }

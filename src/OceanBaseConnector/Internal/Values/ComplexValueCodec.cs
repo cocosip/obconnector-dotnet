@@ -66,16 +66,16 @@ namespace OceanBaseConnector.Internal.Values
             return new TextResultParser(ResultColumn.Utf8.GetString(value), type).Read();
         }
 
-        internal static byte[] EncodeParameter(ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null, bool lobLocators = false)
+        internal static byte[] EncodeParameter(ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null, bool lobLocators = false, bool allowNamedLobLocators = false)
         {
             using var stream = new MemoryStream(); using var writer = new BinaryWriter(stream, ResultColumn.Utf8, leaveOpen: true);
-            WriteParameter(writer, type, values, mode, national, validateOnly, clientEncoding, lobLocators); return stream.ToArray();
+            WriteParameter(writer, type, values, mode, national, validateOnly, clientEncoding, lobLocators, allowNamedLobLocators); return stream.ToArray();
         }
 
-        internal static void WriteParameter(BinaryWriter writer, ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null, bool lobLocators = false)
+        internal static void WriteParameter(BinaryWriter writer, ComplexType type, object?[] values, OceanBaseCompatibilityMode mode, NationalCharacterSet? national = null, bool validateOnly = false, Encoding? clientEncoding = null, bool lobLocators = false, bool allowNamedLobLocators = false)
         {
             ValidateRoot(type, mode); var budget = MaximumMembers;
-            Write(writer, type, values, 0, ref budget, national, validateOnly, clientEncoding ?? ResultColumn.Utf8, lobLocators);
+            Write(writer, type, values, 0, ref budget, national, validateOnly, clientEncoding ?? ResultColumn.Utf8, lobLocators, allowNamedLobLocators);
         }
 
         private static void ValidateRoot(ComplexType type, OceanBaseCompatibilityMode mode)
@@ -309,7 +309,7 @@ namespace OceanBaseConnector.Internal.Values
             return cursor.ReadBytes(count);
         }
 
-        private static void Write(BinaryWriter writer, ComplexType type, object?[] values, int depth, ref int budget, NationalCharacterSet? national, bool validateOnly, Encoding clientEncoding, bool lobLocators = false)
+        private static void Write(BinaryWriter writer, ComplexType type, object?[] values, int depth, ref int budget, NationalCharacterSet? national, bool validateOnly, Encoding clientEncoding, bool lobLocators = false, bool allowNamedLobLocators = false)
         {
             if (values == null) throw new ArgumentNullException(nameof(values));
             if (depth >= MaximumDepth || values.Length > budget) throw new NotSupportedException("Complex nesting or member count exceeds the supported limit.");
@@ -332,7 +332,7 @@ namespace OceanBaseConnector.Internal.Values
                 if (member.TypeCode == 160)
                 {
                     if (!(value is object?[] nested)) throw new ArgumentException("A nested complex value requires an object array.");
-                    Write(writer, member, nested, depth + 1, ref budget, national, validateOnly, clientEncoding); continue;
+                    Write(writer, member, nested, depth + 1, ref budget, national, validateOnly, clientEncoding, allowNamedLobLocators: allowNamedLobLocators); continue;
                 }
                 switch (member.TypeCode)
                 {
@@ -366,8 +366,14 @@ namespace OceanBaseConnector.Internal.Values
                         }
                         else
                         {
-                            // Named PL members use LONG_BLOB payloads, not the anonymous array locator protocol.
-                            if (value is OceanBaseLob) throw new NotSupportedException("Named complex LOB members require BLOB bytes or CLOB text, not locators.");
+                            // Named PL members use LONG_BLOB payloads at execution; validation may retain a locator for SQL constructor rewriting.
+                            if (value is OceanBaseLob lob)
+                            {
+                                if (!allowNamedLobLocators || lob.IsCharacter != (member.TypeCode == 211))
+                                    throw new NotSupportedException("Named complex LOB members require BLOB bytes or CLOB text, not locators.");
+                                if (validateOnly) break;
+                                throw new NotSupportedException("Named complex LOB locators require constructor binding.");
+                            }
                             if (member.TypeCode == 210 && value is byte[] payload)
                             { ReserveBytes(writer, payload.Length); PreparedParameters.WriteBytes(writer, payload); }
                             // LONG_BLOB payloads bypass the server's client charset conversion.
