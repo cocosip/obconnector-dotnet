@@ -75,7 +75,7 @@ namespace OceanBaseConnector.Internal.Sql
         internal static DataRow[] OrderParameters(DataTable arguments, DataRow routine, bool mysql)
         {
             if (arguments.Rows.Count > MaximumParameters) throw Invalid("The routine has too many parameters.");
-            var rows = new List<DataRow>(); var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var rows = new List<DataRow>(); var names = new HashSet<string>(mysql ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
             foreach (DataRow row in arguments.Rows)
             {
                 foreach (var identity in new[] { "ROUTINE_CATALOG", "ROUTINE_SCHEMA", "ROUTINE_NAME", "PACKAGE_NAME", "OVERLOAD", "SUBPROGRAM_ID" })
@@ -85,7 +85,7 @@ namespace OceanBaseConnector.Internal.Sql
                 var direction = RequiredText(row, "PARAMETER_MODE");
                 if (ordinal < 0 || ordinal > MaximumParameters || (ordinal == 0) != (direction == "RETURN")) throw Invalid("Invalid argument position or return direction.");
                 var name = ordinal == 0 ? "RETURN_VALUE" : RequiredText(row, "PARAMETER_NAME");
-                if (!ValidParameterName(name, mysql) || !names.Add(name)) throw Invalid("Argument names cannot be represented by the current binding syntax.");
+                if (!IsValidParameterLabel(name) || !names.Add(name)) throw Invalid("Argument labels are invalid or duplicated.");
                 RequiredText(row, "DATA_TYPE"); rows.Add(row);
             }
             rows.Sort((a, b) => Integer(a, "ORDINAL_POSITION")!.Value.CompareTo(Integer(b, "ORDINAL_POSITION")!.Value));
@@ -284,16 +284,10 @@ namespace OceanBaseConnector.Internal.Sql
         internal static string? Text(DataRow row, string column) => row.IsNull(column) ? null : row[column] as string ?? throw Invalid("Invalid directory text.");
         internal static string RequiredText(DataRow row, string column) => Text(row, column) is string text && text.Length != 0 ? text : throw Invalid("Missing directory text: " + column);
         internal static int? Integer(DataRow row, string column) => row.IsNull(column) ? (int?)null : row[column] is int value ? value : throw Invalid("Invalid directory integer.");
-        private static bool ValidParameterName(string name, bool mysql)
+        internal static bool IsValidParameterLabel(string name)
         {
-            if (name.Length == 0 || ResultColumn.Utf8.GetByteCount(name) > 512) return false;
-            if (mysql)
-            {
-                foreach (var c in name) if (char.IsControl(c)) return false;
-                return true;
-            }
-            if (!OracleCommandPlan.IsNameStart(name[0])) return false;
-            for (var i = 1; i < name.Length; i++) if (!OracleCommandPlan.IsNamePart(name[i])) return false;
+            if (string.IsNullOrEmpty(name) || ResultColumn.Utf8.GetByteCount(name) > 512) return false;
+            foreach (var c in name) if (char.IsControl(c)) return false;
             return true;
         }
         private static NotSupportedException Invalid(string message) => new NotSupportedException(message);

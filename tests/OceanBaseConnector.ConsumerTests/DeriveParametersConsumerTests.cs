@@ -48,6 +48,11 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetDerivesAndExecutesOracleUnconstrainedNumber(string target, bool asynchronous)
             => VerifyRoutineDerivation(target, asynchronous, mysql: false, unconstrainedNumber: true);
 
+        [Theory]
+        [MemberData(nameof(OracleUnconstrainedNumberDerivationAssets))]
+        public Task EveryAssetDerivesAndExecutesOracleQuotedParameterLabel(string target, bool asynchronous)
+            => VerifyRoutineDerivation(target, asynchronous, mysql: false, unconstrainedNumber: true, parameterName: "输 入); DELETE --");
+
         public static IEnumerable<object[]> GeometryDerivationAssets()
         {
             foreach (var target in ConsumerTargetMatrix.Representative)
@@ -61,7 +66,7 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetDerivesGeometryRoutineArgumentsAsBinary(string target, bool asynchronous, string type)
             => VerifyRoutineDerivation(target, asynchronous, mysql: true, geometryType: type);
 
-        private static async Task VerifyRoutineDerivation(string target, bool asynchronous, bool mysql, string? floatType = null, string? geometryType = null, bool unconstrainedNumber = false)
+        private static async Task VerifyRoutineDerivation(string target, bool asynchronous, bool mysql, string? floatType = null, string? geometryType = null, bool unconstrainedNumber = false, string parameterName = "amount")
         {
             var variableScale = floatType != null || unconstrainedNumber;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -106,7 +111,7 @@ namespace OceanBaseConnector.ConsumerTests
                     if (arguments)
                     {
                         names = names.Concat(new[] { "PARAMETER_NAME", "ORDINAL_POSITION", "PARAMETER_MODE", "DATA_TYPE", "DATA_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION", "TYPE_OWNER", "TYPE_NAME", "TYPE_SUBNAME", "TYPE_DECLARATION", "CHARACTER_LENGTH", "DECLARED_PRECISION", "DECLARED_SCALE" }).ToArray();
-                        row = row.Concat(new[] { "amount", "1", "INOUT", geometryType ?? floatType ?? (mysql ? "decimal" : "NUMBER"), null, geometryType != null || unconstrainedNumber ? null : floatType != null ? "126" : "3",
+                        row = row.Concat(new[] { parameterName, "1", "INOUT", geometryType ?? floatType ?? (mysql ? "decimal" : "NUMBER"), null, geometryType != null || unconstrainedNumber ? null : floatType != null ? "126" : "3",
                             geometryType != null ? null : variableScale ? "-85" : mysql ? "1" : "-2", null, null, null, null, geometryType ?? (mysql ? "decimal(3,1)" : null), null, null, null }).ToArray();
                     }
                     await channel.WritePacketAsync(new[] { (byte)names.Length }, budget.Token);
@@ -170,7 +175,7 @@ namespace OceanBaseConnector.ConsumerTests
                     catch (TargetInvocationException error) when (error.InnerException != null) { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
                 }
                 await Derive(); var parameter = Assert.IsAssignableFrom<DbParameter>(command.Parameters[0]);
-                Assert.NotSame(original, parameter); Assert.Equal("amount", parameter.ParameterName); Assert.Equal(ParameterDirection.InputOutput, parameter.Direction);
+                Assert.NotSame(original, parameter); Assert.Equal(parameterName, parameter.ParameterName); Assert.Equal(ParameterDirection.InputOutput, parameter.Direction);
                 Assert.Equal(variableScale || geometryType != null ? 0 : 3, parameter.Precision);
                 Assert.Equal(variableScale || geometryType != null ? (int?)null : mysql ? 1 : -2, parameter.GetType().GetProperty("DecimalScale")!.GetValue(parameter)); Assert.Equal(DBNull.Value, parameter.Value);
                 if (geometryType != null)

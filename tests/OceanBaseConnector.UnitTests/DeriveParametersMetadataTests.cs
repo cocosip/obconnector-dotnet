@@ -128,13 +128,15 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public void ReturnAndCaseInsensitiveArgumentNameCollisionsCannotProduceAmbiguousBindings(bool function)
+        public void OracleArgumentNamesUseExactIdentityIncludingTheSyntheticReturn(bool function)
         {
             using var table = Arguments(); var first = Argument(table, "NUMBER"); first["ROUTINE_TYPE"] = function ? "FUNCTION" : "PROCEDURE";
             first["PARAMETER_NAME"] = function ? "return_value" : "VALUE";
             var second = table.NewRow(); second.ItemArray = first.ItemArray;
             second["ORDINAL_POSITION"] = function ? 0 : 2; second["PARAMETER_MODE"] = function ? "RETURN" : "IN";
             second["PARAMETER_NAME"] = function ? DBNull.Value : "value"; table.Rows.Add(second);
+            Assert.Equal(2, RoutineParameterDerivation.OrderParameters(table, first, false).Length);
+            first["PARAMETER_NAME"] = function ? "RETURN_VALUE" : "value";
             Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.OrderParameters(table, first, false));
         }
 
@@ -191,14 +193,17 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("输入\u200B")]
         [InlineData("输入🙂")]
         [InlineData("输入。")]
-        public void DerivedUnicodeNamesMustRemainBindable(string name)
+        public void DerivedQuotedNamesRemainRawAndBindPositionally(string name)
         {
             using var table = Arguments(); var row = Argument(table, "NUMBER"); row["PARAMETER_NAME"] = name;
-            Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.OrderParameters(table, row, false));
+            Assert.Single(RoutineParameterDerivation.OrderParameters(table, row, false));
+            var parameters = new OceanBaseParameterCollection(); parameters.Add(RoutineParameterDerivation.Map(row, false, false));
+            var plan = OracleCommandPlan.Create("p", CommandType.StoredProcedure, parameters);
+            Assert.Equal("BEGIN p(?); END;", plan.Bindings.CommandText); Assert.Equal(name, plan.Bindings.Parameters[0].ParameterName);
         }
 
         [Fact]
-        public void DerivedUnicodeNamesRetainTheUtf8ByteLimitAndCaseCollisionGuard()
+        public void DerivedUnicodeNamesRetainTheUtf8ByteLimitAndExactIdentity()
         {
             using var table = Arguments(); var row = Argument(table, "NUMBER");
             row["PARAMETER_NAME"] = new string('中', 170) + "ab";
@@ -208,6 +213,8 @@ namespace OceanBaseConnector.UnitTests
             row["PARAMETER_NAME"] = "état";
             var second = table.NewRow(); second.ItemArray = row.ItemArray;
             second["ORDINAL_POSITION"] = 2; second["PARAMETER_NAME"] = "ÉTAT"; table.Rows.Add(second);
+            Assert.Equal(2, RoutineParameterDerivation.OrderParameters(table, row, false).Length);
+            second["PARAMETER_NAME"] = "état";
             Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.OrderParameters(table, row, false));
         }
 

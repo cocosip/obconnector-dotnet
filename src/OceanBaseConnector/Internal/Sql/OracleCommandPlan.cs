@@ -189,23 +189,32 @@ namespace OceanBaseConnector.Internal.Sql
                     throw new ArgumentException("A single ReturnValue parameter requires CommandType.StoredProcedure.");
                 returned = parameter;
             }
+            ParameterBindingPlan original;
             if (type == CommandType.StoredProcedure)
             {
                 ValidateProcedureName(text);
+                var names = new HashSet<string>(StringComparer.Ordinal);
+                foreach (OceanBaseParameter parameter in parameters)
+                    if (!RoutineParameterDerivation.IsValidParameterLabel(parameter.ParameterName) || !names.Add(parameter.ParameterName))
+                        throw new ArgumentException("Oracle procedure parameter labels must be valid and distinct.");
+                var ordered = new List<OceanBaseParameter>();
                 var sql = new StringBuilder("BEGIN ");
-                if (returned != null) sql.Append(':').Append(BindingName(returned.ParameterName)).Append(" := ");
+                if (returned != null) { sql.Append("? := "); ordered.Add(returned); }
                 sql.Append(text).Append('(');
                 var first = true;
                 foreach (OceanBaseParameter parameter in parameters)
                 {
                     if (ReferenceEquals(parameter, returned)) continue;
                     if (!first) sql.Append(", ");
-                    sql.Append(':').Append(BindingName(parameter.ParameterName)); first = false;
+                    sql.Append('?'); ordered.Add(parameter); first = false;
                 }
-                text = sql.Append("); END;").ToString();
+                original = new ParameterBindingPlan(sql.Append("); END;").ToString(), ordered.ToArray());
             }
-            else if (type != CommandType.Text) throw new NotSupportedException("This CommandType is not supported.");
-            var original = ParameterBindingPlan.Create(text, OceanBaseCompatibilityMode.Oracle, parameters, allowOutputs: true);
+            else
+            {
+                if (type != CommandType.Text) throw new NotSupportedException("This CommandType is not supported.");
+                original = ParameterBindingPlan.Create(text, OceanBaseCompatibilityMode.Oracle, parameters, allowOutputs: true);
+            }
             var inputs = new OceanBaseParameter[original.Parameters.Length];
             var outputs = new List<OceanBaseParameter>();
             var complexTypes = new List<OceanBaseComplexType?>();
@@ -275,8 +284,6 @@ namespace OceanBaseConnector.Internal.Sql
             if (keyword == "INSERT" || keyword == "UPDATE" || keyword == "DELETE" || keyword == "MERGE") return false;
             throw new NotSupportedException("Array binding supports Oracle DML and PL statements.");
         }
-
-        private static string BindingName(string name) => name.Length > 0 && name[0] == ':' ? name.Substring(1) : name;
 
         private static void ValidateProcedureName(string text)
         {

@@ -146,7 +146,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | --- | --- | --- | --- | --- |
 | A-01 | `P3`；MySQL/Oracle 直连各 10000 次借还及资源隔离 52/52 通过；持续运行失败根因未定，长测移至发布验收 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、清池和句柄/线程/内存稳定性未证实；原始异常被测试清理遮蔽的问题已修复 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
 | A-02 | `P3`；MySQL/Oracle 直连 XA 生命周期、recover 和池丢弃恢复 28/28、环境事务 COMMIT 回执丢失 16/16 通过 | PSPE、XA、unknown outcome（G11） | 环境事务 InDoubt 指定回执丢失子集已验收；协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
-| A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过，包重载 2/2、引用 package 标识符 2/2 通过 | Schema、目录和参数元数据（G13） | 包内 PL 类型和最小权限仍缺；大小写/引用 package 标识符已覆盖；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制 | 双模式最小权限、唯一/歧义签名、更多大小写/引用标识符、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
+| A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过，包重载 2/2、引用 package 标识符 2/2 通过；带空格的引用形参原名派生与过程/package/函数位置调用新增 **6/6**（A-03h） | Schema、目录和参数元数据（G13） | 包内 PL 类型和最小权限仍缺；大小写/引用 package 标识符已覆盖；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制；仅大小写不同形参的当前实库失败保留 | 双模式最小权限、唯一/歧义签名、更多大小写/引用标识符、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
 | A-04 | `P3`；当前 Windows 包/运行时指定子集已验收 | 包、TFM 和平台（G14/R01） | 五资产、net8/net9/net10 独立 runtime、两个 netstandard 的 net10 host 及 netstandard2.0 的 net48 host 已复验；非 Windows、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
 | A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；196608 字符 NUL 单表达式从 .NET 0/4 恢复 4/4，原因未定，见执行记录 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
 
@@ -1867,6 +1867,41 @@ build 均 **0 warning / 0 error**。
 本次产品、测试及五份文档已独立走查通过，无阻断发现；修正文案中的非 ASCII 数字限定。
 报告均位于忽略目录 `TestResults/roadmap/`。本轮未重跑长测、全消费者、冻结服务端探针，
 也未扩展 quoted bind、PL-only RECORD、其他字符集或代理部署契约。
+
+#### A-03h：Oracle 引用参数名的派生和位置调用（2026-11-03，指定直连子集 `P4`）
+
+基线 `72d4b96`。G13 的剩余引用标识符范围中，目录参数名目前复用了 text bind 的未引用
+名称限制，StoredProcedure 又先把参数名拼成冒号绑定，导致带空格/标点、大小写不同的引用
+形参无法原名派生执行。过程参数原本按集合顺序传递；本轮直接构造同样的 `?` 位置调用和
+参数顺序，保留 ReturnValue 首位置、输入快照、输出原子发布和参数原名，名称不进入 SQL。
+Text 命令继续使用原命名绑定语法，不扩展脚本扫描器。目录和 StoredProcedure label 保留
+UTF-8 字节上限、非空/控制字符/重复原名校验；Oracle 目录按精确大小写区分真实参数身份。
+原 text PL 控制确认引用形参可执行后，派生/显式 Prepare/重复调用均通过。手工 label 同样
+复用严格 UTF-8/512-byte/control 校验；Oracle 使用原名精确重复校验，MySQL 保持忽略大小写。
+普通 Text 命令的冒号绑定仍保留原语法、前导冒号和忽略大小写匹配，不因位置调用而放宽。
+函数真实形参若恰名 `RETURN_VALUE`，仍与合成返回 label 精确冲突而拒绝；不宣称任意签名。
+
+首轮本地 RED **17项，12失败/5通过**：引用 label、大小写身份仍被旧 guard 拒绝，手工参数
+原先未保留目录的512-byte上限。初始实库 **0/6**，其中函数 sync/async 两项的 text PL 控制
+成功，随后 DeriveParameters 因旧名称 guard 失败，确认客户端缺口。另四项使用仅大小写不同
+的 `Result/result` 形参，普通过程创建返回 **600/42000**，package text 调用返回 **410/HY000**；
+该形状未取得实库成功，未归因为已确认的跨客户端服务端限制，也不计为本轮支持。
+诊断源码和原始失败报告保留在 `TestResults/roadmap/a03h-case-only-diagnostic.cs`、
+`a03h-quoted-live-red.trx`、`a03h-quoted-server-boundary.trx`。
+
+最终实库以可调用的 `input value/output value/result` 引用形参验证普通过程、package 和函数
+sync/async **6/6**：原 text PL 控制、原名/方向派生、ReturnValue、隐式后显式 Prepare 重复
+执行、旧参数脱离和会话复用通过。连同原 Unicode 过程名/参数名及 DML 回归共 **16/16**，
+0 skip，约7秒；仅大小写不同形参仍只有本地精确身份和位置调用证据。
+
+定向单测 **254/254**，补充 PL/输出原子发布/INOUT stream 回归 **130/130**，均0 skip，
+覆盖函数返回绑定首位、其余参数顺序、引用原名、快照、注入式 label 不进入 SQL、孤立
+surrogate、512-byte上限、精确重复、MySQL 忽略大小写及 Text 原规则。公开 DLL 消费者
+**18/18**，含新6项引用 label 和原12项双模式派生/原子失败，代表 netstandard2.0/2.1/net10
+资产 × sync/async，约5秒。完整包/platform 矩阵仍由 A-04 追踪。
+产品五 TFM 与集成项目 Release build 均 **0 warning / 0 error**，产品及测试独立复核无阻断项。
+同步能力矩阵、缺失矩阵、架构与 schema 契约；证据在忽略目录 `TestResults/roadmap/a03h-*.trx`。
+不重跑全量、长压或冻结端点；A-03 父项、CHAR_LENGTH 和 package-local RECORD 等限制仍保留。
 
 #### D-08u：multi-send 关闭连接 reader 的 LOB 读取窗口（2026-11-03，根 LOB 指定直连子集 `P4`）
 

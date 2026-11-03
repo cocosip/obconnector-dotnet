@@ -823,16 +823,22 @@ They require CommandType.StoredProcedure and an open idle connection. Bind the c
 
 MySQL accepts routine or database.routine, with optional backticks; an unqualified name uses DATABASE(). Oracle accepts routine, owner.routine or package.routine, and owner.package.routine, with double-quoted identifiers retaining case and unquoted identifiers converted to uppercase. Unqualified Oracle names use CURRENT_SCHEMA. Two-part Oracle names check both interpretations and reject ambiguity. The optional overload is an exact Oracle directory selector, not argument-based overload inference; MySQL rejects it. No matching visible routine, ambiguous signatures, incomplete metadata, unsupported type declarations or unavailable named descriptors fail explicitly. Synonym resolution is not promised.
 
-Oracle execution, binding and derivation share unquoted identifier character rules: BMP Unicode letters
-or underscore first, then those characters plus ASCII digits, dollar and hash. Quoted names retain
+Oracle execution and derivation share unquoted routine identifier rules: BMP Unicode letters or
+underscore first, then those characters plus ASCII digits, dollar and hash. Quoted routine names retain
 their existing rules. Derivation retains its name/part byte limits, exact catalog binding and invariant
-uppercase conversion for routine identifiers. Bind names accept one optional leading colon and match
-with OrdinalIgnoreCase; repeated inputs retain SQL order, while outputs require a unique position.
-Derived parameter names retain their original spelling and the 512-byte UTF-8 directory limit.
-Quoted bind names, combining marks, format controls, supplementary letters and emoji are unsupported;
-no Unicode normalization is performed. Unrepresentable derived names fail before replacing the caller's
-collection. Binding labels are replaced before transmission; SQL identifiers and values retain the
-existing strict session encoding rules.
+uppercase conversion for routine identifiers. In Text commands, bind names use the same unquoted
+characters, accept one optional leading colon and match with OrdinalIgnoreCase; repeated inputs retain
+SQL order, while outputs require a unique position. Quoted text bind names remain unsupported.
+
+Oracle StoredProcedure calls bind arguments in collection order, with a function ReturnValue moved to
+the first wire position. Parameter labels do not enter the generated SQL or select a formal parameter
+by name. Labels retain their exact spelling, including spaces and punctuation from quoted formal names;
+they must be nonempty, valid UTF-8 within 512 bytes, contain no control characters and be distinct with
+Ordinal comparison. Derivation preserves the same exact Oracle argument identities; MySQL retains its
+OrdinalIgnoreCase duplicate check. An actual function argument named RETURN_VALUE still conflicts with
+the synthetic return label and is rejected. No Unicode normalization is performed. Invalid derived
+labels fail before replacing the caller's collection. SQL identifiers and values retain the existing
+strict session encoding rules; an accepted label does not establish server support for its formal name.
 
 Success replaces the parameter collection with fresh DBNull-valued parameters ordered by ordinal position; a function return is first and named RETURN_VALUE. Existing parameter objects are detached and their values are not copied. Failure/cancellation leaves the original collection unpublished; concurrent member changes are detected atomically and retained. Avoid changing individual parameter properties concurrently: that is outside the membership-version guarantee. The command/session/transaction context is checked before publication, and Execute/Prepare/another derivation cannot overlap. Valid complex descriptors loaded before a later failure may remain cached.
 
