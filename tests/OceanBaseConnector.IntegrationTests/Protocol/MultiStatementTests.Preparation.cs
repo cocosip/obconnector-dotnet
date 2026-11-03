@@ -15,6 +15,7 @@ public sealed partial class MultiStatementTests
     public static IEnumerable<object[]> UnsupportedScriptRows() =>
         from row in Rows()
         from operation in new[] { "prepare", "cursor", "out", "inout", "null inout" }
+        where operation == "prepare" || operation == "cursor" || IntegrationEnvironment.GetProfile((string)row[0]).Oracle
         select row.Concat(new object[] { operation }).ToArray();
 
     [IntegrationTheory]

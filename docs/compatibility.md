@@ -3,7 +3,7 @@
 更新：2026-11-03。本页保留当前支持声明的限制，不重复开发流水。
 范围以[能力矩阵](obconnector-dotnet-progress.md)为准，判定按[验收标准](acceptance-criteria.md)。
 下面结果来自各自注明日期的报告；2026-11-03新增D-07e/f/g/h字符集指定存储和结果专项，
-以及D-08ab的multi-send会话/DDL屏障和D-12c1的一至六层INT ARRAY专项。
+以及D-08ab的multi-send会话/DDL屏障、D-12c1的一至六层INT ARRAY和D-02c1的MySQL脚本输出专项。
 未重跑完整实库矩阵，也没有关闭既有失败。
 
 ## 环境矩阵
@@ -16,6 +16,7 @@
 | CP932/UJIS/EUCJPMS 客户端/结果/national映射 | 官方全表与MySQL4.4.2.2转换一致；每族MySQL客户端2、canonical/alias结果2和Oracle national2成功，见D-07f/g/h | 普通Oracle客户端均在第三条SET results=utf8mb4返回900/42000，Connector/J同交互匹配；不关闭其他部署、runtime及存储组合 |
 | multi-send 会话/DDL 屏障 | 4.4.2.2 MySQL/Oracle直连sync/async **4/4**：自有连接NonQuery的DDL/后续新列更新、调用方Scalar与reader的时区切换、独立存储核对；安全段保持流水化 | SET/DDL等单独执行，不是同组流水化；脚本正向/错误/取消/旧类型与缓存失效另有本地证据；其他部署及跨平台未验收，见D-08ab |
 | MySQL 一至六层 INT ARRAY | 4.4.2.2 直连 sync/async × implicit/explicit Prepare **4/4**；String 参数、独立 text/binary 逐值读回、NULL/空叶数组/不等长子数组，见 D-12c1 | 二维顶层 `[]` 参数与 SQL 字面量均返回 `7602/22000`；七层 DDL `1235/0A000`；其他元素/版本和专用 metadata 未验收 |
+| MySQL 脚本标量 OUT/INOUT | 4.4.2.2 直连 sync/async **2/2**，普通/NULL INOUT、OUT、独立 binary 存储核对、reader 半读关闭、失败前缀/未执行后缀、batch 脚本屏障及后续更新，见 D-02c1 | 客户端变量编排；成功后统一发布不代表提交，后续错误保留已执行 SQL；Oracle 脚本输出、Prepare/cursor、ReturnValue 和资源/复杂输出仍拒绝，其他部署/版本未验收 |
 | 真实TLS/企业CA/mTLS/撤销/轮换 | **当前两种模式真实环境未开TLS，未验收** | 必须保留matrix.tls-authentication deferred；自签名SslStream只属本地证据 |
 | 认证plugin/KDC/凭据服务 | native账号直连与本地客户端分支 | 非native正负认证、平台协商、实际轮换；Java插件注册不是OB部署证明 |
 | OBProxy/ODP、真正多节点、OCP/TNS服务 | 本地parser与受控单上游客户端路由 | 真实发现服务、节点/代理故障、后端reset/迁移，单上游中继不是HA |

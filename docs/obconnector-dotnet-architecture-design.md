@@ -973,6 +973,31 @@ The initialization SET is SQL sent before the business CALL. A later transport f
 
 The statement-boundary scanner also recognizes MySQL CREATE PROCEDURE/FUNCTION/TRIGGER/EVENT program units, including OR REPLACE and supported DEFINER forms, so body semicolons do not require text multi-statement opt-in. This classifies a program unit; the server validates its grammar and suffix. The local grammar regressions and default-policy direct-server procedure run cover this boundary; other versions and proxies still require validation.
 
+### MySQL script outputs
+
+With `Allow Multi Statements=true`, Text scripts accept scalar Output/InputOutput positional
+parameters. Each output occupies one `?` and is replaced by a private per-command user variable;
+Input positions retain the existing bounded client-literal encoding. A transient prepared SET
+initializes Output to NULL and InputOutput from a snapshot on each execution, after script
+expansion and validation. The complete script runs as one text request. A hidden SELECT reads
+the variables after every script result finishes; the existing routine decoder publishes all
+values only after that single-row response completes. Output values follow server metadata,
+as for procedure outputs; DbType does not impose conversion.
+
+Reader Close/Dispose drains the active script and collects outputs. Any later script or output
+query error preserves prior caller values; successful prefix SQL remains executed. Cancellation
+and transport failure use the existing exchange outcome rules, without replay. One session lease
+spans initialization, the script and output collection; stateful execution retires the session on
+pool return. Script variables use the same isolation and reset policy as procedure variables.
+Mixed batches treat the whole script as an execution barrier and publish to the original batch
+parameters before starting the following prepared segment.
+
+ReturnValue, stream/locator/complex outputs, Oracle script outputs, Prepare and server cursors
+remain unsupported. The existing MySQL String-input script charset/routine restrictions remain;
+an INOUT string initialized through SET does not become an SQL literal. This is client orchestration,
+not native multi-statement output wire or a transaction around the script. See D-02c1 in the
+[roadmap](obconnector-dotnet-missing-features-roadmap.md) for exact validation evidence.
+
 ## Transactions, batches and failures
 
 Assign the active transaction to each business command. MySQL supports ReadUncommitted, ReadCommitted, RepeatableRead and Serializable; Oracle supports ReadCommitted and Serializable. Unspecified isolation uses MySQL RepeatableRead or Oracle ReadCommitted. Opening inside an ambient `TransactionScope` enlists one physical session through the coordinator single-resource slot; commands/Batch use its local transaction. See the [ambient transaction contract](#ambient-transactions) for rejection and outcome rules. MySQL-mode sessions with `@@autocommit` disabled are rejected at Open; see the identity rules above.

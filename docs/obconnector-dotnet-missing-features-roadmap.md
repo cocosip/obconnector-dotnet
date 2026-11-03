@@ -44,7 +44,7 @@
 | 本文任务 | Java 2.4.14 已有能力 | 仍需独立确认的部分 |
 | --- | --- | --- |
 | D-01 | client/server prepare、`emulateUnsupportedPstmts` 回退和模式专用参数字面量 | .NET 的精确 1295/HY000、安全边界和每种字面量仍按自身契约验收 |
-| D-02 | 多语句、多结果、客户端参数展开及多种 batch 路径 | b/c 本轮复核：目标服务端拒绝脚本 server prepare；本轮 Java callable 脚本未得到成功证据；MySQL 用户变量结果不等于参数 OUT |
+| D-02 | 多语句、多结果、客户端参数展开及多种 batch 路径 | b 的目标服务端拒绝脚本 server prepare；c1 已以客户端私有变量编排补齐 MySQL 标量 OUT/INOUT；Oracle 脚本输出及其余资源方向仍受限 |
 | D-03 | cursor fetch、REF CURSOR、标量 OUT/INOUT、带条件的 offset | 不代表 SELECT CURSOR 列形状、OUT offset 或 REF CURSOR 输入都支持 |
 | D-04 | ObStruct/ObArray、复杂描述、LOB/cursor 读取及限定 writer | 不代表所有 named/anonymous 成员和 locator 回绑都已实现 |
 | D-05 | ROWID 类型 209 的字符串结果路径 | 不能据此认定 UROWID 参数/结果已闭环 |
@@ -115,7 +115,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | ID | 当前进度 | 任务 | 需要修改/核对 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；命名复杂值普通/批量受控 fallback 子集见 D-01b；不含 OUT/cursor/LOB/anonymous，不以 `P3` 宣称全部组合完成 |
-| D-02 | `P2`；a1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；Prepare、cursor、OUT 和 d1～d3 以外的复杂输入继续明确拒绝或单独关闭 |
+| D-02 | `P2`；a1、c1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；MySQL标量脚本输出见c1；Prepare、cursor、Oracle脚本输出及d1～d3以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
 | D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/多语句与受控 1295 fallback 子集见 D-05b；跨部署、长期压力与 A-03 目录边界仍保留 |
@@ -209,7 +209,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 
 | 组合缺口 | 对应任务 | 进入开发前需要补齐 |
 | --- | --- | --- |
-| 脚本级 Prepare、服务端 cursor、typed OUT/INOUT 发布 | D-02b/c | 当前脚本 prepare 被服务端拒绝；typed 输出需定义映射、失败前缀、原子发布及变量/取消/释放隔离，单 PL 块输出不是该缺口 |
+| 脚本级 Prepare、服务端 cursor、typed OUT/INOUT 发布 | D-02b/c | MySQL标量脚本OUT/INOUT已按D-02c1补齐；Oracle脚本/其余资源输出仍待契约；脚本prepare当前被服务端拒绝，单PL块输出不替代脚本功能 |
 | Oracle 输出计划 / REF CURSOR offset | D-03b | 成功 wire、位置与归属契约；Java RefCursor 也排除普通 offset 分支，不能直接套用普通 SELECT FETCH |
 | 命名复杂值中的 LOB locator 回绑及未证实的复杂成员方向 | D-04 | 可辨识的类型/locator wire 和生命周期；当前 BLOB DML、根 NULL/text/cursor 成员的已确认服务端限制另记，不作为盲改客户端的理由 |
 | package-local PL/SQL RECORD 参数派生与绑定 | A-03d | 字段目录、输入/输出 payload 及成功交互；目前 Java 公开 API 也不支持绑定，不能归为服务端拒绝 |
@@ -329,7 +329,7 @@ D-02b～D-02d 先调查是否纳入产品范围，不代表必须实现；允许
 | --- | --- | --- | --- |
 | D-02a 已有输入/多结果闭环 | `P2`；a1/a2 达到 `P4` | 核对双模式的正常/NULL/边界、SequentialAccess、半读释放、错误前缀/未执行后缀和独立存储；只为发现的具体缺口补代码或测试 | MySQL 时间脚本存储见 a1，Oracle DATE/TIMESTAMP/LTZ 脚本存储见 a2；历史 Oracle 长 NUL 4 项失败及本轮恢复均保留，详见 A-05，不能只看总测试数 |
 | D-02b 多语句 Prepare/server cursor | `P0 / 当前目标服务端限制`；目标双模式 profile 在 prepare 阶段拒绝脚本，Connector/J 同一 server-prepare 形状也失败，因此跳过客户端实现并保留发送前拒绝 | 只有目标版本/部署接受脚本级 statement/cursor prepare，并提供身份、顺序、失败前缀和生命周期证据时才重新开启；不把客户端参数展开、FetchSize hint 或现有 DbBatch 的顺序执行当作该功能完成 |
-| D-02c 多语句 OUT/INOUT | `P0 / 待范围与输出契约`；本轮调查完成，功能未实现 | 普通脚本参数 OUT/INOUT 保留拒绝；Oracle 单 PL 块输出沿用 D-03；MySQL 用户变量可显式作为结果读取，已有路径不重复开发；尚无可移植的 Java callable 脚本成功证据 | 如纳入 typed 脚本输出，先定义发布时机、后续错误可见性、变量/资源生命周期和真实 wire；再做 sync/async、OUT/INOUT/NULL、原子发布、复用与独立存储；Java 客户端报错不归为服务端拒绝 |
+| D-02c 多语句 OUT/INOUT | `P2`；MySQL标量子集c1已补齐，见下 | MySQL位置OUT/INOUT经私有变量初始化，脚本全部结果后隐藏SELECT，完整成功才向原参数发布；Oracle单PL块输出沿用D-03，Oracle脚本/ReturnValue/资源复杂输出仍拒绝 | c1的sync/async、NULL、关闭、错误、取消、独立存储及batch屏障见下；原生脚本输出wire、Oracle/其余资源方向需另行证据，不把Java客户端错误归为服务端拒绝 |
 | D-02d 复杂输入/locator/cursor 结果 | `P2`；d1～d3 达到 `P4` | 确认文本脚本可表示的复杂值身份、LOB 归属和 cursor wire；分别复用 D-03/D-04 已证明的能力，避免再开发一套 codec | 命名 OBJECT/嵌套/集合输入见 d1～d3；named scalar/递归 OBJECT text 多结果及引用类型名子集见 D-04e2；集合子树 NULL OBJECT、列存储、匿名/LOB/cursor/其余 text 复杂结果仍未关闭，REF CURSOR 输入仍为范围排除 |
 
 #### D-02b/c：脚本 Prepare、cursor 与输出的证据核对（调查完成，2026-10-30）
@@ -377,6 +377,50 @@ Java 程序、runner 和日志在本地忽略目录 `TestResults/java-gap-probe/
 报告分别为 `d02bc-live.trx`、`d02bc-live-initial.trx`。没有增加新的任务文档。
 本轮没有重跑全仓、完整多语句组、长期负载、其他平台/版本或真实 TLS/OB20/ODP/KDC。
 下一模块进入 D-03，先对照现有输出/cursor 子集及服务端拒绝形状，避免重复实现已支持的 PL。
+
+#### D-02c1：MySQL 脚本标量 OUT/INOUT（2026-11-03，指定直连子集 `P4`）
+
+基线 `eac6def`。目标为显式 `Allow Multi Statements=true` 的 MySQL Text 脚本增加
+位置参数 OUT/INOUT；不新增选项/API。每个输出位置替换成命令私有用户变量，沿用
+`MySqlCommandPlan` 的 prepared 初始化、脚本全部结果后私有 SELECT、成功后原子发布。
+OUT 初始化 NULL，INOUT 初始化调用前快照；普通结果顺序不变，读完或关闭 reader 时排空并发布。
+前缀成功/后续错误不发布输出，取消/超时/错误沿用已有交换和资源规则，不回滚已成功 SQL。
+仅支持既有 MySQL 标量输出；ReturnValue、LOB/complex/Stream 输出、Oracle 脚本、脚本
+Prepare/cursor 继续拒绝。已有 String 输入脚本的 charset/routine 安全限制不放宽。
+
+- [x] 在新 `MySqlScriptOutputTests.cs` 写 sync/async 正向与延迟发布失败用例并观察旧实现拒绝。
+- [x] `ClientPreparedSql` 暴露既有严格位置扫描；`MySqlCommandPlan` 增加脚本变量规划；
+  `OceanBaseCommand` 按模式/脚本/方向选择规划，并在脚本展开及校验后初始化变量。
+- [x] 针对性验证成功/NULL/重执行、前缀错误/输出读取失败/取消、无效输入先拒绝、reader
+  半读/关闭、batch 屏障和公开 DLL；真实 MySQL 独立存储验证，不扩全量或长压。
+- [x] 同步四份矩阵/兼容文档，独立走查本次代码，修复问题后本地提交；17:20 后不开新模块。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| Red | `d02c1-red.trx` **4/4 失败**，旧实现统一以 Only input parameters 拒绝；不是模拟服务端错误 |
+| 新模块 | `d02c1-unit.trx` **18/18**，后来补齐 opt-in 拒绝至 20 项；sync/async、普通/新 EOF、私有 SELECT 尾包前不发布、阻止并发、脚本前缀错误、输出 SELECT ERR/空/多行/断连、取消 token 原样保留和发送前无副作用校验 |
+| 定向回归 | `d02c1-regression-final.trx` **200/200**，无 skip，约 9 秒；MySQL procedure/function/INOUT stream、多语句参数与双模式脚本流，不是全单测 |
+| 走查修复回归 | `d02c1-reviewed-regression.trx` **202/202**，无 skip，约 9 秒；含新增两项 SELECT-only 会话退休，及无效脚本不污染会话的断言；新脚本模块共 22 项 |
+| 公开 DLL | `d02c1-consumer-reviewed.trx` **10/10**，五个产品资产 × sync/async；统一 .NET10 host 经 DbProviderFactory/DbCommand 调用，不冒充五个独立 runtime |
+| 真实直连 | `d02c1-live.trx` 新增 MySQL sync/async **2/2**；`d02c1-live-regression.trx` 双模式相关组 **22/22**，无 skip，约 20 秒；包含 Oracle 仍拒绝、MySQL Prepare/cursor 仍拒绝、既有用户变量脚本及普通 procedure 结果/输出 |
+| 存储与批量 | 新增每例同 command 两轮普通/NULL INOUT、中文/引号、reader 完整/提前关闭；独立 prepared 逐行查账；1062 后旧输出不变、前缀保留且后缀未执行；batch 脚本 OUT 后两条安全 UPDATE，独立存储为 44 |
+| 构建 | 产品五 TFM Release 0 warning/error；无新 API/依赖，沿用普通输出 decoder 和资源/unknown-outcome 机制 |
+
+独立走查发现原 SQL 为纯 SELECT 时不包含 SET/CALL/@，但输出计划仍会初始化私有变量，
+旧回收判断因此漏掉会话副作用。新增 SELECT-only sync/async 在 `d02c1-pool-red.trx`
+**2/2 失败**，确认为 session 仍可归还池。现令任何 MySQL 输出计划均触发既有
+DiscardSessionAfterExecution；本地拒绝前不标记，变量初始化实际发送后才退休会话。
+不增加池 reset、变量清理 SQL 或自动重试。
+同一独立 reviewer 只读复核修复、RED/最终报告后确认无剩余问题；未重复测试或实库探测。
+七个修改/新增 C# 文件的 folder whitespace 核验通过，`git diff --check` 通过；本节随产品、
+测试和当前支持文档本地提交，未 push。
+
+中间新增测试一次因 CreateCommand 的 DbCommand 静态类型无法访问 provider 成员而编译失败，
+已显式转换为 OceanBaseCommand；该夹具编译错误不记为产品 red。原拒绝集只移除已支持的
+MySQL OUT/INOUT 六项，改由新正向/失败/NULL 组覆盖；Oracle 的十项和 MySQL Prepare/cursor
+四项拒绝继续实际执行。此前 2026-10-30 的 b/c 调查记录保留为历史，不再作为 c1 当前状态。
+剩余 Oracle 脚本输出/资源复杂输出、原生脚本 prepare/cursor、跨部署/版本仍未关闭。
+本轮未跑长压、完整单测/消费者、TLS/OB20/ODP 或非 Windows/runtime 部署矩阵。
 
 #### D-02a1：MySQL 时间参数脚本的存储闭环（`P4`，2026-10-30）
 

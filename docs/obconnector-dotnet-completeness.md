@@ -1,6 +1,6 @@
 # 源码走查与功能缺失矩阵
 
-更新：2026-11-03；本阶段基线`25f76fa`，本轮补齐 D-08ab multi-send会话/DDL屏障。范围与编号以[能力矩阵](obconnector-dotnet-progress.md)为准，
+更新：2026-11-03；本阶段基线`eac6def`，本轮补齐 D-02c1 MySQL脚本标量OUT/INOUT。范围与编号以[能力矩阵](obconnector-dotnet-progress.md)为准，
 证据来源见[范围审计](obconnector-dotnet-scope-audit.md)。本次走查不等于重新执行所有历史实库测试。
 
 分类：**缺实现**是已保留目标中的代码缺口；**受限**是已定义子集，不能默认要求任意组合；
@@ -30,7 +30,7 @@ proxy/ODP、多节点/OCP/TNS、OB20/trace 或非 native 认证/KDC profile。�
 | ID | 对应能力/模式 | 分类 / 现状 | 源码证据 | 关闭条件 / 下一步 |
 | --- | --- | --- | --- | --- |
 | G01 | Q04 Oracle普通prepare回退 | 阶段1已补齐已有 DATE/TIMESTAMP/时区、INTERVAL、NCHAR/NVARCHAR2 字面量；`oracle-direct` User Secrets 实库正向 Prepare/输出/时间脚本复核 **38/38** 通过，但本次未触发原生 `1295/HY000`；仍受限于普通单语句输入，无输出/cursor/LOB/anonymous；命名 OBJECT/collection 构造器已复用于普通及 batch 受控 fallback（D-01b） | Internal/Sql/ClientPreparedSql.cs；CommandExchange.ClientPreparedSql | 继续补充前须独立确认字面量身份、编码/时区/精度和1295前提；不能用多语句支持替代 |
-| G02 | Q05 双模式多语句 | 受限：普通输入/多结果及 MySQL、Oracle 时间脚本存储已有直连子集；Oracle 命名 OBJECT、嵌套 OBJECT 和集合输入 D-02d1～d3 已达 P4；Prepare、cursor、OUT 和其余复杂组合仍不支持 | OceanBaseCommand.cs；ClientPreparedSql.cs；MultiStatementTests.Temporal.cs | 当前限定输入+text结果；引用类型名的递归 OBJECT text 多结果及半读切换见 D-04e2；集合子树 NULL OBJECT、locator、匿名复杂值及其余复杂结果仍保留限制；扩大前需模式/方向/wire证据，不默认补所有笛卡尔组合 |
+| G02 | Q05 双模式多语句 | 受限：普通输入/多结果及 MySQL、Oracle 时间脚本存储已有直连子集；Oracle 命名 OBJECT、嵌套 OBJECT 和集合输入 D-02d1～d3 已达 P4；MySQL脚本标量OUT/INOUT已按D-02c1复用变量初始化/私有SELECT/原子发布；Prepare、cursor、Oracle脚本输出及资源/复杂输出仍不支持 | OceanBaseCommand.cs；ClientPreparedSql.cs；MultiStatementTests.Temporal.cs | MySQL标量脚本输出已补齐；其余模式/输出资源边界保留；引用类型名的递归 OBJECT text 多结果及半读切换见 D-04e2；集合子树 NULL OBJECT、locator、匿名复杂值及其余复杂结果仍保留限制；扩大前需模式/方向/wire证据，不默认补所有笛卡尔组合 |
 | G03 | Q11 Oracle输出/游标 | 受限：输出offset拒绝；当前目标版本已验收的普通 `SELECT CURSOR` 列形状为服务端限制，Java 同样返回 902/1002 | OracleCommandPlan.cs；QueryResult.Cursor.cs；OracleCursorOwner.cs | 正FetchSize仅提示；若出现新的可读取列形状再单独验收，不能用 OUT 成功关闭当前结果列限制 |
 | G04 | T14/T15 Oracle复杂值 | 受限：当前 OBJECT/嵌套 OBJECT NULL 输出身份为服务端限制且 Java 同样不报告外层 NULL；named BLOB OBJECT 成员 DML 在 .NET 与 Java 同 wire 诊断回放均返回 `932/22000`，按当前目标服务端限制跳过客户端改动；named OBJECT 标量/递归 text 结果已支持；空格/括号/Unicode 引用类型名已补齐普通读取、多结果与 batch 受控回退（D-04e2），引号/NULL 前缀/名字自身前后空白仅有本地 parser 证据；当前 RAW/DATE/TIMESTAMP text 成员收到服务端重复 RAW payload，Connector/J 同交互也返回相同字符串并且 `getObject` 为 null，按服务端限制跳过；命名 collection 构造的 text 结果 metadata 为 `VARCHAR2`，.NET/Connector-J 均按 String 返回，不需要 complex parser；CLOB/BLOB named OBJECT text 结果在 Java `getObject` 为 null、payload 无可靠成员身份，.NET 预加载描述后 sync/async **2/2** 安全拒绝，按当前服务端 wire 限制跳过；SQL OBJECT 与 PL-only `RECORD` 的当前 cursor 成员形状均无法形成有效对象，Java/.NET 同为服务端限制；其他复杂 cursor、named locator回绑、未解析RETURNING身份仍拒绝 | ComplexValueCodec.cs；ComplexTypeContext.cs；OracleCommandPlan.cs | 新版本/租户提供不同 BLOB 成员或复杂 text wire 时重开 D-04a2/D-04e；若出现可创建的 cursor 成员形状，重新验收 child FETCH/所有权；其余对象/集合、成员方向、named/anonymous、PL输出/存储继续逐项证实；不以属性 NULL 猜测根身份 |
 | G05 | T12 Oracle UROWID | 部分：ROWID209字符串结果保持兼容；UROWID已有显式参数、NULL/type209 wire、DataTypes 和目录映射 | ResultColumn.cs:209、PreparedParameters、RoutineParameterDerivation、Schema.DataTypes | Oracle 4.4.2.2 直连已验证普通/PrepareExecute、OUT/INOUT/ReturnValue、RETURNING、坏值拒绝与恢复；UROWID真实Derive已在FLOAT编号签名验收，NUMBER/VARCHAR2目录边界见A-03；长压、代理、跨平台未验收；client text 输入已通过 CHARTOROWID 接入多语句与限定 1295 fallback，短/长/NULL、坏值/空串拒绝及恢复有直连/受控中继证据（D-05b）；原生 1295 未复现 |

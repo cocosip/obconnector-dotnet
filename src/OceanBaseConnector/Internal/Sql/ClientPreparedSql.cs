@@ -287,7 +287,7 @@ namespace OceanBaseConnector.Internal.Sql
             return new string(text);
         }
 
-        private static int[] MySqlPositions(string sql, bool singleStatement, bool stableCharacterSet)
+        internal static int[] MySqlPositions(string sql, bool singleStatement, bool stableCharacterSet)
         {
             // Accept only SQL whose placeholder locations agree with and without backslash escapes.
             if (sql.IndexOf('\0') >= 0) throw Ambiguous();

@@ -28,6 +28,40 @@ namespace OceanBaseConnector.Internal.Sql
         private readonly ParameterBindingPlan _initialization;
         private object[]? _values;
 
+        internal static MySqlCommandPlan CreateScript(string text, OceanBaseParameterCollection parameters, string variablePrefix, Encoding clientEncoding)
+        {
+            var positions = ClientPreparedSql.MySqlPositions(text, singleStatement: false, stableCharacterSet: false);
+            if (positions.Length != parameters.Count) throw new ArgumentException("Script parameter count mismatch.");
+            var sql = new StringBuilder(); var copied = 0;
+            var inputs = new List<OceanBaseParameter>(); var outputs = new List<OceanBaseParameter>();
+            var initializers = new List<OceanBaseParameter>(); var assignments = new List<string>(); var variables = new List<string>();
+            for (var i = 0; i < positions.Length; i++)
+            {
+                var parameter = (OceanBaseParameter)parameters[i];
+                var copy = parameter.Snapshot(); copy.Direction = ParameterDirection.Input;
+                sql.Append(text, copied, positions[i] - copied); copied = positions[i] + 1;
+                if (parameter.Direction == ParameterDirection.Input) { sql.Append('?'); inputs.Add(copy); continue; }
+                if (parameter.Direction != ParameterDirection.Output && parameter.Direction != ParameterDirection.InputOutput)
+                    throw new NotSupportedException("Script outputs require Output or InputOutput parameters.");
+                if (outputs.Count == 4096) throw new NotSupportedException("Too many script output parameters.");
+                if (parameter.ComplexType != null || parameter.OceanBaseDbType == OceanBaseDbType.Array || parameter.OceanBaseDbType == OceanBaseDbType.Struct ||
+                    parameter.OceanBaseDbType == OceanBaseDbType.Blob || parameter.OceanBaseDbType == OceanBaseDbType.Clob || parameter.OceanBaseDbType == OceanBaseDbType.RefCursor ||
+                    parameter.Value is System.IO.Stream || parameter.Value is OceanBaseLob || parameter.Value is OceanBaseComplexValue || parameter.Value is OceanBaseRefCursor)
+                    throw new NotSupportedException("Script outputs require scalar parameters without streams, locators or complex values.");
+                var variable = "@" + variablePrefix + "_" + outputs.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                sql.Append(variable); variables.Add(variable); assignments.Add(variable + " = ?"); outputs.Add(parameter);
+                if (parameter.Direction == ParameterDirection.Output) copy.Value = DBNull.Value;
+                initializers.Add(copy);
+            }
+            var rewritten = sql.Append(text, copied, text.Length - copied).ToString();
+            if (clientEncoding.GetByteCount(rewritten) >= PacketChannel.DefaultMaxPacketSize)
+                throw new ArgumentException("Script text exceeds the packet size limit.");
+            var initialization = new ParameterBindingPlan("SET " + string.Join(", ", assignments), initializers.ToArray());
+            PreparedParameters.Encode(initialization.Parameters, OceanBaseCompatibilityMode.MySql, validateOnly: true, clientEncoding: clientEncoding);
+            return new MySqlCommandPlan(new ParameterBindingPlan(rewritten, inputs.ToArray()), outputs.ToArray(),
+                initialization, "SELECT " + string.Join(", ", variables));
+        }
+
         internal static MySqlCommandPlan Create(string name, OceanBaseParameterCollection parameters, string variablePrefix, Encoding? clientEncoding = null)
         {
             var parts = RoutineParameterDerivation.ParseName(name, mysql: true);

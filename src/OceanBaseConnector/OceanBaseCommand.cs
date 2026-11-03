@@ -101,7 +101,7 @@ namespace OceanBaseConnector
                 var zone = execution.EnsureSessionTimeZone();
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = execution.EnsureNationalCharacterSet();
-                operation.MySql?.Initialize(execution, operation.Session);
+                if (operation.Binary) operation.MySql?.Initialize(execution, operation.Session);
                 var statement = operation.Binary && (operation.Oracle == null || _prepared != null || HasStreamParameters(operation.Bindings.Parameters))
                     ? EnsurePrepared(operation, operation.ClientFallback) : null;
                 var clientMultiStatement = !operation.Binary && operation.Bindings.Parameters.Length != 0;
@@ -109,6 +109,7 @@ namespace OceanBaseConnector
                     ? execution.BuildClientPreparedSql(operation.Bindings,
                         ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? execution.ReadMySqlLiteralContext() : null,
                         clientMultiStatement, asynchronous: false).GetAwaiter().GetResult() : operation.Bindings.CommandText;
+                if (!operation.Binary) operation.MySql?.Initialize(execution, operation.Session);
                 if (statement != null && operation.Oracle == null) execution.ResolveComplexColumns(statement);
                 var hasCursorColumns = statement != null && operation.Oracle == null && execution.HasCursorColumns(statement);
                 ValidateCursorStatement(operation.FetchSize, statement);
@@ -183,7 +184,7 @@ namespace OceanBaseConnector
                 var zone = await execution.EnsureSessionTimeZoneAsync(cancellationToken).ConfigureAwait(false);
                 PreparedParameters.ValidateSessionTimeZone(operation.Bindings.Parameters, zone);
                 var national = await execution.EnsureNationalCharacterSetAsync(cancellationToken).ConfigureAwait(false);
-                if (operation.MySql != null) await operation.MySql.InitializeAsync(execution, operation.Session, cancellationToken).ConfigureAwait(false);
+                if (operation.Binary && operation.MySql != null) await operation.MySql.InitializeAsync(execution, operation.Session, cancellationToken).ConfigureAwait(false);
                 var statement = operation.Binary && (operation.Oracle == null || _prepared != null || HasStreamParameters(operation.Bindings.Parameters))
                     ? await EnsurePreparedAsync(operation, cancellationToken, operation.ClientFallback).ConfigureAwait(false) : null;
                 var clientMultiStatement = !operation.Binary && operation.Bindings.Parameters.Length != 0;
@@ -191,6 +192,7 @@ namespace OceanBaseConnector
                     ? await execution.BuildClientPreparedSql(operation.Bindings,
                         ClientPreparedSql.RequiresMySqlLiteralContext(operation.Bindings, execution.Mode) ? await execution.ReadMySqlLiteralContextAsync(cancellationToken).ConfigureAwait(false) : null,
                         clientMultiStatement, asynchronous: true).ConfigureAwait(false) : operation.Bindings.CommandText;
+                if (!operation.Binary && operation.MySql != null) await operation.MySql.InitializeAsync(execution, operation.Session, cancellationToken).ConfigureAwait(false);
                 if (statement != null && operation.Oracle == null) await execution.ResolveComplexColumnsAsync(statement, cancellationToken).ConfigureAwait(false);
                 var hasCursorColumns = statement != null && operation.Oracle == null && execution.HasCursorColumns(statement);
                 ValidateCursorStatement(operation.FetchSize, statement);
@@ -276,11 +278,13 @@ namespace OceanBaseConnector
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
                 var oracle = session.UseOraclePrepareExecute && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle &&
                     (arrayCount != 0 || CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters, arrayCount) : null;
+                var multiStatement = CommandType == CommandType.Text && SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
                 var mysql = CommandType == CommandType.StoredProcedure && session.Info!.Mode == OceanBaseCompatibilityMode.MySql
                     ? MySqlCommandPlan.Create(text, _parameters, _mysqlVariablePrefix ??= "obc_" + Guid.NewGuid().ToString("N"), session.ClientEncoding) : null;
-                if (mysql != null && !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientPsMultiResults))
+                if (multiStatement && HasOutputParameters() && session.Info!.Mode == OceanBaseCompatibilityMode.MySql)
+                    mysql = MySqlCommandPlan.CreateScript(text, _parameters, _mysqlVariablePrefix ??= "obc_" + Guid.NewGuid().ToString("N"), session.ClientEncoding);
+                if (mysql != null && CommandType == CommandType.StoredProcedure && !session.Info!.Capabilities.HasEffective(CapabilityFlags.ClientPsMultiResults))
                     throw new NotSupportedException("MySQL stored procedures require PS multi-results support.");
-                var multiStatement = CommandType == CommandType.Text && SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
                 if (schemaOnly && multiStatement) throw new NotSupportedException("SchemaOnly requires a single statement.");
                 if (keyInfo && multiStatement) throw new NotSupportedException("KeyInfo requires a single statement.");
                 // CLIENT_MULTI_STATEMENTS is a client opt-in, not a server-offered capability.
@@ -298,7 +302,7 @@ namespace OceanBaseConnector
                 if (oracle != null && cursorOffset) throw new NotSupportedException("Oracle output execution does not support offset fetch.");
                 var bindings = mysql?.Bindings ?? oracle?.Bindings ?? ParameterBindingPlan.Create(text, session.Info!.Mode, _parameters);
                 if (multiStatement && (prepareOnly || _explicitPreparation || _fetchSize > 0 || oracle != null))
-                    throw new NotSupportedException("Multi-statement execution supports only input parameters without Prepare or server cursors.");
+                    throw new NotSupportedException("Multi-statement execution does not support Prepare, server cursors or Oracle outputs.");
                 var clientFallback = AllowClientSidePrepareFallback && !multiStatement && !prepareOnly && !schemaOnly && !keyInfo && !_explicitPreparation && _fetchSize == 0 && oracle == null && mysql == null;
                 // Stream identity must not depend on a user stream's equality implementation.
                 ConditionalWeakTable<Stream, OceanBaseParameter>? streamBindings = null;
@@ -353,7 +357,7 @@ namespace OceanBaseConnector
                 execution.BatchFailed = BatchFailed;
 #endif
                 execution.DiscardSessionAfterExecution = !prepareOnly && !schemaOnly &&
-                    (CommandType == CommandType.StoredProcedure || SessionStateSql.RequiresDiscard(text, session.Info!.Mode));
+                    (mysql != null || CommandType == CommandType.StoredProcedure || SessionStateSql.RequiresDiscard(text, session.Info!.Mode));
                 execution.InvalidatePreparedStatements = session.StatementCachingEnabled && !prepareOnly && !schemaOnly &&
                     (CommandType != CommandType.Text || !SqlStatementBoundary.CanCacheStatement(text, session.Info!.Mode));
                 execution.InvalidateComplexTypes = !prepareOnly && !schemaOnly && CommandType == CommandType.Text &&
