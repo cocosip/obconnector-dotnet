@@ -1,15 +1,83 @@
 using System;
 using System.Data;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
+using OceanBaseConnector.Internal.Sql;
 using Xunit;
 
 namespace OceanBaseConnector.UnitTests
 {
     public sealed partial class TextCommandTests
     {
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MySqlScriptReturnValuePublishesAfterHiddenSelect(bool asynchronous)
+        {
+            var server = MySqlProcedureServer(async channel =>
+            {
+                var prepare = await StatementCommand(channel, 22);
+                var initialization = Encoding.UTF8.GetString(prepare, 1, prepare.Length - 1);
+                Assert.Matches("^SET @obc_[0-9a-f]{32}_0 = \\?$", initialization);
+                var variable = initialization.Substring(4, initialization.Length - 8);
+                await Prepared(channel, 80, 1);
+                Assert.Equal(PreparedParameters.Execute(80, PreparedParameters.Encode(new[]
+                {
+                    new OceanBaseParameter { Value = DBNull.Value }
+                }, OceanBaseCompatibilityMode.MySql)), await StatementCommand(channel, 23));
+                await channel.WritePacketAsync(Ok(status: 2));
+                Assert.Equal(new byte[] { 25, 80, 0, 0, 0 }, await StatementCommand(channel, 25));
+
+                channel.BeginCommand(); await Query(channel, "SET " + variable + "=42; SELECT 1");
+                await channel.WritePacketAsync(Ok(status: 10));
+                await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(Column("value", 8));
+                await channel.WritePacketAsync(Eof(2)); await channel.WritePacketAsync(new byte[] { 1, 49 });
+                await channel.WritePacketAsync(MySqlProcedureEnd(false));
+
+                channel.BeginCommand(); await Query(channel, "SELECT " + variable);
+                await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(Column("return_value", 8));
+                await channel.WritePacketAsync(Eof(2)); await channel.WritePacketAsync(new byte[] { 2, 52, 50 });
+                await channel.WritePacketAsync(MySqlProcedureEnd(false));
+                channel.BeginCommand(); await Query(channel, "after script return value"); await channel.WritePacketAsync(Ok(1, 2));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Allow Multi Statements=true");
+            try
+            {
+                await connection.OpenAsync(); using var command = (OceanBaseCommand)connection.CreateCommand();
+                command.CommandText = "SET ?=42; SELECT 1";
+                var returnValue = new OceanBaseParameter { Direction = ParameterDirection.ReturnValue, DbType = DbType.Int32, Value = -1 };
+                command.Parameters.Add(returnValue);
+                using var reader = asynchronous ? await command.ExecuteReaderAsync() : command.ExecuteReader();
+                Assert.Equal(-1, returnValue.Value);
+                Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+                Assert.True(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+                Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read()); Assert.Equal(1L, reader.GetInt64(0));
+                Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+                Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+                if (asynchronous) await reader.CloseAsync(); else reader.Close();
+                Assert.Equal(42L, returnValue.Value);
+                using var after = connection.CreateCommand(); after.CommandText = "after script return value";
+                Assert.Equal(1, asynchronous ? await after.ExecuteNonQueryAsync() : after.ExecuteNonQuery());
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public void MySqlScriptReturnValueBuildsTheExistingOutputPlan()
+        {
+            var parameters = new OceanBaseParameterCollection();
+            var returnValue = new OceanBaseParameter { Direction = ParameterDirection.ReturnValue, DbType = DbType.Int32, Value = -1 };
+            parameters.Add(returnValue);
+            var plan = MySqlCommandPlan.CreateScript("SET ?=42; SELECT 1", parameters, "obc_test", Encoding.UTF8);
+            Assert.Same(returnValue, Assert.Single(plan.Outputs));
+            Assert.Equal("SET @obc_test_0=42; SELECT 1", plan.Bindings.CommandText);
+            Assert.Equal("SELECT @obc_test_0", plan.OutputSql);
+        }
+
         private static (OceanBaseParameter Output, OceanBaseParameter InOut) AddMySqlScriptParameters(OceanBaseCommand command)
         {
             command.CommandText = "CALL p(?,?); SELECT ?";
@@ -203,7 +271,6 @@ namespace OceanBaseConnector.UnitTests
                 output.Direction = ParameterDirection.Output; output.DbType = DbType.String; output.Value = "old";
                 command.FetchSize = 1; Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery()); command.FetchSize = 0;
                 Assert.Throws<NotSupportedException>(() => command.Prepare());
-                output.Direction = ParameterDirection.ReturnValue; Assert.Throws<NotSupportedException>(() => command.ExecuteNonQuery());
                 output.Direction = ParameterDirection.Output;
                 command.CommandText = "SELECT ?; SELECT ?"; Assert.Throws<ArgumentException>(() => command.ExecuteNonQuery());
                 command.CommandText = "SELECT ?; SELECT 'ambiguous\\'; SELECT ?";

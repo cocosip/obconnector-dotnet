@@ -329,7 +329,7 @@ D-02b～D-02d 先调查是否纳入产品范围，不代表必须实现；允许
 | --- | --- | --- | --- |
 | D-02a 已有输入/多结果闭环 | `P2`；a1/a2 达到 `P4` | 核对双模式的正常/NULL/边界、SequentialAccess、半读释放、错误前缀/未执行后缀和独立存储；只为发现的具体缺口补代码或测试 | MySQL 时间脚本存储见 a1，Oracle DATE/TIMESTAMP/LTZ 脚本存储见 a2；历史 Oracle 长 NUL 4 项失败及本轮恢复均保留，详见 A-05，不能只看总测试数 |
 | D-02b 多语句 Prepare/server cursor | `P0 / 当前目标服务端限制`；目标双模式 profile 在 prepare 阶段拒绝脚本，Connector/J 同一 server-prepare 形状也失败，因此跳过客户端实现并保留发送前拒绝 | 只有目标版本/部署接受脚本级 statement/cursor prepare，并提供身份、顺序、失败前缀和生命周期证据时才重新开启；不把客户端参数展开、FetchSize hint 或现有 DbBatch 的顺序执行当作该功能完成 |
-| D-02c 多语句 OUT/INOUT | `P2`；MySQL标量子集c1已补齐，见下 | MySQL位置OUT/INOUT经私有变量初始化，脚本全部结果后隐藏SELECT，完整成功才向原参数发布；Oracle单PL块输出沿用D-03，Oracle脚本/ReturnValue/资源复杂输出仍拒绝 | c1的sync/async、NULL、关闭、错误、取消、独立存储及batch屏障见下；原生脚本输出wire、Oracle/其余资源方向需另行证据，不把Java客户端错误归为服务端拒绝 |
+| D-02c 多语句 OUT/INOUT | `P2`；MySQL标量子集c1及脚本ReturnValue规划子集已补齐，见下 | MySQL位置OUT/INOUT/ReturnValue经私有变量初始化，脚本全部结果后隐藏SELECT，完整成功才向原参数发布；Oracle单PL块输出沿用D-03，Oracle脚本/资源复杂输出仍拒绝 | c1的sync/async、NULL、关闭、错误、取消、独立存储及batch屏障见下；ReturnValue当前有loopback闭环，待MySQL直连profile复验；原生脚本输出wire、Oracle/其余资源方向需另行证据，不把Java客户端错误归为服务端拒绝 |
 | D-02d 复杂输入/locator/cursor 结果 | `P2`；d1～d3 达到 `P4` | 确认文本脚本可表示的复杂值身份、LOB 归属和 cursor wire；分别复用 D-03/D-04 已证明的能力，避免再开发一套 codec | 命名 OBJECT/嵌套/集合输入见 d1～d3；named scalar/递归 OBJECT text 多结果及引用类型名子集见 D-04e2；集合子树 NULL OBJECT、列存储、匿名/LOB/cursor/其余 text 复杂结果仍未关闭，REF CURSOR 输入仍为范围排除 |
 
 #### D-02b/c：脚本 Prepare、cursor 与输出的证据核对（调查完成，2026-10-30）
@@ -421,6 +421,22 @@ MySQL OUT/INOUT 六项，改由新正向/失败/NULL 组覆盖；Oracle 的十�
 四项拒绝继续实际执行。此前 2026-10-30 的 b/c 调查记录保留为历史，不再作为 c1 当前状态。
 剩余 Oracle 脚本输出/资源复杂输出、原生脚本 prepare/cursor、跨部署/版本仍未关闭。
 本轮未跑长压、完整单测/消费者、TLS/OB20/ODP 或非 Windows/runtime 部署矩阵。
+
+#### D-02c2：MySQL 脚本标量 ReturnValue（2026-11-04，loopback `P3` 子集）
+
+在 D-02c1 已有的私有变量初始化、脚本结果排空和隐藏 SELECT 发布路径上，补齐 Text
+脚本中单个标量 `ParameterDirection.ReturnValue`。它与 Output 一样以 NULL 初始化，脚本
+完成后才发布；InputOutput、LOB/complex/Stream、脚本 Prepare/cursor 和 Oracle 脚本边界不变。
+没有新增 API、协议或变量清理逻辑。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| RED/Unit | 旧计划在 `CreateScript` 处拒绝；修复后规划测试 **1/1**、sync/async loopback 发布测试 **2/2** 通过 |
+| 真实 profile | 当前 User Secrets 仅配置 `oracle-direct`，没有可运行的 MySQL profile；尝试选择 `mysql-direct` 被配置门禁拒绝，故不把本项标为直连 P4 |
+| 构建与走查 | 相关 Unit/Integration 项目 Release 编译通过；检查变量初始化仍只对 Output/ReturnValue 发送 NULL，InputOutput 保留快照；无公开 API 或协议变化 |
+
+本项只关闭客户端规划和 loopback 行为；取得 MySQL 直连 profile 后需补 sync/async 独立存储、
+半读/关闭、错误前缀和 batch 屏障实库证据，再决定是否提升为 P4。
 
 #### D-02a1：MySQL 时间参数脚本的存储闭环（`P4`，2026-10-30）
 

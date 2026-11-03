@@ -41,8 +41,9 @@ namespace OceanBaseConnector.Internal.Sql
                 var copy = parameter.Snapshot(); copy.Direction = ParameterDirection.Input;
                 sql.Append(text, copied, positions[i] - copied); copied = positions[i] + 1;
                 if (parameter.Direction == ParameterDirection.Input) { sql.Append('?'); inputs.Add(copy); continue; }
-                if (parameter.Direction != ParameterDirection.Output && parameter.Direction != ParameterDirection.InputOutput)
-                    throw new NotSupportedException("Script outputs require Output or InputOutput parameters.");
+                if (parameter.Direction != ParameterDirection.Output && parameter.Direction != ParameterDirection.InputOutput &&
+                    parameter.Direction != ParameterDirection.ReturnValue)
+                    throw new NotSupportedException("Script outputs require Output, InputOutput or ReturnValue parameters.");
                 if (outputs.Count == 4096) throw new NotSupportedException("Too many script output parameters.");
                 if (parameter.ComplexType != null || parameter.OceanBaseDbType == OceanBaseDbType.Array || parameter.OceanBaseDbType == OceanBaseDbType.Struct ||
                     parameter.OceanBaseDbType == OceanBaseDbType.Blob || parameter.OceanBaseDbType == OceanBaseDbType.Clob || parameter.OceanBaseDbType == OceanBaseDbType.RefCursor ||
@@ -50,7 +51,7 @@ namespace OceanBaseConnector.Internal.Sql
                     throw new NotSupportedException("Script outputs require scalar parameters without streams, locators or complex values.");
                 var variable = "@" + variablePrefix + "_" + outputs.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 sql.Append(variable); variables.Add(variable); assignments.Add(variable + " = ?"); outputs.Add(parameter);
-                if (parameter.Direction == ParameterDirection.Output) copy.Value = DBNull.Value;
+                if (parameter.Direction == ParameterDirection.Output || parameter.Direction == ParameterDirection.ReturnValue) copy.Value = DBNull.Value;
                 initializers.Add(copy);
             }
             var rewritten = sql.Append(text, copied, text.Length - copied).ToString();

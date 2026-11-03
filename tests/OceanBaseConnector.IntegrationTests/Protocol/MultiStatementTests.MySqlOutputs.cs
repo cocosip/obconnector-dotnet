@@ -11,6 +11,28 @@ public sealed partial class MultiStatementTests
 {
     [IntegrationTheory]
     [MemberData(nameof(MySqlRows))]
+    public async Task MySqlScriptReturnValuePublishesAfterAllResults(string profileName, bool asynchronous)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = CreateConnection(db, enabled: true);
+        await Open(connection, asynchronous);
+        using var command = db.Command(connection, "SET ?=42; SELECT 1");
+        var returnValue = DatabaseContext.Parameter(command, "result", -1, DbType.Int32);
+        returnValue.Direction = ParameterDirection.ReturnValue;
+        using var reader = asynchronous ? await command.ExecuteReaderAsync() : command.ExecuteReader();
+        Assert.Equal(-1, returnValue.Value);
+        Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+        Assert.True(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+        Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+        DatabaseContext.EqualNumber(reader.GetValue(0), 1, "Script result order changed.");
+        Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+        Assert.False(asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+        if (asynchronous) await reader.CloseAsync(); else reader.Close();
+        DatabaseContext.EqualNumber(returnValue.Value, 42, "Script ReturnValue mismatch.");
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(MySqlRows))]
     public async Task MySqlScriptOutputsPreserveStoredPrefixAndPublishAfterDrain(string profileName, bool asynchronous)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
