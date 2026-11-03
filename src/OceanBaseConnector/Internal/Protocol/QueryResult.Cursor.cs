@@ -9,7 +9,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private readonly uint? _cursorId;
         private bool _refCursorInitial;
 
-        private void BeginRefCursorRows() { _refCursorInitial = false; _cursorActive = true; }
+        private void BeginRefCursorRows() { _refCursorInitial = false; _cursorActive = true; _cursorOffsetTailPending = _cursorOffset; }
         private readonly int _fetchSize;
         private bool _cursorActive;
         private bool _cursorNeedsFetch;
@@ -65,19 +65,15 @@ namespace OceanBaseConnector.Internal.Protocol
         }
 
         private byte[] FetchPacket()
-        {
-            var packet = CursorFetchPacket(_cursorId!.Value, _fetchSize);
-            if (!_cursorOffset) return packet;
-            Array.Resize(ref packet, 19);
-            packet[9] = 2; packet[15] = 1;
-            return packet;
-        }
+            => CursorFetchPacket(_cursorId!.Value, _fetchSize, _cursorOffset);
 
-        internal static byte[] CursorFetchPacket(uint id, int rows)
+        internal static byte[] CursorFetchPacket(uint id, int rows, bool offset = false)
         {
             var count = (uint)rows;
-            return new byte[] { 28, (byte)id, (byte)(id >> 8), (byte)(id >> 16), (byte)(id >> 24),
+            var packet = new byte[] { 28, (byte)id, (byte)(id >> 8), (byte)(id >> 16), (byte)(id >> 24),
                 (byte)count, (byte)(count >> 8), (byte)(count >> 16), (byte)(count >> 24) };
+            if (offset) { Array.Resize(ref packet, 19); packet[9] = 2; packet[15] = 1; }
+            return packet;
         }
 
         private void FetchCursor()

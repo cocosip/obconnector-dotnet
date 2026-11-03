@@ -1086,6 +1086,8 @@ Enable `Use Oracle Prepare Execute=true`. Procedures use `CommandType.StoredProc
 
 For cursor outputs, set `OceanBaseDbType.RefCursor` with Output or ReturnValue. Read the returned `OceanBaseRefCursor` once through `GetDataReader()` / `GetDataReaderAsync()`; default page size is 128. The cursor belongs to its original connection and transaction. An unconsumed cursor causes a pooled physical session to be discarded when its logical connection closes; release the cursor before expecting that session to be reused.
 
+REF CURSOR readers can opt in to forward offset FETCH with `GetDataReader(fetchSize, useCursorOffset, behavior)` or `GetDataReaderAsync(fetchSize, useCursorOffset, behavior, cancellationToken)`. All arguments of these additive overloads are required to preserve existing calls with `default`. Existing overloads retain ordinary FETCH. The extended request uses NEXT, zero offset and the position-tail flag; the first response and every later page consume and validate the cumulative-position OK tail before releasing the exchange. Empty results and result-limit draining follow the same rule. The existing Oracle/version check applies. This adds no scrolling API and does not enable `OceanBaseCommand.UseCursorOffset` for parent output execution.
+
 Pure output and return-value rows must carry exactly one four-byte little-endian cursor identifier. The
 output capture path validates the width before consulting the originating cursor owner, so trailing or
 truncated identifiers fail as malformed protocol data.

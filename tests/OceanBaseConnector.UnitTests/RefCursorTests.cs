@@ -36,7 +36,27 @@ namespace OceanBaseConnector.UnitTests
         public Task RefCursorPositiveCommandFetchHintKeepsIndependentPageSize(bool async, bool deprecated, bool sequential)
             => ReadRefCursorPagesAndRelease(async, deprecated, sequential, commandFetchSize: 1);
 
-        internal static async Task ReadRefCursorPagesAndRelease(bool async, bool deprecated, bool sequential, int slowThreshold = 0, int commandFetchSize = 0, CommandBehavior behavior = CommandBehavior.Default, bool advanceWithoutRead = false)
+        [Theory]
+        [InlineData(false, false, false)]
+        [InlineData(true, false, false)]
+        [InlineData(false, true, false)]
+        [InlineData(true, true, false)]
+        [InlineData(false, false, true)]
+        [InlineData(true, false, true)]
+        [InlineData(false, true, true)]
+        [InlineData(true, true, true)]
+        public Task RefCursorOffsetConsumesInitialAndSubsequentPageTails(bool async, bool deprecated, bool sequential)
+            => ReadRefCursorPagesAndRelease(async, deprecated, sequential, cursorOffset: true);
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public Task RefCursorOffsetRejectsBadInitialTailWithoutChangingParentOutcome(bool async, bool sequential)
+            => ReadRefCursorPagesAndRelease(async, false, sequential, cursorOffset: true, invalidInitialTail: true);
+
+        internal static async Task ReadRefCursorPagesAndRelease(bool async, bool deprecated, bool sequential, int slowThreshold = 0, int commandFetchSize = 0, CommandBehavior behavior = CommandBehavior.Default, bool advanceWithoutRead = false, bool cursorOffset = false, bool invalidInitialTail = false)
         {
             var server = Server(async channel =>
             {
@@ -54,11 +74,14 @@ namespace OceanBaseConnector.UnitTests
                 for (var page = 0; page < 2; page++)
                 {
                     channel.BeginCommand();
-                    Assert.Equal(new byte[] { 28, 91, 0, 0, 0, 2, 0, 0, 0 }, await StatementCommand(channel, 28, deprecated));
+                    Assert.Equal(cursorOffset ? new byte[] { 28, 91, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0 }
+                        : new byte[] { 28, 91, 0, 0, 0, 2, 0, 0, 0 }, await StatementCommand(channel, 28, deprecated));
                     await CursorMetadata(channel, 2, deprecated, omitTerminator: deprecated);
                     await channel.WritePacketAsync(CursorRow(page * 2 + 1));
                     if (page == 0) await channel.WritePacketAsync(CursorRow(2));
                     await channel.WritePacketAsync(CursorTerminator(page == 0 ? (byte)66 : (byte)130, deprecated));
+                    if (cursorOffset) await channel.WritePacketAsync(Ok(invalidInitialTail ? (byte)99 : page == 0 ? (byte)2 : (byte)3));
+                    if (invalidInitialTail) return;
                 }
                 for (var i = 0; i < 2; i++)
                 {
@@ -79,26 +102,38 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(0, async ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
                 using var cursor = Assert.IsType<OceanBaseRefCursor>(parameter.Value);
                 command.Dispose(); // The output cursor owns the parent statement after command disposal.
-                Assert.Throws<ArgumentOutOfRangeException>(() => { cursor.GetDataReader(0); });
+                Assert.Throws<ArgumentOutOfRangeException>(() => { cursor.GetDataReader(0, default); });
+                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => cursor.GetDataReaderAsync(0, default, default));
                 Assert.Throws<NotSupportedException>(() => { cursor.GetDataReader(2, CommandBehavior.SchemaOnly); });
                 using var canceled = new CancellationTokenSource(); canceled.Cancel();
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cursor.GetDataReaderAsync(cancellationToken: canceled.Token));
-                using var reader = async ? await cursor.GetDataReaderAsync(2, behavior | (sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default))
-                    : cursor.GetDataReader(2, behavior | (sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default));
-                if (slowThreshold > 0) await Task.Delay(30);
-                Assert.Equal("n", reader.GetName(0)); Assert.Equal(typeof(long), reader.GetFieldType(0));
-                if (!advanceWithoutRead)
+                var readerBehavior = behavior | (sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default);
+                using var reader = cursorOffset
+                    ? async ? await cursor.GetDataReaderAsync(2, true, readerBehavior, CancellationToken.None) : cursor.GetDataReader(2, true, readerBehavior)
+                    : async ? await cursor.GetDataReaderAsync(2, readerBehavior) : cursor.GetDataReader(2, readerBehavior);
+                if (invalidInitialTail)
                 {
-                    var rows = (behavior & CommandBehavior.SingleRow) != 0 ? 1 : 3;
-                    for (var i = 1L; i <= rows; i++) { Assert.True(async ? await reader.ReadAsync() : reader.Read()); Assert.Equal(i, reader.GetInt64(0)); }
-                    Assert.False(async ? await reader.ReadAsync() : reader.Read());
+                    for (var i = 1L; i <= 2; i++) { Assert.True(async ? await reader.ReadAsync() : reader.Read()); Assert.Equal(i, reader.GetInt64(0)); }
+                    var error = await Assert.ThrowsAsync<OceanBaseException>(async () => { if (async) await reader.ReadAsync(); else reader.Read(); });
+                    Assert.False(error.IsExecutionOutcomeUnknown); Assert.Equal(ConnectionState.Broken, connection.State);
                 }
-                Assert.False(async ? await reader.NextResultAsync() : reader.NextResult());
-                Assert.False(await reader.ReadAsync()); Assert.False(reader.NextResult());
-                Assert.Throws<InvalidOperationException>(() => cursor.GetDataReader());
-                cursor.Dispose();
-                using var after = connection.CreateCommand(); after.CommandText = "after";
-                Assert.Equal(1, await after.ExecuteNonQueryAsync());
+                else
+                {
+                    if (slowThreshold > 0) await Task.Delay(30);
+                    Assert.Equal("n", reader.GetName(0)); Assert.Equal(typeof(long), reader.GetFieldType(0));
+                    if (!advanceWithoutRead)
+                    {
+                        var rows = (behavior & CommandBehavior.SingleRow) != 0 ? 1 : 3;
+                        for (var i = 1L; i <= rows; i++) { Assert.True(async ? await reader.ReadAsync() : reader.Read()); Assert.Equal(i, reader.GetInt64(0)); }
+                        Assert.False(async ? await reader.ReadAsync() : reader.Read());
+                    }
+                    Assert.False(async ? await reader.NextResultAsync() : reader.NextResult());
+                    Assert.False(await reader.ReadAsync()); Assert.False(reader.NextResult());
+                    Assert.Throws<InvalidOperationException>(() => cursor.GetDataReader());
+                    cursor.Dispose();
+                    using var after = connection.CreateCommand(); after.CommandText = "after";
+                    Assert.Equal(1, await after.ExecuteNonQueryAsync());
+                }
             }
             finally { connection.Close(); server.Stop(); }
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
