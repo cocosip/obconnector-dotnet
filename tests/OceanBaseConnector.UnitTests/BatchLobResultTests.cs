@@ -151,7 +151,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, "charset")] [InlineData(true, "charset")]
         [InlineData(false, "owned-anonymous")] [InlineData(true, "owned-anonymous")]
         [InlineData(false, "capability-anonymous")] [InlineData(true, "capability-anonymous")]
-        public async Task BatchMultiSendLobResultsValidateLifetimeAndCapabilityBeforeExecution(bool asynchronous, string boundary)
+        public async Task BatchMultiSendLobResultsValidateCapabilityAndRetainOwnedSessions(bool asynchronous, string boundary)
         {
             var anonymous = boundary.EndsWith("-anonymous", StringComparison.Ordinal);
             if (anonymous) boundary = boundary.Substring(0, boundary.Length - "-anonymous".Length);
@@ -164,7 +164,11 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(new byte[] { 0, 90, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 });
                 await channel.WritePacketAsync(anonymous ? ComplexColumn("", "", element: 211) : complex ? ComplexColumn() : Column("lob", 211, boundary == "charset" ? (ushort)63 : (ushort)45));
                 await channel.WritePacketAsync(Eof());
-                if (boundary != "owned") await StatementCommand(channel, 25);
+                if (boundary == "owned")
+                {
+                    await StatementCommand(channel, 23); await OwnedLobDrainReply(channel, 211, anonymous, true, false);
+                }
+                await StatementCommand(channel, 25);
                 Assert.Equal(0, await channelStreamRead(channel));
             }, lobLocators: boundary != "capability");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Batch Multi Send=true");
@@ -174,7 +178,13 @@ namespace OceanBaseConnector.UnitTests
                 if (complex) await connection.GetComplexTypeAsync("Owner", "Thing");
                 using var batch = boundary == "owned" ? new OceanBaseBatch(connection) : connection.CreateBatch();
                 BatchItem(batch, "select lob from t");
-                if (asynchronous) await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteScalarAsync());
+                if (boundary == "owned")
+                {
+                    var value = asynchronous ? await batch.ExecuteScalarAsync() : batch.ExecuteScalar();
+                    using var lob = anonymous ? Assert.Single(ComplexResultLobs(Assert.IsType<OceanBaseComplexValue>(value))) : Assert.IsType<OceanBaseLob>(value);
+                    using var text = lob.OpenTextReader(); Assert.Equal("a", await text.ReadToEndAsync());
+                }
+                else if (asynchronous) await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteScalarAsync());
                 else Assert.Throws<NotSupportedException>(() => batch.ExecuteScalar());
             }
             finally { connection.Close(); server.Stop(); }

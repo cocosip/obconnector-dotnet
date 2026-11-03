@@ -36,7 +36,6 @@ namespace OceanBaseConnector
         internal DbBatchCommand? BatchCommand { get; set; }
         internal Action? BatchFailed { get; set; }
         internal bool? BatchBarrierLobOutputs { get; set; }
-        internal bool DisallowLobResults { get; set; }
         internal bool RequiresBatchRoutineBarrier(OceanBaseCompatibilityMode mode) => CommandType == CommandType.StoredProcedure ||
             mode == OceanBaseCompatibilityMode.Oracle && CommandType == CommandType.Text && SqlStatementBoundary.IsOraclePlBlock(CommandText);
 #endif
@@ -352,7 +351,6 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
                 execution.BatchCommand = BatchCommand;
                 execution.BatchFailed = BatchFailed;
-                execution.DisallowLobResults = DisallowLobResults;
 #endif
                 execution.DiscardSessionAfterExecution = !prepareOnly && !schemaOnly &&
                     (CommandType == CommandType.StoredProcedure || SessionStateSql.RequiresDiscard(text, session.Info!.Mode));

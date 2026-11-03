@@ -196,26 +196,6 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
-        [Fact]
-        public async Task OwnedMultiSendNonQueryRejectsLobOutputsBeforeSending()
-        {
-            var server = Server(async channel =>
-            {
-                Assert.Equal(0, await channelStreamRead(channel));
-            }, lobLocators: true, serverVersion: "4.4.2.2");
-            using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Oracle Prepare Execute=true;Use Batch Multi Send=true");
-            try
-            {
-                using var batch = new OceanBaseBatch(connection);
-                var output = BatchReturningItem(batch, 1); output.ResetDbType(); output.Value = DBNull.Value;
-                output.OceanBaseDbType = OceanBaseDbType.Blob;
-                await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteNonQueryAsync());
-                Assert.Equal(DBNull.Value, output.Value);
-            }
-            finally { connection.Close(); server.Stop(); }
-            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
-        }
-
         [Theory]
         [InlineData("metadata")] [InlineData("rows")] [InlineData("cancel")]
         public async Task BatchMultiSendResourceReturningRejectsMalformedOrCancelledOutputWithoutLeaks(string failure)

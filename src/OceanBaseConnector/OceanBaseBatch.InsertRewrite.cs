@@ -16,12 +16,12 @@ namespace OceanBaseConnector
         private async Task<int> ExecuteRewrittenNonQuery(bool asynchronous, CancellationToken token)
         {
             Operation? operation = null;
+            if (_ownsConnection)
+            {
+                if (asynchronous) await OpenOwnedConnectionAsync(token).ConfigureAwait(false); else OpenOwnedConnection();
+            }
             try
             {
-                if (_ownsConnection)
-                {
-                    if (asynchronous) await _connection!.OpenAsync(token).ConfigureAwait(false); else _connection!.Open();
-                }
                 operation = Start(CommandBehavior.Default, token);
                 var total = 0; var any = operation.Commands.Length == 0;
                 for (var index = 0; index < operation.Commands.Length;)
@@ -86,7 +86,7 @@ namespace OceanBaseConnector
                 try { operation?.Dispose(); }
                 finally
                 {
-                    if (_ownsConnection)
+                    if (_ownsConnection && !RetainsOwnedLobConnection)
                     {
                         if (operation != null)
                         {

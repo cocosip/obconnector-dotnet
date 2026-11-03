@@ -50,7 +50,6 @@ namespace OceanBaseConnector
             if (!_operation.Batch.CanUseMultiSend(_operation.Session!) || !OceanBaseBatch.CanUseMultiSendReader(_operation.Behavior)) return;
             var command = _operation.Commands[_index];
             command.BatchBarrierLobOutputs = _operation.Batch.CanRetainLobResults(_operation);
-            command.DisallowLobResults = !command.BatchBarrierLobOutputs.Value && !_operation.DiscardLobResults;
         }
         private int FindMultiSendSegmentEnd()
         {

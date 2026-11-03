@@ -342,6 +342,7 @@ namespace OceanBaseConnector.Internal.Session
             }
         }
         internal void MarkLobHandle() { lock (_gate) { _liveLobCount++; } }
+        internal bool HasLiveLobHandles { get { lock (_gate) return _liveLobCount != 0; } }
         internal void ReleaseLobHandle()
         {
             lock (_gate)

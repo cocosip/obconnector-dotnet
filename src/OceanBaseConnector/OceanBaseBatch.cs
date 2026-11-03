@@ -9,7 +9,8 @@ using OceanBaseConnector.Internal.Session;
 namespace OceanBaseConnector
 {
     /// <summary>Executes commands sequentially by default, with optional MySQL INSERT rewriting.
-    /// No implicit transaction or automatic replay is added.</summary>
+    /// No implicit transaction or automatic replay is added. A data source batch retains its connection
+    /// for returned LOB handles; dispose those handles before reexecution, and dispose the batch to close it.</summary>
     public sealed partial class OceanBaseBatch : DbBatch
     {
         internal object Gate { get; } = new object();
@@ -72,9 +73,31 @@ namespace OceanBaseConnector
                 catch { operation.Dispose(); throw; }
             }
         }
+        private void PrepareOwnedConnection()
+        {
+            CheckMutable();
+            if (_connection!.State == ConnectionState.Open && _connection.GetOpenSession().HasLiveLobHandles)
+                throw new InvalidOperationException("Dispose previous LOB handles, including complex members, before executing this batch again.");
+        }
+        private void OpenOwnedConnection()
+        {
+            PrepareOwnedConnection();
+            if (_connection!.State != ConnectionState.Closed) _connection.Close();
+            _connection.Open();
+        }
+        private async Task OpenOwnedConnectionAsync(CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested(); PrepareOwnedConnection();
+            if (_connection!.State != ConnectionState.Closed) await _connection.CloseAsync().ConfigureAwait(false);
+            await _connection.OpenAsync(token).ConfigureAwait(false);
+        }
+        private bool RetainsOwnedLobConnection => _ownsConnection && _connection!.State == ConnectionState.Open && _connection.GetOpenSession().HasLiveLobHandles;
+        private void CloseOwnedConnection() { if (_ownsConnection && !RetainsOwnedLobConnection) _connection!.Close(); }
+        private async Task CloseOwnedConnectionAsync()
+        { if (_ownsConnection && !RetainsOwnedLobConnection) await _connection!.CloseAsync().ConfigureAwait(false); }
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
         {
-            if (_ownsConnection) _connection!.Open();
+            if (_ownsConnection) OpenOwnedConnection();
             try
             {
                 var operation = Start(_ownsConnection ? behavior | CommandBehavior.CloseConnection : behavior, CancellationToken.None);
@@ -90,7 +113,7 @@ namespace OceanBaseConnector
         }
         protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
         {
-            if (_ownsConnection) await _connection!.OpenAsync(cancellationToken).ConfigureAwait(false);
+            if (_ownsConnection) await OpenOwnedConnectionAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 var operation = Start(_ownsConnection ? behavior | CommandBehavior.CloseConnection : behavior, cancellationToken);
@@ -108,29 +131,31 @@ namespace OceanBaseConnector
         {
             if (_rewriteBatchedInserts) return ExecuteRewrittenNonQuery(false, CancellationToken.None).GetAwaiter().GetResult();
             if (IsBatchMultiSendRequested()) return ExecuteMultiSendNonQuery();
-            using var reader = ExecuteReader(); do { while (reader.Read()) { } } while (reader.NextResult()); return reader.RecordsAffected;
+            if (_ownsConnection) OpenOwnedConnection();
+            try { return ExecuteSequentialNonQuery(); }
+            finally { CloseOwnedConnection(); }
         }
         public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken = default)
         {
             if (_rewriteBatchedInserts) return await ExecuteRewrittenNonQuery(true, cancellationToken).ConfigureAwait(false);
             if (IsBatchMultiSendRequested()) return await ExecuteMultiSendNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            await using var reader = await ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            do { while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) { } } while (await reader.NextResultAsync(cancellationToken).ConfigureAwait(false)); return reader.RecordsAffected;
+            if (_ownsConnection) await OpenOwnedConnectionAsync(cancellationToken).ConfigureAwait(false);
+            try { return await ExecuteSequentialNonQueryAsync(cancellationToken).ConfigureAwait(false); }
+            finally { await CloseOwnedConnectionAsync().ConfigureAwait(false); }
         }
         public override object? ExecuteScalar()
         {
             if (IsBatchMultiSendRequested()) return ExecuteMultiSendScalar();
-            using var reader = ExecuteReader(); while (reader.FieldCount == 0 && reader.NextResult()) { }
-            var value = reader.FieldCount != 0 && reader.Read() ? reader.GetValue(0) : null;
-            do { while (reader.Read()) { } } while (reader.NextResult()); return value;
+            if (_ownsConnection) OpenOwnedConnection();
+            try { return ExecuteSequentialScalar(); }
+            finally { CloseOwnedConnection(); }
         }
         public override async Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken = default)
         {
             if (IsBatchMultiSendRequested()) return await ExecuteMultiSendScalarAsync(cancellationToken).ConfigureAwait(false);
-            await using var reader = await ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (reader.FieldCount == 0 && await reader.NextResultAsync(cancellationToken).ConfigureAwait(false)) { }
-            var value = reader.FieldCount != 0 && await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? reader.GetValue(0) : null;
-            do { while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) { } } while (await reader.NextResultAsync(cancellationToken).ConfigureAwait(false)); return value;
+            if (_ownsConnection) await OpenOwnedConnectionAsync(cancellationToken).ConfigureAwait(false);
+            try { return await ExecuteSequentialScalarAsync(cancellationToken).ConfigureAwait(false); }
+            finally { await CloseOwnedConnectionAsync().ConfigureAwait(false); }
         }
         public override void Prepare()
         {
@@ -201,7 +226,6 @@ namespace OceanBaseConnector
             internal OceanBaseBatchMultiSendRequest[]? MultiSendRequests { get; set; }
             internal int[] Counts { get; set; } = Array.Empty<int>();
             internal OceanBaseBatchReader? Reader { get; set; }
-            internal bool? RetainLobResults { get; set; }
             internal bool DiscardLobResults { get; set; }
             internal void Activate(OceanBaseCommand command, bool owned)
             {
@@ -238,7 +262,7 @@ namespace OceanBaseConnector
                             if (command == null || !ReferenceEquals(command.SessionOwner, this)) continue;
                             command.SessionOwner = null; command.RequiredSession = null; command.CancellationOrigin = null;
                             command.BatchFailed = null; command.BatchCommand = null;
-                            command.BatchBarrierLobOutputs = null; command.DisallowLobResults = false;
+                            command.BatchBarrierLobOutputs = null;
                         }
                         if (ReferenceEquals(_batch._operation, this)) _batch._operation = null;
                         _cancel.Dispose();

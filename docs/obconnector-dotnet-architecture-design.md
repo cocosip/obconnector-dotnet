@@ -445,9 +445,17 @@ captured LOBs, including nested members, that were not delivered. Partial comple
 packaging failures also dispose already decoded LOBs. Data-source-owned NonQuery can drain ordinary
 LOB result rows without decoding values or allocating handles, including negotiated root text/binary
 LOBs and anonymous binary LOB collections. Prepare and response metadata still enforce capability,
-charset and complex-type restrictions. This permission never applies to declared OUT/INOUT values:
-data-source-owned Scalar locator results and explicit LOB outputs remain rejected because the method
-closes their connection. Anonymous inputs, cursor members, complex text LOB results, Oracle PL outputs, cursor/array binding and legacy Oracle
+charset and complex-type restrictions. Data-source-owned Scalar results and explicit LOB OUT/INOUT
+values retain their original connection while published handles, including nested complex members,
+remain live. All execution entry points reject reexecution before sending until those handles are
+disposed; the next execution returns the old lease and opens a fresh one. Dispose the batch to close
+the retained connection and invalidate remaining handles. Calls that publish no handles still close
+immediately. Internal Scalar/NonQuery draining uses this batch lifetime; public readers retain the
+CloseConnection window described above. On 4.4.2.2 direct Oracle, remote Scalar and read-only PL outputs
+and inline DML RETURNING outputs are verified. Remote LOBs produced by autocommit DML are rejected
+by DBMS_LOB.READ with 600/0A000; Connector/J PL controls match and explicit-transaction controls read
+the complete content. Retaining a connection does not extend a server transaction's locator lifetime.
+Anonymous inputs, cursor members, complex text LOB results, same-group Oracle PL outputs, cursor/array binding and legacy Oracle
 249-252 results remain outside the pipeline. Ordinary named complex binary results use
 the existing decoder. Source-column type lookups finish before sending the execution group; each
 response restores only its request's source mapping, time zone and national character set snapshot.
