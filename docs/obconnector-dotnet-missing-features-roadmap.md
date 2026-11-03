@@ -120,7 +120,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/多语句与受控 1295 fallback 子集见 D-05b；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
-| D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；UJIS 等逐项确认后再加入，不支持名称继续发送前拒绝 |
+| D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；CP850/HP8/MACROMAN客户端及SWE7仅结果已在D-07e验收；UJIS等逐项确认后再加入，不支持名称继续发送前拒绝 |
 
 ### 第二阶段：参考 Java 的候选实现
 
@@ -182,7 +182,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | S-02 | OB20/Full Link Trace/标准压缩 | 当前只有普通协议回退；强制 OB20 因 `Layer=mysql` 失败 | 真实 OB20/trace/压缩 profile、双向帧和服务器采样/collector证据 |
 | S-03 | OBProxy/ODP/多节点/OCP/TNS/后端迁移 | 只有本地 parser、单上游 relay 和受控路由 fixture | 真实代理/发现服务、多节点、后端 reset、路由和迁移 profile |
 | S-04 | 非 native 认证/KDC/凭据轮换 | 当前只有 native 账号直连 | 服务端插件/KDC 正负认证、平台协商和实际轮换端点 |
-| S-05 | 剩余新字符集 | MySQL SJIS/Big5 有专项；Oracle SJIS/Big5 仍失败，其余新名称无 profile | 逐项服务端 collation、严格映射和两模式 roundtrip |
+| S-05 | 剩余新字符集 | MySQL SJIS/Big5 有专项；Oracle SJIS/Big5 仍失败；CP850/HP8/MACROMAN及SWE7结果已补齐（D-07e）；UJIS/EUCJPMS/CP932目录存在，尚缺严格映射与存储证据 | 逐项服务端 collation、严格映射和两模式 roundtrip；不把SWE7结果专用扩成客户端SQL |
 
 S-01 至 S-05 不是“永远不支持”，也不是可以用本地 fixture、Java SPI 或单上游中继关闭的
 代码任务。当前未关闭的失败或前提还包括 Oracle nested-table 列、`SELECT CURSOR` 列、
@@ -1240,6 +1240,52 @@ national 分开验收，失败先固定阶段/错误码，只有定位到驱动�
 检查；最终4项GB2312通过。EUCKR的900始终独立保留。这里未新增产品实现，不把既有代码已
 通过的验收测试伪记成产品红/绿。D-07父项保持P2，其余名称、二进制collation的逐项实库、
 代理/TLS/OB20、其他版本/平台和复杂national成员仍未验收；Oracle 普通 EUCKR 初始化的失败已按当前目标服务端限制保留，未修改客户端编码或身份验证。
+
+#### D-07e：剩余单字节字符集（2026-11-03，指定直连子集 `P4`）
+
+基线 `6847333`。本轮两个4.4.2.2直连租户的SHOW CHARACTER SET均列出cp850、hp8、
+macroman、swe7；当前驱动缺少这些映射。采用固定MySQL 8.0.36官方XML Unicode表，并与
+MySQL目标服务端的全部256字节转换独立核对，复用SingleByteResultEncoding及既有严格
+客户端、结果/national解析和状态校验，不增加依赖或配置。相比直接套用.NET近似codepage，
+显式表保留服务端控制字节和未定义槽；不新增通用编码注册器。
+
+cp850/hp8/macroman接入ASCII兼容的客户端和结果路径。swe7将@、反斜线、方括号等ASCII
+字节映射为瑞典字符，不符合现有客户端SQL语法契约，因此仅支持结果解码，客户端仍发送前
+拒绝。此边界不是用相近编码替代。未定义字节严格拒绝；NULL/空值/长值、流式读取、pool
+身份和非法字符恢复沿用现有契约。Oracle初始化与national独立核对，服务端拒绝保留失败。
+
+- [x] 固定官方表、live目录及完整单字节转换；新增映射/非法字节/客户端红测。
+- [x] 扩展既有单字节表与collation ID，连接字符串只接入三个ASCII兼容名称。
+- [x] 定向单元/公开资产消费，真实参数与SQL存储、独立UTF8读回和结果流式验证。
+- [x] 同步能力/缺失矩阵及字符集契约，独立走查本次差异，无阻塞后本地提交。
+
+影响文件：ClientCharacterSet、ResultCharacterSet、SingleByteResultEncoding；对应Unit、
+共享Consumer样本、Integration及字符集文档；不修改认证、端点、服务端配置和旧限制。
+
+官方表固定为MySQL标签`mysql-8.0.36`下的
+[cp850.xml](https://github.com/mysql/mysql-server/blob/mysql-8.0.36/share/charsets/cp850.xml)、
+[hp8.xml](https://github.com/mysql/mysql-server/blob/mysql-8.0.36/share/charsets/hp8.xml)、
+[macroman.xml](https://github.com/mysql/mysql-server/blob/mysql-8.0.36/share/charsets/macroman.xml)、
+[swe7.xml](https://github.com/mysql/mysql-server/blob/mysql-8.0.36/share/charsets/swe7.xml)。
+MySQL实库分别查询全部256字节，所有已定义位置256/255/256/127均与表一致；未定义槽不
+复制服务端的宽松替换，HP8的FF及SWE7的7F–FF严格抛出DecoderFallbackException。
+两个实库目录均确认collation ID为4/80、6/72、39/53、10/82，未猜测其他alias ID。
+`LegacySingleByteReference.py`可从四张XML重新生成完整SHA256，单测按256位置解码、
+反向编码、流式非法字节和ASCII语法边界验证，无Python/Java运行时依赖。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| 红/绿 | `d07e-red.trx`：11个缺映射用例失败、1个SWE7客户端拒绝对照通过；实现后初轮240/240通过 |
+| 定向Unit | `d07e-unit-final.trx` **1215/1215**，0失败/0skip；覆盖新表及既有字符集、客户端状态/信任、字段/顺序读取，未跑全量Unit |
+| 公开资产 | `d07e-consumer.trx` **10/10**，五TFM×sync/async；每例三种客户端的双模式SQL/参数、四种结果的text/binary及buffered/sequential代表组合 |
+| 实库 | `d07e-live-first.trx` **22/22**，0失败/0skip，约12秒：双模式客户端12、Oracle national6、MySQL结果4；全部使用4.4.2.2直连、Windows、TLS Disabled |
+| 存储与结果 | 客户端用例复用D-07严格存储工具：SQL/参数、NULL、长值、引号/反斜线/NUL、非法字符拒绝后复用、独立UTF8连接逐行读回；结果用例检查固定字节、text/binary及buffered/sequential读取 |
+| 实库组合边界 | 客户端与national各覆盖sync隐式/async显式Prepare或PrepareExecute的两个配对组合，未把它计为四种完整笛卡尔组合；SWE7实库仅MySQL普通结果，Oracle结果有loopback证据，不宣称实库SWE7客户端/national |
+| 编译与走查 | 五个产品TFM Release编译0警告/0错误；fresh-context只读走查无可执行问题，指出上述组合边界并已明确记录；git diff --check通过 |
+
+原始目录、XML及1024条转换证据保留在忽略目录`TestResults/charset-catalog-probe/`，不包含
+凭据。未重跑全量Consumer、长期压力、代理/OB20/TLS、独立旧runtime或其他服务端版本；
+UJIS/EUCJPMS/CP932、Oracle SJIS/Big5和EUCKR旧失败及其他部署仍保留为开放项。
 
 ### A-03a：Oracle 未约束 NUMBER 参数推导（2026-10-30，指定 profile 已验收）
 

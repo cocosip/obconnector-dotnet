@@ -748,6 +748,15 @@ Following the strict result policy, the14 DEC8 zero placeholders outside NUL and
 placeholders throw DecoderFallbackException; the latter deliberately rejects the server table's
 replacement output. Defined bytes round-trip; unrepresentable characters throw EncoderFallbackException.
 The stateless decoder serves whole fields and streaming reads; both families report width1.
+CP850 (4/80), HP8 (6/72), MacRoman (39/53) and SWE7 (10/82) use the official MySQL
+`mysql-8.0.36/share/charsets/{cp850,hp8,macroman,swe7}.xml` Unicode maps. All assigned positions
+(256/255/256/127 respectively) match direct OceanBase4.4.2.2 conversion. HP8 byteFF and SWE7
+bytes7F–FF are undefined and throw; all families report width1 and use the same strict streaming
+decoder. CP850/HP8/MacRoman also support client SQL/ordinary parameters and trusted explicit
+national names. SWE7 remains result-only because it remaps ASCII syntax bytes such as @ and
+backslash. The optional `LegacySingleByteReference.py` in the same fixture directory regenerates
+full-table digests from the pinned XML sources. Client storage, Oracle national and MySQL result
+acceptance are recorded under D-07e; other versions/deployments and independent runtimes remain open.
 The optional `python tests/fixtures/character-sets/SingleByteReference.py ob_ctype_extra.cc ob_ctype_tis620_tab.h`
 command regenerates independent all256-byte SHA256 expectations from downloaded pinned source files:
 each position contributes a two-byte big-endian scalar, or FFFF for an undefined position. Python and

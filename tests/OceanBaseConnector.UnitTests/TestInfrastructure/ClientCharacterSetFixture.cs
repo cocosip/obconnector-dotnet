@@ -23,6 +23,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             ("dec8", "¤ŒŸ", "A8D7DD"), ("tis620", "กฺ฿", "A1DADF"), ("euckr", "한글", "C7D1B1DB"),
             ("sjis", "日本語", "93FA967B8CEA"), ("big5", "中•∼", "A4A4A145A1E3"),
             ("hkscs", "\uf308Ā中", "88458856A4A4"), ("hkscs31", "\U0002010cĀ中", "88458856A4A4"),
+            ("cp850", "Çøı", "809BD5"), ("hp8", "À₤Ÿ", "A1AFEE"), ("macroman", "Ä€ﬁ", "80DBDE"),
         };
         private const string StateSql = "SELECT @@character_set_client, @@character_set_connection, @@character_set_results, @@collation_connection";
         private const string Result = "患者😀";

@@ -30,6 +30,10 @@ namespace OceanBaseConnector.UnitTests
 
         [Theory]
         [InlineData(11, "80")]
+        [InlineData(6, "FF")]
+        [InlineData(72, "41FF")]
+        [InlineData(10, "7F")]
+        [InlineData(82, "80")]
         [InlineData(3, "41A4")]
         [InlineData(18, "A1DB")]
         [InlineData(13, "815F81")]

@@ -60,6 +60,14 @@ namespace OceanBaseConnector.Internal.Protocol
                     maximumBytesPerCharacter = 1; return SingleByteResultEncoding.Tis620;
                 case 19: case 85:
                     maximumBytesPerCharacter = 2; return EucKr;
+                case 4: case 80:
+                    maximumBytesPerCharacter = 1; return SingleByteResultEncoding.Cp850;
+                case 6: case 72:
+                    maximumBytesPerCharacter = 1; return SingleByteResultEncoding.Hp8;
+                case 39: case 53:
+                    maximumBytesPerCharacter = 1; return SingleByteResultEncoding.MacRoman;
+                case 10: case 82:
+                    maximumBytesPerCharacter = 1; return SingleByteResultEncoding.Swe7;
                 case 11:
                 case 65:
                 case 331:

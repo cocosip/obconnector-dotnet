@@ -10,8 +10,11 @@ alias. Names are case insensitive and canonicalized; `utf8` means `utf8mb3`.
 | `utf8mb3`, `ascii`, `latin1` | No supplementary characters in mb3; ASCII is 7-bit; MySQL latin1 uses CP1252 |
 | `gb2312`, `gbk`, `gb18030`, `gb18030_2022` | GB2312 uses the strict OceanBase mapping; GB18030 uses the 2005 mapping unless 2022 is selected |
 | `dec8`, `tis620`, `euckr`, `sjis`, `big5`, `hkscs`, `hkscs31` | Existing pinned server mappings, with ASCII syntax preserved for input |
+| `cp850`, `hp8`, `macroman` | Exact single-byte server maps, with identity ASCII and strict undefined-slot checks |
 
-UTF-16/LE, binary and unknown names fail configuration validation before networking. Encoders
+UTF-16/LE, binary, `swe7` and unknown names fail configuration validation before networking. SWE7
+remaps ASCII syntax such as `@` and backslash and is supported only for ordinary result decoding
+(collations 10/82). Its undefined bytes 7F–FF fail decoding. Encoders
 reject malformed Unicode, unmappable characters and aliases that do not decode to the original
 text. They never substitute `?`. SJIS backslash is sent as ASCII `5C`, while non-ASCII characters
 retain their strict server mapping. GBK's CP936-only euro alias and HKSCS's lossy U+2593 alias are
