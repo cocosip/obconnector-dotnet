@@ -179,6 +179,8 @@ namespace OceanBaseConnector.Internal.Sql
                         203 => OceanBaseDbType.Binary,
                         12 => OceanBaseDbType.OracleDate,
                         202 => OceanBaseDbType.Timestamp,
+                        204 => OceanBaseDbType.IntervalYearToMonth,
+                        205 => OceanBaseDbType.IntervalDayToSecond,
                         _ => throw Unsupported(),
                     };
                     if (code == 0 && value != null && value != DBNull.Value && !(value is OceanBaseDecimal))

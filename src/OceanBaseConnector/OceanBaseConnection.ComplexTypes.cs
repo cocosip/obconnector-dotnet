@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.Internal.Protocol;
@@ -220,6 +221,7 @@ namespace OceanBaseConnector
 
         private sealed class ComplexTypeLoader
         {
+            private static readonly Regex IntervalMemberType = new Regex(@"\AINTERVAL (?:YEAR(?:\([0-9]\))? TO MONTH|DAY(?:\([0-9]\))? TO SECOND(?:\([0-9]\))?)\z", RegexOptions.CultureInvariant);
             private readonly OceanBaseConnection _connection;
             private readonly ComplexTypeContext _context;
             private readonly OceanBaseCommand _command;
@@ -300,7 +302,9 @@ namespace OceanBaseConnector
                             case "BLOB": code = 210; break;
                             case "CLOB": code = 211; break;
                             case "CURSOR": code = 163; break;
-                            default: throw new NotSupportedException("The complex dictionary member type is not supported.");
+                            default:
+                                if (!IntervalMemberType.IsMatch(childKind)) throw new NotSupportedException("The complex dictionary member type is not supported.");
+                                code = childKind.StartsWith("INTERVAL YEAR", StringComparison.Ordinal) ? (byte)204 : (byte)205; break;
                         }
                         layout = new ComplexType(code);
                     }

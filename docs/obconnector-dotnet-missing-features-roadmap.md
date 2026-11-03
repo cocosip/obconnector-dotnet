@@ -117,7 +117,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；命名复杂值普通/批量受控 fallback 子集见 D-01b；不含 OUT/cursor/LOB/anonymous，不以 `P3` 宣称全部组合完成 |
 | D-02 | `P2`；a1、c1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；MySQL标量脚本输出见c1；Prepare、cursor、Oracle脚本输出及d1～d3以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
-| D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
+| D-04 | `P2`；a1/a3.1/b1/f 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/多语句与受控 1295 fallback 子集见 D-05b；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
 | D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；CP850/HP8/MACROMAN客户端及SWE7仅结果已在D-07e验收；CP932指定成功子集见D-07f、普通Oracle初始化服务端900仍保留；UJIS指定成功子集见D-07g，EUCJPMS指定成功子集见D-07h；其余新名称继续逐项确认后再加入，不支持名称继续发送前拒绝 |
@@ -1071,6 +1071,33 @@ SJIS/Big5 初始化、nested-table 持久列和 `SELECT CURSOR` 列形状。测�
 负向证据，不把客户端能力改写成已实现。配置解析、混合 profile 行为和限制元数据保留
 均有单元回归。新版本或新租户提供不同 wire 后，应删除对应 limitation 声明并重新跑原始
 正向用例，而不是扩大 skip 条件。
+
+#### D-04f：命名复杂值的 INTERVAL 成员（2026-11-03，指定直连子集 `P4`）
+
+目标：补齐命名 OBJECT/collection 的 INTERVAL YEAR TO MONTH 与 DAY TO SECOND 二进制输入、
+结果、PL 输出和客户端构造输入。复用已有 `IntervalCodec`、精确 provider 值和标量字面量，
+不增加公开类型、配置或依赖。
+服务端 `ObPLDataType::deserialize/serialize` 经现有 interval parser/`cell_str` 读写成员；
+命名成员不携带独立 column scale，结果按 payload 自带 precision/scale 严格解码。
+
+- [x] 先验证当前服务端的类型目录/DDL，并以新单元和实库用例复现客户端拒绝。
+- [x] 扩展 `ComplexType`、目录 scalar 映射和 `ComplexValueCodec`；固定长度在跳读前验证，
+  沿用 provider 值的符号、分量、精度检查以及现有 NULL/嵌套/资源/字节预算约束。
+- [x] 定向验证 OBJECT/collection、嵌套、NULL、精度与坏 payload；实库检查输入后的独立存储、
+  OUT/INOUT和脚本构造输入；复杂text结果和标量匿名INTERVAL factory保持拒绝。
+- [x] 同步矩阵/契约，独立走查本次 diff，无遗留发现；验证后本地提交，不 push。
+
+| 证据 | 结果 |
+| --- | --- |
+| 初始 RED | codec **4/4失败**、canonical目录 **4/4失败**、实库 **4/4失败**，均复现未支持的成员/目录类型；`d04f-red.trx`、`d04f-dictionary-red.trx`、`d04f-live-red.trx` |
+| 精度目录与字面量 RED | 实库目录为 `INTERVAL YEAR(9) TO MONTH`、`INTERVAL DAY(9) TO SECOND(9)`；canonical映射后实库仍4失败。补充目录测试 **6失败/9通过**；首次过滤器括号写法导致0测试，保留且不计验收；字面量 **4/4失败**；见 `d04f-live-green.trx`、`d04f-catalog.trx`、`d04f-precision-red-corrected.trx`、`d04f-literal-red.trx` |
+| 夹具修正 | 原过程的一元INTERVAL负号在 `USER_ERRORS` 出现编译错误，调用932/22000；改用等值INTERVAL字面量后通过。原无类型 `:q:=NULL` 无复杂身份而被安全拒绝，改为typed local collection NULL后通过；未放宽产品metadata校验。原始失败保留在 `d04f-live-precision.trx`、`d04f-call-diagnostic.trx`、`d04f-collection-live.trx` |
+| 最终单元回归 | **237/237**，无skip，约5秒；含本轮41项及既有复杂值/目录/INTERVAL/fallback边界；`d04f-reviewed-regression.trx` |
+| 最终实库 | Oracle 4.4.2.2直连 sync/async **10/10**，无skip，约28秒；OBJECT及OBJECT集合4、标量INTERVAL集合4、脚本输入2；输入存储由独立连接显式Prepare读回，覆盖负值/纳秒、precision 2/9与scale 3/9、元素NULL、空与typed根NULL集合、OUT/INOUT；`d04f-reviewed-live.trx` |
+| 构建/走查 | 产品五TFM Release构建0warning/0error；本次七个C#文件空白检查；独立review两次无遗留发现，未重复执行测试/探针 |
+
+TRX均位于忽略的 `TestResults/roadmap/`。复杂text结果、标量匿名INTERVAL factory、named LOB
+locator回绑、专门流水化验收以及跨版本/部署仍未关闭；本轮没有长测或全套/全消费者重跑。
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 

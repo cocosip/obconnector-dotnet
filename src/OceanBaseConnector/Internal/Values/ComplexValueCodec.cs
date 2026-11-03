@@ -261,6 +261,8 @@ namespace OceanBaseConnector.Internal.Values
                         if (length > int.MaxValue || member.TypeCode == 0 && length > 512)
                             throw new ProtocolException("Invalid complex scalar length.");
                         if (member.TypeCode == 12 || member.TypeCode == 202) TemporalCodec.ValidateFieldLength(member.TypeCode, length);
+                        if (member.TypeCode == 204 && length != 7 || member.TypeCode == 205 && length != 14)
+                            throw new ProtocolException("Invalid complex INTERVAL length.");
                         if (!materialize)
                         {
                             if (length > MaximumBytes - (start - cursor.Remaining)) throw new ProtocolException("Complex data exceeds the supported byte limit.");
@@ -280,6 +282,11 @@ namespace OceanBaseConnector.Internal.Values
                             case 12: values[i] = TemporalCodec.DecodeBinary(12, OceanBaseCompatibilityMode.Oracle, bytes, 0); break;
                             case 202:
                                 values[i] = TemporalCodec.DecodeTimestamp(bytes, bytes[11]); break;
+                            case 204:
+                            case 205:
+                                // Complex members carry precision in the payload, without separate column metadata.
+                                values[i] = IntervalCodec.Decode(bytes, member.TypeCode == 205,
+                                    member.TypeCode == 204 ? bytes[6] : bytes[12] * 10 + bytes[13]); break;
                             case 210:
                             case 211:
                                 values[i] = new OceanBaseLob(lobs ?? throw new NotSupportedException("Complex LOB members require negotiated Oracle LOB locators."), bytes, member.TypeCode == 211); break;
@@ -374,6 +381,10 @@ namespace OceanBaseConnector.Internal.Values
                     case 202:
                         if (!(value is OceanBaseTimestamp timestamp)) throw new ArgumentException("A TIMESTAMP member requires an exact timestamp.");
                         Reserve(writer, 13); TemporalCodec.WriteTimestamp(writer, timestamp, null); break;
+                    case 204:
+                    case 205:
+                        Reserve(writer, member.TypeCode == 204 ? 8 : 15);
+                        IntervalCodec.Write(writer, value, member.TypeCode == 205, 0, null); break;
                     default: throw new NotSupportedException("The complex scalar type is not supported.");
                 }
             }
