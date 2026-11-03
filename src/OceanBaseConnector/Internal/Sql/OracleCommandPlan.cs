@@ -201,9 +201,16 @@ namespace OceanBaseConnector.Internal.Sql
             {
                 ValidateProcedureName(text);
                 var names = new HashSet<string>(StringComparer.Ordinal);
+                var allInput = returned == null && arrayCount == 0;
+                var hasComplexLob = false;
                 foreach (OceanBaseParameter parameter in parameters)
+                {
                     if (!RoutineParameterDerivation.IsValidParameterLabel(parameter.ParameterName) || !names.Add(parameter.ParameterName))
                         throw new ArgumentException("Oracle procedure parameter labels must be valid and distinct.");
+                    allInput &= parameter.Direction == ParameterDirection.Input;
+                    hasComplexLob |= NamedComplexLobBinding.RequiresRewrite(parameter);
+                }
+                var namedComplexLob = allInput && hasComplexLob;
                 var ordered = new List<OceanBaseParameter>();
                 var sql = new StringBuilder("BEGIN ");
                 if (returned != null) { sql.Append("? := "); ordered.Add(returned); }
@@ -213,9 +220,14 @@ namespace OceanBaseConnector.Internal.Sql
                 {
                     if (ReferenceEquals(parameter, returned)) continue;
                     if (!first) sql.Append(", ");
-                    sql.Append('?'); ordered.Add(parameter); first = false;
+                    if (namedComplexLob) sql.Append(':').Append(parameter.ParameterName);
+                    else sql.Append('?');
+                    ordered.Add(parameter); first = false;
                 }
-                original = new ParameterBindingPlan(sql.Append("); END;").ToString(), ordered.ToArray());
+                var procedureSql = sql.Append("); END;").ToString();
+                original = namedComplexLob
+                    ? NamedComplexLobBinding.Rewrite(procedureSql, ordered.ToArray())
+                    : new ParameterBindingPlan(procedureSql, ordered.ToArray());
             }
             else
             {

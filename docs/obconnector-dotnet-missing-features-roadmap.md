@@ -959,6 +959,25 @@ named complex wire 仍拒绝发送。
 
 因此 a4 已提升为指定直连子集 `P4`，并关闭该子集的 Prepare/cache 缺口；named collection 内嵌 named OBJECT 且含 BLOB/CLOB locator 的形状也已取得 loopback 与 `oracle-direct` wire/存储证据，但不关闭 D-04a 或 D-04 父项。下一步转向矩阵中仍有独立服务端或方向证据前提的项；OUT/INOUT、batch、cursor、multi-statement 仍保持边界，不把现有服务端 `932/22000` 失败改写成客户端成功。
 
+#### D-04i：StoredProcedure 命名复杂 LOB locator 输入（2026-11-04，指定子集 `P4`）
+
+在 D-04h 的 Text 路径之外，本轮将同一构造器 + 隐藏根 BLOB/CLOB 参数策略扩展到 Oracle
+`CommandType.StoredProcedure` 的单条、无输出、全 Input、非 array-binding 形状。过程调用先保留
+命名参数生成构造器 SQL，再交给现有 `NamedComplexLobBinding.Rewrite`；显式 `Prepare/PrepareAsync`
+仍使用 Oracle PrepareExecute 执行该已准备 SQL。仅当参数集合中确实存在命名复杂 LOB locator 时启用
+命名重写，普通过程、OUT/INOUT/ReturnValue、batch、cursor 和 multi-statement 继续走原位置绑定或
+既有拒绝路径。StoredProcedure 执行仍是会话屏障，执行后不承诺跨调用复用 statement-cache。
+
+| 检查 | 结果 |
+| --- | --- |
+| RED loopback | 改动前收到 `BEGIN consume(?); END;`，目标构造器 SQL 缺失；同步/异步均复现 |
+| GREEN loopback | StoredProcedure + 显式 Prepare/PrepareAsync 的构造器 SQL 与隐藏根 locator 参数 **2/2** 通过 |
+| Oracle 直连 | 4.4.2.2 `oracle-direct`，BLOB named OBJECT、StoredProcedure、显式 Prepare/PrepareAsync、sync/async **2/2**，写入后独立连接读回内容一致 |
+| 其它验证 | 相关 named complex LOB 单测 **4/4**；`git diff --check` 通过；全量 whitespace verify 仍受仓库既有格式告警影响 |
+
+因此 D-04i 的指定 input-only StoredProcedure 子集达到 `P4`。下一步仍应先取得独立 wire/服务端证据，
+再考虑 OUT/INOUT 或 collection/cursor 方向；不把本轮单参数过程输入扩展为复杂输出、批量或跨会话缓存。
+
 #### D-04a2 Connector/J 2.4.14 公开 API 实测（2026-11-01）
 
 为确认“Java 同样失败”条件，使用同一 Oracle 4.4.2.2 `oracle-direct`、TLS Disabled

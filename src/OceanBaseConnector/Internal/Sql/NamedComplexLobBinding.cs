@@ -10,6 +10,13 @@ namespace OceanBaseConnector.Internal.Sql
 {
     internal static class NamedComplexLobBinding
     {
+        internal static bool RequiresRewrite(OceanBaseParameter parameter)
+        {
+            var complex = PreparedParameters.GetComplexType(parameter);
+            return complex != null && !complex.IsAnonymous && parameter.Value is OceanBaseComplexValue value &&
+                ContainsLocator(complex, value);
+        }
+
         internal static ParameterBindingPlan Rewrite(string sql, OceanBaseParameter[] supplied)
         {
             if (sql == null) throw new ArgumentNullException(nameof(sql));
