@@ -211,7 +211,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | --- | --- | --- |
 | 脚本级 Prepare、服务端 cursor、typed OUT/INOUT 发布 | D-02b/c | MySQL标量脚本OUT/INOUT已按D-02c1补齐；Oracle脚本/其余资源输出仍待契约；脚本prepare当前被服务端拒绝，单PL块输出不替代脚本功能 |
 | Oracle 输出计划 / REF CURSOR offset | D-03b | 成功 wire、位置与归属契约；Java RefCursor 也排除普通 offset 分支，不能直接套用普通 SELECT FETCH |
-| 命名复杂值中的 LOB locator 回绑及未证实的复杂成员方向 | D-04 | 可辨识的类型/locator wire 和生命周期；当前 BLOB DML、根 NULL/text/cursor 成员的已确认服务端限制另记，不作为盲改客户端的理由 |
+| 命名复杂值中的 LOB locator 回绑及未证实的复杂成员方向 | D-04 | D-04g已确认named BLOB把locator字节当内容，而显式SQL构造器配合根locator可用；自动构造/输出映射/描述与句柄生命周期仍缺。当前BLOB DML、根NULL/text/cursor服务端限制另记 |
 | package-local PL/SQL RECORD 参数派生与绑定 | A-03d | 字段目录、输入/输出 payload 及成功交互；目前 Java 公开 API 也不支持绑定，不能归为服务端拒绝 |
 | multi-send 普通DML的匿名输入/声明输出、复杂 text LOB 结果、PL 同组流水化输出、cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；保留调用方连接的复杂 LOB binary 结果见 D-08n（OBJECT 实库、collection 仅 loopback）；DML RETURNING 标量 OUT/INOUT 见 D-08o，命名复杂值和 LOB 输出见 D-08p；混合routine状态屏障兼容已关闭（D-08y），PL同组流水化仍未关闭；自有连接Scalar/显式LOB输出的已验收子集与自动提交远程DML的目标服务端事务边界见D-08z；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
 
@@ -882,16 +882,46 @@ Connector/J 公开 API 的前置 writer 错误冒充同一交互。只有目标�
 
 固定 OceanBase 服务端源码提交 `5e8a63d` 后，named OBJECT 的成员输入路径可以逐层对照：
 `ObRecordType::deserialize` 先跳过每个 OBJECT 的成员 NULL bitmap，再按成员顺序调用
-`ObPLDataType::deserialize`；普通 BLOB 成员由 `ObSMUtils::get_mysql_type` 映射为
-`MYSQL_TYPE_ORA_BLOB`，随后进入 `ObMPStmtExecute::parse_basic_param_value`。该分支读取
-length-encoded string；BLOB 设置 binary collation，并将 payload 包装成带 LOB header 的
-`ObLongTextType` 值。当前 `ComplexValueCodec` 的 named BLOB 编码正是同一层级的 bitmap、
-length-encoded raw bytes，不需要匿名数组的 locator/header 输入格式。
+`ObPLDataType::deserialize`，再经 `ObSMUtils::get_mysql_type` 和
+`ObMPStmtExecute::parse_basic_param_value`。映射依赖实际 `ObObjType`：`ObLongTextType`
+对应 `MYSQL_TYPE_LONG_BLOB`，`ObLobType` 才对应 `MYSQL_TYPE_ORA_BLOB`，不能仅凭 SQL 的
+BLOB 名称认定进入 locator 分支。前者读取 length-encoded 内容并包装为临时 LOB，后者
+才保留 locator/header 身份。当前 named BLOB 的 bitmap/length-encoded raw bytes 是内容
+绑定；2026-11-03 的同会话对照进一步确认这一边界，见下方 D-04g。
 
 因此本次源码对照没有发现 .NET writer 与服务端成员反序列化 wire 的差异；配合 Java wire
 replay 的同码失败，失败范围收窄到服务端接收后的 BLOB OBJECT bind/DML 转换。D-04a2
 按当前目标服务端限制关闭客户端开发，不改产品编码。源码依据：[ObRecordType::deserialize][O12-record-deserialize]、
-[ObPLDataType::deserialize][O12-pl-deserialize]、[parse_basic_param_value][O12-basic-param]。
+[ObPLDataType::deserialize][O12-pl-deserialize]、[ObSMUtils type map][O12-type-map]、
+[parse_basic_param_value][O12-basic-param]。
+
+#### D-04g：命名 BLOB 成员的 locator 字节对照（2026-11-03，对照完成，自动回绑仍缺）
+
+目标：确认直接将 named BLOB 内容替换为 locator 是否可行，保持当前发送前保护。
+采用同一连接/事务/临时 BLOB，对照根locator、named内容、named locator原始字节和显式SQL
+构造器；只检查长度/内容，不增加产品API、隐式LOB读取、SQL自动改写或重复已知DML失败。
+
+- [x] 在Integration中保留sync/async回归，显式释放临时LOB；主体及free/rollback/dispose/对象清理
+  的异常按顺序保留，全部清理独立尝试，不让后续清理异常覆盖首个失败。
+- [x] 记录实际wire结论及可用构造器路径，独立走查本次修改并本地提交；不将调查标为功能完成。
+
+| 同一连接/事务中的对照 | 实际结果 |
+| --- | --- |
+| 真实临时BLOB作为根type210 locator | `DBMS_LOB.GETLENGTH(:p)`返回3，证明源句柄与根locator路径有效 |
+| 命名OBJECT的BLOB成员绑定3字节内容 | 过程GETLENGTH返回3，SUBSTR返回原始 `00 80 FF` |
+| 同一命名成员绑定locator原始字节 | 探针locator为117字节，GETLENGTH返回117，SUBSTR精确等于locator前32字节，未解析成3字节内容 |
+| 显式SQL构造器 + 根type210 locator | `BEGIN proc(type(:p), :n, :v); END;`返回3和原始内容；这是已有根locator参数能力，不是 `CreateValue(lob)` 自动绑定 |
+
+`NamedLobLocatorWireTests` sync/async **2/2**、无skip，最终约3秒；
+`TestResults/roadmap/d04g-named-locator-reviewed.trx`。初次2/2结果另保留为
+`d04g-named-locator.trx`；独立走查发现清理可能掩盖首个异常，修正后复核无遗留发现。
+本次只改回归和文档；单个新C#文件空白检查通过，没有重跑产品全套/消费者/长测。
+一次性探针和两次控制输出位于忽略的 `TestResults/d04-named-locator-probe/`，无凭据或locator内容。
+
+因此，直接让named writer发送locator字节会绑定错误内容，继续保留 `CreateValue(lob)` 拒绝。
+**尚未实现**自动将命名复杂值展开成SQL构造器和独立locator绑定；后续若采用该路线，必须覆盖
+原描述/句柄的发送前身份校验、Input/INOUT/OUT映射、嵌套NULL、重复参数/包预算、Prepare/cache
+形状变化、batch与失败资源归属。本轮不能推断CLOB、collection、其他版本或所有替代wire均不可行。
 
 #### D-04a2 Connector/J 2.4.14 公开 API 实测（2026-11-01）
 
@@ -2892,3 +2922,4 @@ skip 是既有 alternateDatabase 配置门槛；单独 Oracle `a01-soak-oracle-i
 [O12-record-deserialize]: https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/pl/ob_pl_user_type.cpp#L2267-L2352
 [O12-pl-deserialize]: https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/pl/ob_pl_type.cpp#L1182-L1267
 [O12-basic-param]: https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/observer/mysql/obmp_stmt_execute.cpp#L2360-L2700
+[O12-type-map]: https://github.com/oceanbase/oceanbase/blob/5e8a63d29dae9fde5e962b8fcc7b167d438fc343/src/observer/mysql/obsm_utils.cpp

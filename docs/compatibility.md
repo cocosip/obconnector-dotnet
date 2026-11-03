@@ -18,6 +18,7 @@
 | MySQL 一至六层 INT ARRAY | 4.4.2.2 直连 sync/async × implicit/explicit Prepare **4/4**；String 参数、独立 text/binary 逐值读回、NULL/空叶数组/不等长子数组，见 D-12c1 | 二维顶层 `[]` 参数与 SQL 字面量均返回 `7602/22000`；七层 DDL `1235/0A000`；其他元素/版本和专用 metadata 未验收 |
 | MySQL 脚本标量 OUT/INOUT | 4.4.2.2 直连 sync/async **2/2**，普通/NULL INOUT、OUT、独立 binary 存储核对、reader 半读关闭、失败前缀/未执行后缀、batch 脚本屏障及后续更新，见 D-02c1 | 客户端变量编排；成功后统一发布不代表提交，后续错误保留已执行 SQL；Oracle 脚本输出、Prepare/cursor、ReturnValue 和资源/复杂输出仍拒绝，其他部署/版本未验收 |
 | Oracle 命名复杂值 INTERVAL 成员 | 4.4.2.2 直连 sync/async **10/10**：OBJECT、OBJECT集合及标量INTERVAL集合的二进制输入/PL OUT/INOUT、NULL元素/空与typed NULL集合、精度，以及脚本文本输入后的独立存储核对，见 D-04f | 复用既有精确provider值与codec；命名客户端构造器输入已支持，复杂text结果与标量匿名INTERVAL factory仍拒绝；未外推跨版本/部署或流水化专门验收 |
+| Oracle 命名BLOB成员locator字节 | 4.4.2.2 直连 sync/async **2/2** 对照确认：根locator有效，named成员把locator字节当作内容；显式SQL构造器配合根locator可用，见 D-04g | 自动 `CreateValue(lob)` 回绑仍拒绝；不能仅放开named writer，也不能据此认定所有替代协议、CLOB或collection均不支持 |
 | 真实TLS/企业CA/mTLS/撤销/轮换 | **当前两种模式真实环境未开TLS，未验收** | 必须保留matrix.tls-authentication deferred；自签名SslStream只属本地证据 |
 | 认证plugin/KDC/凭据服务 | native账号直连与本地客户端分支 | 非native正负认证、平台协商、实际轮换；Java插件注册不是OB部署证明 |
 | OBProxy/ODP、真正多节点、OCP/TNS服务 | 本地parser与受控单上游客户端路由 | 真实发现服务、节点/代理故障、后端reset/迁移，单上游中继不是HA |
