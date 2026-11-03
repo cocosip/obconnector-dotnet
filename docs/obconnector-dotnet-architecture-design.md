@@ -326,7 +326,7 @@ See the [OceanBase/Java and direct-test evidence](compatibility.md).
 
 Explicit trusted national/result names additionally resolve through the existing strict client
 mapping for utf8mb3, ascii, latin1, gbk, gb18030, gb18030_2022, dec8, tis620, sjis, big5, hkscs and
-hkscs31, cp932, gb2312, euckr, cp850, hp8 and macroman. Scalar binary input and ordinary/PL national results share this resolver; streaming uses
+hkscs31, cp932, ujis, gb2312, euckr, cp850, hp8 and macroman. Scalar binary input and ordinary/PL national results share this resolver; streaming uses
 the underlying stateful decoder. Missing facts retain Unicode-only collation fallback and later
 results require fresh state. Stored complex members still require AL16UTF16. See the
 [encoding evidence and live scope](compatibility.md).
@@ -695,6 +695,7 @@ derive this type; PrepareExecute outputs reuse metadata-driven scalar decoding a
 | TIS620 | 18, 89, 332, 347, 362 | 1 |
 | SJIS | 13, 88, 334, 349, 364 | 2 |
 | CP932 | 95, 96 | 2 |
+| UJIS | 12, 91 | 3 |
 | Big5 | 1, 84, 335, 350, 365 | 2 |
 | HKSCS | 152, 336, 351, 366 | 2 |
 | HKSCS31 | 153, 337, 352, 367 | 2 |
@@ -763,6 +764,16 @@ command regenerates independent all256-byte SHA256 expectations from downloaded 
 each position contributes a two-byte big-endian scalar, or FFFF for an undefined position. Python and
 server sources are not test/runtime dependencies. Client encoding and national/JSON/CLOB rules retain
 their separate scope. Real emission/storage and deployment compatibility remain unverified.
+
+UJIS follows the official MySQL `mysql-8.0.36/strings/ctype-ujis.cc` table. Its common JIS X 0208
+assignments reuse the existing strict SJIS codec through the standard row/cell transformation;
+6067 JIS X 0212 assignments are fixed numeric data, and each plane appends940 private-use positions.
+ASCII is one byte; halfwidth kana uses8E plus A1–DF; JIS X 0208 uses A1–FE pairs; JIS X 0212 uses8F
+plus an A1–FE pair. Undefined and truncated sequences throw; count and failed destination writes
+retain both possible pending-prefix states. Canonical encoding preserves ASCII5C/7E even though
+A1C0/8FA2B7 decode to the same scalars. `UjisReference.py` regenerates the numeric data and independent
+full decode/BMP-encode digests. D-07g records all15017 assigned/15015 reversible source positions
+matching MySQL4.4.2.2, storage/result/national tests and the Java-matched ordinary Oracle900 limitation.
 
 CP932 follows the official MySQL `mysql-8.0.36/strings/ctype-cp932.cc` table. It retains the
 strict .NET932 canonical mapping and adds398 defined duplicate wire positions for decoding only.

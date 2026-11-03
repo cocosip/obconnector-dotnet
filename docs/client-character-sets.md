@@ -12,6 +12,7 @@ alias. Names are case insensitive and canonicalized; `utf8` means `utf8mb3`.
 | `dec8`, `tis620`, `euckr`, `sjis`, `big5`, `hkscs`, `hkscs31` | Existing pinned server mappings, with ASCII syntax preserved for input |
 | `cp850`, `hp8`, `macroman` | Exact single-byte server maps, with identity ASCII and strict undefined-slot checks |
 | `cp932` | Exact CP932 mapping, including NEC/IBM/private-use extensions and canonical reverse encoding; separate from SJIS |
+| `ujis` | Complete JIS X 0208, halfwidth kana, JIS X 0212 three-byte sequences and the pinned server's private-use positions |
 
 UTF-16/LE, binary, `swe7` and unknown names fail configuration validation before networking. SWE7
 remaps ASCII syntax such as `@` and backslash and is supported only for ordinary result decoding
@@ -180,7 +181,7 @@ and remaining extended metadata are not expanded by this option.
 
 ## Evidence boundary
 
-Byte-exact loopback fixtures cover all fourteen non-default names in both compatibility modes,
+Byte-exact loopback fixtures cover the supported non-default names in both compatibility modes,
 sync/async text and server preparation, UTF-8 results/identifiers, EOF variants and pool restoration.
 Additional local regressions cover trust invalidation, procedure outputs, staged data, generated XA
 controls, nested complex/array encodings, byte budgets and strict alias rejection. Five product assets
@@ -208,9 +209,19 @@ validation of OceanBase's EUC-KR byte ranges. It uses OceanBase 4.4.2 charset ID
 code page 51949. D-07 adds real MySQL client/result and Oracle national scalar storage evidence;
 ordinary Oracle EUCKR client initialization still returns server 900/42000. Connector/J 2.4.14
 fails the same initialization sequence, so this is a current-target server limitation and no client
-workaround is enabled. Other versions, permissions and deployment profiles remain open. UJIS,
-EUCJPMS and the remaining newer names remain candidates because the available .NET code page does
-not reproduce OceanBase's full UJIS table.
+workaround is enabled. Other versions, permissions and deployment profiles remain open. EUCJPMS
+still requires its own complete mapping and storage evidence; it is not treated as a UJIS alias.
+
+UJIS uses result collations12/91 and a strict two/three-byte decoder. JIS X 0208 reuses the existing
+SJIS assignments; JIS X 0212 adds6067 official numeric assignments, and two940-position private-use
+ranges follow the fixed server table. ASCII backslash and tilde encode as5C/7E; their additional
+wire forms A1C0/8FA2B7 decode to the same scalars. Unassigned bytes, incomplete prefixes and lossy
+Windows aliases fail. All15017 assigned decode positions and15015 reversible Unicode encodes match
+direct MySQL-mode4.4.2.2 conversion. D-07g records MySQL client storage/results and Oracle scalar
+national storage. Ordinary Oracle UJIS initialization fails900/42000 at the same third SET as CP932;
+Connector/J2.4.14 matches it, recorded as `oracle-ujis`. Local five-asset consumption uses one .NET10
+host; live client/national cases pair sync implicit with async explicit preparation. Other versions,
+deployments, JSON/CLOB storage and live pool reset remain open.
 
 CP932 uses result collations95/96 and preserves ASCII input syntax. Its strict decoder adds the398
 official duplicate byte positions rejected by .NET932; encoding selects the official canonical

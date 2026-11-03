@@ -1,6 +1,6 @@
 # SDK 功能、能力与支持边界矩阵
 
-更新：2026-11-03，源码基线`bc3737d`，本轮补齐 D-07f CP932指定子集；D-07e和D-08aa已本地提交。本文是当前功能范围的唯一入口；
+更新：2026-11-03，源码基线`ea34ed5`，本轮补齐 D-07g UJIS指定子集；D-07e/f和D-08aa已本地提交。本文是当前功能范围的唯一入口；
 [依据与清理决策](obconnector-dotnet-scope-audit.md)固定官方文档/Java版本并解释O/J编号，
 [缺失矩阵](obconnector-dotnet-completeness.md)列开发与验收差距，
 [验收标准](acceptance-criteria.md)定义完成条件，[兼容性](compatibility.md)保留环境阻塞。
@@ -87,8 +87,8 @@
 | T16 LONG/LONG RAW/BFILE/NCLOB | — | 排除专用支持 | 无专用API/模拟实现 | O4明确不支持；Java别名/枚举不能扩大范围 |
 | T17 XMLType/SDO_GEOMETRY/ANYDATA | — | XMLType 已有 4.4.2.2 直连的字符串 wire 子集：type 160 ownerless 结果按 String 返回，`SYS.XMLTYPE` metadata 有安全的 String 消费边界，`DbType.Xml` 参数按 type 253 字符串写入；NULL、metadata、同步/异步 DML 与 PL 函数结果已验收；PL XMLTYPE OUT/INOUT 在 Java/.NET 同一租户分别返回 `600/0A000`、`600/42000`，按服务端限制跳过；仍无带 owner/复杂 XML 专用 codec；SDO 已验收显式 Prepare 整列读取与 generic OBJECT/ARRAY 输入子集，仍无专用 codec；ANYDATA 在当前目标租户找不到 `SYS.ANYDATA`，Java/.NET 同 SQL 失败并按服务端限制跳过 | XMLTYPE 当前 text+binary String 子集和 `XMLSERIALIZE→CLOB` 已验证；PL 输出负向边界 sync/async **4/4**；SDO 通用 OBJECT 路径已覆盖整列读取和受限输入 | O8；XMLTYPE 带 owner 复杂 payload、坏值/最大值和跨版本部署仍待证据；SDO 专用 WKB/WKT/SRID 契约与非法几何行为仍待证据，ANYDATA 需新版本/租户提供包后重开 |
 | T18 向量/位图/SQL数组 | 4.4.2.2 直连 VECTOR/ARRAY 通用 String、RoaringBitmap 通用 Binary/SQL 函数子集已验收 | 不把 MySQL 扩展套用此模式 | ResultColumn、PreparedParameters；复用现有 String/Binary，不新增专用 codec | O2；D-12a/b/c 指定子集 P4；SPARSEVECTOR、嵌套 ARRAY、专用 codec 与跨版本仍待证据；Oracle collection/数组绑定另见 T14/Q16 |
-| T19 客户端SQL编码 | utf8mb4/mb3、ASCII、latin1、GB2312、GBK、GB18030/2022、DEC8、TIS620、EUCKR、SJIS、Big5、HKSCS/31、CP850、HP8、MacRoman、CP932 | 相同解析白名单，MySQL直连 SJIS/Big5 专项4/4通过 | 未列名字发送前拒绝；Oracle SJIS/Big5/CP932仍失败 | CP850/HP8/MACROMAN双模式客户端直连12/12（D-07e）；SWE7只解码结果，客户端因ASCII语法映射发送前拒绝；CP932严格映射/MySQL客户端直连2/2（D-07f），普通Oracle初始化900/42000已由Java匹配；UJIS/EUCJPMS仍待严格映射与存储证据 |
-| T20 结果/national编码 | 映射UTF8、UTF16/LE及已实现单/多字节collation（含GB2312 24/86、EUCKR 19/85、CP850 4/80、HP8 6/72、MacRoman 39/53、SWE7 10/82及CP932 95/96） | 普通结果与national独立规则 | ResultCharacterSet、NationalCharacterSet | 未知collation/坏字节拒绝；GB2312/EUCKR指定直连结果/national子集见D-07；D-07e新增MySQL结果4/4、Oracle national6/6；D-07f新增CP932 MySQL canonical/duplicate结果2/2、Oracle national2/2；当前目标 Oracle 普通 EUCKR 初始化由服务端 900 限制且 Java 同交互失败；其他版本/部署及 UJIS/EUCJPMS 等仍未覆盖 |
+| T19 客户端SQL编码 | utf8mb4/mb3、ASCII、latin1、GB2312、GBK、GB18030/2022、DEC8、TIS620、EUCKR、SJIS、Big5、HKSCS/31、CP850、HP8、MacRoman、CP932、UJIS | 相同解析白名单，MySQL直连 SJIS/Big5 专项4/4通过 | 未列名字发送前拒绝；Oracle SJIS/Big5/CP932/UJIS仍失败 | CP850/HP8/MACROMAN双模式客户端直连12/12（D-07e）；SWE7只解码结果，客户端因ASCII语法映射发送前拒绝；CP932严格映射/MySQL客户端直连2/2（D-07f），普通Oracle初始化900/42000已由Java匹配；UJIS严格映射/MySQL客户端直连2/2（D-07g），普通Oracle初始化同样900且Java匹配；EUCJPMS仍待严格映射与存储证据 |
+| T20 结果/national编码 | 映射UTF8、UTF16/LE及已实现单/多字节collation（含GB2312 24/86、EUCKR 19/85、CP850 4/80、HP8 6/72、MacRoman 39/53、SWE7 10/82、CP932 95/96及UJIS 12/91） | 普通结果与national独立规则 | ResultCharacterSet、NationalCharacterSet | 未知collation/坏字节拒绝；GB2312/EUCKR指定直连结果/national子集见D-07；D-07e新增MySQL结果4/4、Oracle national6/6；D-07f新增CP932 MySQL canonical/duplicate结果2/2、Oracle national2/2；D-07g新增UJIS MySQL客户端/结果/Oracle national共6成功，普通Oracle900仍保留；当前目标 Oracle 普通 EUCKR 初始化由服务端 900 限制且 Java 同交互失败；其他版本/部署及 EUCJPMS 等仍未覆盖 |
 
 类型依据O2/O4、J2/J3/J6；实际约束在[ResultColumn](../src/OceanBaseConnector/Internal/Protocol/ResultColumn.cs)、
 [PreparedParameters](../src/OceanBaseConnector/Internal/Protocol/PreparedParameters.cs)和各codec中。

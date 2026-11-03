@@ -120,7 +120,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-04 | `P2`；a1/a3.1/b1 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/多语句与受控 1295 fallback 子集见 D-05b；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
-| D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；CP850/HP8/MACROMAN客户端及SWE7仅结果已在D-07e验收；CP932指定成功子集见D-07f、普通Oracle初始化服务端900仍保留；UJIS等逐项确认后再加入，不支持名称继续发送前拒绝 |
+| D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；CP850/HP8/MACROMAN客户端及SWE7仅结果已在D-07e验收；CP932指定成功子集见D-07f、普通Oracle初始化服务端900仍保留；UJIS指定成功子集见D-07g，EUCJPMS继续逐项确认后再加入，不支持名称继续发送前拒绝 |
 
 ### 第二阶段：参考 Java 的候选实现
 
@@ -182,7 +182,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | S-02 | OB20/Full Link Trace/标准压缩 | 当前只有普通协议回退；强制 OB20 因 `Layer=mysql` 失败 | 真实 OB20/trace/压缩 profile、双向帧和服务器采样/collector证据 |
 | S-03 | OBProxy/ODP/多节点/OCP/TNS/后端迁移 | 只有本地 parser、单上游 relay 和受控路由 fixture | 真实代理/发现服务、多节点、后端 reset、路由和迁移 profile |
 | S-04 | 非 native 认证/KDC/凭据轮换 | 当前只有 native 账号直连 | 服务端插件/KDC 正负认证、平台协商和实际轮换端点 |
-| S-05 | 剩余新字符集 | MySQL SJIS/Big5 有专项；Oracle SJIS/Big5 仍失败；CP850/HP8/MACROMAN及SWE7结果已补齐（D-07e）；CP932映射和MySQL存储/结果、Oracle national已补齐（D-07f），普通Oracle初始化900/42000由Java匹配；UJIS/EUCJPMS目录存在，尚缺映射与存储证据 | 逐项服务端 collation、严格映射和两模式 roundtrip；不把SWE7结果专用扩成客户端SQL |
+| S-05 | 剩余新字符集 | MySQL SJIS/Big5 有专项；Oracle SJIS/Big5 仍失败；CP850/HP8/MACROMAN及SWE7结果已补齐（D-07e）；CP932映射和MySQL存储/结果、Oracle national已补齐（D-07f），普通Oracle初始化900/42000由Java匹配；UJIS严格映射及同范围6项成功子集见D-07g，普通Oracle900/42000由Java匹配；EUCJPMS目录存在，尚缺映射与存储证据 | 逐项服务端 collation、严格映射和两模式 roundtrip；不把SWE7结果专用扩成客户端SQL |
 
 S-01 至 S-05 不是“永远不支持”，也不是可以用本地 fixture、Java SPI 或单上游中继关闭的
 代码任务。当前未关闭的失败或前提还包括 Oracle nested-table 列、`SELECT CURSOR` 列、
@@ -1327,6 +1327,50 @@ MySQL实库通过两条批量转换查询，独立核对全部9795个已定义�
 其中`live-mapping.log`记录完整核对结果、`java-initialization.log`保留精确失败阶段，无凭据。
 本轮不关闭普通Oracle CP932、旧SJIS/Big5/EUCKR限制、UJIS/EUCJPMS、其他runtime和部署验收；
 JSON/CLOB、live pool reset及命名复杂national存储组合未因此新增实库承诺。
+
+#### D-07g：UJIS 三字节映射（2026-11-03，指定成功子集 `P4`）
+
+基线`ea34ed5`。两个4.4.2.2直连目录均确认ujis_japanese_ci/12、ujis_bin/91；
+MySQL服务端两条批量转换与固定MySQL8.0.36`ctype-ujis.cc`的全部15017个已定义解码
+位置、15015个可逆Unicode编码位置完全一致。严格.NET20932/51932分别有8277/8028个
+解码差异，均缺完整JIS X 0212，不能直接命名为UJIS。
+
+复用已有SJIS严格映射生成共同JIS X 0208区，仅新增JIS X 0212的6067个固定Unicode
+事实映射；两组940位置的PUA按官方顺序生成。复用Big5/HKSCS的两遍扫描模式，扩为
+8E半角及8F三字节状态，count/失败不消费状态；ASCII保持identity，不放宽未知/坏字节
+或Unicode别名。名称ujis接入客户端及既有national解析，结果只接入已确认12/91。
+EUCJPMS独立留待逐项比对，不把它当UJIS别名。
+
+影响codec/固定表、ClientCharacterSet、ResultCharacterSet、共享样本、定向Unit/Consumer/
+Integration及矩阵/编码契约。无新依赖或服务端配置修改。真实存储使用独立默认UTF8
+连接核对；普通Oracle客户端与national分别验证，服务端失败保留并用Java相同交互判断。
+
+- [x] 固定表和全表摘要，新增名称/结果缺映射红测。
+- [x] 实现完整UJIS和三字节流式状态；守住既有SJIS/CP932边界。
+- [x] 定向Unit、五资产消费与编译、指定直连存储/结果测试。
+- [x] 同步矩阵/契约，fresh-context独立只读走查无可执行问题；限定检查通过，按模块本地提交。
+
+参考固定为[MySQL 8.0.36 ctype-ujis.cc](https://github.com/mysql/mysql-server/blob/mysql-8.0.36/strings/ctype-ujis.cc)。
+`UjisReference.py`独立计算全部256单字节、32768候选二字节、65536个8F前缀三字节和
+65536个BMP编码/拒绝摘要，并可重新生成JIS X 0212的固定数值表。运行测试无需Python、
+Java或下载；没有把.NET近似EUC-JP或其他字符集当作缺失平面的替代。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| 红/绿 | `d07g-red.trx` **13 fail/0 pass**，均为名称或12/91缺映射；`d07g-first.trx` **13/13**，约1秒；含两种三字节prefix的count/flush/invalid/overflow恢复及Reset |
+| 定向Unit | `d07g-unit-final.trx` **1027/1027**，0失败/0skip，约9秒；UJIS全表/流式、既有SJIS/CP932、字符集/客户端/national、DBCS fallback、顺序读取及共享协议样本；未跑全量Unit |
+| 公开资产 | `d07g-consumer.trx` **10/10**，五TFM×sync/async；每例客户端双模式SQL/参数、multibyte fallback、嵌套national输入、双模式text/binary普通结果及standalone national读写；在一个net10 host加载五资产，不算五个独立runtime |
+| 服务端全表 | `live-mapping.log`：MySQL两条批量转换分别匹配全部15017个已定义解码位置和15015个可逆编码位置；包含两平面PUA及ASCII别名，不是仅驱动内部对称roundtrip |
+| 首次实库 | `d07g-live-first.trx` **6 pass/2 fail**，0skip；MySQL客户端2、canonical/ASCII-alias结果2及Oracle national2成功；普通Oracle客户端2项均在Open返回900/42000，DDL前失败 |
+| Oracle对照 | 官方Connector/J2.4.14默认UTF8控制查询通过；同序列SET client/connection=ujis成功，第三条SET results=utf8mb4失败900/42000；无非ASCII SQL、无对象、无服务端配置修改，日志`java-initialization.log` |
+| 声明限制后 | `d07g-live-final.trx` **6 pass/1 skip**，0失败；1个skip为`oracle-ujis`整条负向theory，代表原2个失败组合，不当成功；未声明限制的profile继续执行普通客户端实测 |
+| 存储/组合 | 独立默认UTF8连接核对SQL/参数、NULL、长值、NUL/引号/反斜线、非法字符拒绝后复用、national定长填充；客户端/national只配对sync隐式与async显式Prepare/PrepareExecute；结果内部覆盖text/binary、buffered/sequential、sync/async |
+| 编译 | 五个产品TFM Release编译0警告/0错误；没有重跑全解决方案或长稳；其他服务器版本/代理/TLS和非Windows未验收 |
+| 格式/走查 | 五个新增C#文件限定whitespace检查、git diff --check通过；独立走查codec/数值表/generator及调用方、测试和证据边界，无可执行问题；不重复已通过测试 |
+
+官方源表、.NET差异列表、全表转换和独立Java原始证据位于忽略目录`TestResults/ujis-probe/`，
+不包含凭据。普通Oracle UJIS及旧CP932/SJIS/Big5/EUCKR失败保留，EUCJPMS仍为缺实现候选；
+JSON/CLOB、live pool-reset和命名复杂national存储组合未因此新增实库承诺。
 
 ### A-03a：Oracle 未约束 NUMBER 参数推导（2026-10-30，指定 profile 已验收）
 
