@@ -11,6 +11,7 @@ alias. Names are case insensitive and canonicalized; `utf8` means `utf8mb3`.
 | `gb2312`, `gbk`, `gb18030`, `gb18030_2022` | GB2312 uses the strict OceanBase mapping; GB18030 uses the 2005 mapping unless 2022 is selected |
 | `dec8`, `tis620`, `euckr`, `sjis`, `big5`, `hkscs`, `hkscs31` | Existing pinned server mappings, with ASCII syntax preserved for input |
 | `cp850`, `hp8`, `macroman` | Exact single-byte server maps, with identity ASCII and strict undefined-slot checks |
+| `cp932` | Exact CP932 mapping, including NEC/IBM/private-use extensions and canonical reverse encoding; separate from SJIS |
 
 UTF-16/LE, binary, `swe7` and unknown names fail configuration validation before networking. SWE7
 remaps ASCII syntax such as `@` and backslash and is supported only for ordinary result decoding
@@ -210,6 +211,18 @@ fails the same initialization sequence, so this is a current-target server limit
 workaround is enabled. Other versions, permissions and deployment profiles remain open. UJIS,
 EUCJPMS and the remaining newer names remain candidates because the available .NET code page does
 not reproduce OceanBase's full UJIS table.
+
+CP932 uses result collations95/96 and preserves ASCII input syntax. Its strict decoder adds the398
+official duplicate byte positions rejected by .NET932; encoding selects the official canonical
+position and rejects lossy Unicode aliases. All9795 assigned decode positions and9397 reversible
+Unicode encodes match MySQL-mode OceanBase4.4.2.2 conversion. D-07f adds real MySQL client storage,
+canonical/duplicate results and Oracle scalar national storage. Ordinary Oracle CP932 initialization
+fails900/42000 on the third SET (`character_set_results='utf8mb4'` after switching client/connection);
+Connector/J2.4.14 reproduces the same failure. The exact profile limitation is `oracle-cp932`.
+Local five-asset checks cover SQL/parameters, fallback trail5C escaping, nested national inputs and
+ordinary/national readers; they run in one .NET10 host and do not establish five runtimes. Client
+and national live cases pair sync implicit execution with async explicit preparation. Other
+versions, deployments, JSON/CLOB and live pool-reset combinations remain open.
 
 The single-byte fallback extension has local byte-exact automatic-fallback fixtures and five-asset
 consumption. Explicit read-only MySQL 4.4.2.2 checks pass all four families in sync/async mode with

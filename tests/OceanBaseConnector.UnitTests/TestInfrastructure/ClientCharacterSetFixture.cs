@@ -23,6 +23,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             ("dec8", "¤ŒŸ", "A8D7DD"), ("tis620", "กฺ฿", "A1DADF"), ("euckr", "한글", "C7D1B1DB"),
             ("sjis", "日本語", "93FA967B8CEA"), ("big5", "中•∼", "A4A4A145A1E3"),
             ("hkscs", "\uf308Ā中", "88458856A4A4"), ("hkscs31", "\U0002010cĀ中", "88458856A4A4"),
+            ("cp932", "日本纊Ⅰⅰ\ue000", "93FA967BFA5C8754FA40F040"),
             ("cp850", "Çøı", "809BD5"), ("hp8", "À₤Ÿ", "A1AFEE"), ("macroman", "Ä€ﬁ", "80DBDE"),
         };
         private const string StateSql = "SELECT @@character_set_client, @@character_set_connection, @@character_set_results, @@collation_connection";
@@ -34,6 +35,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             ("gb18030", "ḿ\ue7c7😀乗", "A8BC8135F4379439FC36815C"),
             ("gb18030_2022", "龴\ue81e\ufe10乗", "FE5982359037A6D9815C"),
             ("sjis", "日本語ソ", "93FA967B8CEA835C"), ("big5", "中•∼功", "A4A4A145A1E3A55C"),
+            ("cp932", "日本纊Ⅰⅰ\ue000ソ", "93FA967BFA5C8754FA40F040835C"),
             ("hkscs", "\uf308Ā中功", "88458856A4A4A55C"), ("hkscs31", "\U0002010cĀ中功", "88458856A4A4A55C"),
         };
 

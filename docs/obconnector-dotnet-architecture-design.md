@@ -326,7 +326,7 @@ See the [OceanBase/Java and direct-test evidence](compatibility.md).
 
 Explicit trusted national/result names additionally resolve through the existing strict client
 mapping for utf8mb3, ascii, latin1, gbk, gb18030, gb18030_2022, dec8, tis620, sjis, big5, hkscs and
-hkscs31. Scalar binary input and ordinary/PL national results share this resolver; streaming uses
+hkscs31, cp932, gb2312, euckr, cp850, hp8 and macroman. Scalar binary input and ordinary/PL national results share this resolver; streaming uses
 the underlying stateful decoder. Missing facts retain Unicode-only collation fallback and later
 results require fresh state. Stored complex members still require AL16UTF16. See the
 [encoding evidence and live scope](compatibility.md).
@@ -694,6 +694,7 @@ derive this type; PrepareExecute outputs reuse metadata-driven scalar decoding a
 | DEC8 | 3, 69, 338, 353, 368 | 1 |
 | TIS620 | 18, 89, 332, 347, 362 | 1 |
 | SJIS | 13, 88, 334, 349, 364 | 2 |
+| CP932 | 95, 96 | 2 |
 | Big5 | 1, 84, 335, 350, 365 | 2 |
 | HKSCS | 152, 336, 351, 366 | 2 |
 | HKSCS31 | 153, 337, 352, 367 | 2 |
@@ -762,6 +763,16 @@ command regenerates independent all256-byte SHA256 expectations from downloaded 
 each position contributes a two-byte big-endian scalar, or FFFF for an undefined position. Python and
 server sources are not test/runtime dependencies. Client encoding and national/JSON/CLOB rules retain
 their separate scope. Real emission/storage and deployment compatibility remain unverified.
+
+CP932 follows the official MySQL `mysql-8.0.36/strings/ctype-cp932.cc` table. It retains the
+strict .NET932 canonical mapping and adds398 defined duplicate wire positions for decoding only.
+ASCII00–7F, halfwidthA1–DF and assigned pairs under leads81–9F/E0–FC are accepted; unassigned,
+invalid and incomplete sequences throw. The streaming scanner preserves pending state across
+count probes and failed writes; encoding selects canonical bytes and rejects non-reversible aliases.
+`Cp932Reference.py` regenerates full decode/BMP-encode digests using the same serialization as
+the SJIS reference below. All9795 assigned decode and9397 reversible encode positions match direct
+MySQL-mode4.4.2.2 conversion. D-07f records MySQL storage/results, Oracle scalar national storage
+and the Java-matched900/42000 limitation for ordinary Oracle CP932 session initialization.
 
 SJIS uses CP932 with the fixed server's seven corrections from
 [ob_mb_wc_sjis and its table](https://github.com/oceanbase/oceanbase/blob/5d6cb5cbc3f7c1ab6eb22e40abec8e160a8764d5/deps/oblib/src/lib/charset/ob_ctype_sjis.cc#L1438).
