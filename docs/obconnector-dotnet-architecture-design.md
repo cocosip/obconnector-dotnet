@@ -433,12 +433,17 @@ Root BLOB/CLOB
 locator inputs reuse ordinary type 210/211 encoding without additional LOB I/O. Existing capability,
 connection/session/transaction and disposal checks still apply; handles remain caller-owned and
 1295 text fallback rejects locator materialization. Root BLOB/CLOB and named complex binary LOB results reuse the ordinary
-decoder when the caller owns and retains the connection. Prepare and live metadata both validate
-Oracle mode and locator negotiation; root CLOB metadata also validates charset. Streams open only after the batch reader is fully
-drained and closed; early close invalidates retained handles. Failed scalar execution disposes any
+decoder while their originating connection is retained. Prepare and live metadata both validate
+Oracle mode and locator negotiation; root CLOB metadata also validates charset. A multi-send reader
+releases its session reservation only after all responses complete and the final NextResult returns
+false; Read returning false alone only finishes the current result. LOB streams may then open before
+the reader is closed. CloseConnection and data-source readers keep their connection open for that
+window and close it with the reader, invalidating remaining handles and streams. An old reader cannot
+close a reopened logical lease. Early close aborts unread responses and invalidates retained handles.
+Failed scalar execution disposes any
 captured LOBs, including nested members, that were not delivered. Partial complex decoding and result
-packaging failures also dispose already decoded LOBs. Data-source-owned batches and CloseConnection retain the result
-restriction. Anonymous inputs, cursor members, complex text LOB results, Oracle PL/resource outputs, cursor/array binding and legacy Oracle
+packaging failures also dispose already decoded LOBs. Data-source-owned Scalar/NonQuery keep the
+locator-result restriction because their method closes the connection. Anonymous inputs, cursor members, complex text LOB results, Oracle PL outputs, cursor/array binding and legacy Oracle
 249-252 results remain outside the pipeline. Ordinary named complex binary results use
 the existing decoder. Source-column type lookups finish before sending the execution group; each
 response restores only its request's source mapping, time zone and national character set snapshot.
@@ -467,7 +472,8 @@ failure preserves the successful prefix and the failed command's old outputs. Fr
 and actual output metadata reject anonymous layouts and cursor members; root BLOB/CLOB declarations
 must match the metadata even for NULL rows. Named complex outputs bind their declared layout before
 batch validation, including the opaque whole-column shape and EOF-only output markers. LOB outputs
-require negotiated locators and a retained caller connection. Partial decoding, terminal errors and
+require negotiated locators and a retained connection; closing readers provide the same read window
+after their final NextResult returns false. Partial decoding, terminal errors and
 cancellation dispose only unpublished handles; published outputs remain caller-owned after batch disposal.
 DML prepare metadata may
 describe OUT/INOUT as columns; both split counts and output-column count must match. This does not
@@ -492,7 +498,8 @@ NextResult even though it will not expose another result. Early Close keeps the 
 unstarted entries are skipped. An unread current response can destroy its session. CloseConnection
 still belongs to the original logical lease; data-source batches still own that connection.
 SchemaOnly with limits may prepare hidden entries and query their metadata catalogs, but executes no
-target SQL. The batch reservation remains until reader close. See [verification and open acceptance](compatibility.md).
+target SQL. Sequential batch reservations remain until reader close; multi-send readers release theirs
+after successfully consuming every response. See [verification and open acceptance](compatibility.md).
 
 ### CRUD generation scope
 

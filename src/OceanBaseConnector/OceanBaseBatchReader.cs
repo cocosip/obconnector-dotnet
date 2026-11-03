@@ -97,6 +97,8 @@ namespace OceanBaseConnector
         {
             var exchange = _multiExchange; _multiExchange = null; _multiRequests = null; _multiSend = false;
             exchange?.Complete();
+            // All responses are consumed; LOB reads may now use the session before CloseConnection runs.
+            _operation.Session!.ReleaseReservation(_operation);
         }
         private void UpdateCount()
         {

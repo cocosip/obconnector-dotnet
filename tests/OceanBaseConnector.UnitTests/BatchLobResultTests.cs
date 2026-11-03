@@ -147,12 +147,9 @@ namespace OceanBaseConnector.UnitTests
 
         [Theory]
         [InlineData(false, "owned")] [InlineData(true, "owned")]
-        [InlineData(false, "close")] [InlineData(true, "close")]
         [InlineData(false, "capability")] [InlineData(true, "capability")]
         [InlineData(false, "charset")] [InlineData(true, "charset")]
-        [InlineData(false, "close-complex")] [InlineData(true, "close-complex")]
         [InlineData(false, "owned-anonymous")] [InlineData(true, "owned-anonymous")]
-        [InlineData(false, "close-anonymous")] [InlineData(true, "close-anonymous")]
         [InlineData(false, "capability-anonymous")] [InlineData(true, "capability-anonymous")]
         public async Task BatchMultiSendLobResultsValidateLifetimeAndCapabilityBeforeExecution(bool asynchronous, string boundary)
         {
@@ -167,7 +164,7 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(new byte[] { 0, 90, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 });
                 await channel.WritePacketAsync(anonymous ? ComplexColumn("", "", element: 211) : complex ? ComplexColumn() : Column("lob", 211, boundary == "charset" ? (ushort)63 : (ushort)45));
                 await channel.WritePacketAsync(Eof());
-                if (boundary != "owned" && boundary != "close") await StatementCommand(channel, 25);
+                if (boundary != "owned") await StatementCommand(channel, 25);
                 Assert.Equal(0, await channelStreamRead(channel));
             }, lobLocators: boundary != "capability");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Batch Multi Send=true");
@@ -177,12 +174,7 @@ namespace OceanBaseConnector.UnitTests
                 if (complex) await connection.GetComplexTypeAsync("Owner", "Thing");
                 using var batch = boundary == "owned" ? new OceanBaseBatch(connection) : connection.CreateBatch();
                 BatchItem(batch, "select lob from t");
-                if (boundary == "close")
-                {
-                    if (asynchronous) await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteReaderAsync(CommandBehavior.CloseConnection));
-                    else Assert.Throws<NotSupportedException>(() => batch.ExecuteReader(CommandBehavior.CloseConnection));
-                }
-                else if (asynchronous) await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteScalarAsync());
+                if (asynchronous) await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteScalarAsync());
                 else Assert.Throws<NotSupportedException>(() => batch.ExecuteScalar());
             }
             finally { connection.Close(); server.Stop(); }

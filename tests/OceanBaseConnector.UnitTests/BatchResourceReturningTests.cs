@@ -196,25 +196,20 @@ namespace OceanBaseConnector.UnitTests
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
-        [Theory]
-        [InlineData("owned", false)] [InlineData("close", false)] [InlineData("close", true)]
-        public async Task BatchMultiSendResourceReturningRejectsClosingConnectionBeforeSending(string boundary, bool complex)
+        [Fact]
+        public async Task OwnedMultiSendNonQueryRejectsLobOutputsBeforeSending()
         {
             var server = Server(async channel =>
             {
-                if (complex) await ComplexScalarType(channel, scalar: "BLOB", collection: false);
                 Assert.Equal(0, await channelStreamRead(channel));
             }, lobLocators: true, serverVersion: "4.4.2.2");
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Oracle Prepare Execute=true;Use Batch Multi Send=true");
             try
             {
-                if (boundary != "owned") await connection.OpenAsync();
-                var type = complex ? await connection.GetComplexTypeAsync("Owner", "Thing") : null;
-                using var batch = boundary == "owned" ? new OceanBaseBatch(connection) : connection.CreateBatch();
+                using var batch = new OceanBaseBatch(connection);
                 var output = BatchReturningItem(batch, 1); output.ResetDbType(); output.Value = DBNull.Value;
-                if (complex) output.ComplexType = type; else output.OceanBaseDbType = OceanBaseDbType.Blob;
-                if (boundary == "close") await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteReaderAsync(CommandBehavior.CloseConnection));
-                else await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteNonQueryAsync());
+                output.OceanBaseDbType = OceanBaseDbType.Blob;
+                await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteNonQueryAsync());
                 Assert.Equal(DBNull.Value, output.Value);
             }
             finally { connection.Close(); server.Stop(); }

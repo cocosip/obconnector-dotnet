@@ -252,7 +252,7 @@ namespace OceanBaseConnector
         }
 
         internal bool CanRetainLobResults(Operation operation) =>
-            !_ownsConnection && (operation.Behavior & CommandBehavior.CloseConnection) == 0;
+            operation.Reader != null || !_ownsConnection && (operation.Behavior & CommandBehavior.CloseConnection) == 0;
 
         internal static bool CanUseMultiSendReader(CommandBehavior behavior) =>
             (behavior & ~CommandBehavior.CloseConnection) == CommandBehavior.Default;
