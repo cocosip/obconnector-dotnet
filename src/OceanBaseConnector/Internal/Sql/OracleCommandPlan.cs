@@ -34,12 +34,12 @@ namespace OceanBaseConnector.Internal.Sql
         private readonly OceanBaseDbType?[] _outputTypes;
         private readonly OceanBaseComplexType?[] _outputComplexTypes;
 
-        internal void RequireBatchOutputs(bool allowLobOutputs)
+        internal void RequireBatchOutputs(bool allowLobOutputs, bool allowAnonymous = false)
         {
             for (var i = 0; i < _outputTypes.Length; i++)
             {
                 var type = _outputTypes[i]; var complex = _outputComplexTypes[i];
-                if (type == OceanBaseDbType.RefCursor || complex != null && (complex.IsAnonymous || complex.Layout.HasCursorMembers) ||
+                if (type == OceanBaseDbType.RefCursor || complex != null && (complex.IsAnonymous && !allowAnonymous || complex.Layout.HasCursorMembers) ||
                     !allowLobOutputs && (type == OceanBaseDbType.Blob || type == OceanBaseDbType.Clob || complex?.Layout.HasLobMembers == true))
                     throw new NotSupportedException("Batch multi-send RETURNING requires scalar or named complex outputs; LOBs require a retained caller connection.");
             }

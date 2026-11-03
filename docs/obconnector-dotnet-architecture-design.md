@@ -477,9 +477,24 @@ releases the batch operation without requiring an extra Close. The connection is
 responses remain unread. SequentialAccess follows the same command eligibility checks as Default;
 SingleRow and SingleResult preserve multi-send while applying their limits to the entire batch.
 SchemaOnly and KeyInfo keep their sequential command path.
+
+With multi-send enabled, StoredProcedure commands in either mode and Oracle text BEGIN/DECLARE
+blocks (including leading comments and labels) form state barriers. Each routine uses the ordinary
+command path; its complete response and output tail must finish before the following contiguous
+DML/SELECT segment is preflighted and pipelined. This preserves routine session changes, including
+time zone and national charset, without replay or SQL rewriting. It does not pipeline PL requests
+in the same group or expand ordinary PL type-DDL handling. A later segment's preflight can fail after
+an executed prefix: successful counts and outputs remain, while unsent suffix counts stay -1.
+Segment completion retains the batch reservation; whole-batch completion releases it even when the
+last entry is a routine, opening the same reader LOB window. Routine barriers accept ordinary scalar,
+named and anonymous collection outputs under the existing output plan, but reject cursor members.
+Owned Scalar rejects locator results, including unexpected live routine metadata, and explicit LOB
+outputs remain subject to the retained-connection rule. Owned NonQuery drains ordinary LOB rows
+without handles. Internal use of a reader does not relax these consumer lifetime restrictions;
+failed Scalar disposes captured nested LOBs. Early close never starts a later segment or routine.
 Anonymous scalar collection binary results reuse the ordinary metadata layout and decoder in batch
 reader/scalar/nonquery, including root/member NULL, empty collections and retained read-only values.
-They cannot be rebound as inputs or declared batch outputs. Non-NULL national members still require
+They cannot be rebound as inputs or declared outputs of pipelined DML. Non-NULL national members still require
 a trusted storage encoding; anonymous query metadata alone does not provide one. Local protocol
 fixtures cover NUMBER, RAW, VARCHAR2, DATE, TIMESTAMP and negotiated BLOB/CLOB results; real anonymous
 SELECT wire acceptance remains open (D-08s).

@@ -126,7 +126,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的根/命名复杂 LOB binary 结果及命名复杂 LOB 内容输入及 Oracle DML RETURNING 标量 OUT/INOUT、命名复杂值和保留调用方连接的 LOB 输出子集也已验收；关闭连接/data source reader 的根远程 LOB 读取窗口 **8/8**（D-08u）；data source NonQuery 的根远程 LOB 排空/池复用 **4/4**（D-08v）；SequentialAccess reader 的双模式字段 **8/8**、Oracle LOB 窗口 **16/16**（含原8）与 XML **4/4**（含原2）（D-08w）；整批 SingleRow/SingleResult 的双模式限读及 Oracle 隐藏 RETURNING **10/10**（D-08x） | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自有连接 Scalar 的 locator 结果及显式 LOB OUT/INOUT、复杂 text LOB 结果、PL 输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的根/命名复杂 LOB binary 结果及命名复杂 LOB 内容输入及 Oracle DML RETURNING 标量 OUT/INOUT、命名复杂值和保留调用方连接的 LOB 输出子集也已验收；关闭连接/data source reader 的根远程 LOB 读取窗口 **8/8**（D-08u）；data source NonQuery 的根远程 LOB 排空/池复用 **4/4**（D-08v）；SequentialAccess reader 的双模式字段 **8/8**、Oracle LOB 窗口 **16/16**（含原8）与 XML **4/4**（含原2）（D-08w）；整批 SingleRow/SingleResult 的双模式限读及 Oracle 隐藏 RETURNING **10/10**（D-08x） | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自有连接 Scalar 的 locator 结果及显式 LOB OUT/INOUT、复杂 text LOB 结果、PL 同组流水化输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属；混合 StoredProcedure/Oracle PL 状态屏障已支持，安全段仍流水化，后段预检延迟到完整routine响应结束；双模式存储/OUT及Oracle匿名集合OUT/时区变更直连 **10/10**（D-08y），不代表PL同组流水化 |
 | D-09 | `P4`；4.4.2.2 `oracle-direct` text+binary String wire 子集；PL XMLTYPE OUT/INOUT 已确认是服务端限制；完整 XML codec 仍未关闭 | XMLType wire 调查与有条件 codec（T17） | ownerless `XMLTYPE` 已有严格 UTF-8 String wire；`SYS.XMLTYPE` metadata 已有安全的 String 消费边界；`DbType.Xml` 参数使用已验证的 type 253 字符串 wire；同一 PL OUT/INOUT 形状在 Connector/J 2.4.14 与 .NET 分别返回 `600/0A000`、`600/42000`，按服务端限制跳过客户端扩展 | 当前子集覆盖普通 XMLTYPE 列、NULL、同步/异步 DML、metadata、PL 函数结果、显式 Prepare binary 结果；带 owner 的复杂 payload、坏值/最大值和跨版本证据仍待确认；PL OUT/INOUT 当前版本不再作为待开发项 | 保持当前子集的参数/结果/NULL/metadata 契约；取得稳定复杂 XML identity 和不同服务端 wire 后再扩展，不把 PL 失败伪装成客户端成功 |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
@@ -164,7 +164,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | G06 | D-06 | MySQL GEOMETRY |
 | G07 | D-07、S-05 | 字符集本地映射和真实服务端 roundtrip 分开追踪 |
 | G08 | D-09、D-10、D-11、D-12 | T17 专用类型和 T18 版本相关类型先拆证据任务 |
-| G09 | D-08 | Java multi-send；.NET 已实现默认关闭的 prepared batch multi-send 子集，指定直连子集已验收，其余组合和部署仍待验收 |
+| G09 | D-08 | Java multi-send；.NET 已实现默认关闭的 prepared batch multi-send 子集，指定直连子集已验收，其余组合和部署仍待验收；混合 StoredProcedure/Oracle PL 状态屏障已支持，安全段仍流水化，后段预检延迟到完整routine响应结束；双模式存储/OUT及Oracle匿名集合OUT/时区变更直连 **10/10**（D-08y），不代表PL同组流水化 |
 | G10 | A-01 | 池/reset/cache 长期验收 |
 | G11 | A-02 | 事务、XA、unknown outcome 故障验收 |
 | G12 | S-01、S-02、S-03、S-05 | TLS、协议扩展、发现/HA、字符集服务端前提 |
@@ -213,7 +213,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | Oracle 输出计划 / REF CURSOR offset | D-03b | 成功 wire、位置与归属契约；Java RefCursor 也排除普通 offset 分支，不能直接套用普通 SELECT FETCH |
 | 命名复杂值中的 LOB locator 回绑及未证实的复杂成员方向 | D-04 | 可辨识的类型/locator wire 和生命周期；当前 BLOB DML、根 NULL/text/cursor 成员的已确认服务端限制另记，不作为盲改客户端的理由 |
 | package-local PL/SQL RECORD 参数派生与绑定 | A-03d | 字段目录、输入/输出 payload 及成功交互；目前 Java 公开 API 也不支持绑定，不能归为服务端拒绝 |
-| multi-send 的匿名输入/声明输出、复杂 text LOB 结果、自有连接 Scalar 的 locator 结果及显式 LOB OUT/INOUT、PL 输出、cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；保留调用方连接的复杂 LOB binary 结果见 D-08n（OBJECT 实库、collection 仅 loopback）；DML RETURNING 标量 OUT/INOUT 见 D-08o，命名复杂值和 LOB 输出见 D-08p；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
+| multi-send 普通DML的匿名输入/声明输出、复杂 text LOB 结果、自有连接 Scalar 的 locator 结果及显式 LOB OUT/INOUT、PL 同组流水化输出、cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；保留调用方连接的复杂 LOB binary 结果见 D-08n（OBJECT 实库、collection 仅 loopback）；DML RETURNING 标量 OUT/INOUT 见 D-08o，命名复杂值和 LOB 输出见 D-08p；混合routine状态屏障兼容已关闭（D-08y），PL同组流水化仍未关闭；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
 
 完整 XML codec、SDO 专用 WKB/WKT/SRID API、稀疏向量/嵌套 ARRAY 属于额外范围或 wire/版本待确认；
 当前通用 String/Binary/OBJECT 路径已有验收，不能把“没有专用类型名”直接等同没有功能。
@@ -2114,6 +2114,45 @@ RETURNING sync/async 共2项，输出发布与独立连接查询一致。本轮�
 产品五 TFM、集成项目 Release build 均 **0 warning / 0 error**。
 产品及测试独立走查无阻断项；四份文档同步当前边界。报告在忽略目录
 `TestResults/roadmap/d08x-*.trx`。不重复长压、全消费者或冻结端点；D-08 父项仍未整体关闭。
+
+#### D-08y：混合 routine batch 的状态屏障（2026-11-03，指定直连子集 `P4`）
+
+基线 `efc1fde`。直接 DML 的匿名纯 OUT `BULK COLLECT` 普通0xa1控制返回600/0A000、
+outcome已知，回滚后原行保留；同一PL本地集合控制及PL匿名纯OUT返回成功，原factory身份、
+元素值和rollback独立读回通过。原始失败与PL成功报告位于 `TestResults/roadmap/d08y-*`。
+不据此解除DML匿名输入/输出的guard，也不将一例PL输出当作PL同组流水化证据。
+
+本项复用普通命令执行建立状态屏障：StoredProcedure及Oracle BEGIN/DECLARE（含label/comment）
+单独执行，完整响应和tail结束后才预检后续安全DML/SELECT段；安全段保留先发整组再读响应。
+直接去掉PL guard会提前缓存后段的statement/时区/字符集状态；整批降为顺序则失去安全段的
+multi-send。因此按段调度，不新增配置、codec、SQL重写或重放。SchemaOnly/KeyInfo沿既有路径。
+后段预检失败可能已有成功前缀；计数/输出保留，未发送后缀为-1，不能宣称mixed整批零执行。
+不扩大普通PL内部隐式type DDL、匿名普通DML、cursor/array流水化或owned locator生命周期。
+
+- [x] mixed精确wire验证：安全段前后、纯PL、sync/async及三API；输出tail、首结果限制。
+- [x] BatchReader按段预检/调度，段末仅完成exchange，整批末释放reservation；保留取消/错误归属。
+- [x] 内部消费模式独立约束LOB结果/输出，Scalar失败递归清理；不因内部reader放宽owned句柄。
+- [x] 定向回归及双模式实库存储/输出/状态变化验证；同步矩阵和契约；最终独立走查见下。
+
+新增单元50例覆盖段内两请求先发后收、routine tail前不发布输出/不预检后段、会话占用、
+首/末/连续routine、早关、段间取消、已知ERR与后段预检失败的prefix/output/suffix、
+整批限读及首scalar、owned动态LOB拒绝/NonQuery排空、末routine LOB读取窗口与Scalar递归清理。
+
+| 核验 | 结果与边界 |
+| --- | --- |
+| RED | 修正等待gate能传播执行异常后 **20/20失败**，原产品在发送前拒绝routine；`d08y-routine-barrier-red.trx`。最初fixture等待未传播异常而超时，已取消并仅修正fixture，不计产品证据 |
+| 最终定向单元 | **738/738**、无skip，约13秒；`d08y-routine-barrier-unit-verified.trx`，包含全部50新增和相关batch/匿名输出/SQL边界回归，不叠加前次重叠运行 |
+| 公开DLL消费者 | **16/16**、无skip，`d08y-routine-barrier-consumer-verified.trx`；新增6例检查net8/net9/net10资产 × sync/async分段wire，原10例回归；统一net10 host，不当独立runtime证据 |
+| 双模式实库 | **10/10**、无skip，约13秒；`d08y-routine-barrier-live.trx`，4.4.2.2 `mysql-direct,oracle-direct`。8例caller/data source × sync/async × 两模式，Reader/Scalar/NonQuery重复执行、routine OUT和独立observer存储读回；Oracle另2例PL匿名NUMBER集合OUT及同一PL变更+05:45时区，后段LTZ输入与纳秒独立读回 |
+| 构建 | 产品全部五TFM Release构建 **0警告/0错误**；实库与consumer项目定向编译通过 |
+
+Consumer最初 **10通过/6失败** 是新fixture未处理普通命令的会话上下文探测，修正后第二轮
+又因未消费连接关闭时4个statement close而 **10通过/6失败**；仅修fixture后最终16/16。
+原 `d08y-routine-barrier-consumer.trx`、`d08y-routine-barrier-consumer-final.trx` 均保留。
+产品、全部新增测试、四份文档与TRX已独立只读走查，无未解决阻断项；纠正了checklist
+将后补绿色回归误称RED的表述。`git diff --check` 及暂存差异检查通过，本项本地提交、不push。
+本项仅关闭混合routine与安全段的兼容性；真正PL同组流水化、普通DML匿名输入/输出、
+cursor/array、complex text LOB、owned Scalar locator及显式LOB输出仍保留，不重跑全量/长压/冻结端点。
 
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 

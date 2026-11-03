@@ -87,6 +87,7 @@ namespace OceanBaseConnector.Internal.Session
         internal OceanBaseCompatibilityMode Mode => _session.Info!.Mode;
         internal bool TreatTinyAsBoolean => _session.TreatTinyAsBoolean;
         internal bool DiscardSessionAfterExecution { get; set; }
+        internal bool DisallowLobResults { get; set; }
         internal bool InvalidatePreparedStatements { get; set; }
         internal bool InvalidateComplexTypes { get; set; }
         internal bool Succeeded { get; private set; }

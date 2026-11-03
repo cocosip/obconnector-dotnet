@@ -78,7 +78,9 @@ namespace OceanBaseConnector.Internal.Sql
             return false;
         }
 
-        private static bool IsOracleProgramUnit(string text)
+        internal static bool IsOraclePlBlock(string text) => IsOracleProgramUnit(text, includeDdl: false);
+
+        private static bool IsOracleProgramUnit(string text, bool includeDdl = true)
         {
             var position = 0;
             SkipTrivia(text, ref position, true);
@@ -93,7 +95,7 @@ namespace OceanBaseConnector.Internal.Sql
             }
             var keyword = ReadKeyword(text, ref position);
             if (keyword == "BEGIN" || keyword == "DECLARE") return true;
-            if (keyword != "CREATE") return false;
+            if (!includeDdl || keyword != "CREATE") return false;
             keyword = ReadKeyword(text, ref position);
             if (keyword == "OR")
             {

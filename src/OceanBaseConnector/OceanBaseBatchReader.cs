@@ -23,6 +23,7 @@ namespace OceanBaseConnector
         private OceanBaseBatchMultiSendRequest[]? _multiRequests;
         private int _multiNext;
         private int _multiGroupEnd;
+        private int _multiSegmentEnd;
         private bool _multiSend;
         internal OceanBaseBatchReader(OceanBaseBatch.Operation operation) => _operation = operation;
         private CommandBehavior Behavior => _operation.Behavior & ~CommandBehavior.CloseConnection;
@@ -32,31 +33,47 @@ namespace OceanBaseConnector
             _operation.ThrowIfCanceled();
             if (CanUseMultiSendReader()) { StartMultiSend(); return; }
             if (_index < _operation.Commands.Length)
-            { _current = _operation.Commands[_index].ExecuteReaderCore(Behavior, _operation.Token); UpdateCount(); }
+            { ConfigureRoutineBarrier(); _current = _operation.Commands[_index].ExecuteReaderCore(Behavior, _operation.Token); UpdateCount(); }
         }
         internal async Task StartAsync()
         {
             _operation.ThrowIfCanceled();
             if (CanUseMultiSendReader()) { await StartMultiSendAsync().ConfigureAwait(false); return; }
             if (_index < _operation.Commands.Length)
-            { _current = await _operation.Commands[_index].ExecuteReaderAsync(Behavior, _operation.Token).ConfigureAwait(false); UpdateCount(); }
+            { ConfigureRoutineBarrier(); _current = await _operation.Commands[_index].ExecuteReaderAsync(Behavior, _operation.Token).ConfigureAwait(false); UpdateCount(); }
         }
-        private bool CanUseMultiSendReader() => _operation.Commands.Length != 0 &&
-            OceanBaseBatch.CanUseMultiSendReader(_operation.Behavior) && _operation.Session != null && _operation.Batch.CanUseMultiSend(_operation.Session);
+        private bool CanUseMultiSendReader() => _index < _operation.Commands.Length &&
+            OceanBaseBatch.CanUseMultiSendReader(_operation.Behavior) && _operation.Session != null && _operation.Batch.CanUseMultiSend(_operation.Session) &&
+            !_operation.Commands[_index].RequiresBatchRoutineBarrier(_operation.Session.Info!.Mode);
+        private void ConfigureRoutineBarrier()
+        {
+            if (!_operation.Batch.CanUseMultiSend(_operation.Session!) || !OceanBaseBatch.CanUseMultiSendReader(_operation.Behavior)) return;
+            var command = _operation.Commands[_index];
+            command.BatchBarrierLobOutputs = _operation.Batch.CanRetainLobResults(_operation);
+            command.DisallowLobResults = !command.BatchBarrierLobOutputs.Value && !_operation.DiscardLobResults;
+        }
+        private int FindMultiSendSegmentEnd()
+        {
+            var end = _index;
+            while (end < _operation.Commands.Length && !_operation.Commands[end].RequiresBatchRoutineBarrier(_operation.Session!.Info!.Mode)) end++;
+            return end;
+        }
         private void StartMultiSend()
         {
-            var requests = new OceanBaseBatchMultiSendRequest[_operation.Commands.Length];
+            var requests = _operation.MultiSendRequests ?? new OceanBaseBatchMultiSendRequest[_operation.Commands.Length];
             _operation.MultiSendRequests = requests;
-            for (var i = 0; i < requests.Length; i++) requests[i] = _operation.Commands[i].BuildBatchMultiSendRequest(_operation.Token, _operation.Batch.CanRetainLobResults(_operation));
+            _multiNext = _index; _multiSegmentEnd = FindMultiSendSegmentEnd();
+            for (var i = _index; i < _multiSegmentEnd; i++) requests[i] = _operation.Commands[i].BuildBatchMultiSendRequest(_operation.Token, _operation.Batch.CanRetainLobResults(_operation), _operation.DiscardLobResults);
             _multiRequests = requests; _multiExchange = _operation.Batch.StartMultiSendExchange(_operation); _multiSend = true;
             try { SendNextMultiSendGroup(); StartCurrentMultiSend(); }
             catch (Exception error) { AbortMultiSend(error); throw; }
         }
         private async Task StartMultiSendAsync()
         {
-            var requests = new OceanBaseBatchMultiSendRequest[_operation.Commands.Length];
+            var requests = _operation.MultiSendRequests ?? new OceanBaseBatchMultiSendRequest[_operation.Commands.Length];
             _operation.MultiSendRequests = requests;
-            for (var i = 0; i < requests.Length; i++) requests[i] = await _operation.Commands[i].BuildBatchMultiSendRequestAsync(_operation.Token, _operation.Batch.CanRetainLobResults(_operation)).ConfigureAwait(false);
+            _multiNext = _index; _multiSegmentEnd = FindMultiSendSegmentEnd();
+            for (var i = _index; i < _multiSegmentEnd; i++) requests[i] = await _operation.Commands[i].BuildBatchMultiSendRequestAsync(_operation.Token, _operation.Batch.CanRetainLobResults(_operation), _operation.DiscardLobResults).ConfigureAwait(false);
             _multiRequests = requests; _multiExchange = _operation.Batch.StartMultiSendExchange(_operation); _multiSend = true;
             try { await SendNextMultiSendGroupAsync().ConfigureAwait(false); await StartCurrentMultiSendAsync().ConfigureAwait(false); }
             catch (Exception error) { AbortMultiSend(error); throw; }
@@ -64,11 +81,11 @@ namespace OceanBaseConnector
         private void SendNextMultiSendGroup()
         {
             var exchange = _multiExchange!;
-            _operation.Batch.SendMultiSendGroup(_operation, exchange, _multiRequests!, ref _multiNext, out _multiGroupEnd);
+            _operation.Batch.SendMultiSendGroup(_operation, exchange, _multiRequests!, ref _multiNext, out _multiGroupEnd, _multiSegmentEnd);
         }
         private async Task SendNextMultiSendGroupAsync()
         {
-            _multiGroupEnd = await _operation.Batch.SendMultiSendGroupAsync(_operation, _multiExchange!, _multiRequests!, _multiNext, _operation.Token).ConfigureAwait(false);
+            _multiGroupEnd = await _operation.Batch.SendMultiSendGroupAsync(_operation, _multiExchange!, _multiRequests!, _multiNext, _operation.Token, _multiSegmentEnd).ConfigureAwait(false);
             _multiNext = _multiGroupEnd;
         }
         private void StartCurrentMultiSend()
@@ -97,8 +114,13 @@ namespace OceanBaseConnector
         {
             var exchange = _multiExchange; _multiExchange = null; _multiRequests = null; _multiSend = false;
             exchange?.Complete();
-            // All responses are consumed; LOB reads may now use the session before CloseConnection runs.
-            _operation.Session!.ReleaseReservation(_operation);
+            if (_index == _operation.Commands.Length) ReleaseCompletedReservation();
+        }
+        private void ReleaseCompletedReservation()
+        {
+            // Keep the reservation across segment boundaries; only the whole batch opens the LOB window.
+            if (_operation.Batch.CanUseMultiSend(_operation.Session!) && OceanBaseBatch.CanUseMultiSendReader(_operation.Behavior))
+                _operation.Session!.ReleaseReservation(_operation);
         }
         private void UpdateCount()
         {
@@ -126,7 +148,6 @@ namespace OceanBaseConnector
         public override bool NextResult()
         {
             EnsureOpen(); if (_current == null) return false;
-            if (_multiSend) return NextMultiSendResult();
             try
             {
                 while (_current != null)
@@ -134,17 +155,23 @@ namespace OceanBaseConnector
                     var next = _current.NextResult(); UpdateCount();
                     if (next) { if (!SingleResult) return true; continue; }
                     _current.Dispose(); _current = null; _index++;
-                    if (_index == _operation.Commands.Length) return false;
-                    Start(); if (!SingleResult) return true;
+                    if (_multiSend && _index == _multiSegmentEnd) CompleteMultiSend();
+                    if (_index == _operation.Commands.Length) { ReleaseCompletedReservation(); return false; }
+                    if (_multiSend)
+                    {
+                        if (_index == _multiGroupEnd) SendNextMultiSendGroup();
+                        StartCurrentMultiSend();
+                    }
+                    else Start();
+                    if (!SingleResult) return true;
                 }
                 return false;
             }
-            catch { Close(); throw; }
+            catch (Exception error) { if (_multiExchange != null) AbortMultiSend(error); Close(); throw; }
         }
         public override async Task<bool> NextResultAsync(CancellationToken cancellationToken)
         {
             EnsureOpen(); if (_current == null) { cancellationToken.ThrowIfCancellationRequested(); return false; }
-            if (_multiSend) return await NextMultiSendResultAsync(cancellationToken).ConfigureAwait(false);
             using var registration = cancellationToken.Register(_operation.Cancel);
             _operation.ReaderToken = cancellationToken;
             try
@@ -154,50 +181,19 @@ namespace OceanBaseConnector
                     var next = await _current.NextResultAsync(cancellationToken).ConfigureAwait(false); UpdateCount();
                     if (next) { if (!SingleResult) return true; continue; }
                     await _current.DisposeAsync().ConfigureAwait(false); _current = null; _index++;
-                    if (_index == _operation.Commands.Length) return false;
-                    await StartAsync().ConfigureAwait(false); if (!SingleResult) return true;
+                    if (_multiSend && _index == _multiSegmentEnd) CompleteMultiSend();
+                    if (_index == _operation.Commands.Length) { ReleaseCompletedReservation(); return false; }
+                    if (_multiSend)
+                    {
+                        if (_index == _multiGroupEnd) await SendNextMultiSendGroupAsync().ConfigureAwait(false);
+                        await StartCurrentMultiSendAsync().ConfigureAwait(false);
+                    }
+                    else await StartAsync().ConfigureAwait(false);
+                    if (!SingleResult) return true;
                 }
                 return false;
             }
-            catch { await CloseAsync().ConfigureAwait(false); throw; }
-            finally { _operation.ReaderToken = default; }
-        }
-        private bool NextMultiSendResult()
-        {
-            try
-            {
-                while (true)
-                {
-                    var next = _current!.NextResult(); UpdateCount();
-                    if (next) { if (!SingleResult) return true; continue; }
-                    _current.Dispose(); _current = null; _index++;
-                    if (_index == _operation.Commands.Length) { CompleteMultiSend(); return false; }
-                    if (_index == _multiGroupEnd) SendNextMultiSendGroup();
-                    StartCurrentMultiSend(); if (!SingleResult) return true;
-                }
-            }
-            catch (Exception error) { AbortMultiSend(error); Close(); throw; }
-        }
-        private async Task<bool> NextMultiSendResultAsync(CancellationToken cancellationToken)
-        {
-            using var registration = cancellationToken.Register(_operation.Cancel); _operation.ReaderToken = cancellationToken;
-            try
-            {
-                while (true)
-                {
-                    var next = await _current!.NextResultAsync(cancellationToken).ConfigureAwait(false); UpdateCount();
-                    if (next) { if (!SingleResult) return true; continue; }
-                    await _current.DisposeAsync().ConfigureAwait(false); _current = null; _index++;
-                    if (_index == _operation.Commands.Length) { CompleteMultiSend(); return false; }
-                    if (_index == _multiGroupEnd)
-                    {
-                        _multiGroupEnd = await _operation.Batch.SendMultiSendGroupAsync(_operation, _multiExchange!, _multiRequests!, _multiNext, cancellationToken).ConfigureAwait(false);
-                        _multiNext = _multiGroupEnd;
-                    }
-                    await StartCurrentMultiSendAsync().ConfigureAwait(false); if (!SingleResult) return true;
-                }
-            }
-            catch (Exception error) { AbortMultiSend(error); await CloseAsync().ConfigureAwait(false); throw; }
+            catch (Exception error) { if (_multiExchange != null) AbortMultiSend(error); await CloseAsync().ConfigureAwait(false); throw; }
             finally { _operation.ReaderToken = default; }
         }
         public override int RecordsAffected

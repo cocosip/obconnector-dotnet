@@ -168,6 +168,8 @@ namespace OceanBaseConnector.Internal.Protocol
             if (!parameter && (_oracleOutputResult || _query.IsBatchResponse && _oracleTailPending && _oraclePlan != null))
                 _oraclePlan!.ValidateOutputColumn(ordinal, column);
             if (!parameter && _query.IsBatchResponse) column.RequireBatchMultiSendResult(IsBinary, _query.AllowBatchLobResults);
+            if (!parameter && _query.DisallowLobResults && (column.TypeCode == 210 || column.TypeCode == 211 || column.ComplexType?.Layout.HasLobMembers == true))
+                throw new NotSupportedException("LOB results require a retained caller connection.");
             if (!parameter) column.RequireComplexResult(IsBinary);
             if (!parameter) column.BindCursorResult(IsBinary, _query.CursorColumns);
             return column;

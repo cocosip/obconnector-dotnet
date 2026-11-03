@@ -201,6 +201,8 @@ namespace OceanBaseConnector
             internal OceanBaseBatchMultiSendRequest[]? MultiSendRequests { get; set; }
             internal int[] Counts { get; set; } = Array.Empty<int>();
             internal OceanBaseBatchReader? Reader { get; set; }
+            internal bool? RetainLobResults { get; set; }
+            internal bool DiscardLobResults { get; set; }
             internal void Activate(OceanBaseCommand command, bool owned)
             {
                 lock (_batch.Gate)
@@ -236,6 +238,7 @@ namespace OceanBaseConnector
                             if (command == null || !ReferenceEquals(command.SessionOwner, this)) continue;
                             command.SessionOwner = null; command.RequiredSession = null; command.CancellationOrigin = null;
                             command.BatchFailed = null; command.BatchCommand = null;
+                            command.BatchBarrierLobOutputs = null; command.DisallowLobResults = false;
                         }
                         if (ReferenceEquals(_batch._operation, this)) _batch._operation = null;
                         _cancel.Dispose();

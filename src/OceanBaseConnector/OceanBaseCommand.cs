@@ -35,6 +35,10 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
         internal DbBatchCommand? BatchCommand { get; set; }
         internal Action? BatchFailed { get; set; }
+        internal bool? BatchBarrierLobOutputs { get; set; }
+        internal bool DisallowLobResults { get; set; }
+        internal bool RequiresBatchRoutineBarrier(OceanBaseCompatibilityMode mode) => CommandType == CommandType.StoredProcedure ||
+            mode == OceanBaseCompatibilityMode.Oracle && CommandType == CommandType.Text && SqlStatementBoundary.IsOraclePlBlock(CommandText);
 #endif
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get => _timeout; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _timeout = value; } }
@@ -286,6 +290,7 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
                 if (BatchCommand is OceanBaseBatchCommand batch)
                 {
+                    if (BatchBarrierLobOutputs.HasValue) oracle?.RequireBatchOutputs(BatchBarrierLobOutputs.Value, allowAnonymous: true);
                     if (oracle != null) batch.BindOutputs(oracle.Outputs);
                     if (mysql != null) batch.BindOutputs(mysql.Outputs);
                 }
@@ -347,6 +352,7 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
                 execution.BatchCommand = BatchCommand;
                 execution.BatchFailed = BatchFailed;
+                execution.DisallowLobResults = DisallowLobResults;
 #endif
                 execution.DiscardSessionAfterExecution = !prepareOnly && !schemaOnly &&
                     (CommandType == CommandType.StoredProcedure || SessionStateSql.RequiresDiscard(text, session.Info!.Mode));
