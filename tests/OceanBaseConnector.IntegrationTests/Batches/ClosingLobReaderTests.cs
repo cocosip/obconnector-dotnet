@@ -15,11 +15,12 @@ public sealed class ClosingLobReaderTests
     public static IEnumerable<object[]> Rows() =>
         from row in LobMultiSendTests.Rows()
         from owned in new[] { false, true }
-        select new[] { row[0], row[1], row[2], owned };
+        from sequential in new[] { false, true }
+        select new[] { row[0], row[1], row[2], owned, sequential };
 
     [IntegrationTheory]
     [MemberData(nameof(Rows))]
-    public async Task ExternalLobsReadAfterMultiSendDrainBeforeReaderClosesConnection(string profileName, bool asynchronous, bool character, bool owned)
+    public async Task ExternalLobsReadAfterMultiSendDrainBeforeReaderClosesConnection(string profileName, bool asynchronous, bool character, bool owned, bool sequential)
     {
         var profile = IntegrationEnvironment.GetProfile(profileName);
         var builder = profile.CreateBuilder(); builder.Pooling = false;
@@ -54,7 +55,8 @@ public sealed class ClosingLobReaderTests
         var handles = new List<OceanBaseLob>();
         try
         {
-            using var reader = asynchronous ? await batch.ExecuteReaderAsync(CommandBehavior.CloseConnection) : batch.ExecuteReader(CommandBehavior.CloseConnection);
+            var behavior = CommandBehavior.CloseConnection | (sequential ? CommandBehavior.SequentialAccess : 0);
+            using var reader = asynchronous ? await batch.ExecuteReaderAsync(behavior) : batch.ExecuteReader(behavior);
             for (var i = 0; i < 3; i++)
             {
                 Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());

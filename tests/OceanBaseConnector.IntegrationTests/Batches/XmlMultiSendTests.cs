@@ -14,11 +14,12 @@ public sealed class XmlMultiSendTests
     public static IEnumerable<object[]> Rows() =>
         from profile in IntegrationEnvironment.Profiles.Where(p => p.Oracle && p.CreateObjects && p.HasTag("direct"))
         from asynchronous in new[] { false, true }
-        select new object[] { profile.Name, asynchronous };
+        from sequential in new[] { false, true }
+        select new object[] { profile.Name, asynchronous, sequential };
 
     [IntegrationTheory]
     [MemberData(nameof(Rows))]
-    public async Task XmlMultiSendReadsAcrossGroupsAndDrainsResults(string profileName, bool asynchronous)
+    public async Task XmlMultiSendReadsAcrossGroupsAndDrainsResults(string profileName, bool asynchronous, bool sequential)
     {
         var profile = IntegrationEnvironment.GetProfile(profileName);
         var builder = profile.CreateBuilder(); builder.UseBatchMultiSend = true; builder.BatchMultiSendNumber = 2;
@@ -44,13 +45,19 @@ public sealed class XmlMultiSendTests
                 item.Parameters.Add(new OceanBaseParameter { ParameterName = "id", DbType = DbType.Int32, Value = i });
                 batch.BatchCommands.Add(item);
             }
-            using (var reader = asynchronous ? await batch.ExecuteReaderAsync() : batch.ExecuteReader())
+            var behavior = sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default;
+            using (var reader = asynchronous ? await batch.ExecuteReaderAsync(behavior) : batch.ExecuteReader(behavior))
             {
                 for (var i = 0; i < values.Length; i++)
                 {
                     Assert.Equal(typeof(string), reader.GetFieldType(0)); Assert.Equal("XMLTYPE", reader.GetDataTypeName(0));
                     Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
-                    if (i == 1) Assert.True(reader.IsDBNull(0)); else Assert.Equal((string)values[i] + "\n", reader.GetString(0));
+                    if (i == 1) Assert.True(reader.IsDBNull(0));
+                    else if (sequential && i == 2)
+                    {
+                        using var text = reader.GetTextReader(0); Assert.Equal((string)values[i] + "\n", asynchronous ? await text.ReadToEndAsync() : text.ReadToEnd());
+                    }
+                    else Assert.Equal((string)values[i] + "\n", asynchronous ? await reader.GetFieldValueAsync<string>(0) : reader.GetString(0));
                     Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
                     Assert.Equal(i != 2, asynchronous ? await reader.NextResultAsync() : reader.NextResult());
                 }

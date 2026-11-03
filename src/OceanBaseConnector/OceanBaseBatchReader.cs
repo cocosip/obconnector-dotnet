@@ -76,7 +76,7 @@ namespace OceanBaseConnector
             var exchange = _multiExchange!;
             var request = _multiRequests![_index];
             exchange.BatchCommand = _operation.Items[_index]; exchange.BeginBatchResponse(request.SourceComplexTypes, request.SessionTimeZone, request.NationalCharacterSet);
-            var result = request.CreateResult(exchange);
+            var result = request.CreateResult(exchange, sequential: (Behavior & CommandBehavior.SequentialAccess) != 0);
             result.Start(); _current = new OceanBaseDataReader(exchange, result, _operation.Connection, _operation.Session!, Behavior, leaveExchangeOpen: true); UpdateCount();
         }
         private async Task StartCurrentMultiSendAsync()
@@ -84,7 +84,7 @@ namespace OceanBaseConnector
             var exchange = _multiExchange!;
             var request = _multiRequests![_index];
             exchange.BatchCommand = _operation.Items[_index]; exchange.BeginBatchResponse(request.SourceComplexTypes, request.SessionTimeZone, request.NationalCharacterSet);
-            var result = request.CreateResult(exchange);
+            var result = request.CreateResult(exchange, sequential: (Behavior & CommandBehavior.SequentialAccess) != 0);
             await result.StartAsync(_operation.Token).ConfigureAwait(false);
             _current = new OceanBaseDataReader(exchange, result, _operation.Connection, _operation.Session!, Behavior, leaveExchangeOpen: true); UpdateCount();
         }

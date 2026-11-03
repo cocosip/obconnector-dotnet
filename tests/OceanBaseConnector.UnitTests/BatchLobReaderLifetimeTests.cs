@@ -18,12 +18,13 @@ namespace OceanBaseConnector.UnitTests
                 foreach (var character in new[] { false, true })
                     foreach (var shape in new[] { "root", "named", "anonymous" })
                         foreach (var owned in new[] { false, true })
-                            if (shape != "named" || !owned) yield return new object[] { asynchronous, character, shape, owned };
+                            foreach (var sequential in new[] { false, true })
+                                if (shape != "named" || !owned) yield return new object[] { asynchronous, character, shape, owned, sequential };
         }
 
         [Theory]
         [MemberData(nameof(ClosingLobReaderCases))]
-        public async Task ClosingMultiSendReaderKeepsLobsReadableBetweenDrainAndClose(bool asynchronous, bool character, string shape, bool owned)
+        public async Task ClosingMultiSendReaderKeepsLobsReadableBetweenDrainAndClose(bool asynchronous, bool character, string shape, bool owned, bool sequential)
         {
             var code = character ? (byte)211 : (byte)210;
             var data = Encoding.UTF8.GetBytes("患者🙂");
@@ -58,7 +59,8 @@ namespace OceanBaseConnector.UnitTests
                 if (shape == "named") await connection.GetComplexTypeAsync("Owner", "Thing");
                 using var batch = owned ? new OceanBaseBatch(connection) : connection.CreateBatch();
                 for (var i = 0; i < 3; i++) BatchItem(batch, "select lob from t" + i);
-                using var reader = asynchronous ? await batch.ExecuteReaderAsync(CommandBehavior.CloseConnection) : batch.ExecuteReader(CommandBehavior.CloseConnection);
+                var behavior = CommandBehavior.CloseConnection | (sequential ? CommandBehavior.SequentialAccess : 0);
+                using var reader = asynchronous ? await batch.ExecuteReaderAsync(behavior) : batch.ExecuteReader(behavior);
                 for (var i = 0; i < 3; i++)
                 {
                     Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());

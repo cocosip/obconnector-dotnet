@@ -61,6 +61,10 @@ namespace OceanBaseConnector.UnitTests
         [InlineData(false, "scalar", false)] [InlineData(true, "scalar", false)]
         [InlineData(false, "nonquery", false)] [InlineData(true, "nonquery", false)]
         [InlineData(false, "reader", true)] [InlineData(true, "reader", true)]
+        [InlineData(false, "sequential", false)] [InlineData(true, "sequential", false)]
+        [InlineData(false, "sequential", true)] [InlineData(true, "sequential", true)]
+        [InlineData(false, "skip", false)] [InlineData(true, "skip", false)]
+        [InlineData(false, "skip", true)] [InlineData(true, "skip", true)]
         public async Task BatchMultiSendXmlReadsAndDrainsBinaryResults(bool asynchronous, string api, bool omittedName)
         {
             var server = Server(async channel =>
@@ -98,13 +102,22 @@ namespace OceanBaseConnector.UnitTests
                 using (var batch = connection.CreateBatch())
                 {
                     BatchItem(batch, "select x from first_table"); BatchItem(batch, "select x from second_table");
-                    if (api == "reader")
+                    if (api == "reader" || api == "sequential" || api == "skip")
                     {
-                        using var reader = asynchronous ? await batch.ExecuteReaderAsync() : batch.ExecuteReader();
+                        var behavior = api == "reader" ? CommandBehavior.Default : CommandBehavior.SequentialAccess;
+                        using var reader = asynchronous ? await batch.ExecuteReaderAsync(behavior) : batch.ExecuteReader(behavior);
                         for (var i = 0; i < 2; i++)
                         {
                             Assert.Equal(typeof(string), reader.GetFieldType(0)); Assert.Equal("XMLTYPE", reader.GetDataTypeName(0));
-                            Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read()); Assert.Equal("<a>患者🙂</a>", reader.GetString(0));
+                            Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+                            if (api != "skip")
+                            {
+                                if (api == "sequential" && i == 1)
+                                {
+                                    using var text = reader.GetTextReader(0); Assert.Equal("<a>患者🙂</a>", asynchronous ? await text.ReadToEndAsync() : text.ReadToEnd());
+                                }
+                                else Assert.Equal("<a>患者🙂</a>", asynchronous ? await reader.GetFieldValueAsync<string>(0) : reader.GetString(0));
+                            }
                             Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read()); Assert.True(reader.IsDBNull(0));
                             Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
                             Assert.Equal(i == 0, asynchronous ? await reader.NextResultAsync() : reader.NextResult());

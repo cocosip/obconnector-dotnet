@@ -459,6 +459,15 @@ Client-prepared text fallback also accepts preloaded named OBJECT results throug
 recursive text decoder. Type identity must be exact or uniquely resolvable for ownerless metadata;
 collection/anonymous layouts and RAW, temporal, LOB or cursor text members remain unsupported.
 Each request keeps its own text/binary response mode, including mixed groups.
+Multi-send readers accept SequentialAccess, including CloseConnection and data-source ownership.
+The ordinary QueryResult/SequentialRow path streams root byte and text fields on demand; moving to
+the next row/result drains the current field and invalidates its streams. Named/anonymous complex
+binary fields retain the existing bounded whole-field materialization. XMLTYPE uses its ordinary
+length-encoded UTF-8 String framing, including binary metadata with type 160, rather than an OBJECT
+layout. Field I/O failure invokes the batch failure callback, closes the failed reader logically and
+releases the batch operation without requiring an extra Close. The connection is discarded when
+responses remain unread. SequentialAccess follows the same command eligibility checks as Default;
+SchemaOnly, KeyInfo, SingleRow and SingleResult keep their sequential command path.
 Anonymous scalar collection binary results reuse the ordinary metadata layout and decoder in batch
 reader/scalar/nonquery, including root/member NULL, empty collections and retained read-only values.
 They cannot be rebound as inputs or declared batch outputs. Non-NULL national members still require

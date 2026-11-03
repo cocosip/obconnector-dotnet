@@ -60,7 +60,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 Skip(_remaining); NextColumn();
                 try
                 {
-                    if (_columns[_ordinal].TypeCode == 160 && !IsBinaryNull)
+                    if (_columns[_ordinal].TypeCode == 160 && !_columns[_ordinal].IsXmlType && !IsBinaryNull)
                     {
                         _columns[_ordinal].RequireComplexResult(_binary);
                         if (_binary) MaterializeComplex(false, CancellationToken.None).GetAwaiter().GetResult();
@@ -86,7 +86,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 await SkipAsync(_remaining, token).ConfigureAwait(false); NextColumn();
                 try
                 {
-                    if (_columns[_ordinal].TypeCode == 160 && !IsBinaryNull)
+                    if (_columns[_ordinal].TypeCode == 160 && !_columns[_ordinal].IsXmlType && !IsBinaryNull)
                     {
                         _columns[_ordinal].RequireComplexResult(_binary);
                         if (_binary) await MaterializeComplex(true, token).ConfigureAwait(false);

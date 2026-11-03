@@ -12,6 +12,8 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(false, false, "reader")] [InlineData(true, false, "reader")]
         [InlineData(false, true, "reader")] [InlineData(true, true, "reader")]
+        [InlineData(false, false, "sequential")] [InlineData(true, false, "sequential")]
+        [InlineData(false, true, "sequential")] [InlineData(true, true, "sequential")]
         [InlineData(false, false, "scalar")] [InlineData(true, false, "scalar")]
         [InlineData(false, true, "scalar")] [InlineData(true, true, "scalar")]
         [InlineData(false, false, "nonquery")] [InlineData(true, false, "nonquery")]
@@ -70,9 +72,10 @@ namespace OceanBaseConnector.UnitTests
                 using (var batch = connection.CreateBatch())
                 {
                     BatchItem(batch, "select value from first_table"); BatchItem(batch, "select value from second_table");
-                    if (api == "reader")
+                    if (api == "reader" || api == "sequential")
                     {
-                        using var reader = asynchronous ? await batch.ExecuteReaderAsync() : batch.ExecuteReader();
+                        var behavior = api == "sequential" ? CommandBehavior.SequentialAccess : CommandBehavior.Default;
+                        using var reader = asynchronous ? await batch.ExecuteReaderAsync(behavior) : batch.ExecuteReader(behavior);
                         for (var i = 0; i < 2; i++)
                         {
                             Assert.Equal(typeof(OceanBaseComplexValue), reader.GetFieldType(0));

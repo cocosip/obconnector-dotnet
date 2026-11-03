@@ -27,7 +27,7 @@ namespace OceanBaseConnector
         internal NationalCharacterSet? NationalCharacterSet { get; }
         internal bool HasLongData => LongDataParameters != null;
         private OracleCommandPlan? OraclePlan { get; }
-        internal QueryResult CreateResult(CommandExchange exchange) => new QueryResult(exchange, Binary, completeExchange: false,
+        internal QueryResult CreateResult(CommandExchange exchange, bool sequential = false) => new QueryResult(exchange, Binary, completeExchange: false, sequential: sequential,
             oracleParameterCount: OraclePlan?.Bindings.Parameters.Length, oraclePlan: OraclePlan);
         public void Dispose()
         {

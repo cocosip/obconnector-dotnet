@@ -126,7 +126,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的根/命名复杂 LOB binary 结果及命名复杂 LOB 内容输入及 Oracle DML RETURNING 标量 OUT/INOUT、命名复杂值和保留调用方连接的 LOB 输出子集也已验收；关闭连接/data source reader 的根远程 LOB 读取窗口 **8/8**（D-08u）；data source NonQuery 的根远程 LOB 排空/池复用 **4/4**（D-08v） | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自有连接 Scalar 的 locator 结果及显式 LOB OUT/INOUT、复杂 text LOB 结果、PL 输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的根/命名复杂 LOB binary 结果及命名复杂 LOB 内容输入及 Oracle DML RETURNING 标量 OUT/INOUT、命名复杂值和保留调用方连接的 LOB 输出子集也已验收；关闭连接/data source reader 的根远程 LOB 读取窗口 **8/8**（D-08u）；data source NonQuery 的根远程 LOB 排空/池复用 **4/4**（D-08v）；SequentialAccess reader 的双模式字段 **8/8**、Oracle LOB 窗口 **16/16**（含原8）与 XML **4/4**（含原2）（D-08w） | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自有连接 Scalar 的 locator 结果及显式 LOB OUT/INOUT、复杂 text LOB 结果、PL 输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
 | D-09 | `P4`；4.4.2.2 `oracle-direct` text+binary String wire 子集；PL XMLTYPE OUT/INOUT 已确认是服务端限制；完整 XML codec 仍未关闭 | XMLType wire 调查与有条件 codec（T17） | ownerless `XMLTYPE` 已有严格 UTF-8 String wire；`SYS.XMLTYPE` metadata 已有安全的 String 消费边界；`DbType.Xml` 参数使用已验证的 type 253 字符串 wire；同一 PL OUT/INOUT 形状在 Connector/J 2.4.14 与 .NET 分别返回 `600/0A000`、`600/42000`，按服务端限制跳过客户端扩展 | 当前子集覆盖普通 XMLTYPE 列、NULL、同步/异步 DML、metadata、PL 函数结果、显式 Prepare binary 结果；带 owner 的复杂 payload、坏值/最大值和跨版本证据仍待确认；PL OUT/INOUT 当前版本不再作为待开发项 | 保持当前子集的参数/结果/NULL/metadata 契约；取得稳定复杂 XML identity 和不同服务端 wire 后再扩展，不把 PL 失败伪装成客户端成功 |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
@@ -1931,6 +1931,44 @@ data source NonQuery 在三组中排空普通/NULL LOB 行，完成尾部 DML，
 产品、测试及四份文档已独立走查通过，无阻断发现。
 报告位于忽略目录 `TestResults/roadmap/d08v-*.trx`，保留 RED 和全部结果。
 不重复长测、全消费者、冻结服务端探针；D-08 父项仍未整体关闭。
+
+#### D-08w：multi-send SequentialAccess reader（2026-11-03，指定直连子集 `P4`）
+
+Q09 的流式 reader 与 Q20 的分组发送此前因 behavior 白名单而退回逐命令执行。本轮复用
+`QueryResult`/`SequentialRow`，让 batch 的 SequentialAccess 保留组内先发送、再按需读取根
+byte/text 字段的路径；允许与 CloseConnection/data source reader 组合。复杂 binary 字段
+继续沿用原有有界整字段物化，不承诺复杂成员全程无缓冲。
+不改变 SingleRow/SingleResult/SchemaOnly/KeyInfo 的顺序路径、LOB negotiation、复杂值 decoder
+或已有错误/取消契约，不新增公开配置、codec 或依赖。
+
+请求结果工厂增加内部 sequential flag，由 batch reader 同步/异步透传；NonQuery/Scalar 的
+默认消费策略不变。SequentialAccess 与 Default 使用相同的 SQL/参数 eligible-shape 校验，
+不以该 flag 绕过 PL/cursor/array 等已有流水化限制。
+
+独立初审发现字段流 I/O 发生在 batch reader 的 Read/NextResult catch 之外，因此同步补上
+multi-send exchange 的 `BatchFailed=operation.Fail`。截断、caller token、batch Cancel 和提前
+Close 后 reader 逻辑关闭、连接 Broken、操作释放，无需额外 Close 即可修改 batch；保留当前
+BatchCommand 和 unknown-outcome，不新增重放。真正 OBJECT/collection 的资源路径不改。
+复审另发现 binary XMLTYPE 的 type160 被误送入复杂布局，导致空 descriptor 解引用；共享
+SequentialRow 两处分支改为排除已确认的 XMLTYPE，复用原 length-encoded UTF-8 String 路径。
+
+`BatchSequentialMultiSendTests` 首轮 RED **12/12 失败**，证实原路径仍逐命令发送；新增字段
+截断/取消/关闭共22项后通过。中间误用 Oracle 默认 fixture 承载 MySQL type252 的失败保留，
+修正为现有 MySQL fixture，不放宽产品类型限制。XML 读取/跳过及 source identity 新增8项
+RED 为 **8失败/8通过**，8个失败均为原复杂布局 NRE。最终相关单测 **536/536**、无 skip，
+含 gated partial-row 先发后读、半读跨组、NULL、旧流失效、命名 context 与根/命名/匿名 LOB 窗口。
+
+实库 `SequentialMultiSendTests` 双模式 × sync/async × caller CloseConnection/data source
+**8/8**：MySQL 100000字节 MEDIUMBLOB 与长 TEXT、Oracle 2000字节 RAW 与 Unicode 字符串，
+包含部分字段读取、跳过、NULL、尾部 UPDATE、逐条计数、独立查账和对象清理。
+扩展 `ClosingLobReaderTests` 的 SequentialAccess 维度，Oracle 根远程 BLOB/CLOB 窗口
+**16/16**（含原 Default 对照8项）；以上两组总计 **24/24**、无 skip，约91秒。
+修复 XML 后的 `XmlMultiSendTests` **4/4**（含原 Default 对照2项），约6秒；读取/NULL/
+TextReader 与跨组消费通过。命名/匿名复杂字段的新顺序路径仍只计 loopback 证据。
+最终产品五 TFM 与集成项目 Release build 均 **0 warning / 0 error**。
+产品、测试和四份文档已独立走查通过，无阻断发现；`git diff --check` 通过。
+报告保存在忽略目录 `TestResults/roadmap/d08w-*.trx`，保留原始 RED 与中间失败。
+不重复长压、全消费者、冻结端点或无关部署；D-08 父项仍未整体关闭。
 
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 
