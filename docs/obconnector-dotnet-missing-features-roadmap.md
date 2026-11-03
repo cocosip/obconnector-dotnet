@@ -1840,6 +1840,34 @@ build 均 **0 warning / 0 error**。代码、测试和四份文档已独立走�
 全部结果位于忽略目录 `TestResults/roadmap/`。
 不重跑长测、全消费者、旧匿名 SQL 变体或服务端冻结项。
 
+#### A-03g：Oracle Unicode 参数名的绑定与派生闭环（2026-11-03，指定中文名称子集 `P4`）
+
+A-03f 只放开过程 identity；当前 `ParameterBindingPlan` 和派生参数名校验仍拒绝中文参数，
+导致目录可见的 Unicode 形式参数无法派生后执行。本项复用同一 BMP 字母/ASCII 数字及
+`_`/`$`/`#` 字符规则，用于普通命名占位符、过程 wrapper 和目录参数名校验，不新增 API。
+保留可选冒号前缀、OrdinalIgnoreCase 重名拒绝、SQL 顺序和重复输入、输出位置唯一、
+quote/comment/q-quote 跳过、未知名字/非法 suffix 拒绝、派生原子发布及512字节目录名字上限。
+quoted 参数、空格、combining mark、格式控制、emoji 等不扩展；不做 Unicode 正规化或隐式改名。
+
+命名绑定/输出方向/派生 RED **12/12** 按预期因旧 ASCII 校验失败，
+`a03g-unicode-bind-red.trx`。产品只修改两个既有校验点，复用 `OracleCommandPlan` 字符规则，
+删除重复 ASCII 判定；参数集合、literal、输出解码和发布逻辑均复用既有实现。
+这项扩展取代 A-03f 当时保留的 ASCII 参数名限制，A-03f 的历史证据保持原样。
+
+定向单测 **278/278**、无跳过，`a03g-unicode-bind-unit.trx`：绑定/parser、SQL 顺序和重复输入、
+原始 literal 位置、大小写与重名、输出位置、派生与过程执行、512字节多字节边界；
+合法前缀后接 combining mark/emoji/格式控制/全角标点或非 ASCII 数字仍拒绝，名称不被截断或正规化。
+Oracle 4.4.2.2 `oracle-direct` 实库 **10/10**、无跳过，`a03g-unicode-bind-live.trx`：
+原有中文独立过程/package **4例**回归；新增同步/异步 × 独立过程/package **4例**中文
+IN/OUT/INOUT 派生后原名执行，隐式及显式 Prepare 重执行；另 **2例**普通 prepared DML 和
+重复中文输入标签的多语句存储后独立读回，包含带引号/分号/注释样式的中文字符串。
+全部验证连接复用及对象清理；绑定标签在发送前已替换，不把标签名与会话 SQL/value 编码混淆。
+产品 netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0 五 TFM 及集成项目 Release
+build 均 **0 warning / 0 error**。
+本次产品、测试及五份文档已独立走查通过，无阻断发现；修正文案中的非 ASCII 数字限定。
+报告均位于忽略目录 `TestResults/roadmap/`。本轮未重跑长测、全消费者、冻结服务端探针，
+也未扩展 quoted bind、PL-only RECORD、其他字符集或代理部署契约。
+
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 
 本轮先固定服务端形状，再核对 Java 和 .NET 是否已有可复用的客户端类型路径。OceanBase

@@ -292,12 +292,10 @@ namespace OceanBaseConnector.Internal.Sql
                 foreach (var c in name) if (char.IsControl(c)) return false;
                 return true;
             }
-            if (!IsNameStart(name[0])) return false;
-            for (var i = 1; i < name.Length; i++) if (!IsNamePart(name[i])) return false;
+            if (!OracleCommandPlan.IsNameStart(name[0])) return false;
+            for (var i = 1; i < name.Length; i++) if (!OracleCommandPlan.IsNamePart(name[i])) return false;
             return true;
         }
-        private static bool IsNameStart(char c) => c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_';
-        private static bool IsNamePart(char c) => IsNameStart(c) || c >= '0' && c <= '9' || c == '$' || c == '#';
         private static NotSupportedException Invalid(string message) => new NotSupportedException(message);
     }
 }

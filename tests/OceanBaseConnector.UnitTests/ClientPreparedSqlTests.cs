@@ -30,6 +30,19 @@ namespace OceanBaseConnector.UnitTests
             => Assert.Equal(expected, Build(sql, OceanBaseCompatibilityMode.Oracle, new OceanBaseParameter { ParameterName = "p", Value = "it's \\ 中文" }));
 
         [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void UnicodeLabelsRetainLiteralPositionsInClientExecution(bool multiStatement)
+        {
+            const string sql = "select ':输入 ?', q'[:输入 ?]', :输入 /* :输入 ? */";
+            const string expected = "select ':输入 ?', q'[:输入 ?]', (42) /* :输入 ? */";
+            var parameter = new OceanBaseParameter { ParameterName = ":输入", Value = 42 };
+            Assert.Equal(multiStatement ? expected + "; select (42)" : expected,
+                multiStatement ? BuildMulti(sql + "; select :输入", OceanBaseCompatibilityMode.Oracle, parameter)
+                    : Build(sql, OceanBaseCompatibilityMode.Oracle, parameter));
+        }
+
+        [Theory]
         [InlineData("select ?, '?', \"?\", `?` # ?\n", "select (1), '?', \"?\", `?` # ?\n")]
         [InlineData("select /* ? */ ? -- ?\n", "select /* ? */ (1) -- ?\n")]
         public void MySqlSkipsQuotedAndCommentedQuestionMarks(string sql, string expected)

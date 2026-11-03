@@ -67,9 +67,9 @@ namespace OceanBaseConnector.Internal.Sql
                 if (position + 1 < sql.Length && sql[position + 1] == '=') { position += 2; continue; }
 
                 var start = position++;
-                if (position == sql.Length || !IsNameStart(sql[position])) throw UnsupportedSyntax();
+                if (position == sql.Length || !OracleCommandPlan.IsNameStart(sql[position])) throw UnsupportedSyntax();
                 position++;
-                while (position < sql.Length && IsNamePart(sql[position])) position++;
+                while (position < sql.Length && OracleCommandPlan.IsNamePart(sql[position])) position++;
                 if (position < sql.Length && IsIdentifierPart(sql[position])) throw UnsupportedSyntax();
                 var name = sql.Substring(start + 1, position - start - 1);
                 if (!names.TryGetValue(name, out var index)) throw new ArgumentException("A required Oracle parameter is missing.");
@@ -91,8 +91,8 @@ namespace OceanBaseConnector.Internal.Sql
         {
             if (string.IsNullOrEmpty(name)) throw InvalidName();
             var start = name[0] == ':' ? 1 : 0;
-            if (start == name.Length || !IsNameStart(name[start])) throw InvalidName();
-            for (var i = start + 1; i < name.Length; i++) if (!IsNamePart(name[i])) throw InvalidName();
+            if (start == name.Length || !OracleCommandPlan.IsNameStart(name[start])) throw InvalidName();
+            for (var i = start + 1; i < name.Length; i++) if (!OracleCommandPlan.IsNamePart(name[i])) throw InvalidName();
             return start == 0 ? name : name.Substring(1);
         }
 
@@ -127,9 +127,7 @@ namespace OceanBaseConnector.Internal.Sql
             throw Unterminated();
         }
 
-        private static bool IsNameStart(char c) => c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_';
-        private static bool IsNamePart(char c) => IsNameStart(c) || c >= '0' && c <= '9' || c == '$' || c == '#';
-        private static bool IsIdentifierPart(char c) => IsNamePart(c) || c >= 128 && !char.IsWhiteSpace(c);
+        private static bool IsIdentifierPart(char c) => OracleCommandPlan.IsNamePart(c) || c >= 128 && !char.IsWhiteSpace(c);
         private static ArgumentException InvalidName() => new ArgumentException("Oracle parameter names must use the supported unquoted name syntax.");
         private static ArgumentException Unterminated() => new ArgumentException("CommandText contains an unterminated quote or comment.");
         private static NotSupportedException UnsupportedSyntax() => new NotSupportedException("The Oracle literal or binding syntax is not supported.");

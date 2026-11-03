@@ -56,6 +56,59 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal(":Id", parameters[1].ParameterName);
         }
 
+        [Fact]
+        public void UnicodeBindingsKeepSqlOrderRepeatedIdentityAndLiteralPositions()
+        {
+            var parameters = Parameters("编号_2", ":输入");
+            var plan = ParameterBindingPlan.Create("select :输入, :编号_2, :输入", OceanBaseCompatibilityMode.Oracle, parameters);
+            Assert.Equal("select ?, ?, ?", plan.CommandText);
+            Assert.Equal(new[] { 7, 10, 13 }, plan.BindingPositions);
+            Assert.Equal(new[] { parameters[1], parameters[0], parameters[1] }, plan.Parameters);
+            Assert.Equal(":输入", parameters[1].ParameterName);
+        }
+
+        [Theory]
+        [InlineData("select :输入", "select ?")]
+        [InlineData("select ':输入', :输入", "select ':输入', ?")]
+        [InlineData("select \"列:输入\", :输入", "select \"列:输入\", ?")]
+        [InlineData("select q'[:输入 ?]', :输入", "select q'[:输入 ?]', ?")]
+        [InlineData("select nq'!:输入 ?!', :输入", "select nq'!:输入 ?!', ?")]
+        [InlineData("select /* :输入 ? */ :输入 -- :输入", "select /* :输入 ? */ ? -- :输入")]
+        public void OracleUnicodeBindingsSkipQuotedAndCommentedNames(string sql, string expected)
+        {
+            var parameters = Parameters("输入");
+            var plan = ParameterBindingPlan.Create(sql, OceanBaseCompatibilityMode.Oracle, parameters);
+            Assert.Equal(expected, plan.CommandText); Assert.Same(parameters[0], Assert.Single(plan.Parameters));
+        }
+
+        [Theory]
+        [InlineData(ParameterDirection.Output)] [InlineData(ParameterDirection.InputOutput)]
+        public void UnicodeOutputBindingsRemainUnique(ParameterDirection direction)
+        {
+            var parameters = Parameters("输出"); parameters[0].Direction = direction;
+            var plan = ParameterBindingPlan.Create("begin :输出 := 1; end;", OceanBaseCompatibilityMode.Oracle, parameters, allowOutputs: true);
+            Assert.Equal("begin ? := 1; end;", plan.CommandText); Assert.Same(parameters[0], Assert.Single(plan.Parameters));
+            Assert.Throws<ArgumentException>(() => ParameterBindingPlan.Create("begin :输出 := :输出; end;", OceanBaseCompatibilityMode.Oracle, parameters, allowOutputs: true));
+        }
+
+        [Theory]
+        [InlineData("\u0301")]
+        [InlineData("🙂")]
+        [InlineData("\u200B")]
+        [InlineData("。")]
+        [InlineData("２")]
+        public void UnicodeBindingCannotConsumeOnlyAValidPrefix(string suffix)
+            => Assert.Throws<NotSupportedException>(() => ParameterBindingPlan.Create("select :输入" + suffix,
+                OceanBaseCompatibilityMode.Oracle, Parameters("输入")));
+
+        [Fact]
+        public void UnicodeBindingsMatchOrdinalCaseWithoutNormalizingNames()
+        {
+            var parameters = Parameters(":état");
+            Assert.Same(parameters[0], Assert.Single(ParameterBindingPlan.Create("select :ÉTAT", OceanBaseCompatibilityMode.Oracle, parameters).Parameters));
+            Assert.Throws<NotSupportedException>(() => ParameterBindingPlan.Create("select :e\u0301tat", OceanBaseCompatibilityMode.Oracle, parameters));
+        }
+
         [Theory]
         [InlineData("select 1 -- :hidden")]
         [InlineData("select '?:hidden', q'[:hidden]' /* :hidden */")]
@@ -82,8 +135,8 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData("select :1")]
         [InlineData("select :\"quoted\"")]
-        [InlineData("select :中文")]
-        [InlineData("select :id中文")]
+        [InlineData("select :中文\u0301")]
+        [InlineData("select :id中文🙂")]
         [InlineData("select ::id")]
         [InlineData("select :")]
         [InlineData("select ?")]
@@ -96,6 +149,8 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData("id", ":ID")]
         [InlineData(":id", "ID")]
+        [InlineData("输入", ":输入")]
+        [InlineData("état", ":ÉTAT")]
         public void DuplicateNormalizedNamesAreRejectedEvenIfUnused(string first, string second)
         {
             Assert.Throws<ArgumentException>(() => ParameterBindingPlan.Create("select 1", OceanBaseCompatibilityMode.Oracle, Parameters(first, second)));
@@ -107,7 +162,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("::id")]
         [InlineData("1")]
         [InlineData("a b")]
-        [InlineData("中文")]
+        [InlineData("中文。")]
         public void InvalidParameterNamesAreRejected(string name)
         {
             Assert.Throws<ArgumentException>(() => ParameterBindingPlan.Create("select 1", OceanBaseCompatibilityMode.Oracle, Parameters(name)));

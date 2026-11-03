@@ -1,6 +1,6 @@
 # SDK 功能、能力与支持边界矩阵
 
-更新：2026-11-03，源码基线`1f1ffe9`，本轮补齐 A-03f 未引用 Unicode 过程名执行与参数派生。本文件是当前功能范围的唯一入口；
+更新：2026-11-03，源码基线`17543c2`，本轮补齐 A-03g Unicode 参数名派生、绑定与执行。本文件是当前功能范围的唯一入口；
 [依据与清理决策](obconnector-dotnet-scope-audit.md)固定官方文档/Java版本并解释O/J编号，
 [缺失矩阵](obconnector-dotnet-completeness.md)列开发与验收差距，
 [验收标准](acceptance-criteria.md)定义完成条件，[兼容性](compatibility.md)保留环境阻塞。
@@ -42,12 +42,12 @@
 | ID / 能力 | 范围 | MySQL模式 | Oracle模式 | .NET入口 | 证据/验收边界 |
 | --- | --- | --- | --- | --- | --- |
 | Q01 单语句text/CRUD/DDL/错误 | 核心 | 有实现 | 有实现，仅Oracle兼容SQL | OceanBaseCommand、CommandExchange、ErrPacket | O2/O3/J2；服务端SQL错误不由驱动模拟；TableDirect拒绝 |
-| Q02 参数绑定/重复占位/NULL/方向 | 核心 | 位置绑定、过程IN/OUT/INOUT | 命名绑定、标量IN/OUT/INOUT | ParameterBindingPlan、PreparedParameters、OceanBaseParameter | 参数方向与值类型分别验证；不等于全部组合支持 |
+| Q02 参数绑定/重复占位/NULL/方向 | 核心 | 位置绑定、过程IN/OUT/INOUT | 命名绑定（含 BMP Unicode 字母标签）、标量IN/OUT/INOUT；中文派生及 DML/脚本直连 **6/6**（A-03g） | ParameterBindingPlan、PreparedParameters、OceanBaseParameter | 参数方向与值类型分别验证；不等于全部组合支持 |
 | Q03 Prepare/PrepareAsync/重执行 | 核心 | 服务端prepare | 服务端prepare；可选PrepareExecute | PreparedStatement、OraclePrepareExecutePacket | J1/J4；版本/能力门槛不能用客户端期望替代 |
 | Q04 普通客户端prepare回退 | 可选 | 明确1295拒绝后限定标量/JSON/BIT/YEAR/时间 | 普通标量、DATE/TIMESTAMP/时区、INTERVAL、NCHAR/NVARCHAR2、显式 Urowid 等已有字面量子集；`oracle-direct` 实库 Prepare/输出/时间脚本复核 **38/38** 通过，原生1295仍未复现；命名 OBJECT/collection 构造器已复用于普通/批量受控回退输入（D-01b） | ClientPreparedSql、CommandExchange.ClientPreparedSql | 显式Prepare/输出/cursor/stream等不回退；需原生1295 profile 才能完成回退实库验收 |
 | Q05 文本多语句/参数/多结果 | 可选opt-in | 普通标量、JSON/BIT/YEAR/时间/二进制流 | 普通标量/national/时间/interval/二进制流；命名 OBJECT、嵌套 OBJECT 和集合输入已有指定直连子集 | ClientPreparedSql、SqlStatementBoundary | J5；Prepare/cursor/输出拒绝；复杂输入仅 D-02d1～d3 子集，集合子树 NULL OBJECT、locator 和其他未验证形状仍拒绝；展开 SQL 有界；Oracle temporal 存储见 D-02a2 |
 | Q06 存储过程/函数 | 核心模式差异 | 过程IN/OUT/INOUT；函数单ReturnValue+Input | PL块/过程/函数/RETURNING输出子集 | MySqlCommandPlan、OracleCommandPlan | J4；MySQL函数不混OUT，元数据/权限有条件 |
-| Q07 参数元数据派生 | 可选ADO.NET适配 | 可见唯一签名 | 可见唯一签名；未引用 BMP Unicode 字母过程名的执行与派生共用校验，中文独立过程/package 直连 sync/async **4/4**（A-03f）；普通 package-local `PL/SQL RECORD` 目录可见但公开绑定仍无协议契约；含 `SYS_REFCURSOR` 成员的 PL-only RECORD 在当前目标使 package INVALID，Java/.NET 同为服务端限制 | OceanBaseConnection.Parameters、RoutineParameterDerivation | 不执行目标；歧义/包内PL类型等拒绝；普通 RECORD 需字段描述和成功 wire 后再实现；cursor 成员需新服务端形状后重开 |
+| Q07 参数元数据派生 | 可选ADO.NET适配 | 可见唯一签名 | 可见唯一签名；未引用 BMP Unicode 字母过程名的执行与派生共用校验，中文独立过程/package 直连 sync/async **4/4**（A-03f）；中文 IN/OUT/INOUT 参数原名派生并执行及普通 DML/脚本独立读回，新增直连 sync/async **6/6**（A-03g）；普通 package-local `PL/SQL RECORD` 目录可见但公开绑定仍无协议契约；含 `SYS_REFCURSOR` 成员的 PL-only RECORD 在当前目标使 package INVALID，Java/.NET 同为服务端限制 | OceanBaseConnection.Parameters、RoutineParameterDerivation | 不执行目标；歧义/包内PL类型等拒绝；普通 RECORD 需字段描述和成功 wire 后再实现；cursor 成员需新服务端形状后重开 |
 | Q08 Reader/NextResult/typed getters | 核心 | 有实现 | 有实现 | OceanBaseDataReader、QueryResult、ResultColumn | metadata、NULL、精度与类型身份须一致 |
 | Q09 SequentialAccess/流式读取 | 核心资源 | 有实现 | 有实现，含LOB资源 | SequentialRow、LobReadStream、LobTextReader | 半读/取消/关闭/池租约子集验收，不等于全部资源交错 |
 | Q10 cursor fetch/page/offset | 可选 | prepared cursor分页 | prepared cursor分页，offset有条件 | QueryResult.Cursor、OracleCursorOwner | 普通cursor与PL输出不同；输出offset拒绝 |

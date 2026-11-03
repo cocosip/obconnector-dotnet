@@ -99,7 +99,7 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public void MySqlDirectoryNamesDoNotInheritOracleAsciiBindRestrictions()
+        public void MySqlDirectoryNamesDoNotInheritOracleBindRestrictions()
         {
             using var table = Arguments(); var row = Argument(table, "INT", "int");
             row["PARAMETER_NAME"] = "目标"; row["ROUTINE_TYPE"] = "PROCEDURE";
@@ -169,10 +169,45 @@ namespace OceanBaseConnector.UnitTests
         public void RoutineNamesCannotBeSql(string text, bool mysql)
             => Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.ParseName(text, mysql));
 
-        [Fact]
-        public void UnicodeRoutineNamesDoNotExpandTheBindParameterGrammar()
+        [Theory]
+        [InlineData("IN", ParameterDirection.Input)]
+        [InlineData("OUT", ParameterDirection.Output)]
+        [InlineData("INOUT", ParameterDirection.InputOutput)]
+        public void UnicodeDerivedParameterNamesCanBeBoundWithoutRenaming(string mode, ParameterDirection direction)
         {
-            using var table = Arguments(); var row = Argument(table, "NUMBER"); row["PARAMETER_NAME"] = "输入";
+            using var table = Arguments(); var row = Argument(table, "NUMBER"); row["PARAMETER_NAME"] = "数值"; row["PARAMETER_MODE"] = mode;
+            Assert.Same(row, Assert.Single(RoutineParameterDerivation.OrderParameters(table, row, false)));
+            var parameter = RoutineParameterDerivation.Map(row, false, false);
+            Assert.Equal("数值", parameter.ParameterName); Assert.Equal(direction, parameter.Direction);
+            var parameters = new OceanBaseParameterCollection(); parameters.Add(parameter);
+            var plan = OracleCommandPlan.Create("诊断", CommandType.StoredProcedure, parameters);
+            Assert.Equal("BEGIN 诊断(?); END;", plan.Bindings.CommandText); Assert.Equal("数值", Assert.Single(plan.Bindings.Parameters).ParameterName);
+        }
+
+        [Theory]
+        [InlineData("输 入")]
+        [InlineData(":输入")]
+        [InlineData("输入\u0301")]
+        [InlineData("输入\u200B")]
+        [InlineData("输入🙂")]
+        [InlineData("输入。")]
+        public void DerivedUnicodeNamesMustRemainBindable(string name)
+        {
+            using var table = Arguments(); var row = Argument(table, "NUMBER"); row["PARAMETER_NAME"] = name;
+            Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.OrderParameters(table, row, false));
+        }
+
+        [Fact]
+        public void DerivedUnicodeNamesRetainTheUtf8ByteLimitAndCaseCollisionGuard()
+        {
+            using var table = Arguments(); var row = Argument(table, "NUMBER");
+            row["PARAMETER_NAME"] = new string('中', 170) + "ab";
+            Assert.Single(RoutineParameterDerivation.OrderParameters(table, row, false));
+            row["PARAMETER_NAME"] = new string('中', 171);
+            Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.OrderParameters(table, row, false));
+            row["PARAMETER_NAME"] = "état";
+            var second = table.NewRow(); second.ItemArray = row.ItemArray;
+            second["ORDINAL_POSITION"] = 2; second["PARAMETER_NAME"] = "ÉTAT"; table.Rows.Add(second);
             Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.OrderParameters(table, row, false));
         }
 
