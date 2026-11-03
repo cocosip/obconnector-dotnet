@@ -1,6 +1,6 @@
 # 源码走查与功能缺失矩阵
 
-更新：2026-11-04；本阶段基线`9780dba`，D-04j 已完成服务端边界复核，候选改动已撤销；D-08ac 已补齐 batch named OBJECT、scalar collection、nested collection BLOB/CLOB locator 输入子集，Oracle 直连 12/12。范围与编号以[能力矩阵](obconnector-dotnet-progress.md)为准，
+更新：2026-11-04；本阶段基线`e45ddac`，D-02c2 已补齐 MySQL 文本脚本标量 ReturnValue 的 loopback 子集（P3）；D-04j 已完成服务端边界复核，候选改动已撤销；D-08ac 已补齐 batch named OBJECT、scalar collection、nested collection BLOB/CLOB locator 输入子集，Oracle 直连 12/12。当前集成配置仅有 `oracle-direct`，MySQL ReturnValue 直连仍待 profile。范围与编号以[能力矩阵](obconnector-dotnet-progress.md)为准，
 证据来源见[范围审计](obconnector-dotnet-scope-audit.md)。本次走查不等于重新执行所有历史实库测试。
 
 分类：**缺实现**是已保留目标中的代码缺口；**受限**是已定义子集，不能默认要求任意组合；

@@ -1,6 +1,6 @@
 # SDK 功能、能力与支持边界矩阵
 
-更新：2026-11-04，源码基线`9780dba`，D-04i 已补齐 StoredProcedure 单条全 Input locator 子集；D-04j 的复杂 locator InputOutput 在目标服务端返回 `900/42000`，候选改动已撤销；D-08ac 已补齐 batch named OBJECT、scalar collection、nested collection BLOB/CLOB locator 输入子集，Oracle 直连 12/12。本文是当前功能范围的唯一入口；
+更新：2026-11-04，源码基线`e45ddac`，D-02c2 已补齐 MySQL 文本脚本标量 ReturnValue 的 loopback 子集（P3）；D-04i 已补齐 StoredProcedure 单条全 Input locator 子集；D-04j 的复杂 locator InputOutput 在目标服务端返回 `900/42000`，候选改动已撤销；D-08ac 已补齐 batch named OBJECT、scalar collection、nested collection BLOB/CLOB locator 输入子集，Oracle 直连 12/12。下一步 D-04 方案 A 已确认，恢复开发后先按显式 Prepare/缓存最小扩展做 RED/协议复核；本文是当前功能范围的唯一入口；
 [依据与清理决策](obconnector-dotnet-scope-audit.md)固定官方文档/Java版本并解释O/J编号，
 [缺失矩阵](obconnector-dotnet-completeness.md)列开发与验收差距，
 [验收标准](acceptance-criteria.md)定义完成条件，[兼容性](compatibility.md)保留环境阻塞。
