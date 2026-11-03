@@ -314,7 +314,7 @@ namespace OceanBaseConnector
                     {
                         supplied[i] = (OceanBaseParameter)_parameters[i];
                         var complex = PreparedParameters.GetComplexType(supplied[i]);
-                        if (complex != null) connection.ValidateComplexType(complex, supplied[i].Value as OceanBaseComplexValue);
+                        if (!prepareOnly && complex != null) connection.ValidateComplexType(complex, supplied[i].Value as OceanBaseComplexValue);
                     }
                     bindings = NamedComplexLobBinding.Rewrite(text, supplied);
                 }

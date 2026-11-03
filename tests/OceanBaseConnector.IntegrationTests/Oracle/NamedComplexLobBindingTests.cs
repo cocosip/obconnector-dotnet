@@ -75,7 +75,7 @@ public sealed class NamedComplexLobBindingTests
             var profile = IntegrationEnvironment.GetProfile(profileName);
             if (!profile.CreateBuilder().UseLobLocators) continue;
             foreach (var character in new[] { false, true })
-                foreach (var shape in new[] { "object", "collection" })
+                foreach (var shape in new[] { "object", "collection", "nested-collection" })
                     foreach (var asynchronous in new[] { false, true }) data.Add(profile.Name, character, shape, asynchronous);
         }
         return data;
@@ -94,7 +94,7 @@ public sealed class NamedComplexLobBindingTests
             var profile = IntegrationEnvironment.GetProfile(profileName);
             if (!profile.CreateBuilder().UseLobLocators) continue;
             foreach (var character in new[] { false, true })
-                foreach (var shape in new[] { "object", "collection" })
+                foreach (var shape in new[] { "object", "collection", "nested-collection" })
                     foreach (var asynchronous in new[] { false, true }) data.Add(profile.Name, character, shape, asynchronous);
         }
         return data;
@@ -116,13 +116,22 @@ public sealed class NamedComplexLobBindingTests
         var scalar = character ? "CLOB" : "BLOB";
         var resultType = character ? "VARCHAR2(128)" : "RAW(32)";
         var table = await db.TableAsync(connection, "n NUMBER, len NUMBER, v " + resultType, CancellationToken.None);
-        var typeName = db.NewObject("TYPE");
+        var typeName = db.NewObject("TYPE", registerCleanup: shape == "nested-collection" ? false : true);
+        string? nestedTypeName = null;
+        if (shape == "nested-collection")
+        {
+            nestedTypeName = db.NewObject("TYPE", registerCleanup: false);
+            RegisterForceTypeCleanup(db, nestedTypeName);
+            RegisterForceTypeCleanup(db, typeName);
+            await db.ExecuteAsync(connection, "CREATE TYPE " + nestedTypeName + " AS OBJECT (a " + scalar + ", n NUMBER)", CancellationToken.None);
+        }
         await db.ExecuteAsync(connection, "CREATE TYPE " + typeName +
-            (shape == "object" ? " AS OBJECT (a " + scalar + ")" : " AS TABLE OF " + scalar), CancellationToken.None);
+            (shape == "object" ? " AS OBJECT (a " + scalar + ")" : " AS TABLE OF " + (nestedTypeName ?? scalar)), CancellationToken.None);
         var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
         var procedure = db.NewObject("PROCEDURE");
-        var member = shape == "object" ? "p.a" : "p(1)";
-        var nullGuard = shape == "collection" ? "IF p.COUNT <> 2 OR p(2) IS NOT NULL THEN RAISE_APPLICATION_ERROR(-20001, 'Invalid NULL member'); END IF; " : "";
+        var member = shape == "object" ? "p.a" : shape == "nested-collection" ? "p(1).a" : "p(1)";
+        var nullGuard = shape == "collection" ? "IF p.COUNT <> 2 OR p(2) IS NOT NULL THEN RAISE_APPLICATION_ERROR(-20001, 'Invalid NULL member'); END IF; " :
+            shape == "nested-collection" ? "IF p.COUNT <> 2 OR p(2).n <> 8 THEN RAISE_APPLICATION_ERROR(-20001, 'Invalid nested member'); END IF; " : "";
         await db.ExecuteAsync(connection, "CREATE PROCEDURE " + procedure + "(p IN " + typeName + ") IS BEGIN " + nullGuard +
             "INSERT INTO " + table + " VALUES (7, DBMS_LOB.GETLENGTH(" + member + "), DBMS_LOB.SUBSTR(" + member + ", 32, 1)); END;", CancellationToken.None);
         var type = await connection.GetComplexTypeAsync(owner, typeName);
@@ -140,7 +149,10 @@ public sealed class NamedComplexLobBindingTests
 
         await using (var command = db.Command(connection, "BEGIN " + procedure + "(:p); END;", transaction))
         {
-            DatabaseContext.Parameter(command, "p", shape == "object" ? type.CreateValue(lob) : type.CreateValue(lob, null));
+            var value = shape == "object" ? type.CreateValue(lob)
+                : shape == "nested-collection" ? type.CreateValue(type.Members[0].ComplexType!.CreateValue(lob, 7), type.Members[0].ComplexType!.CreateValue(lob, 8))
+                : type.CreateValue(lob, null);
+            DatabaseContext.Parameter(command, "p", value);
             if (prepared)
             {
                 if (asynchronous) await command.PrepareAsync(); else command.Prepare();
@@ -163,4 +175,11 @@ public sealed class NamedComplexLobBindingTests
         }
         Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
     }
+
+    private static void RegisterForceTypeCleanup(DatabaseContext db, string name)
+        => db.RegisterCleanup("TYPE", name, async () =>
+        {
+            await using var cleanup = await db.OpenAsync(CancellationToken.None);
+            await db.ExecuteAsync(cleanup, "DROP TYPE " + name + " FORCE", CancellationToken.None);
+        });
 }
