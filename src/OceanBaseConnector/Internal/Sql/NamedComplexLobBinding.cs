@@ -12,6 +12,8 @@ namespace OceanBaseConnector.Internal.Sql
     {
         internal static bool RequiresRewrite(OceanBaseParameter parameter)
         {
+            if (parameter.Direction != ParameterDirection.Input || parameter.Value is not OceanBaseComplexValue)
+                return false;
             var complex = PreparedParameters.GetComplexType(parameter);
             return complex != null && !complex.IsAnonymous && parameter.Value is OceanBaseComplexValue value &&
                 ContainsLocator(complex, value);
@@ -30,11 +32,9 @@ namespace OceanBaseConnector.Internal.Sql
                 var name = ParameterBindingPlan.NormalizeName(parameter.ParameterName);
                 if (names.ContainsKey(name)) throw new ArgumentException("Oracle parameter names must be unique after normalization.");
                 names.Add(name, i);
-                var complex = PreparedParameters.GetComplexType(parameter);
-                if (complex != null && !complex.IsAnonymous && parameter.Value is OceanBaseComplexValue value && ContainsLocator(complex, value))
+                var complex = RequiresRewrite(parameter) ? PreparedParameters.GetComplexType(parameter) : null;
+                if (complex != null && parameter.Value is OceanBaseComplexValue value)
                 {
-                    if (parameter.Direction != ParameterDirection.Input)
-                        throw new NotSupportedException("Named complex LOB locator rewriting supports input parameters only.");
                     rewrite[i] = true;
                 }
             }

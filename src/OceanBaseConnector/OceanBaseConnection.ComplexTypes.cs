@@ -88,15 +88,15 @@ namespace OceanBaseConnector
             return session;
         }
 
-        internal void ValidateComplexType(OceanBaseComplexType type, OceanBaseComplexValue? value = null)
+        internal void ValidateComplexType(OceanBaseComplexType type, OceanBaseComplexValue? value = null, object? owner = null)
         {
             EnsureAmbientTransaction();
             lock (_gate)
             {
                 var context = type.Context ?? throw new NotSupportedException("An anonymous result descriptor has no dictionary session.");
-                var session = GetCommandSession(context.Transaction);
+                var session = GetCommandSession(context.Transaction, owner);
                 ValidateComplexBinding(type, session, context.Transaction);
-                value?.ValidateLobBindings(this, session, context.Transaction, null);
+                value?.ValidateLobBindings(this, session, context.Transaction, owner);
             }
         }
 

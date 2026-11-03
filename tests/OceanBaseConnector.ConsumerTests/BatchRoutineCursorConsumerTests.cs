@@ -70,10 +70,15 @@ namespace OceanBaseConnector.ConsumerTests
                 DbDataReader reader;
                 if (asynchronous)
                 {
-                    var opening = (Task)cursor.GetType().GetMethod("GetDataReaderAsync")!.Invoke(cursor, new object[] { 2, CommandBehavior.Default, budget.Token })!;
+                    var method = cursor.GetType().GetMethods().Single(candidate => candidate.Name == "GetDataReaderAsync" && candidate.GetParameters().Length == 3);
+                    var opening = (Task)method.Invoke(cursor, new object[] { 2, CommandBehavior.Default, budget.Token })!;
                     await opening; reader = (DbDataReader)opening.GetType().GetProperty("Result")!.GetValue(opening)!;
                 }
-                else reader = (DbDataReader)cursor.GetType().GetMethod("GetDataReader")!.Invoke(cursor, new object[] { 2, CommandBehavior.Default })!;
+                else
+                {
+                    var method = cursor.GetType().GetMethods().Single(candidate => candidate.Name == "GetDataReader" && candidate.GetParameters().Length == 2);
+                    reader = (DbDataReader)method.Invoke(cursor, new object[] { 2, CommandBehavior.Default })!;
+                }
                 using (reader)
                 {
                     Assert.True(asynchronous ? await reader.ReadAsync(budget.Token) : reader.Read()); Assert.Equal(7L, reader.GetInt64(0));

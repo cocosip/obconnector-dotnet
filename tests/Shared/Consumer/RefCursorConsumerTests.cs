@@ -106,10 +106,15 @@ namespace OceanBaseConnector.ConsumerTests
                     DbDataReader reader;
                     if (async)
                     {
-                        var opening = (Task)cursor.GetType().GetMethod("GetDataReaderAsync")!.Invoke(cursor, new object[] { 2, behavior | CommandBehavior.SequentialAccess, budget.Token })!;
+                        var method = cursor.GetType().GetMethods().Single(candidate => candidate.Name == "GetDataReaderAsync" && candidate.GetParameters().Length == 3);
+                        var opening = (Task)method.Invoke(cursor, new object[] { 2, behavior | CommandBehavior.SequentialAccess, budget.Token })!;
                         await opening; reader = (DbDataReader)opening.GetType().GetProperty("Result")!.GetValue(opening)!;
                     }
-                    else reader = (DbDataReader)cursor.GetType().GetMethod("GetDataReader")!.Invoke(cursor, new object[] { 2, behavior })!;
+                    else
+                    {
+                        var method = cursor.GetType().GetMethods().Single(candidate => candidate.Name == "GetDataReader" && candidate.GetParameters().Length == 2);
+                        reader = (DbDataReader)method.Invoke(cursor, new object[] { 2, behavior })!;
+                    }
                     using (reader)
                     {
                         var rows = limited && (behavior & CommandBehavior.SingleRow) == 0 ? 3 : 1;

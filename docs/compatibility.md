@@ -1,9 +1,9 @@
 # 真实兼容性与未验收部署
 
-更新：2026-11-03。本页保留当前支持声明的限制，不重复开发流水。
+更新：2026-11-04。本页保留当前支持声明的限制，不重复开发流水。
 范围以[能力矩阵](obconnector-dotnet-progress.md)为准，判定按[验收标准](acceptance-criteria.md)。
 下面结果来自各自注明日期的报告；2026-11-03新增D-07e/f/g/h字符集指定存储和结果专项，
-以及D-08ab的multi-send会话/DDL屏障、D-12c1的一至六层INT ARRAY和D-02c1的MySQL脚本输出专项。
+以及D-08ab的multi-send会话/DDL屏障、D-08ac的batch named OBJECT/collection locator输入、D-12c1的一至六层INT ARRAY和D-02c1的MySQL脚本输出专项。
 未重跑完整实库矩阵，也没有关闭既有失败。
 
 ## 环境矩阵
@@ -15,11 +15,12 @@
 | GB2312/EUCKR 客户端/结果映射 | MySQL 直连客户端/结果与 Oracle NCHAR/NVARCHAR2 national 真实 4.4.2.2 roundtrip；严格 CP20936/51949、collation 24/86/19/85 | 当前目标 Oracle 普通客户端 EUCKR 被服务端 900/42000 拒绝，Connector/J 同一序列也失败，按服务端限制跳过客户端改动；其他版本/代理仍未验收 |
 | CP932/UJIS/EUCJPMS 客户端/结果/national映射 | 官方全表与MySQL4.4.2.2转换一致；每族MySQL客户端2、canonical/alias结果2和Oracle national2成功，见D-07f/g/h | 普通Oracle客户端均在第三条SET results=utf8mb4返回900/42000，Connector/J同交互匹配；不关闭其他部署、runtime及存储组合 |
 | multi-send 会话/DDL 屏障 | 4.4.2.2 MySQL/Oracle直连sync/async **4/4**：自有连接NonQuery的DDL/后续新列更新、调用方Scalar与reader的时区切换、独立存储核对；安全段保持流水化 | SET/DDL等单独执行，不是同组流水化；脚本正向/错误/取消/旧类型与缓存失效另有本地证据；其他部署及跨平台未验收，见D-08ab |
+| multi-send named OBJECT/collection BLOB/CLOB locator 输入 | 4.4.2.2 Oracle直连 sync/async × OBJECT、scalar collection、nested collection × BLOB/CLOB **12/12**：batch constructor + hidden root LOB 输入，三条 INSERT 跨两组，函数读取成员并由独立连接核对存储 | 仅关闭 batch input-only locator 子集；LOB 输出、OUT/INOUT、cursor、代理/OB20 和其他版本未验收，见D-08ac |
 | MySQL 一至六层 INT ARRAY | 4.4.2.2 直连 sync/async × implicit/explicit Prepare **4/4**；String 参数、独立 text/binary 逐值读回、NULL/空叶数组/不等长子数组，见 D-12c1 | 二维顶层 `[]` 参数与 SQL 字面量均返回 `7602/22000`；七层 DDL `1235/0A000`；其他元素/版本和专用 metadata 未验收 |
 | REF CURSOR reader前向offset FETCH | Oracle4.4.2.2直连sync/async **12/12**，空/三行、Default/SequentialAccess/SingleRow、父command释放与连接复用；D-03b1 | 显式reader新重载；既有签名默认普通FETCH；真实legacy EOF，DEPRECATE_EOF仅本地验证；无滚动定位，父command输出offset仍拒绝，其他部署未验收 |
 | MySQL 脚本标量 OUT/INOUT | 4.4.2.2 直连 sync/async **2/2**，普通/NULL INOUT、OUT、独立 binary 存储核对、reader 半读关闭、失败前缀/未执行后缀、batch 脚本屏障及后续更新，见 D-02c1 | 客户端变量编排；成功后统一发布不代表提交，后续错误保留已执行 SQL；Oracle 脚本输出、Prepare/cursor、ReturnValue 和资源/复杂输出仍拒绝，其他部署/版本未验收 |
 | Oracle 命名复杂值 INTERVAL 成员 | 4.4.2.2 直连 sync/async **10/10**：OBJECT、OBJECT集合及标量INTERVAL集合的二进制输入/PL OUT/INOUT、NULL元素/空与typed NULL集合、精度，以及脚本文本输入后的独立存储核对，见 D-04f | 复用既有精确provider值与codec；命名客户端构造器输入已支持，复杂text结果与标量匿名INTERVAL factory仍拒绝；未外推跨版本/部署或流水化专门验收 |
-| Oracle 命名BLOB成员locator字节 | 4.4.2.2 直连 sync/async **2/2** 对照确认：根locator有效，named成员把locator字节当作内容；显式SQL构造器配合根locator可用，见 D-04g。客户端 a4 已在 `oracle-direct` 以 BLOB/CLOB × OBJECT/collection/nested-collection × sync/async **12/12** 通过 constructor + hidden root LOB 自动绑定；显式 Prepare/PrepareAsync 与重复执行 **12/12** 通过并复用同一 statement；D-04i 又补齐单条全 Input、无输出 StoredProcedure 的显式 Prepare/PrepareAsync sync/async **2/2** | OUT/INOUT、batch、cursor、multi-statement 仍不在范围；StoredProcedure 仍是会话屏障，不承诺跨调用缓存；不能仅放开named writer，也不能据此认定所有其他替代协议或更复杂 collection 形状均支持 |
+| Oracle 命名BLOB成员locator字节 | 4.4.2.2 直连 sync/async **2/2** 对照确认：根locator有效，named成员把locator字节当作内容；显式SQL构造器配合根locator可用，见 D-04g。客户端 a4 已在 `oracle-direct` 以 BLOB/CLOB × OBJECT/collection/nested-collection × sync/async **12/12** 通过 constructor + hidden root LOB 自动绑定；显式 Prepare/PrepareAsync 与重复执行 **12/12** 通过并复用同一 statement；D-04i 又补齐单条全 Input、无输出 StoredProcedure 的显式 Prepare/PrepareAsync sync/async **2/2** | StoredProcedure 复杂 OBJECT locator InputOutput 在目标 4.4.2.2 直连 sync/async **2/2** 复核时，局部 OBJECT 回写 OUT bind 返回 `900/42000`，按服务端/协议边界不开发；batch、cursor、multi-statement 仍不在范围；StoredProcedure 仍是会话屏障，不承诺跨调用缓存；不能仅放开named writer，也不能据此认定所有其他替代协议或更复杂 collection 形状均支持 |
 | 真实TLS/企业CA/mTLS/撤销/轮换 | **当前两种模式真实环境未开TLS，未验收** | 必须保留matrix.tls-authentication deferred；自签名SslStream只属本地证据 |
 | 认证plugin/KDC/凭据服务 | native账号直连与本地客户端分支 | 非native正负认证、平台协商、实际轮换；Java插件注册不是OB部署证明 |
 | OBProxy/ODP、真正多节点、OCP/TNS服务 | 本地parser与受控单上游客户端路由 | 真实发现服务、节点/代理故障、后端reset/迁移，单上游中继不是HA |

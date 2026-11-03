@@ -300,11 +300,7 @@ namespace OceanBaseConnector
 #endif
                 if (oracle == null && mysql == null && CommandType != CommandType.Text) throw new NotSupportedException("Oracle stored procedures require Use Oracle Prepare Execute=true.");
                 if (oracle != null && cursorOffset) throw new NotSupportedException("Oracle output execution does not support offset fetch.");
-                var hasBatchCommand = false;
-#if NET8_0_OR_GREATER
-                hasBatchCommand = BatchCommand != null;
-#endif
-                var namedComplexLob = !schemaOnly && CommandType == CommandType.Text && !multiStatement && !HasOutputParameters() && !hasBatchCommand &&
+                var namedComplexLob = !schemaOnly && CommandType == CommandType.Text && !multiStatement && !HasOutputParameters() &&
                     session.Info!.Mode == OceanBaseCompatibilityMode.Oracle;
                 ParameterBindingPlan bindings;
                 if (namedComplexLob)
@@ -313,8 +309,9 @@ namespace OceanBaseConnector
                     for (var i = 0; i < supplied.Length; i++)
                     {
                         supplied[i] = (OceanBaseParameter)_parameters[i];
-                        var complex = PreparedParameters.GetComplexType(supplied[i]);
-                        if (!prepareOnly && complex != null) connection.ValidateComplexType(complex, supplied[i].Value as OceanBaseComplexValue);
+                        var complex = NamedComplexLobBinding.RequiresRewrite(supplied[i])
+                            ? PreparedParameters.GetComplexType(supplied[i]) : null;
+                        if (!prepareOnly && complex != null) connection.ValidateComplexType(complex, supplied[i].Value as OceanBaseComplexValue, SessionOwner);
                     }
                     bindings = NamedComplexLobBinding.Rewrite(text, supplied);
                 }

@@ -48,7 +48,8 @@ namespace OceanBaseConnector.UnitTests
             }
             actual.Append(chars, 0, decoder.GetChars(Array.Empty<byte>(), 0, 0, chars, 0, true));
             Assert.Equal(text, actual.ToString());
-            if (bytes[0] >= 128 && name != "latin1" && name != "dec8" && name != "tis620")
+            if (bytes[0] >= 128 && name != "latin1" && name != "dec8" && name != "tis620" &&
+                name != "cp850" && name != "hp8" && name != "macroman")
             {
                 decoder.Reset();
                 Assert.Equal(0, decoder.GetChars(bytes, 0, 1, chars, 0, false));
