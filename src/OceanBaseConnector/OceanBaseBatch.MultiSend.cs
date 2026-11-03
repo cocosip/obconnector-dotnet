@@ -31,11 +31,10 @@ namespace OceanBaseConnector
             return false;
         }
 
-        private bool HasRoutineBarrier(PhysicalSession session)
+        private bool HasExecutionBarrier(PhysicalSession session)
         {
             foreach (OceanBaseBatchCommand command in _commands)
-                if (command.CommandType == CommandType.StoredProcedure || session.Info!.Mode == OceanBaseCompatibilityMode.Oracle &&
-                    command.CommandType == CommandType.Text && Internal.Sql.SqlStatementBoundary.IsOraclePlBlock(command.CommandText)) return true;
+                if (OceanBaseCommand.RequiresBatchExecutionBarrier(command.CommandType, command.CommandText, session.Info!.Mode)) return true;
             return false;
         }
 
@@ -45,7 +44,7 @@ namespace OceanBaseConnector
             try
             {
                 if (_ownsConnection && !CanUseMultiSend(_connection!.GetOpenSession())) return ExecuteSequentialNonQuery();
-                if (HasRoutineBarrier(_connection!.GetOpenSession())) return ExecuteSequentialNonQuery();
+                if (HasExecutionBarrier(_connection!.GetOpenSession())) return ExecuteSequentialNonQuery();
                 using var operation = Start(CommandBehavior.Default, CancellationToken.None);
                 return ExecuteMultiSend(operation).Affected;
             }
@@ -58,7 +57,7 @@ namespace OceanBaseConnector
             try
             {
                 if (_ownsConnection && !CanUseMultiSend(_connection!.GetOpenSession())) return await ExecuteSequentialNonQueryAsync(cancellationToken).ConfigureAwait(false);
-                if (HasRoutineBarrier(_connection!.GetOpenSession())) return await ExecuteSequentialNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                if (HasExecutionBarrier(_connection!.GetOpenSession())) return await ExecuteSequentialNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 using var operation = Start(CommandBehavior.Default, cancellationToken);
                 return (await ExecuteMultiSendAsync(operation).ConfigureAwait(false)).Affected;
             }
@@ -71,7 +70,7 @@ namespace OceanBaseConnector
             try
             {
                 if (_ownsConnection && !CanUseMultiSend(_connection!.GetOpenSession())) return ExecuteSequentialScalar();
-                if (HasRoutineBarrier(_connection!.GetOpenSession())) return ExecuteSequentialScalar();
+                if (HasExecutionBarrier(_connection!.GetOpenSession())) return ExecuteSequentialScalar();
                 using var operation = Start(CommandBehavior.Default, CancellationToken.None);
                 return ExecuteMultiSend(operation, captureScalar: true).Scalar;
             }
@@ -84,7 +83,7 @@ namespace OceanBaseConnector
             try
             {
                 if (_ownsConnection && !CanUseMultiSend(_connection!.GetOpenSession())) return await ExecuteSequentialScalarAsync(cancellationToken).ConfigureAwait(false);
-                if (HasRoutineBarrier(_connection!.GetOpenSession())) return await ExecuteSequentialScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (HasExecutionBarrier(_connection!.GetOpenSession())) return await ExecuteSequentialScalarAsync(cancellationToken).ConfigureAwait(false);
                 using var operation = Start(CommandBehavior.Default, cancellationToken);
                 return (await ExecuteMultiSendAsync(operation, captureScalar: true).ConfigureAwait(false)).Scalar;
             }

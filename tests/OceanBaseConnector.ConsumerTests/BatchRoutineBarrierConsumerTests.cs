@@ -16,10 +16,19 @@ namespace OceanBaseConnector.ConsumerTests
     public sealed class BatchRoutineBarrierConsumerTests
     {
         [Theory]
-        [InlineData("net8.0", false)] [InlineData("net8.0", true)]
-        [InlineData("net9.0", false)] [InlineData("net9.0", true)]
-        [InlineData("net10.0", false)] [InlineData("net10.0", true)]
-        public async Task ModernAssetsKeepPipelinedSegmentsAroundRoutineBarriers(string target, bool asynchronous)
+        [InlineData("net8.0", false, "BEGIN NULL; END;")]
+        [InlineData("net8.0", true, "BEGIN NULL; END;")]
+        [InlineData("net9.0", false, "BEGIN NULL; END;")]
+        [InlineData("net9.0", true, "BEGIN NULL; END;")]
+        [InlineData("net10.0", false, "BEGIN NULL; END;")]
+        [InlineData("net10.0", true, "BEGIN NULL; END;")]
+        [InlineData("net8.0", false, "SET time_zone='+05:45'")]
+        [InlineData("net8.0", true, "ALTER TABLE t ADD v INTEGER")]
+        [InlineData("net9.0", false, "ALTER TABLE t ADD v INTEGER")]
+        [InlineData("net9.0", true, "SET time_zone='+05:45'")]
+        [InlineData("net10.0", false, "SET time_zone='+05:45'")]
+        [InlineData("net10.0", true, "ALTER TABLE t ADD v INTEGER")]
+        public async Task ModernAssetsKeepPipelinedSegmentsAroundExecutionBarriers(string target, bool asynchronous, string barrier)
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
@@ -47,7 +56,7 @@ namespace OceanBaseConnector.ConsumerTests
                     for (var i = 0; i < 2; i++) { channel.BeginResponse(); await channel.WritePacketAsync(new byte[] { 0, 1, 0, 2, 0, 0, 0 }, budget.Token); }
                     if (segment == 0)
                     {
-                        var block = await Read(3); Assert.Equal("BEGIN NULL; END;", Encoding.UTF8.GetString(block, 1, block.Length - 1));
+                        var block = await Read(3); Assert.Equal(barrier, Encoding.UTF8.GetString(block, 1, block.Length - 1));
                         await channel.WritePacketAsync(new byte[] { 0, 0, 0, 2, 0, 0, 0 }, budget.Token);
                     }
                 }
@@ -64,7 +73,7 @@ namespace OceanBaseConnector.ConsumerTests
                 await connection.OpenAsync(budget.Token);
                 using (var batch = connection.CreateBatch())
                 {
-                    foreach (var sql in new[] { "update t set id=1", "update t set id=2", "BEGIN NULL; END;", "update t set id=3", "update t set id=4" })
+                    foreach (var sql in new[] { "update t set id=1", "update t set id=2", barrier, "update t set id=3", "update t set id=4" })
                     { var item = batch.CreateBatchCommand(); item.CommandText = sql; batch.BatchCommands.Add(item); }
                     Assert.Equal(4, asynchronous ? await batch.ExecuteNonQueryAsync(budget.Token) : batch.ExecuteNonQuery());
                     for (var i = 0; i < 5; i++) Assert.Equal(i == 2 ? 0 : 1, batch.BatchCommands[i].RecordsAffected);

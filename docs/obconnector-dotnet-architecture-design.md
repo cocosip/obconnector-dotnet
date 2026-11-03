@@ -486,12 +486,14 @@ responses remain unread. SequentialAccess follows the same command eligibility c
 SingleRow and SingleResult preserve multi-send while applying their limits to the entire batch.
 SchemaOnly and KeyInfo keep their sequential command path.
 
-With multi-send enabled, StoredProcedure commands in either mode and Oracle text BEGIN/DECLARE
-blocks (including leading comments and labels) form state barriers. Each routine uses the ordinary
-command path; its complete response and output tail must finish before the following contiguous
-DML/SELECT segment is preflighted and pipelined. This preserves routine session changes, including
-time zone and national charset, without replay or SQL rewriting. It does not pipeline PL requests
-in the same group or expand ordinary PL type-DDL handling. A later segment's preflight can fail after
+With multi-send enabled, commands that fail the existing statement-cache eligibility check form
+execution barriers. This includes SET, DDL, explicitly enabled text scripts, StoredProcedure commands
+in either mode and Oracle text BEGIN/DECLARE blocks (including leading comments and labels).
+Each barrier uses the ordinary command path; its complete response and output tail must finish
+before the following contiguous DML/SELECT segment is preflighted and pipelined. Ordinary command
+validation, multi-statement opt-in, statement/type invalidation and session-state checks still apply.
+This preserves session changes, including time zone and national charset, without replay or SQL rewriting.
+It does not pipeline PL requests in the same group or expand ordinary PL type-DDL handling. A later segment's preflight can fail after
 an executed prefix: successful counts and outputs remain, while unsent suffix counts stay -1.
 Segment completion retains the batch reservation; whole-batch completion releases it even when the
 last entry is a routine, opening the same reader LOB/cursor window. Routine barriers accept ordinary scalar,

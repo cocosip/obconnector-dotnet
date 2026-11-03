@@ -33,19 +33,24 @@ namespace OceanBaseConnector
             _operation.ThrowIfCanceled();
             if (CanUseMultiSendReader()) { StartMultiSend(); return; }
             if (_index < _operation.Commands.Length)
-            { ConfigureRoutineBarrier(); _current = _operation.Commands[_index].ExecuteReaderCore(Behavior, _operation.Token); UpdateCount(); }
+            { ConfigureExecutionBarrier(); _current = _operation.Commands[_index].ExecuteReaderCore(Behavior, _operation.Token); UpdateCount(); }
         }
         internal async Task StartAsync()
         {
             _operation.ThrowIfCanceled();
             if (CanUseMultiSendReader()) { await StartMultiSendAsync().ConfigureAwait(false); return; }
             if (_index < _operation.Commands.Length)
-            { ConfigureRoutineBarrier(); _current = await _operation.Commands[_index].ExecuteReaderAsync(Behavior, _operation.Token).ConfigureAwait(false); UpdateCount(); }
+            { ConfigureExecutionBarrier(); _current = await _operation.Commands[_index].ExecuteReaderAsync(Behavior, _operation.Token).ConfigureAwait(false); UpdateCount(); }
         }
         private bool CanUseMultiSendReader() => _index < _operation.Commands.Length &&
             OceanBaseBatch.CanUseMultiSendReader(_operation.Behavior) && _operation.Session != null && _operation.Batch.CanUseMultiSend(_operation.Session) &&
-            !_operation.Commands[_index].RequiresBatchRoutineBarrier(_operation.Session.Info!.Mode);
-        private void ConfigureRoutineBarrier()
+            !RequiresExecutionBarrier(_index);
+        private bool RequiresExecutionBarrier(int index)
+        {
+            var command = _operation.Commands[index];
+            return OceanBaseCommand.RequiresBatchExecutionBarrier(command.CommandType, command.CommandText, _operation.Session!.Info!.Mode);
+        }
+        private void ConfigureExecutionBarrier()
         {
             if (!_operation.Batch.CanUseMultiSend(_operation.Session!) || !OceanBaseBatch.CanUseMultiSendReader(_operation.Behavior)) return;
             var command = _operation.Commands[_index];
@@ -54,7 +59,7 @@ namespace OceanBaseConnector
         private int FindMultiSendSegmentEnd()
         {
             var end = _index;
-            while (end < _operation.Commands.Length && !_operation.Commands[end].RequiresBatchRoutineBarrier(_operation.Session!.Info!.Mode)) end++;
+            while (end < _operation.Commands.Length && !RequiresExecutionBarrier(end)) end++;
             return end;
         }
         private void StartMultiSend()

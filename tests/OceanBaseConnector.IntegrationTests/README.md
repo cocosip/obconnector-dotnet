@@ -224,6 +224,12 @@ Oracle output FetchSize acceptance adds twenty direct Oracle cases: sync/async Ã
 
 ## Isolation and cleanup
 
+`Batches/ExecutionBarrierMultiSendTests` covers SET/DDL barriers with multi-send enabled:
+owned NonQuery defers new-column preparation until ALTER succeeds; caller Scalar and SequentialAccess
+reader preserve results across time-zone changes. The 4.4.2.2 direct MySQL/Oracle sync/async run passed
+4/4 with independent storage checks. Barriers execute separately; this does not pipeline session SQL
+or DDL within a group. See D-08ab in the [roadmap](../../docs/obconnector-dotnet-missing-features-roadmap.md).
+
 Each test owns a `DatabaseContext` that names created objects `OBI_<random>` and drops them LIFO on dispose (DDL + temporary LOBs + XA branches). A cleanup failure fails the test even if its body passed. Interrupted runs can leave `OBI_` objects or prepared XA branches behind; target those names when cleaning up manually. The assembly runs sequentially (`DisableTestParallelization`) because several suites mutate session state.
 
 ## Local database

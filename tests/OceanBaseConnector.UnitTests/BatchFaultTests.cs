@@ -60,8 +60,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)]
-        [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task BatchMultiSendRejectsLobInputWithoutNegotiatedLocators(bool asynchronous, bool optIn)
         {
             var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)), lobLocators: !optIn);
@@ -110,13 +112,13 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public async Task BatchMultiSendRejectsSessionStateSqlBeforeWriting()
+        public async Task BatchExecutionBarrierKeepsMultiStatementOptInBeforeWriting()
         {
             var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)));
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true");
             try
             {
-                await connection.OpenAsync(); using var batch = connection.CreateBatch(); BatchItem(batch, "set autocommit = 1");
+                await connection.OpenAsync(); using var batch = connection.CreateBatch(); BatchItem(batch, "set autocommit = 1; select 1");
                 await Assert.ThrowsAsync<NotSupportedException>(() => batch.ExecuteNonQueryAsync());
             }
             finally { connection.Close(); server.Stop(); }

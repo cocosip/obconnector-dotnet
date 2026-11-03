@@ -36,8 +36,8 @@ namespace OceanBaseConnector
         internal DbBatchCommand? BatchCommand { get; set; }
         internal Action? BatchFailed { get; set; }
         internal bool? BatchBarrierLobOutputs { get; set; }
-        internal bool RequiresBatchRoutineBarrier(OceanBaseCompatibilityMode mode) => CommandType == CommandType.StoredProcedure ||
-            mode == OceanBaseCompatibilityMode.Oracle && CommandType == CommandType.Text && SqlStatementBoundary.IsOraclePlBlock(CommandText);
+        internal static bool RequiresBatchExecutionBarrier(CommandType type, string text, OceanBaseCompatibilityMode mode) =>
+            type != CommandType.Text || string.IsNullOrWhiteSpace(text) || !SqlStatementBoundary.CanCacheStatement(text, mode);
 #endif
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get => _timeout; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _timeout = value; } }
