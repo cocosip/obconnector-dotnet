@@ -137,11 +137,11 @@ namespace OceanBaseConnector
             for (var i = 0; i < requests.Length; i++)
             {
                 operation.ThrowIfCanceled();
-                requests[i] = operation.Commands[i].BuildBatchMultiSendRequest(operation.Token, CanRetainLobResults(operation));
+                requests[i] = operation.Commands[i].BuildBatchMultiSendRequest(operation.Token, CanRetainLobResults(operation), discardLobResults: !captureScalar);
             }
             if (requests.Length == 0) return (0, null);
 
-            using var exchange = StartMultiSendExchange(operation);
+            using var exchange = StartMultiSendExchange(operation, discardLobResults: !captureScalar);
             var total = 0;
             var anyAffected = false;
             using var scalar = new ScalarState();
@@ -174,11 +174,11 @@ namespace OceanBaseConnector
             for (var i = 0; i < requests.Length; i++)
             {
                 operation.ThrowIfCanceled();
-                requests[i] = await operation.Commands[i].BuildBatchMultiSendRequestAsync(operation.Token, CanRetainLobResults(operation)).ConfigureAwait(false);
+                requests[i] = await operation.Commands[i].BuildBatchMultiSendRequestAsync(operation.Token, CanRetainLobResults(operation), discardLobResults: !captureScalar).ConfigureAwait(false);
             }
             if (requests.Length == 0) return (0, null);
 
-            using var exchange = StartMultiSendExchange(operation);
+            using var exchange = StartMultiSendExchange(operation, discardLobResults: !captureScalar);
             var total = 0;
             var anyAffected = false;
             using var scalar = new ScalarState();
@@ -242,12 +242,12 @@ namespace OceanBaseConnector
             return reader.RecordsAffected;
         }
 
-        internal CommandExchange StartMultiSendExchange(Operation operation)
+        internal CommandExchange StartMultiSendExchange(Operation operation, bool discardLobResults = false)
         {
             var exchange = operation.Connection.StartCommand(operation.Session!, operation.Transaction, _timeout, operation.Token,
                 release: static () => { }, owner: operation, cancellationOrigin: operation.CancellationOrigin);
             exchange.StartDiagnostics("batch.multi-send");
-            exchange.AllowBatchLobResults = CanRetainLobResults(operation);
+            exchange.AllowBatchLobResults = CanRetainLobResults(operation) || discardLobResults;
             return exchange;
         }
 

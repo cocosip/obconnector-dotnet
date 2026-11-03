@@ -416,7 +416,7 @@ namespace OceanBaseConnector
         }
 
 #if NET8_0_OR_GREATER
-        internal OceanBaseBatchMultiSendRequest BuildBatchMultiSendRequest(CancellationToken token, bool allowLobResults)
+        internal OceanBaseBatchMultiSendRequest BuildBatchMultiSendRequest(CancellationToken token, bool allowLobResults, bool discardLobResults = false)
         {
             if (CommandType != CommandType.Text || _fetchSize != 0 || AllowClientSidePrepareFallback)
                 throw new NotSupportedException("Batch multi-send requires text commands without cursors or client fallback.");
@@ -451,7 +451,7 @@ namespace OceanBaseConnector
                         sessionTimeZone: zone, nationalCharacterSet: national);
                 }
                 operation.Exchange.ResolveComplexColumns(statement);
-                ValidateBatchMultiSendColumns(statement, operation.Exchange, allowLobResults);
+                ValidateBatchMultiSendColumns(statement, operation.Exchange, allowLobResults || discardLobResults);
                 if (operation.Exchange.SourceComplexTypes != null)
                 {
                     zone = operation.Exchange.EnsureSessionTimeZone();
@@ -469,7 +469,7 @@ namespace OceanBaseConnector
             catch (Exception error) { throw operation.Exchange.Fail(error); }
         }
 
-        internal async Task<OceanBaseBatchMultiSendRequest> BuildBatchMultiSendRequestAsync(CancellationToken token, bool allowLobResults)
+        internal async Task<OceanBaseBatchMultiSendRequest> BuildBatchMultiSendRequestAsync(CancellationToken token, bool allowLobResults, bool discardLobResults = false)
         {
             if (CommandType != CommandType.Text || _fetchSize != 0 || AllowClientSidePrepareFallback)
                 throw new NotSupportedException("Batch multi-send requires text commands without cursors or client fallback.");
@@ -503,7 +503,7 @@ namespace OceanBaseConnector
                         sessionTimeZone: zone, nationalCharacterSet: national);
                 }
                 await operation.Exchange.ResolveComplexColumnsAsync(statement, token).ConfigureAwait(false);
-                ValidateBatchMultiSendColumns(statement, operation.Exchange, allowLobResults);
+                ValidateBatchMultiSendColumns(statement, operation.Exchange, allowLobResults || discardLobResults);
                 if (operation.Exchange.SourceComplexTypes != null)
                 {
                     zone = await operation.Exchange.EnsureSessionTimeZoneAsync(token).ConfigureAwait(false);

@@ -442,8 +442,12 @@ window and close it with the reader, invalidating remaining handles and streams.
 close a reopened logical lease. Early close aborts unread responses and invalidates retained handles.
 Failed scalar execution disposes any
 captured LOBs, including nested members, that were not delivered. Partial complex decoding and result
-packaging failures also dispose already decoded LOBs. Data-source-owned Scalar/NonQuery keep the
-locator-result restriction because their method closes the connection. Anonymous inputs, cursor members, complex text LOB results, Oracle PL outputs, cursor/array binding and legacy Oracle
+packaging failures also dispose already decoded LOBs. Data-source-owned NonQuery can drain ordinary
+LOB result rows without decoding values or allocating handles, including negotiated root text/binary
+LOBs and anonymous binary LOB collections. Prepare and response metadata still enforce capability,
+charset and complex-type restrictions. This permission never applies to declared OUT/INOUT values:
+data-source-owned Scalar locator results and explicit LOB outputs remain rejected because the method
+closes their connection. Anonymous inputs, cursor members, complex text LOB results, Oracle PL outputs, cursor/array binding and legacy Oracle
 249-252 results remain outside the pipeline. Ordinary named complex binary results use
 the existing decoder. Source-column type lookups finish before sending the execution group; each
 response restores only its request's source mapping, time zone and national character set snapshot.
