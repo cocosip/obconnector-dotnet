@@ -66,4 +66,78 @@ public sealed class NamedComplexLobBindingTests
         }
         Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
     }
+
+    public static TheoryData<string, bool, string, bool> ExpandedCases()
+    {
+        var data = new TheoryData<string, bool, string, bool>();
+        foreach (var profileName in ProfileTheoryData.OraclePrepareExecuteObjects())
+        {
+            var profile = IntegrationEnvironment.GetProfile(profileName);
+            if (!profile.CreateBuilder().UseLobLocators) continue;
+            foreach (var character in new[] { false, true })
+                foreach (var shape in new[] { "object", "collection" })
+                    foreach (var asynchronous in new[] { false, true }) data.Add(profile.Name, character, shape, asynchronous);
+        }
+        return data;
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(ExpandedCases))]
+    public Task NamedObjectAndCollectionLocatorInputsUseConstructors(string profileName, bool character, string shape, bool asynchronous)
+        => VerifyExpanded(IntegrationEnvironment.GetProfile(profileName), character, shape, asynchronous);
+
+    private static async Task VerifyExpanded(IntegrationProfile profile, bool character, string shape, bool asynchronous)
+    {
+        var settings = profile.CreateBuilder();
+        if (!profile.Oracle || !profile.CreateObjects || !settings.UseLobLocators || !settings.UseOraclePrepareExecute)
+            throw new InvalidOperationException("An explicitly authorized Oracle object/PrepareExecute/LOB profile is required.");
+
+        await using var db = new DatabaseContext(profile);
+        await using var connection = await db.OpenAsync();
+        var scalar = character ? "CLOB" : "BLOB";
+        var resultType = character ? "VARCHAR2(128)" : "RAW(32)";
+        var table = await db.TableAsync(connection, "n NUMBER, len NUMBER, v " + resultType, CancellationToken.None);
+        var typeName = db.NewObject("TYPE");
+        await db.ExecuteAsync(connection, "CREATE TYPE " + typeName +
+            (shape == "object" ? " AS OBJECT (a " + scalar + ")" : " AS TABLE OF " + scalar), CancellationToken.None);
+        var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
+        var procedure = db.NewObject("PROCEDURE");
+        var member = shape == "object" ? "p.a" : "p(1)";
+        var nullGuard = shape == "collection" ? "IF p.COUNT <> 2 OR p(2) IS NOT NULL THEN RAISE_APPLICATION_ERROR(-20001, 'Invalid NULL member'); END IF; " : "";
+        await db.ExecuteAsync(connection, "CREATE PROCEDURE " + procedure + "(p IN " + typeName + ") IS BEGIN " + nullGuard +
+            "INSERT INTO " + table + " VALUES (7, DBMS_LOB.GETLENGTH(" + member + "), DBMS_LOB.SUBSTR(" + member + ", 32, 1)); END;", CancellationToken.None);
+        var type = await connection.GetComplexTypeAsync(owner, typeName);
+        await using var transaction = (OceanBaseTransaction)await connection.BeginTransactionAsync();
+        type = await connection.GetComplexTypeAsync(owner, typeName, transaction);
+        await using var lob = asynchronous ? await connection.CreateTemporaryLobAsync(character ? OceanBaseDbType.Clob : OceanBaseDbType.Blob, transaction)
+            : connection.CreateTemporaryLob(character ? OceanBaseDbType.Clob : OceanBaseDbType.Blob, transaction);
+        var text = "患者-CLOB";
+        var bytes = new byte[] { 0, 1, 92, 39, 128, 255 };
+        if (character)
+        {
+            if (asynchronous) await lob.WriteTextAsync(0, text); else lob.WriteText(0, text);
+        }
+        else if (asynchronous) await lob.WriteBytesAsync(0, bytes, 0, bytes.Length); else lob.WriteBytes(0, bytes, 0, bytes.Length);
+
+        await using (var command = db.Command(connection, "BEGIN " + procedure + "(:p); END;", transaction))
+        {
+            DatabaseContext.Parameter(command, "p", shape == "object" ? type.CreateValue(lob) : type.CreateValue(lob, null));
+            if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+            if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+        }
+
+        await transaction.CommitAsync();
+        await using var verification = await db.OpenAsync();
+        using var query = db.Command(verification, "SELECT n, len, v FROM " + table + " ORDER BY n");
+        using var reader = asynchronous ? await query.ExecuteReaderAsync() : query.ExecuteReader();
+        for (var i = 0; i < 2; i++)
+        {
+            Assert.True(asynchronous ? await reader.ReadAsync() : reader.Read());
+            Assert.Equal(7, DatabaseContext.IntegerResult(reader.GetValue(0)));
+            Assert.Equal(character ? text.Length : bytes.Length, DatabaseContext.IntegerResult(reader.GetValue(1)));
+            if (character) Assert.Equal(text, Assert.IsType<string>(reader.GetValue(2)));
+            else Assert.Equal(bytes, Assert.IsType<byte[]>(reader.GetValue(2)));
+        }
+        Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
+    }
 }

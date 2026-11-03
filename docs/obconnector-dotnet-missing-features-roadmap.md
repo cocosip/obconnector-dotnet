@@ -117,7 +117,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；命名复杂值普通/批量受控 fallback 子集见 D-01b；不含 OUT/cursor/LOB/anonymous，不以 `P3` 宣称全部组合完成 |
 | D-02 | `P2`；a1、c1、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；MySQL标量脚本输出见c1；Prepare、cursor、Oracle脚本输出及d1～d3以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
-| D-04 | `P2`；a1/a3.1/b1/f 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
+| D-04 | `P2`；a1/a3.1/b1/f/a4 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；a4 已完成 named OBJECT/collection BLOB/CLOB locator 的单条 Text input-only 自动绑定；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/多语句与受控 1295 fallback 子集见 D-05b；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
 | D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；CP850/HP8/MACROMAN客户端及SWE7仅结果已在D-07e验收；CP932指定成功子集见D-07f、普通Oracle初始化服务端900仍保留；UJIS指定成功子集见D-07g，EUCJPMS指定成功子集见D-07h；其余新名称继续逐项确认后再加入，不支持名称继续发送前拒绝 |
@@ -735,7 +735,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 
 | 子项 | 进度 | 当前范围与下一步 |
 | --- | --- | --- |
-| D-04a 命名 LOB 成员 | `P2`；a1/a3.1 为 `P4`；a4 已实现、实库待验 | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT/嵌套 OBJECT 根 NULL 输出身份为当前服务端限制。a2：BLOB OBJECT 成员 DML 在 .NET 与 Java 同 wire 诊断回放均返回 932；按当前目标服务端限制跳过客户端改动。a4：Oracle 单条 Text、input-only named OBJECT/collection locator 通过 SQL 构造器和隐藏根 LOB 参数自动绑定，已有本地单测，实库 profile 尚未启用；OUT/INOUT、batch、cursor、multi-statement 仍拒绝或未纳入。 |
+| D-04a 命名 LOB 成员 | `P2`；a1/a3.1/a4 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT/嵌套 OBJECT 根 NULL 输出身份为当前服务端限制。a2：BLOB OBJECT 成员 DML 在 .NET 与 Java 同 wire 诊断回放均返回 932；按当前目标服务端限制跳过客户端改动。a4：Oracle 单条 Text、input-only named OBJECT/collection 的 BLOB/CLOB locator 通过 SQL 构造器和隐藏根 LOB 参数自动绑定，直连 sync/async **10/10** 通过；OUT/INOUT、batch、cursor、multi-statement 仍拒绝或未纳入。 |
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
 | D-04d 复杂 cursor 成员 | `P4`（当前目标形状为服务端限制）；新版本/新 wire 仍需重开 | 同一租户 `CREATE TYPE ... AS OBJECT (c SYS_REFCURSOR)` 在 Java 返回 `PLS-00201`、.NET 返回 `42000`；PL-only `RECORD (C SYS_REFCURSOR, N NUMBER)` 在 Java 与 .NET 均使 package 变为 `INVALID`，`ALL_ERRORS` 返回 `OBE-00600/-4007 attribute type of record is cursor type not supported`。两端都没有可读取的 child cursor wire，因此跳过客户端实现；若后续出现可创建的形状，再单独验收 child FETCH/所有权 |
@@ -936,7 +936,7 @@ replay 的同码失败，失败范围收窄到服务端接收后的 BLOB OBJECT 
 原描述/句柄的发送前身份校验、Input/INOUT/OUT映射、嵌套NULL、重复参数/包预算、Prepare/cache
 形状变化、batch与失败资源归属。本轮不能推断CLOB、collection、其他版本或所有替代wire均不可行。
 
-#### D-04h：命名复杂值 LOB locator 自动绑定（2026-11-03，代码完成、实库待验）
+#### D-04h：命名复杂值 LOB locator 自动绑定（2026-11-03，指定直连子集 `P4`）
 
 本轮按 D-04g 已确认的可用路径实现最小自动绑定：Oracle 单条 `CommandType.Text`、无输出、
 非 batch 的 input-only named OBJECT/collection 值，如果自身或嵌套值包含 BLOB/CLOB locator，
@@ -953,13 +953,12 @@ named complex wire 仍拒绝发送。
 | --- | --- |
 | 本地 unit | 新增 constructor/隐藏参数、嵌套/NULL、quoted type name、重复占位符及拒绝路径 **4/4**；相关复杂 LOB 组 **84/84** |
 | Release 构建 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`，五个目标框架、测试/消费者资产 **0 warning / 0 error** |
-| 集成测试 | 新增 Oracle sync/async **1 个理论用例**已编译；未设置 `OB_REQUIRE_INTEGRATION=1`，按测试基础设施明确 **1 skip**，没有实库通过证据 |
+| 集成测试 | Oracle 4.4.2.2 `oracle-direct`、BLOB/CLOB × OBJECT/collection × sync/async **10/10** 通过；既有复杂 LOB 回归 **20/20**、locator wire 对照 **2/2** 通过；使用 User Secrets，未写入凭据 |
 | 格式/差异 | 变更 C# 文件 scoped whitespace verify 通过；`git diff --check` 通过 |
 
-因此 a4 目前只能记为“代码完成、实库待验”，不能提升 D-04a 或 D-04 父项状态。下一步应使用已授权的
-Oracle 4.4.2.2 profile 运行该 sync/async 用例，确认独立连接存储读回、重复执行和连接复用；随后再决定
-是否扩大到 named collection 的更多成员形状或 Prepare/cache。没有实库证据前，不扩大支持矩阵，也不把
-现有服务端 `932/22000` 失败改写成客户端成功。
+因此 a4 已提升为指定直连子集 `P4`，但不关闭 D-04a 或 D-04 父项。下一步应单独设计 named
+collection 更复杂成员形状和 Prepare/cache 组合的 wire 证据；OUT/INOUT、batch、cursor、multi-statement
+仍保持边界，不把现有服务端 `932/22000` 失败改写成客户端成功。
 
 #### D-04a2 Connector/J 2.4.14 公开 API 实测（2026-11-01）
 
