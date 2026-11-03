@@ -2196,6 +2196,43 @@ Java standalone RETURNING 的 callable 注册返回 `0/null`，不算同错误�
 本轮不扩展 named locator 成员输入、
 普通DML匿名输入/输出、PL同组流水化、cursor/array或代理/OB20，不启动全量与长压。
 
+#### D-08aa：mixed batch routine 屏障的 REF CURSOR 输出（2026-11-03，指定直连子集 `P4`）
+
+基线 `fb923d8`。普通顺序 batch 已支持显式 REF CURSOR OUT/ReturnValue，开启multi-send后，
+routine屏障却额外拒绝同一输出。复用普通Oracle输出计划、四字节cursor ID、父statement和
+FETCH，不把PL放入同一发送组。屏障前后安全DML段继续先发送整组再排空；全部batch响应结束
+前不允许FETCH。调用方连接的cursor仍独立于batch寿命；data source自有连接由batch保留到
+游标资源释放/下次执行或batch.Dispose，未释放的cursor/LOB均阻止所有入口重新执行。
+公开reader保留CloseConnection关闭窗口。
+
+实现只放开routine屏障中显式声明的根REF CURSOR输出，不放开DML RETURNING cursor、
+普通SELECT CURSOR列、复杂cursor成员、输入或offset。输出metadata必须匹配声明；terminal
+错误不发布新值，未发布cursor交由既有owner清理；后续命令失败不撤销已成功命令的输出。
+连接保留依据已有LOB计数和cursor owner的discard-on-return计数，不依据session状态变化标志。
+影响范围：OracleCommandPlan的routine输出校验、OceanBaseCommand的屏障调用、PhysicalSession
+资源状态、OceanBaseBatch自有租约检查，以及对应Unit/Integration/Consumer和矩阵文档；无新API/配置。
+
+- [x] 屏障cursor协议红测 **8/8** 在原guard失败；真实普通调用对照使用相同过程/结果。
+- [x] 最小实现根声明/metadata边界和统一自有资源租约，保持普通输出原子发布/FETCH/关闭协议。
+- [x] 定向验证同步/异步、调用方/自有连接、排空前拒读、NULL、失败清理和释放后重执行。
+- [x] Oracle 4.4.2.2 `oracle-direct` **4/4**，现代公开DLL消费 **6/6**；独立只读走查无阻塞发现。
+
+实库每例先验证普通调用，再执行两条INSERT、routine、两条INSERT；cursor分页面精确读回
+前三行的数字、中文/emoji和RAW，独立连接验证全部五行的存储值。调用方batch销毁后cursor
+仍可读且原session可复用；自有batch在cursor存活时拒绝重执行，释放后重新租约执行成功。
+计数与普通过程对照比较，不把服务端返回的routine affected-row数硬编码为0。
+ReturnValue、公开reader读取窗口、NULL、terminal ERR、后续失败保留已发布游标及未读游标
+在batch销毁后失效具有loopback证据；本轮实库过程为OUT，不扩大为真实function验收。
+
+证据位于忽略的 `TestResults/roadmap/`：`d08aa-cursor-red.trx`（预期红测8），
+`d08aa-cursor-live.trx`（4通过）、`d08aa-cursor-consumer.trx`（6通过）、
+`d08aa-batch-cursor-regression.trx`（905通过/0失败/0跳过，含新增20例）及
+`d08aa-cursor-lifetime-failure-final.trx`（另4例，后续失败/未读销毁）；五个产品TFM
+Release编译0警告/0错误。实库早期`live-guard-red`实际失败在普通控制的整数断言，
+不能作为guard红测证据；已改为既有精确数值比较后完成上述实库验证。
+本轮未运行全量Consumer/Unit、长时soak、代理/OB20、其他服务端/独立runtime；PL同组、
+SELECT CURSOR列、DML RETURNING cursor、复杂cursor成员和array binding流水化仍开放。
+
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 
 本轮先固定服务端形状，再核对 Java 和 .NET 是否已有可复用的客户端类型路径。OceanBase

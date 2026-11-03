@@ -86,7 +86,7 @@ namespace OceanBaseConnector
                 try { operation?.Dispose(); }
                 finally
                 {
-                    if (_ownsConnection && !RetainsOwnedLobConnection)
+                    if (_ownsConnection && !RetainsOwnedResultConnection)
                     {
                         if (operation != null)
                         {

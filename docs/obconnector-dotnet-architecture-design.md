@@ -494,11 +494,17 @@ time zone and national charset, without replay or SQL rewriting. It does not pip
 in the same group or expand ordinary PL type-DDL handling. A later segment's preflight can fail after
 an executed prefix: successful counts and outputs remain, while unsent suffix counts stay -1.
 Segment completion retains the batch reservation; whole-batch completion releases it even when the
-last entry is a routine, opening the same reader LOB window. Routine barriers accept ordinary scalar,
-named and anonymous collection outputs under the existing output plan, but reject cursor members.
-Owned Scalar rejects locator results, including unexpected live routine metadata, and explicit LOB
-outputs remain subject to the retained-connection rule. Owned NonQuery drains ordinary LOB rows
-without handles. Internal use of a reader does not relax these consumer lifetime restrictions;
+last entry is a routine, opening the same reader LOB/cursor window. Routine barriers accept ordinary scalar,
+named and anonymous collection outputs and explicitly declared root REF CURSOR OUT/ReturnValue under
+the existing output plan, but reject complex cursor members. Cursor metadata must be cursor or NULL;
+undeclared cursor outputs, pipelined DML RETURNING cursors and ordinary SELECT CURSOR columns remain
+rejected. The existing cursor owner retains the parent statement and controls FETCH/close. Caller-owned
+cursors survive batch disposal. Owned Scalar/NonQuery retains its original connection while live cursor
+or LOB resources remain; every execution entry point rejects reuse until those resources are released.
+Batch disposal closes that lease and invalidates unread cursors. Public batch readers keep the connection
+open after final NextResult until reader closure; cursor FETCH before whole-batch completion is rejected.
+Terminal routine errors preserve old outputs and release unpublished cursors; a later command error
+preserves already published outputs. Owned NonQuery drains ordinary LOB rows without handles;
 failed Scalar disposes captured nested LOBs. Early close never starts a later segment or routine.
 Anonymous scalar collection binary results reuse the ordinary metadata layout and decoder in batch
 reader/scalar/nonquery, including root/member NULL, empty collections and retained read-only values.

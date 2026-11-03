@@ -10,7 +10,7 @@ namespace OceanBaseConnector
 {
     /// <summary>Executes commands sequentially by default, with optional MySQL INSERT rewriting.
     /// No implicit transaction or automatic replay is added. A data source batch retains its connection
-    /// for returned LOB handles; dispose those handles before reexecution, and dispose the batch to close it.</summary>
+    /// for returned LOB handles and cursors; release those resources before reexecution, and dispose the batch to close it.</summary>
     public sealed partial class OceanBaseBatch : DbBatch
     {
         internal object Gate { get; } = new object();
@@ -76,8 +76,8 @@ namespace OceanBaseConnector
         private void PrepareOwnedConnection()
         {
             CheckMutable();
-            if (_connection!.State == ConnectionState.Open && _connection.GetOpenSession().HasLiveLobHandles)
-                throw new InvalidOperationException("Dispose previous LOB handles, including complex members, before executing this batch again.");
+            if (_connection!.State == ConnectionState.Open && _connection.GetOpenSession().HasLiveResultResources)
+                throw new InvalidOperationException("Release previous cursors and LOB handles, including complex members, before executing this batch again.");
         }
         private void OpenOwnedConnection()
         {
@@ -91,10 +91,10 @@ namespace OceanBaseConnector
             if (_connection!.State != ConnectionState.Closed) await _connection.CloseAsync().ConfigureAwait(false);
             await _connection.OpenAsync(token).ConfigureAwait(false);
         }
-        private bool RetainsOwnedLobConnection => _ownsConnection && _connection!.State == ConnectionState.Open && _connection.GetOpenSession().HasLiveLobHandles;
-        private void CloseOwnedConnection() { if (_ownsConnection && !RetainsOwnedLobConnection) _connection!.Close(); }
+        private bool RetainsOwnedResultConnection => _ownsConnection && _connection!.State == ConnectionState.Open && _connection.GetOpenSession().HasLiveResultResources;
+        private void CloseOwnedConnection() { if (_ownsConnection && !RetainsOwnedResultConnection) _connection!.Close(); }
         private async Task CloseOwnedConnectionAsync()
-        { if (_ownsConnection && !RetainsOwnedLobConnection) await _connection!.CloseAsync().ConfigureAwait(false); }
+        { if (_ownsConnection && !RetainsOwnedResultConnection) await _connection!.CloseAsync().ConfigureAwait(false); }
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
         {
             if (_ownsConnection) OpenOwnedConnection();

@@ -289,7 +289,7 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
                 if (BatchCommand is OceanBaseBatchCommand batch)
                 {
-                    if (BatchBarrierLobOutputs.HasValue) oracle?.RequireBatchOutputs(BatchBarrierLobOutputs.Value, allowAnonymous: true);
+                    if (BatchBarrierLobOutputs.HasValue) oracle?.RequireBatchOutputs(BatchBarrierLobOutputs.Value, allowRoutineOutputs: true);
                     if (oracle != null) batch.BindOutputs(oracle.Outputs);
                     if (mysql != null) batch.BindOutputs(mysql.Outputs);
                 }

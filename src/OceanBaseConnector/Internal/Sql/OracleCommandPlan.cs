@@ -29,21 +29,22 @@ namespace OceanBaseConnector.Internal.Sql
         internal OracleArrayBindingPlan? ArrayBinding { get; private set; }
         private bool _batchOutputs;
         private bool _allowBatchLobs;
+        private bool _allowBatchRefCursors;
         private bool _published;
         private object[]? _values;
         private readonly OceanBaseDbType?[] _outputTypes;
         private readonly OceanBaseComplexType?[] _outputComplexTypes;
 
-        internal void RequireBatchOutputs(bool allowLobOutputs, bool allowAnonymous = false)
+        internal void RequireBatchOutputs(bool allowLobOutputs, bool allowRoutineOutputs = false)
         {
             for (var i = 0; i < _outputTypes.Length; i++)
             {
                 var type = _outputTypes[i]; var complex = _outputComplexTypes[i];
-                if (type == OceanBaseDbType.RefCursor || complex != null && (complex.IsAnonymous && !allowAnonymous || complex.Layout.HasCursorMembers) ||
+                if (type == OceanBaseDbType.RefCursor && !allowRoutineOutputs || complex != null && (complex.IsAnonymous && !allowRoutineOutputs || complex.Layout.HasCursorMembers) ||
                     !allowLobOutputs && (type == OceanBaseDbType.Blob || type == OceanBaseDbType.Clob || complex?.Layout.HasLobMembers == true))
-                    throw new NotSupportedException("Batch multi-send RETURNING requires scalar or named complex outputs; LOBs require a retained caller connection.");
+                    throw new NotSupportedException("Batch outputs require supported scalar or complex values; cursors require a routine barrier and LOBs require a retained connection.");
             }
-            _batchOutputs = true; _allowBatchLobs = allowLobOutputs;
+            _batchOutputs = true; _allowBatchLobs = allowLobOutputs; _allowBatchRefCursors = allowRoutineOutputs;
         }
 
         internal void ValidateOutputColumn(int ordinal, ResultColumn column)
@@ -61,6 +62,12 @@ namespace OceanBaseConnector.Internal.Sql
             if (_batchOutputs)
             {
                 var declared = _outputTypes[ordinal];
+                if (_allowBatchRefCursors && declared == OceanBaseDbType.RefCursor)
+                {
+                    if (column.TypeCode != 163 && column.TypeCode != 6)
+                        throw new ProtocolException("A REF CURSOR output requires cursor or NULL metadata.");
+                    return;
+                }
                 if ((declared == OceanBaseDbType.Blob && column.TypeCode != 210) ||
                     (declared == OceanBaseDbType.Clob && column.TypeCode != 211) ||
                     ((column.TypeCode == 210 || column.TypeCode == 211) && declared != OceanBaseDbType.Blob && declared != OceanBaseDbType.Clob))
