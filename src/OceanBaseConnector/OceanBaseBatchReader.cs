@@ -166,11 +166,15 @@ namespace OceanBaseConnector
         {
             try
             {
-                if (_current!.NextResult()) return true;
-                _current.Dispose(); _current = null; _index++;
-                if (_index == _operation.Commands.Length) { CompleteMultiSend(); return false; }
-                if (_index == _multiGroupEnd) SendNextMultiSendGroup();
-                StartCurrentMultiSend(); return true;
+                while (true)
+                {
+                    var next = _current!.NextResult(); UpdateCount();
+                    if (next) { if (!SingleResult) return true; continue; }
+                    _current.Dispose(); _current = null; _index++;
+                    if (_index == _operation.Commands.Length) { CompleteMultiSend(); return false; }
+                    if (_index == _multiGroupEnd) SendNextMultiSendGroup();
+                    StartCurrentMultiSend(); if (!SingleResult) return true;
+                }
             }
             catch (Exception error) { AbortMultiSend(error); Close(); throw; }
         }
@@ -179,15 +183,19 @@ namespace OceanBaseConnector
             using var registration = cancellationToken.Register(_operation.Cancel); _operation.ReaderToken = cancellationToken;
             try
             {
-                if (await _current!.NextResultAsync(cancellationToken).ConfigureAwait(false)) return true;
-                await _current.DisposeAsync().ConfigureAwait(false); _current = null; _index++;
-                if (_index == _operation.Commands.Length) { CompleteMultiSend(); return false; }
-                if (_index == _multiGroupEnd)
+                while (true)
                 {
-                    _multiGroupEnd = await _operation.Batch.SendMultiSendGroupAsync(_operation, _multiExchange!, _multiRequests!, _multiNext, cancellationToken).ConfigureAwait(false);
-                    _multiNext = _multiGroupEnd;
+                    var next = await _current!.NextResultAsync(cancellationToken).ConfigureAwait(false); UpdateCount();
+                    if (next) { if (!SingleResult) return true; continue; }
+                    await _current.DisposeAsync().ConfigureAwait(false); _current = null; _index++;
+                    if (_index == _operation.Commands.Length) { CompleteMultiSend(); return false; }
+                    if (_index == _multiGroupEnd)
+                    {
+                        _multiGroupEnd = await _operation.Batch.SendMultiSendGroupAsync(_operation, _multiExchange!, _multiRequests!, _multiNext, cancellationToken).ConfigureAwait(false);
+                        _multiNext = _multiGroupEnd;
+                    }
+                    await StartCurrentMultiSendAsync().ConfigureAwait(false); if (!SingleResult) return true;
                 }
-                await StartCurrentMultiSendAsync().ConfigureAwait(false); return true;
             }
             catch (Exception error) { AbortMultiSend(error); await CloseAsync().ConfigureAwait(false); throw; }
             finally { _operation.ReaderToken = default; }

@@ -126,7 +126,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的根/命名复杂 LOB binary 结果及命名复杂 LOB 内容输入及 Oracle DML RETURNING 标量 OUT/INOUT、命名复杂值和保留调用方连接的 LOB 输出子集也已验收；关闭连接/data source reader 的根远程 LOB 读取窗口 **8/8**（D-08u）；data source NonQuery 的根远程 LOB 排空/池复用 **4/4**（D-08v）；SequentialAccess reader 的双模式字段 **8/8**、Oracle LOB 窗口 **16/16**（含原8）与 XML **4/4**（含原2）（D-08w） | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自有连接 Scalar 的 locator 结果及显式 LOB OUT/INOUT、复杂 text LOB 结果、PL 输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的根/命名复杂 LOB binary 结果及命名复杂 LOB 内容输入及 Oracle DML RETURNING 标量 OUT/INOUT、命名复杂值和保留调用方连接的 LOB 输出子集也已验收；关闭连接/data source reader 的根远程 LOB 读取窗口 **8/8**（D-08u）；data source NonQuery 的根远程 LOB 排空/池复用 **4/4**（D-08v）；SequentialAccess reader 的双模式字段 **8/8**、Oracle LOB 窗口 **16/16**（含原8）与 XML **4/4**（含原2）（D-08w）；整批 SingleRow/SingleResult 的双模式限读及 Oracle 隐藏 RETURNING **10/10**（D-08x） | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自有连接 Scalar 的 locator 结果及显式 LOB OUT/INOUT、复杂 text LOB 结果、PL 输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属 |
 | D-09 | `P4`；4.4.2.2 `oracle-direct` text+binary String wire 子集；PL XMLTYPE OUT/INOUT 已确认是服务端限制；完整 XML codec 仍未关闭 | XMLType wire 调查与有条件 codec（T17） | ownerless `XMLTYPE` 已有严格 UTF-8 String wire；`SYS.XMLTYPE` metadata 已有安全的 String 消费边界；`DbType.Xml` 参数使用已验证的 type 253 字符串 wire；同一 PL OUT/INOUT 形状在 Connector/J 2.4.14 与 .NET 分别返回 `600/0A000`、`600/42000`，按服务端限制跳过客户端扩展 | 当前子集覆盖普通 XMLTYPE 列、NULL、同步/异步 DML、metadata、PL 函数结果、显式 Prepare binary 结果；带 owner 的复杂 payload、坏值/最大值和跨版本证据仍待确认；PL OUT/INOUT 当前版本不再作为待开发项 | 保持当前子集的参数/结果/NULL/metadata 契约；取得稳定复杂 XML identity 和不同服务端 wire 后再扩展，不把 PL 失败伪装成客户端成功 |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
@@ -1969,6 +1969,36 @@ TextReader 与跨组消费通过。命名/匿名复杂字段的新顺序路径�
 产品、测试和四份文档已独立走查通过，无阻断发现；`git diff --check` 通过。
 报告保存在忽略目录 `TestResults/roadmap/d08w-*.trx`，保留原始 RED 与中间失败。
 不重复长压、全消费者、冻结端点或无关部署；D-08 父项仍未整体关闭。
+
+#### D-08x：multi-send 的整批 SingleRow/SingleResult（2026-11-03，指定直连子集 `P4`）
+
+Q13 的整批结果限制已有顺序实现；本轮将其接入 Q20 分组发送，复用普通 reader 的首行/
+首结果限制，在 batch 层隐藏并排空后续请求，保留 affected counts、RETURNING 发布、错误
+和取消。允许 SequentialAccess/CloseConnection/data source 组合；SchemaOnly/KeyInfo 保持
+顺序路径。空结果或 affected-count 首结果不查找后续结果；Read=false 不启动下一组，须继续
+NextResult 排空整批。提前 Close 不能撤销已发送组，也不保证隐藏命令尚未执行。
+
+本轮基线 `cfc0e75`。扩展 behavior 白名单和 NextMultiSendResult sync/async 的排空循环，
+每次切换前 UpdateCount，修正只在终止包出现的计数遗漏。QueryResult 对 batch 普通请求的
+多个结果保留同一响应序列，最终结果才 ResponseComplete；内部会话查询仍拒绝多结果。
+独立审查发现 Oracle PrepareExecute 的尾部若带 MoreResults 会提前发布输出，新增2项
+RED 均证实旧参数被改成7；现对此未知尾部形状在计数/发布前严格拒绝，旧输出保持，连接丢弃。
+
+首轮限制用例 RED **16/16 失败**，确认旧顺序路径；扩充至28项后发现原 QueryResult 将 batch
+多结果误判为内部会话查询，修正共享边界后 **28/28**。LOB 用例最初8项在活动操作期间调用
+GetOpenSession 而失败，修正测试为全部排空后取会话，不放宽产品会话保护。中间失败报告均保留。
+最终相关单测 **602/602，0 skip**，约9秒，覆盖组内先发、半读字段/直接切换、空/count 首结果、
+Read=false 不启动下一组、终止计数、Default 多结果可见性、隐藏错误/取消和 NextResult token、
+RETURNING 完成前不发布与失败保留前缀；根 BLOB/CLOB × sync/async × caller CloseConnection/
+自有连接的8项验证限读后的读取窗口、隐藏句柄无泄漏及关闭后失效，仅计 loopback 证据。
+
+实库 `LimitedMultiSendTests` **10/10，0 skip**，约5秒：MySQL/Oracle 直连 × sync/async ×
+SingleRow/SingleResult 共8项，通过 data source + SequentialAccess + CloseConnection 验证
+首结果限读、后续 UPDATE/SELECT/INSERT 跨组排空、逐条计数和独立存储查账；Oracle 隐藏
+RETURNING sync/async 共2项，输出发布与独立连接查询一致。本轮未复验远程 LOB 限读组合。
+产品五 TFM、集成项目 Release build 均 **0 warning / 0 error**。
+产品及测试独立走查无阻断项；四份文档同步当前边界。报告在忽略目录
+`TestResults/roadmap/d08x-*.trx`。不重复长压、全消费者或冻结端点；D-08 父项仍未整体关闭。
 
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 

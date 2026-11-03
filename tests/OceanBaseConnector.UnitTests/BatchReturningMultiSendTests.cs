@@ -13,7 +13,7 @@ namespace OceanBaseConnector.UnitTests
         public static IEnumerable<object[]> BatchReturningCases()
         {
             foreach (var asynchronous in new[] { false, true })
-                foreach (var api in new[] { "nonquery", "scalar", "reader" })
+                foreach (var api in new[] { "nonquery", "scalar", "reader", "singleRow", "singleResult" })
                     foreach (var inputOutput in new[] { false, true })
                         yield return new object[] { asynchronous, api, inputOutput };
         }
@@ -75,11 +75,12 @@ namespace OceanBaseConnector.UnitTests
                         else if (api == "scalar") Assert.Null(asynchronous ? await batch.ExecuteScalarAsync() : batch.ExecuteScalar());
                         else
                         {
-                            using var reader = asynchronous ? await batch.ExecuteReaderAsync() : batch.ExecuteReader();
-                            for (var i = 0; i < 3; i++)
+                            var behavior = api == "singleRow" ? CommandBehavior.SingleRow : api == "singleResult" ? CommandBehavior.SingleResult : CommandBehavior.Default;
+                            using var reader = asynchronous ? await batch.ExecuteReaderAsync(behavior) : batch.ExecuteReader(behavior);
+                            for (var i = 0; i < (api == "reader" ? 3 : 1); i++)
                             {
                                 Assert.Equal(0, reader.FieldCount); Assert.False(asynchronous ? await reader.ReadAsync() : reader.Read());
-                                Assert.Equal(i < 2, asynchronous ? await reader.NextResultAsync() : reader.NextResult());
+                                Assert.Equal(api == "reader" && i < 2, asynchronous ? await reader.NextResultAsync() : reader.NextResult());
                             }
                             Assert.Equal(3, reader.RecordsAffected);
                         }
@@ -100,9 +101,11 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, true)] [InlineData(true, true)]
-        [InlineData(false, false)] [InlineData(true, false)]
-        public async Task BatchMultiSendReturningFailureKeepsPublishedPrefix(bool asynchronous, bool last)
+        [InlineData(false, true, false)] [InlineData(true, true, false)]
+        [InlineData(false, false, false)] [InlineData(true, false, false)]
+        [InlineData(false, true, true)] [InlineData(true, true, true)]
+        [InlineData(false, false, true)] [InlineData(true, false, true)]
+        public async Task BatchMultiSendReturningFailureKeepsPublishedPrefix(bool asynchronous, bool last, bool limited)
         {
             var server = Server(async channel =>
             {
@@ -124,7 +127,15 @@ namespace OceanBaseConnector.UnitTests
                 using (var batch = connection.CreateBatch())
                 {
                     var outputs = new[] { BatchReturningItem(batch, 1), BatchReturningItem(batch, 2), BatchReturningItem(batch, 3) };
-                    var error = await Assert.ThrowsAsync<OceanBaseException>(() => asynchronous ? batch.ExecuteNonQueryAsync() : Task.FromResult(batch.ExecuteNonQuery()));
+                    var error = await Assert.ThrowsAsync<OceanBaseException>(async () =>
+                    {
+                        if (!limited) { if (asynchronous) await batch.ExecuteNonQueryAsync(); else batch.ExecuteNonQuery(); }
+                        else
+                        {
+                            using var reader = asynchronous ? await batch.ExecuteReaderAsync(CommandBehavior.SingleRow) : batch.ExecuteReader(CommandBehavior.SingleRow);
+                            if (asynchronous) await reader.NextResultAsync(); else reader.NextResult();
+                        }
+                    });
                     Assert.Same(batch.BatchCommands[last ? 2 : 1], error.BatchCommand); Assert.False(error.IsExecutionOutcomeUnknown);
                     Assert.Equal(7L, outputs[0].Value); Assert.Equal(last ? 8L : -1L, outputs[1].Value); Assert.Equal(-1L, outputs[2].Value);
                     Assert.Equal(last ? ConnectionState.Open : ConnectionState.Broken, connection.State);

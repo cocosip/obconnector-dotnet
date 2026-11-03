@@ -467,7 +467,8 @@ length-encoded UTF-8 String framing, including binary metadata with type 160, ra
 layout. Field I/O failure invokes the batch failure callback, closes the failed reader logically and
 releases the batch operation without requiring an extra Close. The connection is discarded when
 responses remain unread. SequentialAccess follows the same command eligibility checks as Default;
-SchemaOnly, KeyInfo, SingleRow and SingleResult keep their sequential command path.
+SingleRow and SingleResult preserve multi-send while applying their limits to the entire batch.
+SchemaOnly and KeyInfo keep their sequential command path.
 Anonymous scalar collection binary results reuse the ordinary metadata layout and decoder in batch
 reader/scalar/nonquery, including root/member NULL, empty collections and retained read-only values.
 They cannot be rebound as inputs or declared batch outputs. Non-NULL national members still require
@@ -480,7 +481,8 @@ Oracle DML RETURNING scalar OUT/INOUT, declared named complex values and retaine
 request. An explicit prepared statement transfers to that request's live owner; preflight does not
 end it. Operation cleanup closes owners for completed, failed and partially constructed requests.
 Outputs stay hidden from reader/scalar results and publish atomically per command only after the final
-OK, output-presence and response-boundary checks, under the exchange's cancellation budget. A later
+OK, output-presence and response-boundary checks, under the exchange's cancellation budget. A batch
+PrepareExecute tail with unexpected additional results is rejected before publishing outputs. A later
 failure preserves the successful prefix and the failed command's old outputs. Frozen declarations
 and actual output metadata reject anonymous layouts and cursor members; root BLOB/CLOB declarations
 must match the metadata even for NULL rows. Named complex outputs bind their declared layout before
@@ -501,14 +503,18 @@ result; SingleRow exposes only the first row of that result and implies SingleRe
 result or affected-count response does not cause the reader to search later results for a row.
 Ordinary command SingleRow uses the same first-result rule; its previous per-result behavior was a defect.
 
-NextResult drains all hidden results, starts and consumes remaining entries sequentially, and returns
+NextResult drains all hidden results, starts and consumes remaining entries, and returns
 false on successful exhaustion. A hidden error or cancellation propagates with the ordinary BatchCommand,
 unknown-outcome and cleanup rules. Successful counts and procedure outputs are retained, including hidden
-results. Limits do not rewrite SQL, add an implicit transaction or replay failed operations.
+results. With opt-in multi-send, eligible entries retain grouped sending and ordered response consumption;
+each request completes only after its final result, and terminal affected counts are captured before moving
+to the next request. Limits do not rewrite SQL, add an implicit transaction or replay failed operations.
 
 Read returning false only finishes the current result. To process remaining batch entries, call
 NextResult even though it will not expose another result. Early Close keeps the existing lazy contract:
-unstarted entries are skipped. An unread current response can destroy its session. CloseConnection
+unstarted entries are skipped on the sequential path. Multi-send may already have sent hidden entries in
+the current group; Close cannot retract them or prove they were not executed. An unread current response
+can destroy its session. CloseConnection
 still belongs to the original logical lease; data-source batches still own that connection.
 SchemaOnly with limits may prepare hidden entries and query their metadata catalogs, but executes no
 target SQL. Sequential batch reservations remain until reader close; multi-send readers release theirs

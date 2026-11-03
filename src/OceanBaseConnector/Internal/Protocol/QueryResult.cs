@@ -188,8 +188,8 @@ namespace OceanBaseConnector.Internal.Protocol
             _more = (flags & ServerStatusFlags.MoreResultsExists) != 0;
             if (!_completeExchange)
             {
-                if (_more) throw new ProtocolException("The session state query returned multiple results.");
-                _query.ResponseComplete();
+                if (_more && !_query.IsBatchResponse) throw new ProtocolException("The session state query returned multiple results.");
+                if (!_more) _query.ResponseComplete();
             }
             else if (!_more && _mysqlPlan?.Outputs.Length > 0)
             {

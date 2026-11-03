@@ -53,6 +53,8 @@ namespace OceanBaseConnector.Internal.Protocol
         private void EndOracleTail(byte[] packet)
         {
             var ok = OkPacket.Parse(packet, _query.Capabilities);
+            if (_query.IsBatchResponse && (ok.StatusFlags & ServerStatusFlags.MoreResultsExists) != 0)
+                throw new ProtocolException("Batch PrepareExecute returned unexpected additional results.");
             if (_oraclePlan?.ArrayBinding != null)
             {
                 if ((ok.StatusFlags & ServerStatusFlags.MoreResultsExists) != 0) throw new ProtocolException("Array binding returned unexpected additional results.");

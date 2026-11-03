@@ -256,7 +256,7 @@ namespace OceanBaseConnector
             operation.Reader != null || !_ownsConnection && (operation.Behavior & CommandBehavior.CloseConnection) == 0;
 
         internal static bool CanUseMultiSendReader(CommandBehavior behavior) =>
-            (behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess)) == CommandBehavior.Default;
+            (behavior & ~(CommandBehavior.CloseConnection | CommandBehavior.SequentialAccess | CommandBehavior.SingleRow | CommandBehavior.SingleResult)) == CommandBehavior.Default;
 
         internal void SendMultiSendGroup(Operation operation, CommandExchange exchange, OceanBaseBatchMultiSendRequest[] requests, ref int next, out int end)
         {
