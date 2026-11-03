@@ -936,7 +936,7 @@ replay 的同码失败，失败范围收窄到服务端接收后的 BLOB OBJECT 
 原描述/句柄的发送前身份校验、Input/INOUT/OUT映射、嵌套NULL、重复参数/包预算、Prepare/cache
 形状变化、batch与失败资源归属。本轮不能推断CLOB、collection、其他版本或所有替代wire均不可行。
 
-#### D-04h：命名复杂值 LOB locator 自动绑定（2026-11-03，指定直连子集 `P4`）
+#### D-04h：命名复杂值 LOB locator 自动绑定（2026-11-04，指定直连子集 `P4`）
 
 本轮按 D-04g 已确认的可用路径实现最小自动绑定：Oracle 单条 `CommandType.Text`、无输出、
 非 batch 的 input-only named OBJECT/collection 值，如果自身或嵌套值包含 BLOB/CLOB locator，
@@ -952,12 +952,13 @@ named complex wire 仍拒绝发送。
 | 检查 | 结果 |
 | --- | --- |
 | 本地 unit | 新增 constructor/隐藏参数、嵌套/NULL、quoted type name、重复占位符及拒绝路径 **4/4**；相关复杂 LOB 组 **84/84** |
+| Prepare/cache wire | loopback sync/async **2/2**：首次 `COM_STMT_PREPARE` 已收到 constructor SQL，隐藏 locator 参数数目正确；两次执行复用同一 statement id |
 | Release 构建 | `dotnet build OceanBaseConnector.slnx -c Release --no-restore -m:1 -nr:false -p:UseSharedCompilation=false`，五个目标框架、测试/消费者资产 **0 warning / 0 error** |
-| 集成测试 | Oracle 4.4.2.2 `oracle-direct`、BLOB/CLOB × OBJECT/collection × sync/async **10/10** 通过；既有复杂 LOB 回归 **20/20**、locator wire 对照 **2/2** 通过；使用 User Secrets，未写入凭据 |
+| 集成测试 | Oracle 4.4.2.2 `oracle-direct`、显式 Prepare/PrepareAsync 后 BLOB/CLOB × OBJECT/collection × sync/async **8/8** 通过；既有 constructor 矩阵 **10/10**、复杂 LOB 回归 **20/20**、locator wire 对照 **2/2** 通过；使用 User Secrets，未写入凭据 |
 | 格式/差异 | 变更 C# 文件 scoped whitespace verify 通过；`git diff --check` 通过 |
 
-因此 a4 已提升为指定直连子集 `P4`，但不关闭 D-04a 或 D-04 父项。下一步应单独设计 named
-collection 更复杂成员形状和 Prepare/cache 组合的 wire 证据；OUT/INOUT、batch、cursor、multi-statement
+因此 a4 已提升为指定直连子集 `P4`，并关闭该子集的 Prepare/cache 缺口，但不关闭 D-04a 或 D-04 父项。下一步应单独设计 named
+collection 更复杂成员形状的 wire 证据；OUT/INOUT、batch、cursor、multi-statement
 仍保持边界，不把现有服务端 `932/22000` 失败改写成客户端成功。
 
 #### D-04a2 Connector/J 2.4.14 公开 API 实测（2026-11-01）

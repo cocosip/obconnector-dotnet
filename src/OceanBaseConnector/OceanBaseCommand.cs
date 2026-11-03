@@ -304,7 +304,7 @@ namespace OceanBaseConnector
 #if NET8_0_OR_GREATER
                 hasBatchCommand = BatchCommand != null;
 #endif
-                var namedComplexLob = !prepareOnly && !schemaOnly && CommandType == CommandType.Text && !multiStatement && !HasOutputParameters() && !hasBatchCommand &&
+                var namedComplexLob = !schemaOnly && CommandType == CommandType.Text && !multiStatement && !HasOutputParameters() && !hasBatchCommand &&
                     session.Info!.Mode == OceanBaseCompatibilityMode.Oracle;
                 ParameterBindingPlan bindings;
                 if (namedComplexLob)

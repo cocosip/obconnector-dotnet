@@ -86,7 +86,26 @@ public sealed class NamedComplexLobBindingTests
     public Task NamedObjectAndCollectionLocatorInputsUseConstructors(string profileName, bool character, string shape, bool asynchronous)
         => VerifyExpanded(IntegrationEnvironment.GetProfile(profileName), character, shape, asynchronous);
 
-    private static async Task VerifyExpanded(IntegrationProfile profile, bool character, string shape, bool asynchronous)
+    public static TheoryData<string, bool, string, bool> PreparedCases()
+    {
+        var data = new TheoryData<string, bool, string, bool>();
+        foreach (var profileName in ProfileTheoryData.OraclePrepareExecuteObjects())
+        {
+            var profile = IntegrationEnvironment.GetProfile(profileName);
+            if (!profile.CreateBuilder().UseLobLocators) continue;
+            foreach (var character in new[] { false, true })
+                foreach (var shape in new[] { "object", "collection" })
+                    foreach (var asynchronous in new[] { false, true }) data.Add(profile.Name, character, shape, asynchronous);
+        }
+        return data;
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(PreparedCases))]
+    public Task PreparedNamedObjectAndCollectionLocatorInputsUseCachedConstructors(string profileName, bool character, string shape, bool asynchronous)
+        => VerifyExpanded(IntegrationEnvironment.GetProfile(profileName), character, shape, asynchronous, prepared: true);
+
+    private static async Task VerifyExpanded(IntegrationProfile profile, bool character, string shape, bool asynchronous, bool prepared = false)
     {
         var settings = profile.CreateBuilder();
         if (!profile.Oracle || !profile.CreateObjects || !settings.UseLobLocators || !settings.UseOraclePrepareExecute)
@@ -122,6 +141,10 @@ public sealed class NamedComplexLobBindingTests
         await using (var command = db.Command(connection, "BEGIN " + procedure + "(:p); END;", transaction))
         {
             DatabaseContext.Parameter(command, "p", shape == "object" ? type.CreateValue(lob) : type.CreateValue(lob, null));
+            if (prepared)
+            {
+                if (asynchronous) await command.PrepareAsync(); else command.Prepare();
+            }
             if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
             if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
         }
