@@ -16,6 +16,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private static readonly Encoding Sjis = new SjisEncoding();
         private static readonly Lazy<Encoding> Cp932 = new Lazy<Encoding>(() => new Cp932Encoding());
         private static readonly Lazy<Encoding> Ujis = new Lazy<Encoding>(() => new UjisEncoding());
+        private static readonly Lazy<Encoding> EucJpMs = new Lazy<Encoding>(() => new UjisEncoding(microsoft: true));
         private static readonly Lazy<Encoding> Big5 = new Lazy<Encoding>(() => new Big5Encoding());
         private static readonly Lazy<Encoding> Hkscs = new Lazy<Encoding>(() => new HkscsEncoding(false));
         private static readonly Lazy<Encoding> Hkscs31 = new Lazy<Encoding>(() => new HkscsEncoding(true));
@@ -60,6 +61,8 @@ namespace OceanBaseConnector.Internal.Protocol
                     maximumBytesPerCharacter = 2; return Cp932.Value;
                 case 12: case 91:
                     maximumBytesPerCharacter = 3; return Ujis.Value;
+                case 97: case 98:
+                    maximumBytesPerCharacter = 3; return EucJpMs.Value;
                 case 3: case 69: case 338: case 353: case 368:
                     maximumBytesPerCharacter = 1; return SingleByteResultEncoding.Dec8;
                 case 18: case 89: case 332: case 347: case 362:

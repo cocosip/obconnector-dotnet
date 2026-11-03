@@ -2,7 +2,7 @@
 
 更新：2026-11-03。本页保留当前支持声明的限制，不重复开发流水。
 范围以[能力矩阵](obconnector-dotnet-progress.md)为准，判定按[验收标准](acceptance-criteria.md)。
-下面结果来自各自注明日期的报告；2026-11-03新增D-07e/f/g字符集指定存储和结果专项。
+下面结果来自各自注明日期的报告；2026-11-03新增D-07e/f/g/h字符集指定存储和结果专项。
 未重跑完整实库矩阵，也没有关闭既有失败。
 
 ## 环境矩阵
@@ -12,7 +12,7 @@
 | OceanBase4.4.2.2 MySQL直连、Windows、TLS Disabled | CRUD/类型/事务/池/LOCAL INFILE/批处理等子集；新增专项各有记录 | 全版本、全部API/负载/故障组合，不承诺原生MySQL兼容 |
 | OceanBase4.4.2.2 Oracle直连、Windows、TLS Disabled | PL输出/LOB/复杂值/数组/XA/字符集等子集；同时保留真实失败 | 下表服务端/权限与形状失败，全版本/全部组合，不承诺原生Oracle兼容 |
 | GB2312/EUCKR 客户端/结果映射 | MySQL 直连客户端/结果与 Oracle NCHAR/NVARCHAR2 national 真实 4.4.2.2 roundtrip；严格 CP20936/51949、collation 24/86/19/85 | 当前目标 Oracle 普通客户端 EUCKR 被服务端 900/42000 拒绝，Connector/J 同一序列也失败，按服务端限制跳过客户端改动；其他版本/代理仍未验收 |
-| CP932/UJIS 客户端/结果/national映射 | 官方全表与MySQL4.4.2.2转换一致；每族MySQL客户端2、canonical/alias结果2和Oracle national2成功，见D-07f/g | 普通Oracle客户端均在第三条SET results=utf8mb4返回900/42000，Connector/J同交互匹配；不关闭其他部署、runtime及存储组合 |
+| CP932/UJIS/EUCJPMS 客户端/结果/national映射 | 官方全表与MySQL4.4.2.2转换一致；每族MySQL客户端2、canonical/alias结果2和Oracle national2成功，见D-07f/g/h | 普通Oracle客户端均在第三条SET results=utf8mb4返回900/42000，Connector/J同交互匹配；不关闭其他部署、runtime及存储组合 |
 | 真实TLS/企业CA/mTLS/撤销/轮换 | **当前两种模式真实环境未开TLS，未验收** | 必须保留matrix.tls-authentication deferred；自签名SslStream只属本地证据 |
 | 认证plugin/KDC/凭据服务 | native账号直连与本地客户端分支 | 非native正负认证、平台协商、实际轮换；Java插件注册不是OB部署证明 |
 | OBProxy/ODP、真正多节点、OCP/TNS服务 | 本地parser与受控单上游客户端路由 | 真实发现服务、节点/代理故障、后端reset/迁移，单上游中继不是HA |
@@ -35,7 +35,7 @@ OB20/trace 或非 native 认证/KDC profile。只读握手专项 4/4 通过，OB
 | OB20/trace/压缩 OB20 | 没有 OB20 profile；历史强制 OB20 因服务端 `Layer=mysql` 失败 | 暂不开发；普通协议回退和拒绝边界继续保留 |
 | OBProxy/ODP/多节点/OCP/TNS/后端迁移 | 没有真实 proxy 或发现服务 profile；本地 relay 只验证客户端路由 | 暂不开发；本地拓扑 fixture 不升级为 HA 结论 |
 | 非 native 认证、KDC、凭据轮换 | 当前只有 native 账号直连，未提供插件/KDC 端点 | 暂不开发；Java SPI 存在不计为 OceanBase 部署能力 |
-| 剩余新字符集 | D-07e已补CP850/HP8/MacRoman及SWE7结果；D-07f/g已补CP932/UJIS指定成功子集；EUCJPMS仍缺完整映射和存储证据 | 仅按逐项证据关闭成功子集；Oracle普通SJIS/Big5/EUCKR/CP932/UJIS的Java匹配失败保留，其他部署继续冻结 |
+| 本轮新增字符集 | D-07e已补CP850/HP8/MacRoman及SWE7结果；D-07f/g/h已补CP932/UJIS/EUCJPMS严格映射与指定成功子集 | 仅按逐项证据关闭成功子集；Oracle普通SJIS/Big5/EUCKR/CP932/UJIS/EUCJPMS的Java匹配失败保留，其他部署继续冻结 |
 
 ## 未关闭失败与前提
 

@@ -35,6 +35,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             (153, "\U0002010c\U000200d1Ā\uffed中\0  ", "884588478856F9FEA4A4002020", 2),
             (95, "日本纊Ⅰⅰ\ue000≒纊Ⅰ\0  ", "93FA967BFA5C8754FA40F0408790ED40FA4A002020", 2),
             (12, "日本ｶ丂\ue000\ue3ac\\~\0  ", "C6FCCBDC8EB68FB0A1F5A18FF5A1A1C08FA2B7002020", 3),
+            (97, "日本①ⅰ\ue000\ue3ac≒Ⅰ～\0  ", "C6FCCBDCADA18FF3F3F5A18FF5A1ADF08FF3FD8FA2B7002020", 3),
             (4, "Çøı\0  ", "809BD5002020", 1), (6, "À₤Ÿ\0  ", "A1AFEE002020", 1),
             (39, "Ä€ﬁ\0  ", "80DBDE002020", 1), (10, "ÉÄÖÅÜéäöåü\0  ", "405B5C5D5E607B7C7D7E002020", 1),
         };

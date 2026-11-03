@@ -163,7 +163,7 @@ surfaces a real server or client failure. When multiple profiles are selected, a
 test runs on every profile that does not declare the limitation; it is skipped only when all
 selected profiles declare it.
 
-Evidence-backed Oracle direct-profile limitation names include `oracle-euckr`, `oracle-sjis-big5`, `oracle-cp932`, `oracle-ujis`,
+Evidence-backed Oracle direct-profile limitation names include `oracle-euckr`, `oracle-sjis-big5`, `oracle-cp932`, `oracle-ujis`, `oracle-eucjpms`,
 `oracle-nested-table-column`, and `oracle-select-cursor-column`. These entries preserve the
 negative evidence and do not claim that the corresponding client capability is implemented.
 

@@ -326,7 +326,7 @@ See the [OceanBase/Java and direct-test evidence](compatibility.md).
 
 Explicit trusted national/result names additionally resolve through the existing strict client
 mapping for utf8mb3, ascii, latin1, gbk, gb18030, gb18030_2022, dec8, tis620, sjis, big5, hkscs and
-hkscs31, cp932, ujis, gb2312, euckr, cp850, hp8 and macroman. Scalar binary input and ordinary/PL national results share this resolver; streaming uses
+hkscs31, cp932, ujis, eucjpms, gb2312, euckr, cp850, hp8 and macroman. Scalar binary input and ordinary/PL national results share this resolver; streaming uses
 the underlying stateful decoder. Missing facts retain Unicode-only collation fallback and later
 results require fresh state. Stored complex members still require AL16UTF16. See the
 [encoding evidence and live scope](compatibility.md).
@@ -696,6 +696,7 @@ derive this type; PrepareExecute outputs reuse metadata-driven scalar decoding a
 | SJIS | 13, 88, 334, 349, 364 | 2 |
 | CP932 | 95, 96 | 2 |
 | UJIS | 12, 91 | 3 |
+| EUCJPMS | 97, 98 | 3 |
 | Big5 | 1, 84, 335, 350, 365 | 2 |
 | HKSCS | 152, 336, 351, 366 | 2 |
 | HKSCS31 | 153, 337, 352, 367 | 2 |
@@ -774,6 +775,15 @@ retain both possible pending-prefix states. Canonical encoding preserves ASCII5C
 A1C0/8FA2B7 decode to the same scalars. `UjisReference.py` regenerates the numeric data and independent
 full decode/BMP-encode digests. D-07g records all15017 assigned/15015 reversible source positions
 matching MySQL4.4.2.2, storage/result/national tests and the Java-matched ordinary Oracle900 limitation.
+
+EUCJPMS shares this scanner and fixed JIS data, with198 numeric changes from official MySQL
+`mysql-8.0.36/strings/ctype-eucjpms.cc`. Its seven Windows Unicode assignments, NEC/IBM additions
+and24 duplicate positions remain separate from UJIS. Reverse lookup is built after applying the
+changes, preferring the first primary/secondary position; ASCII stays one byte. The same reference
+script regenerates EUCJPMS digests and the correction data when given both fixed sources. D-07h
+records all15206 assigned/15182 reversible source positions matching MySQL4.4.2.2, scoped storage/
+result/national evidence and the Java-matched ordinary Oracle900 limitation. UJIS full-table digests
+and public five-asset consumption remain regression checks after changing their shared constructor.
 
 CP932 follows the official MySQL `mysql-8.0.36/strings/ctype-cp932.cc` table. It retains the
 strict .NET932 canonical mapping and adds398 defined duplicate wire positions for decoding only.

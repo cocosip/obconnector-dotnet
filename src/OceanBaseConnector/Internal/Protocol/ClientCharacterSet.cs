@@ -36,6 +36,7 @@ namespace OceanBaseConnector.Internal.Protocol
                 "sjis" => 13,
                 "cp932" => 95,
                 "ujis" => 12,
+                "eucjpms" => 97,
                 "big5" => 1,
                 "hkscs" => 152,
                 "hkscs31" => 153,

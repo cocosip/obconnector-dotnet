@@ -9,7 +9,7 @@ namespace OceanBaseConnector.Internal.Protocol
         private const int PlaneSize = 94 * 94;
         private readonly char[] _characters = new char[PlaneSize * 2];
         private readonly Dictionary<char, int> _codes = new Dictionary<char, int>();
-        internal UjisEncoding() : base(51932, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback)
+        internal UjisEncoding(bool microsoft = false) : base(51932, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback)
         {
             var sjis = new SjisEncoding(); var pair = new byte[2]; var decoded = new char[1];
             for (var lead = 0xa1; lead <= 0xf4; lead++)
@@ -35,11 +35,29 @@ namespace OceanBaseConnector.Internal.Protocol
                     for (var trail = 0xa1; trail <= 0xfe; trail++)
                         Add(plane, lead << 8 | trail, (char)(0xe000 + plane * 940 + (lead - 0xf5) * 94 + trail - 0xa1));
 
+            if (microsoft)
+            {
+                Apply(0, EucJpMsMappings.Primary); Apply(1, EucJpMsMappings.Secondary);
+            }
+            // The official reverse map prefers the first primary/secondary position for duplicates.
+            for (var plane = 0; plane < 2; plane++)
+                for (var lead = 0xa1; lead <= 0xfe; lead++)
+                    for (var trail = 0xa1; trail <= 0xfe; trail++)
+                    {
+                        var character = _characters[plane * PlaneSize + Position(lead, trail)];
+                        if (character != 0 && !_codes.ContainsKey(character))
+                            _codes.Add(character, lead << 8 | trail | (plane == 0 ? 0 : 0x8f0000));
+                    }
+
             void Add(int plane, int code, char character)
             {
                 if (character == 0) return;
                 _characters[plane * PlaneSize + Position(code >> 8, code & 255)] = character;
-                _codes.Add(character, code | (plane == 0 ? 0 : 0x8f0000));
+            }
+            void Apply(int plane, string corrections)
+            {
+                for (var i = 0; i < corrections.Length; i += 2)
+                    _characters[plane * PlaneSize + Position(corrections[i] >> 8, corrections[i] & 255)] = corrections[i + 1];
             }
         }
         private static int Position(int lead, int trail) => (lead - 0xa1) * 94 + trail - 0xa1;
@@ -57,29 +75,29 @@ namespace OceanBaseConnector.Internal.Protocol
                 var value = bytes[i]; char character;
                 if (pending == 0x8f)
                 {
-                    if (value < 0xa1 || value > 0xfe) throw new DecoderFallbackException("Invalid UJIS triple byte sequence.");
+                    if (value < 0xa1 || value > 0xfe) throw new DecoderFallbackException("Invalid EUC-JP triple byte sequence.");
                     pending = 0x8f00 | value; continue;
                 }
                 if (pending == 0x8e)
                 {
-                    if (value < 0xa1 || value > 0xdf) throw new DecoderFallbackException("Invalid UJIS halfwidth byte sequence.");
+                    if (value < 0xa1 || value > 0xdf) throw new DecoderFallbackException("Invalid EUC-JP halfwidth byte sequence.");
                     character = (char)(0xfec0 + value);
                 }
                 else if (pending >= 0)
                 {
-                    if (value < 0xa1 || value > 0xfe) throw new DecoderFallbackException("Invalid UJIS trail byte.");
+                    if (value < 0xa1 || value > 0xfe) throw new DecoderFallbackException("Invalid EUC-JP trail byte.");
                     character = _characters[(pending >= 256 ? PlaneSize : 0) + Position(pending & 255, value)];
-                    if (character == 0) throw new DecoderFallbackException("Undefined UJIS result byte sequence.");
+                    if (character == 0) throw new DecoderFallbackException("Undefined EUC-JP result byte sequence.");
                 }
                 else if (value < 128) character = (char)value;
                 else if (value == 0x8e || value == 0x8f || value >= 0xa1 && value <= 0xfe)
                 { pending = value; continue; }
-                else throw new DecoderFallbackException("Invalid UJIS result byte sequence.");
+                else throw new DecoderFallbackException("Invalid EUC-JP result byte sequence.");
                 pending = -1;
                 if (chars != null) chars[charIndex + written] = character;
                 written++;
             }
-            if (flush && pending >= 0) throw new DecoderFallbackException("Incomplete UJIS result byte sequence.");
+            if (flush && pending >= 0) throw new DecoderFallbackException("Incomplete EUC-JP result byte sequence.");
             next = pending; return written;
         }
         private int ReadChars(byte[] bytes, int byteIndex, int byteCount, char[] chars, int charIndex, int pending, bool flush, out int next)
@@ -97,7 +115,7 @@ namespace OceanBaseConnector.Internal.Protocol
             if (value < 128) return value;
             if (value >= 0xff61 && value <= 0xff9f) return 0x8e00 | value - 0xfec0;
             if (_codes.TryGetValue(value, out var code)) return code;
-            throw new EncoderFallbackException("Character is not representable in UJIS results.");
+            throw new EncoderFallbackException("Character is not representable in EUC-JP results.");
         }
         public override int GetByteCount(char[] chars, int index, int count)
         {

@@ -13,6 +13,7 @@ alias. Names are case insensitive and canonicalized; `utf8` means `utf8mb3`.
 | `cp850`, `hp8`, `macroman` | Exact single-byte server maps, with identity ASCII and strict undefined-slot checks |
 | `cp932` | Exact CP932 mapping, including NEC/IBM/private-use extensions and canonical reverse encoding; separate from SJIS |
 | `ujis` | Complete JIS X 0208, halfwidth kana, JIS X 0212 three-byte sequences and the pinned server's private-use positions |
+| `eucjpms` | Exact Microsoft EUC-JP variant with its own Unicode assignments, NEC/IBM extensions and canonical duplicate handling |
 
 UTF-16/LE, binary, `swe7` and unknown names fail configuration validation before networking. SWE7
 remaps ASCII syntax such as `@` and backslash and is supported only for ordinary result decoding
@@ -209,8 +210,18 @@ validation of OceanBase's EUC-KR byte ranges. It uses OceanBase 4.4.2 charset ID
 code page 51949. D-07 adds real MySQL client/result and Oracle national scalar storage evidence;
 ordinary Oracle EUCKR client initialization still returns server 900/42000. Connector/J 2.4.14
 fails the same initialization sequence, so this is a current-target server limitation and no client
-workaround is enabled. Other versions, permissions and deployment profiles remain open. EUCJPMS
-still requires its own complete mapping and storage evidence; it is not treated as a UJIS alias.
+workaround is enabled. Other versions, permissions and deployment profiles remain open.
+
+EUCJPMS uses result collations97/98. It shares UJIS byte grammar, with198 official mapping changes
+and24 duplicate positions; it retains the seven Windows Unicode distinctions and NEC/IBM additions.
+Canonical encoding prefers the first primary/secondary position and rejects lossy UJIS aliases.
+All15206 assigned decode positions and15182 reversible Unicode encodes match direct MySQL4.4.2.2.
+D-07h records MySQL client storage/results and Oracle scalar national storage. Ordinary Oracle
+EUCJPMS initialization fails900/42000 at the third SET, reproduced by Connector/J2.4.14 and recorded
+as `oracle-eucjpms`. The original UJIS digests and five-asset consumption remain regression checks.
+Live client/national combinations pair sync implicit with async explicit preparation; five assets
+run under one .NET10 host. Other deployment/runtime, JSON/CLOB storage and live pool-reset evidence
+remain open.
 
 UJIS uses result collations12/91 and a strict two/three-byte decoder. JIS X 0208 reuses the existing
 SJIS assignments; JIS X 0212 adds6067 official numeric assignments, and two940-position private-use
