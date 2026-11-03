@@ -330,7 +330,7 @@ D-02b～D-02d 先调查是否纳入产品范围，不代表必须实现；允许
 | D-02a 已有输入/多结果闭环 | `P2`；a1/a2 达到 `P4` | 核对双模式的正常/NULL/边界、SequentialAccess、半读释放、错误前缀/未执行后缀和独立存储；只为发现的具体缺口补代码或测试 | MySQL 时间脚本存储见 a1，Oracle DATE/TIMESTAMP/LTZ 脚本存储见 a2；历史 Oracle 长 NUL 4 项失败及本轮恢复均保留，详见 A-05，不能只看总测试数 |
 | D-02b 多语句 Prepare/server cursor | `P0 / 当前目标服务端限制`；目标双模式 profile 在 prepare 阶段拒绝脚本，Connector/J 同一 server-prepare 形状也失败，因此跳过客户端实现并保留发送前拒绝 | 只有目标版本/部署接受脚本级 statement/cursor prepare，并提供身份、顺序、失败前缀和生命周期证据时才重新开启；不把客户端参数展开、FetchSize hint 或现有 DbBatch 的顺序执行当作该功能完成 |
 | D-02c 多语句 OUT/INOUT | `P0 / 待范围与输出契约`；本轮调查完成，功能未实现 | 普通脚本参数 OUT/INOUT 保留拒绝；Oracle 单 PL 块输出沿用 D-03；MySQL 用户变量可显式作为结果读取，已有路径不重复开发；尚无可移植的 Java callable 脚本成功证据 | 如纳入 typed 脚本输出，先定义发布时机、后续错误可见性、变量/资源生命周期和真实 wire；再做 sync/async、OUT/INOUT/NULL、原子发布、复用与独立存储；Java 客户端报错不归为服务端拒绝 |
-| D-02d 复杂输入/locator/cursor 结果 | `P2`；d1～d3 达到 `P4` | 确认文本脚本可表示的复杂值身份、LOB 归属和 cursor wire；分别复用 D-03/D-04 已证明的能力，避免再开发一套 codec | 命名 OBJECT/嵌套/集合输入见 d1～d3；集合子树 NULL OBJECT、列存储、匿名/LOB/cursor/text 复杂结果仍未关闭，REF CURSOR 输入仍为范围排除 |
+| D-02d 复杂输入/locator/cursor 结果 | `P2`；d1～d3 达到 `P4` | 确认文本脚本可表示的复杂值身份、LOB 归属和 cursor wire；分别复用 D-03/D-04 已证明的能力，避免再开发一套 codec | 命名 OBJECT/嵌套/集合输入见 d1～d3；named scalar/递归 OBJECT text 多结果及引用类型名子集见 D-04e2；集合子树 NULL OBJECT、列存储、匿名/LOB/cursor/其余 text 复杂结果仍未关闭，REF CURSOR 输入仍为范围排除 |
 
 #### D-02b/c：脚本 Prepare、cursor 与输出的证据核对（调查完成，2026-10-30）
 
@@ -682,7 +682,7 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
 | D-04d 复杂 cursor 成员 | `P4`（当前目标形状为服务端限制）；新版本/新 wire 仍需重开 | 同一租户 `CREATE TYPE ... AS OBJECT (c SYS_REFCURSOR)` 在 Java 返回 `PLS-00201`、.NET 返回 `42000`；PL-only `RECORD (C SYS_REFCURSOR, N NUMBER)` 在 Java 与 .NET 均使 package 变为 `INVALID`，`ALL_ERRORS` 返回 `OBE-00600/-4007 attribute type of record is cursor type not supported`。两端都没有可读取的 child cursor wire，因此跳过客户端实现；若后续出现可创建的形状，再单独验收 child FETCH/所有权 |
-| D-04e 复杂 text 结果及其余 collection 形状 | `P4`（named OBJECT 标量/递归 OBJECT text 子集）；RAW/DATE/TIMESTAMP text 形状为当前服务端限制；collection 构造 text 结果已确认是 String；其余 `P2` | named OBJECT 的 NUMBER、VARCHAR2/CHAR、NCHAR/NVARCHAR2 及递归 named OBJECT text 结果已实现并验收；当前 RAW/DATE/TIMESTAMP text wire 重复同一 RAW payload，Connector/J 同交互也返回相同字符串且 `getObject` 为 null，因此跳过客户端 parser；命名 collection 构造结果 metadata 为 `VARCHAR2`，.NET/Connector-J 均按 String 返回，不新增 complex parser；LOB/cursor 仍明确拒绝。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
+| D-04e 复杂 text 结果及其余 collection 形状 | `P4`（named OBJECT 标量/递归 OBJECT text 子集）；RAW/DATE/TIMESTAMP text 形状为当前服务端限制；collection 构造 text 结果已确认是 String；其余 `P2` | named OBJECT 的 NUMBER、VARCHAR2/CHAR、NCHAR/NVARCHAR2 及递归 named OBJECT text 结果已实现并验收；引用类型名的空格/括号/Unicode 与多结果/batch 回退子集见 D-04e2；当前 RAW/DATE/TIMESTAMP text wire 重复同一 RAW payload，Connector/J 同交互也返回相同字符串且 `getObject` 为 null，因此跳过客户端 parser；命名 collection 构造结果 metadata 为 `VARCHAR2`，.NET/Connector-J 均按 String 返回，不新增 complex parser；LOB/cursor 仍明确拒绝。持久 nested-table 列和集合 NULL OBJECT 继续保留既有服务端阻塞 |
 
 本模块先验证 a/b 已有实现的边界；若实库暴露缺陷，先保留失败证据、补最小回归，再决定
 共享修复。所有新增计划、结果及提交号仍记录在本文：
@@ -932,6 +932,46 @@ type name、成员数量、递归深度和总成员预算；collection、anonymo
 | Oracle 实库 | `ComplexTextResultTests` **4/4** 通过，0 skip：`oracle-direct`、sync/async × buffered/sequential；User Secrets `ConnectionStrings:Oracle`，未设置凭据环境变量 |
 | 走查边界 | 只扩展 Java 与目标 wire 已证明的递归 named OBJECT 标量叶子；collection/复杂成员、持久 nested-table 列和集合 NULL OBJECT 仍保持原拒绝/服务端边界 |
 | 提交 | `186c813`（`✨ feat(oracle): support recursive named OBJECT text results`）；D-04e 递归 named OBJECT 标量子集达到 `P4`，其余形状仍为 `P2` |
+
+#### D-04e2：引用类型名的 named OBJECT text 结果（2026-11-03，指定子集 `P4`）
+
+源码基线 `cc2425d`。普通/递归 OBJECT 的引用类型名含空格或构造分隔符时，原
+`ComplexValueCodec.TextResultParser.ReadTypeName` 在空白或 `(` 处截断名字。
+实库先证明 CREATE/INSERT 和 explicit Prepare binary 读取成功，再核对原始 text payload
+包含完整 raw 名字：旧 parser 的 GetValue sync/async **0/2**。诊断源码及报告保留于
+`TestResults/roadmap/d04e2-quoted-type-wire-diagnostic.cs`、`d04e2-quoted-type-live-red.trx`。
+这是客户端解析缺口，不是凭特殊名字推断的服务端能力。
+
+设计与单模块计划采用 writing-plans，结果只维护在本文。产品仅修改共享
+`Internal/Values/ComplexValueCodec.cs`：按完整预加载 descriptor 名称匹配，再要求实际构造
+左括号；名字自身前后空白与格式空白分开处理。嵌套 constructor 优先于 NULL token，NULL 后
+必须是成员分隔符；不猜 owner、descriptor 或 SQL 语法，不增加 API/依赖。保留既有
+OrdinalIgnoreCase 名字比较、NULL/严格 UTF-8/深度/成员/字节限制和不支持成员拒绝。
+
+- [x] 实库 binary 控制、原始 text wire 断言与 RED 留存。
+- [x] 根/递归名字、NULL 前缀、错误前缀/截断/分隔符单测及共享 parser 修复。
+- [x] 普通/SequentialAccess text、多结果半读切换及 multi-send fallback 调用方回归。
+- [x] 五 TFM build、代码独立复审，补齐能力/缺失矩阵和架构事实。
+- [x] 最终文档独立复核和 diff check 通过；纳入本模块本地提交，不 push。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| 单元 RED | 初始 **11例：5失败、6通过**，5个新成功形状均被旧名字 parser 拒绝；`d04e2-quoted-type-unit-red.trx`。后续补充 NULL 分隔符名字与纯空格名字边界 |
+| 最终定向单元 | **94/94**，无 skip，约207 ms；codec、named result、text batch 与新名字/格式边界；`d04e2-quoted-type-unit-final.trx` |
+| Oracle 4.4.2.2 直连 | 最终 **12/12**，无 skip，约31秒；新引用类型 sync/async **2例**证明 binary 控制、SequentialAccess text、NULL 成员、多结果 NextResult 半读排空及连接复用；batch **4例**（新增引用名2、原名2）证明受控1295 text/binary 混排、跨组、reader/scalar/nonquery与保留值；原 ComplexText **6例**含既有不支持 LOB text 的负向边界2例；`d04e2-quoted-type-live-final.trx` |
+| 构建 | 产品 netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0 及重建后的 integration Release 均0警告/0错误 |
+| 独立代码走查 | 发现纯空格 descriptor 对长空白+错误分隔符会重复扫描，已改成首次完整名字匹配后分隔符错误立即失败；新增100000空白的坏分隔符回归，复审通过；未通过增加超时或重试回避 |
+
+扩展候选中，child 名字 `NULL, <唯一前缀> 子' type ` 在 CREATE TYPE 时 sync/async 均返回
+`600/42000`，尚未进入结果解码；原14例中 **12通过、2失败**，随后4例诊断复跑 **2通过、2失败**。
+保留 `d04e2-quoted-type-live.trx`、`d04e2-quoted-type-edge-boundary.trx` 和
+`d04e2-quoted-type-edge-diagnostic.cs`，不计为支持，也未做 Java 对照，不能宣称已确认跨客户端
+服务端限制。正式回归只保留已证明可创建的空格/括号/Unicode 引用名。
+
+引号、NULL 前缀和名字自身前后空白仅有本地 parser 证据，不外推实库。普通 named scalar/
+recursive OBJECT text 多结果本来复用同一 decoder，本轮补齐该调用组合的实库证据，无需另建
+codec。集合、RAW/temporal/LOB/cursor text、根 NULL OBJECT 身份、跨版本与部署缺口仍保留。
+未运行长测、全套或全消费者/平台大矩阵；本模块不改变 D-02/D-04/D-08 父项未完成状态。
 
 #### D-04e RAW/DATE/TIMESTAMP text 成员（当前目标服务端限制，2026-11-01）
 

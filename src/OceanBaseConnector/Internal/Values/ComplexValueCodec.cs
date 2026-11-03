@@ -97,20 +97,18 @@ namespace OceanBaseConnector.Internal.Values
 
             internal object?[] Read()
             {
-                SkipWhitespace();
                 var values = ReadObject(_type, 0);
                 SkipWhitespace();
                 if (_position != _text.Length) throw Invalid("Trailing complex text result data.");
                 return values;
             }
 
-            private object?[] ReadObject(OceanBaseComplexType type, int depth)
+            private object?[] ReadObject(OceanBaseComplexType type, int depth, bool nameRead = false)
             {
                 if (depth >= MaximumDepth) throw Invalid("Complex text result nesting exceeds the supported depth.");
                 if (type.IsCollection || type.IsAnonymous || type.TypeName.Length == 0)
                     throw new NotSupportedException("Complex text results require named object types.");
-                var name = ReadTypeName();
-                if (!string.Equals(name, type.TypeName, StringComparison.OrdinalIgnoreCase))
+                if (!nameRead && !TryReadTypeName(type.TypeName))
                     throw Invalid("The complex text result type name does not match its metadata.");
                 SkipWhitespace(); Expect('(');
                 var members = type.Members.Count;
@@ -119,29 +117,45 @@ namespace OceanBaseConnector.Internal.Values
                 var values = new object?[members];
                 for (var i = 0; i < values.Length; i++)
                 {
-                    SkipWhitespace(); values[i] = ReadMember(type.Members[i], depth + 1); SkipWhitespace();
+                    values[i] = ReadMember(type.Members[i], depth + 1); SkipWhitespace();
                     if (i + 1 < values.Length) Expect(',');
                 }
                 SkipWhitespace(); Expect(')');
                 return values;
             }
 
-            private string ReadTypeName()
+            private bool TryReadTypeName(string name)
             {
-                var start = _position;
-                while (_position < _text.Length && !char.IsWhiteSpace(_text[_position]) && _text[_position] != '(') _position++;
-                if (start == _position) throw Invalid("A complex text result is missing its type name.");
-                return _text.Substring(start, _position - start);
+                // Quoted SQL type names arrive unquoted and may themselves contain spaces or parentheses.
+                var position = _position;
+                while (position < _text.Length)
+                {
+                    if (name.Length <= _text.Length - position &&
+                        string.Compare(_text, position, name, 0, name.Length, StringComparison.OrdinalIgnoreCase) == 0)
+                    {
+                        var next = position + name.Length;
+                        while (next < _text.Length && char.IsWhiteSpace(_text[next])) next++;
+                        if (next < _text.Length && _text[next] == '(')
+                        { _position = position + name.Length; return true; }
+                        return false;
+                    }
+                    if (!char.IsWhiteSpace(_text[position])) break;
+                    position++;
+                }
+                return false;
             }
 
             private object? ReadMember(OceanBaseComplexMember member, int depth)
             {
+                if (member.Layout.TypeCode == 160 && member.ComplexType != null && TryReadTypeName(member.ComplexType.TypeName))
+                    return ReadObject(member.ComplexType, depth, nameRead: true);
+                SkipWhitespace();
                 if (ReadNull()) return null;
                 switch (member.Layout.TypeCode)
                 {
                     case 160:
                         if (member.ComplexType == null) throw new NotSupportedException("The nested complex text descriptor is unavailable.");
-                        return ReadObject(member.ComplexType, depth);
+                        throw Invalid("The complex text result type name does not match its metadata.");
                     case 0:
                         var numberText = ReadBareToken();
                         try
@@ -166,7 +180,9 @@ namespace OceanBaseConnector.Internal.Values
                 const string token = "NULL";
                 if (_position + token.Length > _text.Length || !string.Equals(_text.Substring(_position, token.Length), token, StringComparison.OrdinalIgnoreCase)) return false;
                 var end = _position + token.Length;
-                if (end < _text.Length && !char.IsWhiteSpace(_text[end]) && _text[end] != ',' && _text[end] != ')') return false;
+                var next = end;
+                while (next < _text.Length && char.IsWhiteSpace(_text[next])) next++;
+                if (next < _text.Length && _text[next] != ',' && _text[next] != ')') return false;
                 _position = end; return true;
             }
 

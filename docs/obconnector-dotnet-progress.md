@@ -1,6 +1,6 @@
 # SDK 功能、能力与支持边界矩阵
 
-更新：2026-11-03，源码基线`72d4b96`，本轮补齐 A-03h Oracle 引用形参原名派生与位置调用。本文是当前功能范围的唯一入口；
+更新：2026-11-03，源码基线`cc2425d`，本轮补齐 D-04e2 Oracle 引用类型名的 named OBJECT text 结果。本文是当前功能范围的唯一入口；
 [依据与清理决策](obconnector-dotnet-scope-audit.md)固定官方文档/Java版本并解释O/J编号，
 [缺失矩阵](obconnector-dotnet-completeness.md)列开发与验收差距，
 [验收标准](acceptance-criteria.md)定义完成条件，[兼容性](compatibility.md)保留环境阻塞。
@@ -45,7 +45,7 @@
 | Q02 参数绑定/重复占位/NULL/方向 | 核心 | 位置绑定、过程IN/OUT/INOUT | 命名绑定（含 BMP Unicode 字母标签）、标量IN/OUT/INOUT；中文派生及 DML/脚本直连 **6/6**（A-03g） | ParameterBindingPlan、PreparedParameters、OceanBaseParameter | 参数方向与值类型分别验证；不等于全部组合支持 |
 | Q03 Prepare/PrepareAsync/重执行 | 核心 | 服务端prepare | 服务端prepare；可选PrepareExecute | PreparedStatement、OraclePrepareExecutePacket | J1/J4；版本/能力门槛不能用客户端期望替代 |
 | Q04 普通客户端prepare回退 | 可选 | 明确1295拒绝后限定标量/JSON/BIT/YEAR/时间 | 普通标量、DATE/TIMESTAMP/时区、INTERVAL、NCHAR/NVARCHAR2、显式 Urowid 等已有字面量子集；`oracle-direct` 实库 Prepare/输出/时间脚本复核 **38/38** 通过，原生1295仍未复现；命名 OBJECT/collection 构造器已复用于普通/批量受控回退输入（D-01b） | ClientPreparedSql、CommandExchange.ClientPreparedSql | 显式Prepare/输出/cursor/stream等不回退；需原生1295 profile 才能完成回退实库验收 |
-| Q05 文本多语句/参数/多结果 | 可选opt-in | 普通标量、JSON/BIT/YEAR/时间/二进制流 | 普通标量/national/时间/interval/二进制流；命名 OBJECT、嵌套 OBJECT 和集合输入已有指定直连子集 | ClientPreparedSql、SqlStatementBoundary | J5；Prepare/cursor/输出拒绝；复杂输入仅 D-02d1～d3 子集，集合子树 NULL OBJECT、locator 和其他未验证形状仍拒绝；展开 SQL 有界；Oracle temporal 存储见 D-02a2 |
+| Q05 文本多语句/参数/多结果 | 可选opt-in | 普通标量、JSON/BIT/YEAR/时间/二进制流 | 普通标量/national/时间/interval/二进制流；命名 OBJECT、嵌套 OBJECT 和集合输入已有指定直连子集 | ClientPreparedSql、SqlStatementBoundary | J5；Prepare/cursor/输出拒绝；复杂输入仅 D-02d1～d3 子集，集合子树 NULL OBJECT、locator 和其他未验证形状仍拒绝；展开 SQL 有界；Oracle temporal 存储见 D-02a2；引用类型名的递归 OBJECT text 多结果/半读切换见 D-04e2，其他复杂结果限制保留 |
 | Q06 存储过程/函数 | 核心模式差异 | 过程IN/OUT/INOUT；函数单ReturnValue+Input | PL块/过程/函数/RETURNING输出子集 | MySqlCommandPlan、OracleCommandPlan | J4；MySQL函数不混OUT，元数据/权限有条件 |
 | Q07 参数元数据派生 | 可选ADO.NET适配 | 可见唯一签名 | 可见唯一签名；未引用 BMP Unicode 字母过程名的执行与派生共用校验，中文独立过程/package 直连 sync/async **4/4**（A-03f）；中文 IN/OUT/INOUT 参数原名派生并执行及普通 DML/脚本独立读回，新增直连 sync/async **6/6**（A-03g）；带空格的引用 IN/OUT/INOUT 形参已可原名派生并按位置调用，普通过程/package/函数直连 sync/async 新增 **6/6**（A-03h）；仅大小写不同形参的客户端精确身份有本地证据，当前实库创建/调用失败不计为支持；普通 package-local `PL/SQL RECORD` 目录可见但公开绑定仍无协议契约；含 `SYS_REFCURSOR` 成员的 PL-only RECORD 在当前目标使 package INVALID，Java/.NET 同为服务端限制 | OceanBaseConnection.Parameters、RoutineParameterDerivation | 不执行目标；歧义/包内PL类型等拒绝；普通 RECORD 需字段描述和成功 wire 后再实现；cursor 成员需新服务端形状后重开 |
 | Q08 Reader/NextResult/typed getters | 核心 | 有实现 | 有实现 | OceanBaseDataReader、QueryResult、ResultColumn | metadata、NULL、精度与类型身份须一致 |
@@ -82,7 +82,7 @@
 | T11 NCHAR/NVARCHAR2 | 不套用Oracle national协议 | 标量和有依据复杂成员子集 | string+显式类型、NationalCharacterSet | 输入/结果/存储编码不同；需可信身份/编码快照 |
 | T12 ROWID/UROWID | — | 协议209结果解码与 UROWID 参数 | ROWID结果保持String；新增 Urowid 参数类型、NULL/type209 编码、目录映射 | 直连 Oracle 4.4.2.2 的输入/输出/RETURNING 已验收；多语句及受控 1295 client fallback 已接入 CHARTOROWID，空字符串执行前拒绝（D-05b）；DeriveParameters 目录边界见唯一路线图 |
 | T13 BLOB/CLOB locator | 普通BLOB byte[]/流，不用Oracle locator | locator读写/修改/回绑的限定子集 | OceanBaseLob、LobSession、LobMutation | 需PrepareExecute/locator能力；失效/旧租约/外置大值 |
-| T14 命名OBJECT/collection | — | 加载描述、预装类型、嵌套值子集 | OceanBaseComplexType/Value、ComplexTypeContext/Codec | 类型DDL失效；named与anonymous、输入与结果分别验收；当前 OBJECT/嵌套 OBJECT NULL 输出身份为服务端限制，collection NULL 形状另有证据；named BLOB 成员 DML 在同 wire 的 Java/.NET 诊断回放均返回 932，当前目标服务端限制 |
+| T14 命名OBJECT/collection | — | 加载描述、预装类型、嵌套值子集 | OceanBaseComplexType/Value、ComplexTypeContext/Codec | 类型DDL失效；named与anonymous、输入与结果分别验收；当前 OBJECT/嵌套 OBJECT NULL 输出身份为服务端限制，collection NULL 形状另有证据；named BLOB 成员 DML 在同 wire 的 Java/.NET 诊断回放均返回 932，当前目标服务端限制；空格/括号/Unicode 引用类型名的标量及递归 OBJECT text 结果已补齐普通读取、多结果及 batch 受控回退子集（D-04e2）；引号/NULL 前缀/名字自身前后空白仅有本地 parser 证据 |
 | T15 复杂LOB/cursor成员 | — | 结果读取子集；命名LOB内容/匿名locator输入子集；named OBJECT 标量/递归 text 结果子集 | ComplexValueCodec、SequentialRow.Complex | Oracle named BLOB OBJECT 成员 DML 在 .NET 与 Java 同 wire 诊断回放均返回 `932/22000`，当前目标服务端限制；当前 RAW/DATE/TIMESTAMP text 成员在 .NET 与 Connector/J 收到相同重复 RAW payload，Java `getObject` 为 null，也按服务端限制跳过；命名 collection 构造 text 结果 metadata 为 `VARCHAR2`，两 SDK 都按 String 返回；CLOB/BLOB named OBJECT text 结果在 Java `getObject` 为 null、文本 payload 无成员身份，.NET 预加载描述后 sync/async **2/2** 安全拒绝，按当前服务端 wire 限制跳过；命名locator回绑/cursor输入/未解析RETURNING身份仍拒绝 |
 | T16 LONG/LONG RAW/BFILE/NCLOB | — | 排除专用支持 | 无专用API/模拟实现 | O4明确不支持；Java别名/枚举不能扩大范围 |
 | T17 XMLType/SDO_GEOMETRY/ANYDATA | — | XMLType 已有 4.4.2.2 直连的字符串 wire 子集：type 160 ownerless 结果按 String 返回，`SYS.XMLTYPE` metadata 有安全的 String 消费边界，`DbType.Xml` 参数按 type 253 字符串写入；NULL、metadata、同步/异步 DML 与 PL 函数结果已验收；PL XMLTYPE OUT/INOUT 在 Java/.NET 同一租户分别返回 `600/0A000`、`600/42000`，按服务端限制跳过；仍无带 owner/复杂 XML 专用 codec；SDO 已验收显式 Prepare 整列读取与 generic OBJECT/ARRAY 输入子集，仍无专用 codec；ANYDATA 在当前目标租户找不到 `SYS.ANYDATA`，Java/.NET 同 SQL 失败并按服务端限制跳过 | XMLTYPE 当前 text+binary String 子集和 `XMLSERIALIZE→CLOB` 已验证；PL 输出负向边界 sync/async **4/4**；SDO 通用 OBJECT 路径已覆盖整列读取和受限输入 | O8；XMLTYPE 带 owner 复杂 payload、坏值/最大值和跨版本部署仍待证据；SDO 专用 WKB/WKT/SRID 契约与非法几何行为仍待证据，ANYDATA 需新版本/租户提供包后重开 |

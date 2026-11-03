@@ -456,7 +456,15 @@ If bound Prepare omits the type identity, the exact source-column catalog lookup
 XMLTYPE with an empty or SYS owner before marking that prepared column; live metadata remains
 independently validated. Other missing-owner complex types retain their existing restrictions.
 Client-prepared text fallback also accepts preloaded named OBJECT results through the ordinary
-recursive text decoder. Type identity must be exact or uniquely resolvable for ownerless metadata;
+recursive text decoder. The parser matches the full descriptor type name before requiring the
+constructor parenthesis: quoted SQL identifiers arrive unquoted in text payloads and can contain
+spaces or parentheses. A matching nested constructor takes precedence over the NULL token; NULL
+requires a following member delimiter. Name matching preserves the existing OrdinalIgnoreCase
+comparison, strict UTF-8 and depth/member/byte limits, and scans leading whitespace linearly even
+for a whitespace-only descriptor. This shared path covers ordinary, sequential, script and fallback
+results. Direct acceptance covers interior spaces, parentheses and Unicode names; quote characters,
+NULL prefixes and names with leading/trailing whitespace have local parser evidence only (D-04e2).
+Type identity must be exact or uniquely resolvable for ownerless metadata;
 collection/anonymous layouts and RAW, temporal, LOB or cursor text members remain unsupported.
 Each request keeps its own text/binary response mode, including mixed groups.
 Multi-send readers accept SequentialAccess, including CloseConnection and data-source ownership.

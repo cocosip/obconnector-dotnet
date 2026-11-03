@@ -191,6 +191,52 @@ namespace OceanBaseConnector.UnitTests
                 new[] { new OceanBaseComplexMember("N", null, "CHILD", null, Object(Number)) }), "Thing(1)"));
         }
 
+        [Theory]
+        [InlineData("Thing with space")]
+        [InlineData("Thing(child), 'quoted' \"name\"")]
+        [InlineData("患者 (类型)")]
+        [InlineData(" Thing ")]
+        [InlineData("NULL child")]
+        [InlineData("NULL, child")]
+        [InlineData("NULL)child")]
+        [InlineData("NULL")]
+        [InlineData(" ")]
+        public void NamedObjectTextResultsReadWholeDescriptorNames(string name)
+        {
+            var child = new OceanBaseComplexType(null!, "Owner", name, false,
+                new[] { new OceanBaseComplexMember("N", null, "NUMBER", null, Number) });
+            var root = new OceanBaseComplexType(null!, "Owner", name + " root", false,
+                new[] { new OceanBaseComplexMember("CHILD", null, name, child, child.Layout),
+                    new OceanBaseComplexMember("ID", null, "NUMBER", null, Number) });
+            var result = DecodeText(root, "  " + root.TypeName + " (  " + name + " (7), 9) ");
+            Assert.Equal("7", Assert.IsType<OceanBaseDecimal>(Assert.IsType<object?[]>(result[0])[0]).ToString());
+            Assert.Equal("9", Assert.IsType<OceanBaseDecimal>(result[1]).ToString());
+            Assert.Null(DecodeText(root, root.TypeName + "( NULL ,9)")[0]);
+            Assert.Equal("7", Assert.IsType<OceanBaseDecimal>(DecodeText(child, name + "(7)")[0]).ToString());
+        }
+
+        [Theory]
+        [InlineData("Thing with space extra(7)")]
+        [InlineData("Thing with spac(7)")]
+        [InlineData("Thing with space")]
+        [InlineData("Thing with space [7]")]
+        [InlineData("Thing with space(7) suffix")]
+        [InlineData("Thing with space(")]
+        public void NamedObjectTextResultsRejectWrongOrTruncatedWholeNames(string payload)
+        {
+            var type = new OceanBaseComplexType(null!, "Owner", "Thing with space", false,
+                new[] { new OceanBaseComplexMember("N", null, "NUMBER", null, Number) });
+            Assert.Throws<ProtocolException>(() => DecodeText(type, payload));
+        }
+
+        [Fact]
+        public void WhitespaceTypeNameRejectsLongWhitespaceBeforeWrongDelimiter()
+        {
+            var type = new OceanBaseComplexType(null!, "Owner", " ", false,
+                new[] { new OceanBaseComplexMember("N", null, "NUMBER", null, Number) });
+            Assert.Throws<ProtocolException>(() => DecodeText(type, new string(' ', 100000) + "[7]"));
+        }
+
         [Fact]
         public void NamedObjectTextResultsRejectInvalidUtf8AndOversizedPayloads()
         {

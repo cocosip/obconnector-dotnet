@@ -15,22 +15,27 @@ public sealed class ComplexTextMultiSendTests
     public static IEnumerable<object[]> Rows() =>
         from profile in IntegrationEnvironment.Profiles.Where(p => p.Oracle && p.CreateObjects && p.HasTag("direct"))
         from asynchronous in new[] { false, true }
-        select new object[] { profile.Name, asynchronous };
+        from quoted in new[] { false, true }
+        select new object[] { profile.Name, asynchronous, quoted };
 
     [IntegrationTheory]
     [MemberData(nameof(Rows))]
-    public async Task NamedObjectTextFallbackMixesWithBinaryAcrossGroups(string profileName, bool asynchronous)
+    public async Task NamedObjectTextFallbackMixesWithBinaryAcrossGroups(string profileName, bool asynchronous, bool quoted)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var observer = await db.OpenAsync();
-        var childName = db.NewObject("TYPE"); var name = db.NewObject("TYPE");
-        await db.ExecuteAsync(observer, "CREATE TYPE " + childName + " AS OBJECT(n NUMBER,s VARCHAR2(80))", CancellationToken.None);
-        await db.ExecuteAsync(observer, "CREATE TYPE " + name + " AS OBJECT(child " + childName + ",id NUMBER)", CancellationToken.None);
-        var table = await db.TableAsync(observer, "id INTEGER PRIMARY KEY,value " + name + ",marker NUMBER", CancellationToken.None);
+        var childName = db.NewObject("TYPE", registerCleanup: false) + (quoted ? " 子 type" : "");
+        var name = db.NewObject("TYPE", registerCleanup: false) + (quoted ? " (root)" : "");
+        var childSql = Quote(childName); var typeSql = Quote(name);
+        await db.ExecuteAsync(observer, "CREATE TYPE " + childSql + " AS OBJECT(n NUMBER,s VARCHAR2(80))", CancellationToken.None);
+        db.RegisterDropCleanup("TYPE", childSql);
+        await db.ExecuteAsync(observer, "CREATE TYPE " + typeSql + " AS OBJECT(child " + childSql + ",id NUMBER)", CancellationToken.None);
+        db.RegisterDropCleanup("TYPE", typeSql);
+        var table = await db.TableAsync(observer, "id INTEGER PRIMARY KEY,value " + typeSql + ",marker NUMBER", CancellationToken.None);
         const string text = "患者, (c) 'q'";
         for (var i = 0; i < 3; i++)
         {
-            var value = i == 1 ? name + "(NULL,NULL)" : name + "(" + childName + "(7,'" + text.Replace("'", "''") + "'),9)";
+            var value = i == 1 ? typeSql + "(NULL,NULL)" : typeSql + "(" + childSql + "(7,'" + text.Replace("'", "''") + "'),9)";
             await db.ExecuteAsync(observer, "INSERT INTO " + table + " VALUES(" + i + "," + value + "," + (42 + i) + ")", CancellationToken.None);
         }
         var owner = Convert.ToString(await db.ScalarAsync(observer, "SELECT USER FROM DUAL", CancellationToken.None))!;
@@ -88,4 +93,6 @@ public sealed class ComplexTextMultiSendTests
         DatabaseContext.EqualNumber(nested.GetValues()[0], 7, "Nested number mismatch."); Assert.Equal(text, nested.GetValues()[1]);
         DatabaseContext.EqualNumber(value.GetValues()[1], 9, "Root number mismatch.");
     }
+
+    private static string Quote(string name) => "\"" + name.Replace("\"", "\"\"") + "\"";
 }
