@@ -797,6 +797,12 @@ They require CommandType.StoredProcedure and an open idle connection. Bind the c
 
 MySQL accepts routine or database.routine, with optional backticks; an unqualified name uses DATABASE(). Oracle accepts routine, owner.routine or package.routine, and owner.package.routine, with double-quoted identifiers retaining case and unquoted identifiers converted to uppercase. Unqualified Oracle names use CURRENT_SCHEMA. Two-part Oracle names check both interpretations and reject ambiguity. The optional overload is an exact Oracle directory selector, not argument-based overload inference; MySQL rejects it. No matching visible routine, ambiguous signatures, incomplete metadata, unsupported type declarations or unavailable named descriptors fail explicitly. Synonym resolution is not promised.
 
+Oracle execution and derivation share unquoted routine identifier character rules: BMP Unicode letters
+or underscore first, then those characters plus ASCII digits, dollar and hash. Quoted names retain
+their existing rules. Derivation retains its name/part byte limits, exact catalog binding and invariant
+uppercase conversion. This does not expand the ASCII grammar for Oracle bind parameter names;
+unrepresentable derived parameter names still fail before replacing the caller's collection.
+
 Success replaces the parameter collection with fresh DBNull-valued parameters ordered by ordinal position; a function return is first and named RETURN_VALUE. Existing parameter objects are detached and their values are not copied. Failure/cancellation leaves the original collection unpublished; concurrent member changes are detected atomically and retained. Avoid changing individual parameter properties concurrently: that is outside the membership-version guarantee. The command/session/transaction context is checked before publication, and Execute/Prepare/another derivation cannot overlap. Valid complex descriptors loaded before a later failure may remain cached.
 
 The operation reserves one physical session across routine, argument and named-type queries. It uses CommandTimeout for each query, with no total-duration guarantee. CancellationToken, Cancel and Dispose cover the operation and query gaps; a canceled in-flight request follows the existing connection-break/unknown-outcome rules. Directory permission errors retain the server error code and SQL state. Each routine/argument directory table is bounded to 1024 rows and 4 MiB of UTF-8 string content; named descriptors retain the existing complex-type member/depth/cache bounds.

@@ -140,6 +140,10 @@ namespace OceanBaseConnector.UnitTests
 
         [Theory]
         [InlineData("owner.pkg.p", false, "OWNER", "PKG", "P")]
+        [InlineData("医院.诊断包.查询_2$#", false, "医院", "诊断包", "查询_2$#")]
+        [InlineData("诊断包.查询", false, "诊断包", "查询", null)]
+        [InlineData("hôpital.查询", false, "HÔPITAL", "查询", null)]
+        [InlineData("\"Mixed.Owner\".查询", false, "Mixed.Owner", "查询", null)]
         [InlineData("\"Mixed.Owner\".\"P\"", false, "Mixed.Owner", "P", null)]
         [InlineData("`db.name`.`p``name`", true, "db.name", "p`name", null)]
         public void RoutineNamesPreserveQuotingAndModeCase(string text, bool mysql, string first, string second, string? third)
@@ -154,8 +158,23 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("`bad", true)]
         [InlineData("db.p.extra", true)]
         [InlineData(" p", false)]
+        [InlineData("诊断;delete", false)]
+        [InlineData("诊断包.1查询", false)]
+        [InlineData("诊断--", false)]
+        [InlineData("诊断/*x*/", false)]
+        [InlineData("诊断。查询", false)]
+        [InlineData("诊断\u200B查询", false)]
+        [InlineData("诊断\u0301", false)]
+        [InlineData("诊断🙂", false)]
         public void RoutineNamesCannotBeSql(string text, bool mysql)
             => Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.ParseName(text, mysql));
+
+        [Fact]
+        public void UnicodeRoutineNamesDoNotExpandTheBindParameterGrammar()
+        {
+            using var table = Arguments(); var row = Argument(table, "NUMBER"); row["PARAMETER_NAME"] = "输入";
+            Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.OrderParameters(table, row, false));
+        }
 
         [Fact]
         public void AtomicReplacementDetectsClearAndReaddAndRetainsOwnershipOnFailure()

@@ -269,7 +269,7 @@ namespace OceanBaseConnector.Internal.Sql
                 }
                 break;
             }
-            var position = start; while (position < text.Length && IsPart(text[position])) position++;
+            var position = start; while (position < text.Length && IsNamePart(text[position])) position++;
             var keyword = text.Substring(start, position - start).ToUpperInvariant();
             if (keyword == "BEGIN" || keyword == "DECLARE" || keyword == "CALL") return true;
             if (keyword == "INSERT" || keyword == "UPDATE" || keyword == "DELETE" || keyword == "MERGE") return false;
@@ -300,8 +300,8 @@ namespace OceanBaseConnector.Internal.Sql
                 }
                 else
                 {
-                    if (!IsStart(text[position++])) throw InvalidName();
-                    while (position < text.Length && IsPart(text[position])) position++;
+                    if (!IsNameStart(text[position++])) throw InvalidName();
+                    while (position < text.Length && IsNamePart(text[position])) position++;
                 }
                 if (position == text.Length) return;
                 if (text[position++] != '.' || position == text.Length) throw InvalidName();
@@ -309,8 +309,8 @@ namespace OceanBaseConnector.Internal.Sql
             throw InvalidName();
         }
 
-        private static bool IsStart(char c) => c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_';
-        private static bool IsPart(char c) => IsStart(c) || c >= '0' && c <= '9' || c == '$' || c == '#';
+        internal static bool IsNameStart(char c) => char.IsLetter(c) || c == '_';
+        internal static bool IsNamePart(char c) => IsNameStart(c) || c >= '0' && c <= '9' || c == '$' || c == '#';
         private static ArgumentException InvalidName() => new ArgumentException("StoredProcedure requires a qualified Oracle identifier.");
     }
 }

@@ -1,6 +1,6 @@
 # OceanBase .NET 缺失功能开发清单
 
-更新：2026-11-02。本文以当前源码及范围审计固定的 OceanBase 官方文档、Connector/J 2.4.14
+更新：2026-11-03。本文以当前源码及范围审计固定的 OceanBase 官方文档、Connector/J 2.4.14
 静态对照为依据。服务端状态沿用兼容性报告，除执行记录明确列出的复验外，不代表本日重跑。
 它回答三个问题：
 
@@ -213,7 +213,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | Oracle 输出计划 / REF CURSOR offset | D-03b | 成功 wire、位置与归属契约；Java RefCursor 也排除普通 offset 分支，不能直接套用普通 SELECT FETCH |
 | 命名复杂值中的 LOB locator 回绑及未证实的复杂成员方向 | D-04 | 可辨识的类型/locator wire 和生命周期；当前 BLOB DML、根 NULL/text/cursor 成员的已确认服务端限制另记，不作为盲改客户端的理由 |
 | package-local PL/SQL RECORD 参数派生与绑定 | A-03d | 字段目录、输入/输出 payload 及成功交互；目前 Java 公开 API 也不支持绑定，不能归为服务端拒绝 |
-| multi-send 的 anonymous/复杂 text LOB 结果、关闭连接时的 locator 结果、PL 输出、cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；保留调用方连接的复杂 LOB binary 结果见 D-08n（OBJECT 实库、collection 仅 loopback）；DML RETURNING 标量 OUT/INOUT 见 D-08o，命名复杂值和 LOB 输出见 D-08p；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
+| multi-send 的匿名输入/声明输出、复杂 text LOB 结果、关闭连接时的 locator 结果、PL 输出、cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；保留调用方连接的复杂 LOB binary 结果见 D-08n（OBJECT 实库、collection 仅 loopback）；DML RETURNING 标量 OUT/INOUT 见 D-08o，命名复杂值和 LOB 输出见 D-08p；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
 
 完整 XML codec、SDO 专用 WKB/WKT/SRID API、稀疏向量/嵌套 ARRAY 属于额外范围或 wire/版本待确认；
 当前通用 String/Binary/OBJECT 路径已有验收，不能把“没有专用类型名”直接等同没有功能。
@@ -1796,6 +1796,49 @@ LOB 释放/连接复用、半途 locator 解码失败和自有连接/CloseConnec
 未因此修改产品逻辑。产品 netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0
 五 TFM Release build **0 warning / 0 error**。本模块代码、测试及四份文档已独立复审批准。
 不运行全套/长测，不推送；本模块提交后结束本轮推进，不再启动新模块。
+
+#### D-08t：multi-send 匿名数组普通输入前提（2026-11-03，待成功协议证据）
+
+在 D-08s 结果路径之后，核对 batch 对 factory 匿名数组输入的额外拒绝。
+设计选择：复用 `PreparedParameters` 的 type 160/元素 identity 和既有二进制 writer，
+不引入字符串展开、隐式命名类型转换或新的数组 API。普通数组输入与 ExecuteArray 的 DML
+迭代契约分开；匿名声明输出、cursor、text fallback、array binding 和 PL 流水化不由本项放开。
+影响范围为 `OceanBaseCommand.ValidateBatchMultiSendParameters`、对应 batch 负向 fixture、
+匿名输入协议/生命周期测试和能力矩阵。Session/transaction/cache generation、national 编码、
+locator 协商与释放仍由普通执行的既有校验负责。
+
+本轮核对：batch 新协议用例同步/异步 **2/2** 按既有 guard 拒绝；普通命令 NUMBER
+控制组使用 `TABLE(CAST(:p AS named_table_type))`，同步/异步 **0/2**，在进入 batch 前被
+当前服务端拒绝。与 D-08l 的 NVARCHAR2 控制不同，本次 NUMBER 去除了 national 编码前提，
+仍未取得成功的普通数组输入交互。ExecuteArray 的 0xA1/迭代模式不能替代普通 0x17 的证据。
+因此不修改产品 guard，不把失败单独归因为服务端能力缺失，不继续其他 SQL 变体探测。
+源码和结果保留于忽略目录 `TestResults/roadmap/D08tAnonymousSqlInputProbe.cs`、
+`D08tAnonymousInputUnitProbe.cs`、`d08t-anonymous-input-control.trx` 和 `d08t-anonymous-input-red.trx`；
+未增加长期失败测试，不宣称匿名输入功能完成。
+
+#### A-03f：未引用 Unicode 过程名的参数派生和执行（2026-11-03，指定中文名称子集 `P4`）
+
+执行与派生目前分别只接受 ASCII 未引用过程标识符，矩阵 A-03e 已保留该缺口。
+复用现有过程名字符校验，允许 BMP Unicode 字母作为未引用 owner/package/routine 名称的
+首字和后续字符，保留 ASCII 数字/`_`/`$`/`#` 和既有引用规则；不扩大参数占位符语法。
+影响 `OracleCommandPlan` 和 `RoutineParameterDerivation.ParseName`，不增加公开 API。
+新增过程计划和派生名称 RED：**8 例**因旧 ASCII 校验失败，原有 **5 例**通过，
+`a03f-unicode-name-red.trx`。随后将 `OracleCommandPlan` 的既有字符判定用于派生的 Oracle
+routine identity；参数名校验保持原来的 ASCII 规则，避免派生出当前占位符语法不能绑定的参数。
+
+定向回归 **155/155**、无跳过，`a03f-unicode-name-unit.trx`：覆盖执行计划、名称 folding/引用、
+两段/三段中文目录身份精确绑定、派生原子替换、中文参数名仍拒绝及既有派生/过程/数组结果边界。
+分号、注释、数字首字、全角点、格式字符、combining mark、emoji 均仍拒绝。
+Oracle 4.4.2.2 `oracle-direct` 实库 **4/4**、无跳过，`a03f-unicode-name-live.trx`：
+同步/异步 × 中文独立过程/package，目录发现、派生两个 NUMBER 参数、隐式 PrepareExecute，
+再显式 Prepare 并改变输入重执行，分别验证输出 42/43、连接复用和创建对象清理。
+名称沿用会话 client 编码的严格转换，不使用 national 参数编码；本次实库不外推其他字符集或部署。
+共享字符判定还用于数组执行的 PL/DML 首词识别，因此额外定向验证该调用方：
+**26/26**、无跳过，`a03f-shared-array-keyword-regression.trx`（与前述组有交集，不叠加计数）。
+产品 netstandard2.0/netstandard2.1/net8.0/net9.0/net10.0 五 TFM 及集成项目 Release
+build 均 **0 warning / 0 error**。代码、测试和四份文档已独立走查批准，`git diff --check` 通过。
+全部结果位于忽略目录 `TestResults/roadmap/`。
+不重跑长测、全消费者、旧匿名 SQL 变体或服务端冻结项。
 
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 

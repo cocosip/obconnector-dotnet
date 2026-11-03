@@ -41,7 +41,7 @@ namespace OceanBaseConnector.Internal.Sql
                     {
                         var c = text[position++];
                         if (mysql ? !(char.IsLetterOrDigit(c) || c == '_' || c == '$')
-                            : !(IsNamePart(c) && (position != start + 1 || IsNameStart(c)))) throw Invalid("Invalid routine identifier.");
+                            : !(OracleCommandPlan.IsNamePart(c) && (position != start + 1 || OracleCommandPlan.IsNameStart(c)))) throw Invalid("Invalid routine identifier.");
                         value.Append(c);
                     }
                 }

@@ -9,6 +9,10 @@ namespace OceanBaseConnector.UnitTests
     {
         [Theory]
         [InlineData("pkg.proc")] [InlineData("\"My Schema\".\"p\"\"q\"")]
+        [InlineData("诊断")]
+        [InlineData("诊断包.查询_2$#")]
+        [InlineData("医院.诊断包.查询")]
+        [InlineData("\"My Schema\".诊断包.\"查询.结果\"")]
         public void OracleProcedurePlanWrapsIdentifiersAndSnapshotsDirections(string name)
         {
             var parameters = new OceanBaseParameterCollection();
@@ -42,6 +46,10 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("p; delete from t")] [InlineData("p(--")] [InlineData("p..q")]
         [InlineData("p@remote")] [InlineData(" p ")] [InlineData("\"unclosed")]
         [InlineData("p/*comment*/")] [InlineData("p.1q")]
+        [InlineData("诊断;delete from t")] [InlineData("诊断包.1查询")]
+        [InlineData("诊断--")] [InlineData("诊断/*x*/")]
+        [InlineData("诊断。查询")] [InlineData("诊断\u200B查询")]
+        [InlineData("诊断\u0301")][InlineData("诊断🙂")]
         public void OracleProcedureNamesCannotContainSql(string name)
             => Assert.Throws<ArgumentException>(() => OracleCommandPlan.Create(name, CommandType.StoredProcedure, new OceanBaseParameterCollection()));
 

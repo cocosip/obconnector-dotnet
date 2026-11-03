@@ -95,6 +95,41 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
+        [InlineData(false, false)] [InlineData(true, false)]
+        [InlineData(false, true)] [InlineData(true, true)]
+        public async Task OracleUnicodeRoutineDerivationBindsExactDirectoryIdentities(bool asynchronous, bool qualified)
+        {
+            using var routines = DerivationRoutines(false); using var arguments = DerivationArguments(false);
+            foreach (var table in new[] { routines, arguments })
+            {
+                table.Rows[0]["ROUTINE_SCHEMA"] = "医院"; table.Rows[0]["PACKAGE_NAME"] = "诊断包"; table.Rows[0]["ROUTINE_NAME"] = "查询";
+            }
+            routines.Rows[0]["ROUTINE_TYPE"] = DBNull.Value;
+            var server = Server(async channel =>
+            {
+                await ServeDerivationTable(channel, 71, routines, false, false, qualified ? new object[] { "医院", "查询", "诊断包" }
+                    : new object[] { "诊断包", "诊断包", "查询" });
+                await ServeDerivationTable(channel, 72, arguments, false, true, new object[] { 1, "医院", "查询", "诊断包" }, package: "诊断包");
+                Assert.Equal(0, await channelStreamRead(channel));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                using var command = new OceanBaseCommand { Connection = connection, CommandType = CommandType.StoredProcedure,
+                    CommandText = qualified ? "医院.诊断包.查询" : "诊断包.查询" };
+                var original = new OceanBaseParameter { ParameterName = "old", Value = 9 }; command.Parameters.Add(original);
+                if (asynchronous) await command.DeriveParametersAsync(); else command.DeriveParameters();
+                var derived = Assert.Single(command.Parameters.Cast<OceanBaseParameter>());
+                Assert.Equal("amount", derived.ParameterName); Assert.Equal(ParameterDirection.InputOutput, derived.Direction);
+                Assert.Null(original.Owner); Assert.Equal(DBNull.Value, derived.Value); Assert.Equal(ConnectionState.Open, connection.State);
+            }
+            catch (Exception error) when (server.Completion.IsFaulted) { throw new AggregateException(error, server.Completion.Exception!); }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData(false, false)]
         [InlineData(true, false)]
         [InlineData(false, true)]
