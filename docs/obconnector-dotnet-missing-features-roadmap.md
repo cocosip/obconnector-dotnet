@@ -422,7 +422,7 @@ MySQL OUT/INOUT 六项，改由新正向/失败/NULL 组覆盖；Oracle 的十�
 剩余 Oracle 脚本输出/资源复杂输出、原生脚本 prepare/cursor、跨部署/版本仍未关闭。
 本轮未跑长压、完整单测/消费者、TLS/OB20/ODP 或非 Windows/runtime 部署矩阵。
 
-#### D-02c2：MySQL 脚本标量 ReturnValue（2026-11-04，loopback `P3` 子集）
+#### D-02c2：MySQL 脚本标量 ReturnValue（2026-11-04，指定直连子集 `P4`）
 
 在 D-02c1 已有的私有变量初始化、脚本结果排空和隐藏 SELECT 发布路径上，补齐 Text
 脚本中单个标量 `ParameterDirection.ReturnValue`。它与 Output 一样以 NULL 初始化，脚本
@@ -441,6 +441,27 @@ MySQL OUT/INOUT 六项，改由新正向/失败/NULL 组覆盖；Oracle 的十�
 本模块实现与文档更新已提交为 `e45ddac`；下一步 D-04 方案 A 已由用户确认，恢复开发后先
 补显式 Prepare/缓存最小扩展的 RED 和协议边界复核，不把当前 D-04j 的服务端 `900/42000`
 失败改写成客户端成功。
+
+后续实库复验（2026-11-04）：当前 `mysql-direct` 已可运行，解除上方初始记录中的 profile
+阻塞；没有修改产品代码或输出契约。新增 `MySqlScriptReturnValuePreservesStoredPrefixAndBatchBarrier`
+覆盖成功脚本的独立存储、错误前缀已执行/后缀未执行、错误后旧 ReturnValue 保留及物理会话复用、
+混合 batch 的脚本屏障/原参数发布/后段更新，以及半读 Close/CloseAsync 排空后发布与连接复用。
+Close 成功排空后按既有 MySQL 脚本契约发布输出，不套用 Oracle 早关 reader 的规则。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| MySQL 直连 | 基础 ReturnValue sync/async **2/2**；新增存储/失败/batch/半读闭环 **2/2**；既有 OUT/INOUT 存储/batch 回归 **2/2**；合计 **6/6**，无 skip、清理失败 |
+| 本地回归 | MySqlScript 相关 **25/25**，无 skip；`d02c2-returnvalue-unit.trx` |
+| 构建/格式 | Integration Release 构建通过；新增 C# scoped whitespace verify 通过；`git diff --check` 通过 |
+| 独立走查 | 无阻塞发现；复核 observer 隔离、错误前缀/后缀、原 batch 参数映射、半读 Close 的 hidden SELECT 发布及清理归属 |
+
+首次新增半读断言误以为 Close 保留旧值，按 DataReader/QueryResult 源码和既有脚本契约纠正为
+成功排空后发布，随后完整 **6/6** 重跑；未修改产品行为或降低错误路径断言。一次常规构建因
+仍在运行的消费者锁定产品 DLL 而失败，改为使用已验证的当前 DLL、`BuildProjectReferences=false`
+构建集成夹具后通过。实库报告为 IntegrationTests/TestResults/`d02c2-returnvalue-live.trx`。
+
+本项提升为当前 `mysql-direct` 的指定功能 `P4`；代理/TLS/其他版本平台、资源/复杂输出与
+Oracle 脚本输出仍未关闭，不把本次实库闭环外推为 D-02 父项完成。
 
 #### D-02a1：MySQL 时间参数脚本的存储闭环（`P4`，2026-10-30）
 
@@ -1036,7 +1057,7 @@ IntegrationTests/TestResults 的 `d04k-integration.trx`、`d04k-live-regression.
 
 本项只关闭 named locator **Input + 独立标量输出** 的指定组合；复杂 locator INOUT 的 D-04j `900/42000`、
 复杂/LOB/cursor 输出组合、脚本、长期压力及其他版本/平台仍保留。StoredProcedure 仍是会话/cache 屏障。
-消费者门禁正在执行；本模块完成后继续按矩阵推进其余有协议依据的客户端缺口，不重做已关闭的 D-04h Prepare/cache 子集。
+本模块提交 `fd44475`；关联公开 DLL 消费者 **12/12**、DI **14/14** 通过。额外全量消费者运行 7 分 27 秒后主动中止（中止前 2970 个已完成用例通过、0 failure，但整体运行未完成，不算全量通过）；不以该运行关闭平台门槛。后续继续按矩阵推进其余有协议依据的客户端缺口，不重做已关闭的 D-04h Prepare/cache 子集。
 
 #### D-04a2 Connector/J 2.4.14 公开 API 实测（2026-11-01）
 

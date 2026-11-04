@@ -8,6 +8,8 @@
 
 D-04k：本轮 Oracle 4.4.2.2 `oracle-direct`（TLS Disabled）新增 named OBJECT/collection/nested-collection BLOB/CLOB locator Input 与独立标量 OUT/INOUT/函数 ReturnValue，显式 Prepare/重复执行/提交后独立读回 **36/36** 通过、无 skip。该证据不关闭复杂 locator INOUT 的 `900/42000`、长期压力或其他部署边界。
 
+D-02c2：当前 `mysql-direct` 已可运行。脚本标量 ReturnValue 的基础发布、新增存储/失败前缀与后缀/batch/半读关闭，以及既有 OUT/INOUT 回归合计 **6/6** 通过、无 skip；仅关闭该直连功能子集，其他部署仍欠验收。
+
 ## 环境矩阵
 
 | 组合 | 历史证据 | 仍未验收 |

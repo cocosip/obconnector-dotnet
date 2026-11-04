@@ -992,9 +992,9 @@ pool return. Script variables use the same isolation and reset policy as procedu
 Mixed batches treat the whole script as an execution barrier and publish to the original batch
 parameters before starting the following prepared segment.
 
-Scalar ReturnValue uses the same private-variable and hidden-SELECT path and is currently covered
-by sync/async loopback evidence; a real MySQL direct profile is still required before treating it
-as a completed compatibility claim. Stream/locator/complex outputs, Oracle script outputs,
+Scalar ReturnValue uses the same private-variable and hidden-SELECT path. The current MySQL
+direct subset has sync/async loopback and live storage, failed-prefix/suffix, mixed-batch barrier
+and partial-reader Close/drain evidence (D-02c2); other deployments still require separate acceptance. Stream/locator/complex outputs, Oracle script outputs,
 Prepare and server cursors remain unsupported. The existing MySQL String-input script charset/routine restrictions remain;
 an INOUT string initialized through SET does not become an SQL literal. This is client orchestration,
 not native multi-statement output wire or a transaction around the script. See D-02c1 and D-02c2 in the
