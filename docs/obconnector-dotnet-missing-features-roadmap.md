@@ -1379,6 +1379,12 @@ TLS Disabled、未请求OB20。只关闭两个工厂及ExecuteArray DML输入/RE
 端点恢复后先确认/清理上述精确表名，再重跑当前公开测试及既有控制；不删除失败、不自动skip。
 普通0x17匿名输入、复杂text和multi-send专门验收仍开放。
 
+后续恢复检查（2026-11-04，代码 `30d28ad`）：分别对当前Oracle、MySQL直连profile使用独立
+Python socket建立TCP，接收greeting均为0bytes；未发送认证或SQL，未重复整组失败测试。
+两个profile当前均不能用于新wire调查或实库验收。剩余D项的进入前提仍按上方组合缺口表保留，
+不以额外fixture替代成功服务端交互。需要恢复现有端点或更新本地profile后，再处理上述精确表名
+并执行当前D-04f2公开测试及array/routine控制；整体目标未完成。
+
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
 基线 `ae40dba`。D-04a2 继续核对服务端命名成员 deserialize 与 Java writer；Java
