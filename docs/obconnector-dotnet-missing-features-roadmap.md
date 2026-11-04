@@ -150,7 +150,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | ID | 当前进度 | 任务 | 当前缺口 | 关闭条件 |
 | --- | --- | --- | --- | --- |
 | A-01 | `P3`；MySQL/Oracle 直连各 10000 次借还及资源隔离 52/52 通过；持续运行失败根因未定，长测移至发布验收 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、清池和句柄/线程/内存稳定性未证实；原始异常被测试清理遮蔽的问题已修复 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
-| A-02 | `P3`；MySQL/Oracle 直连 XA 生命周期、recover 和池丢弃恢复 28/28、环境事务 COMMIT 回执丢失 16/16 通过 | PSPE、XA、unknown outcome（G11） | 环境事务InDoubt指定回执丢失子集已验收；XA prepared worker决定落盘前/后进程终止与恢复已按A-02b每模式6/6验收；其他协调器、supervisor整体丢失、节点/代理崩溃、取消顺序和分支恢复仍未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
+| A-02 | `P3`；MySQL/Oracle 直连 XA 生命周期、recover 和池丢弃恢复 28/28、环境事务 COMMIT 回执丢失 16/16 通过；MySQL PREPARE整包成功回执丢失后独立恢复/rollback 2/2（A-02c） | PSPE、XA、unknown outcome（G11） | 环境事务InDoubt指定回执丢失子集已验收；XA prepared worker决定落盘前/后进程终止与恢复已按A-02b每模式6/6验收；其他协调器、supervisor整体丢失、节点/代理崩溃、取消顺序和分支恢复仍未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
 | A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过，包重载 2/2、引用 package 标识符 2/2 通过；带空格的引用形参原名派生与过程/package/函数位置调用新增 **6/6**（A-03h）；双模式函数合成返回名避让新增 **8/8**（A-03i） | Schema、目录和参数元数据（G13） | 包内 PL 类型和最小权限仍缺；大小写/引用 package 标识符已覆盖；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制；仅大小写不同形参的当前实库失败保留 | 双模式最小权限、唯一/歧义签名、更多大小写/引用标识符、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
 | A-04 | `P3`；当前 Windows 包/运行时指定子集已验收 | 包、TFM 和平台（G14/R01） | 五资产、net8/net9/net10 独立 runtime、两个 netstandard 的 net10 host 及 netstandard2.0 的 net48 host 已复验；非 Windows、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
 | A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；196608 字符 NUL 单表达式从 .NET 0/4 恢复 4/4，原因未定，见执行记录 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
@@ -262,6 +262,34 @@ D-04f2 仍按事故隔离，不执行其用例或 PL 匿名 INTERVAL 集合探�
 新增锚点检查通过，功能矩阵74个编号和缺失矩阵30个编号顺序均未变，`git diff --check`通过。
 范围复核时命名 OBJECT 的 INTERVAL text 结果尚待 wire 调查；已有 RAW/DATE/TIMESTAMP/LOB
 text 失败不能推断其也失败。后续已按 D-04f3 完成该独立子集，不宣称所有剩余功能均已关闭。
+
+### 剩余任务准入复核（2026-11-04，基线 `627f4b6`）
+
+上一模块A-02b已提交；本次按当前代码guard、验收入口和本地配置复核下一步，
+不把缺协议/部署或尚未定义的扩展组合直接改成产品代码，不将本表视为所有功能已完成。
+本地 `integration-tests.json` 当前仅含 `mysql-direct`/`oracle-direct`，均为direct tag；
+D-08f1的当前双模式10例门禁与A-02b两份实库报告分别固定plaintext/无压缩/OB20和4.4.2.2证据。
+
+| 剩余入口 | 当前代码/证据 | 重新开启条件 |
+| --- | --- | --- |
+| D-01、D-02b、D-05的原生prepare/fallback门槛 | `OceanBaseCommand.StartOperation`保留脚本Prepare/cursor拒绝；受控1295已验收，租户原生1295未复现；D-02b的脚本prepare失败记录仍保留 | 能复现原生1295或接受脚本prepare的目标版本/SQL/profile；不能重复注入后称原生支持 |
+| D-02c剩余Oracle脚本/资源输出、D-04 multi-statement locator | `OceanBaseCommand`只为MySQL脚本建立输出计划；named locator constructor受单语句限制；`ClientPreparedSql.ComplexLiteral`拒绝LOB/cursor/anonymous | 明确Oracle脚本输出映射/失败发布及locator脚本表示和资源归属；不能把单PL块、多条DbBatch或隐式读成内容当同一功能 |
+| D-03列cursor及D-04已确认服务端形状 | REF CURSOR/default offset已完成；SELECT CURSOR、OBJECT根NULL身份、BLOB成员DML、部分complex text/cursor和nested-table列仍有本节各专项服务端失败证据 | 新可读取/可创建形状、正确NULL/成员身份或不同服务端wire；本次不重复已知失败SQL |
+| D-04f2事故隔离 | `AnonymousIntervalOutputTests.LocalCollectionsKeepExactIntervalsNullsAndEmptyOutputs`仍有明确Skip；连接恢复不关闭根因 | 服务端事故日志和隔离复现环境，再处理扩展PL集合验收；本次未执行 |
+| A-03d RECORD与D-08匿名普通输入/结果、PL同组扩展 | `RoutineParameterDerivation.Map`拒绝TYPE_SUBNAME；`ValidateBatchMultiSendParameters`拒绝anonymous/cursor；已有匿名binary结果只有loopback | RECORD字段目录与输入/输出布局；匿名普通0x17成功交互或真实结果metadata来源；PL同组响应/归属契约。已有DML ExecuteArray或routine屏障不能替代 |
+| D-06b、D-07服务端限制及D-09～D-12额外类型范围 | 当前非零SRS、普通Oracle部分charset、ANYDATA/SPARSEVECTOR前提未满足；XML/String、SDO/generic OBJECT和ARRAY/String等既有子集已验收 | 实际SRS/包/版本/wire或新增明确.NET用例；专用codec/API和额外笛卡尔组合不自动成为必补项 |
+| A-02的MySQL XA PREPARE回执丢失 | 准入时当前direct profile、`TransactionResponseDropProxy`和loopback中断断言已具备；后续A-02c补齐真实prepared分支的独立Recover/rollback sync/async 2/2 | 无需新部署的整包成功回执丢失子集已验证；其他响应边界/模式不由此关闭 |
+| S-01～S-04及A-02其他真实故障/协调器环境 | 当前只有两个direct profile；单上游relay、测试worker存活supervisor不等于TLS/KDC/ODP/多节点或通用协调器 | 专用TLS/认证/压缩/OB20/发现/代理/节点/协调器profile与受控故障权限；产品通用持久协调器仍排除 |
+| A-01、A-03最小权限、A-04、A-05 | A-01已由用户移至发布验收；没有最小权限专用账号；本机无WSL/Docker；zero-date当前实际SQL_MODE仍不满足；长NUL缺失败时段诊断 | 发布长稳时段、最小权限账号、非Windows运行环境、允许零日期的专用profile、失败时段执行/网络日志；不调租户基线、不重放事故或重复长测 |
+
+本轮仅重查可变且可安全确认的zero-date前提：复用既有验收工具，当前MySQL4.4.2.2连接控制通过，
+`types.zero-date-policy`在建表前明确失败（需要NO_ZERO_DATE与NO_ZERO_IN_DATE均不存在），
+报告 `TestResults/zero-date-live-mysql-6a723bbd.json` 为1pass/1fail/0skip，Objects为空、无清理错误。
+没有SET SQL_MODE、建表或把此失败归为客户端缺陷。私有runner重建成功，仅有缓存NU1900漏洞源
+不可达警告，不作为产品build/analyzer结论。`wsl --list --quiet`返回未安装WSL（退出1），
+`Get-Command`未发现Docker；原始安全输出在忽略目录 `TestResults/readiness-20261104/`。
+没有安装运行时、拉取镜像或启动外部CI。独立准入走查 `review_readiness_627f4b6` 指出
+A-02的MySQL PREPARE回执丢失可直接推进，已修正表中此前将所有剩余A-02归为环境门槛的过度结论。
 
 ### 开发优先级调整与 A-01 延后（2026-11-02）
 
@@ -3407,6 +3435,39 @@ journal、非法Commit=true请求发送前拒绝。扩大验收相关回归 `a02
 本项只验证worker进程在prepare后、决定落盘前/后被强制终止；supervisor仍存活并持有自有XID，
 无记录时由它先确定rollback并落盘，恢复进程不接受内存决定。未声称supervisor整体丢失后可
 重建所有权、断电持久性或产品提供通用协调器；A-02父项保持P3，其余断点/节点/代理/平台门槛保留。
+
+### A-02c：MySQL XA PREPARE 成功回执丢失的独立恢复（2026-11-04）
+
+基线 `627f4b6`，在现有分支继续，不新建/切换分支或worktree。范围是MySQL直连、plaintext、
+无压缩/OB20、单端点且允许建表的profile，sync/async两例；复用现有relay，在收到真实
+XA PREPARE OK后扣住整个响应并断开。Oracle DBMS_XA的标量响应不纳入该MySQL边界。
+仅新增Integration验收，不新增产品接口、依赖或协调器。
+
+- [x] 断言unknown outcome、Broken、PREPARE仅发送一次、独立观察者看不到未提交行。
+- [x] 独立连接Recover恰好找到自有XID，精确rollback，再Recover确认消失、行仍为0；旧XA资源在断线和重开后均拒绝操作。
+- [x] 复用owned table/XID清理，失败时保留测试主体和清理错误，任何Recover结果均只处理该测试XID。
+- [x] 定向loopback回归、两例实库、格式/文档检查、独立只读走查并处理问题；按既有授权在当前分支本地提交，不push、不长压、不执行D-04f2。
+
+验收：当前 `mysql-direct` 的4.4.2.2、Windows/.NET10、TLS Disabled、无压缩/OB20，
+sync/async新用例 **2/2**。最终 `a02c-final-live-and-relay.trx` 合并这两例与已有relay
+本地检查，共 **12/12**，0fail/skip；两个自有表均完成清理，无XA/对象清理错误。
+每例均观察真实OK、一次PREPARE、unknown/Broken、独立Recover恰好找到自有XID、
+rollback后Recover无该XID及独立行数为0；原连接Close/Open使用新物理session，旧资源
+拒绝后新会话SELECT1仍成功。本项连接均不使用池，不推断池reset或Oracle DBMS_XA响应行为。
+
+`a02c-xa-regression.trx` 的MySQL/Oracle XA及池隔离、网络门禁定向本地回归 **165/165**，
+包含原有PREPARE断连/cancel/timeout/close的loopback；此前 `a02c-related.trx` **7/7**
+只匹配网络门禁，未算作XA验证。Integration及UnitTests的Release构建均0warning/error；
+新C#的scoped whitespace、六份修改Markdown的相对链接及`git diff --check`通过。
+TRX在各测试项目的忽略目录TestResults，命令日志在 `TestResults/a02c-prepare-loss/`。
+
+独立只读走查 `review_a02c_prepare_loss` 发现profile gate缺少direct标签，已补充
+`HasTag("direct")`并重建/重跑上述最终12例；主agent自查将resolved标志延后到Recover
+确认消失，并将恢复连接释放纳入错误累积。最终复核无可操作遗留问题，未代替主agent执行测试。
+
+仅关闭该MySQL整包成功回执丢失子集，A-02父项保持P3。Oracle标量/部分回执、真实
+取消/超时顺序、其他XA控制断点、supervisor整体丢失、服务端/代理崩溃及其他部署仍未全覆盖；
+没有引入Java XAResource/JTA接口要求，也未把服务端/环境限制算作客户端功能缺失。
 
 ### A-04 续：当前 Windows 包资产与独立运行时复验（2026-11-02）
 

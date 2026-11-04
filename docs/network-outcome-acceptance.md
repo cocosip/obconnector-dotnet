@@ -42,3 +42,13 @@ ambient in-doubt/coordinator crashes, real OBProxy, TLS, other versions/platform
 load remain open under P0-04/W2 and P2-06/W8. A separate [XA coordinator process matrix](xa-process-recovery-acceptance.md)
 now covers prepared-worker death before and after decision persistence. [Controlled topology cases](topology-acceptance.md)
 cover client-route changes and refused TCP; two deferred matrix placeholders remain. It does not close the 23-gap/eight-package baseline.
+
+The integration suite also covers MySQL XA PREPARE whole successful reply loss in
+`Faults/XaPrepareResponseLossTests` (sync/async, direct 4.4.2.2, plaintext, no compression/OB20).
+The relay receives the real OK before disconnecting; the driver reports unknown outcome and
+Broken, with exactly one PREPARE request. An independent unpooled connection recovers exactly
+the owned XID, rolls it back and verifies its absence; an observer sees zero committed rows.
+The old XA resource rejects operations both before and after Close/Open, and the fresh session
+remains usable. These two cases use owned table/branch cleanup and retain body and cleanup
+failures. They are separate from the console's 16 network cases and do not cover Oracle DBMS_XA,
+partial PREPARE replies, cancellation/timeout ordering, or real server/proxy crashes.

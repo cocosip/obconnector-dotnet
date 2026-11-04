@@ -215,6 +215,7 @@ Without a configuration file, `OB_REQUIRE_INTEGRATION=1` plus the four documente
 | Mode-advertised schema collections sync/async, restriction filtering, composite key/index/FK ordering, views, Oracle types/synonyms and sequence non-advancement | `Schema` |
 | Single-slot pool XA dedication after idle/commit/rollback, replacement autocommit/local transaction, prepared branch Close then explicit recovery/commit/rollback (sync/async) | `Connections/PoolXaIsolationTests` |
 | XA lifecycle (prepare/recover/commit/rollback), one-phase, invalid phase transitions | `Xa` |
+| MySQL XA PREPARE whole successful reply loss (sync/async), unknown/Broken, no replay, independent exact-XID recovery/rollback and old-resource rejection after reopen; plaintext/uncompressed/non-OB20 only | `Faults/XaPrepareResponseLossTests` |
 | PL/SQL OUT/InputOutput, RETURNING INTO, stored procedures + schema, REF CURSOR, positive output FetchSize hints with implicit/explicit Prepare and independent cursor page size, temporary LOBs + locator params, complex types (including collection IN/OUT/InputOutput procedure parameters), array binding | `Oracle` |
 | Large binary streaming (LONG DATA / LOB locator), Oracle piece-wise upload | `Streams` |
 | Known server error reuse, cancellation, CommandTimeout; real COMMIT/ROLLBACK acknowledgement loss through a test-only plaintext relay, independent reconciliation and single-slot pool replacement | `Faults` |
