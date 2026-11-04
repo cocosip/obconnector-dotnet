@@ -14,6 +14,12 @@ D-04l：同一 Oracle profile 的短 LOB（BLOB 6 bytes / CLOB 7 chars）named l
 
 D-03b2：同一 Oracle 4.4.2.2 直连 profile 的父 REF CURSOR offset 默认值与显式 reader 覆盖已验收，相关组 **46/46** 无 skip：原显式 reader 12、父默认/覆盖24、函数返回2、过程生命周期8。覆盖空/三行、Default/SequentialAccess/SingleRow、Prepare、父释放、错误后旧输出保留与同会话恢复；真实端点使用 legacy EOF，DEPRECATE_EOF/OB20 仍仅本地协议证据。
 
+D-08ad：当前 MySQL/Oracle 4.4.2.2 直连、TLS Disabled、未请求 OB20、Windows/.NET 10 的普通
+prepared UPDATE 短时对照 **4/4** 通过（sync/async，每配置5次；顺序与 multi-send 分组1/4/16）。
+80个样本全部提交、独立查账和测试清理通过；分组16相对顺序路径命令吞吐在本次负载中为
+4.15×～8.62×。分组1已存在执行路径开销差异，不能把全部收益归因于分组；资源仅为进程级粗诊断。
+原始样本、分位、资源、失败率口径和复现命令见路线图 D-08ad；不外推生产SLO、其他负载或长期稳定性。
+
 ## 环境矩阵
 
 | 组合 | 历史证据 | 仍未验收 |

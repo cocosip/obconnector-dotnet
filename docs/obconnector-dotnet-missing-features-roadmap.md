@@ -126,7 +126,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 
 | ID | 当前进度 | 任务 | Java/OceanBase 边界 | 前置条件 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的根/命名复杂 LOB binary 结果及命名复杂 LOB 内容输入及 Oracle DML RETURNING 标量 OUT/INOUT、命名复杂值和保留调用方连接的 LOB 输出子集也已验收；关闭连接/data source reader 的根远程 LOB 读取窗口 **8/8**（D-08u）；data source NonQuery 的根远程 LOB 排空/池复用 **4/4**（D-08v）；SequentialAccess reader 的双模式字段 **8/8**、Oracle LOB 窗口 **16/16**（含原8）与 XML **4/4**（含原2）（D-08w）；整批 SingleRow/SingleResult 的双模式限读及 Oracle 隐藏 RETURNING **10/10**（D-08x）；batch named OBJECT、scalar collection、nested collection BLOB/CLOB locator 输入通过 constructor + hidden root LOB **12/12**（D-08ac） | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 目标 profile 的 wire、错误排序、收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自动提交远程 DML LOB 输出（D-08z）、复杂 text LOB 结果、PL 同组流水化输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属；混合StoredProcedure/Oracle PL及SET/DDL等不可缓存SQL已支持执行屏障，安全段仍流水化，后段预检延迟到完整屏障响应结束（D-08ab）；双模式存储/OUT及Oracle匿名集合OUT/时区变更直连 **10/10**（D-08y），不代表PL同组流水化；自有连接 Scalar 的根远程 LOB、只读 PL INOUT 和 inline RETURNING OUT 已支持，由 batch 保留原连接，释放全部句柄后方可重执行；直连16成功路径及8事务边界负向通过（D-08z），匿名复杂 Scalar 仅 loopback |
+| D-08 | `P4`；指定 4.4.2.2 MySQL/Oracle 直连 profile 的 input-only DML/scalar/ExecuteReader 子集已验收；MySQL Stream 存储/读取、MySQL BLOB/TEXT 结果、Oracle Stream piece-data 回退、1295 text fallback 及 Oracle named OBJECT/collection 普通输入、普通/嵌套 OBJECT binary 结果与根 BLOB/CLOB locator 普通输入、保留调用方连接的根/命名复杂 LOB binary 结果及命名复杂 LOB 内容输入及 Oracle DML RETURNING 标量 OUT/INOUT、命名复杂值和保留调用方连接的 LOB 输出子集也已验收；关闭连接/data source reader 的根远程 LOB 读取窗口 **8/8**（D-08u）；data source NonQuery 的根远程 LOB 排空/池复用 **4/4**（D-08v）；SequentialAccess reader 的双模式字段 **8/8**、Oracle LOB 窗口 **16/16**（含原8）与 XML **4/4**（含原2）（D-08w）；整批 SingleRow/SingleResult 的双模式限读及 Oracle 隐藏 RETURNING **10/10**（D-08x）；batch named OBJECT、scalar collection、nested collection BLOB/CLOB locator 输入通过 constructor + hidden root LOB **12/12**（D-08ac） | multi-send/pipelining（Q20） | Java 有实现；MariaDB bulk 不在范围；.NET 为默认关闭的 opt-in prepared batch send | 普通 prepared DML 短时收益对照已记录（D-08ad，双模式直连 sync/async 4/4，每配置5次）；目标 profile 的 wire、错误排序、其他负载收益、取消和 unknown-outcome 仍需分别扩展；当前子集不含 Oracle 自动提交远程 DML LOB 输出（D-08z）、复杂 text LOB 结果、PL 同组流水化输出、cursor、array binding；Connector/J 2.4.14 的 Oracle piece-data 同样逐片等待确认，未形成流水化协议依据，故不猜测实现；代理/OB20 和真实租户原生 1295 仍未验收；新增的 token/batch cancel/timeout 仅验证 loopback unknown-outcome 归属；混合StoredProcedure/Oracle PL及SET/DDL等不可缓存SQL已支持执行屏障，安全段仍流水化，后段预检延迟到完整屏障响应结束（D-08ab）；双模式存储/OUT及Oracle匿名集合OUT/时区变更直连 **10/10**（D-08y），不代表PL同组流水化；自有连接 Scalar 的根远程 LOB、只读 PL INOUT 和 inline RETURNING OUT 已支持，由 batch 保留原连接，释放全部句柄后方可重执行；直连16成功路径及8事务边界负向通过（D-08z），匿名复杂 Scalar 仅 loopback |
 | D-09 | `P4`；4.4.2.2 `oracle-direct` text+binary String wire 子集；PL XMLTYPE OUT/INOUT 已确认是服务端限制；完整 XML codec 仍未关闭 | XMLType wire 调查与有条件 codec（T17） | ownerless `XMLTYPE` 已有严格 UTF-8 String wire；`SYS.XMLTYPE` metadata 已有安全的 String 消费边界；`DbType.Xml` 参数使用已验证的 type 253 字符串 wire；同一 PL OUT/INOUT 形状在 Connector/J 2.4.14 与 .NET 分别返回 `600/0A000`、`600/42000`，按服务端限制跳过客户端扩展 | 当前子集覆盖普通 XMLTYPE 列、NULL、同步/异步 DML、metadata、PL 函数结果、显式 Prepare binary 结果；带 owner 的复杂 payload、坏值/最大值和跨版本证据仍待确认；PL OUT/INOUT 当前版本不再作为待开发项 | 保持当前子集的参数/结果/NULL/metadata 契约；取得稳定复杂 XML identity 和不同服务端 wire 后再扩展，不把 PL 失败伪装成客户端成功 |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
@@ -223,7 +223,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | 类别 | 数量 | 当前结论 |
 | --- | ---: | --- |
 | 已有代码但组合受限 | 7 项（D-01～D-07） | 保留已验收子集；剩余按协议、版本与服务端前提逐项推进，不重复开发 P4 范围 |
-| 已实现的流水化子集 | 1 项（D-08） | 保留已验收的 input-only 与 RETURNING 输出子集边界；扩展与收益、故障、代理验收分别推进 |
+| 已实现的流水化子集 | 1 项（D-08） | 保留已验收的 input-only 与 RETURNING 输出子集边界；短时 prepared DML 收益对照已记录（D-08ad），其他负载、故障、代理验收分别推进 |
 | 专用类型已有通用路径子集 | 3 项（D-09、D-10、D-12） | 已有指定版本 P4 证据；复杂 XML、空间专用契约、稀疏向量/其他数组元素及跨版本仍待证据 |
 | 类型服务端阻塞 | 1 项（D-11） | 当前缺 SYS.ANYDATA 包；取得实际 PL 参数/结果 wire 后重开 |
 | 已实现但欠验收 | 5 项（A-01～A-05） | 需要真实部署、故障、压力或平台证据 |
@@ -2771,6 +2771,68 @@ operation owner，确保预留会话期间仍能验证原 descriptor、连接、
 LOB 输出。D-04j 的 StoredProcedure locator InputOutput 仍因目标
 服务端 `900/42000` 保持跳过；D-08 父项仍未整体关闭。未运行长测、全消费者、代理/OB20、
 其他版本或部署矩阵。
+
+#### D-08ad：prepared DML multi-send 的短时收益基线（2026-11-04，指定直连负载 `P4`）
+
+对应验收标准的性能对照门槛，复用现有 Integration opt-in/profile/表清理，不增加产品选项或依赖。
+双模式直连 × sync/async；顺序 batch、multi-send 分组1/4/16，以相同16条参数化 UPDATE、显式
+Prepare、一次预热及8次测量为一次样本，每配置5次；逐轮轮换顺序，避免只在末尾测优化路径。
+建表/初始数据、连接、Prepare、预热和 COMMIT 不计入执行时间；显式事务、独立连接核对每行总增量。
+记录 batch 延迟原始样本与p50/p95、命令吞吐、进程CPU/托管分配/working set和失败数；
+不设置容易抖动的“必须更快”断言，不声称硬件无关SLO、Java性能等价、长稳或所有负载收益。
+
+新增 `MultiSendComparisonTests.PreparedDmlComparisonPreservesEveryStoredIncrement`。各配置使用
+等价但独立的16行，每个样本新建非池化物理连接，关闭 statement cache；Oracle 使用普通 prepare，
+关闭 PrepareExecute/locator。全部 batch command 显式 Prepare，顺序与 multi-send 都保留已准备语句。
+四组 profile/API 共80个完成样本、640次计时 batch 执行、10240条计时 UPDATE，另有1280条预热
+UPDATE；每次计时后核对总 affected=16 和逐命令 affected=1，提交后独立观察者核对每行总增量45。
+
+2026-11-04 最终实库 **4/4**，无失败或 skip，测试清理通过。环境为 OceanBase **4.4.2.2**、
+MySQL/Oracle 直连、TLS Disabled、未请求 OB20，Windows 10.0.26300 / .NET 10.0.14。
+每组的20个尝试样本全部提交完成，`StorageVerified=true`。吞吐按总命令数除以计时执行总时长；
+p50/p95 使用每配置40次 batch 延迟的 nearest-rank，单位为每16命令 batch 的毫秒。
+
+| 模式/API | 命令/秒：顺序 / 分组1 / 分组4 / 分组16 | 顺序 p50/p95 ms | 分组16 p50/p95 ms | 分组16/顺序吞吐 |
+| --- | --- | --- | --- | --- |
+| MySQL sync | 1700 / 1744 / 4168 / 7054 | 9.021 / 11.549 | 2.111 / 2.801 | 4.15× |
+| MySQL async | 1584 / 1495 / 4070 / 6896 | 9.741 / 12.613 | 2.082 / 3.427 | 4.35× |
+| Oracle sync | 607 / 1398 / 3370 / 4944 | 25.224 / 32.219 | 3.141 / 3.819 | 8.15× |
+| Oracle async | 486 / 1159 / 2969 / 4195 | 31.824 / 41.803 | 3.601 / 4.981 | 8.62× |
+
+资源值为每配置5次样本之和，working set 是该 profile/API 的前后快照范围：
+
+| 模式/API | CPU ms：顺序 / 1 / 4 / 16 | 托管分配 MiB：顺序 / 1 / 4 / 16 | 进程 working set MiB |
+| --- | --- | --- | --- |
+| MySQL sync | 62.5 / 125 / 46.88 / 46.88 | 1.973 / 2.170 / 2.170 / 2.170 | 124.0–129.4 |
+| MySQL async | 187.5 / 140.62 / 93.75 / 46.88 | 3.310 / 3.194 / 3.086 / 3.048 | 124.0–125.6 |
+| Oracle sync | 62.5 / 15.62 / 31.25 / 0 | 6.221 / 3.372 / 3.371 / 3.371 | 132.3–132.4 |
+| Oracle async | 812.5 / 265.62 / 125 / 125 | 11.983 / 4.904 / 4.783 / 4.755 | 105.9–122.9 |
+
+CPU、分配和 working set 是进程级粗诊断，区间包含断言及运行时开销；CPU计时粒度会产生0，
+不能解读为零消耗，working set 也不是峰值或泄漏证据。每组 `SampleFailureRate=0/20`，定义为
+已尝试样本从连接、Prepare、预热、执行到 COMMIT 的失败率，失败即停止，未尝试样本不入分母；
+不是逐命令错误率。`StorageVerified` 仅表示独立查账通过，清理成功由完整测试结果确认。
+分组1控制了不同执行路径的开销，尤其 Oracle 分组1已明显不同于顺序路径，不能把全部收益归因于分组。
+
+原始延迟、资源、分位和环境元数据保留在本地忽略的
+`tests/OceanBaseConnector.IntegrationTests/TestResults/d08ad-comparison.trx` 的 JSON StdOut，
+控制台记录为 `TestResults/d08ad-live.log`。复现命令（使用现有 User Secrets profile）：
+
+```powershell
+$env:OB_REQUIRE_INTEGRATION='1'
+$env:OB_INTEGRATION_PROFILES='mysql-direct,oracle-direct'
+dotnet test tests/OceanBaseConnector.IntegrationTests -c Release --no-restore `
+ --filter 'FullyQualifiedName~MultiSendComparisonTests' -m:1 -nr:false `
+ -p:UseSharedCompilation=false --logger 'trx;LogFileName=d08ad-comparison.trx'
+```
+
+本模块只增加验收测试和证据，无产品/API改动；关闭的是当前主机/网络/负载下的普通 prepared DML
+短时对照缺口。其他负载、并发、代理/OB20、更大错误矩阵、生产收益及长期稳定性仍未验收，
+不关闭 D-08 父项，不提升到 `P5`，不声称硬件无关SLO或Java性能等价。
+
+- [x] 有界实库对照，测量和正确性断言分离，原始样本及清理结果已记录。
+- [x] Integration Release 构建0 warning/0 error；新增文件限定 whitespace verify exit0（工作区加载警告）；`git diff --check` 通过。
+- [x] 独立只读走查无问题；从 TRX 原始样本复算全部16配置的分位、吞吐、CPU/分配与 working set，并确认四份文档的范围一致。
 
 ### D-09：XMLType 字符串 wire 子集（2026-11-02，`P4` 子集；完整 codec 未关闭）
 
