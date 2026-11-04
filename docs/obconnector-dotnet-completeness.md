@@ -1,30 +1,35 @@
 # 源码走查与功能缺失矩阵
 
-更新：2026-11-04；本轮起点`daaafae`，新增 D-03b2 父 REF CURSOR offset 默认值传递，D-02c2 已补齐 MySQL 文本脚本标量 ReturnValue，并完成当前 mysql-direct 指定功能实库闭环（P4）；D-04j 已完成服务端边界复核，候选改动已撤销；D-08ac 已补齐 batch named OBJECT、scalar collection、nested collection BLOB/CLOB locator 输入子集，Oracle 直连 12/12。当前 `mysql-direct` 已可运行，ReturnValue 新增及相关实库回归 6/6；旧的 profile 阻塞已解除。范围与编号以[能力矩阵](obconnector-dotnet-progress.md)为准，
-证据来源见[范围审计](obconnector-dotnet-scope-audit.md)。本次走查不等于重新执行所有历史实库测试。
+更新：2026-11-04；收敛基线 `73ebf16`。本表回答：**现在确定缺什么、下一步具体做什么、什么条件算完成**。
+能力范围见[功能矩阵](obconnector-dotnet-progress.md)，来源见[范围审计](obconnector-dotnet-scope-audit.md)，
+实施步骤、历史测试及提交证据统一维护在[开发清单](obconnector-dotnet-missing-features-roadmap.md)。
+本次只整理范围和任务，不增加支持声明，不代表重跑数据库或完成整个驱动。
 
-D-04k 新增：named OBJECT/collection BLOB/CLOB locator **Input** 可与独立标量 OUT/INOUT 共存于单条 Text PL/StoredProcedure，函数可带标量 ReturnValue；显式 Prepare 与重复执行的 Oracle 4.4.2.2 `oracle-direct` 矩阵 **36/36** 通过。复杂 locator 值自身的 INOUT 仍按 D-04j 保持拒绝，不扩展其服务端边界。
+## 本轮范围和完成口径
 
-D-04l 新增短 LOB 验收（BLOB 6 bytes / CLOB 7 chars）：同一 locator Input 可与独立 complex OUT/函数 ReturnValue（与输入同一 named type）、根 BLOB/CLOB OUT、REF CURSOR OUT 共存；现有共享输出计划无需新增产品代码。Oracle 4.4.2.2 `oracle-direct` 的 Text/过程/函数 × BLOB/CLOB × OBJECT/collection/nested-collection × sync/async **36/36** 通过，含错误后旧输出保留、重复执行、父 command 释放后在原事务内读取资源及提交后独立查账；复杂 locator 自身 INOUT、复杂 cursor 成员和脚本不在该范围。
+- 目标证据基线是 OceanBase **4.4.2.2 的 MySQL/Oracle 租户兼容模式**；原生 Oracle/MySQL 的能力不能直接移入本表。
+- 每个必补项须同时具备 OceanBase 文档/服务端协议/实库证据、明确的 .NET 调用契约及当前实现缺口。JDBC 接口、Java 选项和 Java 支持某种组合均不足以立项。
+- **代码缺口、欠验收、服务端/环境阻塞、待范围决策、指定范围已完成分别列账。** 未证明的组合保留记录，不能报成确定缺失，也不能报成已经完成或已排除。
+- G01～G15 是本轮固定核对单元。现有 D/A/S 编号只作实现和证据索引；其历史子章节数量不是未完成任务数量。不得因一个用例通过，再自动追加方向、嵌套层数、API、部署或数据类型组合。
+- 新增必补范围必须先在本表写明 OceanBase 依据、使用场景、影响面及有限关闭条件，并由用户明确确认；不能边实现边扩大完成标准。
 
-D-03b2 新增：父 command 的 `UseCursorOffset=true`（正 FetchSize）现可用于已声明 REF CURSOR Output/ReturnValue。既有 reader 重载继承执行时快照，显式 bool 可覆盖；子 reader 页大小仍独立，隐藏输出行不使用 offset。Oracle 4.4.2.2 直连相关实库 **46/46**（含原显式 reader 12、父默认/覆盖24、函数2、过程生命周期8），不扩展滚动、array、标量-only 输出或 cursor-valued 列范围。
+**功能开发完成**：已纳入范围的代码缺口逐项实现并通过对应测试、独立走查；尚未决定的范围必须显式保留，不能靠移出表格宣布全部完成。
+**发布验收完成**：拟声明支持的版本/部署/OS/runtime 固定后，对应验收和清理全部通过；缺环境、隔离、skip/deferred 均不算通过。
+两者分别报告，不以提交数、测试数或父项长期标 P2/P3 代替结论。
 
-D-04m：named OBJECT/scalar collection/nested collection BLOB/CLOB locator Input 与独立标量 INOUT、同一 named type 的 complex OUT/函数 ReturnValue、根 LOB OUT、REF CURSOR OUT，现已在 mixed batch routine屏障中通过 Oracle 4.4.2.2 直连 Text/过程/函数 × sync/async **36/36**。覆盖显式 Prepare、PL错误的已执行前缀与未执行后缀、旧输出保留、原batch重复执行、batch释放后原事务内读取资源及提交后独立查账；复用已有产品代码。只关闭短LOB/调用方连接的指定组合，不代表同组PL流水化、locator自身INOUT或其他部署。
+## 当前仍未结清的事项
 
-D-04f1：匿名 INTERVAL 工厂已接入现有204/205布局；`ExecuteArray` 的 INSERT/RETURNING、NULL、负值/纳秒和重复 Prepare 执行已通过当前 Oracle 4.4.2.2 直连8项正向验证。过程输出的未知精度仍安全拒绝，4项负向回归单列；普通0x17匿名绑定、PL集合输出和multi-send不由此关闭。
+| 性质 | 现有编号 | 当前缺什么 | 下一步 |
+| --- | --- | --- | --- |
+| 客户端代码能力缺口，协议前提未齐 | G13 / A-03d | package-local PL/SQL RECORD 可在 OceanBase 创建且目录可见，但 .NET 无字段描述、参数派生和绑定路径 | 取得目标服务端可验证的字段描述及成功参数 wire，再实现；取得前保留明确拒绝，不反复试 SQL 变体 |
+| 代码已有，扩展实库隔离 | G04 / D-04f2 | 匿名 INTERVAL 集合的根 NULL、失败后旧输出和独立事务查账未完成 | 先取得事故日志和隔离复现环境，再执行原定用例；普通连接恢复不能解封 |
+| 已实现路径缺真实协议/部署证据 | G01、G09 | 原生 1295 回退；匿名及部分 collection 的 multi-send 结果只有本地证据 | 分别取得原生拒绝 profile、可复现的真实结果 metadata；不再增加同义 fixture 冒充实库 |
+| 发布验收欠账 | G10、G11、G13、G14 | 长稳、其余真实故障、最小权限、非 Windows/完整 API 与 ORM 声明、zero-date/长 NUL 边界 | 按下表各行的有限场景和前提执行；A-01 已移至发布验收，当前不重跑长压 |
+| 服务端或部署前提阻塞 | G03、G04、G06～G08、G12、G15 | 具体失败形状、SRS/包/版本、TLS/协议/代理/认证端点 | 保留已有失败和安全拒绝；前提改变后只重开对应行 |
+| 待范围决策，尚非必补功能 | G02、G04、G08、G09 | 任意 Oracle 脚本资源输出、跨语句 locator、更多 PL/游标/数组流水化、专用 XML/空间 codec 等 | 见下方逐项处置表；先决定是否纳入，不能直接开始编码 |
 
-D-04f2：匿名INTERVAL结果描述已接入204/205，沿用嵌入精度和显式输出身份校验；本地及消费者完成，首轮PL本地显式精度9集合OUT直连4/4。扩展根NULL/错误后发布/独立事务查账的实库未完成，事故用例保持隔离且不计通过；恢复后的两模式基础检查及已知遗留表清理已完成，当前保持P3，详见路线图；未知精度255仍拒绝。
-
-D-04f3：命名 OBJECT/嵌套 OBJECT 的 INTERVAL text 结果已复用目录精度和精确 provider 值；Oracle 4.4.2.2 `oracle-direct` 的三组精度 × 平面/嵌套 × sync/async × buffered/sequential **24/24**，含独立 Prepare binary 控制、成员 NULL、正负值及后续字段哨兵。仅关闭该 text 子集；collection/RAW/DATE/TIMESTAMP/LOB/cursor 的既有 text 边界与 D-04f2 事故隔离保持。
-
-分类：**缺实现**是已保留目标中的代码缺口；**受限**是已定义子集，不能默认要求任意组合；
-**候选差距**有 .NET 使用场景及数据库/协议或 ADO.NET 契约依据但未纳入当前目标；**欠验收**有代码而缺特定部署证据；
-**服务端/权限阻塞**必须保留失败；**排除**不进入开发积压。
-
-Java/JDBC 专属接口及 JVM 集成不列为候选差距、缺实现或欠验收，具体对照见
-[范围决策表](obconnector-dotnet-scope-audit.md#jdbc-专属接口不进入-net-矩阵)。
-G03 保留的是数据库 REF CURSOR/游标列的限定形状，不是 JDBC ResultSet 接口对齐；
-G09 中未定义契约的流水化组合也不自动构成必补功能。
+候选组合不能合并计为已确定的必补功能。已纳入的 RECORD 能力缺口、隔离验收、发布欠账和阻塞
+仍分别保留；本次分类不代表它们已完成，不据此计算整个驱动的完成率。
 
 ## 当前服务端前提判定
 
@@ -36,7 +41,7 @@ proxy/ODP、多节点/OCP/TNS、OB20/trace 或非 native 认证/KDC profile。�
 | 项目 | 当前确认 | 暂不开发的原因 |
 | --- | --- | --- |
 | TLS/mTLS/企业 CA/撤销/轮换 | 两个真实 profile 明确 TLS Disabled | 没有真实 TLS 端点和证书链，代码修改无法形成 OceanBase 验收证据 |
-| OB20/trace/压缩 OB20 | 没有 OB20 profile；强制 OB20 历史失败于服务端 `Layer=mysql` | 缺少服务端协商与双向帧，不能以本地帧 fixture 代替部署能力 |
+| OB20/trace/标准压缩 | 没有 OB20 profile；强制 OB20 历史失败于服务端 `Layer=mysql` | 缺少服务端协商与双向帧，不能以本地帧 fixture 代替部署能力；压缩 OB20 仍属排除项 |
 | OBProxy/ODP/多节点/OCP/TNS | 没有真实代理或发现服务 profile | 单上游中继不能证明 HA、后端 reset、迁移或发现服务 |
 | 非 native 认证/KDC/凭据轮换 | 当前只配置 native 账号直连 | 没有插件/KDC 正负端点，Java 插件注册不等于 OceanBase 支持 |
 | Oracle普通CP932/UJIS/EUCJPMS | 三族严格映射、MySQL存储/结果和Oracle national已补齐（D-07f/g/h），普通Oracle初始化由Java同交互确认900/42000 | 仅按D-07f/g/h关闭成功子集，SJIS/Big5/EUCKR旧失败及其他部署仍保留 |
@@ -44,25 +49,46 @@ proxy/ODP、多节点/OCP/TNS、OB20/trace 或非 native 认证/KDC profile。�
 上述冻结不删除现有 API、拒绝校验、负向测试或 Deferred 记录；获得真实端点后再按验收标准
 重新立项。
 
-## 代码与覆盖差距
+<a id="bounded-gap-matrix"></a>
 
-| ID | 对应能力/模式 | 分类 / 现状 | 源码证据 | 关闭条件 / 下一步 |
-| --- | --- | --- | --- | --- |
-| G01 | Q04 Oracle普通prepare回退 | 阶段1已补齐已有 DATE/TIMESTAMP/时区、INTERVAL、NCHAR/NVARCHAR2 字面量；`oracle-direct` User Secrets 实库正向 Prepare/输出/时间脚本复核 **38/38** 通过，但本次未触发原生 `1295/HY000`；仍受限于普通单语句输入，无输出/cursor/LOB/anonymous；命名 OBJECT/collection 构造器已复用于普通及 batch 受控 fallback（D-01b） | Internal/Sql/ClientPreparedSql.cs；CommandExchange.ClientPreparedSql | 继续补充前须独立确认字面量身份、编码/时区/精度和1295前提；不能用多语句支持替代 |
-| G02 | Q05 双模式多语句 | 受限：普通输入/多结果及 MySQL、Oracle 时间脚本存储已有直连子集；Oracle 命名 OBJECT、嵌套 OBJECT 和集合输入 D-02d1～d3 已达 P4；MySQL脚本标量OUT/INOUT已按D-02c1复用变量初始化/私有SELECT/原子发布，标量ReturnValue已有 sync/async loopback 与指定 MySQL 直连闭环（D-02c2，P4）；Prepare、cursor、Oracle脚本输出及资源/复杂输出仍不支持 | OceanBaseCommand.cs；ClientPreparedSql.cs；MultiStatementTests.Temporal.cs | MySQL标量脚本输出已补齐，ReturnValue 指定 MySQL 直连验收见 D-02c2（相关实库 6/6）；其余模式/输出资源边界保留；引用类型名的递归 OBJECT text 多结果及半读切换见 D-04e2；集合子树 NULL OBJECT、locator、匿名复杂值及其余复杂结果仍保留限制；扩大前需模式/方向/wire证据，不默认补所有笛卡尔组合 |
-| G03 | Q11 Oracle输出/游标 | 受限：REF CURSOR reader已补齐显式前向offset FETCH（D-03b1），首批及后续尾包均验证；父 command 的已声明 REF CURSOR 输出现可保存 offset 默认值，reader 显式 bool 可覆盖，页大小独立（D-03b2）；未声明 REF CURSOR 的输出计划与 array binding 仍拒绝；当前目标版本已验收的普通 `SELECT CURSOR` 列形状为服务端限制，Java 同样返回 902/1002 | OracleCommandPlan.cs；QueryResult.Cursor.cs；OracleCursorOwner.cs | 正FetchSize仅提示；若出现新的可读取列形状再单独验收，不能用 OUT 成功关闭当前结果列限制 |
-| G04 | T14/T15 Oracle复杂值 | 受限：当前 OBJECT/嵌套 OBJECT NULL 输出身份为服务端限制且 Java 同样不报告外层 NULL；named BLOB OBJECT 成员 DML 在 .NET 与 Java 同 wire 诊断回放均返回 `932/22000`，按当前目标服务端限制跳过客户端改动；named OBJECT 标量/递归 text 结果已支持，INTERVAL text成员24/24（D-04f3）；命名OBJECT/collection的INTERVAL成员二进制输入/结果、PL OUT/INOUT与客户端构造输入已补齐指定子集（D-04f）；匿名INTERVAL工厂与ExecuteArray DML输入/RETURNING见D-04f1，PL未知精度输出仍拒绝；空格/括号/Unicode 引用类型名已补齐普通读取、多结果与 batch 受控回退（D-04e2），引号/NULL 前缀/名字自身前后空白仅有本地 parser 证据；当前 RAW/DATE/TIMESTAMP text 成员收到服务端重复 RAW payload，Connector/J 同交互也返回相同字符串并且 `getObject` 为 null，按服务端限制跳过；命名 collection 构造的 text 结果 metadata 为 `VARCHAR2`，.NET/Connector-J 均按 String 返回，不需要 complex parser；CLOB/BLOB named OBJECT text 结果在 Java `getObject` 为 null、payload 无可靠成员身份，.NET 预加载描述后 sync/async **2/2** 安全拒绝，按当前服务端 wire 限制跳过；SQL OBJECT 与 PL-only `RECORD` 的当前 cursor 成员形状均无法形成有效对象，Java/.NET 同为服务端限制；其他复杂cursor、未解析RETURNING身份仍拒绝；D-08ac 已补齐 batch named OBJECT、scalar collection、nested collection BLOB/CLOB locator input-only，Oracle 直连 12/12；D-04g已证实named BLOB成员按内容接收locator字节，a4 已在 Oracle 4.4.2.2 `oracle-direct` 以 BLOB/CLOB × OBJECT/collection/nested-collection × sync/async **12/12** 验收 constructor + hidden root LOB 自动绑定，并以显式 Prepare/PrepareAsync 与重复执行 **12/12** 关闭该子集的 statement-cache 缺口；D-04j 对 StoredProcedure 复杂 OBJECT locator InputOutput 做了 loopback 与 Oracle 4.4.2.2 sync/async **2/2** 复核，局部 OBJECT 回写 OUT bind 返回 `900/42000`，按服务端边界不开发；独立标量输出见 D-04k，独立 complex/根 LOB/REF CURSOR 输出见 D-04l，mixed batch routine屏障的同类输入与独立标量/资源输出见 D-04m（36/36），batch input-only见 D-08ac；复杂 cursor 成员及 multi-statement locator 仍不在范围 | ComplexValueCodec.cs；ComplexTypeContext.cs；NamedComplexLobBinding.cs；OracleCommandPlan.cs；OceanBaseCommand.cs | a4/D-04i 指定直连子集已关闭，named collection 内嵌 named OBJECT 的 LOB 形状已有 loopback/实库证据；后续转向仍有独立服务端或参数方向前提的项。StoredProcedure 仍是会话屏障，不承诺跨调用 statement-cache；新版本/租户提供不同 BLOB 成员或复杂 text wire 时仍重开 D-04a2/D-04e；不以属性 NULL 猜测根身份 |
-| G05 | T12 Oracle UROWID | 部分：ROWID209字符串结果保持兼容；UROWID已有显式参数、NULL/type209 wire、DataTypes 和目录映射 | ResultColumn.cs:209、PreparedParameters、RoutineParameterDerivation、Schema.DataTypes | Oracle 4.4.2.2 直连已验证普通/PrepareExecute、OUT/INOUT/ReturnValue、RETURNING、坏值拒绝与恢复；UROWID真实Derive已在FLOAT编号签名验收，NUMBER/VARCHAR2目录边界见A-03；长压、代理、跨平台未验收；client text 输入已通过 CHARTOROWID 接入多语句与限定 1295 fallback，短/长/NULL、坏值/空串拒绝及恢复有直连/受控中继证据（D-05b）；原生 1295 未复现 |
-| G06 | T05 MySQL GEOMETRY | 部分：type255原始byte[]结果可经Binary参数回绑；DataTypes参数支持及空间过程目录映射已补 | ResultColumn.cs:255、PreparedParameters:Binary、RoutineParameterDerivation、Schema.DataTypes | SRID=0直连输入/输出/独立存储与Binary fallback已验证；目标SRS目录仅0，非零SRID待服务端前提；无GIS领域API，进度见D-06 |
-| G07 | T19/T20 两模式字符集 | 部分：GB2312、EUCKR 已按 OceanBase 4.4.2 的 collation 做严格客户端/结果映射；CP850/HP8/MACROMAN客户端/结果及SWE7仅结果的精确映射已补齐（D-07e）；CP932严格完整映射及MySQL客户端/结果、Oracle national指定子集已补齐（D-07f）；UJIS完整三字节映射及指定存储/结果成功子集已补齐（D-07g）；EUCJPMS精确变体及同范围指定成功子集已补齐（D-07h）；普通Oracle初始化限制和其他部署仍开放 | ClientCharacterSet.cs；ResultCharacterSet.Resolve；EucEncoding.cs；ClientCharacterSetTests/CharacterSetTests | MySQL GB2312/EUCKR客户端/结果、Oracle GB2312客户端及两族national指定直连子集见D-07；当前目标普通 Oracle EUCKR 初始化 900 已按 Java 同交互归为服务端限制；D-07e新增双模式客户端12、Oracle national6、MySQL结果4，共22项直连通过；D-07f新增CP932直连6通过、普通Oracle初始化2失败且Java匹配900/42000，不把声明skip算成功；D-07g新增UJIS同范围6成功、普通Oracle2失败且Java匹配；D-07h新增EUCJPMS同范围6成功、普通Oracle2失败且Java匹配；SWE7不作为客户端编码；SJIS/Big5历史失败、其他版本与部署仍保留 |
-| G08 | T17/T18 专用新类型 | XMLType 已补齐当前 4.4.2.2 直连的 text+binary String wire 子集；`SYS.XMLTYPE` PL OUT/INOUT 与 Connector/J 同租户同形状均返回服务端 `600/0A000`、`600/42000`，按服务端限制跳过；SDO 已有显式 Prepare 整列读取与 generic OBJECT/ARRAY 输入子集，但没有专用 codec；ANYDATA 在当前 4.4.2.2 目标租户因 `SYS.ANYDATA` 缺失且 Java 同交互失败，标记服务端限制；MySQL VECTOR/ARRAY 复用 String，一至六层 INT ARRAY 的 NULL/空叶数组/不等长子数组已验收（D-12c1），二维顶层 [] 的参数/字面量均被 7602/22000 拒绝，其余六种文档元素的单层String路径已验收（D-12c2，FLOAT文本舍入/VARCHAR非JSON边界保留），其他嵌套/版本仍开放；RoaringBitmap 复用 Binary 读取及 SQL 函数写入，均无专用 codec 承诺 | OceanBaseDbType.cs、ResultColumn/PreparedParameters、OracleCommandPlan、Schema.DataTypes、ComplexValueCodec、CommandExchange.ComplexColumns、RoaringBitmapTests.cs、XmlProbeTests.cs | 当前版本通用路径已验收；XMLTYPE type 160 ownerless text/binary 结果按严格 UTF-8 映射为 String，`SYS.XMLTYPE` metadata 有单元边界，`DbType.Xml` 按 type 253 字符串参数写入，NULL、metadata、同步/异步 DML 与 PL 函数结果真实 Oracle 直连 **text 2/2、binary 3/3**；PL OUT/INOUT 负向回归 sync/async **4/4**，并有 Java 2.4.14 同错误证据；带 owner 的复杂 XML payload、坏值/最大值和跨版本部署仍未确认。RoaringBitmap 真实 MySQL 直连 sync/async **2/2** 覆盖 BLOB/`byte[]`、空/NULL/64 位、SQL 函数回绑和坏 raw；直接 `byte[]` prepared binding 的 `1235/0A000` 是服务端限制。ANYDATA 的 Java/.NET 同失败证据已记录；不把通用 SDO 子集或服务端转换等同专用类型 codec |
-| G09 | Q20 multi-send | 部分：.NET 已有默认关闭的 prepared batch multi-send；可缓存 input-only DML/SELECT、基本 scalar 排空、MySQL BLOB/TEXT binary result materialize、时间区/国民字符集上下文、不可流水化SQL由普通command屏障隔离（D-08ab）、64 MiB 分组边界、MySQL Stream long-data 发送和 server prepare `1295/HY000` 的 client-prepared text fallback 有 loopback 证据；Oracle Stream 在该选项下安全回退到逐命令 piece-data；named OBJECT/collection 普通输入及 named complex binary 结果已有实现；batch named OBJECT、scalar collection、nested collection BLOB/CLOB locator 输入已通过 loopback/Oracle 直连 sync/async 12/12（D-08ac）；根 BLOB/CLOB locator 普通输入和保留调用方连接的结果复用已有编码/decoder；命名复杂 LOB 内容输入已复用既有 writer，保留调用方连接的命名复杂 LOB binary 结果已复用既有 decoder；Oracle DML RETURNING 标量 OUT/INOUT、命名复杂值及保留调用方连接的 LOB 输出已复用输出计划并按每条最终成功响应发布；匿名集合 binary 结果已复用普通 reader decoder（D-08s，仅 loopback）；anonymous 输入与 cursor 成员发送前拒绝；4.4.2.2 MySQL/Oracle 直连临时 profile 的 DML/scalar × sync/async **8/8 通过**，真实 MySQL Stream 存储/`GetStream` 回读 **2/2 通过**，Oracle Stream piece-data fallback 存储/LOB 读回 **2/2 通过**，已知响应错误的 prefix/error/suffix 边界 **4/4 通过**，Oracle PrepareExecute + locator Stream 安全回退 **2/2 通过**，1295 text fallback sync/async loopback **2/2 通过**，MySQL BLOB/TEXT result loopback sync/async **4/4 通过**，第一响应成功后第二响应挂起的 caller token/batch cancel/timeout **3/3 通过**（本地归属）；双模式直连扣住第二条真实 DML OK 的取消/独立查账 **10/10 通过**（D-08f1），确认第一组两条已提交、下一组未发送，限定 plaintext/无压缩/OB20；Connector/J 2.4.14 的 Oracle piece-data 路径也是每片等待确认，未提供 piece-data 流水化证据，因此 .NET 不猜测增加该协议 | Java DefaultOptions:470–490、AbstractQueryProtocol:1287–1326；`UseBatchMultiSend`、`OceanBaseBatch.MultiSend`、`CommandExchange.BatchLongData`、`CommandExchange.PieceData`、`ClientPreparedSql` | 普通 prepared DML 短时收益对照已有双模式直连 sync/async **4/4**（D-08ad，每配置5次）；流水化仍缺其他负载收益、代理/OB20、Oracle 自动提交远程 DML LOB 输出（D-08z）、complex text LOB 结果、PL 同组流水化输出、cursor/array；named OBJECT/collection 普通输入已通过精确 wire/错误边界单测及 Oracle 直连 sync/async 独立存储 **4/4**（D-08i）；普通/嵌套 OBJECT binary 结果与顶层 national/LTZ 混合读取、scalar/nonquery 排空已通过 Oracle 直连 **4/4**（D-08j），collection 结果仅有 loopback 证据；根 BLOB/CLOB locator 输入与保留调用方连接的 reader/scalar/nonquery 结果已分别通过 Oracle 直连 **4/4**（D-08k/l）；命名复杂 LOB 内容输入已通过 Oracle 直连 **8/8**（D-08m）；命名复杂 LOB binary 结果的平面/嵌套 OBJECT 已通过 Oracle 直连 **8/8**，collection 仅有 loopback 证据（D-08n）；Oracle DML RETURNING 标量 OUT/INOUT 已通过 Oracle 直连 **8/8**（D-08o）；命名复杂值及根/OBJECT LOB RETURNING 输出通过 Oracle 直连 sync 隐式/async 显式 Prepare **10/10**，collection 输出仅 loopback（D-08p）；XMLTYPE String 结果及 bound Prepare 的目录身份解析已支持（D-08q）；命名 OBJECT 标量/嵌套 text 结果已接入受控 1295 fallback（D-08r）；命名 OBJECT/collection 普通输入构造器也已接入受控 fallback（D-01b）；普通DML匿名输入/声明输出、cursor 成员、复杂 text LOB 结果仍未纳入流水化；自动提交远程 DML LOB 读取受目标版本事务边界限制（D-08z）；关闭连接 reader 的读取窗口已补齐，根远程 BLOB/CLOB 直连 **8/8**（D-08u）；未知结果的更大错误排序矩阵仍待验收；data source NonQuery 已支持普通 LOB 行无句柄排空，根远程 BLOB/CLOB 直连 **4/4**、匿名 binary LOB 仅 loopback（D-08v）；SequentialAccess reader 已复用流式字段与失败清理，双模式普通字段直连 **8/8**、Oracle LOB 窗口 **16/16**（含 Default 对照8）、XML **4/4**（含 Default 对照2），命名/匿名复杂顺序路径仅 loopback（D-08w）；整批 SingleRow/SingleResult 已保留 opt-in multi-send 与隐藏结果计数/RETURNING，双模式限读及 Oracle 隐藏输出直连 **10/10**，LOB 限读窗口/隐藏句柄排空仅 loopback（D-08x）；不和 MariaDB bulk 混淆；混合StoredProcedure/Oracle PL及SET/DDL等不可缓存SQL已支持执行屏障，安全段仍流水化（D-08ab），后段预检延迟到完整屏障响应结束；双模式存储/OUT及Oracle匿名集合OUT/时区变更直连 **10/10**（D-08y），不代表PL同组流水化；自有连接 Scalar 的根远程 LOB、只读 PL INOUT 和 inline RETURNING OUT 已支持，由 batch 保留原连接，释放全部句柄后方可重执行；直连16成功路径及8事务边界负向通过（D-08z），匿名复杂 Scalar 仅 loopback；mixed batch routine 屏障已支持显式根 REF CURSOR OUT/ReturnValue，调用方游标独立于batch寿命，自有连接保留至资源释放，全部响应排空前禁止FETCH；Oracle直连sync/async×调用方/自有连接 **4/4**，现代DLL消费 **6/6**（D-08aa）；不代表PL同组或SELECT/DML RETURNING cursor流水化 |
-| G10 | C10/C11/Q17 池/reset/cache | 欠验收：MySQL/Oracle 4.4.2.2 直连均完成 16 并发、10000 次借还；Oracle reader/LOB/cursor/XA 旧租约隔离 **52/52**；长期交错和资源稳定性仍未证实 | PhysicalSessionPool、PhysicalSession.PreparedStatements、SessionStateSql、PoolStressTests.cs | 继续完成 60 分钟交错、清池和句柄/线程/内存稳定性；状态不可证明时销毁 |
-| G11 | X02/X03/X04 事务与故障 | 欠验收：MySQL/Oracle 直连 XA 生命周期、recover 和池丢弃恢复 **28/28**，Oracle 响应丢失/relay 切断 **16/16** 通过；XA验收工具的prepare后决定落盘前/后的worker进程终止与恢复已通过双模式每模式 **6/6**（A-02b）；MySQL直连PREPARE整包成功回执丢失后独立Recover/rollback及无重放 **2/2**（A-02c），限sync/async、plaintext/无压缩/OB20；显式XA/PSPE/unknown的其他故障点仍未全覆盖 | AmbientEnlistment、Connection.Xa*、CommandExchange.Io | in-doubt/管理器与节点/代理崩溃、取消顺序、分支恢复/无重放及独立查账 |
-| G12 | C05–C09/P02–P04/C12–C14 | 服务端受限，暂不开发与修复；现有路径保留 | TLS/Authentication/Discovery/压缩/OB20已有路径 | 提供真实 TLS/认证/ODP/压缩/OB20/trace/发现 profile 后再按验收标准开启；当前限制不得删除 |
-| G13 | M01/Q07 元数据与目录 | 受限/欠验收：Oracle 直连基础目录、过程签名和未约束 NUMBER 回归 **18/18** 通过；package NUMBER/DATE overload 按 `OVERLOAD` 派生并执行 sync/async **4/4** 通过；引用 package 标识符派生 sync/async **2/2** 通过；未引用 BMP Unicode 字母过程名的执行与派生共用校验，中文独立过程/package 直连 sync/async **4/4**（A-03f）；中文 IN/OUT/INOUT 参数原名派生并执行及普通 DML/脚本独立读回，新增直连 sync/async **6/6**（A-03g）；带空格的引用 IN/OUT/INOUT 形参已可原名派生并按位置调用，普通过程/package/函数直连 sync/async 新增 **6/6**（A-03h）；双模式函数的合成返回名已避让真实形参，exact/后缀冲突直连 sync/async 新增 **8/8**（A-03i）；仅大小写不同形参的客户端精确身份有本地证据，当前实库创建/调用失败不计为支持；普通 package-local `PL/SQL RECORD` 目录可读且公开绑定边界 sync/async **2/2** 仍是客户端能力缺口；独立探针去掉 `DATA_LEVEL=0` 后 `ALL_ARGUMENTS` 仍只有顶层行，`ALL_PLSQL_TYPES`/`ALL_PLSQL_TYPE_ATTRS` 没有字段布局；另有 `RECORD` cursor 成员使 package `INVALID` 的回归 **2/2**，Java/.NET 同为服务端限制；A-03b 的 `CHAR_LENGTH` 缺失已确认是当前目标服务端目录限制，Java 同样收到 `904/42S22` | Connection.Schema.*、RoutineParameterDerivation.cs、ResultColumn.cs、PackageLocalRecordTests.cs | 其余双模式最小权限、更多大小写/引用标识符、视图/同义词权限错误和实际列身份；普通 package-local RECORD 需可验证字段描述、输入/输出布局和成功目标服务端交互；Java 对照按需单列；不以 `DATA_LENGTH`/`DATA_PRECISION` 伪造字符长度 |
-| G14 | R01 发布/平台 | 欠验收：当前 Windows 两包五资产 hash/依赖/资产选择通过；net8/9/10 独立 runtime、两个 netstandard 的 net10 host 及 netstandard2.0 的 net48 host 共 48 项双模式包实库场景通过 | csproj、Verify-Packages.ps1、ConsumerTests | A-04 记录各 runtime 和限定场景；完整 API/ORM、非 Windows 及其他部署仍待验收，netstandard host 加载不算全平台 |
-| G15 | C08 非native认证分支 | 服务端受限，暂不开发与修复；当前仅 native 账号直连 | AuthenticationConversation、GssapiAuthentication | 提供真实插件/KDC 端点、服务端文档和正负认证后再列部署支持；Java SPI 不能替代 |
+## 固定缺口、处理动作与关闭条件（G01～G15）
+
+“指定范围已完成”只覆盖行内列出的现有能力；同一行的候选、阻塞和欠验收仍单列，不能相互抵消。
+
+| ID / 索引 | 现状与确切剩余项 | 具体处理动作 | 有限关闭条件 |
+| --- | --- | --- | --- |
+| G01 / D-01、D-05b、A-05 | Oracle 普通输入及命名复杂输入的受控 fallback 已实现；**欠验收：租户原生 1295**，不是继续补所有输出组合 | 提供能原生返回 1295 的目标 SQL/profile；复用现有参数和存储回读用例，只在出现真实客户端缺陷时修码 | sync/async 实际触发原生拒绝后回退；值/NULL、精度/编码及独立存储一致，失败无误重放；没有该 profile 就保留未验收 |
+| G02 / D-02 | **指定子集已完成**：双模式已列明输入/多结果、MySQL 标量脚本 OUT/INOUT/ReturnValue；**待范围决策**：Oracle 任意脚本输出、资源复杂输出及跨语句 locator；脚本 Prepare/cursor 在当前服务端被拒绝 | 保留现有脚本拒绝；候选先按下表决定契约。服务端失败只在版本/可接受 SQL 改变后复核，不以 DbBatch 或单 PL 块冒充脚本支持 | 现有子集按 D-02a1/a2/c1/c2/d1～d3 的 P4 证据结账；未纳入组合不追加成必过项，也不宣称已支持 |
+| G03 / D-03 | **指定子集已完成**：REF CURSOR 输出、前向 offset 及父默认值；**服务端限制**：SELECT CURSOR 列当前在 execute/FETCH 失败 | 保留现有列形状失败和发送前保护；只有出现目标 OceanBase 成功列 wire 才重开 child FETCH/释放验证；JDBC 滚动/可更新 ResultSet 不纳入 | D-03b1/b2/c 已验收范围保持完成；列形状须新实库成功证据，不能用 REF CURSOR OUT 通过替代 |
+| G04 / D-04、D-04f2 | named OBJECT/collection、LOB locator Input 与独立输出及 INTERVAL 指定子集已有 P4；**欠验收且隔离**：D-04f2；根 NULL 身份、特定 BLOB DML/text/cursor 成员及 locator 自身 INOUT 有服务端失败；其他组合尚未纳入 | D-04f2 先查事故日志并在隔离环境定位，再执行原定根 NULL、空集合、错误后旧输出、事务内写入/提交后独立查账；其余已知失败不循环探测 | 原定用例 sync/async、隐式/显式 Prepare 通过且主体/清理错误均可见、对象清理成功后才能关闭 D-04f2；事故前提未齐就保持隔离，P4 子集不重复开发 |
+| G05 / D-05、D-05b | **指定范围已完成**：UROWID 普通/PrepareExecute、NULL、OUT/INOUT/ReturnValue/RETURNING 及已列明 text 输入 | 无新增功能开发；原生 fallback 只随 G01 验收，跨部署随 G12/G14，不能重复挂任务 | 保留现有 P4 及受控中继证据边界；没有新失败不重开该功能 |
+| G06 / D-06 | **指定范围已完成**：SRID=0 GEOMETRY Binary/目录；**服务端前提缺失**：非零 SRS | 提供实际含非零 SRS 且可往返的 OceanBase profile，再用原始 SRID+WKB 参数/结果/NULL/坏值独立读回；不在测试中改服务端 SRS | 指定非零 SRS 的 sync/async 独立存储结果一致或记录明确服务端拒绝；专用 GIS API 不在当前必补范围 |
+| G07 / D-07、S-05 | **清单内映射指定子集已完成**；普通 Oracle 部分字符集初始化及其他部署有已记录失败 | 仅在服务端初始化/枚举改变后复核对应失败名称；严格 codec 不用相近 code page 替代，不自动扩大字符集名单 | D-07～h 的成功/失败结论分别保留；当前没有一个可直接新增的已确认名称，其他部署验收按实际 profile 单列 |
+| G08 / D-09～D-12 | **指定通用路径已完成**：XML/String、SDO/generic OBJECT、VECTOR/ARRAY/String、RoaringBitmap/Binary+SQL；ANYDATA/SPARSEVECTOR 及部分形状当前服务端失败；完整 XML/空间专用 codec 未纳入 | 缺包/版本的只等待对应前提；额外 codec 必须先说明现有通用路径不能满足的 .NET 用例和真实 wire，不凭类型名追加实现 | 当前已验收通用子集按 P4 结账；阻塞保持可见；专用 codec 和其他嵌套未决不算已完成或确定代码欠账 |
+| G09 / D-08 | **指定 opt-in multi-send 子集已完成**；**欠实库证据**：匿名和部分 collection 结果；**待范围决策**：PL 同组、cursor/array binding、更多复杂 text LOB 组合 | 先取得真实匿名/collection 结果 metadata 来源，再复用既有 decoder 验证正常/NULL/空、顺序/错误、LOB 释放和独立结果；没有来源不继续造 fixture。额外组合先走范围决策 | 只对已实现且有真实形状的结果补一次 sync/async 验收；现有 DML/LOB/屏障等 P4 不重跑扩组；未决定的流水化组合不能阻止已验收子集结账 |
+| G10 / A-01 | **发布欠验收**：16 并发/10000 借还及资源隔离已有；一小时稳定性未通过，用户已延期 | 到发布验收时按现有 PoolSoak 固定配置执行每模式 60 分钟；保留原始失败、资源曲线与清理结果，先定位再决定是否重跑 | 池上限、旧资源隔离和停止后资源/自有对象清理均满足 acceptance-criteria；短跑和最后 SELECT 成功不替代一小时结果 |
+| G11 / A-02 | XA 生命周期、已列明响应丢失、决定落盘前/后 worker 终止及 MySQL PREPARE 丢失已验收；**欠证据**：其余真实取消/超时顺序、节点/ODP 失联与恢复 | 使用受控且有权限的故障 profile，先固定断点/预期 unknown/Recover/独立查账用例清单，再执行；只处理自有 XID，不再自动枚举组合。通用持久协调器仍排除 | 固定清单逐例证明结果分类、无重放、旧资源拒绝、独立恢复与清理；缺节点/ODP 环境保持欠验收，不能称已完成全部故障覆盖 |
+| G12 / S-01～S-03 | **部署欠验收/阻塞**：TLS/mTLS、OB20/trace/标准压缩、真实 ODP/发现/多节点 | 分别提供证书正负端点、实际协商/双向帧及 trace/collector、真实代理/发现 profile；按开发清单 S 表执行，禁用降级和单上游 relay 替代 | 只关闭已取得端点的那一格部署；压缩 OB20、透明迁移等原排除项不改成目标，也不宣称未配置即服务端不支持 |
+| G13 / A-03、A-03d | **代码能力缺口/待协议**：package-local RECORD 派生与绑定；**欠验收**：最小权限及目录权限边界；CHAR_LENGTH 缺列等为已记录服务端限制 | RECORD 先取得字段描述及成功输入/输出 wire，再接入现有 descriptor/绑定/原子参数发布；最小权限用专用账号核对允许/拒绝目录，禁止伪造 owner、字段或字符长度 | RECORD 的真实参数派生/绑定、NULL/错误不发布及 sync/async 成功后才算支持；取得前明确拒绝不算实现完成。权限用例结果与账号实际授权一致，不能由管理员通过替代 |
+| G14 / A-04 | Windows 包/五资产及既有 runtime 子集已验收；**欠发布证据**：拟声明支持的非 Windows OS/runtime、完整 API/ORM | 先固定本次发布实际声明的 OS/runtime 和 ORM 名单；在对应环境复用包消费者、实际资产选择与实库场景，记录不支持/未测格子，不自动声称全平台 | 固定发布名单的每一格都有包/运行时/实库报告和清理记录；netstandard host 不算独立 runtime；名单未固定或证据未齐就不作全平台发布声明 |
+| G15 / S-04 | **待服务端支持证据和端点**：非 native 插件/KDC/凭据轮换；Java SPI 存在不足以证明目标 OceanBase 提供该认证 | 先确定目标 OceanBase 版本实际提供的插件/机制并配置正负认证、轮换端点，再测试现有认证路径；没有依据不新增插件 API | 实际支持的机制完成正负认证/轮换/脱敏及对应平台验证；未确认机制保持待证据，不算确定功能缺口或已排除 |
+
+A-05 的 zero-date 需要专用允许零日期的 SQL_MODE profile；不改租户基线。长 NUL 需要失败时段的执行/网络诊断，
+不反复重放长 SQL。两者仍是边界验收欠账，分别保留 G01/G11 的故障及原始 A-05 记录，不能报成两个新功能。
+
+<a id="scope-decisions"></a>
+
+## 尚未纳入必补范围的组合：先决策，后开发
+
+| 现有索引 | 未决定的能力 | 纳入前必须拿出的证据/方案 | 当前动作 |
+| --- | --- | --- | --- |
+| D-02b/c | 脚本级 Prepare/cursor、Oracle 任意脚本 OUT/INOUT/复杂资源输出 | 目标 OceanBase 能接受的脚本/协议；明确输出位置、完整成功才发布、失败前缀及取消后的资源归属；单 PL 块/多条 DbBatch 不替代 | 保留拒绝和当前失败，未纳入；拿到证据并经用户确认才写有限实现项 |
+| D-04 的其他方向 | multi-statement locator、复杂 locator 自身 INOUT、未证实 cursor/匿名成员形状 | 成功 wire、类型身份/NULL 表示、LOB/cursor 所有权及释放；当前 900/932 等失败形状需新服务端依据 | 保留已验收 Input/独立输出子集，不自动补其所有排列 |
+| D-08 其他组合 | 普通匿名输入/声明输出、PL 同组流水化、cursor/array binding、复杂 text LOB | 单条普通命令成功协议、组响应顺序/错误归属、资源生命周期及可复现 .NET 用例；ExecuteArray 不代替普通输入 | 现有 guard/屏障保留；不得把 Java 可选优化或 API 的存在当成 OceanBase 必补契约 |
+| D-09/D-10/D-12 额外范围 | 完整 XML codec、专用 SDO WKB/WKT/SRID API、稀疏向量及更多数组嵌套 | 明确现有 String/Binary/OBJECT 路径不能解决的使用场景、目标版本实际支持和参数/结果 wire | 通用路径按现有证据支持；候选不计入必补或完成率 |
+
+上述“未纳入”保留范围决策欠账，并非将原问题宣布解决；用户确认纳入后只能修改对应现有行，
+同时固定用例及关闭条件，不能由实现 agent 自行派生一串新的常驻子任务。
 
 没有发现产品源码TODO/FIXME/NotImplementedException式空实现。已确认的无用途代码是A01演示类型、
 3个零引用方法和2个过时UTF-8快捷属性，删除范围与外部API影响见[清理决策](obconnector-dotnet-scope-audit.md)。
