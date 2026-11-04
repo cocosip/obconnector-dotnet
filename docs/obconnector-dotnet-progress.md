@@ -15,15 +15,19 @@ D-04m：named OBJECT/scalar collection/nested collection BLOB/CLOB locator Input
 
 D-04f1：匿名 INTERVAL 工厂已接入现有204/205布局；`ExecuteArray` 的 INSERT/RETURNING、NULL、负值/纳秒和重复 Prepare 执行已通过当前 Oracle 4.4.2.2 直连8项正向验证。过程输出的未知精度仍安全拒绝，4项负向回归单列；普通0x17匿名绑定、PL集合输出和multi-send不由此关闭。
 
-D-04f2：匿名INTERVAL结果描述已接入204/205，沿用嵌入精度和显式输出身份校验；本地及消费者完成，首轮PL本地显式精度9集合OUT直连4/4。扩展根NULL/错误后发布/独立事务查账的实库运行因端点握手断开而未完成，清理状态待确认，当前保持P3，详见路线图；未知精度255仍拒绝。
+D-04f2：匿名INTERVAL结果描述已接入204/205，沿用嵌入精度和显式输出身份校验；本地及消费者完成，首轮PL本地显式精度9集合OUT直连4/4。扩展根NULL/错误后发布/独立事务查账的实库未完成，事故用例保持隔离且不计通过；恢复后的两模式基础检查及已知遗留表清理已完成，当前保持P3，详见路线图；未知精度255仍拒绝。
 
 **当前是实验性驱动，不承诺生产级全功能。** 下表“有实现/部分”是源码状态，
 “直连子集”引用历史4.4.2.2记录，不是本次重跑或全功能验收。任何部署支持均须绑定
 `服务端版本+租户模式+直连/ODP+协议+TLS/认证+客户端OS/runtime+选项`，不能只有“支持Oracle/MySQL”。
 
 范围：**核心**为必须正确的ADO.NET能力；**可选**为显式选项/特定模式扩展；
-**候选**为有服务端或Java依据但未纳入当前承诺的扩展；**排除**不构成待开发项。
+**候选**为有 .NET 使用场景及数据库/协议或 ADO.NET 契约依据、但未纳入当前承诺的扩展；**排除**不构成待开发项。
 “—”表示该模式不适用该特定接口，不表示该服务端没有类似SQL能力。
+
+JDBC 专属接口、JVM 集成和行为兼容配置不进入本矩阵或缺失统计，详见
+[范围决策表](obconnector-dotnet-scope-audit.md#jdbc-专属接口不进入-net-矩阵)。
+Java 类/方法仅是实现参考；ADO.NET 对应行为按自身契约判断，不能按名称逐项移植。
 
 ## 连接、会话、安全与部署
 
@@ -62,8 +66,8 @@ D-04f2：匿名INTERVAL结果描述已接入204/205，沿用嵌入精度和显�
 | Q07 参数元数据派生 | 可选ADO.NET适配 | 可见唯一签名 | 可见唯一签名；未引用 BMP Unicode 字母过程名的执行与派生共用校验，中文独立过程/package 直连 sync/async **4/4**（A-03f）；中文 IN/OUT/INOUT 参数原名派生并执行及普通 DML/脚本独立读回，新增直连 sync/async **6/6**（A-03g）；带空格的引用 IN/OUT/INOUT 形参已可原名派生并按位置调用，普通过程/package/函数直连 sync/async 新增 **6/6**（A-03h）；仅大小写不同形参的客户端精确身份有本地证据，当前实库创建/调用失败不计为支持；普通 package-local `PL/SQL RECORD` 目录可见但公开绑定仍无协议契约；含 `SYS_REFCURSOR` 成员的 PL-only RECORD 在当前目标使 package INVALID，Java/.NET 同为服务端限制 | OceanBaseConnection.Parameters、RoutineParameterDerivation | 双模式函数的合成返回名已避让真实形参，exact/后缀冲突直连 sync/async 新增 **8/8**（A-03i）；不执行目标；歧义/包内PL类型等拒绝；普通 RECORD 需字段描述和成功 wire 后再实现；cursor 成员需新服务端形状后重开 |
 | Q08 Reader/NextResult/typed getters | 核心 | 有实现 | 有实现 | OceanBaseDataReader、QueryResult、ResultColumn | metadata、NULL、精度与类型身份须一致 |
 | Q09 SequentialAccess/流式读取 | 核心资源 | 有实现 | 有实现，含LOB资源 | SequentialRow、LobReadStream、LobTextReader | 半读/取消/关闭/池租约子集验收；已支持 multi-send SequentialAccess（D-08w），复杂字段沿用有界物化；不等于全部资源交错 |
-| Q10 cursor fetch/page/offset | 可选 | prepared cursor分页 | prepared cursor分页，offset有条件 | QueryResult.Cursor、OracleCursorOwner | 普通cursor与PL输出不同；REF CURSOR reader已支持显式前向offset FETCH（D-03b1）；父 command 的已声明 REF CURSOR 输出现可保存 offset 默认值，reader 显式 bool 可覆盖，页大小独立（D-03b2）；未声明 REF CURSOR 的输出计划与 array binding 仍拒绝 |
-| Q11 REF CURSOR结果/OUT | 可选Oracle | — | 四字节cursor/OUT实现 | OceanBaseRefCursor、QueryResult.OraclePrepareExecute | J4；当前目标版本 `SELECT CURSOR` 列形状为服务端限制且 Java 同样失败，Integration profile 通过 `capabilities.serverLimitations` 在发现期跳过该已确认形状；不能整体称支持；PL OUT/REF CURSOR 仍按独立契约验收 |
+| Q10 服务端前向cursor分页/offset FETCH | 可选数据库/协议能力 | prepared cursor分页 | prepared cursor分页，offset有条件 | QueryResult.Cursor、OracleCursorOwner | 已有分批读取，不是 JDBC 滚动/可更新 ResultSet；普通cursor与PL输出不同；REF CURSOR reader已支持显式前向offset FETCH（D-03b1）；父 command 的已声明 REF CURSOR 输出现可保存 offset 默认值，reader 显式 bool 可覆盖，页大小独立（D-03b2）；未声明 REF CURSOR 的输出计划与 array binding 仍拒绝 |
+| Q11 Oracle REF CURSOR输出/游标列 | 可选数据库/协议能力 | — | 四字节cursor/OUT实现 | OceanBaseRefCursor、QueryResult.OraclePrepareExecute | J4；REF CURSOR 输出已有独立 .NET 契约；当前目标版本 `SELECT CURSOR` 列形状为服务端限制且 Java 同样失败，Integration profile 通过 `capabilities.serverLimitations` 在发现期跳过该已确认形状；不能整体称支持，也不以此称 .NET 缺少 cursor |
 | Q12 REF CURSOR IN/INOUT | 排除当前范围 | — | 发送前拒绝 | OracleCommandPlan/参数校验 | 无参考writer依据；不影响普通标量INOUT |
 | Q13 CommandBehavior | ADO.NET契约 | SchemaOnly/KeyInfo/SingleRow/SingleResult/CloseConnection子集 | 同左 | OceanBaseCommand.KeyInfo、KeyInfoQuery、OceanBaseBatchReader | SchemaOnly不执行、不上传；KeyInfo仅证明的单表形状扩隐藏键；整批 SingleRow/SingleResult 已保留 opt-in multi-send，可组合 SequentialAccess/CloseConnection/data source（D-08x） |
 | Q14 DbBatch顺序执行/结果 | 可选ADO.NET适配 | 有实现 | 有实现 | OceanBaseBatch、OceanBaseBatchReader | 仅net8/9/10；失败前缀/未执行后缀清晰，不承诺原子批次 |

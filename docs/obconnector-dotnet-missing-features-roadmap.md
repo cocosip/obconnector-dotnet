@@ -12,6 +12,11 @@
 都直接补充在本文，不再为同一批缺失功能拆分新的任务文档。能力矩阵、缺失矩阵、兼容性记录和
 验收标准只作为本文的依据，不承担开发进度记录。
 
+范围准入：只跟踪已明确 .NET 使用语义的数据库/协议能力及 ADO.NET 行为；Java/JDBC 专属接口、
+JVM 集成及 JDBC 兼容配置不进入缺失清单、候选项或完成率，见
+[范围决策表](obconnector-dotnet-scope-audit.md#jdbc-专属接口不进入-net-矩阵)。
+Java 支持某个组合本身不构成 .NET 必补理由，仍须分别确认调用契约与协议前提。
+
 ## 状态定义
 
 | 状态 | 含义 |
@@ -237,6 +242,26 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 
 每完成一个代码模块，先测试、独立代码走查，处理问题后提交；在本节记录修改、证据、提交和
 未关闭边界，再更新上方任务进度。全部记录留在本文。
+
+### 恢复后的基础复验与 JDBC 范围复核（2026-11-04）
+
+基线 `4c5284c`。用户通知数据库恢复并要求继续后，双模式连接重开、text/prepared CRUD、
+事务提交/回滚/Dispose 及独立 observer 查账 sync/async **12/12**，0 failure/0 skip，约4秒；
+自有测试对象清理完成。Integration Release 构建0 warning/0 error。报告为忽略目录
+`tests/OceanBaseConnector.IntegrationTests/TestResults/recovery-baseline-20261104.trx`。
+只读 `SHOW CHARACTER SET` 返回24项，除 binary 外已有对应结果codec，客户端限制沿用原契约；
+没有据此增加新字符集名称，也不将基础复验解释为完整恢复或长期稳定性。
+D-04f2 仍按事故隔离，不执行其用例或 PL 匿名 INTERVAL 集合探针。
+
+用户要求剔除 JDBC 专属功能后，复核功能/缺失矩阵、范围依据、开发清单与验收标准：现有编号项
+没有将 Java 专属接口单列为缺实现；但候选项准入措辞、RECORD 的 Java 成功交互前提及报告一律
+要求 Java 版本的规则会误导后续开发。本轮补充明确排除表、修正这些规则并澄清 cursor 分类；
+保留数据库/协议与 ADO.NET 能力，不增加或删除产品 API，不把范围排除计为完成。
+独立范围走查确认 Java 对照应为可选参考，不能决定 .NET 能否基于独立服务端证据立项。
+最终五文档 diff 经独立只读走查无遗留问题，并独立核对上述12项TRX；42条本地文档链接及
+新增锚点检查通过，功能矩阵74个编号和缺失矩阵30个编号顺序均未变，`git diff --check`通过。
+命名 OBJECT 的 INTERVAL text 结果仍是待 wire 调查项；已有 RAW/DATE/TIMESTAMP/LOB text
+失败不能推断其也失败。本轮未执行该调查，不宣称所有剩余功能均无可推进事项。
 
 ### 开发优先级调整与 A-01 延后（2026-11-02）
 
@@ -687,6 +712,11 @@ Oracle NUMBER 的失败已修正；没有修改产品 NUMBER 返回类型或删�
 集合、嵌套和复杂 text 结果支持前，各自补独立证据，继续在本文记录，不新增并行进度文档。
 
 ### D-03：输出与 cursor 的剩余形状核对（2026-10-30）
+
+这里的 cursor 指数据库/协议能力：Q10 服务端前向分批读取与 Q11 Oracle REF CURSOR 输出已有
+.NET API；`SELECT CURSOR(...)` 列另按当前目标服务端限制保留。JDBC 的 ResultSet 滚动、
+敏感性、可更新接口及常量不属于 .NET 缺口；D-08 的 cursor 同组流水化是另需契约的可选扩展，
+不能据此把现有驱动描述为“缺少 cursor”。
 
 基线 `985cad4`，初始工作区干净。本轮未修改产品源码；核对普通 cursor 列的完整读取，
 为已有 PL 输出/REF CURSOR 生命周期补齐实库验证，并纠正架构文档中“尚未连接服务端”的
@@ -1889,7 +1919,8 @@ Connector/J 2.4.14 对同一目录形状可以返回两个 `PL/SQL RECORD` 参�
 （`600/0A000`）。这证明当前证据是两个 SDK 都没有可移植的 package-local RECORD wire/API
 绑定路径，不能把失败归为 OceanBase 服务端拒绝，也不能仅凭目录行新增一个 .NET provider type。
 A-03d 保持为**客户端能力缺口/待协议证据**；只有取得记录字段描述、输入/输出 payload
-布局和 Java 成功交互后，才重新开启实现与 sync/async、NULL、嵌套字段验收。普通
+布局和成功的目标服务端交互后，才重新开启实现与 sync/async、NULL、嵌套字段验收；
+Java 对照若采用则单列结果，不作为必需前提。普通
 `GetSchema` 仍返回该真实目录值，不伪造类型 owner 或 descriptor。
 
 新增 `Oracle/PackageLocalRecordTests.cs` 作为可复现边界回归：同一 User Secrets profile
@@ -3074,7 +3105,7 @@ NCHAR/NVARCHAR2、浮点和 UROWID 等多种内部类型；访问类型不匹配
 传输；这属于服务端转换，不关闭 ANYDATA 客户端能力缺口。
 
 调查结论：D-11 在当前目标版本标记为**服务端限制，跳过客户端开发**。只有后续目标版本/租户
-能成功调用 `SYS.ANYDATA.CONVERT*`，并提供 Java/.NET 可观察的参数或返回 wire 时，才重新定义
+能成功调用 `SYS.ANYDATA.CONVERT*`，并提供可验证的参数或返回 wire 时，才重新定义
 有限 PL 参数/返回值集合及 NULL、类型名、未知内部类型、LOB、OBJECT/COLLECTION 和失败后的
 输出发布规则；不把 ANYDATA 当作普通列或任意对象兜底。
 

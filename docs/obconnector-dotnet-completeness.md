@@ -13,11 +13,16 @@ D-04m：named OBJECT/scalar collection/nested collection BLOB/CLOB locator Input
 
 D-04f1：匿名 INTERVAL 工厂已接入现有204/205布局；`ExecuteArray` 的 INSERT/RETURNING、NULL、负值/纳秒和重复 Prepare 执行已通过当前 Oracle 4.4.2.2 直连8项正向验证。过程输出的未知精度仍安全拒绝，4项负向回归单列；普通0x17匿名绑定、PL集合输出和multi-send不由此关闭。
 
-D-04f2：匿名INTERVAL结果描述已接入204/205，沿用嵌入精度和显式输出身份校验；本地及消费者完成，首轮PL本地显式精度9集合OUT直连4/4。扩展根NULL/错误后发布/独立事务查账的实库运行因端点握手断开而未完成，清理状态待确认，当前保持P3，详见路线图；未知精度255仍拒绝。
+D-04f2：匿名INTERVAL结果描述已接入204/205，沿用嵌入精度和显式输出身份校验；本地及消费者完成，首轮PL本地显式精度9集合OUT直连4/4。扩展根NULL/错误后发布/独立事务查账的实库未完成，事故用例保持隔离且不计通过；恢复后的两模式基础检查及已知遗留表清理已完成，当前保持P3，详见路线图；未知精度255仍拒绝。
 
 分类：**缺实现**是已保留目标中的代码缺口；**受限**是已定义子集，不能默认要求任意组合；
-**候选差距**有参考能力但未纳入当前目标；**欠验收**有代码而缺特定部署证据；
+**候选差距**有 .NET 使用场景及数据库/协议或 ADO.NET 契约依据但未纳入当前目标；**欠验收**有代码而缺特定部署证据；
 **服务端/权限阻塞**必须保留失败；**排除**不进入开发积压。
+
+Java/JDBC 专属接口及 JVM 集成不列为候选差距、缺实现或欠验收，具体对照见
+[范围决策表](obconnector-dotnet-scope-audit.md#jdbc-专属接口不进入-net-矩阵)。
+G03 保留的是数据库 REF CURSOR/游标列的限定形状，不是 JDBC ResultSet 接口对齐；
+G09 中未定义契约的流水化组合也不自动构成必补功能。
 
 ## 当前服务端前提判定
 
@@ -53,7 +58,7 @@ proxy/ODP、多节点/OCP/TNS、OB20/trace 或非 native 认证/KDC profile。�
 | G10 | C10/C11/Q17 池/reset/cache | 欠验收：MySQL/Oracle 4.4.2.2 直连均完成 16 并发、10000 次借还；Oracle reader/LOB/cursor/XA 旧租约隔离 **52/52**；长期交错和资源稳定性仍未证实 | PhysicalSessionPool、PhysicalSession.PreparedStatements、SessionStateSql、PoolStressTests.cs | 继续完成 60 分钟交错、清池和句柄/线程/内存稳定性；状态不可证明时销毁 |
 | G11 | X02/X03/X04 事务与故障 | 欠验收：MySQL/Oracle 直连 XA 生命周期、recover 和池丢弃恢复 **28/28**，Oracle 响应丢失/relay 切断 **16/16** 通过；显式XA/PSPE/unknown 的故障点仍未全覆盖 | AmbientEnlistment、Connection.Xa*、CommandExchange.Io | in-doubt/管理器与节点/代理崩溃、取消顺序、分支恢复/无重放及独立查账 |
 | G12 | C05–C09/P02–P04/C12–C14 | 服务端受限，暂不开发与修复；现有路径保留 | TLS/Authentication/Discovery/压缩/OB20已有路径 | 提供真实 TLS/认证/ODP/压缩/OB20/trace/发现 profile 后再按验收标准开启；当前限制不得删除 |
-| G13 | M01/Q07 元数据与目录 | 受限/欠验收：Oracle 直连基础目录、过程签名和未约束 NUMBER 回归 **18/18** 通过；package NUMBER/DATE overload 按 `OVERLOAD` 派生并执行 sync/async **4/4** 通过；引用 package 标识符派生 sync/async **2/2** 通过；未引用 BMP Unicode 字母过程名的执行与派生共用校验，中文独立过程/package 直连 sync/async **4/4**（A-03f）；中文 IN/OUT/INOUT 参数原名派生并执行及普通 DML/脚本独立读回，新增直连 sync/async **6/6**（A-03g）；带空格的引用 IN/OUT/INOUT 形参已可原名派生并按位置调用，普通过程/package/函数直连 sync/async 新增 **6/6**（A-03h）；双模式函数的合成返回名已避让真实形参，exact/后缀冲突直连 sync/async 新增 **8/8**（A-03i）；仅大小写不同形参的客户端精确身份有本地证据，当前实库创建/调用失败不计为支持；普通 package-local `PL/SQL RECORD` 目录可读且公开绑定边界 sync/async **2/2** 仍是客户端能力缺口；独立探针去掉 `DATA_LEVEL=0` 后 `ALL_ARGUMENTS` 仍只有顶层行，`ALL_PLSQL_TYPES`/`ALL_PLSQL_TYPE_ATTRS` 没有字段布局；另有 `RECORD` cursor 成员使 package `INVALID` 的回归 **2/2**，Java/.NET 同为服务端限制；A-03b 的 `CHAR_LENGTH` 缺失已确认是当前目标服务端目录限制，Java 同样收到 `904/42S22` | Connection.Schema.*、RoutineParameterDerivation.cs、ResultColumn.cs、PackageLocalRecordTests.cs | 其余双模式最小权限、更多大小写/引用标识符、视图/同义词权限错误和实际列身份；普通 package-local RECORD 需字段描述和成功 Java/.NET wire；不以 `DATA_LENGTH`/`DATA_PRECISION` 伪造字符长度 |
+| G13 | M01/Q07 元数据与目录 | 受限/欠验收：Oracle 直连基础目录、过程签名和未约束 NUMBER 回归 **18/18** 通过；package NUMBER/DATE overload 按 `OVERLOAD` 派生并执行 sync/async **4/4** 通过；引用 package 标识符派生 sync/async **2/2** 通过；未引用 BMP Unicode 字母过程名的执行与派生共用校验，中文独立过程/package 直连 sync/async **4/4**（A-03f）；中文 IN/OUT/INOUT 参数原名派生并执行及普通 DML/脚本独立读回，新增直连 sync/async **6/6**（A-03g）；带空格的引用 IN/OUT/INOUT 形参已可原名派生并按位置调用，普通过程/package/函数直连 sync/async 新增 **6/6**（A-03h）；双模式函数的合成返回名已避让真实形参，exact/后缀冲突直连 sync/async 新增 **8/8**（A-03i）；仅大小写不同形参的客户端精确身份有本地证据，当前实库创建/调用失败不计为支持；普通 package-local `PL/SQL RECORD` 目录可读且公开绑定边界 sync/async **2/2** 仍是客户端能力缺口；独立探针去掉 `DATA_LEVEL=0` 后 `ALL_ARGUMENTS` 仍只有顶层行，`ALL_PLSQL_TYPES`/`ALL_PLSQL_TYPE_ATTRS` 没有字段布局；另有 `RECORD` cursor 成员使 package `INVALID` 的回归 **2/2**，Java/.NET 同为服务端限制；A-03b 的 `CHAR_LENGTH` 缺失已确认是当前目标服务端目录限制，Java 同样收到 `904/42S22` | Connection.Schema.*、RoutineParameterDerivation.cs、ResultColumn.cs、PackageLocalRecordTests.cs | 其余双模式最小权限、更多大小写/引用标识符、视图/同义词权限错误和实际列身份；普通 package-local RECORD 需可验证字段描述、输入/输出布局和成功目标服务端交互；Java 对照按需单列；不以 `DATA_LENGTH`/`DATA_PRECISION` 伪造字符长度 |
 | G14 | R01 发布/平台 | 欠验收：当前 Windows 两包五资产 hash/依赖/资产选择通过；net8/9/10 独立 runtime、两个 netstandard 的 net10 host 及 netstandard2.0 的 net48 host 共 48 项双模式包实库场景通过 | csproj、Verify-Packages.ps1、ConsumerTests | A-04 记录各 runtime 和限定场景；完整 API/ORM、非 Windows 及其他部署仍待验收，netstandard host 加载不算全平台 |
 | G15 | C08 非native认证分支 | 服务端受限，暂不开发与修复；当前仅 native 账号直连 | AuthenticationConversation、GssapiAuthentication | 提供真实插件/KDC 端点、服务端文档和正负认证后再列部署支持；Java SPI 不能替代 |
 

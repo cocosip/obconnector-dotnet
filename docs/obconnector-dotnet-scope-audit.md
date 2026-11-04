@@ -14,6 +14,31 @@ V4.3.5，固定提交 `2a5ae3a23a51729d065cec716508eb26cb064106`。文档版本�
 5. SQL/DDL/PL包、权限、备份、复制、分区、优化器是服务端能力。驱动负责发送、绑定、解码和返回错误，不给每项语法增加模拟实现或专用 API。
 6. 未配置 TLS、OB20 等属于欠验收；确定拒绝的组合保留校验。不能通过删测试、改 skip、降安全等级来关闭缺口。
 
+### JDBC 专属接口不进入 .NET 矩阵
+
+2026-11-04 复核：功能矩阵比较 OceanBase 数据库/协议能力及其 ADO.NET 使用语义，不比较
+Java 类、方法或配置项的数量。Java 源码只能提供参考实现证据；新增能力还须说明 .NET 调用场景
+及适用的数据库/协议或 ADO.NET 契约依据。仅因 Connector/J 存在某接口，不能将其列为 .NET 核心、
+候选差距、缺实现或待验收，也不计入完成率。
+
+| Java/JDBC 项目 | .NET 范围决策 | 保留的实际能力 / 对应入口 |
+| --- | --- | --- |
+| `ResultSet` 的滚动、敏感性、可更新接口与 `TYPE_SCROLL_*` / `CONCUR_*` 常量 | 不复刻 JDBC 结果集契约；滚动导航和通过结果集回写不属于当前产品目标 | Q08/Q09 的前向 `DbDataReader`；Q10 的服务端分批 FETCH；SQL UPDATE 仍由命令执行 |
+| `Statement.setFetchSize`、`ResultSet` / `RefCursor` 类名与方法形状 | 不要求同名 API；不能因此排除底层游标能力 | Q10 已有 `OceanBaseCommand.FetchSize`；Q11 已有 `OceanBaseRefCursor` 输出及 reader；`SELECT CURSOR(...)` 是另一个服务端结果形状 |
+| `PreparedStatement`、`CallableStatement`、`DatabaseMetaData` 接口及 JDBC 类型常量 | 不逐方法移植或复制 Java 类型码 | Q02/Q03/Q06 的参数、Prepare、过程/函数与 OUT；Q07/M01 的参数派生、GetSchema 和列元数据 |
+| `java.sql.Array` / `Struct`、`SQLData` / `SQLInput` / `SQLOutput`、`Connection.getTypeMap/setTypeMap` | 不增加 Java 对象映射接口或类型映射注册表 | T14/T15 的 OceanBase OBJECT/collection 描述、绑定和解码按已定义 .NET 值契约保留 |
+| `java.sql.SQLXML` / `NClob` 接口及工厂/setter | 不要求专用 Java 式对象或同名 API | T11 的 national 字符语义、T17 的服务端 XMLType String 子集独立判断；NCLOB 的服务端范围排除另有依据 |
+| `DriverManager`、`jdbc:` URL、`ServiceLoader` / `META-INF/services`、OSGi/JNDI 注册 | 不移植 JVM 驱动发现与容器集成 | C02/C03 的 .NET provider factory、DataSource 和 DI 按 ADO.NET 契约保留 |
+| `javax.sql` 的连接池、事件及 XADataSource 接口 | 不移植 Java 池类、事件或容器契约 | C10/C11 的物理连接池、reset 与租约隔离按 .NET 契约保留 |
+| `Wrapper.unwrap/isWrapperFor`、Java JMX、认证/凭据/JSSE 的 Java SPI 形状 | 不移植 Java 接口、注册和运行时管理机制 | C05–C09 的 TLS/认证/凭据行为与 M02/M03 的 .NET 诊断保留；SPI 存在不证明服务端支持 |
+| Java `XAResource` / JTA 登记接口 | 不承诺 Java 事务管理器集成或 API 对齐 | X03 的数据库 XA 命令/recover 保留；X02 是另行定义的 .NET 单资源 TransactionScope，非分布式提升 |
+| `compatibleMysqlVersion` / `compatibleOjdbcVersion` | JDBC 客户端行为兼容配置，不是 OceanBase 版本能力；不接受、不立开发项 | C01 的真实服务端产品/租户模式识别保留 |
+
+复核现有 C/Q/T/X/P/M/R 与 G01–G15 编号项，未发现上述 Java 专属接口被单独列为缺实现；
+本次收紧候选项准入和验收措辞，并澄清 Q10/Q11/G03 的游标含义，不删除已有数据库功能。
+multi-send 是可跨客户端实现的协议优化，不是 JDBC 专属功能；其余 cursor/array/PL 组合仍须
+逐项确认 .NET 使用契约与协议前提，不能把 Java 支持的组合自动变成 .NET 必补清单。
+
 ## 官方文档依据
 
 以下为 OceanBase 官方仓库原文，本次核对使用以上固定提交。文档并非完整的4.4.2.2实库支持证明。
