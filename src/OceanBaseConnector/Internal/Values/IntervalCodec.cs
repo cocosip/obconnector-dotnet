@@ -1,11 +1,57 @@
 using System;
 using System.IO;
+using System.Text.RegularExpressions;
 using OceanBaseConnector.Internal.Protocol;
 
 namespace OceanBaseConnector.Internal.Values
 {
     internal static class IntervalCodec
     {
+        private static readonly Regex YearMonthDeclaration = new Regex(@"\AINTERVAL YEAR(?:\(([0-9])\))? TO MONTH\z", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+        private static readonly Regex DaySecondDeclaration = new Regex(@"\AINTERVAL DAY(?:\(([0-9])\))? TO SECOND(?:\(([0-9])\))?\z", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+        internal static (byte Leading, byte Fraction) GetTextPrecisions(string declaration, bool daySecond)
+        {
+            var match = (daySecond ? DaySecondDeclaration : YearMonthDeclaration).Match(declaration);
+            if (!match.Success) throw new NotSupportedException("The complex text INTERVAL declaration is not supported.");
+            return (match.Groups[1].Success ? (byte)(match.Groups[1].Value[0] - '0') : (byte)2,
+                daySecond ? match.Groups[2].Success ? (byte)(match.Groups[2].Value[0] - '0') : (byte)6 : (byte)0);
+        }
+
+        internal static object DecodeText(string value, bool daySecond, string declaration)
+        {
+            var precision = GetTextPrecisions(declaration, daySecond);
+            var width = Math.Max(1, (int)precision.Leading);
+            var separator = 1 + width;
+            var length = separator + (daySecond ? 9 + (precision.Fraction == 0 ? 0 : 1 + precision.Fraction) : 3);
+            if (value.Length != length || value[0] != '+' && value[0] != '-' ||
+                value[separator] != (daySecond ? ' ' : '-') || daySecond &&
+                (value[separator + 3] != ':' || value[separator + 6] != ':' || precision.Fraction != 0 && value[separator + 9] != '.'))
+                throw new ProtocolException("Invalid complex text INTERVAL format.");
+            try
+            {
+                var leading = ReadTextComponent(value, 1, width);
+                if (!daySecond) return new OceanBaseIntervalYearToMonth(value[0] == '-', leading,
+                    ReadTextComponent(value, separator + 1, 2), precision.Leading);
+                var nanos = precision.Fraction == 0 ? 0 : ReadTextComponent(value, separator + 10, precision.Fraction) * (int)Math.Pow(10, 9 - precision.Fraction);
+                return new OceanBaseIntervalDayToSecond(value[0] == '-', leading, ReadTextComponent(value, separator + 1, 2),
+                    ReadTextComponent(value, separator + 4, 2), ReadTextComponent(value, separator + 7, 2), nanos, precision.Leading, precision.Fraction);
+            }
+            catch (ArgumentException) { throw new ProtocolException("Invalid complex text INTERVAL components or precision."); }
+        }
+
+        private static int ReadTextComponent(string value, int offset, int length)
+        {
+            var result = 0;
+            for (var i = offset; i < offset + length; i++)
+            {
+                var digit = value[i] - '0';
+                if (digit < 0 || digit > 9) throw new ProtocolException("Invalid complex text INTERVAL component.");
+                result = result * 10 + digit;
+            }
+            return result;
+        }
+
         internal static object Decode(byte[] bytes, bool daySecond, int scale)
         {
             if (bytes.Length != (daySecond ? 14 : 7)) throw new ProtocolException("Invalid Oracle INTERVAL length.");

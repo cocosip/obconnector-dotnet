@@ -52,6 +52,8 @@ namespace OceanBaseConnector.Internal.Values
                     if (member.ComplexType == null) throw new NotSupportedException("The nested complex text descriptor is unavailable.");
                     ValidateTextObject(member.ComplexType, depth + 1);
                 }
+                else if (member.Layout.TypeCode == 204 || member.Layout.TypeCode == 205)
+                    IntervalCodec.GetTextPrecisions(member.TypeName, member.Layout.TypeCode == 205);
                 else if (member.Layout.TypeCode != 0 && member.Layout.TypeCode != 253 && member.Layout.TypeCode != 254 &&
                     member.Layout.TypeCode != 207 && member.Layout.TypeCode != 208)
                     throw new NotSupportedException("The complex text result contains an unsupported member type.");
@@ -171,6 +173,9 @@ namespace OceanBaseConnector.Internal.Values
                     case 207:
                     case 208:
                         return ReadQuoted();
+                    case 204:
+                    case 205:
+                        return IntervalCodec.DecodeText(ReadQuoted(), member.Layout.TypeCode == 205, member.TypeName);
                     default: throw new NotSupportedException("The complex text result contains an unsupported member type.");
                 }
             }

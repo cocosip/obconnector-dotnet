@@ -303,9 +303,11 @@ namespace OceanBaseConnector.UnitTests
         [MemberData(nameof(AnonymousOutputCases))]
         public async Task OracleArrayPlOutputsUseArrayFlagsAndDecodeEachScalarDirection(bool asynchronous, ParameterDirection direction, string name)
         {
-            var code = name == "NUMBER" ? (byte)0 : name == "VARCHAR2" ? (byte)253 : name == "CHAR" ? (byte)254 : name == "RAW" ? (byte)203 : name == "DATE" ? (byte)12 : (byte)202;
+            var code = name == "NUMBER" ? (byte)0 : name == "VARCHAR2" ? (byte)253 : name == "CHAR" ? (byte)254 : name == "RAW" ? (byte)203 : name == "DATE" ? (byte)12
+                : name == "TIMESTAMP" ? (byte)202 : name == "INTERVAL YEAR TO MONTH" ? (byte)204 : (byte)205;
             var body = Convert.FromHexString(name == "NUMBER" ? "023432" : name == "VARCHAR2" ? "0AE682A3E88085F09F9880" : name == "CHAR" ? "0161" : name == "RAW" ? "0200FF"
-                : name == "DATE" ? "07E8070203040506" : "0C1418020304050615CD5B0709");
+                : name == "DATE" ? "07E8070203040506" : name == "TIMESTAMP" ? "0C1418020304050615CD5B0709"
+                : name == "INTERVAL YEAR TO MONTH" ? "070115CD5B070B09" : "0E00B168DE3A173B3A15CD5B070909");
             var server = Server(async channel =>
             {
                 await TransactionBegin(channel);
@@ -314,7 +316,7 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(OracleExecuteHeader(1, 4, direction == ParameterDirection.ReturnValue ? 7u : 6u));
                 await channel.WritePacketAsync(Column("p", 8)); await channel.WritePacketAsync(Eof(5));
                 await channel.WritePacketAsync(Column("sql_no", 8)); await channel.WritePacketAsync(Column("error_code", 8));
-                var column = Column("out", code); if (code == 202) column[column.Length - 3] = 9;
+                var column = Column("out", code); if (code == 202 || code == 204 || code == 205) column[column.Length - 3] = code == 205 ? (byte)99 : (byte)9;
                 await channel.WritePacketAsync(column); await channel.WritePacketAsync(Column("error_message", 253)); await channel.WritePacketAsync(Eof(5));
                 await channel.WritePacketAsync(new byte[] { 0, 32 }.Concat(new byte[16]).Concat(body).ToArray());
                 await channel.WritePacketAsync(new byte[] { 0, 48 }.Concat(BitConverter.GetBytes(1L)).Concat(new byte[8]).ToArray());
@@ -327,7 +329,9 @@ namespace OceanBaseConnector.UnitTests
                 await connection.OpenAsync(); using var transaction = (OceanBaseTransaction)await connection.BeginTransactionAsync();
                 var type = connection.CreateArrayType(name, transaction);
                 object item = name == "NUMBER" ? 42 : name == "VARCHAR2" ? "患者😀" : name == "CHAR" ? "a" : name == "RAW" ? new byte[] { 0, 255 }
-                    : name == "DATE" ? new DateTime(2024, 2, 3, 4, 5, 6) : new OceanBaseTimestamp(new DateTime(2024, 2, 3, 4, 5, 6), 123456789, 9);
+                    : name == "DATE" ? new DateTime(2024, 2, 3, 4, 5, 6) : name == "TIMESTAMP" ? new OceanBaseTimestamp(new DateTime(2024, 2, 3, 4, 5, 6), 123456789, 9)
+                    : name == "INTERVAL YEAR TO MONTH" ? new OceanBaseIntervalYearToMonth(true, 123456789, 11)
+                    : new OceanBaseIntervalDayToSecond(false, 987654321, 23, 59, 58, 123456789);
                 using var command = (OceanBaseCommand)connection.CreateCommand(); command.Transaction = transaction; command.CommandType = CommandType.StoredProcedure; command.CommandText = "pkg.p";
                 var output = new OceanBaseParameter { ParameterName = "p", Direction = direction, Value = direction == ParameterDirection.InputOutput ? type.CreateValue(item, null) : (object)"old" };
                 if (direction != ParameterDirection.InputOutput) output.ComplexType = type;

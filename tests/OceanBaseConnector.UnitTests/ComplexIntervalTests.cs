@@ -86,7 +86,7 @@ namespace OceanBaseConnector.UnitTests
         [Theory]
         [InlineData(204)]
         [InlineData(205)]
-        public void IntervalMembersDoNotEnableUnverifiedComplexTextResults(byte code)
+        public void IntervalTextMembersRequireAnExactSupportedDeclaration(byte code)
         {
             var member = new OceanBaseComplexMember("A", null, "INTERVAL", null, new ComplexType(code));
             var type = new OceanBaseComplexType(null, "Owner", "Thing", false, new[] { member });

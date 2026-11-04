@@ -122,7 +122,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；命名复杂值普通/批量受控 fallback 子集见 D-01b；不含 OUT/cursor/LOB/anonymous，不以 `P3` 宣称全部组合完成 |
 | D-02 | `P2`；a1、c1/c2、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；MySQL标量脚本输出见c1/c2；Prepare、cursor、Oracle脚本输出及d1～d3以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；b1/b2/c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
-| D-04 | `P2`；a1/a3.1/b1/f/f1/a4/k/l/m 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；a4 已完成 named OBJECT/collection BLOB/CLOB locator 的单条 Text input-only 自动绑定，并补齐 collection → nested OBJECT 形状的 loopback/直连证据；D-08ac 又完成 batch multi-send 的 OBJECT、scalar collection、nested collection 同形状 input-only 验收；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
+| D-04 | `P2`；a1/a3.1/b1/f/f1/f3/a4/k/l/m 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；a4 已完成 named OBJECT/collection BLOB/CLOB locator 的单条 Text input-only 自动绑定，并补齐 collection → nested OBJECT 形状的 loopback/直连证据；D-08ac 又完成 batch multi-send 的 OBJECT、scalar collection、nested collection 同形状 input-only 验收；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/多语句与受控 1295 fallback 子集见 D-05b；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
 | D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；CP850/HP8/MACROMAN客户端及SWE7仅结果已在D-07e验收；CP932指定成功子集见D-07f、普通Oracle初始化服务端900仍保留；UJIS指定成功子集见D-07g，EUCJPMS指定成功子集见D-07h；其余新名称继续逐项确认后再加入，不支持名称继续发送前拒绝 |
@@ -260,8 +260,8 @@ D-04f2 仍按事故隔离，不执行其用例或 PL 匿名 INTERVAL 集合探�
 独立范围走查确认 Java 对照应为可选参考，不能决定 .NET 能否基于独立服务端证据立项。
 最终五文档 diff 经独立只读走查无遗留问题，并独立核对上述12项TRX；42条本地文档链接及
 新增锚点检查通过，功能矩阵74个编号和缺失矩阵30个编号顺序均未变，`git diff --check`通过。
-命名 OBJECT 的 INTERVAL text 结果仍是待 wire 调查项；已有 RAW/DATE/TIMESTAMP/LOB text
-失败不能推断其也失败。本轮未执行该调查，不宣称所有剩余功能均无可推进事项。
+范围复核时命名 OBJECT 的 INTERVAL text 结果尚待 wire 调查；已有 RAW/DATE/TIMESTAMP/LOB
+text 失败不能推断其也失败。后续已按 D-04f3 完成该独立子集，不宣称所有剩余功能均已关闭。
 
 ### 开发优先级调整与 A-01 延后（2026-11-02）
 
@@ -1446,6 +1446,33 @@ Oracle/MySQL均成功登录4.4.2.2，普通SELECT 1和显式Prepare SELECT 1均�
 `TestResults/recovery-check/recovery-confirmed.txt`；本次无遗留任务表待清理。
 基础可用不等于完整恢复/长期稳定性或扩展功能验收；事故原因仍未确定，隔离Skip及P3保持，
 不会因本次连接检查成功自动重跑该用例。
+
+#### D-04f3：命名 OBJECT INTERVAL text 结果（2026-11-04，指定子集 P4）
+
+基线 `2551f66`。普通 SQL 构造表达式返回 VARCHAR/type253，继续按 String；持久 OBJECT 列
+返回 type160 及真实类型名，YM/DS 两个不同值、NUMBER/String 哨兵和成员 NULL 均保留，
+显式 Prepare 的 binary 控制一致。precision9/scale9 与 precision2/scale3 两组已分别采集，
+自有 table/type 清理通过，原始报告在忽略目录 `TestResults/d04f3-text-wire/`。
+探针首轮因关闭 PrepareExecute 却保留 locator 配置而在 Open 前被既有校验拒绝，已修正探针；
+不计为产品缺陷，也未发送事故 PL。该结果不能从此前 RAW/DATE/TIMESTAMP text 失败推断。
+
+设计：只扩展已有 named OBJECT text 路径，复用目录中 INTERVAL 声明和精确 provider 值；
+成员必须为带符号、固定分量的引号文本，精度/小数宽度与声明一致，坏值和未知描述拒绝。
+不新增 API、依赖或配置，不改变 scalar INTERVAL 的二进制 wire、collection/text LOB 或隔离用例。
+
+- [x] 在 `ComplexIntervalTextTests.cs` 与实库夹具先复现拒绝；覆盖所有精度/scale、NULL、嵌套、坏值及后续字段边界。
+- [x] 为 `IntervalCodec` 增加内部严格 text 解析，`ComplexValueCodec` 的预检和成员读取复用该路径；保留未知精度/不支持成员拒绝。
+- [x] 定向单元、公开 DLL 消费者、五TFM构建和 sync/async × buffered/sequential 实库，独立 Prepare 读回作对照；限定格式检查。
+- [x] 同步矩阵/契约，独立代码走查并修复问题后本地提交，不 push；只按实际证据提升进度。
+
+验证证据（忽略目录，非跨部署承诺）：
+
+- RED：新增 codec 用例先出现126失败/6通过；实库binary控制后text读取2/2因旧guard失败；NUL回归单例另先失败，改为逐字节ASCII数字校验后通过。
+- GREEN：新/既有complex INTERVAL与数组PL回归 **205/205**；扩大的text/complex/interval回归 **6876/6876**（0 skip），报告 `d04f3-regression-green.trx` / `d04f3-unit-green.trx`。扩测发现共享 `AnonymousOutputCases` 已扩展INTERVAL但旧数组PL夹具仍按TIMESTAMP生成值和wire，12失败已修正为真实204/205与精确值，未放宽产品校验。
+- 公开DLL：三个代表资产 netstandard2.0/netstandard2.1/net10.0，sync/async × buffered/sequential 新named text **12/12**；连同既有scalar/anonymous interval消费者 **24/24**，报告 `d04f3-consumer.trx`。
+- 实库：Oracle 4.4.2.2 `oracle-direct`，precision9/scale9、precision2/scale3、precision2/scale0 × 平面/嵌套 × sync/async × buffered/sequential **24/24**（0 skip），报告 `d04f3-live-green.trx`；独立连接Prepare binary控制、三行正负/零/成员NULL、NUMBER/String及顶层哨兵、读后会话可复用；自有table/type清理通过。全程普通SQL，无PL匿名集合或事故用例。
+- 独立代码/测试走查无遗留问题；文档走查发现旧架构段落仍笼统禁止全部text结果，已改为精确区分支持的named OBJECT与其余形状，并把temporal边界明确为DATE/TIMESTAMP。137条本地文档目标检查通过。
+- Core及DependencyInjection五TFM Release构建0 warning/0 error。限定7个C#文件的folder模式格式检查与 `git diff --check` 通过；项目模式MSBuild命名管道被沙箱拒绝，两次提权自动审核因账户并发限制未完成，未执行该检查。
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
