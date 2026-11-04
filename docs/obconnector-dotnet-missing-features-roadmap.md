@@ -1409,6 +1409,14 @@ cleanup错误均保留在AggregateException。后续3例在Open断开；独立so
 证明发现期隔离，不是功能验收。独立只读 `review_d04f2_incident` 核对属性/发现链、日志与TRX，
 修正两处旧重跑计划的文档冲突后复核无剩余问题；用户要求等待后未再访问数据库或发网络探针。
 
+再次恢复确认（2026-11-04，用户明确通知数据库恢复后）：仅执行基础恢复检查与任务对象清理，
+Oracle/MySQL均成功登录4.4.2.2，普通SELECT 1和显式Prepare SELECT 1均返回1；未执行PL或
+事故用例。旧表 `OBI_6110AC4F28004A748180` 目录计数0，新表 `OBI_1FF78DFC852E4074915A`
+计数1，已按该精确表名DROP并再次查询确认0。记录在忽略目录
+`TestResults/recovery-check/recovery-confirmed.txt`；本次无遗留任务表待清理。
+基础可用不等于完整恢复/长期稳定性或扩展功能验收；事故原因仍未确定，隔离Skip及P3保持，
+不会因本次连接检查成功自动重跑该用例。
+
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
 基线 `ae40dba`。D-04a2 继续核对服务端命名成员 deserialize 与 Java writer；Java
