@@ -16,6 +16,8 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("RAW", (byte)203, "0200FF")]
         [InlineData("DATE", (byte)12, "07E8070203040506")]
         [InlineData("TIMESTAMP", (byte)202, "0C1418020304050615CD5B0709")]
+        [InlineData("INTERVAL YEAR TO MONTH", (byte)204, "0701FFC99A3B0B09")]
+        [InlineData("INTERVAL DAY TO SECOND", (byte)205, "0E01FFC99A3B173B3BFFC99A3B0909")]
         public async Task OracleArrayBindingRequestUsesIterationTwoBatchErrorsAndCanonicalColumns(string name, byte code, string body)
         {
             var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)));
@@ -24,7 +26,10 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync(); var type = connection.CreateArrayType(name);
                 object item = name == "NUMBER" ? 42 : name == "VARCHAR2" ? "患者😀" : name == "CHAR" ? "a" : name == "RAW" ? new byte[] { 0, 255 }
-                    : name == "DATE" ? new DateTime(2024, 2, 3, 4, 5, 6) : new OceanBaseTimestamp(new DateTime(2024, 2, 3, 4, 5, 6), 123456789, 9);
+                    : name == "DATE" ? new DateTime(2024, 2, 3, 4, 5, 6)
+                    : name == "INTERVAL YEAR TO MONTH" ? new OceanBaseIntervalYearToMonth(true, 999999999, 11)
+                    : name == "INTERVAL DAY TO SECOND" ? new OceanBaseIntervalDayToSecond(true, 999999999, 23, 59, 59, 999999999)
+                    : new OceanBaseTimestamp(new DateTime(2024, 2, 3, 4, 5, 6), 123456789, 9);
                 var columns = new[] { new OceanBaseParameter { Value = type.CreateValue(item, null) } };
                 var packet = OraclePrepareExecutePacket.BuildArray(0, "begin p; end;", columns);
                 var expected = Convert.FromHexString("A10000000000020000000D626567696E20703B20656E643B010000000001A000000000")
@@ -37,7 +42,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(1)] [InlineData(9)] [InlineData(251)] [InlineData(65535)]
+        [InlineData(1)]
+        [InlineData(9)]
+        [InlineData(251)]
+        [InlineData(65535)]
         public async Task OracleArrayBindingRequestKeepsAllNullElementsAndLengthEncodedRowCount(int count)
         {
             var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)));
@@ -80,7 +88,8 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)] [InlineData(true)]
+        [InlineData(false)]
+        [InlineData(true)]
         public async Task OracleArrayBindingRequestKeepsNamedElementIdentity(bool collection)
         {
             var server = Server(async channel => { await ComplexScalarType(channel, collection: collection); Assert.Equal(0, await channelStreamRead(channel)); });
@@ -98,9 +107,18 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("empty")] [InlineData("length")] [InlineData("null-root")] [InlineData("dbnull-root")] [InlineData("scalar")]
-        [InlineData("named")] [InlineData("readonly")] [InlineData("wrong-value")] [InlineData("size")]
-        [InlineData("output")] [InlineData("inout")] [InlineData("return")]
+        [InlineData("empty")]
+        [InlineData("length")]
+        [InlineData("null-root")]
+        [InlineData("dbnull-root")]
+        [InlineData("scalar")]
+        [InlineData("named")]
+        [InlineData("readonly")]
+        [InlineData("wrong-value")]
+        [InlineData("size")]
+        [InlineData("output")]
+        [InlineData("inout")]
+        [InlineData("return")]
         public async Task OracleArrayBindingRequestRejectsInvalidColumnsBeforeBuilding(string invalid)
         {
             var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)));

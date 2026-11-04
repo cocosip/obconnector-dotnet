@@ -13,6 +13,8 @@ D-03b2 新增：父 command 的 `UseCursorOffset=true`（正 FetchSize）现可�
 
 D-04m：named OBJECT/scalar collection/nested collection BLOB/CLOB locator Input 与独立标量 INOUT、同一 named type 的 complex OUT/函数 ReturnValue、根 LOB OUT、REF CURSOR OUT，现已在 mixed batch routine屏障中通过 Oracle 4.4.2.2 直连 Text/过程/函数 × sync/async **36/36**。覆盖显式 Prepare、PL错误的已执行前缀与未执行后缀、旧输出保留、原batch重复执行、batch释放后原事务内读取资源及提交后独立查账；复用已有产品代码。只关闭短LOB/调用方连接的指定组合，不代表同组PL流水化、locator自身INOUT或其他部署。
 
+D-04f1：匿名 INTERVAL 工厂已接入现有204/205布局；`ExecuteArray` 的 INSERT/RETURNING、NULL、负值/纳秒和重复 Prepare 执行已通过当前 Oracle 4.4.2.2 直连8项正向验证。过程输出的未知精度仍安全拒绝，4项负向回归单列；普通0x17匿名绑定、PL集合输出和multi-send不由此关闭。
+
 **当前是实验性驱动，不承诺生产级全功能。** 下表“有实现/部分”是源码状态，
 “直连子集”引用历史4.4.2.2记录，不是本次重跑或全功能验收。任何部署支持均须绑定
 `服务端版本+租户模式+直连/ODP+协议+TLS/认证+客户端OS/runtime+选项`，不能只有“支持Oracle/MySQL”。
@@ -86,7 +88,7 @@ D-04m：named OBJECT/scalar collection/nested collection BLOB/CLOB locator Input
 | T07 BIT/YEAR | BIT1..64、四位YEAR | — | ulong/ushort及typed输入 | 常量数值metadata不同真实BIT/YEAR列 |
 | T08 DATE/DATETIME/TIME | 小数至6位；TIME有符号 | Oracle DATE含时间、无小数 | DateTime/TimeSpan、OceanBaseDate/DateTime | MySQL零日期需provider值访问及相容SQL_MODE；TIME极值文本/binary差异保留 |
 | T09 TIMESTAMP | 至6位与会话时区 | 至9位；TZ/LTZ | OceanBaseTimestamp、TimestampWithTimeZone、TimestampLocalTimeZone | 命名地区/二进制非空TZ名称1882阻塞，不能用文本通过覆盖 |
-| T10 INTERVAL | — | YEAR TO MONTH、DAY TO SECOND | 精确provider值、IntervalCodec | 负值/精度/NULL；普通回退仅覆盖已有字面量子集 |
+| T10 INTERVAL | — | YEAR TO MONTH、DAY TO SECOND | 精确provider值、IntervalCodec | 负值/精度/NULL；匿名工厂及ExecuteArray DML输入/RETURNING见D-04f1，过程未知精度输出仍拒绝；普通回退仅覆盖已有字面量子集 |
 | T11 NCHAR/NVARCHAR2 | 不套用Oracle national协议 | 标量和有依据复杂成员子集 | string+显式类型、NationalCharacterSet | 输入/结果/存储编码不同；需可信身份/编码快照 |
 | T12 ROWID/UROWID | — | 协议209结果解码与 UROWID 参数 | ROWID结果保持String；新增 Urowid 参数类型、NULL/type209 编码、目录映射 | 直连 Oracle 4.4.2.2 的输入/输出/RETURNING 已验收；多语句及受控 1295 client fallback 已接入 CHARTOROWID，空字符串执行前拒绝（D-05b）；DeriveParameters 目录边界见唯一路线图 |
 | T13 BLOB/CLOB locator | 普通BLOB byte[]/流，不用Oracle locator | locator读写/修改/回绑的限定子集 | OceanBaseLob、LobSession、LobMutation | 需PrepareExecute/locator能力；失效/旧租约/外置大值 |

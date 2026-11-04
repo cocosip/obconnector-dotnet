@@ -111,6 +111,20 @@ namespace OceanBaseConnector.ConsumerTests
                     }
                     Assert.Equal(1, await command.ExecuteNonQueryAsync(budget.Token));
                 }
+                var factory = connection.GetType().GetMethod("CreateArrayType", new[] { typeof(string), assembly.GetType("OceanBaseConnector.OceanBaseTransaction")! })!;
+                for (var i = 0; i < values.Length; i++)
+                {
+                    var name = i == 0 ? "interval year to month" : "interval day to second";
+                    var type = factory.Invoke(connection, new object?[] { name, null })!;
+                    var create = type.GetType().GetMethod("CreateValue")!;
+                    var value = create.Invoke(type, new object[] { new object?[] { values[i], null } })!;
+                    Assert.Equal(new object?[] { values[i], null }, (object?[])value.GetType().GetMethod("GetValues")!.Invoke(value, null)!);
+                    var wrong = Assert.Throws<System.Reflection.TargetInvocationException>(() => create.Invoke(type, new object[] { new[] { values[1 - i] } }));
+                    Assert.IsType<ArgumentException>(wrong.InnerException);
+                    connection.GetType().GetMethod("ClearComplexTypeCache")!.Invoke(connection, new object?[] { null });
+                    var stale = Assert.Throws<System.Reflection.TargetInvocationException>(() => create.Invoke(type, new object[] { new[] { values[i] } }));
+                    Assert.IsType<InvalidOperationException>(stale.InnerException);
+                }
                 await serving.WaitAsync(budget.Token);
             }
             finally { budget.Cancel(); listener.Stop(); context.Unload(); }

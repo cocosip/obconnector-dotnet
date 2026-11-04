@@ -17,6 +17,8 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("RAW", (byte)203, "01000200FF")]
         [InlineData("DATE", (byte)12, "010007E8070203040506")]
         [InlineData("TIMESTAMP", (byte)202, "01000C1418020304050615CD5B0709")]
+        [InlineData("INTERVAL YEAR TO MONTH", (byte)204, "01000701FFC99A3B0B09")]
+        [InlineData("INTERVAL DAY TO SECOND", (byte)205, "01000E01FFC99A3B173B3BFFC99A3B0909")]
         public async Task AnonymousArrayFactoryConstructsExactScalarInputs(string name, byte element, string body)
         {
             var server = Server(async channel => { await Query(channel, "after"); await channel.WritePacketAsync(Ok(1)); });
@@ -27,9 +29,14 @@ namespace OceanBaseConnector.UnitTests
                 Assert.True(type.IsAnonymous); Assert.True(type.IsCollection); Assert.Equal("", type.SchemaName); Assert.Equal("", type.TypeName);
                 Assert.Equal(name, Assert.Single(type.Members).TypeName); Assert.Null(type.Members[0].ComplexType);
                 object item = name == "NUMBER" ? 42 : name == "VARCHAR2" ? "患者😀" : name == "CHAR" ? "a" : name == "RAW" ? new byte[] { 0, 255 }
-                    : name == "DATE" ? new DateTime(2024, 2, 3, 4, 5, 6) : new OceanBaseTimestamp(new DateTime(2024, 2, 3, 4, 5, 6), 123456789, 9);
+                    : name == "DATE" ? new DateTime(2024, 2, 3, 4, 5, 6)
+                    : name == "INTERVAL YEAR TO MONTH" ? new OceanBaseIntervalYearToMonth(true, 999999999, 11)
+                    : name == "INTERVAL DAY TO SECOND" ? new OceanBaseIntervalDayToSecond(true, 999999999, 23, 59, 59, 999999999)
+                    : new OceanBaseTimestamp(new DateTime(2024, 2, 3, 4, 5, 6), 123456789, 9);
                 var value = type.CreateValue(item);
                 Assert.Throws<ArgumentException>(() => type.CreateValue(new object()));
+                if (element == 204) Assert.Throws<ArgumentException>(() => type.CreateValue(new OceanBaseIntervalDayToSecond(false, 1, 0, 0, 0)));
+                if (element == 205) Assert.Throws<ArgumentException>(() => type.CreateValue(new OceanBaseIntervalYearToMonth(false, 1, 0)));
                 var header = new byte[] { 0, 1, 160, 0, 0, 0, 0, element };
                 Assert.Equal(header.Concat(Convert.FromHexString(body)), PreparedParameters.Encode(new[] { new OceanBaseParameter { Value = value } }, OceanBaseCompatibilityMode.Oracle));
                 Assert.Equal(header.Concat(new byte[] { 0 }), PreparedParameters.Encode(new[] { new OceanBaseParameter { Value = type.CreateValue() } }, OceanBaseCompatibilityMode.Oracle));
@@ -93,6 +100,10 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("CURSOR")]
         [InlineData("NVARCHAR2(4)")]
         [InlineData("Owner.Thing")]
+        [InlineData("INTERVAL YEAR(9) TO MONTH")]
+        [InlineData("INTERVAL DAY(9) TO SECOND(9)")]
+        [InlineData("INTERVAL YEAR TO MONTH ")]
+        [InlineData(" INTERVAL DAY TO SECOND")]
         [InlineData("\0")]
         public void AnonymousArrayFactoryDoesNotInferUnsupportedScalarNames(string name)
         {
@@ -104,6 +115,8 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("RAW")]
         [InlineData("BLOB")]
         [InlineData("CLOB")]
+        [InlineData("INTERVAL YEAR TO MONTH")]
+        [InlineData("INTERVAL DAY TO SECOND")]
         public void AnonymousArrayFactoryRequiresAnOpenConnectionAndNonNullElement(string scalar)
         {
             using var connection = new OceanBaseConnection();

@@ -27,7 +27,7 @@ namespace OceanBaseConnector
         public Task<OceanBaseComplexType> GetComplexTypeAsync(string schemaName, string typeName, OceanBaseTransaction? transaction = null, CancellationToken cancellationToken = default)
             => GetComplexTypeCore(schemaName, typeName, transaction, true, cancellationToken);
 
-        /// <summary>Creates a session-bound anonymous array of NUMBER, VARCHAR2, CHAR, NCHAR, NVARCHAR2, RAW, DATE, TIMESTAMP, BLOB or CLOB.</summary>
+        /// <summary>Creates a session-bound anonymous array of NUMBER, VARCHAR2, CHAR, NCHAR, NVARCHAR2, RAW, DATE, TIMESTAMP, INTERVAL YEAR TO MONTH, INTERVAL DAY TO SECOND, BLOB or CLOB.</summary>
         public OceanBaseComplexType CreateArrayType(string elementTypeName, OceanBaseTransaction? transaction = null)
         {
             if (elementTypeName == null) throw new ArgumentNullException(nameof(elementTypeName));
@@ -42,6 +42,8 @@ namespace OceanBaseConnector
                 case "RAW": code = 203; break;
                 case "DATE": code = 12; break;
                 case "TIMESTAMP": code = 202; break;
+                case "INTERVAL YEAR TO MONTH": code = 204; break;
+                case "INTERVAL DAY TO SECOND": code = 205; break;
                 case "BLOB": code = 210; break;
                 case "CLOB": code = 211; break;
                 default: throw new NotSupportedException("The anonymous array element type is not supported.");

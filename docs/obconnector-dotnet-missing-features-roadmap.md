@@ -117,7 +117,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；命名复杂值普通/批量受控 fallback 子集见 D-01b；不含 OUT/cursor/LOB/anonymous，不以 `P3` 宣称全部组合完成 |
 | D-02 | `P2`；a1、c1/c2、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；MySQL标量脚本输出见c1/c2；Prepare、cursor、Oracle脚本输出及d1～d3以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；b1/b2/c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
-| D-04 | `P2`；a1/a3.1/b1/f/a4/k/l/m 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；a4 已完成 named OBJECT/collection BLOB/CLOB locator 的单条 Text input-only 自动绑定，并补齐 collection → nested OBJECT 形状的 loopback/直连证据；D-08ac 又完成 batch multi-send 的 OBJECT、scalar collection、nested collection 同形状 input-only 验收；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
+| D-04 | `P2`；a1/a3.1/b1/f/f1/a4/k/l/m 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；a4 已完成 named OBJECT/collection BLOB/CLOB locator 的单条 Text input-only 自动绑定，并补齐 collection → nested OBJECT 形状的 loopback/直连证据；D-08ac 又完成 batch multi-send 的 OBJECT、scalar collection、nested collection 同形状 input-only 验收；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/多语句与受控 1295 fallback 子集见 D-05b；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
 | D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；CP850/HP8/MACROMAN客户端及SWE7仅结果已在D-07e验收；CP932指定成功子集见D-07f、普通Oracle初始化服务端900仍保留；UJIS指定成功子集见D-07g，EUCJPMS指定成功子集见D-07h；其余新名称继续逐项确认后再加入，不支持名称继续发送前拒绝 |
@@ -1321,6 +1321,35 @@ SJIS/Big5 初始化、nested-table 持久列和 `SELECT CURSOR` 列形状。测�
 
 TRX均位于忽略的 `TestResults/roadmap/`。复杂text结果、标量匿名INTERVAL factory、named LOB
 locator回绑、专门流水化验收以及跨版本/部署仍未关闭；本轮没有长测或全套/全消费者重跑。
+
+#### D-04f1：匿名 INTERVAL 工厂与 ExecuteArray（2026-11-04，指定DML直连子集 `P4`）
+
+基线 `dccabf5`。现有 `ComplexType`、`ComplexValueCodec` 和 `IntervalCodec` 已有204/205布局，
+本轮只为 `CreateArrayType(string)`补齐两个canonical名称，复用现有会话/事务/代际校验，
+不新增公开类型、配置、依赖或另一套codec。精度来自精确provider值；名称不接受精度语法或周围空白。
+
+- [x] 先用测试侧内部descriptor验证0xA1迭代输入/RETURNING，再删除旁路并切换公开工厂。
+- [x] 公开工厂RED后最小映射；固定wire、大小写、NULL、错误provider值、名字与缓存代际单测。
+- [x] Oracle直连DML正向及过程未知精度负向完成，最终补充Prepare无副作用与1873对照后重跑。
+- [x] 完整单测及沙箱失败复核、五资产构建、公开DLL消费者、限定格式及独立代码走查；本地提交，不push。
+
+| 证据 | 结果 |
+| --- | --- |
+| 服务端控制 | 初始内部descriptor 12项中DML输入/RETURNING **8通过**，过程 **4失败**；`d04f1-protocol-control.trx`。最初类型校验诊断为expected204/actual6，见 `d04f1-pl-metadata.trx`；临时产品诊断已撤销 |
+| 过程精度归因 | 普通scalar调用同一过程，九位年/日值也返回 **1873/HY000**，见 `d04f1-scalar-control.trx`、`d04f1-scalar-code.trx`；缩为两位/6位小数后scalar与array分别失败于INTERVAL metadata，见 `d04f1-pl-precision-control.trx`、`d04f1-array-precision-control.trx` |
+| 原始wire控制 | 忽略目录 `TestResults/d04f1-wire/` 直接消费PrepareExecute响应：小值过程的列type204/205、scale=-1、precision255，YM payload `010C0000000BFF`、DS payload `0062000000173B3A00CA5B0700FF`；末尾精度不满足既有精确provider契约。大值首行error1873、输出metadata NULL，并有最终ERR；不猜测精度、不放宽拒绝。初次raw探针缺显式事务返回600，仅属探针前提修正，不计功能失败 |
+| 公开API RED | `d04f1-factory-red.trx` **6失败/26通过**，`d04f1-public-live-red.trx` **8/8失败**，均在未支持的公开工厂入口失败 |
+| 首轮GREEN | `d04f1-live-green.trx` **20/20**：新DML正向8、过程安全拒绝4、既有named INTERVAL8，0skip。DML含NULL、负值/纳秒、显式/隐式Prepare、原command两次执行、调用方事务及提交后独立Prepare读回；负向不计为PL支持 |
+| 最终实库 | `d04f1-live-final.trx` **22/22**，0failure/0skip：新DML8、过程负向4、既有named/脚本INTERVAL10；新增Prepare不写存储/不发布、普通scalar1873已知错误后同会话可用、array未知精度拒绝后保留旧输出/Broken/独立连接核对未提交行归零；全部测试对象清理通过 |
+| 本地单测 | `d04f1-related-unit.trx` **277/277**，0skip；完整 `d04f1-unit-full.trx` **10005通过/1失败/0skip**，约10分17秒，唯一失败是TNS `ConcurrentReadersUseCompleteSnapshotsAndMissingFilesHaveNoFallback` 的File.Replace沙箱UnauthorizedAccess；该类沙箱外 **67/67**（`d04f1-tns-unsandboxed.trx`）。保留完整运行exit1，不将分开复核写为一次完整绿色 |
+| DLL消费者 | `d04f1-consumer.trx` **12/12**，0skip；netstandard2.0/2.1/net10代表资产，通过目标程序集公开反射工厂构造精确值/NULL、拒绝另一INTERVAL provider值及缓存失效；不等于全部runtime实库 |
+| 构建/格式/走查 | 两包五TFM solution Release构建0warning/0error；限定5个C#文件whitespace verify与git diff --check通过。首次solution构建因并行Unit占用xunit DLL而失败，等待结束后串行重跑；首次格式校验报告原文件同行InlineData，已规范空白。独立只读 `review_d04f1` 沿调用链核对映射、wire、输出发布、事务/代际和消费者隔离，直接核对live22/22及consumer12/12，无需修复问题，可提交；未另跑测试或数据库 |
+
+TRX位于各测试工程忽略的 `TestResults/`。真实环境为Oracle4.4.2.2直连、Windows/.NET10、
+TLS Disabled、未请求OB20。只关闭两个工厂及ExecuteArray DML输入/RETURNING的指定范围；
+普通0x17匿名绑定、PL集合输出、匿名INTERVAL结果描述和multi-send未关闭。当前过程未知精度
+保持安全拒绝、原输出不发布并破坏无法完整消费的连接；新版本或稳定未知精度wire契约后再重开。
+
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
