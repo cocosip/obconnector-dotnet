@@ -5,11 +5,16 @@ using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.IntegrationTests.Infrastructure;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace OceanBaseConnector.IntegrationTests.Oracle;
 
 public sealed class AnonymousIntervalOutputTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public AnonymousIntervalOutputTests(ITestOutputHelper output) => _output = output;
+
     public static IEnumerable<object[]> Cases()
     {
         foreach (var profile in ProfileTheoryData.OraclePrepareExecuteObjects())
@@ -18,7 +23,7 @@ public sealed class AnonymousIntervalOutputTests
                     yield return new object[] { profile, asynchronous, prepared };
     }
 
-    [IntegrationTheory]
+    [IntegrationTheory(Skip = "D-04f2 incident quarantine: this test coincided with repeated endpoint loss. See the roadmap; investigate server logs before isolated reproduction.")]
     [MemberData(nameof(Cases))]
     public async Task LocalCollectionsKeepExactIntervalsNullsAndEmptyOutputs(string profileName, bool asynchronous, bool prepared)
     {
@@ -43,9 +48,11 @@ public sealed class AnonymousIntervalOutputTests
             var fail = DatabaseContext.Parameter(command, "fail", 1);
             var years = DatabaseContext.Parameter(command, "oy", "old years"); years.ComplexType = ym; years.Direction = ParameterDirection.Output;
             var days = DatabaseContext.Parameter(command, "od", "old days"); days.ComplexType = ds; days.Direction = ParameterDirection.Output;
+            _output.WriteLine("Preparing collection output command; explicit Prepare=" + prepared);
             if (prepared) { if (asynchronous) await command.PrepareAsync(); else command.Prepare(); }
             Assert.Equal("old years", years.Value); Assert.Equal("old days", days.Value);
             Assert.Equal(0, DatabaseContext.IntegerResult(await db.ScalarAsync(connection, "SELECT n FROM " + table + " WHERE id=1", CancellationToken.None, transaction)));
+            _output.WriteLine("Executing expected PL error control");
             var error = asynchronous ? await Assert.ThrowsAsync<OceanBaseException>(() => command.ExecuteNonQueryAsync())
                 : Assert.Throws<OceanBaseException>(() => command.ExecuteNonQuery());
             Assert.Equal(20001, error.ServerErrorCode); Assert.False(error.IsExecutionOutcomeUnknown);
@@ -54,7 +61,9 @@ public sealed class AnonymousIntervalOutputTests
             for (var attempt = 0; attempt < 4; attempt++)
             {
                 minimum.Value = attempt == 1 ? 3 : attempt == 2 ? 4 : 0;
+                _output.WriteLine("Executing collection output; attempt=" + attempt + ", minimum=" + minimum.Value);
                 if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+                _output.WriteLine("Completed collection output; attempt=" + attempt);
                 if (attempt == 2) { Assert.Equal(DBNull.Value, years.Value); Assert.Equal(DBNull.Value, days.Value); continue; }
                 var returnedYears = Assert.IsType<OceanBaseComplexValue>(years.Value); Assert.Same(ym, returnedYears.Type);
                 var returnedDays = Assert.IsType<OceanBaseComplexValue>(days.Value); Assert.Same(ds, returnedDays.Type);

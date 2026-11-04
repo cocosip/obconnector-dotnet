@@ -1376,14 +1376,38 @@ TLS Disabled、未请求OB20。只关闭两个工厂及ExecuteArray DML输入/RE
 | 独立走查 | `review_d04f2` 只读核对调用链、原始wire、TRX及文档，产品无问题；提出新增实库测试的db清理会遮蔽主体异常，已复用显式catch/finally聚合主体与清理异常。复核无剩余问题，可本地提交代码里程碑；修复后Integration Release构建0warning/error，未再次访问数据库；不关闭扩展实库任务 |
 
 当前只记录代码和本地完成、首轮有限实库成功，不以此关闭扩展验收或提升P4。
-端点恢复后先确认/清理上述精确表名，再重跑当前公开测试及既有控制；不删除失败、不自动skip。
+原定端点恢复后清理上述精确表名并重跑的计划，已由下方事故隔离流程替代；原始失败保留，
+当前不重跑事故用例，隔离Skip不计为通过。
 普通0x17匿名输入、复杂text和multi-send专门验收仍开放。
 
 后续恢复检查（2026-11-04，代码 `30d28ad`）：分别对当前Oracle、MySQL直连profile使用独立
 Python socket建立TCP，接收greeting均为0bytes；未发送认证或SQL，未重复整组失败测试。
 两个profile当前均不能用于新wire调查或实库验收。剩余D项的进入前提仍按上方组合缺口表保留，
-不以额外fixture替代成功服务端交互。需要恢复现有端点或更新本地profile后，再处理上述精确表名
-并执行当前D-04f2公开测试及array/routine控制；整体目标未完成。
+不以额外fixture替代成功服务端交互。当时计划恢复端点后清理并复测，现已由下方事故隔离流程
+替代；整体目标未完成。
+
+恢复复查（2026-11-04，北京时间）：独立公开API探针一度成功登录两模式，版本均为4.4.2.2，
+普通及显式Prepare的SELECT 1均成功；原遗留表 `OBI_6110AC4F28004A748180` 存在，已精确DROP，
+并查目录确认剩余0。记录在忽略目录 `TestResults/recovery-check/result.txt`。探针首轮对COUNT
+错误使用Convert.ToInt32而不接受OceanBaseDecimal，已改为精确provider转换；不是产品故障。
+
+随后12:03:02–12:03:23的 `d04f2-recovered-public.trx` 为 **0通过/4失败/0skip**。
+首例async/explicit Prepare已完成建表、Prepare无副作用检查和20001错误后旧输出断言；
+在原代码第57行（循环内ExecuteNonQueryAsync）响应中断，其具体attempt未知；主体错误与
+cleanup错误均保留在AggregateException。后续3例在Open断开；独立socket复查两模式均收到
+0bytes greeting。新表 `OBI_1FF78DFC852E4074915A` 清理失败，是否仍存在待确认。
+这提供了测试执行与端点失联的时间关联，**尚不能判定测试触发数据库损坏或具体服务端缺陷**。
+用户表示可能尚未恢复，要求等待；此后停止数据库访问，等待稳定后再做基础连接检查。
+
+为避免普通完整Integration运行无意再次执行这一事故用例，暂为
+`AnonymousIntervalOutputTests.LocalCollectionsKeepExactIntervalsNullsAndEmptyOutputs` 添加明确的
+事故隔离Skip，保留原始失败与P3，不计为通过，也不声明已确认的server limitation。
+补充仅含固定阶段/attempt/minimum的测试输出供后续隔离复现定位；不记录连接串、账号或用户数据。
+重新启用该用例前须先核对服务端事故日志及隔离测试环境；不能只因SELECT 1成功便自动解封。
+隔离后的本地检查：Integration Release构建0warning/error；限定文件whitespace verify exit0
+（工作区加载警告）、git diff --check通过；`d04f2-quarantine-check.trx` 为0执行/0通过/1跳过，
+证明发现期隔离，不是功能验收。独立只读 `review_d04f2_incident` 核对属性/发现链、日志与TRX，
+修正两处旧重跑计划的文档冲突后复核无剩余问题；用户要求等待后未再访问数据库或发网络探针。
 
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 

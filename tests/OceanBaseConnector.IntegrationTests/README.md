@@ -48,6 +48,16 @@ fetch-size paging, command disposal, connection reuse, and sync/async behavior; 
 the `SELECT CURSOR(...)` result-column shape described above. Local fixture/consumer passes remain
 separate from real interoperability. See [full evidence](../../docs/compatibility.md).
 
+## D-04f2 incident quarantine
+
+`AnonymousIntervalOutputTests.LocalCollectionsKeepExactIntervalsNullsAndEmptyOutputs` is explicitly
+skipped while repeated endpoint loss during its execution is investigated. This is an unresolved
+incident, not a confirmed unsupported server feature or a passing acceptance result. Earlier failures
+remain recorded in the [roadmap](../../docs/obconnector-dotnet-missing-features-roadmap.md).
+Do not remove the quarantine based only on a successful connection check; first investigate the
+server logs and arrange an isolated reproduction. Its phase/attempt output contains only synthetic
+test values. Other integration tests retain their existing opt-in behavior.
+
 ## Running
 
 1. Opt in: set `OB_REQUIRE_INTEGRATION=1`. Anything else (or unset) skips database tests.
