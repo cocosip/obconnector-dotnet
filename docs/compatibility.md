@@ -20,6 +20,8 @@ prepared UPDATE 短时对照 **4/4** 通过（sync/async，每配置5次；顺�
 4.15×～8.62×。分组1已存在执行路径开销差异，不能把全部收益归因于分组；资源仅为进程级粗诊断。
 原始样本、分位、资源、失败率口径和复现命令见路线图 D-08ad；不外推生产SLO、其他负载或长期稳定性。
 
+D-04m：named OBJECT/scalar collection/nested collection BLOB/CLOB locator Input 与独立标量 INOUT、同一 named type 的 complex OUT/函数 ReturnValue、根 LOB OUT、REF CURSOR OUT，现已在 mixed batch routine屏障中通过 Oracle 4.4.2.2 直连 Text/过程/函数 × sync/async **36/36**。覆盖显式 Prepare、PL错误的已执行前缀与未执行后缀、旧输出保留、原batch重复执行、batch释放后原事务内读取资源及提交后独立查账；复用已有产品代码。只关闭短LOB/调用方连接的指定组合，不代表同组PL流水化、locator自身INOUT或其他部署。
+
 ## 环境矩阵
 
 | 组合 | 历史证据 | 仍未验收 |
@@ -34,7 +36,7 @@ prepared UPDATE 短时对照 **4/4** 通过（sync/async，每配置5次；顺�
 | REF CURSOR reader前向offset FETCH | Oracle4.4.2.2直连sync/async **12/12**，空/三行、Default/SequentialAccess/SingleRow、父command释放与连接复用；D-03b1 | 显式 reader 重载及父 REF CURSOR offset 默认值均已支持；父选项未启用时既有签名仍用普通 FETCH；真实legacy EOF，DEPRECATE_EOF仅本地验证；无滚动定位，父 command 的已声明 REF CURSOR 输出现可保存 offset 默认值，reader 显式 bool 可覆盖，页大小独立（D-03b2）；未声明 REF CURSOR 的输出计划与 array binding 仍拒绝，其他部署未验收 |
 | MySQL 脚本标量 OUT/INOUT | 4.4.2.2 直连 sync/async **2/2**，普通/NULL INOUT、OUT、独立 binary 存储核对、reader 半读关闭、失败前缀/未执行后缀、batch 脚本屏障及后续更新，见 D-02c1 | 客户端变量编排；成功后统一发布不代表提交，后续错误保留已执行 SQL；Oracle 脚本输出、Prepare/cursor 和资源/复杂输出仍拒绝；ReturnValue 已按 D-02c2 验收，其他部署/版本未验收 |
 | Oracle 命名复杂值 INTERVAL 成员 | 4.4.2.2 直连 sync/async **10/10**：OBJECT、OBJECT集合及标量INTERVAL集合的二进制输入/PL OUT/INOUT、NULL元素/空与typed NULL集合、精度，以及脚本文本输入后的独立存储核对，见 D-04f | 复用既有精确provider值与codec；命名客户端构造器输入已支持，复杂text结果与标量匿名INTERVAL factory仍拒绝；未外推跨版本/部署或流水化专门验收 |
-| Oracle 命名BLOB成员locator字节 | 4.4.2.2 直连 sync/async **2/2** 对照确认：根locator有效，named成员把locator字节当作内容；显式SQL构造器配合根locator可用，见 D-04g。客户端 a4 已在 `oracle-direct` 以 BLOB/CLOB × OBJECT/collection/nested-collection × sync/async **12/12** 通过 constructor + hidden root LOB 自动绑定；显式 Prepare/PrepareAsync 与重复执行 **12/12** 通过并复用同一 statement；D-04i 又补齐单条全 Input、无输出 StoredProcedure 的显式 Prepare/PrepareAsync sync/async **2/2** | StoredProcedure 复杂 OBJECT locator InputOutput 在目标 4.4.2.2 直连 sync/async **2/2** 复核时，局部 OBJECT 回写 OUT bind 返回 `900/42000`，按服务端/协议边界不开发；独立标量输出见 D-04k，独立 complex/根 LOB/REF CURSOR 输出见 D-04l，batch 输入见 D-08ac；复杂 cursor 成员及 multi-statement locator 仍不在范围；StoredProcedure 仍是会话屏障，不承诺跨调用缓存；不能仅放开named writer，也不能据此认定所有其他替代协议或更复杂 collection 形状均支持 |
+| Oracle 命名BLOB成员locator字节 | 4.4.2.2 直连 sync/async **2/2** 对照确认：根locator有效，named成员把locator字节当作内容；显式SQL构造器配合根locator可用，见 D-04g。客户端 a4 已在 `oracle-direct` 以 BLOB/CLOB × OBJECT/collection/nested-collection × sync/async **12/12** 通过 constructor + hidden root LOB 自动绑定；显式 Prepare/PrepareAsync 与重复执行 **12/12** 通过并复用同一 statement；D-04i 又补齐单条全 Input、无输出 StoredProcedure 的显式 Prepare/PrepareAsync sync/async **2/2** | StoredProcedure 复杂 OBJECT locator InputOutput 在目标 4.4.2.2 直连 sync/async **2/2** 复核时，局部 OBJECT 回写 OUT bind 返回 `900/42000`，按服务端/协议边界不开发；独立标量输出见 D-04k，独立 complex/根 LOB/REF CURSOR 输出见 D-04l，mixed batch routine屏障的同类输入与独立标量/资源输出见 D-04m（36/36），batch input-only见 D-08ac；复杂 cursor 成员及 multi-statement locator 仍不在范围；StoredProcedure 仍是会话屏障，不承诺跨调用缓存；不能仅放开named writer，也不能据此认定所有其他替代协议或更复杂 collection 形状均支持 |
 | 真实TLS/企业CA/mTLS/撤销/轮换 | **当前两种模式真实环境未开TLS，未验收** | 必须保留matrix.tls-authentication deferred；自签名SslStream只属本地证据 |
 | 认证plugin/KDC/凭据服务 | native账号直连与本地客户端分支 | 非native正负认证、平台协商、实际轮换；Java插件注册不是OB部署证明 |
 | OBProxy/ODP、真正多节点、OCP/TNS服务 | 本地parser与受控单上游客户端路由 | 真实发现服务、节点/代理故障、后端reset/迁移，单上游中继不是HA |

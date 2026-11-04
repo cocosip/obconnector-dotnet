@@ -117,7 +117,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；命名复杂值普通/批量受控 fallback 子集见 D-01b；不含 OUT/cursor/LOB/anonymous，不以 `P3` 宣称全部组合完成 |
 | D-02 | `P2`；a1、c1/c2、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；MySQL标量脚本输出见c1/c2；Prepare、cursor、Oracle脚本输出及d1～d3以外的复杂输入继续明确拒绝或单独关闭 |
 | D-03 | `P2`；b1/b2/c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
-| D-04 | `P2`；a1/a3.1/b1/f/a4/k/l 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；a4 已完成 named OBJECT/collection BLOB/CLOB locator 的单条 Text input-only 自动绑定，并补齐 collection → nested OBJECT 形状的 loopback/直连证据；D-08ac 又完成 batch multi-send 的 OBJECT、scalar collection、nested collection 同形状 input-only 验收；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
+| D-04 | `P2`；a1/a3.1/b1/f/a4/k/l/m 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；a4 已完成 named OBJECT/collection BLOB/CLOB locator 的单条 Text input-only 自动绑定，并补齐 collection → nested OBJECT 形状的 loopback/直连证据；D-08ac 又完成 batch multi-send 的 OBJECT、scalar collection、nested collection 同形状 input-only 验收；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/多语句与受控 1295 fallback 子集见 D-05b；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
 | D-07 | `P2`；指定成功子集 `P4`，Oracle EUCKR 普通客户端未关闭 | 字符集和 national/result 映射（G07/T19/T20） | `ClientCharacterSet`、`ResultCharacterSet`、strict codec、collation 表 | 每个新名称需要服务端枚举、.NET 严格映射和真实 roundtrip；不能用相近 code page 伪造 | MySQL GB2312/EUCKR 客户端/结果与 Oracle NCHAR/NVARCHAR2 national 目标直连已验收；Oracle 普通 EUCKR 初始化被服务端 900/42000 拒绝并保留；CP850/HP8/MACROMAN客户端及SWE7仅结果已在D-07e验收；CP932指定成功子集见D-07f、普通Oracle初始化服务端900仍保留；UJIS指定成功子集见D-07g，EUCJPMS指定成功子集见D-07h；其余新名称继续逐项确认后再加入，不支持名称继续发送前拒绝 |
@@ -211,7 +211,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | --- | --- | --- |
 | 脚本级 Prepare、服务端 cursor、typed OUT/INOUT 发布 | D-02b/c | MySQL标量脚本OUT/INOUT/ReturnValue已按D-02c1/c2补齐并完成指定直连验收；Oracle脚本/其余资源输出仍待契约；脚本prepare当前被服务端拒绝，单PL块输出不替代脚本功能 |
 | Oracle REF CURSOR offset 的更多部署/资源组合 | D-03b | reader 显式选项与父已声明 REF CURSOR 输出的默认值传递分别由 b1/b2 补齐；滚动/绝对定位不在范围，其他部署/嵌套资源须独立证据 |
-| 命名复杂值中的 LOB locator 回绑及未证实的复杂成员方向 | D-04 | D-04g已确认named BLOB把locator字节当内容，而显式SQL构造器配合根locator可用；D-04h/i/k/l及D-08ac已补齐单条Text/过程/函数的构造器Input、独立标量/资源输出与batch输入指定子集；复杂locator自身INOUT、multi-statement及未验收方向仍保留。当前BLOB DML、根NULL/text/cursor服务端限制另记 |
+| 命名复杂值中的 LOB locator 回绑及未证实的复杂成员方向 | D-04 | D-04g已确认named BLOB把locator字节当内容，而显式SQL构造器配合根locator可用；D-04h/i/k/l/m及D-08ac已补齐单条Text/过程/函数的构造器Input、独立标量/资源输出、batch输入和mixed batch routine屏障输出指定子集；复杂locator自身INOUT、multi-statement及未验收方向仍保留。当前BLOB DML、根NULL/text/cursor服务端限制另记 |
 | package-local PL/SQL RECORD 参数派生与绑定 | A-03d | 字段目录、输入/输出 payload 及成功交互；目前 Java 公开 API 也不支持绑定，不能归为服务端拒绝 |
 | multi-send 普通DML的匿名输入/声明输出、复杂 text LOB 结果、PL 同组流水化输出、cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；保留调用方连接的复杂 LOB binary 结果见 D-08n（OBJECT 实库、collection 仅 loopback）；DML RETURNING 标量 OUT/INOUT 见 D-08o，命名复杂值和 LOB 输出见 D-08p；混合routine状态屏障兼容已关闭（D-08y），PL同组流水化仍未关闭；自有连接Scalar/显式LOB输出的已验收子集与自动提交远程DML的目标服务端事务边界见D-08z；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
 
@@ -795,7 +795,7 @@ Oracle 输出计划仅在声明 REF CURSOR Output/ReturnValue 时接受父 UseCu
 
 | 子项 | 进度 | 当前范围与下一步 |
 | --- | --- | --- |
-| D-04a 命名 LOB 成员 | `P2`；a1/a3.1/a4/k/l 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT/嵌套 OBJECT 根 NULL 输出身份为当前服务端限制。a2：BLOB OBJECT 成员 DML 在 .NET 与 Java 同 wire 诊断回放均返回 932；按当前目标服务端限制跳过客户端改动。a4：Oracle 单条 Text、input-only named OBJECT/collection 的 BLOB/CLOB locator 通过 SQL 构造器和隐藏根 LOB 参数自动绑定，直连 sync/async **12/12** 通过，含 collection → nested OBJECT；显式 Prepare/PrepareAsync 同形状 **12/12**；D-04j 已实测 StoredProcedure 命名 OBJECT locator InputOutput 的局部变量回写在 4.4.2.2 直连 sync/async **2/2** 返回 `900/42000`，不继续扩大客户端代码；D-04k/l已补齐独立标量及complex/根LOB/REF CURSOR输出，D-08ac已补齐batch input-only；复杂locator自身INOUT、其他batch输出、复杂cursor成员及multi-statement locator仍保留。 |
+| D-04a 命名 LOB 成员 | `P2`；a1/a3.1/a4/k/l/m 为 `P4` | a1：OBJECT/嵌套 OBJECT/collection 的 PL IN/OUT/INOUT、NULL 成员、输出 locator 释放与标量存储子集已验收。a3.1：命名根 NULL 输入改用 type 6 后通过；a3.2：OBJECT/嵌套 OBJECT 根 NULL 输出身份为当前服务端限制。a2：BLOB OBJECT 成员 DML 在 .NET 与 Java 同 wire 诊断回放均返回 932；按当前目标服务端限制跳过客户端改动。a4：Oracle 单条 Text、input-only named OBJECT/collection 的 BLOB/CLOB locator 通过 SQL 构造器和隐藏根 LOB 参数自动绑定，直连 sync/async **12/12** 通过，含 collection → nested OBJECT；显式 Prepare/PrepareAsync 同形状 **12/12**；D-04j 已实测 StoredProcedure 命名 OBJECT locator InputOutput 的局部变量回写在 4.4.2.2 直连 sync/async **2/2** 返回 `900/42000`，不继续扩大客户端代码；D-04k/l已补齐独立标量及complex/根LOB/REF CURSOR输出，D-04m已验收mixed batch routine屏障同类输入/输出36/36，D-08ac已补齐batch input-only；复杂locator自身INOUT、其余batch输出、复杂cursor成员及multi-statement locator仍保留。 |
 | D-04b 匿名 LOB 数组 | `P2`；b1 为 `P4` | b1：DML 迭代 locator 输入、事务结束/释放/旧快照的发送前拒绝与同会话恢复已验收；更广 PL 输出、DDL/reset 交错与长期资源压力仍未关闭，不把 DML 数组当普通 PL 集合 |
 | D-04c 复杂 RETURNING 身份 | `P4`；whole-column named OBJECT 子集已验收 | Oracle PrepareExecute 的 whole-column `RETURNING` 返回 `schema/name` 为空、`element=255` 的 opaque metadata；仅当输出参数显式声明同一已加载 named `ComplexType` 时绑定，并按存储 national encoding 解码。匿名数组、未知 element、未声明类型仍拒绝 |
 | D-04d 复杂 cursor 成员 | `P4`（当前目标形状为服务端限制）；新版本/新 wire 仍需重开 | 同一租户 `CREATE TYPE ... AS OBJECT (c SYS_REFCURSOR)` 在 Java 返回 `PLS-00201`、.NET 返回 `42000`；PL-only `RECORD (C SYS_REFCURSOR, N NUMBER)` 在 Java 与 .NET 均使 package 变为 `INVALID`，`ALL_ERRORS` 返回 `OBE-00600/-4007 attribute type of record is cursor type not supported`。两端都没有可读取的 child cursor wire，因此跳过客户端实现；若后续出现可创建的形状，再单独验收 child FETCH/所有权 |
@@ -1095,6 +1095,26 @@ IntegrationTests/TestResults 的 `d04k-integration.trx`、`d04k-live-regression.
 报告：IntegrationTests/TestResults/`d04l-resource-live.trx`，UnitTests/TestResults/`d04l-resource-unit.trx`。
 首轮夹具误对源 LOB 两次打开流，36项均因既有 single-open 契约失败；已修正为最后一次执行后才读取源 LOB，完整重跑通过，未改变产品限制。
 本项仅验收短 BLOB（6 bytes）/CLOB（7 chars）及命名复杂输出中的 NULL 成员；不计为外部大 LOB 分片读取、跨事务、复杂 locator 自身 INOUT、复杂 cursor 成员、multi-statement、同组流水化或压力证据。
+
+#### D-04m：mixed batch 命名复杂 LOB 输入与独立输出（2026-11-04，指定短 LOB 直连子集 `P4`）
+
+目标是核对仍开放的 batch 输出组合：复用 D-04k/l 的 constructor + hidden root LOB 输入和
+既有 routine 屏障，不新增 codec/选项、不把 PL 当同组流水化。范围为调用方持有原连接/显式事务，
+Text PL/StoredProcedure/complex ReturnValue 函数 × OBJECT/scalar collection/nested collection ×
+BLOB/CLOB × sync/async；独立输出包含标量、同一 named type 的 complex、根 LOB 和 REF CURSOR。
+新增实库夹具已证明该组合可复用现有共享路径，无产品代码/API/codec改动，不虚构功能 RED。
+
+- [x] 新增 `Batches/NamedComplexLobOutputBarrierTests.cs`，两条普通 DML → routine → 两条普通 DML，显式 Prepare 与重复执行。
+- [x] Oracle 4.4.2.2 `oracle-direct`、Windows/.NET10、TLS Disabled、未请求OB20 **36/36**，0 failure/0 skip，约24秒，全部对象清理通过。
+- [x] 每例先触发已知 `20001`，关联到routine BatchCommand；旧标量/complex/LOB/cursor输出保留，affected为 `[1,1,-1,-1,-1]`，同一事务查账为 `[1,1,0,0,0]`。随后修改失败标志，原batch两次成功，INOUT累加正确、普通DML逐条affected=1；最后batch释放后在原事务读取独立complex/root LOB与REF CURSOR，源locator保持可用，提交后独立连接核对五行增量为 `[3,3,2,2,2]`。
+- [x] 相关 batch routine/barrier、named LOB输入/输出和complex multi-send unit **84/84**，0 failure/0 skip（既有Release程序集，非完整Unit）；Integration Release构建0 warning/0 error。
+- [x] 新文件限定whitespace verify退出0（workspace-load warning）；首次object initializer格式问题已修正，`git diff --check`通过；功能/缺失矩阵、兼容性、架构和README同步。
+- [x] 独立只读走查 `review_d04m`：追踪constructor重写、分组屏障、输出发布及资源所有权，直接核对实库36/36与相关unit84/84的TRX；无可执行问题，批准本地提交。走查未另跑测试/数据库或构建。
+
+报告：IntegrationTests/TestResults/`d04m-barrier-live.trx`、UnitTests/TestResults/`d04m-related-unit.trx`。
+只关闭上述短 BLOB（6 bytes）/CLOB（7 chars）、原连接/事务中的 **mixed batch routine屏障** 组合。
+不关闭复杂locator自身INOUT、同组PL流水化、其他batch DML输出/复杂cursor成员、multi-statement，
+也不代表data source自有连接、跨事务、外置大LOB或其他部署/长期压力验收。
 
 #### D-04a2 Connector/J 2.4.14 公开 API 实测（2026-11-01）
 
