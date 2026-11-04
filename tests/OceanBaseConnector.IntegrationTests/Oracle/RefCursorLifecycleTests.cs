@@ -48,7 +48,7 @@ public sealed class RefCursorLifecycleTests
             id.Value = attempt + 1; state.Value = attempt == 0 ? DBNull.Value : 7;
             using var source = new MemoryStream(new byte[] { 42 }); bytes.Value = source;
             var originalState = state.Value; var originalCursor = output.Value;
-            command.UseCursorOffset = true;
+            command.FetchSize = 0; command.UseCursorOffset = true;
             await Assert.ThrowsAsync<NotSupportedException>(async () =>
             {
                 if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
@@ -57,7 +57,7 @@ public sealed class RefCursorLifecycleTests
             Assert.Same(originalState, state.Value); Assert.Same(originalCursor, output.Value);
             Assert.Equal(attempt, await db.CountAsync(observer, table, CancellationToken.None));
             Assert.Same(session, connection.GetOpenSession());
-            command.UseCursorOffset = false;
+            command.FetchSize = fetchSize;
             if (prepared)
             {
                 if (asynchronous) await command.PrepareAsync(); else command.Prepare();

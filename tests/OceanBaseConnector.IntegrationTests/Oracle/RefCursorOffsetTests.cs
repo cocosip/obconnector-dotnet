@@ -21,23 +21,60 @@ public sealed class RefCursorOffsetTests
 
     [IntegrationTheory]
     [MemberData(nameof(Profiles))]
-    public async Task ForwardOffsetPagesDrainBeforeConnectionReuse(string profileName, bool asynchronous, bool empty, CommandBehavior behavior)
+    public Task ForwardOffsetPagesDrainBeforeConnectionReuse(string profileName, bool asynchronous, bool empty, CommandBehavior behavior)
+        => VerifyPages(profileName, asynchronous, empty, behavior, parentOffset: false, disable: false);
+
+    public static IEnumerable<object[]> ParentProfiles()
+    {
+        foreach (var row in Profiles())
+            foreach (var disable in new[] { false, true }) yield return new object[] { row[0], row[1], row[2], row[3], disable };
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(ParentProfiles))]
+    public Task ParentOffsetDefaultsCanBeOverriddenAfterExplicitPreparation(string profileName, bool asynchronous, bool empty, CommandBehavior behavior, bool disable)
+        => VerifyPages(profileName, asynchronous, empty, behavior, parentOffset: true, disable);
+
+    public static IEnumerable<object[]> FunctionProfiles()
+    {
+        foreach (var profile in ProfileTheoryData.OraclePrepareExecuteObjects())
+            foreach (var asynchronous in new[] { false, true }) yield return new object[] { profile, asynchronous };
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(FunctionProfiles))]
+    public Task FunctionReturnInheritsParentOffset(string profileName, bool asynchronous)
+        => VerifyPages(profileName, asynchronous, false, CommandBehavior.SequentialAccess, parentOffset: true, disable: false, function: true);
+
+    private static async Task VerifyPages(string profileName, bool asynchronous, bool empty, CommandBehavior behavior, bool parentOffset, bool disable, bool function = false)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         await using var connection = await db.OpenAsync();
-        OceanBaseRefCursor cursor;
-        using (var command = db.Command(connection, empty
-            ? "BEGIN OPEN :c FOR SELECT 11 AS n FROM DUAL WHERE 1=0; END;"
-            : "BEGIN OPEN :c FOR SELECT 11 AS n FROM DUAL UNION ALL SELECT 22 FROM DUAL UNION ALL SELECT 33 FROM DUAL ORDER BY 1; END;"))
+        var query = empty ? "SELECT 11 AS n FROM DUAL WHERE 1=0"
+            : "SELECT 11 AS n FROM DUAL UNION ALL SELECT 22 FROM DUAL UNION ALL SELECT 33 FROM DUAL ORDER BY 1";
+        var sql = "BEGIN OPEN :c FOR " + query + "; END;";
+        if (function)
         {
+            sql = db.NewObject("PROCEDURE", registerCleanup: false); db.RegisterDropCleanup("FUNCTION", sql);
+            await db.ExecuteAsync(connection, "CREATE FUNCTION " + sql + " RETURN SYS_REFCURSOR IS c SYS_REFCURSOR; BEGIN OPEN c FOR " + query + "; RETURN c; END;", CancellationToken.None);
+        }
+        OceanBaseRefCursor cursor;
+        using (var command = db.Command(connection, sql))
+        {
+            if (function) command.CommandType = CommandType.StoredProcedure;
+            command.UseCursorOffset = parentOffset; command.FetchSize = parentOffset ? 1 : 0;
             var output = DatabaseContext.Parameter(command, "c", DBNull.Value);
-            output.OceanBaseDbType = OceanBaseDbType.RefCursor; output.Direction = ParameterDirection.Output;
+            output.OceanBaseDbType = OceanBaseDbType.RefCursor; output.Direction = function ? ParameterDirection.ReturnValue : ParameterDirection.Output;
+            if (parentOffset) { if (asynchronous) await command.PrepareAsync(); else command.Prepare(); }
             if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
             cursor = Assert.IsType<OceanBaseRefCursor>(output.Value);
+            command.UseCursorOffset = false;
         }
         using (cursor)
         {
-            await using (var reader = asynchronous ? await cursor.GetDataReaderAsync(2, true, behavior, CancellationToken.None) : cursor.GetDataReader(2, true, behavior))
+            await using (var reader = parentOffset && !disable
+                ? asynchronous ? await cursor.GetDataReaderAsync(2, behavior) : cursor.GetDataReader(2, behavior)
+                : asynchronous ? await cursor.GetDataReaderAsync(2, !disable, behavior, CancellationToken.None) : cursor.GetDataReader(2, !disable, behavior))
             {
                 Assert.Equal(!empty, reader.HasRows);
                 var count = empty ? 0 : (behavior & CommandBehavior.SingleRow) != 0 ? 1 : 3;

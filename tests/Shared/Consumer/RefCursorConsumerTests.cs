@@ -20,7 +20,7 @@ namespace OceanBaseConnector.ConsumerTests
     public sealed partial class Ob20ConsumerTests
     {
 
-        private static async Task EveryAssetReadsRefCursorAfterParentCommandDisposalCore(string target, bool async, string kind, bool encrypted, bool prepared = false, CommandBehavior behavior = CommandBehavior.Default)
+        private static async Task EveryAssetReadsRefCursorAfterParentCommandDisposalCore(string target, bool async, string kind, bool encrypted, bool prepared = false, CommandBehavior behavior = CommandBehavior.Default, bool parentOffset = false)
         {
             using var certificate = encrypted ? TestCertificateFactory.CreateSelfSigned() : null;
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
@@ -56,10 +56,12 @@ namespace OceanBaseConnector.ConsumerTests
                 await Reply(offset, Frame(1, new byte[] { 0, 91, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 1 })
                     .Concat(Frame(2, Column(163))).Concat(Frame(3, Column(163))).Concat(Frame(4, new byte[] { 0, 0, 92, 0, 0, 0 }))
                     .Concat(Frame(5, eof)).Concat(Frame(6, Report(false, 0))).ToArray());
-                Assert.Equal(new byte[] { 28, 92, 0, 0, 0, 2, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 2 + offset + 1, budget.Token));
+                Assert.Equal(parentOffset ? new byte[] { 28, 92, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0 }
+                    : new byte[] { 28, 92, 0, 0, 0, 2, 0, 0, 0 }, await ReadRequest(stream, channel, ob20, 2 + offset + 1, budget.Token));
                 var last = Report(false, 0); last[0] = 254; last[3] |= 128;
                 var response = Frame(1, new byte[] { 1 }).Concat(Frame(2, Column(8)))
                     .Concat(Frame(3, new byte[] { 0, 0, 42, 0, 0, 0, 0, 0, 0, 0 })).Concat(Frame(4, last)).ToArray();
+                if (parentOffset) response = response.Concat(Frame(5, Report(false, 1))).ToArray();
                 if (limited)
                 {
                     var more = Report(false, 0); more[0] = 254; more[3] |= 64;
@@ -90,6 +92,11 @@ namespace OceanBaseConnector.ConsumerTests
                 connection.ConnectionString = $"Server=127.0.0.1;Port={((IPEndPoint)listener.LocalEndpoint).Port};User ID=u;TLS Mode={(encrypted ? "Required" : "Disabled")};Use Oracle Prepare Execute=true;Use OB20={ob20}";
                 if (async) await connection.OpenAsync(budget.Token); else connection.Open();
                 var command = connection.CreateCommand(); command.CommandText = "pkg.open_cursor"; command.CommandType = CommandType.StoredProcedure;
+                if (parentOffset)
+                {
+                    command.GetType().GetProperty("FetchSize")!.SetValue(command, 1);
+                    command.GetType().GetProperty("UseCursorOffset")!.SetValue(command, true);
+                }
                 var output = command.CreateParameter(); output.ParameterName = "c"; output.Direction = ParameterDirection.Output;
                 output.GetType().GetProperty("OceanBaseDbType")!.SetValue(output, Enum.Parse(assembly.GetType("OceanBaseConnector.OceanBaseDbType")!, "RefCursor"));
                 command.Parameters.Add(output);

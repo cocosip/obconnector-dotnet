@@ -24,6 +24,7 @@ namespace OceanBaseConnector.Internal.Sql
 
         internal ParameterBindingPlan Bindings { get; }
         internal OceanBaseParameter[] Outputs { get; }
+        internal bool HasRefCursorOutputs => Array.Exists(_outputTypes, type => type == OceanBaseDbType.RefCursor);
         internal Action<uint>? StatementCreated { get; set; }
         internal OracleCursorOwner? Cursors { get; set; }
         internal OracleArrayBindingPlan? ArrayBinding { get; private set; }

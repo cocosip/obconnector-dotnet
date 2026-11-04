@@ -46,7 +46,8 @@ namespace OceanBaseConnector
         /// do not page their parent result; returned REF CURSOR readers have their own page size.</summary>
         public int FetchSize { get => _fetchSize; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _fetchSize = value; } }
         /// <summary>Use Oracle offset fetch for a positive FetchSize; requires OceanBase 2.2.5 or later.
-        /// Not supported for Oracle output plans or cursor-valued result columns.</summary>
+        /// For declared REF CURSOR outputs, supplies the returned reader's default; its page size stays independent.
+        /// Not supported for other Oracle output plans, array binding or cursor-valued result columns.</summary>
         public bool UseCursorOffset { get; set; }
         /// <summary>Allow scalar input text execution only after an unsupported-prepare error (1295/HY000).
         /// Disabled by default; explicit Prepare, cursors and Oracle PrepareExecute never fall back.</summary>
@@ -304,7 +305,8 @@ namespace OceanBaseConnector
                 }
 #endif
                 if (oracle == null && mysql == null && CommandType != CommandType.Text) throw new NotSupportedException("Oracle stored procedures require Use Oracle Prepare Execute=true.");
-                if (oracle != null && cursorOffset) throw new NotSupportedException("Oracle output execution does not support offset fetch.");
+                if (oracle != null && cursorOffset && (oracle.ArrayBinding != null || !oracle.HasRefCursorOutputs))
+                    throw new NotSupportedException("Offset fetch on Oracle outputs requires a declared REF CURSOR and no array binding.");
                 ParameterBindingPlan bindings;
                 if (namedComplexLob && oracle == null)
                 {
@@ -382,14 +384,14 @@ namespace OceanBaseConnector
                 _execution = execution;
                 if (arrayCount != 0) ArrayBindingResult = null;
                 if (!prepareOnly && !schemaOnly && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle)
-                    execution.CursorColumns = new OracleCursorOwner(connection, session, transaction, _timeout);
+                    execution.CursorColumns = new OracleCursorOwner(connection, session, transaction, _timeout, useCursorOffset: oracle != null && cursorOffset);
                 if (oracle != null && !prepareOnly)
                 {
                     oracle.Cursors = execution.CursorColumns!;
                     oracle.StatementCreated = oracle.Cursors.SetStatement;
                     _oracleSession = session;
                 }
-                return (execution, session, connection, bindings, parameters, binary, fetchSize, oracle, clientFallback, cursorOffset, mysql);
+                return (execution, session, connection, bindings, parameters, binary, fetchSize, oracle, clientFallback, oracle == null && cursorOffset, mysql);
             }
         }
 

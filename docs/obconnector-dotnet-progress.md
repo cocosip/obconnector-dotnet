@@ -1,6 +1,6 @@
 # SDK 功能、能力与支持边界矩阵
 
-更新：2026-11-04，源码基线`fd44475`，D-02c2 已补齐 MySQL 文本脚本标量 ReturnValue，并完成当前 mysql-direct 指定功能实库闭环（P4）；D-04i 已补齐 StoredProcedure 单条全 Input locator 子集；D-04j 的复杂 locator InputOutput 在目标服务端返回 `900/42000`，候选改动已撤销；D-08ac 已补齐 batch named OBJECT、scalar collection、nested collection BLOB/CLOB locator 输入子集，Oracle 直连 12/12。D-04k 已补齐 locator 输入与独立标量输出的显式 Prepare/重复执行子集，Oracle 直连 36/36；后续按仍开放且有协议依据的组合继续推进；本文是当前功能范围的唯一入口；
+更新：2026-11-04，本轮起点`daaafae`，新增 D-03b2 父 REF CURSOR offset 默认值传递，D-02c2 已补齐 MySQL 文本脚本标量 ReturnValue，并完成当前 mysql-direct 指定功能实库闭环（P4）；D-04i 已补齐 StoredProcedure 单条全 Input locator 子集；D-04j 的复杂 locator InputOutput 在目标服务端返回 `900/42000`，候选改动已撤销；D-08ac 已补齐 batch named OBJECT、scalar collection、nested collection BLOB/CLOB locator 输入子集，Oracle 直连 12/12。D-04k 已补齐 locator 输入与独立标量输出的显式 Prepare/重复执行子集，Oracle 直连 36/36；后续按仍开放且有协议依据的组合继续推进；本文是当前功能范围的唯一入口；
 [依据与清理决策](obconnector-dotnet-scope-audit.md)固定官方文档/Java版本并解释O/J编号，
 [缺失矩阵](obconnector-dotnet-completeness.md)列开发与验收差距，
 [验收标准](acceptance-criteria.md)定义完成条件，[兼容性](compatibility.md)保留环境阻塞。
@@ -8,6 +8,8 @@
 D-04k 新增：named OBJECT/collection BLOB/CLOB locator **Input** 可与独立标量 OUT/INOUT 共存于单条 Text PL/StoredProcedure，函数可带标量 ReturnValue；显式 Prepare 与重复执行的 Oracle 4.4.2.2 `oracle-direct` 矩阵 **36/36** 通过。复杂 locator 值自身的 INOUT 仍按 D-04j 保持拒绝，不扩展其服务端边界。
 
 D-04l 新增短 LOB 验收（BLOB 6 bytes / CLOB 7 chars）：同一 locator Input 可与独立 complex OUT/函数 ReturnValue（与输入同一 named type）、根 BLOB/CLOB OUT、REF CURSOR OUT 共存；现有共享输出计划无需新增产品代码。Oracle 4.4.2.2 `oracle-direct` 的 Text/过程/函数 × BLOB/CLOB × OBJECT/collection/nested-collection × sync/async **36/36** 通过，含错误后旧输出保留、重复执行、父 command 释放后在原事务内读取资源及提交后独立查账；复杂 locator 自身 INOUT、复杂 cursor 成员和脚本不在该范围。
+
+D-03b2 新增：父 command 的 `UseCursorOffset=true`（正 FetchSize）现可用于已声明 REF CURSOR Output/ReturnValue。既有 reader 重载继承执行时快照，显式 bool 可覆盖；子 reader 页大小仍独立，隐藏输出行不使用 offset。Oracle 4.4.2.2 直连相关实库 **46/46**（含原显式 reader 12、父默认/覆盖24、函数2、过程生命周期8），不扩展滚动、array、标量-only 输出或 cursor-valued 列范围。
 
 **当前是实验性驱动，不承诺生产级全功能。** 下表“有实现/部分”是源码状态，
 “直连子集”引用历史4.4.2.2记录，不是本次重跑或全功能验收。任何部署支持均须绑定
@@ -54,7 +56,7 @@ D-04l 新增短 LOB 验收（BLOB 6 bytes / CLOB 7 chars）：同一 locator Inp
 | Q07 参数元数据派生 | 可选ADO.NET适配 | 可见唯一签名 | 可见唯一签名；未引用 BMP Unicode 字母过程名的执行与派生共用校验，中文独立过程/package 直连 sync/async **4/4**（A-03f）；中文 IN/OUT/INOUT 参数原名派生并执行及普通 DML/脚本独立读回，新增直连 sync/async **6/6**（A-03g）；带空格的引用 IN/OUT/INOUT 形参已可原名派生并按位置调用，普通过程/package/函数直连 sync/async 新增 **6/6**（A-03h）；仅大小写不同形参的客户端精确身份有本地证据，当前实库创建/调用失败不计为支持；普通 package-local `PL/SQL RECORD` 目录可见但公开绑定仍无协议契约；含 `SYS_REFCURSOR` 成员的 PL-only RECORD 在当前目标使 package INVALID，Java/.NET 同为服务端限制 | OceanBaseConnection.Parameters、RoutineParameterDerivation | 双模式函数的合成返回名已避让真实形参，exact/后缀冲突直连 sync/async 新增 **8/8**（A-03i）；不执行目标；歧义/包内PL类型等拒绝；普通 RECORD 需字段描述和成功 wire 后再实现；cursor 成员需新服务端形状后重开 |
 | Q08 Reader/NextResult/typed getters | 核心 | 有实现 | 有实现 | OceanBaseDataReader、QueryResult、ResultColumn | metadata、NULL、精度与类型身份须一致 |
 | Q09 SequentialAccess/流式读取 | 核心资源 | 有实现 | 有实现，含LOB资源 | SequentialRow、LobReadStream、LobTextReader | 半读/取消/关闭/池租约子集验收；已支持 multi-send SequentialAccess（D-08w），复杂字段沿用有界物化；不等于全部资源交错 |
-| Q10 cursor fetch/page/offset | 可选 | prepared cursor分页 | prepared cursor分页，offset有条件 | QueryResult.Cursor、OracleCursorOwner | 普通cursor与PL输出不同；REF CURSOR reader已支持显式前向offset FETCH（D-03b1）；父command输出offset仍拒绝 |
+| Q10 cursor fetch/page/offset | 可选 | prepared cursor分页 | prepared cursor分页，offset有条件 | QueryResult.Cursor、OracleCursorOwner | 普通cursor与PL输出不同；REF CURSOR reader已支持显式前向offset FETCH（D-03b1）；父 command 的已声明 REF CURSOR 输出现可保存 offset 默认值，reader 显式 bool 可覆盖，页大小独立（D-03b2）；未声明 REF CURSOR 的输出计划与 array binding 仍拒绝 |
 | Q11 REF CURSOR结果/OUT | 可选Oracle | — | 四字节cursor/OUT实现 | OceanBaseRefCursor、QueryResult.OraclePrepareExecute | J4；当前目标版本 `SELECT CURSOR` 列形状为服务端限制且 Java 同样失败，Integration profile 通过 `capabilities.serverLimitations` 在发现期跳过该已确认形状；不能整体称支持；PL OUT/REF CURSOR 仍按独立契约验收 |
 | Q12 REF CURSOR IN/INOUT | 排除当前范围 | — | 发送前拒绝 | OracleCommandPlan/参数校验 | 无参考writer依据；不影响普通标量INOUT |
 | Q13 CommandBehavior | ADO.NET契约 | SchemaOnly/KeyInfo/SingleRow/SingleResult/CloseConnection子集 | 同左 | OceanBaseCommand.KeyInfo、KeyInfoQuery、OceanBaseBatchReader | SchemaOnly不执行、不上传；KeyInfo仅证明的单表形状扩隐藏键；整批 SingleRow/SingleResult 已保留 opt-in multi-send，可组合 SequentialAccess/CloseConnection/data source（D-08x） |

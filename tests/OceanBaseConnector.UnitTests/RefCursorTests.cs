@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
 using OceanBaseConnector.Internal.Protocol;
@@ -56,13 +57,47 @@ namespace OceanBaseConnector.UnitTests
         public Task RefCursorOffsetRejectsBadInitialTailWithoutChangingParentOutcome(bool async, bool sequential)
             => ReadRefCursorPagesAndRelease(async, false, sequential, cursorOffset: true, invalidInitialTail: true);
 
-        internal static async Task ReadRefCursorPagesAndRelease(bool async, bool deprecated, bool sequential, int slowThreshold = 0, int commandFetchSize = 0, CommandBehavior behavior = CommandBehavior.Default, bool advanceWithoutRead = false, bool cursorOffset = false, bool invalidInitialTail = false)
+        public static TheoryData<bool, bool, bool, bool> ParentCursorOffsetCases()
+        {
+            var data = new TheoryData<bool, bool, bool, bool>();
+            foreach (var asynchronous in new[] { false, true })
+                foreach (var deprecated in new[] { false, true })
+                    foreach (var sequential in new[] { false, true })
+                        foreach (var disable in new[] { false, true }) data.Add(asynchronous, deprecated, sequential, disable);
+            return data;
+        }
+
+        [Theory]
+        [MemberData(nameof(ParentCursorOffsetCases))]
+        public Task RefCursorInheritsParentOffsetSnapshotAndAllowsExplicitOverride(bool asynchronous, bool deprecated, bool sequential, bool disable)
+            => ReadRefCursorPagesAndRelease(asynchronous, deprecated, sequential, commandFetchSize: 1,
+                cursorOffset: !disable, commandCursorOffset: true, readerCursorOffset: disable ? false : null);
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public Task RefCursorInheritedOffsetRejectsBadTailWithoutChangingParentOutcome(bool asynchronous, bool sequential)
+            => ReadRefCursorPagesAndRelease(asynchronous, false, sequential, commandFetchSize: 1,
+                cursorOffset: true, invalidInitialTail: true, commandCursorOffset: true);
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public Task RefCursorParentOffsetFunctionReturnUsesTheSameDefault(bool asynchronous)
+            => ReadRefCursorPagesAndRelease(asynchronous, false, true, commandFetchSize: 1,
+                cursorOffset: true, commandCursorOffset: true, function: true);
+
+        internal static async Task ReadRefCursorPagesAndRelease(bool async, bool deprecated, bool sequential, int slowThreshold = 0, int commandFetchSize = 0, CommandBehavior behavior = CommandBehavior.Default, bool advanceWithoutRead = false, bool cursorOffset = false, bool invalidInitialTail = false, bool commandCursorOffset = false, bool? readerCursorOffset = null, bool function = false)
         {
             var server = Server(async channel =>
             {
 
                 var execute = await StatementCommand(channel, 0xa1, deprecated);
                 Assert.Equal(0, execute[5]);
+                var request = new ByteCursor(execute); request.Skip(10);
+                Assert.Equal(function ? "BEGIN ? := pkg.open_cursor(); END;" : "BEGIN pkg.open_cursor(?); END;", Encoding.UTF8.GetString(request.ReadLengthEncodedBytes()));
                 await channel.WritePacketAsync(OracleExecuteHeader(1, 1, 4));
                 await channel.WritePacketAsync(Column("c", 163));
                 if (!deprecated) await channel.WritePacketAsync(Eof());
@@ -96,11 +131,12 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync();
                 var command = (OceanBaseCommand)connection.CreateCommand(); command.CommandType = CommandType.StoredProcedure; command.CommandText = "pkg.open_cursor";
-                command.FetchSize = commandFetchSize;
-                var parameter = new OceanBaseParameter { ParameterName = "c", Direction = ParameterDirection.Output, OceanBaseDbType = OceanBaseDbType.RefCursor };
+                command.FetchSize = commandFetchSize; command.UseCursorOffset = commandCursorOffset;
+                var parameter = new OceanBaseParameter { ParameterName = "c", Direction = function ? ParameterDirection.ReturnValue : ParameterDirection.Output, OceanBaseDbType = OceanBaseDbType.RefCursor };
                 command.Parameters.Add(parameter);
                 Assert.Equal(0, async ? await command.ExecuteNonQueryAsync() : command.ExecuteNonQuery());
                 using var cursor = Assert.IsType<OceanBaseRefCursor>(parameter.Value);
+                command.UseCursorOffset = false;
                 command.Dispose(); // The output cursor owns the parent statement after command disposal.
                 Assert.Throws<ArgumentOutOfRangeException>(() => { cursor.GetDataReader(0, default); });
                 await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => cursor.GetDataReaderAsync(0, default, default));
@@ -108,8 +144,9 @@ namespace OceanBaseConnector.UnitTests
                 using var canceled = new CancellationTokenSource(); canceled.Cancel();
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cursor.GetDataReaderAsync(cancellationToken: canceled.Token));
                 var readerBehavior = behavior | (sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default);
-                using var reader = cursorOffset
-                    ? async ? await cursor.GetDataReaderAsync(2, true, readerBehavior, CancellationToken.None) : cursor.GetDataReader(2, true, readerBehavior)
+                var explicitOffset = readerCursorOffset ?? (cursorOffset && !commandCursorOffset ? true : (bool?)null);
+                using var reader = explicitOffset.HasValue
+                    ? async ? await cursor.GetDataReaderAsync(2, explicitOffset.Value, readerBehavior, CancellationToken.None) : cursor.GetDataReader(2, explicitOffset.Value, readerBehavior)
                     : async ? await cursor.GetDataReaderAsync(2, readerBehavior) : cursor.GetDataReader(2, readerBehavior);
                 if (invalidInitialTail)
                 {

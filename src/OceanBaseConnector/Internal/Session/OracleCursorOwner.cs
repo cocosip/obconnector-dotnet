@@ -22,10 +22,11 @@ namespace OceanBaseConnector.Internal.Session
         internal OceanBaseTransaction? Transaction { get; }
         internal long Epoch { get; }
         internal int Timeout { get; }
+        internal bool UseCursorOffset { get; }
         internal bool HasParent { get { lock (_gate) return _statement.HasValue || _parentCursor != null; } }
 
-        internal OracleCursorOwner(OceanBaseConnection connection, PhysicalSession session, OceanBaseTransaction? transaction, int timeout)
-        { Connection = connection; Session = session; Transaction = transaction; Timeout = timeout; Epoch = connection.TransactionEpoch; _identifiers = new HashSet<uint>(); }
+        internal OracleCursorOwner(OceanBaseConnection connection, PhysicalSession session, OceanBaseTransaction? transaction, int timeout, bool useCursorOffset = false)
+        { Connection = connection; Session = session; Transaction = transaction; Timeout = timeout; UseCursorOffset = useCursorOffset; Epoch = connection.TransactionEpoch; _identifiers = new HashSet<uint>(); }
 
         internal OracleCursorOwner(OceanBaseRefCursor parent)
             : this(parent.Owner.Connection, parent.Owner.Session, parent.Owner.Transaction, parent.Owner.Timeout)

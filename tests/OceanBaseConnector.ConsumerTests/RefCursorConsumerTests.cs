@@ -29,6 +29,13 @@ namespace OceanBaseConnector.ConsumerTests
         public Task EveryAssetPreparesRefCursorAndKeepsParentAfterDisposal(string target, bool async, string kind)
             => EveryAssetReadsRefCursorAfterParentCommandDisposalCore(target, async, kind, encrypted: false, prepared: true);
 
+        public static IEnumerable<object[]> ParentOffsetAssets() => OracleAssets().Where(row => (string)row[2] != "trailing");
+
+        [Theory]
+        [MemberData(nameof(ParentOffsetAssets))]
+        public Task EveryAssetInheritsParentCursorOffsetThroughExistingReaderOverloads(string target, bool async, string kind)
+            => EveryAssetReadsRefCursorAfterParentCommandDisposalCore(target, async, kind, encrypted: false, prepared: true, parentOffset: true);
+
         public static IEnumerable<object[]> LimitedCursorAssets()
         {
             foreach (var row in OracleAssets())

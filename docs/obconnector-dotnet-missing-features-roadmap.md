@@ -116,7 +116,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | --- | --- | --- | --- | --- | --- |
 | D-01 | `P3`，代码提交 `cca74fb` | Oracle 普通 client-prepare fallback（G01/Q04；本轮本地代码模块完成） | 复用已有 Oracle 时间/INTERVAL/NCHAR 字面量；修复 national 无用 binary 编码，sync/async 一致 | 完整本地门禁和独立走查已通过；原生 1295、字面量身份、编码、时区和精度的目标实库仍待验收 | 原生 1295 profile 下存储后独立读回再进入 `P4`；命名复杂值普通/批量受控 fallback 子集见 D-01b；不含 OUT/cursor/LOB/anonymous，不以 `P3` 宣称全部组合完成 |
 | D-02 | `P2`；a1、c1/c2、d1～d3 达到 `P4` | 扩大双模式多语句参数和多结果（G02/Q05） | `OceanBaseCommand`、SQL 边界扫描、参数展开和结果消费 | 保持 SQL 总长度、引号、NUL、流和失败后会话状态边界；长 NUL 不稳定性保留 | 每个支持模式/方向/类型组合有结果、失败前缀和后缀断言；MySQL标量脚本输出见c1/c2；Prepare、cursor、Oracle脚本输出及d1～d3以外的复杂输入继续明确拒绝或单独关闭 |
-| D-03 | `P2`；c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
+| D-03 | `P2`；b1/b2/c 的指定子集达到 `P4` | Oracle cursor/输出形状（G03/Q10/Q11） | `OracleCommandPlan`、`QueryResult.Cursor`、`OracleCursorOwner`、Fetch/offset | 已有四字节 cursor/OUT 子集；本轮 SELECT CURSOR 的父行/child FETCH 仍失败；扩大范围须有真实 wire | a/b/c 拆分见执行记录；本轮 30/31 保留原有 1 项列失败，PL OUT 成功不关闭结果列缺口 |
 | D-04 | `P2`；a1/a3.1/b1/f/a4/k/l 指定子集达到 `P4` | Oracle OBJECT/collection/复杂 LOB/cursor 成员（G04/T14/T15/Q16） | `ComplexValueCodec`、`ComplexTypeContext`、locator 生命周期、RETURNING 身份 | 子项见执行记录；命名根 NULL 输入已修复；BLOB OBJECT 成员 DML 已按同 wire 的 Java 诊断回放标为当前服务端限制；a4 已完成 named OBJECT/collection BLOB/CLOB locator 的单条 Text input-only 自动绑定，并补齐 collection → nested OBJECT 形状的 loopback/直连证据；D-08ac 又完成 batch multi-send 的 OBJECT、scalar collection、nested collection 同形状 input-only 验收；根 NULL OBJECT 输出身份、复杂 text 和其他 locator 形状仍未关闭；SQL OBJECT 与当前 PL-only cursor 成员形状已按 Java/.NET 同失败标为当前服务端限制 | 支持的成员方向、NULL、嵌套、locator 失效、DDL/reset 和旧资源释放均有证据；未知身份不误解码 |
 | D-05 | `P4`，仅指定直连 profile | UROWID 和 ROWID 参数/结果闭环（G05/T12） | 新增显式 Urowid 参数类型、type209 输入和目录映射；旧 ROWID/String 结果兼容 | 普通 prepare/PrepareExecute、NULL/长值、OUT/INOUT/ReturnValue、RETURNING、独立读回已验收；见执行记录 | 指定 Oracle 4.4.2.2 直连验收；client literal/多语句与受控 1295 fallback 子集见 D-05b；跨部署、长期压力与 A-03 目录边界仍保留 |
 | D-06 | `P2`；a 指定直连子集 `P4`，b 待服务端 SRS | GEOMETRY 输入和结果边界（G06/T05） | 复用Binary参数回绑SRID+WKB；补空间过程目录映射和DataTypes参数支持，旧结果Binary身份兼容 | SRID=0多形状/NULL/坏值/输出/独立存储已验证；当前SRS目录仅0，非零SRID拒绝见执行记录 | a 的范围与证据见下；b 取得真实非零 SRS 目录和往返后单独关闭；无GIS领域API，不更改服务端SRS配置 |
@@ -210,7 +210,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | 组合缺口 | 对应任务 | 进入开发前需要补齐 |
 | --- | --- | --- |
 | 脚本级 Prepare、服务端 cursor、typed OUT/INOUT 发布 | D-02b/c | MySQL标量脚本OUT/INOUT/ReturnValue已按D-02c1/c2补齐并完成指定直连验收；Oracle脚本/其余资源输出仍待契约；脚本prepare当前被服务端拒绝，单PL块输出不替代脚本功能 |
-| Oracle 父输出计划的 offset 选项传递 | D-03b | REF CURSOR reader 的显式前向 offset FETCH 已在 D-03b1 补齐；父 command 选项仍拒绝，不新增滚动/绝对定位 API；其他位置与归属契约须单独确认 |
+| Oracle REF CURSOR offset 的更多部署/资源组合 | D-03b | reader 显式选项与父已声明 REF CURSOR 输出的默认值传递分别由 b1/b2 补齐；滚动/绝对定位不在范围，其他部署/嵌套资源须独立证据 |
 | 命名复杂值中的 LOB locator 回绑及未证实的复杂成员方向 | D-04 | D-04g已确认named BLOB把locator字节当内容，而显式SQL构造器配合根locator可用；D-04h/i/k/l及D-08ac已补齐单条Text/过程/函数的构造器Input、独立标量/资源输出与batch输入指定子集；复杂locator自身INOUT、multi-statement及未验收方向仍保留。当前BLOB DML、根NULL/text/cursor服务端限制另记 |
 | package-local PL/SQL RECORD 参数派生与绑定 | A-03d | 字段目录、输入/输出 payload 及成功交互；目前 Java 公开 API 也不支持绑定，不能归为服务端拒绝 |
 | multi-send 普通DML的匿名输入/声明输出、复杂 text LOB 结果、PL 同组流水化输出、cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；保留调用方连接的复杂 LOB binary 结果见 D-08n（OBJECT 实库、collection 仅 loopback）；DML RETURNING 标量 OUT/INOUT 见 D-08o，命名复杂值和 LOB 输出见 D-08p；混合routine状态屏障兼容已关闭（D-08y），PL同组流水化仍未关闭；自有连接Scalar/显式LOB输出的已验收子集与自动提交远程DML的目标服务端事务边界见D-08z；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
@@ -695,8 +695,8 @@ Oracle NUMBER 的失败已修正；没有修改产品 NUMBER 返回类型或删�
 | 子项 | 进度 | 本轮结论 / 下一步 |
 | --- | --- | --- |
 | D-03a 普通 SELECT CURSOR 列 | `服务端限制（当前目标版本已验收形状）` | 本地四字节 binary/text 解析已有；当前单值 binary 执行报 902，多行父值可返回但 FETCH 报 1002，Java 对同一形状同码。text 十进制解析也无法得到可读 child；当前形状跳过客户端开发，若未来 profile 提供不同可读取形状再重新评估 |
-| D-03b OUT / REF CURSOR offset | `部分实现`；reader前向子集见D-03b1 | 返回的 REF CURSOR reader 已有显式 offset FETCH，沿用 NEXT、offset=0、位置尾包验证；父 command 输出计划仍拒绝 UseCursorOffset。Java 排除该分支不等于服务端不支持；本轮独立服务端源码与实库 wire 对照见 D-03b1。不新增滚动或绝对定位 API |
-| D-03c 已有输出/普通 cursor 的生命周期 | `P4`，仅下述子集 | 新增 sync/async、显式/隐式 Prepare、极小/极大父 FetchSize、NULL INOUT、输出 offset 发送前拒绝、服务端后段错误后的原子输出与恢复执行；普通 cursor/offset 和已有 REF CURSOR 释放/结果限制回归见报告；不关闭 a/b 或全部参数类型组合 |
+| D-03b OUT / REF CURSOR offset | `部分实现`；reader前向及父默认值子集见D-03b1/b2 | 返回的 REF CURSOR reader 已有显式 offset FETCH，沿用 NEXT、offset=0、位置尾包验证；父 command 已声明 REF CURSOR 输出可保存默认 offset 选项，reader 显式 bool 可覆盖（D-03b2）；未声明 REF CURSOR 的输出计划与 array binding 仍拒绝。Java 排除该分支不等于服务端不支持；本轮独立服务端源码与实库 wire 对照见 D-03b1。不新增滚动或绝对定位 API |
+| D-03c 已有输出/普通 cursor 的生命周期 | `P4`，仅下述子集 | 新增 sync/async、显式/隐式 Prepare、极小/极大父 FetchSize、NULL INOUT、缺少正 FetchSize 的 offset 发送前拒绝（b2 更新）、服务端后段错误后的原子输出与恢复执行；普通 cursor/offset 和已有 REF CURSOR 释放/结果限制回归见报告；不关闭 a/b 或全部参数类型组合 |
 
 #### D-03a/b 的服务端与 Java 证据
 
@@ -769,6 +769,25 @@ child 并固定显式 client 工厂；初始观察不作为成功证据。
 - 初始RED：新增8项均因缺少reader选项入口失败，报告`d03b-red.trx`。首轮定向回归213/213通过，报告`d03b-regression.trx`；最终定向回归 **217/217**（新增12项），无skip，约8秒，报告`d03b-reviewed-regression.trx`；包含首批错误计数的sync/async与buffered/sequential负向，连接进入Broken且父SQL不标unknown outcome。
 - Oracle4.4.2.2直连 **12/12**，无skip，约3秒，报告`d03b-live.trx`；sync/async × 空/三行 × Default/SequentialAccess/SingleRow+SequentialAccess，覆盖命令先释放、reader单次打开和后续连接复用。真实端点为legacy EOF；DEPRECATE_EOF仅本地协议证据。
 - 独立走查发现新重载与旧`default`调用歧义，已通过新重载全部参数必填修正；最终回归实际编译并执行旧`GetDataReader(0, default)`及async三参数default调用。最终独立走查无遗留发现；产品五TFM Release构建0warning/0error，四个C#文件空白检查及`git diff --check`通过。所有报告位于`TestResults/roadmap/`；不重跑长测或全量矩阵。
+
+#### D-03b2：父命令 REF CURSOR offset 默认值传递（2026-11-04，指定直连子集 `P4`）
+
+已有 b1 成功 wire 支持前向 NEXT/offset=0；本项补齐父 command 选项仍被拒绝的客户端缺口。
+Oracle 输出计划仅在声明 REF CURSOR Output/ReturnValue 时接受父 UseCursorOffset=true，
+仍要求正 FetchSize；父隐藏输出结果自身不用 cursor/offset FETCH。执行时保存选项，返回句柄的
+既有 GetDataReader/GetDataReaderAsync 默认使用该快照；显式 bool 重载可以覆盖为 false/true。
+子 reader 的 fetchSize 保持独立，普通结果列、标量输出、array binding 和脚本范围不变。
+
+- [x] RED：默认继承/显式关闭16项、坏尾包4项，旧实现 **20/20 因输出 offset 拒绝失败**，报告 `d03b2-red.trx`；不是服务端失败。
+- [x] 最小实现：命令校验、owner 只读快照与 reader 默认值；保留归属/版本/最终发布检查，父隐藏输出结果不启用 cursorOffset。
+- [x] 协议：sync/async、EOF 两模式、buffered/sequential、默认继承及显式关闭；父选项修改/父释放后快照保留；继承路径坏尾包不把已完成父 SQL 改判 unknown outcome；函数 ReturnValue 另增2项。最终相关 unit **556/556**，无 skip（含 constructor/LOB 输出回归）。
+- [x] Oracle 4.4.2.2 `oracle-direct`、Windows/.NET10、TLS Disabled **46/46**，无 skip，约3秒：原显式 reader 12、父默认/覆盖24、函数返回2、过程生命周期8。包含显式 Prepare、空/三行、Default/SequentialAccess/SingleRow、父释放、正/零 FetchSize 边界、错误后旧输出保留、同会话恢复与独立存储。
+- [x] 公开 DLL 消费者 **30/30**：新继承12、既有默认18，覆盖三种代表资产 × sync/async，新增默认继承使用显式 Prepare、standard/合成 OB20，未新增公开签名；不是 OB20 实库证据。
+- [x] solution 两包五TFM Release 构建 0 warning/0 error；九个变更 C# 文件 scoped whitespace verify 退出0（workspace-load warning），`git diff --check` 通过；未重跑全量/长稳。
+- [x] 独立只读走查 `review_d03b2`：产品调用链及最终 consumer 增量复核均无 Critical/Important/Minor 遗留；独立读 TRX 确认556/30/46，核对旧 API/default 签名兼容、版本/归属、最终发布、资源释放、普通列/array 边界及 README/矩阵。未重复运行测试、构建或实库。
+
+报告位于 UnitTests/TestResults/`d03b2-{red,regression,final-unit}.trx`、IntegrationTests/TestResults/`d03b2-live.trx`、ConsumerTests/TestResults/`d03b2-consumer.trx`，构建日志 `TestResults/d03b2-build.log`（均为本地忽略文件）。
+本模块只关闭已声明 REF CURSOR Output/ReturnValue 的父默认值传递；真实端点为 legacy EOF，其他 EOF/OB20 为本地证据。无滚动/绝对定位、array offset、标量-only 输出、普通 cursor 列或 PL 同组流水化扩展；跨平台/部署和长期资源压力仍待发布验收。
 
 ### D-04：复杂值成员、身份与生命周期（2026-10-30）
 

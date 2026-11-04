@@ -23,9 +23,9 @@ namespace OceanBaseConnector
         internal OracleCursorOwner Owner => _owner;
         internal OceanBaseRefCursor(OracleCursorOwner owner, uint id) { _owner = owner; Id = id; }
 
-        /// <summary>Opens one reader. Dispose the cursor if it will not be read; unread reader closure destroys its session.</summary>
+        /// <summary>Opens one reader using the originating command's output cursor offset option. Unread reader closure destroys its session.</summary>
         public OceanBaseDataReader GetDataReader(int fetchSize = 128, CommandBehavior behavior = CommandBehavior.Default)
-            => GetDataReader(fetchSize, false, behavior);
+            => GetDataReader(fetchSize, _owner.UseCursorOffset, behavior);
 
         /// <summary>Opens one forward reader with optional Oracle offset FETCH and validated position tails.</summary>
         public OceanBaseDataReader GetDataReader(int fetchSize, bool useCursorOffset, CommandBehavior behavior)
@@ -43,9 +43,9 @@ namespace OceanBaseConnector
             catch (Exception error) { throw exchange.Fail(error); }
         }
 
-        /// <summary>Asynchronously opens the cursor's single reader using the original command timeout.</summary>
+        /// <summary>Asynchronously opens the cursor's single reader using the original command timeout and output cursor offset option.</summary>
         public Task<OceanBaseDataReader> GetDataReaderAsync(int fetchSize = 128, CommandBehavior behavior = CommandBehavior.Default, CancellationToken cancellationToken = default)
-            => GetDataReaderAsync(fetchSize, false, behavior, cancellationToken);
+            => GetDataReaderAsync(fetchSize, _owner.UseCursorOffset, behavior, cancellationToken);
 
         /// <summary>Asynchronously opens one forward reader with optional Oracle offset FETCH.</summary>
         public async Task<OceanBaseDataReader> GetDataReaderAsync(int fetchSize, bool useCursorOffset, CommandBehavior behavior, CancellationToken cancellationToken)
