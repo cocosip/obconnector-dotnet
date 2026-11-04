@@ -148,7 +148,22 @@ public sealed class NamedComplexLobBindingTests
     public Task PreparedNamedObjectAndCollectionLocatorInputsUseCachedConstructors(string profileName, bool character, string shape, bool asynchronous)
         => VerifyExpanded(IntegrationEnvironment.GetProfile(profileName), character, shape, asynchronous, prepared: true);
 
-    private static async Task VerifyExpanded(IntegrationProfile profile, bool character, string shape, bool asynchronous, bool prepared = false)
+    [IntegrationTheory]
+    [MemberData(nameof(PreparedCases))]
+    public Task TextLocatorInputWithScalarOutputs(string profileName, bool character, string shape, bool asynchronous)
+        => VerifyExpanded(IntegrationEnvironment.GetProfile(profileName), character, shape, asynchronous, prepared: true, outputKind: "text");
+
+    [IntegrationTheory]
+    [MemberData(nameof(PreparedCases))]
+    public Task ProcedureLocatorInputWithScalarOutputs(string profileName, bool character, string shape, bool asynchronous)
+        => VerifyExpanded(IntegrationEnvironment.GetProfile(profileName), character, shape, asynchronous, prepared: true, outputKind: "procedure");
+
+    [IntegrationTheory]
+    [MemberData(nameof(PreparedCases))]
+    public Task FunctionLocatorInputWithScalarReturn(string profileName, bool character, string shape, bool asynchronous)
+        => VerifyExpanded(IntegrationEnvironment.GetProfile(profileName), character, shape, asynchronous, prepared: true, outputKind: "function");
+
+    private static async Task VerifyExpanded(IntegrationProfile profile, bool character, string shape, bool asynchronous, bool prepared = false, string? outputKind = null)
     {
         var settings = profile.CreateBuilder();
         if (!profile.Oracle || !profile.CreateObjects || !settings.UseLobLocators || !settings.UseOraclePrepareExecute)
@@ -171,12 +186,18 @@ public sealed class NamedComplexLobBindingTests
         await db.ExecuteAsync(connection, "CREATE TYPE " + typeName +
             (shape == "object" ? " AS OBJECT (a " + scalar + ")" : " AS TABLE OF " + (nestedTypeName ?? scalar)), CancellationToken.None);
         var owner = Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)!;
-        var procedure = db.NewObject("PROCEDURE");
+        var function = outputKind == "function";
+        var procedure = db.NewObject("PROCEDURE", registerCleanup: false);
+        db.RegisterDropCleanup(function ? "FUNCTION" : "PROCEDURE", procedure);
         var member = shape == "object" ? "p.a" : shape == "nested-collection" ? "p(1).a" : "p(1)";
         var nullGuard = shape == "collection" ? "IF p.COUNT <> 2 OR p(2) IS NOT NULL THEN RAISE_APPLICATION_ERROR(-20001, 'Invalid NULL member'); END IF; " :
             shape == "nested-collection" ? "IF p.COUNT <> 2 OR p(2).n <> 8 THEN RAISE_APPLICATION_ERROR(-20001, 'Invalid nested member'); END IF; " : "";
-        await db.ExecuteAsync(connection, "CREATE PROCEDURE " + procedure + "(p IN " + typeName + ") IS BEGIN " + nullGuard +
-            "INSERT INTO " + table + " VALUES (7, DBMS_LOB.GETLENGTH(" + member + "), DBMS_LOB.SUBSTR(" + member + ", 32, 1)); END;", CancellationToken.None);
+        var outputDeclaration = outputKind != null && !function ? ", n IN OUT NUMBER, result OUT NUMBER" : "";
+        var outputBody = function ? " RETURN DBMS_LOB.GETLENGTH(" + member + ");"
+            : outputKind != null ? " n := n + 1; result := DBMS_LOB.GETLENGTH(" + member + ");" : "";
+        await db.ExecuteAsync(connection, "CREATE " + (function ? "FUNCTION " : "PROCEDURE ") + procedure + "(p IN " + typeName + outputDeclaration + ")" +
+            (function ? " RETURN NUMBER" : "") + " IS BEGIN " + nullGuard +
+            "INSERT INTO " + table + " VALUES (7, DBMS_LOB.GETLENGTH(" + member + "), DBMS_LOB.SUBSTR(" + member + ", 32, 1));" + outputBody + " END;", CancellationToken.None);
         var type = await connection.GetComplexTypeAsync(owner, typeName);
         await using var transaction = (OceanBaseTransaction)await connection.BeginTransactionAsync();
         type = await connection.GetComplexTypeAsync(owner, typeName, transaction);
@@ -190,18 +211,35 @@ public sealed class NamedComplexLobBindingTests
         }
         else if (asynchronous) await lob.WriteBytesAsync(0, bytes, 0, bytes.Length); else lob.WriteBytes(0, bytes, 0, bytes.Length);
 
-        await using (var command = db.Command(connection, "BEGIN " + procedure + "(:p); END;", transaction))
+        await using (var command = db.Command(connection, "BEGIN " + procedure + (outputKind != null ? "(:p, :n, :result); END;" : "(:p); END;"), transaction))
         {
+            if (outputKind == "procedure" || function) { command.CommandType = CommandType.StoredProcedure; command.CommandText = procedure; }
             var value = shape == "object" ? type.CreateValue(lob)
                 : shape == "nested-collection" ? type.CreateValue(type.Members[0].ComplexType!.CreateValue(lob, 7), type.Members[0].ComplexType!.CreateValue(lob, 8))
                 : type.CreateValue(lob, null);
             DatabaseContext.Parameter(command, "p", value);
+            OceanBaseParameter? counter = null;
+            OceanBaseParameter? result = null;
+            if (outputKind != null)
+            {
+                if (!function)
+                {
+                    counter = DatabaseContext.Parameter(command, "n", 7m, DbType.Decimal);
+                    counter.Direction = ParameterDirection.InputOutput;
+                }
+                result = DatabaseContext.Parameter(command, "result", -1m, DbType.Decimal);
+                result.Direction = function ? ParameterDirection.ReturnValue : ParameterDirection.Output;
+            }
             if (prepared)
             {
                 if (asynchronous) await command.PrepareAsync(); else command.Prepare();
             }
-            if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
-            if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+            for (var i = 0; i < 2; i++)
+            {
+                if (asynchronous) await command.ExecuteNonQueryAsync(); else command.ExecuteNonQuery();
+                if (result != null) Assert.Equal(character ? text.Length : bytes.Length, DatabaseContext.IntegerResult(result.Value));
+                if (counter != null) Assert.Equal(8 + i, DatabaseContext.IntegerResult(counter.Value));
+            }
         }
 
         await transaction.CommitAsync();

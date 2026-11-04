@@ -277,6 +277,11 @@ namespace OceanBaseConnector
                 var length = session.ClientEncoding.GetByteCount(text);
                 if (length >= PacketChannel.DefaultMaxPacketSize) throw new ArgumentException("Command text exceeds the packet size limit.");
                 var multiStatement = CommandType == CommandType.Text && SqlStatementBoundary.HasMultipleStatements(text, session.Info!.Mode);
+                var namedComplexLob = !schemaOnly && !multiStatement && arrayCount == 0 && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle;
+                if (namedComplexLob && !prepareOnly)
+                    foreach (OceanBaseParameter parameter in _parameters)
+                        if (NamedComplexLobBinding.RequiresRewrite(parameter))
+                            connection.ValidateComplexType(PreparedParameters.GetComplexType(parameter)!, parameter.Value as OceanBaseComplexValue, SessionOwner);
                 var oracle = session.UseOraclePrepareExecute && session.Info!.Mode == OceanBaseCompatibilityMode.Oracle &&
                     (arrayCount != 0 || CommandType == CommandType.StoredProcedure || HasOutputParameters()) ? OracleCommandPlan.Create(text, CommandType, _parameters, arrayCount) : null;
                 var mysql = CommandType == CommandType.StoredProcedure && session.Info!.Mode == OceanBaseCompatibilityMode.MySql
@@ -300,18 +305,13 @@ namespace OceanBaseConnector
 #endif
                 if (oracle == null && mysql == null && CommandType != CommandType.Text) throw new NotSupportedException("Oracle stored procedures require Use Oracle Prepare Execute=true.");
                 if (oracle != null && cursorOffset) throw new NotSupportedException("Oracle output execution does not support offset fetch.");
-                var namedComplexLob = !schemaOnly && CommandType == CommandType.Text && !multiStatement && !HasOutputParameters() &&
-                    session.Info!.Mode == OceanBaseCompatibilityMode.Oracle;
                 ParameterBindingPlan bindings;
-                if (namedComplexLob)
+                if (namedComplexLob && oracle == null)
                 {
                     var supplied = new OceanBaseParameter[_parameters.Count];
                     for (var i = 0; i < supplied.Length; i++)
                     {
                         supplied[i] = (OceanBaseParameter)_parameters[i];
-                        var complex = NamedComplexLobBinding.RequiresRewrite(supplied[i])
-                            ? PreparedParameters.GetComplexType(supplied[i]) : null;
-                        if (!prepareOnly && complex != null) connection.ValidateComplexType(complex, supplied[i].Value as OceanBaseComplexValue, SessionOwner);
                     }
                     bindings = NamedComplexLobBinding.Rewrite(text, supplied);
                 }

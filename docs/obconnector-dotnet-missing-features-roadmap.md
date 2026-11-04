@@ -1014,6 +1014,30 @@ OBJECT 变量的声明、constructor 初始化和传给 `IN OUT` 过程均可执
 sync/async、显式 Prepare、collection/nested/cursor 的分层验收。当前推进应转向已有明确
 客户端缺口且不依赖该输出形状的任务，避免继续猜测 PL wrapper。
 
+#### D-04k：命名复杂 LOB 输入与独立标量输出（2026-11-04，指定直连子集 `P4`）
+
+设计与执行计划（沿用本清单，不另拆任务文档）：复杂 OBJECT/collection 的 locator 仍仅作 Input，
+允许同一 Text PL 块、StoredProcedure 或函数调用带独立标量 OUT/INOUT/ReturnValue。复用现有
+constructor + hidden root LOB 与 Oracle 输出捕获/最终发布路径，不引入 D-04j 的复杂 INOUT wrapper。
+构造器展开改用既有 ParameterBindingPlan 的位置，避免过程参数标签（空格、大小写）成为新限制。
+保持原始参数集合、类型/locator 归属校验、显式 Prepare 和错误后不发布输出的契约。
+
+- [x] RED：六个规划用例在旧实现中均缺少 constructor SQL；包括 Text/过程/函数、独立 OUT/INOUT 和特殊标签。
+- [x] GREEN：共享位置解析与构造器展开；保留输出对象身份、方向与原值，执行前校验原复杂描述。
+- [x] 协议：sync/async × Text/过程/函数 × 隐式/显式 Prepare × 成功/错误尾包 **24/24**，最终尾包前不发布，错误保留旧值，调用后原 locator 可读。
+- [x] 负向：失效类型缓存、已释放 locator、复杂 locator 自身 INOUT 在发送前拒绝，连接可复用，sync/async × Text/过程 **12/12**。
+- [x] 实库：Oracle 4.4.2.2 `oracle-direct`（TLS Disabled），BLOB/CLOB × OBJECT/collection/nested-collection × Text/过程/函数 × sync/async **36/36**、无 skip；显式 Prepare/PrepareAsync、两次执行、OUT/INOUT 递增、函数 ReturnValue 与提交后独立存储读回。
+- [x] 门禁：相关 unit/batch/解析/输出回归 **1102/1102**；含新增36项的 named constructor/batch LOB Oracle 回归 **92/92**；两包五资产 solution Release 构建 0 warning/0 error；变更 C# scoped whitespace verify 与 `git diff --check` 通过。
+- [x] 独立只读代码走查：无阻塞发现，复核位置/重复占位、特殊过程标签、返回值顺序、原描述符与隐藏 LOB 归属、最终发布及 array/batch 隔离。
+
+报告：UnitTests/TestResults 的 `d04k-red.trx`、`d04k-output-wire.trx`、`d04k-regression.trx`；
+IntegrationTests/TestResults 的 `d04k-integration.trx`、`d04k-live-regression.trx`（均为忽略的本地文件）。
+首次实库运行因新增夹具的 Decimal 值使用 int、FUNCTION 清理注册方式不匹配失败，修正夹具后完整重跑 **36/36**；未修改数值转换规则或降低断言。
+
+本项只关闭 named locator **Input + 独立标量输出** 的指定组合；复杂 locator INOUT 的 D-04j `900/42000`、
+复杂/LOB/cursor 输出组合、脚本、长期压力及其他版本/平台仍保留。StoredProcedure 仍是会话/cache 屏障。
+消费者门禁正在执行；本模块完成后继续按矩阵推进其余有协议依据的客户端缺口，不重做已关闭的 D-04h Prepare/cache 子集。
+
 #### D-04a2 Connector/J 2.4.14 公开 API 实测（2026-11-01）
 
 为确认“Java 同样失败”条件，使用同一 Oracle 4.4.2.2 `oracle-direct`、TLS Disabled

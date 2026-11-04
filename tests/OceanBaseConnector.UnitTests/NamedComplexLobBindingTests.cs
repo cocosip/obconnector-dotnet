@@ -96,6 +96,54 @@ public sealed class NamedComplexLobBindingTests
         Assert.Throws<NotSupportedException>(() => NamedComplexLobBinding.Rewrite("INSERT INTO t VALUES (:p)", new[] { input }));
     }
 
+    [Theory]
+    [InlineData(CommandType.Text, ParameterDirection.Output)]
+    [InlineData(CommandType.Text, ParameterDirection.InputOutput)]
+    [InlineData(CommandType.StoredProcedure, ParameterDirection.Output)]
+    [InlineData(CommandType.StoredProcedure, ParameterDirection.InputOutput)]
+    [InlineData(CommandType.StoredProcedure, ParameterDirection.ReturnValue)]
+    public void LocatorInputConstructorPreservesIndependentScalarOutput(CommandType commandType, ParameterDirection direction)
+    {
+        var type = TypeWithBlobMember();
+        var lob = (OceanBaseLob)FormatterServices.GetUninitializedObject(typeof(OceanBaseLob));
+        var input = new OceanBaseParameter { ParameterName = "p", ComplexType = type, Value = new OceanBaseComplexValue(type, new object?[] { lob, 7 }) };
+        var output = new OceanBaseParameter { ParameterName = "n", Direction = direction, DbType = DbType.Int64, Value = 9L };
+        var parameters = new OceanBaseParameterCollection();
+        parameters.Add(input); parameters.Add(output);
+
+        var plan = OracleCommandPlan.Create(commandType == CommandType.Text ? "BEGIN consume(:p, :n); END;" : "consume", commandType, parameters);
+
+        var function = direction == ParameterDirection.ReturnValue;
+        Assert.Equal(function ? "BEGIN ? := consume(\"OWNER\".\"THING\"(?,?)); END;"
+            : "BEGIN consume(\"OWNER\".\"THING\"(?,?), ?); END;", plan.Bindings.CommandText);
+        Assert.Equal(3, plan.Bindings.Parameters.Length);
+        Assert.Same(lob, plan.Bindings.Parameters[function ? 1 : 0].Value);
+        Assert.Same(output, Assert.Single(plan.Outputs));
+        Assert.Equal(direction == ParameterDirection.InputOutput ? 9L : null, plan.Bindings.Parameters[function ? 0 : 2].Value);
+        Assert.Equal(9L, output.Value);
+        Assert.Same(input, parameters[0]);
+        Assert.Equal(2, parameters.Count);
+    }
+
+    [Fact]
+    public void LocatorProcedureInputPreservesQuotedAndCaseDistinctOutputLabels()
+    {
+        var type = TypeWithBlobMember();
+        var lob = (OceanBaseLob)FormatterServices.GetUninitializedObject(typeof(OceanBaseLob));
+        var parameters = new OceanBaseParameterCollection();
+        parameters.Add(new OceanBaseParameter { ParameterName = "input value", ComplexType = type, Value = new OceanBaseComplexValue(type, new object?[] { lob, 7 }) });
+        var first = new OceanBaseParameter { ParameterName = "Result value", Direction = ParameterDirection.Output };
+        var second = new OceanBaseParameter { ParameterName = "result value", Direction = ParameterDirection.InputOutput, Value = 8L };
+        parameters.Add(first); parameters.Add(second);
+
+        var plan = OracleCommandPlan.Create("consume", CommandType.StoredProcedure, parameters);
+
+        Assert.Equal("BEGIN consume(\"OWNER\".\"THING\"(?,?), ?, ?); END;", plan.Bindings.CommandText);
+        Assert.Equal(new[] { first, second }, plan.Outputs);
+        Assert.Null(plan.Bindings.Parameters[2].Value);
+        Assert.Equal(8L, plan.Bindings.Parameters[3].Value);
+    }
+
     private static OceanBaseComplexType TypeWithBlobMember(string name = "THING")
         => new OceanBaseComplexType(null, "OWNER", name, false,
             new[] { new OceanBaseComplexMember("A", null, "BLOB", null, new Internal.Values.ComplexType(210)),

@@ -201,39 +201,33 @@ namespace OceanBaseConnector.Internal.Sql
             {
                 ValidateProcedureName(text);
                 var names = new HashSet<string>(StringComparer.Ordinal);
-                var allInput = returned == null && arrayCount == 0;
-                var hasComplexLob = false;
                 foreach (OceanBaseParameter parameter in parameters)
                 {
                     if (!RoutineParameterDerivation.IsValidParameterLabel(parameter.ParameterName) || !names.Add(parameter.ParameterName))
                         throw new ArgumentException("Oracle procedure parameter labels must be valid and distinct.");
-                    allInput &= parameter.Direction == ParameterDirection.Input;
-                    hasComplexLob |= NamedComplexLobBinding.RequiresRewrite(parameter);
                 }
-                var namedComplexLob = allInput && hasComplexLob;
                 var ordered = new List<OceanBaseParameter>();
+                var positions = new List<int>();
                 var sql = new StringBuilder("BEGIN ");
-                if (returned != null) { sql.Append("? := "); ordered.Add(returned); }
+                if (returned != null) { positions.Add(sql.Length); sql.Append("? := "); ordered.Add(returned); }
                 sql.Append(text).Append('(');
                 var first = true;
                 foreach (OceanBaseParameter parameter in parameters)
                 {
                     if (ReferenceEquals(parameter, returned)) continue;
                     if (!first) sql.Append(", ");
-                    if (namedComplexLob) sql.Append(':').Append(parameter.ParameterName);
-                    else sql.Append('?');
+                    positions.Add(sql.Length); sql.Append('?');
                     ordered.Add(parameter); first = false;
                 }
                 var procedureSql = sql.Append("); END;").ToString();
-                original = namedComplexLob
-                    ? NamedComplexLobBinding.Rewrite(procedureSql, ordered.ToArray())
-                    : new ParameterBindingPlan(procedureSql, ordered.ToArray());
+                original = new ParameterBindingPlan(procedureSql, ordered.ToArray(), positions.ToArray());
             }
             else
             {
                 if (type != CommandType.Text) throw new NotSupportedException("This CommandType is not supported.");
                 original = ParameterBindingPlan.Create(text, OceanBaseCompatibilityMode.Oracle, parameters, allowOutputs: true);
             }
+            if (arrayCount == 0) original = NamedComplexLobBinding.Rewrite(original);
             var inputs = new OceanBaseParameter[original.Parameters.Length];
             var outputs = new List<OceanBaseParameter>();
             var complexTypes = new List<OceanBaseComplexType?>();
