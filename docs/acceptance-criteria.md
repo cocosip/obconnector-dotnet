@@ -39,7 +39,7 @@
 | Q14–Q19 | 已执行前缀、失败条目/后缀、受影响行/输出、事务/触发器/默认值、流所有权/分块/限额/取消、cache失效 | batch/streams/oracle；Integration Batches/Streams/Oracle及相应专项 |
 | T01–T12/T19/T20 | 类型推断/显式输入、NULL、边界/溢出、精确值、列身份、存储后独立读取、text和binary结果、编码坏字节 | types及对应Integration类型/字符集组；不能只SELECT参数或只看列名 |
 | T13–T15 | named/anonymous、输入/输出、普通列/PL、嵌套/NULL分别覆盖；真实大LOB读写/失效/DDL/reset/旧资源 | lob/complex/oracle；Integration Oracle/Connections资源专项 |
-| X01–X04/Q22 | 提交/回滚独立连接可见性、savepoint、DDL边界、XA recover/记录决定后恢复；未知结果独立查账且无重放 | transactions/xa/faults；Integration Transactions/Xa/Faults及ambient专项 |
+| X01–X04/Q22 | 提交/回滚独立连接可见性、savepoint、DDL边界、XA recover/决定落盘前回滚及落盘后恢复；未知结果独立查账且无重放 | transactions/xa/faults；Integration Transactions/Xa/Faults及ambient专项 |
 | P01–P05 | 实际协商与双向帧、分片/序号/checksum/截断/取消、拒绝组合；trace服务器控制和导出分开 | diagnostics与ob20TraceProfile；真实压缩/OB20当前E10开放 |
 | M01–M03 | 权限/目录准确性、未授权错误不伪造；无敏感标签/高基数；监听卸载/开销/生命周期 | schema/diagnostics；对应Unit/Consumer/Integration |
 | R01 | 五资产构建、基线无现代API泄漏、实际runtime包消费；非Windows必须有对应记录 | eng/Verify-Packages.ps1、Consumer；-VerifyLive另验 |
@@ -70,7 +70,7 @@
 独立数据库连接确认自有事务/分支/对象清理。记录句柄/线程/内存曲线和实际命令，
 有增长则解释并复现，不能仅凭最后一条SELECT成功关闭G10。这是最低正确性/持续性基线，不是生产容量承诺。
 
-故障专项至少分别记录已有16个网络unknown case、6个受控路由case、4个XA进程恢复case，
+故障专项至少分别记录已有16个网络unknown case、6个受控路由case、6个XA进程恢复case（含决定落盘前的sync/async回滚），
 并将真实节点/ODP/协调器其他崩溃点作为独立未验收项。通过受控故障不自动关闭真实HA。
 性能优化至少保留5次相同工作负载的基线/优化对照及分位延迟、吞吐、资源和失败率；
 当前没有硬件无关的吞吐SLO，不能因此声称性能已达标或实现了Java性能等价。

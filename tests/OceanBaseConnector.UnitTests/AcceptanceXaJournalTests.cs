@@ -21,6 +21,7 @@ public sealed class AcceptanceXaJournalTests
     [InlineData("invalid-global")]
     [InlineData("invalid-action")]
     [InlineData("recover-with-memory-decision")]
+    [InlineData("unrecorded-with-commit-decision")]
     public async Task InvalidWorkerInputCannotConnectWriteJournalOrEchoSecrets(string defect)
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
@@ -46,6 +47,7 @@ public sealed class AcceptanceXaJournalTests
                 "invalid-table" => json.Replace("OBA_0123456789ABCDEF0123", "OBA_X; DROP TABLE private"),
                 "invalid-global" => json.Replace("0123456789ABCDEF0123456789ABCDEF", "not-hex"),
                 "invalid-action" => json.Replace("\"prepare\"", "\"unexpected\""),
+                "unrecorded-with-commit-decision" => json.Replace("\"prepare\"", "\"prepare-unrecorded\""),
                 _ => json.Replace("\"prepare\"", "\"recover\""),
             };
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));

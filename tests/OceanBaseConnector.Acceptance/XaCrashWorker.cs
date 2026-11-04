@@ -48,14 +48,16 @@ internal static class XaCrashWorker
                 text.Append(character[0]);
             }
             var request = Parse<XaCrashRequest>(text.ToString());
-            if (request.Action is not ("prepare" or "recover") ||
+            if (request.Action is not ("prepare" or "prepare-unrecorded" or "recover") ||
                 !Path.IsPathFullyQualified(request.JournalPath) || Path.GetFileName(request.JournalPath) != "decision.json")
                 throw new ArgumentException("Invalid worker request.");
             XaDecision decision;
-            if (request.Action == "prepare")
+            if (request.Action != "recover")
             {
                 decision = request.Decision ?? throw new ArgumentException("A prepare decision is required.");
                 decision.Validate();
+                if (request.Action == "prepare-unrecorded" && decision.Commit)
+                    throw new ArgumentException("An unrecorded crash requires rollback recovery.");
             }
             else
             {
@@ -70,7 +72,7 @@ internal static class XaCrashWorker
             var asynchronous = request.Asynchronous;
             if (asynchronous) await connection.OpenAsync(token); else connection.Open();
             var resource = connection.GetXaResource(); var xid = decision.Xid;
-            if (request.Action == "prepare")
+            if (request.Action != "recover")
             {
                 if (asynchronous) await resource.StartAsync(xid, cancellationToken: token); else resource.Start(xid);
                 await using (var command = connection.CreateCommand())
@@ -82,8 +84,8 @@ internal static class XaCrashWorker
                 if (asynchronous) await resource.EndAsync(xid, cancellationToken: token); else resource.End(xid);
                 if ((asynchronous ? await resource.PrepareAsync(xid, token) : resource.Prepare(xid)) != OceanBaseXaVote.Prepared)
                     throw new AssertionFailure("Worker branch must vote prepared.");
-                WriteDecision(request.JournalPath, decision);
-                await output.WriteLineAsync("PREPARED"); await output.FlushAsync(token);
+                if (request.Action == "prepare") WriteDecision(request.JournalPath, decision);
+                await output.WriteLineAsync(request.Action == "prepare" ? "PREPARED" : "PREPARED_UNRECORDED"); await output.FlushAsync(token);
                 // The supervisor kills this live process; no normal Close/Dispose substitutes for death.
                 await Task.Delay(Timeout.InfiniteTimeSpan, token);
             }

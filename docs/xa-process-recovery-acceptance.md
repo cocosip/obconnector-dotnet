@@ -1,7 +1,8 @@
 # XA coordinator process recovery acceptance
 
-The [acceptance console](../tests/OceanBaseConnector.Acceptance/README.md) has four
-`matrix.xa-crash-recovery.commit/rollback.sync/async` cases. They require
+The [acceptance console](../tests/OceanBaseConnector.Acceptance/README.md) has six cases:
+`matrix.xa-crash-recovery.commit/rollback.sync/async` and
+`matrix.xa-crash-recovery.unrecorded.rollback.sync/async`. They require
 `xaCrashProfile=true`, `allowCreateObjects=true`, a dedicated test schema and the `dotnet`
 host on PATH. Oracle also requires `Use Oracle Prepare Execute=true`. Default/example
 profiles skip before connections or DDL. Ordinary unit/CI runs use synthetic loopback only.
@@ -16,6 +17,15 @@ Each case supervises two separate acceptance subprocesses through a reserved wor
 3. A new process reads the decision from disk, requires exactly that prepared branch in
    Recover, commits or rolls it back and verifies its removal. It reports RECOVERED and exits
    zero. The supervisor independently checks the durable row count and branch absence.
+
+The two unrecorded cases stop the first worker after successful Prepare and before writing
+any decision. Its distinct PREPARED_UNRECORDED marker proves that phase; the supervisor kills
+and reaps the process, requires the journal to be absent and independently verifies no visible
+row. The surviving supervisor retains only this test's owned identity and records rollback using
+the existing no-decision rollback rule. The new recovery process reads only that disk decision,
+requires the exact XID in Recover, rolls it back and verifies no row became durable. A request
+combining the unrecorded phase with commit is rejected before connecting. This does not prove
+reconstruction of ownership after the supervisor itself dies.
 
 Sync/async selects driver operations in both workers. This is a test-only coordinator,
 separate from the driver product. The product still provides explicit XA resource APIs;
@@ -37,19 +47,15 @@ An unresolved prepared branch retains its local journal under the OS temp direct
 for manual recovery. Exact owned tables and resolved journals are removed; unrelated branches
 are never completed. Forced termination of the supervisor itself can leave owned resources.
 
-Direct OceanBase4.4.2.2, Windows/.NET10.0.13, TLS disabled: each mode passes all four cases
-plus one connection control. All eight owned tables, branches and journals are cleaned.
+Direct OceanBase4.4.2.2, Windows/.NET10.0.14, TLS disabled: each mode passes all six cases
+plus one connection control. All twelve owned tables, branches and journal directories are cleaned.
+The scoped reports and implementation record are in [roadmap A-02b](obconnector-dotnet-missing-features-roadmap.md).
 Synthetic tests also cover unrelated branch preservation, a missing prepared branch,
 cancellation, completion failure with journal retention, strict input/journal rejection and
 privacy. See the [module record](compatibility.md).
 
-This proves one prepared/recorded-decision crash point. General coordinator interoperability,
-crashes before decision persistence or during completion acknowledgement, server failure,
-power-loss durability, concurrent recovery/heuristics, ambient in-doubt, proxies/TLS and other
-platform/runtime/load profiles remain open under W2/W8. Three deferred matrix placeholders
-remain: TLS/authentication, OB20/trace negotiation and topology failover. The23-gap/eight-package
-baseline remains open.
-
-Current tool status: [controlled topology cases](topology-acceptance.md) now replace the topology
-placeholder; two deferred entries remain (TLS/authentication and OB20/trace). The preceding
-three-placeholder count records this XA module checkpoint.
+This proves prepared-worker death before and after decision persistence in this test harness.
+General coordinator interoperability, loss of the supervisor, crashes during completion
+acknowledgement, server failure, power-loss durability, concurrent recovery/heuristics,
+proxies/TLS and other platform/runtime/load profiles remain open under A-02. The product
+continues to expose XA resource operations without a durable coordinator.

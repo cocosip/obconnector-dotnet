@@ -150,7 +150,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | ID | 当前进度 | 任务 | 当前缺口 | 关闭条件 |
 | --- | --- | --- | --- | --- |
 | A-01 | `P3`；MySQL/Oracle 直连各 10000 次借还及资源隔离 52/52 通过；持续运行失败根因未定，长测移至发布验收 | 池、reset、租约和 prepared cache（G10） | 60 分钟交错、清池和句柄/线程/内存稳定性未证实；原始异常被测试清理遮蔽的问题已修复 | 16 并发调用者、池上限、至少 10000 次借还、60 分钟交错运行；reader/LOB/cursor/XA 旧资源不污染新租约 |
-| A-02 | `P3`；MySQL/Oracle 直连 XA 生命周期、recover 和池丢弃恢复 28/28、环境事务 COMMIT 回执丢失 16/16 通过 | PSPE、XA、unknown outcome（G11） | 环境事务 InDoubt 指定回执丢失子集已验收；协调器、节点/代理崩溃、取消顺序和分支恢复未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
+| A-02 | `P3`；MySQL/Oracle 直连 XA 生命周期、recover 和池丢弃恢复 28/28、环境事务 COMMIT 回执丢失 16/16 通过 | PSPE、XA、unknown outcome（G11） | 环境事务InDoubt指定回执丢失子集已验收；XA prepared worker决定落盘前/后进程终止与恢复已按A-02b每模式6/6验收；其他协调器、supervisor整体丢失、节点/代理崩溃、取消顺序和分支恢复仍未全覆盖 | 发送前/发送中/响应中故障、独立查账、XA recover/决定后恢复、无自动重放全部有记录 |
 | A-03 | `P3`；Oracle 直连基础目录/过程/NUMBER 18/18 通过，包重载 2/2、引用 package 标识符 2/2 通过；带空格的引用形参原名派生与过程/package/函数位置调用新增 **6/6**（A-03h）；双模式函数合成返回名避让新增 **8/8**（A-03i） | Schema、目录和参数元数据（G13） | 包内 PL 类型和最小权限仍缺；大小写/引用 package 标识符已覆盖；无约束 NUMBER 已验收，A-03b 的 CHAR_LENGTH 已确认是当前目标服务端目录限制；仅大小写不同形参的当前实库失败保留 | 双模式最小权限、唯一/歧义签名、更多大小写/引用标识符、视图/同义词权限错误及其余目录边界均按服务端真实结果关闭 |
 | A-04 | `P3`；当前 Windows 包/运行时指定子集已验收 | 包、TFM 和平台（G14/R01） | 五资产、net8/net9/net10 独立 runtime、两个 netstandard 的 net10 host 及 netstandard2.0 的 net48 host 已复验；非 Windows、完整 API/ORM 未验收 | 每个声明支持的 OS/runtime/资产都有消费者、构建和目标实库记录；netstandard host 加载不能替代独立 runtime |
 | A-05 | `P3`，长 NUL 复核未关闭 | 原生 prepare fallback、zero-date、极限 TIME 和长 NUL 失败复核 | 当前包含中继注入、SQL_MODE 前提和服务端边界；196608 字符 NUL 单表达式从 .NET 0/4 恢复 4/4，原因未定，见执行记录 | 原生目标 profile、SQL_MODE、确切长度和 text/binary 路径分别记录；失败不改写成成功 |
@@ -3370,6 +3370,43 @@ skip 是既有 alternateDatabase 配置门槛；单独 Oracle `a01-soak-oracle-i
 限定用例调整为在持续测试期间单独 host 执行：长稳约 14 分钟时 TIME_WAIT=2877，动态端口范围
 16384，已有余量；本组仅 16 项顺序执行，不启动全量 socket-heavy 回归。后续资源曲线须注明这段
 短时负载，不能把同时运行不同进程误称完全隔离的主机基准。
+
+### A-02b：XA prepare 后决定落盘前的协调器进程恢复（2026-11-04，指定直连子集 `P4`）
+
+基线 `4b74c8d`。目标是补齐A-02已列明的协调器崩溃点，复用验收控制台的子进程、
+owned XID/table、严格journal和清理流程；不新增产品协调器/API，不终止数据库或用户进程。
+旧 `21e3de2` 已验收决定落盘后的commit/rollback×sync/async；本次同时纠正矩阵漏记该历史子集，
+不把一般协调器/节点/代理故障标为完成。
+
+设计/实现计划（沿用用户授权的矩阵推进，由当前agent执行）：在 `DatabaseCases.XaCrash.cs`
+增加 `unrecorded.rollback.sync/async` 两例，worker新增 `prepare-unrecorded` 动作。
+仅在自有分支prepare成功后发出独立 `PREPARED_UNRECORDED` marker、等待父进程强制终止；
+父进程必须确认journal不存在、行不可见，然后按既有无决定则回滚的规则生成rollback journal。
+新恢复进程仍只读磁盘journal、要求Recover恰好找到该XID、执行rollback并确认独立存储为0。
+已有已记录commit/rollback和失败清理行为保持；未记录请求若带Commit=true必须发送前拒绝。
+
+- [x] 先扩 `AcceptanceXaProcessTests` 的新崩溃点/无关分支保留回归，以及 `AcceptanceXaJournalTests` 的非法commit请求，确认旧实现RED；opt-in门禁覆盖总6例。
+- [x] 最小扩展worker与现有两子进程编排；检查无记录先回滚、跨进程只读journal、无重放、失败不覆盖owned决定/清理错误。
+- [x] Unit定向回归、双模式实库每模式6崩溃例+连接控制、对象/分支/journal清理、格式与文档检查；无长压、D-04f2或服务端重启。
+- [x] 独立只读走查并处理问题，本地提交（不push）；本节记录证据及剩余A-02范围。
+
+验收结果：两个4.4.2.2直连profile、Windows/.NET10.0.14、TLS Disabled；每模式六个崩溃用例
+（原已记录commit/rollback×sync/async四例，加未记录rollback×sync/async两例）及连接控制，
+合计 **14/14**，0失败/跳过/清理错误。每模式6个table、6个XA、6个journal目录全部removed。
+报告为忽略目录 `TestResults/xa-process-live-mysql-aaf03eee.json` 和
+`TestResults/xa-process-live-oracle-a534ab8b.json`，命令输出 `TestResults/a02b-unrecorded/live.log`。
+连接串由已有User Secrets读取后仅经stdin传递，不写参数、日志或journal。
+
+本地RED分两组：`a02b-unrecorded-red.trx`（门禁3失败/其余17通过）及
+`a02b-process-red.trx`（新增崩溃点3失败/原有7通过）；最小实现后
+`a02b-focused-green.trx` **30/30**，含无关prepared分支保留、未记录恢复失败时保留rollback
+journal、非法Commit=true请求发送前拒绝。扩大验收相关回归 `a02b-acceptance-regression.trx` **208/208**，0skip；五个触及C#文件scoped whitespace、文档相对链接和`git diff --check`通过。Acceptance及现有私有runner Release重建0warning/error。
+
+独立只读走查 `review_a02b_unrecorded` 已复核五个C#文件、关联调用/清理和九份文档，无可操作遗留问题；未代替主agent的构建、测试或实库运行。仅本地提交，不push。
+
+本项只验证worker进程在prepare后、决定落盘前/后被强制终止；supervisor仍存活并持有自有XID，
+无记录时由它先确定rollback并落盘，恢复进程不接受内存决定。未声称supervisor整体丢失后可
+重建所有权、断电持久性或产品提供通用协调器；A-02父项保持P3，其余断点/节点/代理/平台门槛保留。
 
 ### A-04 续：当前 Windows 包资产与独立运行时复验（2026-11-02）
 

@@ -13,12 +13,16 @@ internal static partial class DatabaseCases
     private static void AddXaCrash(System.Collections.Generic.List<AcceptanceCase> cases)
     {
         foreach (var asynchronous in new[] { false, true })
+        {
             foreach (var commit in new[] { false, true })
                 cases.Add(new("matrix.xa-crash-recovery." + (commit ? "commit." : "rollback.") + (asynchronous ? "async" : "sync"),
                     "xa", (c, t) => XaCrash(c, asynchronous, commit, t), RequiresObjects: true, RequiresXaCrashProfile: true));
+            cases.Add(new("matrix.xa-crash-recovery.unrecorded.rollback." + (asynchronous ? "async" : "sync"),
+                "xa", (c, t) => XaCrash(c, asynchronous, false, t, unrecorded: true), RequiresObjects: true, RequiresXaCrashProfile: true));
+        }
     }
 
-    private static async Task XaCrash(CaseContext c, bool asynchronous, bool commit, CancellationToken token)
+    private static async Task XaCrash(CaseContext c, bool asynchronous, bool commit, CancellationToken token, bool unrecorded = false)
     {
         await using var observer = await c.OpenAsync(token);
         var table = await c.TableAsync(observer, "id INTEGER PRIMARY KEY", token);
@@ -48,13 +52,19 @@ internal static partial class DatabaseCases
         var connectionString = configuration.ConnectionString;
         await RunXaWorker(new XaCrashRequest
         {
-            Action = "prepare",
+            Action = unrecorded ? "prepare-unrecorded" : "prepare",
             ConnectionString = connectionString,
             JournalPath = path,
             Asynchronous = asynchronous,
             Decision = decision
         }, crash: true, token);
         c.Check(await c.CountAsync(observer, table, token) == 0, "Prepared write must remain invisible after coordinator death.");
+        if (unrecorded)
+        {
+            c.Check(!File.Exists(path), "The terminated coordinator must not have recorded a decision.");
+            // The harness uses its existing no-decision rollback rule before restarting recovery.
+            XaCrashWorker.WriteDecision(path, decision with { Commit = false });
+        }
         await RunXaWorker(new XaCrashRequest
         {
             Action = "recover",
@@ -94,7 +104,8 @@ internal static partial class DatabaseCases
             await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(request).AsMemory(), deadline.Token);
             process.StandardInput.Close();
             var marker = await process.StandardOutput.ReadLineAsync(deadline.Token);
-            if (marker != (crash ? "PREPARED" : "RECOVERED")) throw new AssertionFailure("XA worker did not confirm its required phase.");
+            var expected = crash ? request.Action == "prepare-unrecorded" ? "PREPARED_UNRECORDED" : "PREPARED" : "RECOVERED";
+            if (marker != expected) throw new AssertionFailure("XA worker did not confirm its required phase.");
             if (crash)
             {
                 if (process.HasExited) throw new AssertionFailure("Prepared XA worker must remain alive until forced termination.");

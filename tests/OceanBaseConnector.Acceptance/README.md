@@ -42,7 +42,7 @@ copy them into repository files or shared logs/reports. Never print or commit re
 | `allowCreateObjects` | Default false. Enables tests that create and drop schema objects; both example files set true. |
 | `zeroDateProfile` | Default false. Explicitly enables MySQL `types.zero-date-policy`, also requiring `allowCreateObjects=true` and a session SQL_MODE without NO_ZERO_DATE/NO_ZERO_IN_DATE. The runner never changes SQL_MODE. |
 | `networkFaultProfile` | Default false. Explicitly enables 16 controlled write/transaction network fault cases, requiring `allowCreateObjects=true`, a single plain DNS/IPv4 host with separate Port, TLS disabled, no compression and no OB20. Incompatible profiles skip without downgrade. |
-| `xaCrashProfile` | Default false. Explicitly enables four XA coordinator process crash/restart cases. Requires `allowCreateObjects=true`, `dotnet` on PATH, and Oracle PrepareExecute in Oracle mode. Uses only owned branches/tables and a decision journal containing no credentials. |
+| `xaCrashProfile` | Default false. Explicitly enables six XA coordinator process crash/restart cases. Requires `allowCreateObjects=true`, `dotnet` on PATH, and Oracle PrepareExecute in Oracle mode. Uses only owned branches/tables and a decision journal containing no credentials. |
 | `topologyFaultProfile` | Default false. Enables six read-only controlled client-route cases: idle refresh, borrowed-session isolation and refused-TCP fallback, sync/async. Single plain host, TLS disabled, no compression/OB20; no DDL. This does not prove real cluster HA. |
 | `ob20TraceProfile` | Default omitted. Selects `ob20`, `trace-legacy`, `trace-modern`, `declined-ob20` or `declined-trace`; only the matching sync/async cases run. Requires OB20, no compression, and Full Link Trace requested except for `ob20`. Keeps TLS settings; no DDL. See the [assertions and trace limits](../../docs/ob20-trace-acceptance.md). |
 | `localInfileProfile` | Default false. Enables the two MySQL `streams.local-infile` cases only when `Allow Local Infile=true` is explicit; the profile also requires `allowCreateObjects=true` because it creates a random table. Oracle mode and missing local-file capability are rejected before networking. |
@@ -73,10 +73,12 @@ borrowed-session isolation and TCP fallback after a refused-only negative contro
 read-only SQL is issued; no schema objects or cluster settings change. Both direct4.4.2.2 modes
 pass6/6 plus connection control on Windows/.NET10.0.13 TLSdisabled; this does not prove
 independent-node/discovery-service/proxy HA. See the [controlled topology contract](../../docs/topology-acceptance.md).
-The four opt-in `matrix.xa-crash-recovery.*` cases kill a live prepared coordinator process
-after its decision is flushed, then restart another process to recover that decision. Both
-direct4.4.2.2 modes pass4/4 plus connection control, with exact owned cleanup. General coordinator,
-server failure and other crash points remain open; see the [process recovery contract](../../docs/xa-process-recovery-acceptance.md).
+The six opt-in `matrix.xa-crash-recovery.*` cases kill a live prepared coordinator worker
+before or after its decision is recorded, then restart a process that reads the recovery decision
+from disk. For the two unrecorded cases the surviving supervisor verifies no journal exists and
+records rollback for its exact owned branch. Both direct4.4.2.2 modes pass6/6 plus connection
+control, with exact owned cleanup. General coordinator/supervisor loss, server failure and other
+crash points remain open; see the [process recovery contract](../../docs/xa-process-recovery-acceptance.md).
 The 16 opt-in `matrix.network-outcome-unknown.*` cases inject INSERT request/response and
 COMMIT/ROLLBACK response loss, then check unknown outcome, broken-channel replacement,
 independent reconciliation, no replay and fresh transaction recovery. Both direct 4.4.2.2

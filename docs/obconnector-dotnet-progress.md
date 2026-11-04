@@ -118,7 +118,7 @@ Java 类/方法仅是实现参考；ADO.NET 对应行为按自身契约判断，
 | --- | --- | --- | --- | --- |
 | X01 本地事务/隔离级别/savepoint | 核心 | 双模式，按模式验证SQL和级别 | OceanBaseTransaction、Connection.Transactions/Savepoints | DDL隐式提交与原生数据库差异不能隐藏 |
 | X02 单资源TransactionScope | 可选ADO.NET适配 | PSPE登记/回调/超时/回滚 | AmbientEnlistment | 不是分布式ambient；提升/durable prepare明确拒绝 |
-| X03 显式XA | 可选OceanBase | MySQL XA语句；Oracle DBMS_XA | OceanBaseXaResource、Connection.Xa/XaOracle | MySQL/Oracle 4.4.2.2 直连生命周期、recover 和池丢弃恢复 **28/28** 通过；O6/J8 的协调器、崩溃和完整 unknown-outcome 矩阵仍待验收，不承诺通用协调器 |
+| X03 显式XA | 可选OceanBase | MySQL XA语句；Oracle DBMS_XA | OceanBaseXaResource、Connection.Xa/XaOracle | MySQL/Oracle 4.4.2.2 直连生命周期、recover 和池丢弃恢复 **28/28** 通过；验收工具已覆盖prepare后决定落盘前回滚与落盘后commit/rollback的worker进程终止/重启，双模式直连每模式 **6/6**（A-02b）；O6/J8的一般协调器、supervisor丢失、服务端/代理故障和完整unknown-outcome矩阵仍待验收，不承诺通用协调器 |
 | X04 unknown outcome/显式重建 | 核心安全 | 请求可能已发后故障分类/Broken/新租约 | PhysicalSession、CommandExchange.Io、OceanBaseException | Oracle 直连响应丢失/relay 切断 **16/16** 通过；不自动重放、pre-send不误报、独立查账和旧资源晚释放仍需扩大到协调器/节点崩溃 |
 | P01 标准wire/逻辑包限制 | 核心 | 双模式、序号/截断/长度校验 | PacketChannel、ByteCursor | 畸形包/超时/取消不污染下一借用者 |
 | P02 标准压缩 | 可选协议 | 仅能力协商后使用；未声明按Java普通协议回退 | MySqlCompressionStream、ZlibBlock | 当前直连只证明回退，未证明真实压缩帧 |

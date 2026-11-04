@@ -18,16 +18,19 @@ namespace OceanBaseConnector.UnitTests;
 public sealed partial class TextCommandTests
 {
     [Theory]
-    [InlineData(false, false, false, false, false)]
-    [InlineData(false, true, false, false, false)]
-    [InlineData(true, false, false, false, false)]
-    [InlineData(true, true, false, false, false)]
-    [InlineData(true, true, true, false, false)]
-    [InlineData(true, true, false, true, false)]
-    [InlineData(true, true, false, false, true)]
-    public async Task XaCoordinatorRecoversAfterProcessDeathWithoutTouchingOtherBranches(bool asynchronous, bool commit, bool hidePreparedBranch, bool cancelDuringWrite, bool failCompletion)
+    [InlineData(false, false, false, false, false, false)]
+    [InlineData(false, true, false, false, false, false)]
+    [InlineData(true, false, false, false, false, false)]
+    [InlineData(true, true, false, false, false, false)]
+    [InlineData(true, true, true, false, false, false)]
+    [InlineData(true, true, false, true, false, false)]
+    [InlineData(true, true, false, false, true, false)]
+    [InlineData(false, false, false, false, false, true)]
+    [InlineData(true, false, false, false, false, true)]
+    [InlineData(true, false, false, false, true, true)]
+    public async Task XaCoordinatorRecoversAfterProcessDeathWithoutTouchingOtherBranches(bool asynchronous, bool commit, bool hidePreparedBranch, bool cancelDuringWrite, bool failCompletion, bool unrecorded)
     {
-        var test = Assert.Single(DatabaseCases.All(), c => c.Name == "matrix.xa-crash-recovery." + (commit ? "commit." : "rollback.") + (asynchronous ? "async" : "sync"));
+        var test = Assert.Single(DatabaseCases.All(), c => c.Name == "matrix.xa-crash-recovery." + (unrecorded ? "unrecorded." : "") + (commit ? "commit." : "rollback.") + (asynchronous ? "async" : "sync"));
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var runCancellation = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
         using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
@@ -66,7 +69,7 @@ public sealed partial class TextCommandTests
                 var owned = Assert.Single(report.Objects, o => o.Kind == "XA").Name;
                 var retained = Assert.Single(Directory.GetDirectories(Path.GetTempPath(), "ob-xa-" + owned + "-*"));
                 var journal = Path.Combine(retained, "decision.json");
-                try { Assert.True(XaCrashWorker.ReadDecision(journal).Commit); }
+                try { Assert.Equal(commit, XaCrashWorker.ReadDecision(journal).Commit); }
                 finally { File.Delete(journal); Directory.Delete(retained); }
             }
             else Assert.All(report.Objects, o => Assert.Equal("removed", o.Cleanup));
