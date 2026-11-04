@@ -15,6 +15,8 @@ D-04m：named OBJECT/scalar collection/nested collection BLOB/CLOB locator Input
 
 D-04f1：匿名 INTERVAL 工厂已接入现有204/205布局；`ExecuteArray` 的 INSERT/RETURNING、NULL、负值/纳秒和重复 Prepare 执行已通过当前 Oracle 4.4.2.2 直连8项正向验证。过程输出的未知精度仍安全拒绝，4项负向回归单列；普通0x17匿名绑定、PL集合输出和multi-send不由此关闭。
 
+D-04f2：匿名INTERVAL结果描述已接入204/205，沿用嵌入精度和显式输出身份校验；本地及消费者完成，首轮PL本地显式精度9集合OUT直连4/4。扩展根NULL/错误后发布/独立事务查账的实库运行因端点握手断开而未完成，清理状态待确认，当前保持P3，详见路线图；未知精度255仍拒绝。
+
 **当前是实验性驱动，不承诺生产级全功能。** 下表“有实现/部分”是源码状态，
 “直连子集”引用历史4.4.2.2记录，不是本次重跑或全功能验收。任何部署支持均须绑定
 `服务端版本+租户模式+直连/ODP+协议+TLS/认证+客户端OS/runtime+选项`，不能只有“支持Oracle/MySQL”。

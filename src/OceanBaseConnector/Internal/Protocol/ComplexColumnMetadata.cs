@@ -26,6 +26,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 case 203: code = 203; name = "RAW"; break;
                 case 12: code = 12; name = "DATE"; break;
                 case 202: code = 202; name = "TIMESTAMP"; break;
+                case 204: code = 204; name = "INTERVAL YEAR TO MONTH"; break;
+                case 205: code = 205; name = "INTERVAL DAY TO SECOND"; break;
                 case 210: code = 210; name = "BLOB"; break;
                 case 211: code = 211; name = "CLOB"; break;
                 case 163: code = 163; name = "REF CURSOR"; break;

@@ -24,6 +24,8 @@ namespace OceanBaseConnector.UnitTests
         [InlineData((byte)202, "TIMESTAMP")]
         [InlineData((byte)207, "NVARCHAR2")]
         [InlineData((byte)208, "NCHAR")]
+        [InlineData((byte)204, "INTERVAL YEAR TO MONTH")]
+        [InlineData((byte)205, "INTERVAL DAY TO SECOND")]
         public void AnonymousCollectionMetadataResolvesScalarLayoutWithoutDictionary(byte element, string elementName)
         {
             var column = ResultColumn.Parse(ComplexColumn("Owner", "", 17, element), OceanBaseCompatibilityMode.Oracle);
@@ -70,6 +72,23 @@ namespace OceanBaseConnector.UnitTests
             var items = Assert.IsType<OceanBaseComplexValue>(column.DecodeBinary(field)).GetValues(); Assert.Null(items[1]);
             var date = new DateTime(2024, 2, 3, 4, 5, 6);
             if (timestamp) Assert.Equal(new OceanBaseTimestamp(date, 123456789, 9), items[0]); else Assert.Equal(date, items[0]);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void AnonymousIntervalResultsPreserveEmbeddedPrecisionAndFollowingField(bool daySecond)
+        {
+            var column = ResultColumn.Parse(ComplexColumn("", "", element: daySecond ? (byte)205 : (byte)204), OceanBaseCompatibilityMode.Oracle);
+            var body = Convert.FromHexString(daySecond ? "0E00B168DE3A173B3A15CD5B070909" : "070115CD5B070B09");
+            var cursor = new ByteCursor(new byte[] { 3, 8 }.Concat(body).Concat(body).Concat(new byte[] { 99 }).ToArray());
+            var field = column.ReadBinaryField(cursor); Assert.Equal(99, cursor.ReadUInt8()); Assert.False(cursor.HasRemaining);
+            var values = Assert.IsType<OceanBaseComplexValue>(column.DecodeBinary(field)).GetValues();
+            object expected = daySecond ? (object)new OceanBaseIntervalDayToSecond(false, 987654321, 23, 59, 58, 123456789)
+                : new OceanBaseIntervalYearToMonth(true, 123456789, 11);
+            Assert.Equal(new object?[] { expected, null, expected }, values);
+            var invalid = (byte[])field!.Clone(); invalid[daySecond ? 16 : 9] = 255;
+            Assert.Throws<ProtocolException>(() => column.DecodeBinary(invalid));
         }
 
         [Theory]

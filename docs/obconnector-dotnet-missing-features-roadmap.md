@@ -1351,6 +1351,34 @@ TLS Disabled、未请求OB20。只关闭两个工厂及ExecuteArray DML输入/RE
 保持安全拒绝、原输出不发布并破坏无法完整消费的连接；新版本或稳定未知精度wire契约后再重开。
 
 
+#### D-04f2：匿名 INTERVAL 结果描述与 PL 本地集合输出（2026-11-04，`P3`；扩展实库未完成）
+
+基线 `64bf37a`。公开匿名工厂和成员codec已有204/205，匿名结果描述尚未映射。
+先以PL本地显式精度9的集合输出验证真实wire，再仅为 `ComplexColumnMetadata.CreateAnonymousType`
+补齐204/205两个映射，复用既有codec、只读结果描述和显式输出身份校验；不新增API或依赖。
+这与D-04f1普通过程输出的未知精度255不同，不放宽任何精度校验。
+
+- [x] 公开API RED、原始wire控制、最小映射后的首轮公开API实库4/4。
+- [x] 本地结果解析/输出方向/精度拒绝及DLL消费者验证、两包五TFM构建。
+- [ ] 扩展实库：根NULL、错误后旧输出、事务内写入/提交后独立查账及既有负向回归。
+- [x] 独立走查及问题修复复核、同步范围和证据；本节随代码本地提交，不push，扩展实库仍开放。
+
+| 证据 | 结果 |
+| --- | --- |
+| 公开API RED | `d04f2-public-control.trx` **4/4失败**，均因匿名结果布局缺失而拒绝；同步/异步 × 显式/隐式Prepare |
+| 原始wire | 无建表探针 `TestResults/d04f2-wire/result.txt` 返回两个type160、element204/205；列scale=-1/precision255，但**成员payload精度有效**：YM `0115CD5B070B09`，DS `00B168DE3A173B3A15CD5B070909`；最终OK、无schema对象需清理 |
+| 本地RED/GREEN | `d04f2-unit-red.trx` **16失败/46通过**；最小映射后相关单测154/154，最终 `d04f2-unit-final.trx` **313/313**，0skip。覆盖只读匿名结果描述、NULL/空、固定wire/后续字段边界、非法嵌入精度255拒绝，以及OUT/INOUT/ReturnValue的loopback；方向loopback不能替代各方向实库 |
+| 首轮实库GREEN | `d04f2-public-green.trx` **4/4**，0skip：PL本地YEAR(9)/DAY(9) SECOND(9)集合OUT、九位年/日、负值/纳秒/NULL、空集合、三次重复执行、原工厂身份及调用方事务；清理通过。环境Oracle4.4.2.2直连、Windows/.NET10、TLS Disabled、无OB20 |
+| 扩展实库失败 | 更新测试后 `d04f2-live-final.trx` **0通过/18失败/0skip**。首例清理 TABLE `OBI_6110AC4F28004A748180` 时端点握手断开，清理异常遮蔽首例原始异常；其余用例（含既有array/routine控制）均在Open握手断开。沙箱内及外独立无schema探针同样在接收greeting前失败（`health.txt`/`health-unsandboxed.txt`）；独立Python socket控制可建TCP，但接收greeting得到0bytes，不依赖驱动结果解析。未确认是端点/网络故障还是某条SQL触发，不能归因为已确认服务端功能限制；该表是否存在/清理仍待端点恢复后确认 |
+| DLL消费者 | `d04f2-consumer-final.trx` **12/12**，0skip；代表netstandard2.0/2.1/net10资产，buffered/sequential读取两个匿名INTERVAL集合、精确provider身份/NULL/空集合及只读描述；首轮因netstandard2.1旧DLL出现4失败/8通过，五TFM重建后复验通过 |
+| 构建 | solution Release两包五TFM构建 **0warning/0error**。首次并行编译相关单测和Integration时共享obj文件冲突，已改为串行重跑通过；未重复上一模块10分钟完整单测，保留其TNS沙箱File.Replace失败记录 |
+| 格式 | 限定5个C#文件 `dotnet format whitespace --verify-no-changes` exit0（工作区加载警告）及 `git diff --check` 通过；首轮报告既有同行InlineData/初始化器空白，已限定格式化 |
+| 独立走查 | `review_d04f2` 只读核对调用链、原始wire、TRX及文档，产品无问题；提出新增实库测试的db清理会遮蔽主体异常，已复用显式catch/finally聚合主体与清理异常。复核无剩余问题，可本地提交代码里程碑；修复后Integration Release构建0warning/error，未再次访问数据库；不关闭扩展实库任务 |
+
+当前只记录代码和本地完成、首轮有限实库成功，不以此关闭扩展验收或提升P4。
+端点恢复后先确认/清理上述精确表名，再重跑当前公开测试及既有控制；不删除失败、不自动skip。
+普通0x17匿名输入、复杂text和multi-send专门验收仍开放。
+
 ### D-05：UROWID 参数与结果闭环（2026-10-30）
 
 基线 `ae40dba`。D-04a2 继续核对服务端命名成员 deserialize 与 Java writer；Java

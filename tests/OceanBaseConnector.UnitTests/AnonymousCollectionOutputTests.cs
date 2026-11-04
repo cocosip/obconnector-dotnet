@@ -17,8 +17,13 @@ namespace OceanBaseConnector.UnitTests
         {
             var type = ComplexResultType(false, ComplexResultScalar("A", 203));
             var parameters = new OceanBaseParameterCollection();
-            parameters.Add(new OceanBaseParameter { ParameterName = "p", Direction = ParameterDirection.Output,
-                ComplexType = type, Value = "old" });
+            parameters.Add(new OceanBaseParameter
+            {
+                ParameterName = "p",
+                Direction = ParameterDirection.Output,
+                ComplexType = type,
+                Value = "old"
+            });
             var plan = OracleCommandPlan.Create("pkg.p", CommandType.StoredProcedure, parameters);
             var column = ResultColumn.Parse(ComplexColumn("", "", element: 255), OceanBaseCompatibilityMode.Oracle);
 
@@ -47,7 +52,9 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData((byte)0)] [InlineData((byte)3)] [InlineData((byte)246)]
+        [InlineData((byte)0)]
+        [InlineData((byte)3)]
+        [InlineData((byte)246)]
         public async Task AnonymousNumberOutputMatchesCanonicalElementLayout(byte element)
         {
             var server = Server(async channel => { await Query(channel, "after"); await channel.WritePacketAsync(Ok(1)); });
@@ -72,9 +79,12 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, ParameterDirection.Output)] [InlineData(true, ParameterDirection.Output)]
-        [InlineData(false, ParameterDirection.InputOutput)] [InlineData(true, ParameterDirection.InputOutput)]
-        [InlineData(false, ParameterDirection.ReturnValue)] [InlineData(true, ParameterDirection.ReturnValue)]
+        [InlineData(false, ParameterDirection.Output)]
+        [InlineData(true, ParameterDirection.Output)]
+        [InlineData(false, ParameterDirection.InputOutput)]
+        [InlineData(true, ParameterDirection.InputOutput)]
+        [InlineData(false, ParameterDirection.ReturnValue)]
+        [InlineData(true, ParameterDirection.ReturnValue)]
         public async Task AnonymousOutputRejectsStaleFactoryBeforeSending(bool async, ParameterDirection direction)
         {
             var server = Server(async channel => { await Query(channel, "after"); await channel.WritePacketAsync(Ok(7)); });
@@ -101,7 +111,7 @@ namespace OceanBaseConnector.UnitTests
         {
             foreach (var async in new[] { false, true })
                 foreach (var direction in new[] { ParameterDirection.Output, ParameterDirection.InputOutput, ParameterDirection.ReturnValue })
-                    foreach (var name in new[] { "NUMBER", "VARCHAR2", "CHAR", "RAW", "DATE", "TIMESTAMP" })
+                    foreach (var name in new[] { "NUMBER", "VARCHAR2", "CHAR", "RAW", "DATE", "TIMESTAMP", "INTERVAL YEAR TO MONTH", "INTERVAL DAY TO SECOND" })
                         yield return new object[] { async, direction, name };
         }
 
@@ -109,9 +119,11 @@ namespace OceanBaseConnector.UnitTests
         [MemberData(nameof(AnonymousOutputCases))]
         public async Task AnonymousScalarArraysRoundTripAllOutputDirections(bool async, ParameterDirection direction, string name)
         {
-            var code = name == "NUMBER" ? (byte)0 : name == "VARCHAR2" ? (byte)253 : name == "CHAR" ? (byte)254 : name == "RAW" ? (byte)203 : name == "DATE" ? (byte)12 : (byte)202;
+            var code = name == "NUMBER" ? (byte)0 : name == "VARCHAR2" ? (byte)253 : name == "CHAR" ? (byte)254 : name == "RAW" ? (byte)203 : name == "DATE" ? (byte)12
+                : name == "TIMESTAMP" ? (byte)202 : name == "INTERVAL YEAR TO MONTH" ? (byte)204 : (byte)205;
             var body = Convert.FromHexString(name == "NUMBER" ? "023432" : name == "VARCHAR2" ? "0AE682A3E88085F09F9880" : name == "CHAR" ? "0161" : name == "RAW" ? "0200FF"
-                : name == "DATE" ? "07E8070203040506" : "0C1418020304050615CD5B0709");
+                : name == "DATE" ? "07E8070203040506" : name == "TIMESTAMP" ? "0C1418020304050615CD5B0709"
+                : name == "INTERVAL YEAR TO MONTH" ? "070115CD5B070B09" : "0E00B168DE3A173B3A15CD5B070909");
             var server = Server(async channel =>
             {
 
@@ -131,7 +143,9 @@ namespace OceanBaseConnector.UnitTests
             {
                 await connection.OpenAsync(); var type = connection.CreateArrayType(name);
                 object item = name == "NUMBER" ? 42 : name == "VARCHAR2" ? "患者😀" : name == "CHAR" ? "a" : name == "RAW" ? new byte[] { 0, 255 }
-                    : name == "DATE" ? new DateTime(2024, 2, 3, 4, 5, 6) : new OceanBaseTimestamp(new DateTime(2024, 2, 3, 4, 5, 6), 123456789, 9);
+                    : name == "DATE" ? new DateTime(2024, 2, 3, 4, 5, 6) : name == "TIMESTAMP" ? new OceanBaseTimestamp(new DateTime(2024, 2, 3, 4, 5, 6), 123456789, 9)
+                    : name == "INTERVAL YEAR TO MONTH" ? new OceanBaseIntervalYearToMonth(true, 123456789, 11)
+                    : new OceanBaseIntervalDayToSecond(false, 987654321, 23, 59, 58, 123456789);
                 using var command = connection.CreateCommand(); command.CommandText = "pkg.p"; command.CommandType = CommandType.StoredProcedure;
                 var parameter = new OceanBaseParameter { ParameterName = "p", Direction = direction, Value = direction == ParameterDirection.InputOutput ? type.CreateValue(item) : (object)"old" };
                 if (direction != ParameterDirection.InputOutput) parameter.ComplexType = type;
@@ -217,7 +231,10 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task AnonymousOutputCancellationOrCloseBeforeTailKeepsOldValue(bool async, bool close)
         {
             var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

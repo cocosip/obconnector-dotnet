@@ -64,6 +64,18 @@ namespace OceanBaseConnector.ConsumerTests
                 Assert.Equal(23, execute[0]);
                 Assert.Equal(new byte[] { 0, 1, 204, 0, 205, 0, 7 }.Concat(ymBytes).Concat(new byte[] { 14 }).Concat(dsBytes), execute.AsSpan(10).ToArray());
                 await channel.WritePacketAsync(new byte[] { 0, 1, 0, 2, 0, 0, 0 }, budget.Token); channel.BeginCommand();
+                Assert.Equal(25, (await ReadCommand())[0]); channel.BeginCommand();
+                Assert.Equal(22, (await ReadCommand())[0]);
+                await channel.WritePacketAsync(new byte[] { 0, 131, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, budget.Token); channel.BeginCommand();
+                Assert.Equal(23, (await ReadCommand())[0]);
+                await channel.WritePacketAsync(new byte[] { 2 }, budget.Token);
+                foreach (var element in new byte[] { 204, 205 })
+                    await channel.WritePacketAsync(Metadata(160, 255).Concat(new byte[] { 0, 0, 0, element }).ToArray(), budget.Token);
+                await channel.WritePacketAsync(eof, budget.Token);
+                await channel.WritePacketAsync(new byte[] { 0, 0, 3, 8, 7 }.Concat(ymBytes).Concat(new byte[] { 7 }).Concat(ymBytes)
+                    .Concat(new byte[] { 3, 8, 14 }).Concat(dsBytes).Concat(new byte[] { 14 }).Concat(dsBytes).ToArray(), budget.Token);
+                await channel.WritePacketAsync(new byte[] { 0, 0, 0, 0, 0, 0 }, budget.Token);
+                await channel.WritePacketAsync(eof, budget.Token); channel.BeginCommand();
                 Assert.Equal(25, (await ReadCommand())[0]);
             });
             var context = new AssemblyLoadContext("interval-" + target, isCollectible: true);
@@ -110,6 +122,31 @@ namespace OceanBaseConnector.ConsumerTests
                         Assert.Equal(DbType.Object, parameter.DbType); command.Parameters.Add(parameter);
                     }
                     Assert.Equal(1, await command.ExecuteNonQueryAsync(budget.Token));
+                }
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "anonymous intervals"; await command.PrepareAsync(budget.Token);
+                    using var reader = await command.ExecuteReaderAsync(sequential ? CommandBehavior.SequentialAccess : CommandBehavior.Default, budget.Token);
+                    Assert.True(await reader.ReadAsync(budget.Token));
+                    for (var i = 0; i < 2; i++)
+                    {
+                        Assert.Equal("ARRAY", reader.GetDataTypeName(i));
+                        Assert.Equal(assembly.GetType("OceanBaseConnector.OceanBaseComplexValue"), reader.GetFieldType(i));
+                        var value = reader.GetValue(i);
+                        var items = (object?[])value.GetType().GetMethod("GetValues")!.Invoke(value, null)!;
+                        Assert.Equal(new object?[] { values[i], null, values[i] }, items);
+                        Assert.Same(assembly, items[0]!.GetType().Assembly);
+                        var descriptor = value.GetType().GetProperty("Type")!.GetValue(value)!;
+                        var readOnly = Assert.Throws<System.Reflection.TargetInvocationException>(() => descriptor.GetType().GetMethod("CreateValue")!.Invoke(descriptor, new object[] { items }));
+                        Assert.IsType<NotSupportedException>(readOnly.InnerException);
+                    }
+                    Assert.True(await reader.ReadAsync(budget.Token));
+                    for (var i = 0; i < 2; i++)
+                    {
+                        var value = reader.GetValue(i);
+                        Assert.Empty((object?[])value.GetType().GetMethod("GetValues")!.Invoke(value, null)!);
+                    }
+                    Assert.False(await reader.ReadAsync(budget.Token));
                 }
                 var factory = connection.GetType().GetMethod("CreateArrayType", new[] { typeof(string), assembly.GetType("OceanBaseConnector.OceanBaseTransaction")! })!;
                 for (var i = 0; i < values.Length; i++)
