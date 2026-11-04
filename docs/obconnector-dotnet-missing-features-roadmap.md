@@ -135,7 +135,7 @@ ARRAY 已有部分实现，三种 MySQL 类型则缺专用契约及独立验收�
 | D-09 | `P4`；4.4.2.2 `oracle-direct` text+binary String wire 子集；PL XMLTYPE OUT/INOUT 已确认是服务端限制；完整 XML codec 仍未关闭 | XMLType wire 调查与有条件 codec（T17） | ownerless `XMLTYPE` 已有严格 UTF-8 String wire；`SYS.XMLTYPE` metadata 已有安全的 String 消费边界；`DbType.Xml` 参数使用已验证的 type 253 字符串 wire；同一 PL OUT/INOUT 形状在 Connector/J 2.4.14 与 .NET 分别返回 `600/0A000`、`600/42000`，按服务端限制跳过客户端扩展 | 当前子集覆盖普通 XMLTYPE 列、NULL、同步/异步 DML、metadata、PL 函数结果、显式 Prepare binary 结果；带 owner 的复杂 payload、坏值/最大值和跨版本证据仍待确认；PL OUT/INOUT 当前版本不再作为待开发项 | 保持当前子集的参数/结果/NULL/metadata 契约；取得稳定复杂 XML identity 和不同服务端 wire 后再扩展，不把 PL 失败伪装成客户端成功 |
 | D-10 | `P4`（4.4.2.2 `oracle-direct` 指定子集）；显式 Prepare 的 SDO_GEOMETRY 整列读取与 generic OBJECT/ARRAY 输入已验收，专用空间契约仍未闭合 | SDO_GEOMETRY wire 调查与有条件 codec（T17） | 服务端有条件空间类型；Java 只有通用复杂值路径，未确认专用 SDO codec | 目标版本、wire、SRID、WKB/文本表示和安全大小上限 | 保持通用 OBJECT 路径；当前仅关闭 SYS.SDO_GEOMETRY 整列读取和 generic OBJECT/ARRAY 输入子集；若纳入 WKB/WKT、SRID 或非法几何契约，先补独立 wire/版本证据；不把 GEOMETRY bytes 冒充 SDO |
 | D-11 | `P0 / 当前目标服务端限制`；ANYDATA PL 包调用在同一租户由 Java/.NET 同样拒绝 | ANYDATA PL 形状调查与有条件 codec（T17） | 当前 4.4.2.2 目标租户找不到 `SYS.ANYDATA`；Connector/J 与 .NET 对同一 `CONVERT*` 查询均失败 | 只有目标版本/租户实际提供 `SYS.ANYDATA` 包并给出参数/返回 wire 后重新开启；不为缺失服务端包增加客户端兜底 | 当前目标直接按服务端限制跳过客户端 API；新部署提供包后再定义有限 PL 形状、NULL、类型名和失败发布契约 |
-| D-12 | `P4`（a/b/c 的当前版本通用路径已分别验收） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，RoaringBitmap 查询为 BLOB/byte[]；Oracle ARRAY 归 D-04 | 一至六层 INT ARRAY 见 D-12c1；其他版本、稀疏向量/其他数组元素和专用 codec 需求仍需单独 profile 证据 | a/c 复用 String，b 复用 Binary 读取并通过 `rb_build_varbinary(?)` 写入；不新增未经证实的专用 codec |
+| D-12 | `P4`（a/b/c 的当前版本通用路径已分别验收） | MySQL VECTOR/RoaringBitmap/ARRAY 的 wire 与 codec（T18；子项见下） | 服务端功能存在；4.4.2.2 的 VECTOR/ARRAY wire 为 CHAR 文本，RoaringBitmap 查询为 BLOB/byte[]；Oracle ARRAY 归 D-04 | 一至六层INT ARRAY见D-12c1；其余六种文档元素的单层String路径见D-12c2；其他嵌套/版本、稀疏向量和专用codec需求仍需单独证据 | a/c 复用 String，b 复用 Binary 读取并通过 `rb_build_varbinary(?)` 写入；不新增未经证实的专用 codec |
 
 D-12 分为以下三个子任务，状态都维护在本文，父项只有在所有子项结论闭合后才能关闭：
 
@@ -143,7 +143,7 @@ D-12 分为以下三个子任务，状态都维护在本文，父项只有在所
 | --- | --- | --- | --- |
 | D-12a VECTOR（当前版本稠密） | `P4`，4.4.2.2 MySQL 直连通用 String 子集 | `VECTOR(3)` DDL、NULL/文本值、参数绑定、显式/隐式 Prepare、结果 metadata 和独立读回；Java 2.4.14 同样返回 `CHAR`/`String` | 当前版本没有专用 wire/type code；`SPARSEVECTOR` 在目标服务端返回 1064，保留为版本边界 |
 | D-12b RoaringBitmap | `P4`；4.4.2.2 MySQL 直连通用 Binary/SQL 函数子集 | DDL、NULL/空集合、`rb_from_string`、64 位值、raw metadata、`rb_to_string`/`rb_to_array`、`rb_build_varbinary(?)` 回绑和坏 raw 行为已验收；真实集成回归 sync/async **2/2** | 查询返回 `BLOB`/`byte[]`；直接把 `byte[]` 绑定到 `ROARINGBITMAP` 列由服务端返回 `1235/0A000`，属于服务端 prepared DML 限制；未新增专用 provider type |
-| D-12c MySQL ARRAY | `P4`，4.4.2.2 MySQL 直连通用 String 子集 | `ARRAY(INT)` DDL、NULL/文本值、参数绑定、显式/隐式 Prepare、结果 metadata 和独立读回；Java 2.4.14 同样返回 `CHAR`/`String` | 一至六层 INT 嵌套、NULL/空叶数组/不等长子数组已验收（D-12c1）；二维顶层 [] 的参数/字面量均被 7602/22000 拒绝；其他元素、专用参数 metadata 和版本仍待确认，不能用 Oracle 类型码 161 代替 |
+| D-12c MySQL ARRAY | `P4`，4.4.2.2 MySQL 直连通用 String 子集 | `ARRAY(INT)` DDL、NULL/文本值、参数绑定、显式/隐式 Prepare、结果 metadata 和独立读回；Java 2.4.14 同样返回 `CHAR`/`String` | 一至六层 INT 嵌套、NULL/空叶数组/不等长子数组已验收（D-12c1）；二维顶层 [] 的参数/字面量均被 7602/22000 拒绝；其余单层TINYINT/SMALLINT/BIGINT/FLOAT/DOUBLE/VARCHAR已在D-12c2验收，FLOAT文本舍入与VARCHAR非JSON边界保留；其他嵌套、专用参数metadata和版本仍待确认，不能用Oracle类型码161代替 |
 
 ### 第三阶段：已有代码的部署和故障验收
 
@@ -220,7 +220,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | package-local PL/SQL RECORD 参数派生与绑定 | A-03d | 字段目录、输入/输出 payload 及成功交互；目前 Java 公开 API 也不支持绑定，不能归为服务端拒绝 |
 | multi-send 普通DML的匿名输入/声明输出、复杂 text LOB 结果、PL 同组流水化输出、cursor/array binding 扩展 | D-08 | named OBJECT/collection 普通输入与普通 OBJECT binary 结果见 D-08i/j；根 BLOB/CLOB locator 输入/结果见 D-08k/l；命名复杂 LOB 内容输入见 D-08m；保留调用方连接的复杂 LOB binary 结果见 D-08n（OBJECT 实库、collection 仅 loopback）；DML RETURNING 标量 OUT/INOUT 见 D-08o，命名复杂值和 LOB 输出见 D-08p；混合routine状态屏障兼容已关闭（D-08y），PL同组流水化仍未关闭；自有连接Scalar/显式LOB输出的已验收子集与自动提交远程DML的目标服务端事务边界见D-08z；其余需分组响应、错误顺序、资源归属及 unknown-outcome 契约 |
 
-完整 XML codec、SDO 专用 WKB/WKT/SRID API、稀疏向量/其他 ARRAY 元素属于额外范围或 wire/版本待确认（一至六层 INT 见 D-12c1）；
+完整 XML codec、SDO 专用 WKB/WKT/SRID API、稀疏向量/其他ARRAY版本与额外嵌套范围仍待证据（一至六层INT见D-12c1，其余六种文档元素单层见D-12c2）；
 当前通用 String/Binary/OBJECT 路径已有验收，不能把“没有专用类型名”直接等同没有功能。
 
 当前整体状态为：
@@ -229,7 +229,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 | --- | ---: | --- |
 | 已有代码但组合受限 | 7 项（D-01～D-07） | 保留已验收子集；剩余按协议、版本与服务端前提逐项推进，不重复开发 P4 范围 |
 | 已实现的流水化子集 | 1 项（D-08） | 保留已验收的 input-only 与 RETURNING 输出子集边界；短时 prepared DML 收益对照已记录（D-08ad），其他负载、故障、代理验收分别推进 |
-| 专用类型已有通用路径子集 | 3 项（D-09、D-10、D-12） | 已有指定版本 P4 证据；复杂 XML、空间专用契约、稀疏向量/其他数组元素及跨版本仍待证据 |
+| 专用类型已有通用路径子集 | 3 项（D-09、D-10、D-12） | 已有指定版本 P4 证据；复杂 XML、空间专用契约、稀疏向量、其他嵌套和跨版本仍待证据 |
 | 类型服务端阻塞 | 1 项（D-11） | 当前缺 SYS.ANYDATA 包；取得实际 PL 参数/结果 wire 后重开 |
 | 已实现但欠验收 | 5 项（A-01～A-05） | 需要真实部署、故障、压力或平台证据 |
 | 服务端前提阻塞 | 5 项（S-01～S-05） | 暂停代码开发，保留 Deferred/失败 |
@@ -2048,6 +2048,35 @@ final **4/4**。不将恢复通过等同 A-01 长期稳定性已关闭。其他�
 独立 fresh-context 只读审查无 Critical/Important/Minor，核对了六种样本、四种执行方式、
 独立 text/binary 读回、精确负向错误码及全部中间报告；未重复测试或服务端探测。
 新增文件的 folder whitespace 核验与 `git diff --check` 通过；本节随测试本地提交，未 push。
+
+#### D-12c2：MySQL ARRAY 其余已列明元素类型（2026-11-04，指定直连子集P4）
+
+基线 `e7cf5e0`。固定官方[T18数组概述][T18-array]和[建列文档][T18-array-ddl]已在线复核：
+支持TINYINT、SMALLINT、INT/INTEGER、BIGINT、FLOAT、DOUBLE、VARCHAR。已有D-12c/c1仅验收INT；
+本模块补其余六种元素的实际参数/结果契约，不把Java数组API列为需求。
+设计选择：优先复用现有String输入/结果；新增专用provider值/codec没有wire依据，故不采用。
+先用只读CAST探针确定目标4.4.2.2的canonical文本、NULL/空值及坏输入行为，再持久存储独立读回；
+出现客户端缺陷才改共享codec，不把服务端转换、格式化或拒绝伪造成客户端问题。
+
+影响范围：新增 `MySql/ArrayElementStringWireTests.cs`，复用 `VectorArrayStringWireTests.Cases`、
+`DatabaseContext` 与现有 `OceanBaseParameter`/reader；文档同步当前元素覆盖。无新API/依赖/配置。
+普通SQL与当前mysql-direct profile，sync/async × implicit/explicit Prepare四例；每例六个元素列，
+验证整数边界、可精确表示的浮点值、Unicode/引用/分隔符字符串、NULL元素、空数组、SQL NULL及
+后续字段边界。独立连接分别用text/binary读取，断言metadata和确切String/NULL；坏输入后的
+原值/行数/会话可复用均须有证据。DDL及清理错误必须保留，不运行Oracle事故PL或长压。
+
+- [x] 采集只读参数CAST与字面量控制的实际返回及拒绝证据；确定成功/服务端受限形状。
+- [x] 新集成模块完成四种执行方式及独立存储/metadata/失败边界验证，必要时先RED后修共享产品路径。
+- [x] 对新范围及既有INT/nested ARRAY执行短回归、限定格式检查；更新矩阵/契约，独立走查后本地提交。
+
+验证与边界：
+
+- 只读CAST探针六种类型的值、[NULL]、[]均为CHAR/String；坏语法`[1,`均返回3140/22032、非unknown outcome。报告在忽略目录 `TestResults/d12c2-array-elements/cast-probe.log`。
+- FLOAT参数和无参数字面量均把16777216打印为16777200；普通text的ELEMENT_AT也显示16777200，而独立连接显式Prepare/binary读同一存储元素为16777216。DOUBLE数组以科学记数法显示9007199254740992，精确标量仍一致。这里是服务端文本表示边界，不能把ARRAY输出称为无损回绑格式。
+- VARCHAR数组输出会保留原始换行/NUL并不完整转义反斜杠；按opaque String读取，不能当作JSON。独立text/binary ELEMENT_AT逐项证明Unicode、空串、字面NULL、逗号、引号、反斜杠、换行和NUL八个元素存储值正确。
+- 新集成模块 `d12c2-elements-first.trx` **4/4**；连同VECTOR/一层INT及一至六层INT回归，`d12c2-elements-regression.trx` **12/12**（0 skip，约2秒）。四种执行方式每例六列，整数边界、[NULL]/[]/SQL NULL、坏输入六次拒绝无id99、原四行保持及原command成功再用、后续字段、独立text/binary读回和读后会话；自有表清理通过。
+- Integration Release构建0 warning/0 error。现有产品String路径无需修改，无新API/codec/依赖；本模块不重复全单元、消费者、五TFM或长测。
+- fresh-context独立只读走查核对新测试、既有ARRAY夹具、profile筛选/清理、String wire和全部文档，无遗留问题；限定新C#文件的folder whitespace核验、73条本地文档目标与 `git diff --check` 通过。本模块随测试本地提交，未push。
 
 ### D-08：prepared batch multi-send 的 input-only DML 与 scalar 子集（2026-10-31，父项 `P2`；子集 `P4`）
 
