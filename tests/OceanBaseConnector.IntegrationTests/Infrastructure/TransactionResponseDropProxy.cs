@@ -143,7 +143,7 @@ internal sealed class TransactionResponseDropProxy : IAsyncDisposable
         return Encoding.UTF8.GetString(reader.ReadBytes((int)length)) == _target;
     }
 
-    private static async Task<byte[]?> ReadFrame(Stream input, CancellationToken token)
+    internal static async Task<byte[]?> ReadFrame(Stream input, CancellationToken token)
     {
         var header = new byte[4];
         if (await input.ReadAsync(header.AsMemory(0, 1), token) == 0) return null;
