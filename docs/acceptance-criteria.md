@@ -56,7 +56,7 @@ P4子集不因尚有未纳入组合而无限重开；代码缺口或已纳入验
 | X01–X04/Q22 | 提交/回滚独立连接可见性、savepoint、DDL边界、XA recover/决定落盘前回滚及落盘后恢复；未知结果独立查账且无重放 | transactions/xa/faults；Integration Transactions/Xa/Faults及ambient专项 |
 | P01–P05 | 实际协商与双向帧、分片/序号/checksum/截断/取消、拒绝组合；trace服务器控制和导出分开 | diagnostics与ob20TraceProfile；真实压缩/OB20当前E10开放 |
 | M01–M03 | 权限/目录准确性、未授权错误不伪造；无敏感标签/高基数；监听卸载/开销/生命周期 | schema/diagnostics；对应Unit/Consumer/Integration |
-| R01 | 五资产构建、基线无现代API泄漏、实际runtime包消费；非Windows必须有对应记录 | eng/Verify-Packages.ps1、Consumer；-VerifyLive另验 |
+| R01 | 五资产构建、基线无现代API泄漏、实际runtime包消费；Windows 可交叉发布 Linux；只有声明 Linux 实机运行时行为时才需对应实机记录 | eng/Verify-Packages.ps1、Consumer；-VerifyLive另验 |
 
 每个支持输入至少有：正常值、typed NULL、边界、错误值/错误模式、同步/异步（若提供）、
 存储/输出后独立核对及失败后的会话状态。涉及模式差异必须各自执行，不能以Oracle通过代替MySQL。
@@ -75,7 +75,7 @@ P4子集不因尚有未纳入组合而无限重开；代码缺口或已纳入验
 | 运行时 | 声明支持的OS/runtime分别执行；五资产各有编译和公开包消费者。netstandard2.0/2.1须记录实际host，现代资产须各记录net8/9/10；Framework消费单列Windows CLR版本 |
 | 安全/代理 | 若声明TLS/mTLS、ODP、OB20/trace/压缩可用，必须补对应真实端点，零失败且没有因缺配置而跳过；当前这些门槛保持开放 |
 | 模式/方向 | 适用的sync/async、text/server-prepare、输入/输出、普通列/PL、NULL/边界分别通过；回退/多语句不可替代普通prepare |
-| 功能结果 | 完整Integration所有适用组零失败，Acceptance每个启用case通过且cleanup零失败；配置skip/deferred单列为未验收 |
+| 功能结果 | 拟发布声明涉及的 Integration 组零失败，Acceptance 每个启用 case 通过且 cleanup 零失败；未声明的集成组可 deferred，必须单列，不作为代码开发失败 |
 
 池和资源至少增加一份可复现的压力报告：每模式16个并发调用者、私有池MaxPoolSize=4、
 不少于10000次借还/真实查询，验证峰值物理会话不超过4、等待取消不泄漏、所有任务在配置预算内结束。

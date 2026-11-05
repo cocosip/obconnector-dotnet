@@ -128,7 +128,7 @@ Java 类/方法仅是实现参考；ADO.NET 对应行为按自身契约判断，
 | M01 GetSchema/列元数据 | 核心+ADO.NET适配 | 双模式实际目录查询/DataTypes | Connection.Schema.*、ResultDbColumn | Oracle 直连基础目录、过程签名和未约束 NUMBER 回归 18/18 通过；package NUMBER/DATE overload 按 `OVERLOAD` 派生并执行 sync/async 4/4 通过，引用 package 标识符派生 sync/async 2/2 通过，Oracle DATE 未知 precision metadata 已归一化；普通 package-local `PL/SQL RECORD` 目录值可读，独立探针去掉 `DATA_LEVEL=0` 后仍只有顶层行且无 `ALL_PLSQL_*` 字段布局，公开绑定发送前拒绝 sync/async 2/2，.NET/Connector-J 仍无可移植 wire/API；含 cursor 成员的 PL-only RECORD 当前 package INVALID 的回归 2/2，Java/.NET 同为服务端限制；权限/最小权限及更多标识符边界、视图/同义词1031仍保留；Oracle `ALL_ARGUMENTS.CHAR_LENGTH` 在当前目标版本缺失且 Java 同样返回904，字符长度保持服务端限制 |
 | M02 日志/Activity/Meter/慢操作 | 可选运维适配 | 双模式已有实现 | DriverDiagnostics、ConnectionLog | 不记录SQL/参数/凭据；慢操作包含客户端消费，不是纯服务端耗时 |
 | M03 协商/帧/I/O/源流/池指标 | 可选运维适配 | 已有固定维度诊断 | ProtocolDiagnostics、DriverDiagnostics.* | 不定义猜测性其他等待点，监听开销/卸载/负载待验收 |
-| R01 包/TFM/平台 | 发布门槛 | 两包五资产，现代 API 仅 net8/9/10；当前 Windows 包/运行时子集见 A-04 | csproj、eng/Verify-Packages.ps1 | net8/9/10 独立 runtime、netstandard2.0/2.1 的 net10 host 及 netstandard2.0 的 net48 host 共 48 项双模式包实库场景通过；netstandard 不是独立 runtime，完整 API/ORM 和非 Windows 实库仍欠验收 |
+| R01 包/TFM/平台 | 发布门槛 | 两包五资产，现代 API 仅 net8/9/10；Windows 可交叉发布 Linux；当前 Windows 包/运行时子集见 A-04 | csproj、eng/Verify-Packages.ps1 | net8/9/10 独立 runtime、netstandard2.0/2.1 的 net10 host 及 netstandard2.0 的 net48 host 共 48 项双模式包实库场景通过；netstandard 不是独立 runtime；Linux 实机/完整 ORM 仅在发布声明涉及时另验 |
 | R02 DataAdapter/CommandBuilder | 范围排除 | 已移除；显式命令CRUD | factory保留平台默认不支持 | 是产品选择，不是服务端不支持或Java缺同名API |
 | R03 原生数据库/运维产品扩展 | 范围排除 | 不实现Oracle OCI/TNS wire、Aurora/Galera、binlog复制/备份管理器 | 无支持承诺 | 可发送合法OceanBase SQL，不承诺原生驱动替换 |
 
