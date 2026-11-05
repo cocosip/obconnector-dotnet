@@ -1,8 +1,10 @@
 using System;
+using System.ComponentModel;
 using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +17,12 @@ namespace OceanBaseConnector.UnitTests
 {
     public sealed class TnsAddressResolverTests
     {
+        private const uint MoveFileReplaceExisting = 0x1;
+        private const uint MoveFileWriteThrough = 0x8;
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool MoveFileEx(string existingFileName, string newFileName, uint flags);
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
@@ -215,7 +223,14 @@ namespace OceanBaseConnector.UnitTests
             {
                 try
                 {
-                    File.Replace(source, destination, null);
+                    if (OperatingSystem.IsWindows())
+                    {
+                        if (MoveFileEx(source, destination, MoveFileReplaceExisting | MoveFileWriteThrough)) return;
+                        var code = Marshal.GetLastWin32Error();
+                        if (attempt < 20 && (code == 5 || code == 32 || code == 33)) { Thread.Sleep(25); continue; }
+                        throw new Win32Exception(code);
+                    }
+                    File.Move(source, destination, overwrite: true);
                     return;
                 }
                 catch (IOException error) when (attempt < 4 &&
