@@ -115,9 +115,9 @@ namespace OceanBaseConnector.ConsumerTests
                     string?[] row = { mysql ? "db" : null, mysql ? null : "OWNER", mysql ? "proc" : "PROC", null, null, mysql ? null : "1", functionReturn ? "FUNCTION" : "PROCEDURE" };
                     if (arguments)
                     {
-                        names = names.Concat(new[] { "PARAMETER_NAME", "ORDINAL_POSITION", "PARAMETER_MODE", "DATA_TYPE", "DATA_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION", "TYPE_OWNER", "TYPE_NAME", "TYPE_SUBNAME", "TYPE_DECLARATION", "CHARACTER_LENGTH", "DECLARED_PRECISION", "DECLARED_SCALE" }).ToArray();
+                        names = names.Concat(new[] { "PARAMETER_NAME", "ORDINAL_POSITION", "PARAMETER_MODE", "DATA_TYPE", "DATA_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION", "TYPE_OWNER", "TYPE_NAME", "TYPE_SUBNAME", "TYPE_DECLARATION", "CHARACTER_LENGTH", "DECLARED_PRECISION", "DECLARED_SCALE", "ARGUMENT_SEQUENCE", "ARGUMENT_LEVEL" }).ToArray();
                         row = row.Concat(new[] { parameterName, "1", functionReturn ? "IN" : "INOUT", geometryType ?? floatType ?? (mysql ? "decimal" : "NUMBER"), null, geometryType != null || unconstrainedNumber ? null : floatType != null ? "126" : "3",
-                            geometryType != null ? null : variableScale ? "-85" : mysql ? "1" : "-2", null, null, null, null, geometryType ?? (mysql ? "decimal(3,1)" : null), null, null, null }).ToArray();
+                            geometryType != null ? null : variableScale ? "-85" : mysql ? "1" : "-2", null, null, null, null, geometryType ?? (mysql ? "decimal(3,1)" : null), null, null, null, null, null }).ToArray();
                     }
                     await channel.WritePacketAsync(new[] { (byte)names.Length }, budget.Token);
                     foreach (var name in names) await channel.WritePacketAsync(Column(name), budget.Token);
