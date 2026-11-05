@@ -107,7 +107,7 @@ namespace OceanBaseConnector
             var context = type.Context;
             if (context == null || !ReferenceEquals(context.Connection, this) || !ReferenceEquals(context, _complexTypeContext) ||
                 !ReferenceEquals(session, context.Session) || !ReferenceEquals(context.Transaction, transaction) || context.Epoch != _transactionEpoch || context.MetadataEpoch != session.ComplexTypeEpoch ||
-                !type.IsAnonymous && (!_complexTypes.TryGetValue((type.SchemaName, type.TypeName), out var cached) || !ReferenceEquals(cached, type)))
+                !type.IsAnonymous && !type.IsPackageLocal && (!_complexTypes.TryGetValue((type.SchemaName, type.TypeName), out var cached) || !ReferenceEquals(cached, type)))
                 throw new InvalidOperationException("The complex type's session, transaction or cache generation has changed.");
         }
 
@@ -126,6 +126,23 @@ namespace OceanBaseConnector
         internal Task<OceanBaseComplexType> GetDerivedComplexType(string schemaName, string typeName, OceanBaseCommand command, bool asynchronous, CancellationToken token)
             => GetComplexTypeCore(schemaName, typeName, (OceanBaseTransaction?)command.Transaction, asynchronous, token,
                 command.SessionOwner, command.RequiredSession, command.RequiredTransactionEpoch, command.CommandTimeout, command.CancellationOrigin);
+
+        internal OceanBaseComplexType CreateDerivedRecordType(string schemaName, string typeName, string packageName,
+            OceanBaseComplexMember[] members, OceanBaseCommand command)
+        {
+            if (packageName == null || packageName.Length == 0) throw new NotSupportedException("Package-local RECORD metadata has no package identity.");
+            ValidateComplexName(schemaName, nameof(schemaName)); ValidateComplexName(typeName, nameof(typeName)); ValidateComplexName(packageName, nameof(packageName));
+            lock (_gate)
+            {
+                var transaction = (OceanBaseTransaction?)command.Transaction;
+                var session = RequireComplexSession(transaction, command);
+                if (command.RequiredSession != null && !ReferenceEquals(session, command.RequiredSession) ||
+                    command.RequiredTransactionEpoch != _transactionEpoch)
+                    throw new InvalidOperationException("The RECORD descriptor session or transaction changed.");
+                var context = EnsureComplexTypeContext(session, transaction);
+                return new OceanBaseComplexType(context, schemaName, typeName, false, members, packageName);
+            }
+        }
 
         internal OceanBaseComplexType GetOrCreateSystemSdoGeometryType(PhysicalSession session, OceanBaseTransaction? transaction)
         {

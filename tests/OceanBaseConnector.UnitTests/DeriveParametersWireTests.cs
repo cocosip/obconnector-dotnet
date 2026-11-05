@@ -125,6 +125,48 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task DeriveParametersBuildsPackageLocalRecordDescriptorFromFieldRows(bool asynchronous)
+        {
+            using var routines = DerivationRoutines(false);
+            routines.Rows[0]["PACKAGE_NAME"] = "PKG";
+            using var arguments = DerivationArguments(false);
+            var record = arguments.Rows[0];
+            record["PACKAGE_NAME"] = "PKG"; record["DATA_TYPE"] = "PL/SQL RECORD";
+            record["TYPE_OWNER"] = "500003"; record["TYPE_NAME"] = "R"; record["TYPE_SUBNAME"] = "PKG";
+            record["ARGUMENT_SEQUENCE"] = 1; record["ARGUMENT_LEVEL"] = 0;
+            record["PARAMETER_NAME"] = "value";
+            var number = arguments.NewRow(); number.ItemArray = (object[])record.ItemArray.Clone();
+            number["PARAMETER_NAME"] = "N"; number["DATA_TYPE"] = "NUMBER"; number["TYPE_OWNER"] = number["TYPE_NAME"] = number["TYPE_SUBNAME"] = DBNull.Value;
+            number["ARGUMENT_SEQUENCE"] = 2; number["ARGUMENT_LEVEL"] = 1; arguments.Rows.Add(number);
+            var text = arguments.NewRow(); text.ItemArray = (object[])record.ItemArray.Clone();
+            text["PARAMETER_NAME"] = "S"; text["DATA_TYPE"] = "VARCHAR2"; text["TYPE_OWNER"] = text["TYPE_NAME"] = text["TYPE_SUBNAME"] = DBNull.Value;
+            text["ARGUMENT_SEQUENCE"] = 3; text["ARGUMENT_LEVEL"] = 1; text["CHARACTER_LENGTH"] = 40L; arguments.Rows.Add(text);
+            var server = Server(async channel =>
+            {
+                await ServeDerivationTable(channel, 71, routines, false, false, new object[] { "OWNER", "PROC", "PKG" });
+                await ServeDerivationTable(channel, 72, arguments, false, true, new object[] { 1, "OWNER", "PROC", "PKG" }, package: "PKG");
+                Assert.Equal(0, await channelStreamRead(channel));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                using var command = new OceanBaseCommand { Connection = connection, CommandType = CommandType.StoredProcedure, CommandText = "owner.pkg.proc" };
+                if (asynchronous) await command.DeriveParametersAsync(); else command.DeriveParameters();
+                var parameter = Assert.Single(command.Parameters.Cast<OceanBaseParameter>());
+                Assert.NotNull(parameter.ComplexType); var descriptor = parameter.ComplexType!;
+                Assert.Equal("500003", descriptor.SchemaName); Assert.Equal("R", descriptor.TypeName);
+                Assert.Equal(new[] { "N", "S" }, descriptor.Members.Select(member => member.Name));
+                Assert.Equal(OceanBaseDbType.Struct, parameter.OceanBaseDbType);
+            }
+            catch (Exception error) when (server.Completion.IsFaulted) { throw new AggregateException(error, server.Completion.Exception!); }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData("missing")]
         [InlineData("ambiguous")]
         [InlineData("null-type")]

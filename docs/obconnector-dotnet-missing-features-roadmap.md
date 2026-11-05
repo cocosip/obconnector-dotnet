@@ -217,7 +217,7 @@ ambient 提升/通用持久协调器、REF CURSOR 输入、DataAdapter/CommandBu
 
 | 已有编号 / 对应 G | 本次确切未完成项 | 按顺序怎么做 | 当前可以执行什么 / 何时停止 |
 | --- | --- | --- | --- |
-| A-03d / G13 | package-local PL/SQL RECORD 的字段描述、参数派生与绑定能力 | ①取得目标 OceanBase 的字段目录/描述及一份成功输入输出交互；②按真实布局复用类型描述/绑定，保持原子派生和输出发布；③正常/NULL/失败不发布、sync/async 实库和独立走查 | 前提未齐，停在待协议；不反复创建变体、不猜字段、不因 Java 不支持就称服务端不支持；实现未完成状态保留 |
+| A-03d / G13 | package-local PL/SQL RECORD 的真实字段/协议验收 | 代码已接入字段行读取、标量 descriptor、原子派生和绑定；①取得目标 OceanBase 字段目录/描述及成功输入输出交互；②只按真实布局补 sync/async、NULL/失败和最小权限验收；③无字段行继续安全拒绝 | 当前目标仍无字段行，实库支持保持待验收；不反复创建变体、不猜字段、不因 Java 不支持就称服务端不支持 |
 | D-04f2 / G04 | 原定匿名 INTERVAL 集合扩展验收 | ①事故日志+隔离环境；②定位原用例的执行阶段；③只复验根 NULL/空集合、错误后旧输出、事务内写入/提交后独立查账和原定 sync/async、Prepare 维度；④核对对象清理与走查 | 当前继续隔离，不发该 SQL；连接恢复不解封；原定用例通过才关闭，失败先定位，不扩展其他 PL 集合 |
 | D-01、D-05b、A-05 / G01 | 原生 1295 回退实库证据 | ①提供真实拒绝 SQL/profile；②复用已有普通参数/存储回读用例；③核对回退值/NULL、精度/编码和无误重放；仅有实际缺陷才改产品 | 缺原生拒绝前提就停止；受控中继已验收不再重复，不扩输出/cursor/LOB/anonymous |
 | D-08s/j/n/p / G09 | 已实现匿名及部分 collection 结果缺实库证据 | ①取得一份真实可读取结果和 metadata 来源；②复用已有 decoder，核对 NULL/空、精确值/顺序、错误与 LOB 释放；③sync/async 验收和走查 | 当前缺可靠形状来源；不继续猜 SELECT/CAST 变体或新增同义 loopback。已有 OBJECT/LOB P4 不重开 |
@@ -1969,22 +1969,25 @@ A-03b 的服务端限制处理。没有把单一 Oracle profile 的通过结果�
 这项修复同时有单元回归 `OracleDateAcceptsUnknownWirePrecision` 和真实 Oracle 过程验收；只调整
 结果列 metadata 归一化，没有扩大 DATE 的小数精度契约。
 
-#### A-03d：package-local PL/SQL 类型仍缺少可移植绑定契约（2026-11-01，保留缺口）
+#### A-03d：package-local PL/SQL RECORD 字段派生路径（2026-11-05，代码已补，实库待验收）
 
 在同一 `oracle-direct` User Secrets profile 上创建 package-local `RECORD` 类型：
 `TYPE R IS RECORD (ID NUMBER, NAME VARCHAR2(20)); PROCEDURE P(X IN R, Y OUT R)`。
 Oracle `ProcedureParameters` 真实目录返回 `DATA_TYPE=PL/SQL RECORD`、`TYPE_NAME=R`、
 `TYPE_SUBNAME=<package>`，而 `TYPE_OWNER` 是带空格填充的内部数值标识（本次为 `500003`），
-并非可通过 `ALL_TYPES`/`ALL_TYPE_ATTRS` 加载的 schema object。当前 .NET `DeriveParameters`
-在发现 `TYPE_SUBNAME` 后按契约抛出 `NotSupportedException`，避免把 package-local identity
-误当成 named OBJECT。
+并非可通过 `ALL_TYPES`/`ALL_TYPE_ATTRS` 加载的 schema object。此前 .NET `DeriveParameters`
+在发现 `TYPE_SUBNAME` 后直接抛出 `NotSupportedException`。现已补上字段行路径：派生查询保留
+`SEQUENCE`/`DATA_LEVEL`，顶层参数与字段行分离；每个 RECORD 仅接受有序的直接字段，复用现有
+NUMBER、字符、RAW、DATE/TIMESTAMP、INTERVAL 和 LOB scalar layout，构造带会话上下文的
+package-local descriptor，再交给既有 complex 参数绑定和原子发布流程。字段缺失、嵌套、重复、
+乱序或不支持类型均在发送前拒绝，保留原有安全边界。
 
 Connector/J 2.4.14 对同一目录形状可以返回两个 `PL/SQL RECORD` 参数元数据，但使用公开
 `CallableStatement` API 绑定并注册该记录时返回客户端 `SQLFeatureNotSupportedException`
 （`600/0A000`）。这证明当前证据是两个 SDK 都没有可移植的 package-local RECORD wire/API
-绑定路径，不能把失败归为 OceanBase 服务端拒绝，也不能仅凭目录行新增一个 .NET provider type。
-A-03d 保持为**客户端能力缺口/待协议证据**；只有取得记录字段描述、输入/输出 payload
-布局和成功的目标服务端交互后，才重新开启实现与 sync/async、NULL、嵌套字段验收；
+绑定路径，不能把失败归为 OceanBase 服务端拒绝，也不能仅凭目录行伪造字段。A-03d 的**代码路径
+已补，实库仍待协议证据**；只有取得记录字段描述、输入/输出 payload 布局和成功的目标服务端
+交互后，才关闭 sync/async、NULL、失败发布和权限验收；
 Java 对照若采用则单列结果，不作为必需前提。普通
 `GetSchema` 仍返回该真实目录值，不伪造类型 owner 或 descriptor。
 
@@ -1993,8 +1996,9 @@ Java 对照若采用则单列结果，不作为必需前提。普通
 `TYPE_SUBNAME`。一次独立目录探针去掉驱动默认的 `DATA_LEVEL=0` 过滤后，`ALL_ARGUMENTS` 仍只有
 `X/Y` 两个顶层 `PL/SQL RECORD` 行，均为 `DATA_LEVEL=0`；`ALL_PLSQL_TYPES`、
 `ALL_PLSQL_TYPE_ATTRS` 对该 package 没有字段布局，`ALL_TYPE_ATTRS` 只返回 schema
-object 属性。因此当前目标没有可用于构造字段 payload 的目录证据。`DeriveParameters` 的
-sync/async **2/2** 均在发送前抛出 `NotSupportedException`，且不发布参数；另有 cursor 成员形状
+object 属性。因此当前目标仍没有可用于构造字段 payload 的目录证据。`DeriveParameters` 的
+sync/async **2/2** 继续在发送前抛出“字段元数据不可用”，且不发布参数；新增 loopback
+覆盖了带 NUMBER/VARCHAR2 字段的 sync/async descriptor 派生和 scalar layout；另有 cursor 成员形状
 使 package INVALID 的服务端回归 **2/2**。该测试确认的是当前客户端契约和清晰拒绝行为，
 不是把 Java 的 `SQLFeatureNotSupportedException` 改写成服务端限制。
 

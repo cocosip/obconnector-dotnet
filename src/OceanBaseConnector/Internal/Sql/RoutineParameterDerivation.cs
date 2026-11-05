@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using OceanBaseConnector.Internal.Protocol;
+using OceanBaseConnector.Internal.Values;
 
 namespace OceanBaseConnector.Internal.Sql
 {
@@ -105,6 +106,34 @@ namespace OceanBaseConnector.Internal.Sql
             return type == "VARCHAR2" || type == "VARCHAR" || type == "CHAR" || type == "NCHAR" || type == "NVARCHAR2";
         }
 
+        internal static OceanBaseComplexMember MapRecordMember(DataRow row)
+        {
+            var name = RequiredText(row, "PARAMETER_NAME");
+            if (!IsValidParameterLabel(name)) throw Invalid("RECORD field label is invalid.");
+            if (Text(row, "TYPE_SUBNAME") != null || Text(row, "TYPE_OWNER") != null || Text(row, "TYPE_NAME") != null)
+                throw Invalid("Nested RECORD field types are not supported.");
+            var raw = RequiredText(row, "DATA_TYPE").Trim().ToUpperInvariant();
+            if (raw.Length > 512) throw Invalid("Invalid RECORD field type length.");
+            var type = Dimensions.Replace(raw, ""); byte code;
+            switch (type)
+            {
+                case "NUMBER": case "DECIMAL": case "NUMERIC": case "INTEGER": code = 0; type = "NUMBER"; break;
+                case "VARCHAR2": case "VARCHAR": code = 253; type = "VARCHAR2"; break;
+                case "CHAR": code = 254; break;
+                case "NCHAR": code = 208; break;
+                case "NVARCHAR2": code = 207; break;
+                case "RAW": code = 203; break;
+                case "DATE": code = 12; break;
+                case "TIMESTAMP": case "TIMESTAMP WITH TIME ZONE": case "TIMESTAMP WITH LOCAL TIME ZONE": code = 202; break;
+                case "INTERVAL YEAR TO MONTH": code = 204; break;
+                case "INTERVAL DAY TO SECOND": code = 205; break;
+                case "BLOB": code = 210; break;
+                case "CLOB": code = 211; break;
+                default: throw Invalid("The RECORD field type is not supported.");
+            }
+            return new OceanBaseComplexMember(name, null, type, null, new ComplexType(code));
+        }
+
         internal static OceanBaseParameter Map(DataRow row, bool mysql, bool tinyAsBoolean, OceanBaseComplexType? complex = null)
         {
             var rawType = RequiredText(row, "DATA_TYPE").Trim().ToUpperInvariant();
@@ -119,11 +148,12 @@ namespace OceanBaseConnector.Internal.Sql
                 case "RETURN": parameter.Direction = ParameterDirection.ReturnValue; break;
                 default: throw Invalid("Unsupported argument direction.");
             }
-            if (Text(row, "TYPE_SUBNAME") != null) throw Invalid("Package-local PL/SQL argument types are not supported.");
+            if (Text(row, "TYPE_SUBNAME") != null && complex == null) throw Invalid("Package-local PL/SQL argument types require a field descriptor.");
             if ((Text(row, "TYPE_OWNER") == null) != (Text(row, "TYPE_NAME") == null)) throw Invalid("Named argument type identity is incomplete.");
             if (complex != null)
             {
-                if (mysql || (type != "OBJECT" && type != "TABLE" && type != "VARRAY") || complex.IsCollection != (type != "OBJECT")) throw Invalid("Named argument type kind does not match its descriptor.");
+                if (mysql || type != "PL/SQL RECORD" && type != "OBJECT" && type != "TABLE" && type != "VARRAY" ||
+                    complex.IsCollection != (type == "TABLE" || type == "VARRAY")) throw Invalid("Named argument type kind does not match its descriptor.");
                 parameter.ComplexType = complex; return parameter;
             }
             bool sized = false, binary = false;

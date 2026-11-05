@@ -89,18 +89,19 @@ namespace OceanBaseConnector
             // Older ALL_ARGUMENTS views lack CHAR_LENGTH; numeric signatures must not require it.
             command.CommandText = mysql ? argumentSql : argumentSql.Replace("CHAR_LENGTH AS CHARACTER_LENGTH", "NULL AS CHARACTER_LENGTH");
             await ReadDerivationTable(command, arguments, asynchronous, token).ConfigureAwait(false);
-            var rows = RoutineParameterDerivation.OrderParameters(arguments, routine, mysql);
+            var topLevelArguments = TopLevelArguments(arguments);
+            var rows = RoutineParameterDerivation.OrderParameters(topLevelArguments, routine, mysql);
             if (!mysql && Array.Exists(rows, RoutineParameterDerivation.RequiresCharacterLength))
             {
                 using var lengths = CreateRoutineDirectoryTable(true, true);
                 command.CommandText = argumentSql;
                 await ReadDerivationTable(command, lengths, asynchronous, token).ConfigureAwait(false);
-                var characterRows = RoutineParameterDerivation.OrderParameters(lengths, routine, false);
+                var characterRows = RoutineParameterDerivation.OrderParameters(TopLevelArguments(lengths), routine, false);
                 if (rows.Length != characterRows.Length) throw new NotSupportedException("The routine signature changed while reading character lengths.");
                 for (var i = 0; i < rows.Length; i++)
                 {
                     foreach (DataColumn column in arguments.Columns)
-                        if (column.ColumnName != "CHARACTER_LENGTH" && !Equals(rows[i][column], characterRows[i][column.ColumnName]))
+                        if (column.ColumnName != "CHARACTER_LENGTH" && !Equals(rows[i][column.ColumnName], characterRows[i][column.ColumnName]))
                             throw new NotSupportedException("The routine signature changed while reading character lengths.");
                     rows[i]["CHARACTER_LENGTH"] = characterRows[i]["CHARACTER_LENGTH"];
                 }
@@ -111,8 +112,17 @@ namespace OceanBaseConnector
                 token.ThrowIfCancellationRequested(); var row = rows[i]; OceanBaseComplexType? complex = null;
                 if (!mysql && !row.IsNull("TYPE_OWNER") && !row.IsNull("TYPE_NAME"))
                 {
-                    if (!row.IsNull("TYPE_SUBNAME")) throw new NotSupportedException("Package-local PL/SQL argument types are not supported.");
-                    complex = await GetDerivedComplexType(RoutineParameterDerivation.RequiredText(row, "TYPE_OWNER"), RoutineParameterDerivation.RequiredText(row, "TYPE_NAME"), command, asynchronous, token).ConfigureAwait(false);
+                    var package = RoutineParameterDerivation.Text(row, "TYPE_SUBNAME");
+                    if (package != null)
+                    {
+                        if (!string.Equals(RoutineParameterDerivation.RequiredText(row, "DATA_TYPE"), "PL/SQL RECORD", StringComparison.OrdinalIgnoreCase))
+                            throw new NotSupportedException("Package-local argument types other than RECORD are not supported.");
+                        var members = RecordMembers(arguments, row);
+                        complex = CreateDerivedRecordType(RoutineParameterDerivation.RequiredText(row, "TYPE_OWNER"),
+                            RoutineParameterDerivation.RequiredText(row, "TYPE_NAME"), package, members, command);
+                    }
+                    else
+                        complex = await GetDerivedComplexType(RoutineParameterDerivation.RequiredText(row, "TYPE_OWNER"), RoutineParameterDerivation.RequiredText(row, "TYPE_NAME"), command, asynchronous, token).ConfigureAwait(false);
                 }
                 parameters[i] = RoutineParameterDerivation.Map(row, mysql, session.TreatTinyAsBoolean, complex);
             }
@@ -126,6 +136,83 @@ namespace OceanBaseConnector
                 parameters[0].ParameterName = name;
             }
             token.ThrowIfCancellationRequested(); return parameters;
+        }
+
+        private static DataTable TopLevelArguments(DataTable source)
+        {
+            var result = source.Clone();
+            foreach (DataRow row in source.Rows)
+            {
+                var level = source.Columns.Contains("ARGUMENT_LEVEL") && !row.IsNull("ARGUMENT_LEVEL")
+                    ? (int?)row["ARGUMENT_LEVEL"] : null;
+                if (!level.HasValue || level.Value == 0) result.ImportRow(row);
+            }
+            return result;
+        }
+
+        private static OceanBaseComplexMember[] RecordMembers(DataTable arguments, DataRow record)
+        {
+            var identity = new[] { "ROUTINE_CATALOG", "ROUTINE_SCHEMA", "ROUTINE_NAME", "PACKAGE_NAME", "OVERLOAD", "SUBPROGRAM_ID" };
+            var candidates = new List<DataRow>();
+            var recordSequence = RoutineParameterDerivation.Integer(record, "ARGUMENT_SEQUENCE");
+            var nextTopSequence = (int?)null;
+            foreach (DataRow row in arguments.Rows)
+            {
+                var matches = true;
+                foreach (var column in identity)
+                    if (!Equals(row[column], record[column])) { matches = false; break; }
+                if (!matches) continue;
+                var level = RoutineParameterDerivation.Integer(row, "ARGUMENT_LEVEL");
+                if (level.HasValue && level.Value > 1) throw new NotSupportedException("Nested RECORD fields are not supported.");
+                if (level == 1) candidates.Add(row);
+            }
+            if (recordSequence.HasValue)
+            {
+                foreach (DataRow row in arguments.Rows)
+                {
+                    var level = RoutineParameterDerivation.Integer(row, "ARGUMENT_LEVEL");
+                    var sequence = RoutineParameterDerivation.Integer(row, "ARGUMENT_SEQUENCE");
+                    if (level.GetValueOrDefault() == 0 && sequence.HasValue && sequence > recordSequence &&
+                        (nextTopSequence == null || sequence < nextTopSequence)) nextTopSequence = sequence;
+                }
+                candidates.RemoveAll(row =>
+                {
+                    var sequence = RoutineParameterDerivation.Integer(row, "ARGUMENT_SEQUENCE");
+                    return !sequence.HasValue || sequence <= recordSequence || nextTopSequence.HasValue && sequence >= nextTopSequence;
+                });
+            }
+            else
+            {
+                var ordinal = RoutineParameterDerivation.Integer(record, "ORDINAL_POSITION");
+                candidates.RemoveAll(row => RoutineParameterDerivation.Integer(row, "ORDINAL_POSITION") != ordinal);
+            }
+            candidates.Sort((left, right) =>
+            {
+                var a = RoutineParameterDerivation.Integer(left, "ARGUMENT_SEQUENCE");
+                var b = RoutineParameterDerivation.Integer(right, "ARGUMENT_SEQUENCE");
+                return a.HasValue && b.HasValue ? a.Value.CompareTo(b.Value) : 0;
+            });
+            if (candidates.Count == 0) throw new NotSupportedException("Package-local PL/SQL RECORD field metadata is unavailable.");
+            foreach (var candidate in candidates)
+                if (!RoutineParameterDerivation.Integer(candidate, "ARGUMENT_SEQUENCE").HasValue)
+                    throw new NotSupportedException("RECORD field sequence metadata is unavailable.");
+            var members = new OceanBaseComplexMember[candidates.Count];
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            var expectedSequence = recordSequence.HasValue ? recordSequence.Value + 1 : (int?)null;
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                var sequence = RoutineParameterDerivation.Integer(candidates[i], "ARGUMENT_SEQUENCE");
+                if (sequence.HasValue && expectedSequence.HasValue && sequence != expectedSequence++)
+                    throw new NotSupportedException("RECORD field sequence metadata is not contiguous.");
+                if (sequence.HasValue && i > 0 && expectedSequence == null)
+                {
+                    var previous = RoutineParameterDerivation.Integer(candidates[i - 1], "ARGUMENT_SEQUENCE");
+                    if (!previous.HasValue || sequence <= previous) throw new NotSupportedException("RECORD field sequence metadata is invalid.");
+                }
+                members[i] = RoutineParameterDerivation.MapRecordMember(candidates[i]);
+                if (!names.Add(members[i].Name!)) throw new NotSupportedException("RECORD field labels are duplicated.");
+            }
+            return members;
         }
 
         private static async Task ReadDerivationTable(OceanBaseCommand command, DataTable table, bool asynchronous, CancellationToken token)

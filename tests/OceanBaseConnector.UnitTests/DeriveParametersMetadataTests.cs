@@ -3,6 +3,7 @@ using System.Data;
 using System.Reflection;
 using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.Internal.Sql;
+using OceanBaseConnector.Internal.Values;
 using Xunit;
 
 namespace OceanBaseConnector.UnitTests
@@ -96,6 +97,54 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal(4, RoutineParameterDerivation.Map(row, false, false).Size);
             row["DATA_TYPE"] = "RAW";
             Assert.Equal(12, RoutineParameterDerivation.Map(row, false, false).Size);
+        }
+
+        [Fact]
+        public void PackageLocalRecordUsesTheProvidedDescriptor()
+        {
+            using var table = Arguments();
+            var row = Argument(table, "PL/SQL RECORD");
+            row["TYPE_OWNER"] = "500003";
+            row["TYPE_NAME"] = "R";
+            row["TYPE_SUBNAME"] = "PKG";
+            var descriptor = new OceanBaseComplexType(null, "500003", "R", false,
+                new[] { new OceanBaseComplexMember("N", null, "NUMBER", null, new ComplexType(0)) });
+
+            var parameter = RoutineParameterDerivation.Map(row, false, false, descriptor);
+
+            Assert.Same(descriptor, parameter.ComplexType);
+            Assert.Equal(OceanBaseDbType.Struct, parameter.OceanBaseDbType);
+        }
+
+        [Theory]
+        [InlineData("NUMBER", 0)]
+        [InlineData("VARCHAR2(40)", 253)]
+        [InlineData("CHAR(2)", 254)]
+        [InlineData("RAW(16)", 203)]
+        [InlineData("DATE", 12)]
+        [InlineData("TIMESTAMP(6)", 202)]
+        [InlineData("INTERVAL YEAR(2) TO MONTH", 204)]
+        public void RecordFieldsReuseSupportedComplexScalarLayouts(string type, int code)
+        {
+            using var table = Arguments();
+            var row = Argument(table, type);
+            row["ARGUMENT_LEVEL"] = 1;
+            row["PARAMETER_NAME"] = "FIELD";
+            var member = RoutineParameterDerivation.MapRecordMember(row);
+            Assert.Equal("FIELD", member.Name);
+            Assert.Equal(code, member.Layout.TypeCode);
+        }
+
+        [Theory]
+        [InlineData("PL/SQL RECORD")]
+        [InlineData("REF CURSOR")]
+        [InlineData("XMLTYPE")]
+        public void RecordFieldsRejectNestedAndUnsupportedTypes(string type)
+        {
+            using var table = Arguments();
+            var row = Argument(table, type);
+            row["ARGUMENT_LEVEL"] = 1;
+            Assert.Throws<NotSupportedException>(() => RoutineParameterDerivation.MapRecordMember(row));
         }
 
         [Fact]

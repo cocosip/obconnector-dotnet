@@ -8,9 +8,9 @@ namespace OceanBaseConnector
     /// <summary>An immutable Oracle OBJECT/COLLECTION descriptor; dictionary and factory types retain their session.</summary>
     public sealed class OceanBaseComplexType
     {
-        internal OceanBaseComplexType(ComplexTypeContext? context, string schema, string name, bool collection, OceanBaseComplexMember[] members)
+        internal OceanBaseComplexType(ComplexTypeContext? context, string schema, string name, bool collection, OceanBaseComplexMember[] members, string? packageName = null)
         {
-            Context = context; SchemaName = schema; TypeName = name; IsCollection = collection;
+            Context = context; SchemaName = schema; TypeName = name; PackageName = packageName; IsCollection = collection;
             Members = Array.AsReadOnly(members); var layouts = new ComplexType[members.Length]; NestingDepth = 1;
             for (var i = 0; i < layouts.Length; i++)
             {
@@ -22,6 +22,8 @@ namespace OceanBaseConnector
 
         public string SchemaName { get; }
         public string TypeName { get; }
+        internal string? PackageName { get; }
+        internal bool IsPackageLocal => PackageName != null;
         public bool IsCollection { get; }
         /// <summary>True for a collection with an element layout and no named database type identity.</summary>
         public bool IsAnonymous => TypeName.Length == 0;
