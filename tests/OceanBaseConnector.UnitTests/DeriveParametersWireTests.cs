@@ -167,6 +167,42 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task DeriveParametersRejectsPackageLocalRecordWithoutFieldRows(bool asynchronous)
+        {
+            using var routines = DerivationRoutines(false);
+            routines.Rows[0]["PACKAGE_NAME"] = "PKG";
+            using var arguments = DerivationArguments(false);
+            var record = arguments.Rows[0];
+            record["PACKAGE_NAME"] = "PKG"; record["DATA_TYPE"] = "PL/SQL RECORD";
+            record["TYPE_OWNER"] = "500003"; record["TYPE_NAME"] = "R"; record["TYPE_SUBNAME"] = "PKG";
+            record["ARGUMENT_SEQUENCE"] = 1; record["ARGUMENT_LEVEL"] = 0;
+            record["PARAMETER_NAME"] = "value";
+            var server = Server(async channel =>
+            {
+                await ServeDerivationTable(channel, 71, routines, false, false, new object[] { "OWNER", "PROC", "PKG" });
+                await ServeDerivationTable(channel, 72, arguments, false, true, new object[] { 1, "OWNER", "PROC", "PKG" }, package: "PKG");
+                Assert.Equal(0, await channelStreamRead(channel));
+            });
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                using var command = new OceanBaseCommand { Connection = connection, CommandType = CommandType.StoredProcedure, CommandText = "owner.pkg.proc" };
+                var original = new OceanBaseParameter { ParameterName = "old", Value = 42 }; command.Parameters.Add(original);
+                NotSupportedException error;
+                if (asynchronous) error = await Assert.ThrowsAsync<NotSupportedException>(() => command.DeriveParametersAsync());
+                else error = Assert.Throws<NotSupportedException>(() => command.DeriveParameters());
+                Assert.Equal("Package-local PL/SQL RECORD field metadata is unavailable.", error.Message);
+                Assert.Same(original, command.Parameters[0]); Assert.Same(command.Parameters, original.Owner); Assert.Equal(42, original.Value);
+            }
+            catch (Exception error) when (server.Completion.IsFaulted) { throw new AggregateException(error, server.Completion.Exception!); }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Theory]
         [InlineData("missing")]
         [InlineData("ambiguous")]
         [InlineData("null-type")]

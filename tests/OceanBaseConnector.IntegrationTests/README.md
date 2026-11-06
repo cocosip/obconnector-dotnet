@@ -58,6 +58,12 @@ Do not remove the quarantine based only on a successful connection check; first 
 server logs and arrange an isolated reproduction. Its phase/attempt output contains only synthetic
 test values. Other integration tests retain their existing opt-in behavior.
 
+The unit regression `AnonymousOutputReexecutionClearsPreviousValueBeforeRootNull` covers the
+client-side contract independently: a prior anonymous collection value is not sent on the next
+execution, and a completed root-NULL response publishes `DBNull.Value`. A disconnect while the
+server produces that response remains a server/protocol acceptance failure and must not be hidden
+by changing the integration skip.
+
 ## Running
 
 1. Opt in: set `OB_REQUIRE_INTEGRATION=1`. Anything else (or unset) skips database tests.

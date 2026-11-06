@@ -126,6 +126,43 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal("old", command.Parameters[0].Value);
         }
 
+        [Fact]
+        public async Task AnonymousOutputReexecutionClearsPreviousValueBeforeRootNull()
+        {
+            var server = Server(async channel => Assert.Equal(0, await channelStreamRead(channel)));
+            using var connection = new OceanBaseConnection(Configuration(server.Port));
+            try
+            {
+                await connection.OpenAsync();
+                var type = connection.CreateArrayType("INTERVAL DAY TO SECOND");
+                using var command = new OceanBaseCommand { CommandText = "pkg.p", CommandType = CommandType.StoredProcedure };
+                var parameter = new OceanBaseParameter
+                {
+                    ParameterName = "p",
+                    Direction = ParameterDirection.Output,
+                    ComplexType = type,
+                    Value = "old"
+                };
+                command.Parameters.Add(parameter);
+
+                var first = Internal.Sql.OracleCommandPlan.Create(command.CommandText, command.CommandType,
+                    (OceanBaseParameterCollection)command.Parameters);
+                var column = ResultColumn.Parse(ComplexColumn("", "", element: 205), OceanBaseCompatibilityMode.Oracle);
+                first.CaptureOutput(new[] { column }, new byte[]?[] { new byte[] { 0, 0 } });
+                first.PublishOutputs();
+                Assert.IsType<OceanBaseComplexValue>(parameter.Value);
+
+                var second = Internal.Sql.OracleCommandPlan.Create(command.CommandText, command.CommandType,
+                    (OceanBaseParameterCollection)command.Parameters);
+                Assert.Null(second.Bindings.Parameters[0].Value);
+                second.CaptureOutput(new[] { column }, new byte[]?[] { null });
+                second.PublishOutputs();
+                Assert.Equal(DBNull.Value, parameter.Value);
+            }
+            finally { connection.Close(); server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         [Theory]
         [InlineData(false, false)]
         [InlineData(true, false)]

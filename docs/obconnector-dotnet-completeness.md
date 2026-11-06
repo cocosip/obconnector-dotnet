@@ -1,6 +1,6 @@
 # 源码走查与功能缺失矩阵
 
-更新：2026-11-04；收敛基线 `73ebf16`。本表回答：**现在确定缺什么、下一步具体做什么、什么条件算完成**。
+更新：2026-11-06；收敛基线 `7b8ca6b`。本表回答：**现在确定缺什么、下一步具体做什么、什么条件算完成**。
 能力范围见[功能矩阵](obconnector-dotnet-progress.md)，来源见[范围审计](obconnector-dotnet-scope-audit.md)，
 实施步骤、历史测试及提交证据统一维护在[开发清单](obconnector-dotnet-missing-features-roadmap.md)。
 本次只整理范围和任务，不增加支持声明，不代表重跑数据库或完成整个驱动。
@@ -30,6 +30,20 @@
 
 候选组合不能合并计为已确定的必补功能。已纳入的 RECORD 能力缺口、隔离验收、发布欠账和阻塞
 仍分别保留；本次分类不代表它们已完成，不据此计算整个驱动的完成率。
+
+### 下一个版本的发布闸门
+
+本轮补了两条客户端边界回归：`DeriveParametersRejectsPackageLocalRecordWithoutFieldRows`
+证明字段目录缺失时不会替换已有参数，`AnonymousOutputReexecutionClearsPreviousValueBeforeRootNull`
+证明重复执行时不会把上一次匿名集合输出作为输入，根 NULL 只在完整响应后发布为 `DBNull.Value`。
+它们只关闭客户端安全边界，不构成真实服务端能力验收。
+
+因此下一个版本仍有两项条件性闸门：
+
+1. 若发布声明包含 package-local `PL/SQL RECORD` 绑定，必须取得字段行、成功输入/输出 wire、sync/async、NULL/错误和最小权限证据；否则继续明确拒绝并从支持声明中排除。
+2. 若发布声明包含匿名 `INTERVAL` 集合输出，必须取得服务端事故日志和隔离环境，并通过根 NULL、空集合、错误后旧输出、提交后独立查账及 sync/async/Prepare 组合；当前连接恢复不能解除隔离。
+
+未满足上述真实环境条件时，代码可以发布为已实现的安全拒绝和本地协议边界，但不能把两项标为实库支持。
 
 ## 当前服务端前提判定
 
