@@ -13,7 +13,13 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed class DiscoveryBlacklistConsumerTests
+    /// <summary>
+    /// Shared fake-server rig for the blacklist acceptance scenarios. Each policy
+    /// variant lives in its own test class: one class per policy would run the
+    /// multi-second retry waits one after another, four classes let xunit overlap
+    /// them on the same shard.
+    /// </summary>
+    public abstract class DiscoveryBlacklistConsumerSupport
     {
         public static IEnumerable<object[]> Assets()
         {
@@ -24,27 +30,7 @@ namespace OceanBaseConnector.ConsumerTests
                             foreach (var ocp in new[] { false, true }) yield return new object[] { target, oracle, asynchronous, path, ocp };
         }
 
-        [Theory]
-        [MemberData(nameof(Assets))]
-        public Task EveryAssetAppliesBlacklistAndZeroBudgetAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
-            => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: false);
-
-        [Theory]
-        [MemberData(nameof(Assets))]
-        public Task EveryAssetAppliesGroupBlacklistAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
-            => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: true);
-
-        [Theory]
-        [MemberData(nameof(Assets))]
-        public Task EveryAssetAppliesGroupAttemptLimitAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
-            => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: true, limited: true);
-
-        [Theory]
-        [MemberData(nameof(Assets))]
-        public Task EveryAssetAppliesAddressBlacklistAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
-            => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: true, address: true);
-
-        private static async Task VerifyBlacklist(string target, bool oracle, bool asynchronous, int path, bool ocp, bool group, bool limited = false, bool address = false)
+        internal static async Task VerifyBlacklist(string target, bool oracle, bool asynchronous, int path, bool ocp, bool group, bool limited = false, bool address = false)
         {
             using var greeting = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepositoryLocator.FindRoot(), "tests", "fixtures", "protocol", "initial-handshake-oceanbase.json")));
             var bytes = Convert.FromBase64String(greeting.RootElement.GetProperty("payloadBase64").GetString()!);
@@ -118,7 +104,40 @@ namespace OceanBaseConnector.ConsumerTests
                 connection?.Dispose(); context.Unload();
             }
         }
+
         private static void Clear(DbConnection connection, DbDataSource? source) { if (source != null) source.GetType().GetMethod("Clear")!.Invoke(source, null); else connection.GetType().GetMethod("ClearPool")!.Invoke(null, new object[] { connection }); }
         private static Task Open(DbConnection connection, bool asynchronous) { if (asynchronous) return connection.OpenAsync(); connection.Open(); return Task.CompletedTask; }
+    }
+
+    public sealed class DiscoveryBlacklistConsumerTests : DiscoveryBlacklistConsumerSupport
+    {
+        [Theory]
+        [MemberData(nameof(Assets))]
+        public Task EveryAssetAppliesBlacklistAndZeroBudgetAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
+            => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: false);
+    }
+
+    public sealed class GroupBlacklistConsumerTests : DiscoveryBlacklistConsumerSupport
+    {
+        [Theory]
+        [MemberData(nameof(Assets))]
+        public Task EveryAssetAppliesGroupBlacklistAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
+            => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: true);
+    }
+
+    public sealed class GroupAttemptLimitConsumerTests : DiscoveryBlacklistConsumerSupport
+    {
+        [Theory]
+        [MemberData(nameof(Assets))]
+        public Task EveryAssetAppliesGroupAttemptLimitAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
+            => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: true, limited: true);
+    }
+
+    public sealed class AddressBlacklistConsumerTests : DiscoveryBlacklistConsumerSupport
+    {
+        [Theory]
+        [MemberData(nameof(Assets))]
+        public Task EveryAssetAppliesAddressBlacklistAcrossPhysicalAndIdlePaths(string target, bool oracle, bool asynchronous, int path, bool ocp)
+            => VerifyBlacklist(target, oracle, asynchronous, path, ocp, group: true, address: true);
     }
 }

@@ -14,7 +14,7 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class PieceDataConsumerTests : Ob20TestSupport
     {
         [Theory]
         [MemberData(nameof(LongDataAssets))]

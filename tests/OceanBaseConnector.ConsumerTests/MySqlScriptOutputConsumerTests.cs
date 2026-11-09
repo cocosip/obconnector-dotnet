@@ -12,7 +12,7 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class MySqlScriptOutputConsumerTests : Ob20TestSupport
     {
         [Theory]
         [InlineData("netstandard2.0", false)]

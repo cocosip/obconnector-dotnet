@@ -15,7 +15,7 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class ComplexLobConsumerTests : Ob20TestSupport
     {
         public static IEnumerable<object[]> ComplexLobAssets() => LobAssets().Where(row => (string)row[2] != "trailing");
 

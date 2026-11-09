@@ -14,16 +14,8 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class OracleMultiStatementParameterConsumerTests : Ob20TestSupport
     {
-        public static IEnumerable<object[]> OracleMultiParameterAssets()
-        {
-            foreach (var target in ConsumerTargetMatrix.Representative)
-                foreach (var asynchronous in new[] { false, true })
-                    foreach (var ob20 in new[] { false, true })
-                        yield return new object[] { target, asynchronous, ob20 };
-        }
-
         [Theory]
         [MemberData(nameof(OracleMultiParameterAssets))]
         public Task PublicAssetsBindOracleMultiStatementInputsWithoutServerPreparation(string target, bool asynchronous, bool ob20)

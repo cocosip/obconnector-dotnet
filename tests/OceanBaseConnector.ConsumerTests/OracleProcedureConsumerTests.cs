@@ -17,7 +17,7 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class OracleProcedureConsumerTests : Ob20TestSupport
     {
 
         [Theory]

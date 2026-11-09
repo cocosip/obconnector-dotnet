@@ -14,7 +14,7 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class CursorOffsetConsumerTests : Ob20TestSupport
     {
         public static IEnumerable<object[]> CursorOffsetAssets()
         {

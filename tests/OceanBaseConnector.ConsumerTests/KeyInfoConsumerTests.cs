@@ -14,7 +14,7 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class KeyInfoConsumerTests : Ob20TestSupport
     {
         [Theory]
         [MemberData(nameof(DecimalScaleAssets))]
@@ -101,14 +101,6 @@ namespace OceanBaseConnector.ConsumerTests
             }
             catch (Exception error) when (serving.IsFaulted) { throw new AggregateException(error, serving.Exception!); }
             finally { budget.Cancel(); listener.Stop(); context.Unload(); }
-        }
-
-        private static byte[] KeyConsumerColumn(string name, byte type = 253, string source = "", ushort flags = 0)
-        {
-            using var column = new MemoryStream();
-            foreach (var field in new[] { "def", source.Length == 0 ? "" : "Tenant", source.Length == 0 ? "" : "l", source.Length == 0 ? "" : "ledger", name, source })
-            { var bytes = Encoding.UTF8.GetBytes(field); column.WriteByte((byte)bytes.Length); column.Write(bytes); }
-            column.Write(new byte[] { 12, 45, 0, 80, 0, 0, 0, type, (byte)flags, (byte)(flags >> 8), 0, 0, 0 }); return column.ToArray();
         }
     }
 }

@@ -16,7 +16,7 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class ConnectRetryConsumerTests : Ob20TestSupport
     {
         public static IEnumerable<object[]> RetryAssets()
         {

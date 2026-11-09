@@ -19,7 +19,7 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class TemporaryLobConsumerTests : Ob20TestSupport
     {
 
         [Theory]

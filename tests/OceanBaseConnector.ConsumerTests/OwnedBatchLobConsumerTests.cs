@@ -12,7 +12,7 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class OwnedBatchLobConsumerTests : Ob20TestSupport
     {
         [Theory]
         [InlineData("net8.0", false)] [InlineData("net8.0", true)]

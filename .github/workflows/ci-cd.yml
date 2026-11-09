@@ -98,10 +98,9 @@ jobs:
       - name: Restore
         run: dotnet restore OceanBaseConnector.slnx
 
-      # Only the Windows package-build leg needs every product asset.
-      # Other legs compile the runtime used by the unit/DI gates; the forced
-      # netstandard2.0 consumer reference still builds the baseline asset, and
-      # the unit suite's isolated netstandard2.1 checks need their asset too.
+      # Only the Windows package-build leg needs every product asset; it also
+      # produces the packages Verify-Packages consumes. Other legs compile the
+      # runtime used by the DI gate. Unit test shards build their own assets.
       - name: Build all package assets
         if: env.PACKAGE_BUILD == 'true' && runner.os == 'Windows'
         run: dotnet build OceanBaseConnector.slnx -c Release --no-restore
@@ -109,29 +108,6 @@ jobs:
       - name: Build CI targets
         if: ${{ !(env.PACKAGE_BUILD == 'true' && runner.os == 'Windows') }}
         run: dotnet build OceanBaseConnector.slnx -c Release --no-restore -p:TargetFramework=net10.0
-
-      - name: Build netstandard2.1 unit test asset
-        run: dotnet build src/OceanBaseConnector/OceanBaseConnector.csproj -c Release --no-restore -f netstandard2.1
-
-      # Real databases and certificate/TLS security acceptance stay outside CI.
-      # SecurityTests is deliberately excluded from OceanBaseConnector.slnx.
-      - name: Unit tests (.NET 10)
-        run: >-
-          dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj
-          -c Release --no-restore --no-build
-          --logger "trx;LogFileName=unit-tests.trx"
-          --results-directory TestResults/logs
-
-      # ConsumerTests contains TCP/protocol compatibility acceptance, without TLS.
-      # It runs once on the Windows tag leg after the representative target matrix
-      # is reduced to netstandard2.0, netstandard2.1 and net10.0.
-      - name: Consumer acceptance tests (tag only)
-        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/')
-        run: >-
-          dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj
-          -c Release --no-restore --no-build
-          --logger "trx;LogFileName=consumer-tests.trx"
-          --results-directory TestResults/logs
 
       - name: Dependency injection tests (.NET 10)
         run: >-
@@ -179,10 +155,175 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # 单元测试分片跑在独立 runner/进程上。xunit 的 "Driver diagnostics" 集合设置了
+  # DisableParallelization:独占期间(ConnectRetry ~147s + EndpointHealth ~120s 纯重试
+  # 间隔等待)整个进程不能跑其它用例;TextCommandTests 又单类 6648 例、串行 ~221s。
+  # 两者在同一进程只能首尾相接(实测 span 564s ≈ 321s + 221s),拆进程后互不阻塞,
+  # 墙钟≈最长的那片。第四片取补集,新增测试类自动落入 rest,不会漏跑。
+  # SecurityTests 需要证书/真实数据库,按约定不进 OceanBaseConnector.slnx。
+  unit-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        shard: [text, retry, endpoint, rest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 11 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+
+      - name: Verify .NET 10 runtime
+        shell: pwsh
+        run: |
+          if (-not (dotnet --list-runtimes | Select-String 'Microsoft\.NETCore\.App 10\.')) {
+            throw '.NET 10 runtime is required to run the net10.0 test targets.'
+          }
+
+      - name: Setup package-consumer runtimes (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore OceanBaseConnector.slnx
+
+      - name: Build all package assets (Windows)
+        if: runner.os == 'Windows'
+        run: dotnet build OceanBaseConnector.slnx -c Release --no-restore
+
+      - name: Build CI targets (Linux)
+        if: runner.os != 'Windows'
+        run: dotnet build OceanBaseConnector.slnx -c Release --no-restore -p:TargetFramework=net10.0
+
+      - name: Build netstandard2.1 unit test asset (Linux)
+        if: runner.os != 'Windows'
+        run: dotnet build src/OceanBaseConnector/OceanBaseConnector.csproj -c Release --no-restore -f netstandard2.1
+
+      - name: Unit tests (${{ matrix.shard }})
+        shell: pwsh
+        run: |
+          $filters = @{
+            text     = 'FullyQualifiedName~TextCommandTests'
+            retry    = 'FullyQualifiedName~ConnectRetryTests'
+            endpoint = 'FullyQualifiedName~EndpointHealthTests'
+            rest     = 'FullyQualifiedName!~TextCommandTests&FullyQualifiedName!~ConnectRetryTests&FullyQualifiedName!~EndpointHealthTests'
+          }
+          dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj `
+            -c Release --no-restore --no-build `
+            --filter $filters['${{ matrix.shard }}'] `
+            --logger "trx;LogFileName=unit-${{ matrix.shard }}.trx" `
+            --results-directory TestResults/logs
+          if ($LASTEXITCODE -ne 0) { throw "Unit tests failed for shard ${{ matrix.shard }}." }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-test-results-${{ matrix.os }}-${{ matrix.shard }}
+          path: TestResults/logs/**/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ConsumerTests contains TCP/protocol compatibility acceptance, without TLS.
+  # 每个代表性产物资产一个分片并行跑:用例显示名里的 target 参数决定归属,
+  # net8.0/net9.0 与非参数化用例落在 shared 分片,四个分片恰好覆盖全部用例
+  # (新增用例要么带资产名、要么进 shared,不会被静默跳过)。分片各自编译,
+  # 与 build-and-test 并行,不再串行等待。测试类已按场景拆开,分片内也能并行。
+  consumer-acceptance:
+    if: startsWith(github.ref, 'refs/tags/')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: netstandard2.0
+            filter: 'DisplayName~netstandard2.0'
+          - shard: netstandard2.1
+            filter: 'DisplayName~netstandard2.1'
+          - shard: net10.0
+            filter: 'DisplayName~net10.0'
+          # 取反过滤:没有资产名的用例(含 net8.0/net9.0 目标)全部归到此分片。
+          - shard: shared
+            filter: 'DisplayName!~netstandard2.0&DisplayName!~netstandard2.1&DisplayName!~net10.0'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 11 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+
+      - name: Verify .NET 10 runtime
+        shell: pwsh
+        run: |
+          if (-not (dotnet --list-runtimes | Select-String 'Microsoft\.NETCore\.App 10\.')) {
+            throw '.NET 10 runtime is required to run the net10.0 test targets.'
+          }
+
+      - name: Setup package-consumer runtimes (Windows)
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore OceanBaseConnector.slnx
+
+      # 与 Windows 打包分支保持一致:消费者测试直接读取各 TFM 的 Release 产物。
+      - name: Build all package assets
+        run: dotnet build OceanBaseConnector.slnx -c Release --no-restore
+
+      - name: Consumer acceptance tests (${{ matrix.shard }})
+        run: >-
+          dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj
+          -c Release --no-restore --no-build
+          --filter "${{ matrix.filter }}"
+          --logger "trx;LogFileName=consumer-${{ matrix.shard }}.trx"
+          --results-directory TestResults/logs
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: consumer-test-results-${{ matrix.shard }}
+          path: TestResults/logs/**/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+
   # 发布只消费构建产物：不 checkout 源码、不 restore、不编译。
   publish:
-    needs: build-and-test
-    if: needs.build-and-test.outputs.release == 'true'
+    needs: [build-and-test, unit-tests, consumer-acceptance]
+    if: needs.build-and-test.outputs.release == 'true' && needs.unit-tests.result == 'success' && needs.consumer-acceptance.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -15,15 +15,8 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class LongDataConsumerTests : Ob20TestSupport
     {
-        public static IEnumerable<object[]> LongDataAssets()
-        {
-            foreach (var target in ConsumerTargetMatrix.Representative)
-                foreach (var asynchronous in new[] { false, true })
-                    foreach (var ob20 in new[] { false, true }) yield return new object[] { target, asynchronous, ob20 };
-        }
-
         [Theory]
         [MemberData(nameof(LongDataAssets))]
         public async Task EveryAssetUploadsLongDataAndFinishesNoResponseBoundaries(string target, bool asynchronous, bool ob20)

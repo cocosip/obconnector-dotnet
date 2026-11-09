@@ -13,7 +13,7 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class PooledReaderCloseConsumerTests : Ob20TestSupport
     {
         public static IEnumerable<object[]> PooledReaderCloseAssets()
         {

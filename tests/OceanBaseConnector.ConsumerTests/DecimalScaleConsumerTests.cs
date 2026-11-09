@@ -15,15 +15,8 @@ using Xunit;
 
 namespace OceanBaseConnector.ConsumerTests
 {
-    public sealed partial class Ob20ConsumerTests
+    public sealed class DecimalScaleConsumerTests : Ob20TestSupport
     {
-        public static IEnumerable<object[]> DecimalScaleAssets()
-        {
-            foreach (var target in ConsumerTargetMatrix.Representative)
-                foreach (var asynchronous in new[] { false, true })
-                    foreach (var mysql in new[] { false, true }) yield return new object[] { target, asynchronous, mysql };
-        }
-
         [Theory]
         [MemberData(nameof(DecimalScaleAssets))]
         public async Task DecimalScaleEveryAssetConstrainsWireAndPreservesTheSessionAfterRejection(string target, bool asynchronous, bool mysql)
