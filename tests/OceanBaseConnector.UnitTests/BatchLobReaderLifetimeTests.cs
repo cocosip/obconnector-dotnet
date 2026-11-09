@@ -99,8 +99,9 @@ namespace OceanBaseConnector.UnitTests
             {
                 await BatchLobPrepared(channel, 90, 210); await BatchLobPrepared(channel, 91, 210);
                 await StatementCommand(channel, 23); await StatementCommand(channel, 23);
-                await BatchLobReply(channel, 210, InlineLob(new byte[] { 42 }));
-                try { Assert.Equal(0, await channelStreamRead(channel)); } catch (IOException) { }
+                // The reader is closed mid-response, so the client can reset the socket before this
+                // reply finishes: an aborted write is the expected outcome of this scenario.
+                try { await BatchLobReply(channel, 210, InlineLob(new byte[] { 42 })); Assert.Equal(0, await channelStreamRead(channel)); } catch (IOException) { }
             }, lobLocators: true);
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Batch Multi Send=true");
             try
@@ -122,8 +123,9 @@ namespace OceanBaseConnector.UnitTests
             var server = Server(async channel =>
             {
                 await BatchLobPrepared(channel, 90, 210); await StatementCommand(channel, 23);
-                await BatchLobReply(channel, 210, InlineLob(new byte[] { 42 }));
-                Assert.Equal(0, await channelStreamRead(channel));
+                // The client closes while this reply is still being written, so an aborted write is
+                // the expected outcome of this scenario.
+                try { await BatchLobReply(channel, 210, InlineLob(new byte[] { 42 })); Assert.Equal(0, await channelStreamRead(channel)); } catch (IOException) { }
             }, lobLocators: true);
             var replacement = Server(async channel => { await Query(channel, "new lease"); await channel.WritePacketAsync(Ok(7)); });
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Batch Multi Send=true");
