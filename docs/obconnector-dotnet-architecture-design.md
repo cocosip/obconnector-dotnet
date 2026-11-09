@@ -2,7 +2,7 @@
 
 Current product scope and exclusions are defined in the [capability matrix](obconnector-dotnet-progress.md),
 with [gaps](obconnector-dotnet-completeness.md) and [acceptance criteria](acceptance-criteria.md).
-This reference explains API behavior; historical module evidence does not close current deployment gates.
+This reference explains API behavior; historical evidence does not close current deployment gates.
 
 For a basic query, see the [README](../README.md). For tested server profiles, see [Compatibility](compatibility.md).
 
@@ -34,7 +34,7 @@ another execution context. The guard does not declare a ThreadStatic field in a 
 An independent-process consumer checks old-context collection and the integrity of new-context static
 objects after the old thread exits. This addresses the reproduced diagnostic state corruption while
 preserving synchronous observer exception isolation, Activity restoration and metadata-only events.
-See the [protocol contract](protocol-diagnostics.md) and [local verification limits](compatibility.md).
+See the [protocol contract](diagnostics.md#protocol) and [local verification limits](compatibility.md).
 
 ## Connection-level server errors
 
@@ -44,7 +44,7 @@ A trusted server ERR with ordinal SQLSTATE prefix `08`, or exactly error `1927` 
 
 The complete framing boundary is validated before retiring the session and completing the exchange. Invalid OB20/compression boundaries remain protocol failures without trusted server code/SQLSTATE. If cancellation closes a fully consumed bare MySQL packet before ERR parsing, its identity is retained. A closed framed transport cannot supply the required boundary evidence and remains a generic conservative failure; the driver does not bypass framing validation. Oracle piece failures do not run response completion a second time after retirement.
 
-Recovery is explicit: Close, then Open to obtain credentials, resolve addresses and acquire a new lease. The driver does not replay the failed request, send a Batch suffix, migrate a transaction or reconnect during ERR handling. Dispose old resources without relying on disposal as compensation; reconcile unknown writes using the [application recovery guidance](unknown-outcome-recovery.md). Capacity-one pools, delayed old transaction/command/CloseConnection-reader disposal and changed resolver endpoints have local regressions.
+Recovery is explicit: Close, then Open to obtain credentials, resolve addresses and acquire a new lease. The driver does not replay the failed request, send a Batch suffix, migrate a transaction or reconnect during ERR handling. Dispose old resources without relying on disposal as compensation; reconcile unknown writes using the [application recovery guidance](failure-handling.md#unknown-outcome). Capacity-one pools, delayed old transaction/command/CloseConnection-reader disposal and changed resolver endpoints have local regressions.
 
 ## Connections and configuration
 
@@ -56,11 +56,11 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `User ID` / `Password` | Empty | Database credentials. |
 | `Database` | Empty | Initial database. `ChangeDatabase` is available in MySQL mode only. |
 | `Connection Timeout` | 15 seconds | Total budget for address discovery, connection, TLS, authentication and identity confirmation. |
-| `Connect Retry Count` | 0 | Additional complete TCP candidate rounds, 0..10; zero preserves one-pass behavior. See [retry contract](#connect-retry-policy). |
+| `Connect Retry Count` | 0 | Additional complete TCP candidate rounds, 0..10; zero preserves one-pass behavior. See [retry contract](#tcp-connection-retry-policy). |
 | `Connect Retry Interval` | 1 second | Fixed wait between failed candidate rounds, 1..60; validated even with count zero. |
-| `Host Recheck Seconds` | 0 seconds | TCP failure hint lifetime, 0..3600; zero disables. Recent failures move after other candidates without excluding any address. See [contract](#endpoint-tcp-health). |
+| `Host Recheck Seconds` | 0 seconds | TCP failure hint lifetime, 0..3600; zero disables. Recent failures move after other candidates without excluding any address. See [contract](#endpoint-tcp-health-cache). |
 | `Command Timeout` | 30 seconds | Command execution budget. |
-| `Slow Query Threshold` | 0 milliseconds | Nonnegative Int32 client execute/cursor lifetime threshold; zero disables slow reporting. See [contract](#slow-query-diagnostics). |
+| `Slow Query Threshold` | 0 milliseconds | Nonnegative Int32 client execute/cursor lifetime threshold; zero disables slow reporting. See [contract](#slow-client-operation-diagnostics). |
 | `ExpectedMode` | Unset | Validates `MySql` or `Oracle` after detection. |
 | `TLS Mode` (`SslMode` alias) | `VerifyFull` | Validates certificate trust and hostname. `Required` encrypts without identity verification; `Disabled` uses plaintext transport. |
 | `TLS Server Name` | Endpoint hostname | Overrides the TLS certificate name. |
@@ -180,7 +180,6 @@ Pools also retain resolver, credential-provider, validation-delegate and certifi
 
 Closed state notification starts before transaction/return cleanup. Pooled opens within that callback can complete the captured cleanup before borrowing, as described below. Complete reset, concurrency and long-running resource acceptance remain open; see [the remaining pool work](compatibility.md).
 
-<a id="pool-wait-handoff"></a>
 ### Pool wait notification handoff
 
 A notification tells a waiting Open to retry the pool decision; it does not reserve a session
@@ -195,7 +194,6 @@ probe/reset validation, credential/route identity, Clear retirement and Dispose 
 Deterministic local regressions exercise cancellation immediately after a notification and a
 failed reset; they do not establish scheduling latency or long-running load guarantees.
 
-<a id="pooled-close-callbacks"></a>
 ### Closed callbacks and pooled opens
 
 A pooled `Open` or `OpenAsync` invoked from a Closed `StateChange` handler completes the captured close operations in that event's execution context before entering the normal borrow path. This includes nested callbacks: if closing A closes B and B's callback opens A, both old cleanup operations finish first. The open can use the same logical connection or another connection sharing the pool. Normal pool capacity, identity, reset, probing and retirement rules still apply; no extra pool or physical slot is created to bypass the limit. Other borrowers can still cause ordinary contention.
@@ -574,7 +572,7 @@ Oracle InputOutput keeps the original parameter in the output plan while normali
 
 The encoded execution request is limited to 64 MiB; Oracle upload bytes count after hexadecimal expansion. Streams cannot be combined with array binding or client-prepare fallback. Async reads receive the command cancellation/timeout token; a source that ignores it must return before interruption completes, and the lease remains busy until then.
 
-With `Allow Multi Statements=true`, binary Input streams are encoded completely before target SQL is sent: MySQL uses X'HEX', Oracle uses 'HEX' with implicit RAW/BLOB conversion, matching Connector/J. Oracle stream expressions consequently have the quoted-hex text shape; they are not the byte-array HEXTORAW expression. Both modes count hex expansion and all other literals toward the 64 MiB SQL limit. Validation, source failure, overflow or cancellation during materialization sends no target SQL and retains a usable session when no initialization response is pending. The driver does not rewind, dispose or replay a source. See the [stream module evidence](compatibility.md).
+With `Allow Multi Statements=true`, binary Input streams are encoded completely before target SQL is sent: MySQL uses X'HEX', Oracle uses 'HEX' with implicit RAW/BLOB conversion, matching Connector/J. Oracle stream expressions consequently have the quoted-hex text shape; they are not the byte-array HEXTORAW expression. Both modes count hex expansion and all other literals toward the 64 MiB SQL limit. Validation, source failure, overflow or cancellation during materialization sends no target SQL and retains a usable session when no initialization response is pending. The driver does not rewind, dispose or replay a source. See the [stream evidence and limits](compatibility.md).
 
 ### Exact values
 
@@ -599,7 +597,7 @@ Oracle may report precision zero and scale -1 for both a bound expression and a 
 
 Schema reports the server metadata (`NumericPrecision=null` when unknown and the advertised `NumericScale`); it does not substitute the value's scale into the column definition. Unknown-precision results remain `OceanBaseDecimal`, and typed `decimal` conversions remain exact. The value representation can change: returned text `"40"` now has coefficient 40 and value scale 0 rather than being rescaled to coefficient 4/scale -1. `GetProviderSpecificValue`, `GetValue` and typed reads agree numerically. This does not undo server-side rounding of a declared column: a server-rounded value of 40 stays 40.
 
-Direct Oracle 4.4.2.2/Windows/.NET10/TLS-disabled evidence covers prepared integer/fractional bindings and declared/cast negative scales. It does not establish other versions, OBProxy, TLS or independent-runtime compatibility. See the [module record](compatibility.md).
+Direct Oracle 4.4.2.2/Windows/.NET10/TLS-disabled evidence covers prepared integer/fractional bindings and declared/cast negative scales. It does not establish other versions, OBProxy, TLS or independent-runtime compatibility. See the [compatibility and known limitations](compatibility.md).
 
 ### Oracle FLOAT results with binary precision
 
@@ -957,11 +955,10 @@ type table uses
 which names ObNumberFloatType NUMBER_FLOAT. These source contracts and local tests
 do not establish real DDL, derivation, rounding or old-server compatibility success.
 
-<a id="mysql-stored-procedures-development-checkpoint"></a>
 
 ## MySQL stored procedures
 
-Implemented from `1bb13cb`. The [module evidence](compatibility.md) separates local regression, limited direct-server runs and open deployment acceptance; the earlier development checkpoint retains original failures.
+The [evidence and limits](compatibility.md) separates local regression, limited direct-server runs and open deployment acceptance.
 
 In MySQL mode, use CommandType.StoredProcedure with a one- or two-part routine identifier, parsed and quoted as identifiers. Procedure parameters bind in collection order, irrespective of their names. Input, Output and InputOutput are accepted for procedures. A stored function accepts one ReturnValue plus Input arguments only; multiple ReturnValue parameters and Output/InputOutput mixed with a function return are rejected. The function plan prepares `SET @private = function(?)` and retrieves the result through a hidden `SELECT`; the ReturnValue is published only after that query completes. Effective CLIENT_PS_MULTI_RESULTS is required. A positive command FetchSize is accepted and its value is preserved, with or without explicit Prepare. Routine execution uses effective fetchSize=0 and cursorFlag=0; ordinary results stream normally, and internal output SELECTs remain hidden and unpaged. This does not add routine-result cursor paging. SchemaOnly and KeyInfo are rejected; explicit Prepare is supported and client-side prepare fallback is disabled. Input streams use the long-data path. Binary InputOutput streams upload through the prepared private-variable SET before CALL; duplicate stream references across SET and CALL are rejected before reading or sending. Sources retain caller ownership and current position; Prepare does not read them. Outputs publish only after all results and the hidden SELECT complete. Oracle binary InputOutput streams use the scalar PrepareExecute piece path described above. See [INOUT stream evidence](compatibility.md). The plan accepts at most 65535 parameters and 4096 output parameters, subject to packet limits.
 
@@ -1018,7 +1015,7 @@ The driver never automatically replays sent SQL or moves an active transaction t
 
 ### Ambient transactions
 
-Local single-resource implementation and verification are recorded in the [module evidence](compatibility.md). The earlier development checkpoint retains the original failures; real deployment acceptance remains open.
+Local single-resource implementation and verification are recorded in the [evidence and limits](compatibility.md); real deployment acceptance remains open.
 
 Open inside TransactionScope automatically enlists; EnlistTransaction explicitly enlists an already open, idle connection. EnlistTransaction(null), inactive transactions and conflicting local/XA/ambient contexts are rejected. Reenlisting the same logical transaction, including a clone, is idempotent on its active connection. A second database resource is rejected with NotSupportedException before its local transaction SQL, including when it names the same server. Failed automatic enlistment closes that logical connection; rejecting a second resource during explicit enlistment leaves that connection available outside the scope. An initialization error can instead break the physical session. Existing promotable or distributed resources cannot be joined, and subsequent promotion requests are rejected. This is local single-resource participation through IPromotableSinglePhaseNotification, with no durable prepare, multi-database atomic commit or distributed recovery.
 
@@ -1115,7 +1112,6 @@ KeyInfo and unknown flags reject before taking the cursor; a corrected call can 
 These flags apply to output and binary or text result-column cursors through the same public object.
 They do not add cursor Input/InputOutput. See [evidence and open acceptance](compatibility.md).
 
-<a id="oracle-standalone-prepare"></a>
 ### Oracle standalone preparation
 
 With `Use Oracle Prepare Execute=true`, `Prepare()` / `PrepareAsync()` also prepare supported Oracle text OUT/RETURNING commands, stored procedures and functions. They normalize the SQL and issue COM_STMT_PREPARE without executing the target, encoding input values, reading or uploading streams, publishing outputs, or applying target SQL session-state effects. Invalid input values can be corrected before execution. Preparation still incurs server parsing, privilege checks and possible metadata locks; trusted server errors propagate without text fallback, and interrupted/malformed metadata breaks the session without reporting an unknown target execution.
@@ -1126,12 +1122,11 @@ COM_STMT_PREPARE normally describes the full bind count. Oracle DML RETURNING ca
 
 Local fixtures and five-asset consumers cover preparation, ownership and failure handling. Direct Oracle4.4.2.2 tests cover synchronous/asynchronous block, RETURNING, procedure, function and REF CURSOR preparation, including no DML before execution and cursor consumption after command disposal. These results do not establish real TLS/OBProxy, other server versions, independent runtimes, or general metadata-lock compatibility.
 
-<a id="oracle-output-fetch-hint"></a>
 ### Oracle output execution and FetchSize
 
 Oracle text OUT/RETURNING and stored procedure/function execution accept a positive command FetchSize with or without explicit Prepare. The property remains unchanged. FetchSize controls a server cursor's page size; the internal output row is returned in the execution response with cursorFlag=0, so the output plan does not issue COM_STMT_FETCH or page its internal outputs. Any ordinary additional result sets keep their existing streaming behavior. This does not add output-result pagination or new result shapes.
 
-Returned OceanBaseRefCursor objects retain their own GetDataReader(fetchSize) / GetDataReaderAsync(fetchSize) page size (default128), independently of the parent command hint; command disposal does not close an outstanding returned cursor. Output values still publish atomically only after validated completion of all responses; known errors, cancellation and early close retain their existing behavior and never replay the command. Ordinary query cursor paging is unchanged. ExecuteArray also accepts a positive FetchSize hint without paging its internal batch results or changing rowCount. UseCursorOffset on Oracle output plans without a declared REF CURSOR, or on array execution plans, remains unsupported and rejects before version/target traffic. Declared REF CURSOR outputs inherit only the offset option snapshot; explicit reader bool overloads can override it (D-03b2). MySQL stored routines now also accept positive non-paging hints, while SchemaOnly/KeyInfo remain rejected; binary MySQL INOUT streams now use the prepared SET upload path described above. See [routine hint evidence](compatibility.md) and [module evidence and limits](compatibility.md).
+Returned OceanBaseRefCursor objects retain their own GetDataReader(fetchSize) / GetDataReaderAsync(fetchSize) page size (default128), independently of the parent command hint; command disposal does not close an outstanding returned cursor. Output values still publish atomically only after validated completion of all responses; known errors, cancellation and early close retain their existing behavior and never replay the command. Ordinary query cursor paging is unchanged. ExecuteArray also accepts a positive FetchSize hint without paging its internal batch results or changing rowCount. UseCursorOffset on Oracle output plans without a declared REF CURSOR, or on array execution plans, remains unsupported and rejects before version/target traffic. Declared REF CURSOR outputs inherit only the offset option snapshot; explicit reader bool overloads can override it (D-03b2). MySQL stored routines now also accept positive non-paging hints, while SchemaOnly/KeyInfo remain rejected; binary MySQL INOUT streams now use the prepared SET upload path described above. See [routine hint and evidence limits](compatibility.md).
 
 ### LOBs
 
@@ -1153,7 +1148,6 @@ Pure Output/ReturnValue parameters send a protocol NULL placeholder. The declare
 
 Complex LOB inputs require negotiated `Use Lob Locators=true`. Named object/collection members use content payloads: `byte[]` for BLOB and `string` for CLOB, including nested named elements; CLOB content uses strict UTF-8 because the named LONG_BLOB parser bypasses client charset conversion. Anonymous scalar BLOB/CLOB arrays instead accept matching `OceanBaseLob` handles from the same connection, physical session, transaction and epoch. Handles are revalidated at value creation and execution, remain caller-owned and are never opened or disposed by binding. NULL members and empty payloads/collections retain their framing. The raw named-member writer does not interpret locator bytes. Single-statement Text and StoredProcedure calls instead expand Input named OBJECT/collection values containing locators into quoted type constructors with hidden root LOB binds. Independent scalar Output/InputOutput parameters and StoredProcedure scalar ReturnValue may coexist (D-04k). Independent named complex Output/function ReturnValue, root BLOB/CLOB Output and REF CURSOR Output also use the shared output plan; the short-LOB direct subset is verified in D-04l. The complex locator input itself remains Input. Supported input-only batch Text commands use the same expansion (D-08ac). Mixed batches also retain the specified independent scalar/named complex/root LOB/REF CURSOR outputs through an individual routine barrier, using the caller connection and original transaction; the short-LOB direct subset is verified in D-04m. This does not pipeline PL calls in the same send group. Original type descriptors and locator connection/transaction/generation are validated before execution; callers retain their parameter collection and handles. Explicit Prepare/PrepareAsync is supported; StoredProcedure execution remains a session/cache barrier. Complex locator INOUT, cursor members and multi-statement locator expansion remain unsupported. No implicit external-LOB materialization is performed. These two wire formats are deliberately distinct.
 
-<a id="complex-national-members"></a>
 NCHAR/NVARCHAR2 members retain distinct layouts (208/207), including nested named objects/collections and scalar factory arrays. `CreateValue` validates shape, Unicode and byte budgets without I/O; encoding is selected again at execution. Complex national inputs use the trusted **connection** character set, unlike standalone national scalar parameters. This input resolver now accepts all configured strict client encodings, including UTF8MB3 and the thirteen non-UTF8 families, while retaining legacy UTF8/UTF16 behavior. Ordinary VARCHAR2/CHAR members use the [selected client encoding](client-character-sets.md), default UTF-8. ExecuteArray uses the same encoding path and existing explicit-transaction, row-count and partial-failure contract.
 
 Managed client initialization shares mode-specific SQL between fresh Open and pool reset: MySQL
@@ -1197,7 +1191,6 @@ matching the newer server inrow parser. Legacy/unknown V2, BLOB and no-inline ex
 remain opaque. Older backports and additional server/proxy versions still require acceptance;
 named LONG_BLOB CLOB payloads remain strict UTF-8.
 
-<a id="complex-type-ddl-invalidation"></a>
 Descriptions and values are bound to their connection, session, transaction and complex-metadata generation. Close/reopen, transaction changes and `ClearComplexTypeCache` invalidate reuse. In Oracle mode, executing text statements beginning with CREATE, ALTER, DROP, RENAME or TRUNCATE also invalidates all cached descriptions, including nested and factory-array descriptions. The shared SQL scanner ignores comments and quoted text and checks later statements in an allowed text batch; CREATE program units are DDL, while BEGIN/DECLARE bodies and procedure calls are opaque.
 
 Invalidation occurs once when target execution begins transmission, independently of `Statement Cache Size`. Even a rejected DDL conservatively requires reloading. Standalone Prepare, metadata/control probes, SchemaOnly, local validation failures and cancellation before target transmission do not invalidate the dictionary. Reload with `GetComplexType` and reconstruct parameter values before the next bind; the driver does not retry DDL or automatically reload types. New result exchanges cannot attach the old dictionary snapshot. Values already returned retain their immutable data/layout for reading, but their descriptors cannot construct or bind new values after invalidation.
@@ -1214,7 +1207,7 @@ Inspect `ArrayBindingResult.Items` for zero-based Succeeded/Failed/Unknown resul
 
 `connection.GetXaResource()` dedicates the open physical session to XA until Close. Use `OceanBaseXid` with Start, End, Prepare, Commit, Rollback and Recover; sync/async APIs are available. Oracle requires PrepareExecute.
 
-Business commands require an active XA branch and no local `Transaction`. Local transactions and database switching are rejected in XA mode. Close does not complete a branch. XA return codes use `OceanBaseException.XaErrorCode`, separately from `ServerErrorCode`; coordinator recovery is the application's responsibility. A separate [opt-in process recovery harness](xa-process-recovery-acceptance.md) tests prepared-worker death before and after decision persistence; it is not a product coordinator.
+Business commands require an active XA branch and no local `Transaction`. Local transactions and database switching are rejected in XA mode. Close does not complete a branch. XA return codes use `OceanBaseException.XaErrorCode`, separately from `ServerErrorCode`; coordinator recovery is the application's responsibility. A separate [opt-in process recovery harness](failure-handling.md#xa-recovery) tests prepared-worker death before and after decision persistence; it is not a product coordinator.
 
 With pooling enabled, XA dedication persists even before Start and after Commit/Rollback. Close destroys the dedicated physical session instead of resetting it into the ordinary pool. A reopened logical connection cannot reuse an old resource; all sync/async resource methods reject it. After Close, prepared branches require explicit recovery/completion by the application on a separate session; Close is not a confirmed business rollback. [Scoped pool acceptance and remaining failure matrix](compatibility.md).
 
@@ -1256,7 +1249,6 @@ Use builder `UseLoggerFactory(...)` or the connection's `ILoggerFactory` constru
 
 `ActivitySource` and `Meter` are named `OceanBaseConnector`. Metrics are `oceanbase.client.operations` and `oceanbase.client.operation.duration` (seconds). Tags identify operation, mode, outcome and unknown outcome; readers complete their execution span when consumption finishes or fails. Local diagnostics do not require server full-link tracing.
 
-<a id="protocol-diagnostics"></a>
 ### Protocol diagnostics
 
 DiagnosticListener `OceanBaseConnector.Protocol` exposes Frame/Error/Boundary/Negotiated events with read-only
@@ -1276,10 +1268,9 @@ replay; this event alone proves neither later I/O/logical Open nor server sampli
 No SQL, payload/authentication/extra-info bytes, endpoint, username or exception object/message is
 emitted. Disabled events allocate no dictionary; observers are synchronous, exception-isolated and
 Activity.Current is restored. Same-thread diagnostic recursion is suppressed. Follow the complete
-[subscription, field and callback contract](protocol-diagnostics.md), including creation failures and
+[subscription, field and callback contract](diagnostics.md#protocol), including creation failures and
 per-listener identity. Other resource waits and real deployment/performance gates remain open.
 
-<a id="slow-query-diagnostics"></a>
 ### Slow client operation diagnostics
 
 `OceanBaseConnectionStringBuilder.SlowQueryThreshold` / `Slow Query Threshold=1000` sets a client lifetime threshold in milliseconds (0..2147483647). The default zero disables reporting. The option is retained in endpoint/credential snapshots and effective pool identity; changing it uses a different ordinary pool policy.
@@ -1294,7 +1285,6 @@ Three independent channels report the result:
 
 Outcomes are success/error/canceled/timeout with the existing unknown-outcome classification. SQL, parameter values, usernames, credentials and exception text are omitted. Correlate through application tracing; the feature does not compute or log a SQL fingerprint. Listener/logger callbacks run synchronously, must return promptly and cannot change an operation's result; failures are isolated and Activity.Current is restored for each new reporting channel. No SQL is retried or canceled by profiling. Existing CommandCompleted/CommandFailed logs and operation metrics remain available. Protocol diagnostics follow their separate contract above; other resource waits, performance limits and deployment acceptance remain open P2-04 work.
 
-<a id="connection-phase-diagnostics"></a>
 ### Connection phase durations
 
 The existing `OceanBaseConnector` meter also exposes `oceanbase.client.connection.phase.duration` in seconds. Each sample covers one actual phase invocation; the only labels are `oceanbase.connection.phase` and `oceanbase.outcome`. Existing operation spans, counters and duration semantics remain unchanged.
@@ -1324,7 +1314,7 @@ Successful pool Rent/TryRent adds one; Return entry or Discard removes it once.
 Reset and idle/prewarm/probe work are excluded; newly rented sessions may still
 be authenticating. Clear/disposal preserves outstanding leases until cleanup.
 The existing `pool.borrowed` remains a cumulative counter. Collection started late
-does not reconstruct an absolute count. See the [pool metric contract](pool-metrics.md)
+does not reconstruct an absolute count. See the [pool metric contract](diagnostics.md#pool)
 for lifecycle, callback, capacity and aggregation limits.
 
 ### Session protocol I/O durations
@@ -1336,7 +1326,7 @@ Application consumption gaps and upload-source reads are excluded. Fixed labels
 are direction, compatibility mode and final exchange outcome; publication follows
 physical lease release, the registered release callback and pending timed calls.
 Higher-level reservation guards may remain active. Listener failures cannot change the
-operation result. See the [full metric contract](session-io-diagnostics.md) for
+operation result. See the [full metric contract](diagnostics.md#session-io) for
 scope, enablement, error interpretation and callback/allocation limits. Other
 resource waits and deployment overhead acceptance remain open.
 
@@ -1350,7 +1340,7 @@ Fixed labels are `oceanbase.source.kind`, compatibility mode and final mapped
 exchange outcome. It shares post-release/pending-completion publication with protocol
 I/O, while enablement and sums remain independent. Disabled wrappers preserve direct
 task forwarding. No content or filename is recorded; stream ownership is unchanged.
-See the [source-read contract](source-read-diagnostics.md) for outcome interpretation,
+See the [source-read contract](diagnostics.md#source-read) for outcome interpretation,
 callback, allocation and verification limits. Other resource waits/load remain open.
 
 ## MySQL compression
@@ -1363,7 +1353,6 @@ Writes use a 64 KiB buffer and send original bytes if compression would not shri
 
 `Use Compression=true;Use OB20=true` currently fails validation before networking: compressed OB20 and proxy reroute are separate, unfinished capabilities. Local framework-zlib peers verify the standard compression path, including TLS and pooling/reset; real OceanBase/OBProxy and cross-platform compression acceptance remain open.
 
-<a id="connect-retry-policy"></a>
 ## TCP connection retry policy
 
 `Connect Retry Count=1;Connect Retry Interval=1` enables one additional complete candidate round, after a one-second fixed wait. Count is 0..10 (default0); interval is 1..60 seconds (default1), including when count is zero. These keys have matching `OceanBaseConnectionStringBuilder.ConnectRetryCount` / `ConnectRetryInterval` properties and constants on every asset. Both enter canonical serialization, immutable endpoint/credential copies and effective pool identity; omitted and explicit defaults remain equivalent.
@@ -1372,7 +1361,7 @@ Without explicit discovery blacklist/ceiling fields, each physical establishment
 
 With a positive count, one logical Open budget covers address/credential acquisition, pool wait/prewarm/probe, all TCP attempts/backoffs, TLS, authentication, identity and automatic ambient initialization. This also caps a longer or unlimited Pool Wait Timeout. All warmup physical sessions share the logical token/deadline; each has its own finite round limit. `Connection Timeout=0` removes the time limit but keeps that attempt limit. Caller cancellation (OpenAsync) and Close interrupt backoff; failure releases capacity for a later explicit Open. Count zero retains existing timeout/wait semantics. Pending cleanup captured by an earlier Close must finish under its original cleanup timeout; a new Open deadline does not abandon that cleanup. After cleanup, an expired new Open fails before borrowing. Caller-owned synchronous callbacks must return promptly and honor cancellation; a deadline cannot forcibly interrupt arbitrary application code.
 
-Credentials and resolver results are acquired once per logical Open and reused throughout its warmup/attempts; retries do not refresh them. This policy does not reconnect an active session, migrate a transaction or replay SQL. Reopen explicitly and reconcile unknown writes according to the [recovery guide](unknown-outcome-recovery.md). Endpoint TCP health hints are described below. Built-in TCP TNS file and OCP HTTP address adapters are described below; full OCP/TNS policies, proxy reroute, real health/fault/load and independent-runtime acceptance remain open.
+Credentials and resolver results are acquired once per logical Open and reused throughout its warmup/attempts; retries do not refresh them. This policy does not reconnect an active session, migrate a transaction or replay SQL. Reopen explicitly and reconcile unknown writes according to the [recovery guide](failure-handling.md#unknown-outcome). Endpoint TCP health hints are described below. Built-in TCP TNS file and OCP HTTP address adapters are described below; full OCP/TNS policies, proxy reroute, real health/fault/load and independent-runtime acceptance remain open.
 
 <a id="endpoint-tcp-health"></a>
 ## Endpoint TCP health cache
@@ -1389,7 +1378,6 @@ Matching ordinary pool borrowers and prewarm sessions share their pool's cache; 
 
 The local evidence covers both compatibility modes, sync/async, direct/pool/data-source/prewarm paths, fallback, expiry, policy identity and generation boundaries. Success clearing, rotated ordering and reserve-to-constructor races include internal unit evidence. The deadline-before-feedback fixture establishes a local elapsed-budget boundary, not a real network timeout or Linux result. Five assets run on one .NET 10 host. The TNS file and OCP HTTP adapters below are implemented; full OCP/TNS policies, proxy topology/reroute and real health/fault/load/platform acceptance remain open.
 
-<a id="discovery-group-selection"></a>
 ## Discovery groups and selection
 
 Built-in TNS and OCP resolvers preserve an immutable group/policy/weight snapshot through logical Open, pool membership checking, prewarm and physical establishment. Their public Resolve/ResolveAsync methods still return canonical declaration-order membership, including duplicates; that string does not encode policy. The driver obtains the richer snapshot internally from built-in resolvers. Wrapping a built-in resolver in a custom string-only resolver loses this metadata and uses ordinary flat connection Load Balance behavior. No mutable last-response policy is kept on shared resolvers.
@@ -1450,7 +1438,6 @@ Only pre-Attach IOException with inner SocketException and an uncanceled budget 
 
 Controlled HTTP/loopback regressions do not establish real OCP, OBProxy, database or independent runtime compatibility. Full discovery/HA and release work remains open.
 
-<a id="tns-file-discovery"></a>
 ## TNS file address discovery
 
 All five assets expose a sealed immutable caller-owned `OceanBaseTnsAddressResolver(string filePath, string netServiceName, string? expectedServiceName = null)`. It implements the existing `IOceanBaseAddressResolver`, is safe for concurrent calls, captures `Path.GetFullPath(filePath)` at construction, and requires a nonblank path/alias. The alias is trimmed and compared ordinal-ignore-case; a supplied service expectation must be nonblank and is compared exactly using ordinal rules.
@@ -1478,7 +1465,7 @@ APP = (DESCRIPTION=
 
 The file may use standard `APP=(DESCRIPTION=...)` or wrapped `(APP=(DESCRIPTION=...))` entries, comma-separated aliases, whitespace, `#` comments and single/double quoted tokens with doubled quote escapes. Duplicate aliases are rejected globally, including unselected entries and wrapper/comma expansions. The whole file must have valid syntax; only the selected descriptor is checked for supported semantics, so other aliases may contain other policies. Empty quoted keys/aliases and IFILE anywhere are rejected.
 
-The selected DESCRIPTION accepts direct ADDRESS children or repeated ADDRESS_LIST groups, optional supported selection policies, and at most one CONNECT_DATA containing exactly SERVICE_NAME. Each ADDRESS requires PROTOCOL=TCP, HOST and PORT in1..65535, with optional WEIGHT under SERVERAFFINITY. Hosts use the existing endpoint validation, including bracketed/bare IPv6. Public output preserves declared order and duplicates. DESCRIPTION_LIST, mixed direct/list addresses, unsupported policies, TCPS and unknown selected options fail explicitly. See the [group selection contract](#discovery-group-selection) for supported policies, precedence, weights, defaults and pool behavior.
+The selected DESCRIPTION accepts direct ADDRESS children or repeated ADDRESS_LIST groups, optional supported selection policies, and at most one CONNECT_DATA containing exactly SERVICE_NAME. Each ADDRESS requires PROTOCOL=TCP, HOST and PORT in1..65535, with optional WEIGHT under SERVERAFFINITY. Hosts use the existing endpoint validation, including bracketed/bare IPv6. Public output preserves declared order and duplicates. DESCRIPTION_LIST, mixed direct/list addresses, unsupported policies, TCPS and unknown selected options fail explicitly. See the [group selection contract](#discovery-groups-and-selection) for supported policies, precedence, weights, defaults and pool behavior.
 
 A present SERVICE_NAME requires `expectedServiceName`; an expectation also requires that field. This binds caller intent to file metadata only, not to actual server/tenant identity. Credentials, database/schema, TLS policy and normal OceanBase identity checks are unchanged. There is no environment lookup, watcher, global cache, file write or dependency.
 
@@ -1488,9 +1475,8 @@ Publish complete file replacements. In-place writes are not guaranteed coherent.
 
 ResolveAsync schedules potentially blocking file open away from its caller thread, uses async reads with cancellation, and checks cancellation before parse/publication. Sync Resolve waits for the same operation. A blocked OS file open/read cannot be forcibly interrupted; existing logical Open cancellation/deadline guards reject late results. Pre-cancel and retry-wait cancellation tests are separate from comprehensive actual mid-read IO cancellation, which is not established. Use Connection Timeout/cancellation and responsive storage accordingly.
 
-Existing pool routing applies unchanged: the resolver reference participates in ordinary pool identity, each Open resolves once before idle reuse/prewarm/new establishment, deleted or malformed files fail without stale fallback, and changed host/port snapshots retire idle candidates no longer present. Active leases are not migrated or replayed. The [controlled topology acceptance](topology-acceptance.md) exercises these client-route rules through local relays to one server; it does not establish actual cluster failover. Two same-path resolver instances have distinct reference identity. Modern private pooled/unpooled data sources use the same adapter. Local tests cover both modes/sync/async and all five assets on one .NET10 host; they do not establish real OceanBase/OBProxy, Linux or network-filesystem behavior. Global/group blacklists and shared TCP ceilings follow the contract above; proxy topology/reroute and real HA acceptance remain open.
+Existing pool routing applies unchanged: the resolver reference participates in ordinary pool identity, each Open resolves once before idle reuse/prewarm/new establishment, deleted or malformed files fail without stale fallback, and changed host/port snapshots retire idle candidates no longer present. Active leases are not migrated or replayed. The [controlled topology acceptance](failure-handling.md#topology) exercises these client-route rules through local relays to one server; it does not establish actual cluster failover. Two same-path resolver instances have distinct reference identity. Modern private pooled/unpooled data sources use the same adapter. Local tests cover both modes/sync/async and all five assets on one .NET10 host; they do not establish real OceanBase/OBProxy, Linux or network-filesystem behavior. Global/group blacklists and shared TCP ceilings follow the contract above; proxy topology/reroute and real HA acceptance remain open.
 
-<a id="ocp-http-discovery"></a>
 ## OCP HTTP address discovery
 
 All five assets expose `OceanBaseOcpAddressResolver(HttpClient httpClient, Uri server, string netServiceName, string? expectedServiceName = null)`. The sealed immutable resolver is caller-owned and safe for concurrent use with a concurrency-safe client/handler. The driver never disposes that client or copies database credentials into HTTP requests. The caller configures HTTP authentication, TLS, proxy, timeout and handler behavior. The server must be an absolute HTTP(S) origin with root path and no userinfo/query/fragment. The trimmed nonblank net service name becomes the escaped appName in `/api/v2/obproxy/loadBalanceInfo?appName=...`; optional expected service must be nonblank.
@@ -1527,7 +1513,7 @@ The accepted address response shape is:
 }
 ```
 
-The envelope must be an object with data; successful/success, when present, must be boolean true, and status, when present, must be the integer token200. Other envelope metadata is parsed and bounded but does not route. data only accepts NET_SERVICE_NAME and DESCRIPTION, with an exact ordinal service-name match. DESCRIPTION accepts a nonempty ADDRESS_LIST group array, optional CONNECT_DATA with exactly SERVICE_NAME, OBLB/LOAD_BALANCE, OBLB_STRATEGY/LOAD_BALANCE_STRATEGY and OBLB_GROUP_STRATEGY. Groups accept ADDRESS plus their own ON marker, selection strategy and optional OBLB_BLACKLIST and OBLB_RETRY_ALL_DOWNS. Addresses require PROTOCOL/HOST/PORT, optionally WEIGHT under SERVERAFFINITY and an OBLB_BLACKLIST override. TCP is case-insensitive; ports are integer JSON numbers or decimal digit strings in1..65535. The [group selection contract](#discovery-group-selection) defines ordering, weights, aliases and pool reuse. Global/group blacklists and the shared DESCRIPTION TCP-attempt ceiling follow the [blacklist contract](#discovery-blacklist-and-attempt-ceiling); unknown members, address-level attempt ceilings and non-TCP protocols fail explicitly.
+The envelope must be an object with data; successful/success, when present, must be boolean true, and status, when present, must be the integer token200. Other envelope metadata is parsed and bounded but does not route. data only accepts NET_SERVICE_NAME and DESCRIPTION, with an exact ordinal service-name match. DESCRIPTION accepts a nonempty ADDRESS_LIST group array, optional CONNECT_DATA with exactly SERVICE_NAME, OBLB/LOAD_BALANCE, OBLB_STRATEGY/LOAD_BALANCE_STRATEGY and OBLB_GROUP_STRATEGY. Groups accept ADDRESS plus their own ON marker, selection strategy and optional OBLB_BLACKLIST and OBLB_RETRY_ALL_DOWNS. Addresses require PROTOCOL/HOST/PORT, optionally WEIGHT under SERVERAFFINITY and an OBLB_BLACKLIST override. TCP is case-insensitive; ports are integer JSON numbers or decimal digit strings in1..65535. The [group selection contract](#discovery-groups-and-selection) defines ordering, weights, aliases and pool reuse. Global/group blacklists and the shared DESCRIPTION TCP-attempt ceiling follow the [blacklist contract](#discovery-blacklist-and-attempt-ceiling); unknown members, address-level attempt ceilings and non-TCP protocols fail explicitly.
 
 NET_SERVICE_NAME binds to caller configuration; a present SERVICE_NAME also requires an exact ordinal expectedServiceName, and an expectation requires that field. These are metadata checks, not real server/tenant authentication. Normal credentials/database/TLS/identity behavior remains unchanged. Basic TNS file discovery is described above.
 

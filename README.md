@@ -1,5 +1,9 @@
 # OceanBaseConnector
 
+[![CI/CD](https://github.com/cocosip/obconnector-dotnet/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/cocosip/obconnector-dotnet/actions/workflows/ci-cd.yml)
+[![NuGet](https://img.shields.io/nuget/v/OceanBaseConnector.svg)](https://www.nuget.org/packages/OceanBaseConnector/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A managed ADO.NET provider for OceanBase MySQL and Oracle tenant compatibility modes.
 One provider shares protocol infrastructure and keeps mode-specific SQL, binding, types and metadata.
 It does not promise complete native MySQL or Oracle driver compatibility.
@@ -11,10 +15,11 @@ OBProxy, genuine OB20/trace/compression, other versions and full platform/load m
 Start with the [documentation index](docs/README.md):
 
 - [Feature and capability matrix](docs/obconnector-dotnet-progress.md): MySQL/Oracle scope and implemented subsets.
-- [Missing functionality and verification gaps](docs/obconnector-dotnet-completeness.md): code limits, optional candidates and deployment blockers.
+- [Missing-feature and verification matrix](docs/obconnector-dotnet-completeness.md): code limits, optional candidates and deployment blockers.
 - [Acceptance criteria](docs/acceptance-criteria.md): required behavior, complete live suites, failure/skip and cleanup rules.
-- [Official/Java evidence and cleanup decisions](docs/obconnector-dotnet-scope-audit.md).
+- [Development tracking list](docs/obconnector-dotnet-missing-features-roadmap.md): open tasks, server prerequisites and scope decisions.
 - [Compatibility and retained TLS/environment limitations](docs/compatibility.md).
+- [Connection strings](docs/connection-strings.md): every keyword, default, validation rule and example.
 
 Core connections, commands, parameters, readers and transactions use ADO.NET APIs. Pooling, caching,
 batch optimizations, Oracle LOB/complex types/XA, discovery and protocol extensions have explicit
@@ -52,6 +57,8 @@ command.Parameters.Add(parameter);
 
 var result = await command.ExecuteScalarAsync();
 ```
+
+For the complete keyword list, defaults and validation rules see the [connection string reference](docs/connection-strings.md).
 
 `ExpectedMode` validates the detected mode; it does not change the server mode. TLS defaults to `VerifyFull`, validating certificate trust and hostnames. Set `Check Certificate Revocation=true` to enable platform revocation checks. For mutual TLS, assign an application-owned certificate with a private key to `OceanBaseConnection.ClientCertificate` before opening. Pooling supports client certificates and isolates certificate instances and SHA-256 fingerprints; reuse a stable certificate instance for one ordinary pool. The application must keep that certificate valid through each Open.
 
@@ -129,7 +136,7 @@ These local checks require no database credentials and do not establish real-ser
 
 This repository and [Locus](https://github.com/cocosip/Locus) share the same CI/CD conventions: pushes to the default branch and pull requests compile and test, and only a version tag publishes. Other branches (including `dev`) trigger nothing.
 
-The [workflow](.github/workflows/ci-cd.yml) builds and tests on Windows and Linux for pull requests targeting `master`, pushes to `master`, and version tag pushes (`v0.2.0` or `0.2.0`).
+The [workflow](.github/workflows/ci-cd.yml) builds and tests on Windows and Linux for pull requests targeting `master`, pushes to `master`, and version tag pushes.
 
 | Event | Build and test | Pack and verify NuGet consumers | Publish to NuGet and GitHub Releases |
 | --- | --- | --- | --- |
@@ -140,28 +147,28 @@ The [workflow](.github/workflows/ci-cd.yml) builds and tests on Windows and Linu
 
 Each run compiles once: tests reuse that build output and packing runs with `--no-build --no-restore`. Packages are built from the two projects under `src/`, verified on Windows, and retained as the `nuget-packages` workflow artifact. Tag publication downloads these same packages without checking out source, restoring, or rebuilding. Real database credentials are not required by this workflow.
 
-To release, update the shared `Version` in `Directory.Build.props`, commit it, and push a matching tag such as `v0.1.0` (or `0.1.0`). A tag that mismatches `Version` or does not point to HEAD fails before building or publishing. Prerelease versions such as `v0.2.0-rc.1` create a GitHub prerelease.
+To release, update the shared `Version` in `Directory.Build.props`, commit it, and push a matching tag (with or without a `v` prefix). A tag that mismatches `Version` or does not point to HEAD fails before building or publishing. A prerelease `Version` creates a GitHub prerelease.
 
 Publication uses [nuget.org trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing), so no long-lived API key is stored: the publish job exchanges the workflow's GitHub OIDC token for a one-hour nuget.org API key immediately before pushing. Before the first tag release, sign in to nuget.org as the `virtual` profile that owns both package IDs and add a trusted publishing policy for repository owner `cocosip`, repository `obconnector-dotnet`, workflow file `ci-cd.yml`, and an empty environment. The workflow uses `GITHUB_TOKEN` with `contents: write` to create the GitHub Release.
 
 Each release records the non-merge commits since the previous reachable version tag, a comparison link, and install commands for both packages. The first release includes the initial commit history. These notes and the verified `.nupkg` files are attached to the GitHub Release; each NuGet package's release notes link to it. Notes are generated from Git history, so use descriptive commit subjects. This does not replace the outstanding publication review in the [verification status](docs/obconnector-dotnet-progress.md).
 
-Check notes generation locally with `pwsh -File eng/Test-ReleaseNotes.ps1`. To preview an existing tag, check out that tag and run `pwsh -File eng/New-ReleaseNotes.ps1 -Tag v0.1.0`; the output defaults to `TestResults/packages/RELEASE_NOTES.md`.
+Check notes generation locally with `pwsh -File eng/Test-ReleaseNotes.ps1`. To preview an existing tag, check out that tag and run `pwsh -File eng/New-ReleaseNotes.ps1 -Tag <tag>`; the output defaults to `TestResults/packages/RELEASE_NOTES.md`.
 
 ## Documentation
 
-- [Compatibility and known limitations](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/compatibility.md)
-- [Complete driver audit report](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-driver-audit.md)
-- [Complete driver capability baseline and gap plan](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-completeness.md)
-- [Database acceptance guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.Acceptance/README.md)
-- [Opt-in controlled network outcome acceptance](docs/network-outcome-acceptance.md)
-- [Opt-in XA coordinator process recovery acceptance](docs/xa-process-recovery-acceptance.md)
-- [Opt-in controlled topology acceptance](docs/topology-acceptance.md)
-- [Integration test guide](https://github.com/cocosip/obconnector-dotnet/blob/master/tests/OceanBaseConnector.IntegrationTests/README.md)
-- [API reference](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-architecture-design.md)
-- [Credential provision and rotation](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/credentials.md)
-- [Verification status and remaining work](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-dotnet-progress.md)
-- [Connector/J architecture reference](https://github.com/cocosip/obconnector-dotnet/blob/master/docs/obconnector-j-architecture-outline.md)
+- [Connection strings](docs/connection-strings.md)
+- [Feature and capability matrix](docs/obconnector-dotnet-progress.md)
+- [Missing-feature and verification matrix](docs/obconnector-dotnet-completeness.md)
+- [Development tracking list](docs/obconnector-dotnet-missing-features-roadmap.md)
+- [Constraint and known limitations](docs/compatibility.md)
+- [API reference and architecture](docs/obconnector-dotnet-architecture-design.md)
+- [Failure handling and recovery](docs/failure-handling.md)
+- [Diagnostics](docs/diagnostics.md)
+- [Credential provision and rotation](docs/credentials.md)
+- [Database acceptance guide](tests/OceanBaseConnector.Acceptance/README.md)
+- [Integration test guide](tests/OceanBaseConnector.IntegrationTests/README.md)
+- [Connector/J architecture reference](docs/obconnector-j-architecture-outline.md)
 
 ## License
 

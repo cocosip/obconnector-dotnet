@@ -1,132 +1,130 @@
-# 源码走查与功能缺失矩阵
+# Missing-feature and verification matrix
 
-更新：2026-11-06；收敛基线 `7b8ca6b`。本表回答：**现在确定缺什么、下一步具体做什么、什么条件算完成**。
-能力范围见[功能矩阵](obconnector-dotnet-progress.md)，来源见[范围审计](obconnector-dotnet-scope-audit.md)，
-实施步骤、历史测试及提交证据统一维护在[开发清单](obconnector-dotnet-missing-features-roadmap.md)。
-本次只整理范围和任务，不增加支持声明，不代表重跑数据库或完成整个驱动。
+Updated: 2026-11-06; convergence baseline `7b8ca6b`. This table answers: **what is definitively missing now, what to do next specifically, and what condition counts as done**.
+Capability scope is in the [feature matrix](obconnector-dotnet-progress.md); sources are in [scope decisions](obconnector-dotnet-missing-features-roadmap.md#scope-decisions);
+implementation steps, historical tests, and commit evidence are maintained uniformly in the [development checklist](obconnector-dotnet-missing-features-roadmap.md).
+This document organizes scope and tasks only; it adds no support claims and does not represent a database re-run or a completed driver.
 
-## 本轮范围和完成口径
+## Scope and completion standard
 
-- 目标证据基线是 OceanBase **4.4.2.2 的 MySQL/Oracle 租户兼容模式**；原生 Oracle/MySQL 的能力不能直接移入本表。
-- 每个必补项须同时具备 OceanBase 文档/服务端协议/实库证据、明确的 .NET 调用契约及当前实现缺口。JDBC 接口、Java 选项和 Java 支持某种组合均不足以立项。
-- **代码缺口、欠验收、服务端/环境阻塞、待范围决策、指定范围已完成分别列账。** 未证明的组合保留记录，不能报成确定缺失，也不能报成已经完成或已排除。
-- G01～G15 是本轮固定核对单元。现有 D/A/S 编号只作实现和证据索引；其历史子章节数量不是未完成任务数量。不得因一个用例通过，再自动追加方向、嵌套层数、API、部署或数据类型组合。
-- 新增必补范围必须先在本表写明 OceanBase 依据、使用场景、影响面及有限关闭条件，并由用户明确确认；不能边实现边扩大完成标准。
+- The target evidence baseline is **MySQL/Oracle tenant compatibility mode on OceanBase 4.4.2.2**; native Oracle/MySQL capabilities cannot be carried into this table directly.
+- Every mandatory item must have OceanBase documentation/server-protocol/real-database evidence, an explicit .NET call contract, and a current implementation gap at the same time. A JDBC interface, a Java option, or Java supporting some combination is not sufficient to open an item.
+- **Code gaps, under-acceptance, server/environment blockers, pending scope decisions, and completed specified scopes are accounted for separately.** Unproven combinations keep their record and cannot be reported as definitively missing, nor as completed or already excluded.
+- G01–G15 are the fixed verification units. Existing D/A/S numbers serve only as implementation and evidence indexes; their historical subsection count is not the count of unfinished tasks. A passing case must not automatically add directions, nesting levels, APIs, deployments, or data-type combinations.
+- New mandatory scope must first be written in this table with its OceanBase basis, usage scenario, impact surface, and bounded closing conditions, and be explicitly confirmed by the user; the completion standard cannot be widened while implementing.
 
-**功能开发完成**：已纳入范围的代码缺口逐项实现并通过可重复的单元/协议测试、独立走查；尚未决定的范围必须显式保留，不能靠移出表格宣布全部完成。长稳、真实拓扑故障和完整平台测试不阻塞开发完成，只在拟发布或生产部署声明对应能力时作为发布证据。
-**发布验收完成**：拟声明支持的版本/部署/OS/runtime 固定后，对应验收和清理全部通过；缺环境、隔离、skip/deferred 均不算该声明的通过。
-两者分别报告，不以提交数、测试数或父项长期标 P2/P3 代替结论。
+**Feature development complete**: every in-scope code gap is implemented and passes repeatable unit/protocol tests and an independent review; undecided scope must remain explicit, and moving it out of the table cannot be used to declare everything complete. Long-run stability, real topology failures, and full platform testing do not block development completion; they serve as release evidence only when the corresponding capability is claimed for a planned release or production deployment.
+**Release acceptance complete**: after the version/deployment/OS/runtime to be claimed as supported is fixed, the corresponding acceptance and cleanup all pass; a missing environment, quarantine, or skip/deferred does not count as passing that claim.
+The two are reported separately; commit counts, test counts, or a parent item left at P2/P3 long-term are not a substitute for a conclusion.
 
-## 当前仍未结清的事项
+## Items still not settled
 
-| 性质 | 现有编号 | 当前缺什么 | 下一步 |
+| Nature | Existing IDs | What is currently missing | Next step |
 | --- | --- | --- | --- |
-| 客户端代码路径已补，实库协议/权限仍待验收 | G13 / A-03d | package-local PL/SQL RECORD 已支持字段目录派生、标量字段 descriptor 和原子参数发布；当前目标仍只返回顶层行，因此继续明确拒绝 | 取得目标服务端字段行及成功输入/输出 wire 后执行 sync/async、NULL/失败和最小权限验收；没有字段行时保持明确拒绝 |
-| 代码已有，扩展实库隔离 | G04 / D-04f2 | 匿名 INTERVAL 集合的根 NULL、失败后旧输出和独立事务查账未完成 | 先取得事故日志和隔离复现环境，再执行原定用例；普通连接恢复不能解封 |
-| 已实现路径缺真实协议/部署证据 | G01、G09 | 原生 1295 回退；匿名及部分 collection 的 multi-send 结果只有本地证据 | 分别取得原生拒绝 profile、可复现的真实结果 metadata；不再增加同义 fixture 冒充实库 |
-| 发布证据待补（不阻塞代码完成） | G10、G11、G13、G14 | 长稳、真实拓扑故障、RECORD 成功 wire/最小权限、特定发布声明、zero-date/长 NUL 边界 | 开发阶段只保留可重复的短测和边界测试；发布声明涉及对应能力时再执行长测或专用环境验收 |
-| 服务端或部署前提阻塞 | G03、G04、G06～G08、G12、G15 | 具体失败形状、SRS/包/版本、TLS/协议/代理/认证端点 | 保留已有失败和安全拒绝；前提改变后只重开对应行 |
-| 待范围决策，尚非必补功能 | G02、G04、G08、G09 | 任意 Oracle 脚本资源输出、跨语句 locator、更多 PL/游标/数组流水化、专用 XML/空间 codec 等 | 见下方逐项处置表；先决定是否纳入，不能直接开始编码 |
+| Client code path added; real-database protocol/permissions still await acceptance | G13 / A-03d | package-local PL/SQL RECORD now supports field-catalog derivation, scalar field descriptors, and atomic parameter publication; the current target still returns only top-level rows, so the explicit rejection continues | Obtain target server field rows and successful input/output wire, then run sync/async, NULL/failure, and least-privilege acceptance; keep the explicit rejection while field rows are unavailable |
+| Code exists; extended real-database quarantine | G04 / D-04f2 | Root NULL for anonymous INTERVAL collections, stale output after failure, and independent transaction verification remain incomplete | First obtain the incident log and an isolated reproduction environment, then run the original cases; ordinary connection recovery does not lift the quarantine |
+| Implemented paths lack real protocol/deployment evidence | G01, G09 | Native 1295 fallback; multi-send results for anonymous and some collection values have local evidence only | Obtain a native-rejection profile and reproducible real result metadata separately; stop adding synonymous fixtures that pass themselves off as a real database |
+| Release evidence pending (does not block code completion) | G10, G11, G13, G14 | Long-run stability, real topology failures, RECORD success wire/least privilege, specific release claims, zero-date/long NUL boundaries | During development keep only repeatable short tests and boundary tests; run long tests or dedicated-environment acceptance only when a release claim involves the corresponding capability |
+| Blocked on server or deployment prerequisites | G03, G04, G06–G08, G12, G15 | Specific failure shapes, SRS/package/version, TLS/protocol/proxy/authentication endpoints | Keep the existing failures and safe rejections; after the prerequisite changes, reopen only the corresponding row |
+| Pending scope decision; not yet a mandatory feature | G02, G04, G08, G09 | Arbitrary Oracle script resource output, cross-statement locator, more PL/cursor/array pipelining, dedicated XML/spatial codecs, etc. | See the per-item disposition table below; decide inclusion first and do not start coding directly |
 
-候选组合不能合并计为已确定的必补功能。已纳入的 RECORD 能力缺口、隔离验收、发布欠账和阻塞
-仍分别保留；本次分类不代表它们已完成，不据此计算整个驱动的完成率。
+Candidate combinations cannot be merged into confirmed mandatory features. The included RECORD capability gap, quarantine acceptance, release debt, and blockers are still retained separately; this classification does not mean they are complete, and the whole-driver completion rate is not computed from it.
 
-### 下一个版本的发布闸门
+### Release gate for the next version
 
-本轮补了两条客户端边界回归：`DeriveParametersRejectsPackageLocalRecordWithoutFieldRows`
-证明字段目录缺失时不会替换已有参数，`AnonymousOutputReexecutionClearsPreviousValueBeforeRootNull`
-证明重复执行时不会把上一次匿名集合输出作为输入，根 NULL 只在完整响应后发布为 `DBNull.Value`。
-它们只关闭客户端安全边界，不构成真实服务端能力验收。
+Two client boundary regressions were added: `DeriveParametersRejectsPackageLocalRecordWithoutFieldRows`
+proves that a missing field catalog does not replace existing parameters, and `AnonymousOutputReexecutionClearsPreviousValueBeforeRootNull`
+proves that re-execution does not use the previous anonymous collection output as input, and that a root NULL is published as `DBNull.Value` only after the complete response.
+They close client safety boundaries only and do not constitute real server capability acceptance.
 
-因此下一个版本仍有两项条件性闸门：
+Therefore the next version still has two conditional gates:
 
-1. 若发布声明包含 package-local `PL/SQL RECORD` 绑定，必须取得字段行、成功输入/输出 wire、sync/async、NULL/错误和最小权限证据；否则继续明确拒绝并从支持声明中排除。
-2. 若发布声明包含匿名 `INTERVAL` 集合输出，必须取得服务端事故日志和隔离环境，并通过根 NULL、空集合、错误后旧输出、提交后独立查账及 sync/async/Prepare 组合；当前连接恢复不能解除隔离。
+1. If a release claim includes package-local `PL/SQL RECORD` binding, evidence for field rows, successful input/output wire, sync/async, NULL/error, and least privilege must be obtained; otherwise keep the explicit rejection and exclude it from the support claim.
+2. If a release claim includes anonymous `INTERVAL` collection output, the server incident log and an isolated environment must be obtained, and the combination of root NULL, empty collection, stale output after an error, independent verification after commit, and sync/async/Prepare must pass; the current connection recovery cannot lift the quarantine.
 
-未满足上述真实环境条件时，代码可以发布为已实现的安全拒绝和本地协议边界，但不能把两项标为实库支持。
+When the above real-environment conditions are unmet, the code can be released as implemented safe rejection and local protocol boundaries, but the two items cannot be marked as real-database support.
 
-## 当前服务端前提判定
+## Current server prerequisite assessment
 
-当前真实配置只有 OceanBase 4.4.2.2 的 MySQL/Oracle 直连 profile，均为 TLS Disabled；没有
-proxy/ODP、多节点/OCP/TNS、OB20/trace 或非 native 认证/KDC profile。下列能力依赖这些服务端
-前提，当前阶段统一标记为**服务端受限，暂不开发与修复**。本地协议 fixture、Java SPI 或
-单上游 relay 只能保留边界证据，不能解除冻结。
+The only real configurations currently available are direct-connect profiles for MySQL/Oracle on OceanBase 4.4.2.2, all with TLS Disabled; there are no
+proxy/ODP, multi-node/OCP/TNS, OB20/trace, or non-native authentication/KDC profiles. The following capabilities depend on these server
+prerequisites and are uniformly marked **server-limited, not developed or fixed at this stage**. Local protocol fixtures, Java SPI, or a
+single-upstream relay can only keep boundary evidence and cannot lift the freeze.
 
-| 项目 | 当前确认 | 暂不开发的原因 |
+| Item | Current confirmation | Reason not developed for now |
 | --- | --- | --- |
-| TLS/mTLS/企业 CA/撤销/轮换 | 两个真实 profile 明确 TLS Disabled | 没有真实 TLS 端点和证书链，代码修改无法形成 OceanBase 验收证据 |
-| OB20/trace/标准压缩 | 没有 OB20 profile；强制 OB20 历史失败于服务端 `Layer=mysql` | 缺少服务端协商与双向帧，不能以本地帧 fixture 代替部署能力；压缩 OB20 仍属排除项 |
-| OBProxy/ODP/多节点/OCP/TNS | 没有真实代理或发现服务 profile | 单上游中继不能证明 HA、后端 reset、迁移或发现服务 |
-| 非 native 认证/KDC/凭据轮换 | 当前只配置 native 账号直连 | 没有插件/KDC 正负端点，Java 插件注册不等于 OceanBase 支持 |
-| Oracle普通CP932/UJIS/EUCJPMS | 三族严格映射、MySQL存储/结果和Oracle national已补齐（D-07f/g/h），普通Oracle初始化由Java同交互确认900/42000 | 仅按D-07f/g/h关闭成功子集，SJIS/Big5/EUCKR旧失败及其他部署仍保留 |
+| TLS/mTLS/enterprise CA/revocation/rotation | Both real profiles explicitly have TLS Disabled | There is no real TLS endpoint or certificate chain, so code changes cannot produce OceanBase acceptance evidence |
+| OB20/trace/standard compression | No OB20 profile; forced OB20 historically failed at the server with `Layer=mysql` | Server negotiation and bidirectional frames are missing, so local frame fixtures cannot replace deployment capability; compressed OB20 remains an exclusion |
+| OBProxy/ODP/multi-node/OCP/TNS | No real proxy or discovery-service profile | A single-upstream relay cannot prove HA, backend reset, migration, or discovery service |
+| Non-native authentication/KDC/credential rotation | Only direct connection with native accounts is currently configured | There are no plugin/KDC positive or negative endpoints; Java plugin registration does not equal OceanBase support |
+| Oracle plain CP932/UJIS/EUCJPMS | Strict mappings for the three families, MySQL storage/results, and Oracle national are complete (D-07f/g/h); plain Oracle initialization is confirmed as 900/42000 by the same Java interaction | Only the successful subsets are closed per D-07f/g/h; the older SJIS/Big5/EUCKR failures and other deployments are still retained |
 
-上述冻结不删除现有 API、拒绝校验、负向测试或 Deferred 记录；获得真实端点后再按验收标准
-重新立项。
+The freeze above does not delete existing APIs, rejection validation, negative tests, or Deferred records; after real endpoints are obtained, items are opened again per the acceptance criteria.
 
 <a id="bounded-gap-matrix"></a>
 
-## 固定缺口、处理动作与关闭条件（G01～G15）
+## Fixed gaps, actions, and closing conditions (G01–G15)
 
-“指定范围已完成”只覆盖行内列出的现有能力；同一行的候选、阻塞和欠验收仍单列，不能相互抵消。
+"Specified scope completed" covers only the existing capabilities listed in the row; candidates, blockers, and under-acceptance items in the same row remain separately listed and cannot offset each other.
 
-| ID / 索引 | 现状与确切剩余项 | 具体处理动作 | 有限关闭条件 |
+| ID / index | Current state and exact remainder | Specific action | Bounded closing condition |
 | --- | --- | --- | --- |
-| G01 / D-01、D-05b、A-05 | Oracle 普通输入及命名复杂输入的受控 fallback 已实现；租户原生 1295 仅是发布证据 | 开发阶段以现有受控 relay 和单元边界验证 fallback；只有明确声明兼容该租户原生拒绝时才补真实 profile | 没有原生 1295 profile 不阻塞代码完成；已有受控 relay 证据不得表述为租户原生验收 |
-| G02 / D-02 | **指定子集已完成**：双模式已列明输入/多结果、MySQL 标量脚本 OUT/INOUT/ReturnValue；**待范围决策**：Oracle 任意脚本输出、资源复杂输出及跨语句 locator；脚本 Prepare/cursor 在当前服务端被拒绝 | 保留现有脚本拒绝；候选先按下表决定契约。服务端失败只在版本/可接受 SQL 改变后复核，不以 DbBatch 或单 PL 块冒充脚本支持 | 现有子集按 D-02a1/a2/c1/c2/d1～d3 的 P4 证据结账；未纳入组合不追加成必过项，也不宣称已支持 |
-| G03 / D-03 | **指定子集已完成**：REF CURSOR 输出、前向 offset 及父默认值；**服务端限制**：SELECT CURSOR 列当前在 execute/FETCH 失败 | 保留现有列形状失败和发送前保护；只有出现目标 OceanBase 成功列 wire 才重开 child FETCH/释放验证；JDBC 滚动/可更新 ResultSet 不纳入 | D-03b1/b2/c 已验收范围保持完成；列形状须新实库成功证据，不能用 REF CURSOR OUT 通过替代 |
-| G04 / D-04、D-04f2 | named OBJECT/collection、LOB locator Input 与独立输出及 INTERVAL 指定子集已有 P4；D-04f2 属于隔离环境专项；其他组合尚未纳入 | 开发阶段保留现有 deterministic guard 和 loopback；只有准备发布该匿名 INTERVAL 组合时才启用隔离实库验收；其余已知服务端失败不循环探测 | 隔离环境缺失不阻塞当前开发；D-04f2 只能在事故日志、专用环境和清理验证齐备后作为发布证据 |
-| G05 / D-05、D-05b | **指定范围已完成**：UROWID 普通/PrepareExecute、NULL、OUT/INOUT/ReturnValue/RETURNING 及已列明 text 输入 | 无新增功能开发；原生 fallback 只随 G01 验收，跨部署随 G12/G14，不能重复挂任务 | 保留现有 P4 及受控中继证据边界；没有新失败不重开该功能 |
-| G06 / D-06 | **指定范围已完成**：SRID=0 GEOMETRY Binary/目录；**服务端前提缺失**：非零 SRS | 提供实际含非零 SRS 且可往返的 OceanBase profile，再用原始 SRID+WKB 参数/结果/NULL/坏值独立读回；不在测试中改服务端 SRS | 指定非零 SRS 的 sync/async 独立存储结果一致或记录明确服务端拒绝；专用 GIS API 不在当前必补范围 |
-| G07 / D-07、S-05 | **清单内映射指定子集已完成**；普通 Oracle 部分字符集初始化及其他部署有已记录失败 | 仅在服务端初始化/枚举改变后复核对应失败名称；严格 codec 不用相近 code page 替代，不自动扩大字符集名单 | D-07～h 的成功/失败结论分别保留；当前没有一个可直接新增的已确认名称，其他部署验收按实际 profile 单列 |
-| G08 / D-09～D-12 | **指定通用路径已完成**：XML/String、SDO/generic OBJECT、VECTOR/ARRAY/String、RoaringBitmap/Binary+SQL；ANYDATA/SPARSEVECTOR 及部分形状当前服务端失败；完整 XML/空间专用 codec 未纳入 | 缺包/版本的只等待对应前提；额外 codec 必须先说明现有通用路径不能满足的 .NET 用例和真实 wire，不凭类型名追加实现 | 当前已验收通用子集按 P4 结账；阻塞保持可见；专用 codec 和其他嵌套未决不算已完成或确定代码欠账 |
-| G09 / D-08 | **指定 opt-in multi-send 子集已完成**；匿名和部分 collection 真实结果属于发布证据；PL 同组、cursor/array binding、更多复杂 text LOB 仍未纳入 | 开发阶段使用现有 decoder、协议 fixture 和已验收 DML/LOB 屏障；只有发布声明包含匿名/collection multi-send 时才补真实 metadata 验收 | 缺真实结果来源不阻塞已实现代码；未决定的流水化组合继续保持范围外 |
-| G10 / A-01 | **发布证据**：16 并发/10000 借还及资源隔离已有；一小时稳定性属于发布/生产门槛 | 开发阶段保留短时并发、资源上限、取消和清理回归；发布候选或生产容量评估时再运行 60 分钟 | 长稳报告不作为本次代码功能完成条件；没有长测环境时保持 deferred |
-| G11 / A-02 | XA 生命周期、已列明响应丢失和受控 relay/worker 故障已有证据；真实节点/ODP/协调器故障属于部署专项 | 开发阶段继续维护 deterministic unknown-outcome、Recover、无重放和资源失效测试；只有声明 HA/节点故障恢复时才申请专用拓扑环境 | 缺真实节点/ODP 环境不阻塞客户端开发；受控 relay 结果不能升级为真实 HA 验收 |
-| G12 / S-01～S-03 | **部署欠验收/阻塞**：TLS/mTLS、OB20/trace/标准压缩、真实 ODP/发现/多节点 | 分别提供证书正负端点、实际协商/双向帧及 trace/collector、真实代理/发现 profile；按开发清单 S 表执行，禁用降级和单上游 relay 替代 | 只关闭已取得端点的那一格部署；压缩 OB20、透明迁移等原排除项不改成目标，也不宣称未配置即服务端不支持 |
-| G13 / A-03、A-03d | **代码路径已实现**：package-local RECORD 读取字段行、构造 scalar descriptor、派生并原子发布；**欠验收**：当前服务端没有字段行、真实输入/输出 wire、最小权限及目录权限边界；CHAR_LENGTH 缺列等为已记录服务端限制 | 代码复用现有 complex descriptor/绑定和原子发布；字段缺失、嵌套/重复/乱序/不支持类型在发送前拒绝；取得真实字段和 wire 后只补定向 sync/async、NULL、失败与权限验收，禁止伪造 owner、字段或字符长度 | 真实字段行和成功输入/输出 wire 下，RECORD 参数派生/绑定、NULL/错误不发布及 sync/async 全部通过才算实库支持；当前目标无字段行时的安全拒绝已由边界和单元测试覆盖。权限用例结果与账号实际授权一致，不能由管理员通过替代 |
-| G14 / A-04 | Windows 包/五资产及既有 runtime 子集已验收；.NET Core/.NET 已支持从 Windows 交叉发布 Linux；Linux 实机数据库验收只在发布明确承诺 Linux runtime 行为时需要 | 用 Windows 完成五资产构建、包消费者和 `dotnet publish` 资产检查；只有声明 Linux 实机/特定 ORM 行为时再补对应实机报告 | 当前发布范围按托管 .NET API 和交叉发布结果结账；不把 Linux 实机数据库测试当作代码开发前置条件 |
-| G15 / S-04 | **待服务端支持证据和端点**：非 native 插件/KDC/凭据轮换；Java SPI 存在不足以证明目标 OceanBase 提供该认证 | 先确定目标 OceanBase 版本实际提供的插件/机制并配置正负认证、轮换端点，再测试现有认证路径；没有依据不新增插件 API | 实际支持的机制完成正负认证/轮换/脱敏及对应平台验证；未确认机制保持待证据，不算确定功能缺口或已排除 |
+| G01 / D-01, D-05b, A-05 | Controlled fallback for Oracle plain input and named complex input is implemented; tenant-native 1295 is release evidence only | During development verify the fallback with the existing controlled relay and unit boundaries; add a real profile only when compatibility with that tenant's native rejection is explicitly claimed | The absence of a native 1295 profile does not block code completion; existing controlled-relay evidence must not be described as tenant-native acceptance |
+| G02 / D-02 | **Specified subset complete**: the listed inputs/multiple results in both modes, and MySQL scalar script OUT/INOUT/ReturnValue; **pending scope decision**: arbitrary Oracle script output, complex resource output, and cross-statement locator; script Prepare/cursor is rejected by the current server | Keep the existing script rejection; decide the contract for candidates first per the table below. Re-check server failures only after the version/acceptable SQL changes, and do not pass off DbBatch or a single PL block as script support | The existing subset is settled per the P4 evidence of D-02a1/a2/c1/c2/d1–d3; combinations not included are not added as must-pass items, nor claimed as supported |
+| G03 / D-03 | **Specified subset complete**: REF CURSOR output, forward offset, and parent default value; **server limitation**: SELECT CURSOR columns currently fail at execute/FETCH | Keep the existing column-shape failure and pre-send protection; reopen child FETCH/release verification only when a successful column wire appears from the target OceanBase; JDBC scrollable/updatable ResultSet is not included | The accepted scope of D-03b1/b2/c remains complete; the column shape requires new real-database success evidence and cannot be replaced by a passing REF CURSOR OUT |
+| G04 / D-04, D-04f2 | named OBJECT/collection, LOB locator Input with independent output, and the specified INTERVAL subset already have P4; D-04f2 is a dedicated quarantine-environment item; other combinations are not yet included | During development keep the existing deterministic guard and loopback; enable quarantined real-database acceptance only when preparing to release that anonymous INTERVAL combination; do not probe other known server failures in a loop | A missing quarantine environment does not block current development; D-04f2 can serve as release evidence only after the incident log, dedicated environment, and cleanup verification are all in place |
+| G05 / D-05, D-05b | **Specified scope complete**: UROWID plain/PrepareExecute, NULL, OUT/INOUT/ReturnValue/RETURNING, and the listed text input | No new feature development; native fallback is accepted only with G01 and cross-deployment only with G12/G14, and tasks must not be attached twice | Keep the existing P4 and controlled-relay evidence boundary; do not reopen this feature without a new failure |
+| G06 / D-06 | **Specified scope complete**: SRID=0 GEOMETRY Binary/catalog; **server prerequisite missing**: non-zero SRS | Provide an OceanBase profile that actually has a non-zero SRS and can round-trip, then independently read back raw SRID+WKB parameters/results/NULL/bad values; do not change the server SRS in tests | Independently stored results for the specified non-zero SRS agree in sync/async, or an explicit server rejection is recorded; a dedicated GIS API is not in the current mandatory scope |
+| G07 / D-07, S-05 | **The specified subset of listed mappings is complete**; plain Oracle initialization for some character sets and other deployments have recorded failures | Re-check the corresponding failure names only after server initialization/enumeration changes; strict codecs are not replaced by a similar code page, and the character-set list is not expanded automatically | The success/failure conclusions for D-07–h are retained separately; there is currently no confirmed name that can be added directly, and other deployment acceptance is listed separately per actual profile |
+| G08 / D-09–D-12 | **Specified generic paths complete**: XML/String, SDO/generic OBJECT, VECTOR/ARRAY/String, RoaringBitmap/Binary+SQL; ANYDATA/SPARSEVECTOR and some shapes currently fail on the server; full XML/spatial dedicated codecs are not included | Missing packages/versions only wait for the corresponding prerequisite; an additional codec must first justify the .NET use case that the existing generic path cannot satisfy and its real wire, and implementations are not added on the strength of a type name | The currently accepted generic subsets are settled as P4; blockers stay visible; dedicated codecs and other undecided nesting count neither as complete nor as confirmed code debt |
+| G09 / D-08 | **The specified opt-in multi-send subset is complete**; real results for anonymous and some collection values are release evidence; same-group PL, cursor/array binding, and more complex text LOB are still not included | During development use the existing decoder, protocol fixtures, and accepted DML/LOB barriers; add real metadata acceptance only when a release claim includes anonymous/collection multi-send | A missing real result source does not block implemented code; undecided pipelining combinations stay out of scope |
+| G10 / A-01 | **Release evidence**: 16-way concurrency/10000 borrow-return cycles and resource isolation exist; one-hour stability is a release/production gate | During development keep the short-time concurrency, resource-ceiling, cancellation, and cleanup regressions; run the 60 minutes only for a release candidate or production capacity assessment | The long-run stability report is not a condition for the current code feature completion; keep it deferred when no long-test environment exists |
+| G11 / A-02 | XA lifecycle, the listed response loss, and controlled relay/worker failures already have evidence; real node/ODP/coordinator failures are a deployment item | During development keep maintaining the deterministic unknown-outcome, Recover, no-replay, and resource-invalidation tests; request a dedicated topology environment only when HA/node-failure recovery is claimed | A missing real node/ODP environment does not block client development; controlled relay results cannot be upgraded to real HA acceptance |
+| G12 / S-01–S-03 | **Deployment under-acceptance/blocked**: TLS/mTLS, OB20/trace/standard compression, real ODP/discovery/multi-node | Provide certificate positive/negative endpoints, actual negotiation/bidirectional frames plus trace/collector, and real proxy/discovery profiles separately; execute per the S table in the development checklist and do not substitute downgrade or a single-upstream relay | Close only the deployment cell whose endpoints were obtained; original exclusions such as compressed OB20 and transparent migration are not turned into targets, and an unconfigured state is not claimed as unsupported by the server |
+| G13 / A-03, A-03d | **Code path implemented**: package-local RECORD reads field rows, builds scalar descriptors, derives and publishes atomically; **under-acceptance**: the current server has no field rows, and real input/output wire, least privilege, and catalog permission boundaries are missing; the missing CHAR_LENGTH column and similar are recorded server limitations | The code reuses the existing complex descriptor/binding and atomic publication; missing fields, nested/duplicate/out-of-order/unsupported types are rejected before sending; after real fields and wire are obtained, add only targeted sync/async, NULL, failure, and permission acceptance, and never fabricate owner, field, or character length | Real-database support requires RECORD parameter derivation/binding, no publication on NULL/error, and sync/async to all pass with real field rows and successful input/output wire; the safe rejection when the current target has no field rows is already covered by boundary and unit tests. Permission case results must match the account's actual grants, and an administrator pass cannot be substituted |
+| G14 / A-04 | The Windows package/five assets and the existing runtime subset are accepted; .NET Core/.NET already supports cross-publishing to Linux from Windows; real Linux machine database acceptance is needed only when a release explicitly promises Linux runtime behavior | Use Windows to complete the five-asset build, package consumer, and `dotnet publish` asset checks; add the corresponding real-machine report only when Linux real-machine/specific ORM behavior is claimed | The current release scope is settled per the managed .NET API and cross-publish results; real Linux machine database testing is not a prerequisite for code development |
+| G15 / S-04 | **Awaiting server support evidence and endpoints**: non-native plugin/KDC/credential rotation; the existence of Java SPI is not enough to prove that the target OceanBase provides that authentication | First determine which plugins/mechanisms the target OceanBase version actually provides and configure positive/negative authentication and rotation endpoints, then test the existing authentication paths; do not add plugin APIs without grounds | Actually supported mechanisms complete positive/negative authentication/rotation/redaction and the corresponding platform verification; unconfirmed mechanisms remain pending evidence and count neither as a confirmed feature gap nor as excluded |
 
-A-05 的 zero-date 需要专用允许零日期的 SQL_MODE profile；不改租户基线。长 NUL 需要失败时段的执行/网络诊断，
-不反复重放长 SQL。两者仍是边界验收欠账，分别保留 G01/G11 的故障及原始 A-05 记录，不能报成两个新功能。
+A-05's zero-date needs a dedicated SQL_MODE profile that allows zero dates; the tenant baseline is not changed. Long NUL needs execution/network diagnostics from the failing window
+without repeatedly replaying long SQL. Both remain boundary acceptance debt; they keep the G01/G11 failures and the original A-05 records respectively, and cannot be reported as two new features.
 
 <a id="scope-decisions"></a>
 
-## 尚未纳入必补范围的组合：先决策，后开发
+## Combinations not yet in mandatory scope: decide first, then develop
 
-| 现有索引 | 未决定的能力 | 纳入前必须拿出的证据/方案 | 当前动作 |
+| Existing index | Undecided capability | Evidence/plan required before inclusion | Current action |
 | --- | --- | --- | --- |
-| D-02b/c | 脚本级 Prepare/cursor、Oracle 任意脚本 OUT/INOUT/复杂资源输出 | 目标 OceanBase 能接受的脚本/协议；明确输出位置、完整成功才发布、失败前缀及取消后的资源归属；单 PL 块/多条 DbBatch 不替代 | 保留拒绝和当前失败，未纳入；拿到证据并经用户确认才写有限实现项 |
-| D-04 的其他方向 | multi-statement locator、复杂 locator 自身 INOUT、未证实 cursor/匿名成员形状 | 成功 wire、类型身份/NULL 表示、LOB/cursor 所有权及释放；当前 900/932 等失败形状需新服务端依据 | 保留已验收 Input/独立输出子集，不自动补其所有排列 |
-| D-08 其他组合 | 普通匿名输入/声明输出、PL 同组流水化、cursor/array binding、复杂 text LOB | 单条普通命令成功协议、组响应顺序/错误归属、资源生命周期及可复现 .NET 用例；ExecuteArray 不代替普通输入 | 现有 guard/屏障保留；不得把 Java 可选优化或 API 的存在当成 OceanBase 必补契约 |
-| D-09/D-10/D-12 额外范围 | 完整 XML codec、专用 SDO WKB/WKT/SRID API、稀疏向量及更多数组嵌套 | 明确现有 String/Binary/OBJECT 路径不能解决的使用场景、目标版本实际支持和参数/结果 wire | 通用路径按现有证据支持；候选不计入必补或完成率 |
+| D-02b/c | Script-level Prepare/cursor, arbitrary Oracle script OUT/INOUT/complex resource output | A script/protocol the target OceanBase accepts; explicit output position, publish only on complete success, failure prefix, and resource ownership after cancellation; a single PL block/multiple DbBatch do not substitute | Keep the rejection and current failure, not included; write a bounded implementation item only after evidence is obtained and the user confirms |
+| Other D-04 directions | multi-statement locator, INOUT on a complex locator itself, unproven cursor/anonymous member shapes | Successful wire, type identity/NULL representation, LOB/cursor ownership and release; the current failure shapes such as 900/932 need new server grounds | Keep the accepted Input/independent-output subset and do not automatically fill in all its permutations |
+| Other D-08 combinations | Plain anonymous input/declared output, same-group PL pipelining, cursor/array binding, complex text LOB | A successful protocol for a single plain command, group response order/error attribution, resource lifecycle, and a reproducible .NET case; ExecuteArray does not substitute for plain input | Existing guards/barriers are kept; the existence of a Java optional optimization or API must not be treated as an OceanBase mandatory contract |
+| Extra D-09/D-10/D-12 scope | Full XML codec, dedicated SDO WKB/WKT/SRID API, sparse vectors, and more array nesting | A use case the existing String/Binary/OBJECT paths cannot solve, the target version's actual support, and parameter/result wire | Generic paths are supported per existing evidence; candidates do not count toward mandatory items or the completion rate |
 
-上述“未纳入”保留范围决策欠账，并非将原问题宣布解决；用户确认纳入后只能修改对应现有行，
-同时固定用例及关闭条件，不能由实现 agent 自行派生一串新的常驻子任务。
+The "not included" above keeps the scope-decision debt; it does not declare the original problem solved. After the user confirms inclusion, only the corresponding existing row may be modified,
+together with fixed cases and closing conditions; the implementing agent must not derive a chain of new permanent subtasks on its own.
 
-没有发现产品源码TODO/FIXME/NotImplementedException式空实现。已确认的无用途代码是A01演示类型、
-3个零引用方法和2个过时UTF-8快捷属性，删除范围与外部API影响见[清理决策](obconnector-dotnet-scope-audit.md)。
-现有NotSupported检查不是完整性统计，更不是全部待开发任务。
+No TODO/FIXME/NotImplementedException-style empty implementation was found in the product source. The confirmed unused code is the A01 demo type,
+3 zero-reference methods, and 2 obsolete UTF-8 shortcut properties. The existing NotSupported checks are not a completeness count, and
+certainly not all pending development tasks.
 
-## 必须保留的真实阻塞
+## Real blockers that must be retained
 
-| ID | 能力/模式 | 已记录事实 | 关闭所需证据 |
+| ID | Capability/mode | Recorded fact | Evidence needed to close |
 | --- | --- | --- | --- |
-| E01 | TLS/mTLS/认证，两模式 | 当前真实租户TLS未开启；企业CA/撤销/轮换/plugin/KDC未验收 | 获得真实配置端点后执行正负握手；保留matrix.tls-authentication deferred |
-| E02 | Oracle SJIS/Big5 | 初始化失败，官方Java同样复现900 | 版本/服务端问题确认或新部署通过，不能删用例或改无条件skip |
-| E03 | Oracle nested-table列 | 创建类型可成功，创建列600/0A000，Java复现 | 区分PL集合/对象类型与持久列，取得目标版本支持后复验 |
-| E04 | Oracle SELECT CURSOR列 | 当前 scalar/多行列形状分别在 execute/FETCH 返回 902/1002，Java 同样复现；text实际值不符既有四字节解析 | 当前形状按服务端限制跳过；只有拿到新的确切可读取形状/wire 后才重新处理，不能用 metadata 或 PL OUT 覆盖 |
-| E05 | Oracle VIEW/SYNONYM | CREATE权限1031/HY000 | 具备权限再验，服务端支持不等于当前账号授权 |
-| E06 | Oracle named TZ | 二进制非空地区名1882，强制Java server prepare同样失败 | 服务端区域文件/版本/模式组合支持；数字偏移通过不等于命名地区通过 |
-| E07 | Oracle长NUL多语句 | 12003字符已记录通过，更大双SELECT在.NET/Java超时 | 隔离服务器执行/SQL展开预算，记录确切长度，不承诺无限长脚本 |
-| E08 | MySQL TIME极限小数 | permissive binary截整秒；strict文本1292、binary仍截断成功 | 明示路径差异，不能静默截断/CAST/重试使二者看似一致 |
-| E09 | 普通prepare fallback | 中继注入1295后真实存储通过，租户未复现原生1295 | 原生拒绝场景需独立验收，注入证据只关闭客户端分支 |
-| E10 | OB20/trace/标准压缩/ODP | 直连只验证declined-ob20和压缩未声明回退；强制OB20因Layer=mysql失败 | 实际双向目标帧、trace控制/采样，collector另验；真实ODP不可用单上游中继代替 |
-| E11 | MySQL零日期 | 有profile，但当前SQL_MODE前置不满足，未建表 | 合适SQL_MODE专用profile验证存储/读写，不在测试中私改租户基线 |
-| E12 | Oracle `ALL_ARGUMENTS.CHAR_LENGTH` | 目标 OceanBase 4.4.2.2 目录缺少 `CHAR_LENGTH`/`CHAR_USED`，直接查询返回 `904/42S22`；Java Connector/J 同一查询同码 | 提供字符长度列或稳定等价目录来源的目标版本/profile 后复核；当前跳过客户端 fallback |
-| E13 | Oracle OBJECT/嵌套 OBJECT NULL 输出身份 | 当前目标版本返回 type 160 且外层 NULL 位为 false；Java `getObject/wasNull` 同样不报告外层 NULL | 提供可区分根 NULL 的新结果 wire 后复核；当前跳过客户端改码，不把全 NULL 属性对象转换为 `DBNull` |
-| E14 | Oracle named BLOB OBJECT 成员 DML | .NET 4.4.2.2 直连 flat/nested、3/90007 字节、sync/async 均到达目标 DML 后返回 `932/22000`；Connector/J 公开 BLOB writer 先失败，但同 SDK 的 RAW descriptor wire replay 发出相同 bitmap/length-encoded bytes 后也返回 `932/22000`，行数为 0 | 当前目标版本按服务端限制跳过客户端开发；若新版本/租户提供不同成员 wire，再重新比较 Java/.NET 并开启 D-04a2 |
-| E15 | Oracle named CLOB/BLOB OBJECT text 结果 | .NET 预加载 named OBJECT 描述后 sync/async **2/2** 以 unsupported complex text member 安全拒绝；Connector/J 2.4.14 同查询 metadata 为 `1111/COMPLEX`、`getObject()` 为 null，`getString()` 只有无法区分成员身份的重复文本 | 当前目标版本 text payload 没有可靠成员身份，按服务端限制跳过 parser；后续版本提供稳定 type identity/NULL/locator 编码后再重开 D-04e |
+| E01 | TLS/mTLS/authentication, both modes | TLS is not enabled on the current real tenants; enterprise CA/revocation/rotation/plugin/KDC not accepted | Run positive and negative handshakes after real configured endpoints are obtained; keep matrix.tls-authentication deferred |
+| E02 | Oracle SJIS/Big5 | Initialization fails; official Java reproduces 900 as well | Confirm the version/server issue or have a new deployment pass; the case must not be deleted or turned into an unconditional skip |
+| E03 | Oracle nested-table column | Creating the type can succeed, creating the column returns 600/0A000, reproduced in Java | Distinguish PL collection/object types from persistent columns, and re-verify after support in the target version is obtained |
+| E04 | Oracle SELECT CURSOR column | The current scalar/multi-row column shapes return 902/1002 at execute/FETCH respectively, reproduced in Java as well; the actual text value does not match the existing four-byte parsing | The current shapes are skipped as a server limitation; handle them again only after a new, exact readable shape/wire is obtained, and neither metadata nor PL OUT can cover it |
+| E05 | Oracle VIEW/SYNONYM | CREATE privilege 1031/HY000 | Verify again once the privilege exists; server support does not equal a grant for the current account |
+| E06 | Oracle named TZ | Binary non-empty region name returns 1882; forcing Java server prepare fails as well | Server region file/version/mode combination support; a numeric offset pass does not equal a named region pass |
+| E07 | Oracle long NUL multi-statement | 12003 characters are recorded as passing; a larger double SELECT times out in .NET/Java | Isolated server execution/SQL expansion budget, record the exact length, and do not promise unlimited script length |
+| E08 | MySQL TIME extreme fractions | permissive binary truncates to whole seconds; strict text returns 1292 and binary still truncates successfully | State the path difference explicitly; do not silently truncate/CAST/retry to make the two look consistent |
+| E09 | Plain prepare fallback | After the relay injects 1295, real storage passes; the tenant has not reproduced native 1295 | The native-rejection scenario needs separate acceptance; injected evidence closes only the client branch |
+| E10 | OB20/trace/standard compression/ODP | Direct connection verifies only declined-ob20 and the fallback for undeclared compression; forced OB20 fails with Layer=mysql | Actual bidirectional target frames, trace control/sampling, with the collector verified separately; real ODP cannot be replaced by a single-upstream relay |
+| E11 | MySQL zero date | A profile exists, but the current SQL_MODE prerequisite is unmet and no table was created | Verify storage/read-write with a dedicated profile using a suitable SQL_MODE; do not privately change the tenant baseline in tests |
+| E12 | Oracle `ALL_ARGUMENTS.CHAR_LENGTH` | The target OceanBase 4.4.2.2 catalog lacks `CHAR_LENGTH`/`CHAR_USED`, and a direct query returns `904/42S22`; Java Connector/J returns the same code for the same query | Re-check after a target version/profile provides the character-length column or a stable equivalent catalog source; the client fallback is currently skipped |
+| E13 | Oracle OBJECT/nested OBJECT NULL output identity | The current target version returns type 160 with the outer NULL bit false; Java `getObject/wasNull` likewise does not report the outer NULL | Re-check after a new result wire that can distinguish a root NULL is provided; client code changes are currently skipped, and an all-NULL attribute object is not converted to `DBNull` |
+| E14 | Oracle named BLOB OBJECT member DML | On .NET 4.4.2.2 direct connection, flat/nested, 3/90007 bytes, and sync/async all reach the target DML and then return `932/22000`; the Connector/J public BLOB writer fails first, but a RAW descriptor wire replay from the same SDK, sending identical bitmap/length-encoded bytes, also returns `932/22000` with 0 rows | Client development is skipped for the current target version as a server limitation; if a new version/tenant provides a different member wire, compare Java/.NET again and reopen D-04a2 |
+| E15 | Oracle named CLOB/BLOB OBJECT text result | After preloading the named OBJECT description, .NET safely rejects with an unsupported complex text member **2/2** in sync/async; for the same query Connector/J 2.4.14 reports metadata `1111/COMPLEX`, `getObject()` is null, and `getString()` yields only repeated text that cannot distinguish member identity | The text payload of the current target version has no reliable member identity, so the parser is skipped as a server limitation; reopen D-04e once a later version provides stable type identity/NULL/locator encoding |
 
 Integration tests now carry these confirmed limitations as profile metadata in
 `capabilities.serverLimitations`. Discovery-time skipping is limited to the named profile
@@ -134,28 +132,16 @@ and limitation; profiles without the declaration still execute the test and expo
 server behavior. This keeps server-limited cases visible without turning an unverified failure
 into a passing client result.
 
-来源和历史运行上下文集中见[真实兼容性与未验收部署](compatibility.md)及[历史证据索引](history/README.md)。
-本次范围整理未重新证明这些服务器状态仍相同。
+Sources and historical run context are collected in [real compatibility and unaccepted deployments](compatibility.md).
+This scope pass did not re-prove that these server states are still the same.
 
-## 明确排除与历史ID归并
+## Explicit exclusions
 
-不列为缺实现：原生Oracle Net/OCI、LONG/LONG RAW/BFILE/NCLOB、Aurora/Galera、MariaDB bulk、
-压缩OB20/proxy reroute、透明活动会话迁移/未知写自动重放、分布式ambient提升/通用持久协调器、
-REF CURSOR输入、DataAdapter/CommandBuilder、未定义的“其他资源等待”。
-排除依据不同：有的是官方不支持，有的是参考协议不足，有的是产品主动不承诺，不能混写。
+Not listed as missing implementations: native Oracle Net/OCI, LONG/LONG RAW/BFILE/NCLOB, Aurora/Galera, MariaDB bulk,
+compressed OB20/proxy reroute, transparent active-session migration/automatic replay of unknown writes, distributed ambient promotion/generic durable coordinator,
+REF CURSOR input, DataAdapter/CommandBuilder, and the undefined "other resource waits".
+The grounds differ: some are officially unsupported, some lack a sufficient reference protocol, and some are choices the
+product deliberately does not promise; they must not be written as one.
 
-| 旧23项 | 当前追踪 |
-| --- | --- |
-| P0-01/P0-02/P0-06 | C10–C14、G10/G12 |
-| P0-03/P0-04/P0-05 | X02–X04、G11；透明迁移为排除 |
-| P1-01/P1-05 | Q01–Q10/Q13/Q14/Q19、G01/G02/G13 |
-| P1-02/P1-03/P1-04 | P02–P05/Q18/C05/C06、G12/E01/E10 |
-| P1-06/P1-07/P1-08 | Q11/Q12/T01–T20、G03–G08 |
-| P1-09/P1-10/P1-11 | C12/C13/M01/C09、G12/G13/G15 |
-| P2-01 | R02，已移除范围，不计完成 |
-| P2-02/P2-03/P2-04 | Q15–Q21/M02/M03；multi-send 已有可选实现子集，bulk 为排除 |
-| P2-05/P2-06 | R01与所有真实验收门槛，不作为功能API |
-
-旧完整性清单和暂停快照已删除，历史结论仅在[历史证据索引](history/README.md)中保留摘要，
-不再用八包/阶段编号驱动无依据开发。关闭G/E项须按[验收标准](acceptance-criteria.md)记录证据，
-失败可能揭示驱动缺陷，不能预先一概归为服务端问题。
+Closing a G/E item requires evidence per the [acceptance criteria](acceptance-criteria.md); failures may reveal driver
+defects and cannot be attributed to the server wholesale in advance.

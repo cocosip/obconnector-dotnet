@@ -30,7 +30,7 @@ using var connection = new OceanBaseConnection(
 await connection.OpenAsync();
 using var command = connection.CreateCommand();
 command.CommandText = "SELECT :value FROM dual"; // Oracle mode example
-command.Parameters.Add(new OceanBaseParameter { ParameterName = "value", Value = "中文" });
+command.Parameters.Add(new OceanBaseParameter { ParameterName = "value", Value = "Chinese" });
 var value = await command.ExecuteScalarAsync();
 ```
 
@@ -252,14 +252,14 @@ ASCII aliases, preserving values, HEX, collation and coercibility4 under the ser
 SQL_MODE. No objects or SQL_MODE were changed. These generated-literal checks do not exercise a
 real 1295-triggered automatic fallback, DBCS, other mode/collation/version profiles or OBProxy.
 Retained failures and exact local verification are in the
-[module record](compatibility.md).
+[compatibility and known limitations](compatibility.md).
 
 The subsequent DBCS extension adds all seven strict mappings with trail5C-adjacent quote/backslash
 samples, GB18030 four-byte values and HKSCS supplementary values. Explicit direct MySQL checks
 pass14/14 generated-literal cases plus a connection control, with ASCII aliases and unchanged
 SQL_MODE. This extends local automatic-fallback support, not actual server1295/proxy or every
 SQL_MODE/collation/version profile. See its
-[module record](compatibility.md).
+[compatibility and known limitations](compatibility.md).
 
 The complex-national extension adds exact synthetic input bytes for all fourteen non-default names,
 both prepare paths, sync/async and five-asset consumption. Explicit Oracle4.4.2.2 array-input
@@ -272,4 +272,4 @@ session switching makes subsequent fixed ASCII statements fail900, independently
 official Connector/J2.4.14. No substitution of a different input encoding is added for those families.
 These observations do not establish other versions, proxies, stored complex output, standalone
 national or live pool-reset compatibility. Retained initialization failures and final local gates
-are in the [module record](compatibility.md).
+are in the [compatibility and known limitations](compatibility.md).
