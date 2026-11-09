@@ -127,7 +127,7 @@ These local checks require no database credentials and do not establish real-ser
 
 ## CI/CD and releases
 
-The [workflow](.github/workflows/ci.yml) builds and tests on Windows and Linux for pull requests targeting `main`/`master`, pushes to those branches, and tag pushes.
+The [workflow](.github/workflows/ci-cd.yml) builds and tests on Windows and Linux for pull requests targeting `main`/`master`, pushes to those branches, and tag pushes.
 
 | Event | Build and test | Pack and verify NuGet consumers | Publish to NuGet and GitHub Releases |
 | --- | --- | --- | --- |
@@ -138,7 +138,9 @@ The [workflow](.github/workflows/ci.yml) builds and tests on Windows and Linux f
 
 Packages are built from the two projects under `src/`, verified on Windows, and retained as the `nuget-packages` workflow artifact. Tag publication downloads these same packages without rebuilding them. Real database credentials are not required by this workflow.
 
-To release, update the shared `Version` in `Directory.Build.props`, commit it, and push a matching tag such as `v0.1.0` (or `0.1.0`). A mismatched tag fails before building or publishing. Prerelease versions such as `v0.2.0-rc.1` create a GitHub prerelease. Configure the repository Actions secret `NUGET_API_KEY` with permission to publish both package IDs; the workflow uses `GITHUB_TOKEN` with `contents: write` to create the GitHub Release.
+To release, update the shared `Version` in `Directory.Build.props`, commit it, and push a matching tag such as `v0.1.0` (or `0.1.0`). A mismatched tag fails before building or publishing. Prerelease versions such as `v0.2.0-rc.1` create a GitHub prerelease.
+
+Publication uses [nuget.org trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing), so no long-lived API key is stored: the publish job exchanges the workflow's GitHub OIDC token for a one-hour nuget.org API key immediately before pushing. Before the first tag release, sign in to nuget.org as the `virtual` profile that owns both package IDs and add a trusted publishing policy for repository owner `cocosip`, repository `obconnector-dotnet`, workflow file `ci-cd.yml`, and an empty environment. The workflow uses `GITHUB_TOKEN` with `contents: write` to create the GitHub Release.
 
 Each release records the non-merge commits since the previous reachable version tag, a comparison link, and install commands for both packages. The first release includes the initial commit history. These notes and the verified `.nupkg` files are attached to the GitHub Release; each NuGet package's release notes link to it. Notes are generated from Git history, so use descriptive commit subjects. This does not replace the outstanding publication review in the [verification status](docs/obconnector-dotnet-progress.md).
 
