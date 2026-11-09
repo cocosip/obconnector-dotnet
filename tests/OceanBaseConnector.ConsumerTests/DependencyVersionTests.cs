@@ -10,13 +10,13 @@ namespace OceanBaseConnector.ConsumerTests
     public sealed class DependencyVersionTests
     {
         [Theory]
-        [InlineData("OceanBaseConnector", "netstandard2.0", 8)]
-        [InlineData("OceanBaseConnector", "netstandard2.1", 8)]
+        [InlineData("OceanBaseConnector", "netstandard2.0", 10)]
+        [InlineData("OceanBaseConnector", "netstandard2.1", 10)]
         [InlineData("OceanBaseConnector", "net8.0", 8)]
         [InlineData("OceanBaseConnector", "net9.0", 9)]
         [InlineData("OceanBaseConnector", "net10.0", 10)]
-        [InlineData("OceanBaseConnector.DependencyInjection", "netstandard2.0", 8)]
-        [InlineData("OceanBaseConnector.DependencyInjection", "netstandard2.1", 8)]
+        [InlineData("OceanBaseConnector.DependencyInjection", "netstandard2.0", 10)]
+        [InlineData("OceanBaseConnector.DependencyInjection", "netstandard2.1", 10)]
         [InlineData("OceanBaseConnector.DependencyInjection", "net8.0", 8)]
         [InlineData("OceanBaseConnector.DependencyInjection", "net9.0", 9)]
         [InlineData("OceanBaseConnector.DependencyInjection", "net10.0", 10)]

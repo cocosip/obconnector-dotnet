@@ -123,7 +123,7 @@ namespace OceanBaseConnector.ConsumerTests
                 {
                     Assert.Equal(new[] { "oceanbase.open", "oceanbase.execute" }, spans.Select(x => x.OperationName)); Assert.Equal(2, counts.Count);
                     Assert.All(counts, tags => { Assert.Equal(4, tags.Length); Assert.Contains(tags, tag => tag.Key == "oceanbase.compatibility_mode" && Equals(tag.Value, "oracle")); Assert.DoesNotContain("secret", string.Join(";", tags)); });
-                    Assert.All(spans, span => { Assert.Equal(ActivityStatusCode.Ok, span.Status); Assert.Equal("0.1.0.0", span.Source.Version); });
+                    Assert.All(spans, span => { Assert.Equal(ActivityStatusCode.Ok, span.Status); Assert.Equal(assembly.GetName().Version!.ToString(), span.Source.Version); });
                     var execute = Assert.Single(spans, x => x.OperationName == "oceanbase.execute");
                     Assert.Equal(profile ? true : null, execute.GetTagItem("oceanbase.slow"));
                     Assert.Equal(profile ? 1 : 0, slow.Count);
@@ -143,7 +143,7 @@ namespace OceanBaseConnector.ConsumerTests
                         Assert.Contains(sample.Tags, tag => tag.Key == "oceanbase.outcome" && Equals(tag.Value, "success"));
                     });
                     var reference = Assert.Single(assembly.GetReferencedAssemblies(), x => x.Name == "System.Diagnostics.DiagnosticSource");
-                    Assert.Equal(target.StartsWith("netstandard", StringComparison.Ordinal) || target == "net8.0" ? 8 : target == "net9.0" ? 9 : 10, reference.Version!.Major);
+                    Assert.Equal(target.StartsWith("netstandard", StringComparison.Ordinal) ? 10 : target == "net8.0" ? 8 : target == "net9.0" ? 9 : 10, reference.Version!.Major);
                 }
                 connection.Close(); await serving.WaitAsync(budget.Token);
             }

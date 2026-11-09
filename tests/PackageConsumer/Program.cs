@@ -21,11 +21,11 @@ public static class PackageConsumer
     {
 #if NETSTANDARD2_0
         const string target = ".NETStandard,Version=v2.0";
-        const int major = 8;
+        const int major = 10;
         const bool modern = false;
 #elif NETSTANDARD2_1
         const string target = ".NETStandard,Version=v2.1";
-        const int major = 8;
+        const int major = 10;
         const bool modern = false;
 #else
 #if NET8_0

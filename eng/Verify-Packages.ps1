@@ -111,7 +111,8 @@ foreach ($id in $packages) {
             Assert-Package ($group.Count -eq 1) "$id is missing dependency group $target."
             $dependencies = @($group[0].dependency)
             Assert-Package (@($dependencies | Where-Object { $_.id -eq 'Microsoft.NET.Test.Sdk' -or $_.id -like 'xunit*' }).Count -eq 0) "$id/$target must not publish test-tool dependencies."
-            $major = if ($target -like 'netstandard*') { 8 } else { [int]$target.Substring(3).Split('.')[0] }
+            # netstandard assets floor on the same extensions line as net10.0.
+            $major = if ($target -like 'netstandard*') { 10 } else { [int]$target.Substring(3).Split('.')[0] }
             $extensions = @($dependencies | Where-Object id -Like 'Microsoft.Extensions.*')
             Assert-Package ($extensions.Count -gt 0) "$id/$target is missing Microsoft.Extensions dependencies."
             foreach ($dependency in $extensions) {
@@ -134,7 +135,7 @@ foreach ($id in $packages) {
                 }
                 $diagnostics = @($dependencies | Where-Object id -eq 'System.Diagnostics.DiagnosticSource')
                 if ($target -like 'netstandard*') {
-                    Assert-Package ($diagnostics.Count -eq 1 -and (Test-MinimumVersion $diagnostics[0].version '8.0.0')) "$target must allow DiagnosticSource 8.0.0 or newer without an upper bound."
+                    Assert-Package ($diagnostics.Count -eq 1 -and (Test-MinimumVersion $diagnostics[0].version $minimum)) "$target must allow DiagnosticSource $minimum or newer without an upper bound."
                 } else {
                     Assert-Package ($diagnostics.Count -eq 0) "$target must use runtime DiagnosticSource."
                 }
@@ -186,7 +187,7 @@ Write-ConsumerFile 'Directory.Packages.props' @"
   <ItemGroup>
     <PackageVersion Include="OceanBaseConnector" Version="[$version]" />
     <PackageVersion Include="OceanBaseConnector.DependencyInjection" Version="[$version]" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="[8.0.0,)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="[10.0.0,)" />
   </ItemGroup>
 </Project>
 "@
@@ -227,7 +228,7 @@ foreach ($target in $targets) {
         $selected = @($graph.$key.compile.PSObject.Properties.Name)
         Assert-Package ($selected.Count -eq 1 -and $selected[0] -eq "lib/$target/$id.dll") "$target selected an incorrect $id asset."
     }
-    $major = if ($target -like 'netstandard*') { 8 } else { [int]$target.Substring(3).Split('.')[0] }
+    $major = if ($target -like 'netstandard*') { 10 } else { [int]$target.Substring(3).Split('.')[0] }
     foreach ($dependency in $graph.PSObject.Properties.Name | Where-Object { $_ -like 'Microsoft.Extensions.*' }) {
         Assert-Package ($dependency.Split('/')[1].StartsWith("$major.")) "$target resolved an incompatible $dependency."
     }
@@ -306,7 +307,7 @@ internal static class Program
         Assert-Package ($selected.Count -eq 1 -and $selected[0] -eq "lib/netstandard2.0/$id.dll") "Framework host must select the $id netstandard2.0 asset."
     }
     foreach ($dependency in $frameworkGraph.PSObject.Properties.Name | Where-Object { $_ -like 'Microsoft.Extensions.*' }) {
-        Assert-Package ($dependency.Split('/')[1].StartsWith('8.')) "Framework host resolved an incompatible $dependency."
+        Assert-Package ($dependency.Split('/')[1].StartsWith('10.')) "Framework host resolved an incompatible $dependency."
     }
     Invoke-Dotnet @('build', $frameworkProject, '-c', 'Release', '--no-restore', '-m:1')
     & (Join-Path $frameworkDirectory 'bin/Release/net48/FrameworkHost.exe')
