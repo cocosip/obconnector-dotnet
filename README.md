@@ -127,18 +127,20 @@ These local checks require no database credentials and do not establish real-ser
 
 ## CI/CD and releases
 
-The [workflow](.github/workflows/ci-cd.yml) builds and tests on Windows and Linux for pull requests targeting `main`/`master`, pushes to those branches, and tag pushes.
+This repository and [Locus](https://github.com/cocosip/Locus) share the same CI/CD conventions: pushes to the default branch and pull requests compile and test, and only a version tag publishes. Other branches (including `dev`) trigger nothing.
+
+The [workflow](.github/workflows/ci-cd.yml) builds and tests on Windows and Linux for pull requests targeting `master`, pushes to `master`, and version tag pushes (`v0.2.0` or `0.2.0`).
 
 | Event | Build and test | Pack and verify NuGet consumers | Publish to NuGet and GitHub Releases |
 | --- | --- | --- | --- |
-| Pull request to `main`/`master` | Yes | No | No |
-| Push to `main`/`master` | Yes | Yes | No |
+| Pull request to `master` | Yes | No | No |
+| Push to `master` | Yes | Yes | No |
 | Version tag push | Yes | Yes | Yes, after both operating systems pass |
 | Other branch push | No | No | No |
 
-Packages are built from the two projects under `src/`, verified on Windows, and retained as the `nuget-packages` workflow artifact. Tag publication downloads these same packages without rebuilding them. Real database credentials are not required by this workflow.
+Each run compiles once: tests reuse that build output and packing runs with `--no-build --no-restore`. Packages are built from the two projects under `src/`, verified on Windows, and retained as the `nuget-packages` workflow artifact. Tag publication downloads these same packages without checking out source, restoring, or rebuilding. Real database credentials are not required by this workflow.
 
-To release, update the shared `Version` in `Directory.Build.props`, commit it, and push a matching tag such as `v0.1.0` (or `0.1.0`). A mismatched tag fails before building or publishing. Prerelease versions such as `v0.2.0-rc.1` create a GitHub prerelease.
+To release, update the shared `Version` in `Directory.Build.props`, commit it, and push a matching tag such as `v0.1.0` (or `0.1.0`). A tag that mismatches `Version` or does not point to HEAD fails before building or publishing. Prerelease versions such as `v0.2.0-rc.1` create a GitHub prerelease.
 
 Publication uses [nuget.org trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing), so no long-lived API key is stored: the publish job exchanges the workflow's GitHub OIDC token for a one-hour nuget.org API key immediately before pushing. Before the first tag release, sign in to nuget.org as the `virtual` profile that owns both package IDs and add a trusted publishing policy for repository owner `cocosip`, repository `obconnector-dotnet`, workflow file `ci-cd.yml`, and an empty environment. The workflow uses `GITHUB_TOKEN` with `contents: write` to create the GitHub Release.
 

@@ -1,14 +1,30 @@
-name: ci-cd
+name: CI/CD Pipeline
 
+# 与 Locus 共享同一套 CI/CD 约定：
+#   push 默认分支(master) / PR -> master : 编译 + 测试
+#   push 版本 tag（v0.2.0 或 0.2.0）    : 编译 + 测试 + 打包 + 发布 NuGet
+# 其他分支不触发任何任务。
+#
+# 版本号唯一来源是 Directory.Build.props 的 <Version>；eng/New-ReleaseNotes.ps1
+# 在编译前校验 tag 与版本一致且指向 HEAD，因此包版本与 tag 不会漂移。
 on:
   push:
-    branches: [master, main]
-    tags: ['*']
+    branches:
+      - master
+    tags:
+      - 'v*.*.*'
+      - '*.*.*'
   pull_request:
-    branches: [master, main]
+    branches:
+      - master
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  CI: true
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
 
 jobs:
   build-and-test:
@@ -17,10 +33,14 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
     env:
-      CI: true
+      # 默认分支或版本 tag 的 push 才产出可发布包；PR 与手动运行只编译、测试。
+      PACKAGE_BUILD: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -28,15 +48,26 @@ jobs:
         shell: pwsh
         run: ./eng/Test-ReleaseNotes.ps1
 
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$properties = Get-Content -LiteralPath Directory.Build.props -Raw
+          $version = [string]$properties.Project.PropertyGroup.Version
+          if ([string]::IsNullOrWhiteSpace($version)) { throw 'Directory.Build.props does not define <Version>.' }
+          if ($env:GITHUB_REF.StartsWith('refs/tags/')) { 'release=true' >> $env:GITHUB_OUTPUT } else { 'release=false' >> $env:GITHUB_OUTPUT }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+
       - name: Validate release tag and generate version update notes
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: ./eng/New-ReleaseNotes.ps1 -Tag $env:RELEASE_TAG
 
       - name: Setup .NET 11 SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 11.0.x
           dotnet-quality: preview
@@ -50,25 +81,33 @@ jobs:
 
       - name: Setup package-consumer runtimes (Windows)
         if: runner.os == 'Windows'
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             8.0.x
             9.0.x
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
       - name: Restore
         run: dotnet restore OceanBaseConnector.slnx
 
-      # Only the Windows push that packs a release needs every product asset.
+      # Only the Windows package-build leg needs every product asset.
       # Other legs compile the runtime used by the unit/DI gates; the forced
       # netstandard2.0 consumer reference still builds the baseline asset, and
       # the unit suite's isolated netstandard2.1 checks need their asset too.
       - name: Build all package assets
-        if: runner.os == 'Windows' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        if: env.PACKAGE_BUILD == 'true' && runner.os == 'Windows'
         run: dotnet build OceanBaseConnector.slnx -c Release --no-restore
 
       - name: Build CI targets
-        if: runner.os != 'Windows' || github.event_name != 'push' || (github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/'))
+        if: ${{ !(env.PACKAGE_BUILD == 'true' && runner.os == 'Windows') }}
         run: dotnet build OceanBaseConnector.slnx -c Release --no-restore -p:TargetFramework=net10.0
 
       - name: Build netstandard2.1 unit test asset
@@ -80,24 +119,39 @@ jobs:
         run: >-
           dotnet test tests/OceanBaseConnector.UnitTests/OceanBaseConnector.UnitTests.csproj
           -c Release --no-restore --no-build
+          --logger "trx;LogFileName=unit-tests.trx"
+          --results-directory TestResults/logs
 
       # ConsumerTests contains TCP/protocol compatibility acceptance, without TLS.
-      # It runs once on
-      # the Windows tag leg after the representative target matrix is reduced
-      # to netstandard2.0, netstandard2.1 and net10.0.
+      # It runs once on the Windows tag leg after the representative target matrix
+      # is reduced to netstandard2.0, netstandard2.1 and net10.0.
       - name: Consumer acceptance tests (tag only)
-        if: runner.os == 'Windows' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/')
         run: >-
           dotnet test tests/OceanBaseConnector.ConsumerTests/OceanBaseConnector.ConsumerTests.csproj
           -c Release --no-restore --no-build
+          --logger "trx;LogFileName=consumer-tests.trx"
+          --results-directory TestResults/logs
 
       - name: Dependency injection tests (.NET 10)
         run: >-
           dotnet test tests/OceanBaseConnector.DependencyInjection.Tests/OceanBaseConnector.DependencyInjection.Tests.csproj
           -c Release --no-restore --no-build
+          --logger "trx;LogFileName=di-tests.trx"
+          --results-directory TestResults/logs
 
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.os }}
+          path: TestResults/logs/**/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # 复用上一步的 Release 输出打包（--no-build --no-restore），不再重新编译。
       - name: Pack main/master or tag
-        if: runner.os == 'Windows' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        if: env.PACKAGE_BUILD == 'true' && runner.os == 'Windows'
         shell: pwsh
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -112,34 +166,36 @@ jobs:
           }
 
       - name: Verify actual package consumers (Windows)
-        if: runner.os == 'Windows' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        if: env.PACKAGE_BUILD == 'true' && runner.os == 'Windows'
         shell: pwsh
         run: ./eng/Verify-Packages.ps1 -PackageDirectory TestResults/packages
 
       - name: Upload verified packages and release notes
-        if: runner.os == 'Windows' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
-        uses: actions/upload-artifact@v4
+        if: env.PACKAGE_BUILD == 'true' && runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-packages
           path: TestResults/packages/
           if-no-files-found: error
+          retention-days: 30
 
+  # 发布只消费构建产物：不 checkout 源码、不 restore、不编译。
   publish:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     needs: build-and-test
+    if: needs.build-and-test.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write # required by NuGet trusted publishing (GitHub OIDC token)
     steps:
       - name: Setup .NET 11 SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 11.0.x
           dotnet-quality: preview
 
       - name: Download verified packages and release notes
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: nuget-packages
           path: TestResults/packages
@@ -157,12 +213,11 @@ jobs:
         shell: bash
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build-and-test.outputs.version }}
         run: |
-          version="${RELEASE_TAG#v}"
           packages=(
-            "TestResults/packages/OceanBaseConnector.$version.nupkg"
-            "TestResults/packages/OceanBaseConnector.DependencyInjection.$version.nupkg"
+            "TestResults/packages/OceanBaseConnector.$VERSION.nupkg"
+            "TestResults/packages/OceanBaseConnector.DependencyInjection.$VERSION.nupkg"
           )
           test -s TestResults/packages/RELEASE_NOTES.md
           for package in "${packages[@]}"; do
@@ -180,14 +235,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build-and-test.outputs.version }}
         run: |
-          version="${RELEASE_TAG#v}"
           flags=()
-          if [[ "$version" == *-* ]]; then
+          if [[ "$VERSION" == *-* ]]; then
             flags+=(--prerelease --latest=false)
           fi
-          gh release create "$RELEASE_TAG" --verify-tag \
-            --title "OceanBaseConnector $version" \
+          gh release create "$GITHUB_REF_NAME" --verify-tag \
+            --title "OceanBaseConnector $VERSION" \
             --notes-file TestResults/packages/RELEASE_NOTES.md \
             "${flags[@]}" TestResults/packages/*.nupkg TestResults/packages/RELEASE_NOTES.md
