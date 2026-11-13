@@ -33,8 +33,8 @@ Types describes server named object/collection types; DataTypes separately descr
 
 ## Column metadata and completeness
 
-`Columns` now has 23 fields. The first twelve retain their names, ordinals,
-CLR types and meanings: TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME,
+Starting with OceanBaseConnector 0.3.0, `Columns` has 23 fields. The first twelve
+retain their names, ordinals, CLR types and meanings: TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME,
 ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE,
 CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION.
 ORDINAL_POSITION and the three precision/scale fields are System.Int32;
