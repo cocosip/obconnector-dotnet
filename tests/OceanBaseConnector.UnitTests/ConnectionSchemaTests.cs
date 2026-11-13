@@ -16,14 +16,16 @@ namespace OceanBaseConnector.UnitTests
     public sealed partial class TextCommandTests
     {
         private static readonly string[] TableDirectoryNames = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "TABLE_TYPE" };
-        private static readonly string[] ColumnDirectoryNames = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "COLUMN_NAME", "ORDINAL_POSITION", "COLUMN_DEFAULT", "IS_NULLABLE", "DATA_TYPE", "CHARACTER_MAXIMUM_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION" };
+        private static readonly string[] ColumnDirectoryNames = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "COLUMN_NAME", "ORDINAL_POSITION", "COLUMN_DEFAULT", "IS_NULLABLE", "DATA_TYPE", "CHARACTER_MAXIMUM_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION", "TYPE_DECLARATION", "IS_IDENTITY", "IS_COMPUTED", "COMPUTED_EXPRESSION", "IS_STORED", "HAS_DEFAULT", "DEFAULT_VALUE_SQL", "HAS_ON_UPDATE", "ON_UPDATE_SQL", "COLLATION_NAME", "COLUMN_COMMENT" };
+        private static readonly string[] ColumnSourceNames = ColumnDirectoryNames.Take(12).Concat(new[] { "RAW_TYPE_DECLARATION", "RAW_DATA_LENGTH", "RAW_CHAR_USED", "RAW_GENERATION_FLAGS", "RAW_GENERATION_EXPRESSION", "RAW_IDENTITY", "COLLATION_NAME", "COLUMN_COMMENT" }).ToArray();
 
-        private static byte[][] DirectoryPackets(bool columns, bool mysql, bool binary = false, string ordinal = "1", bool nativeNumbers = false)
+        private static byte[][] DirectoryPackets(bool columns, bool mysql, bool binary = false, string ordinal = "1", bool nativeNumbers = false, string?[]? sourceValues = null)
         {
-            var names = columns ? ColumnDirectoryNames : TableDirectoryNames;
+            var names = columns ? ColumnSourceNames : TableDirectoryNames;
             string?[] values = columns
                 ? new[] { mysql ? "Db目标" : null, mysql ? null : "Owner目标", "Mixed_Table", "Mixed_Column", ordinal, "'Mixed'", "YES", "VARCHAR", "4294967295", null, "-2", null }
                 : new[] { mysql ? "Db目标" : null, mysql ? null : "Owner目标", "Mixed_Table", "TABLE" };
+            if (columns) values = sourceValues ?? values.Concat(new string?[8]).ToArray();
             using var row = new MemoryStream();
             if (binary)
             {
@@ -36,7 +38,7 @@ namespace OceanBaseConnector.UnitTests
                 if (value == null) { if (!binary) row.WriteByte(251); continue; }
                 var bytes = Encoding.UTF8.GetBytes(value); row.WriteByte((byte)bytes.Length); row.Write(bytes);
             }
-            return new[] { new[] { (byte)names.Length } }.Concat(names.Select((x, i) => Column(x, nativeNumbers && (i == 4 || i == 8 || i == 10) ? (byte)246 : (byte)253)))
+            return new[] { new[] { (byte)names.Length } }.Concat(names.Select((x, i) => Column(x, nativeNumbers && (i == 4 || i == 8 || i == 10 || i == 13) ? (byte)246 : (byte)253)))
                 .Concat(new[] { Eof(), row.ToArray(), Eof() }).ToArray();
         }
 
@@ -187,22 +189,24 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public async Task ConnectionSchemaBindsCurrentLocalTransactionWithoutCompletingIt(bool asynchronous)
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public async Task ConnectionSchemaBindsCurrentLocalTransactionWithoutCompletingIt(bool asynchronous, bool columns)
         {
             var server = Server(async channel =>
             {
                 await TransactionBegin(channel);
                 await StatementCommand(channel, 3);
-                foreach (var packet in DirectoryPackets(false, false)) await channel.WritePacketAsync(packet);
+                foreach (var packet in DirectoryPackets(columns, false)) await channel.WritePacketAsync(packet);
                 channel.BeginCommand(); await TransactionEnd(channel, false);
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port));
             try
             {
                 await connection.OpenAsync(); using var transaction = await connection.BeginTransactionAsync();
-                var table = asynchronous ? await connection.GetSchemaAsync("Tables") : connection.GetSchema("Tables");
+                var table = asynchronous ? await connection.GetSchemaAsync(columns ? "Columns" : "Tables") : connection.GetSchema(columns ? "Columns" : "Tables");
                 Assert.Single(table.Rows.Cast<DataRow>()); Assert.Same(connection, transaction.Connection);
                 using var unbound = connection.CreateCommand(); unbound.CommandText = "not bound"; Assert.Throws<InvalidOperationException>(() => unbound.ExecuteNonQuery());
                 await transaction.RollbackAsync(); Assert.Equal(ConnectionState.Open, connection.State);
@@ -236,10 +240,13 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("token")]
-        [InlineData("timeout")]
-        [InlineData("close")]
-        public async Task ConnectionSchemaAsyncWaitUsesCommandLifetimeAndDoesNotBlock(string origin)
+        [InlineData("token", "Tables")]
+        [InlineData("timeout", "Tables")]
+        [InlineData("close", "Tables")]
+        [InlineData("token", "Columns")]
+        [InlineData("timeout", "Columns")]
+        [InlineData("close", "Columns")]
+        public async Task ConnectionSchemaAsyncWaitUsesCommandLifetimeAndDoesNotBlock(string origin, string collection)
         {
             var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var server = Server(async channel => { await StatementCommand(channel, 3); received.TrySetResult(); Assert.Equal(0, await channelStreamRead(channel)); });
@@ -248,7 +255,7 @@ namespace OceanBaseConnector.UnitTests
             try
             {
                 await connection.OpenAsync();
-                var pending = connection.GetSchemaAsync("Tables", cancellation.Token);
+                var pending = connection.GetSchemaAsync(collection, cancellation.Token);
                 await received.Task.WaitAsync(TimeSpan.FromSeconds(5)); Assert.False(pending.IsCompleted);
                 if (origin == "token") cancellation.Cancel(); else if (origin == "close") connection.Close();
                 var error = await Assert.ThrowsAsync<OceanBaseException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));

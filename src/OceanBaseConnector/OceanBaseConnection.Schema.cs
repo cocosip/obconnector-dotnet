@@ -24,7 +24,8 @@ namespace OceanBaseConnector
         };
         private static readonly int[] SchemaIdentifierParts = { 0, 0, 3, 4, 4, 5, 3, 4, 5, 4, 4, 5, 4, 5, 3, 3, 2, 3, 0, 0 };
         private static readonly string[] SchemaTableColumns = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "TABLE_TYPE" };
-        private static readonly string[] SchemaColumnColumns = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "COLUMN_NAME", "ORDINAL_POSITION", "COLUMN_DEFAULT", "IS_NULLABLE", "DATA_TYPE", "CHARACTER_MAXIMUM_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION" };
+        private static readonly string[] SchemaColumnColumns = { "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "COLUMN_NAME", "ORDINAL_POSITION", "COLUMN_DEFAULT", "IS_NULLABLE", "DATA_TYPE", "CHARACTER_MAXIMUM_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION", "TYPE_DECLARATION", "IS_IDENTITY", "IS_COMPUTED", "COMPUTED_EXPRESSION", "IS_STORED", "HAS_DEFAULT", "DEFAULT_VALUE_SQL", "HAS_ON_UPDATE", "ON_UPDATE_SQL", "COLLATION_NAME", "COLUMN_COMMENT" };
+        private static readonly string[] SchemaColumnSourceColumns = { "RAW_TYPE_DECLARATION", "RAW_DATA_LENGTH", "RAW_CHAR_USED", "RAW_GENERATION_FLAGS", "RAW_GENERATION_EXPRESSION", "RAW_IDENTITY", "COLLATION_NAME", "COLUMN_COMMENT" };
 
         public override DataTable GetSchema() => GetSchema("MetaDataCollections");
         public override DataTable GetSchema(string collectionName) => GetSchema(collectionName, null);
@@ -35,9 +36,9 @@ namespace OceanBaseConnector
             {
                 using var command = operation.Command;
                 if (command == null) return operation.Table;
-                using var reader = command.ExecuteReader();
+                using var reader = ExecuteSchemaReader(command, operation.Table.TableName == "Columns", CompatibilityMode == OceanBaseCompatibilityMode.MySql);
                 ValidateSchemaResult(operation.Table, reader);
-                while (reader.Read()) AddSchemaRow(operation.Table, reader);
+                while (reader.Read()) AddSchemaRow(operation.Table, reader, CompatibilityMode == OceanBaseCompatibilityMode.MySql);
                 if (reader.NextResult()) throw new NotSupportedException("A directory query returned multiple results.");
                 return operation.Table;
             }
@@ -54,9 +55,9 @@ namespace OceanBaseConnector
             {
                 await using var command = operation.Command;
                 if (command == null) return operation.Table;
-                await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                await using var reader = await ExecuteSchemaReaderAsync(command, operation.Table.TableName == "Columns", CompatibilityMode == OceanBaseCompatibilityMode.MySql, cancellationToken).ConfigureAwait(false);
                 ValidateSchemaResult(operation.Table, reader);
-                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) AddSchemaRow(operation.Table, reader);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) AddSchemaRow(operation.Table, reader, CompatibilityMode == OceanBaseCompatibilityMode.MySql);
                 if (await reader.NextResultAsync(cancellationToken).ConfigureAwait(false)) throw new NotSupportedException("A directory query returned multiple results.");
                 return operation.Table;
             }
@@ -139,11 +140,12 @@ namespace OceanBaseConnector
             var table = new DataTable(columns ? "Columns" : "Tables") { Locale = CultureInfo.InvariantCulture };
             var names = columns ? SchemaColumnColumns : SchemaTableColumns;
             for (var i = 0; i < names.Length; i++)
-                table.Columns.Add(names[i], columns && (i == 4 || i >= 9) ? typeof(int) : columns && i == 8 ? typeof(long) : typeof(string));
+                table.Columns.Add(names[i], columns && (i == 4 || i >= 9 && i < 12) ? typeof(int) : columns && i == 8 ? typeof(long)
+                    : columns && (i == 13 || i == 14 || i == 16 || i == 17 || i == 19) ? typeof(bool) : typeof(string));
             return table;
         }
 
-        private static string DirectorySql(bool columns, bool mysql, string?[] restrictions, OceanBaseCommand command)
+        private static string DirectorySql(bool columns, bool mysql, string?[] restrictions, OceanBaseCommand command, bool basicColumnMetadata = false)
         {
             var sql = new StringBuilder();
             string?[] filters;
@@ -151,7 +153,12 @@ namespace OceanBaseConnector
             {
                 sql.Append("SELECT TABLE_SCHEMA AS TABLE_CATALOG, NULL AS TABLE_SCHEMA, TABLE_NAME, ");
                 if (columns)
-                    sql.Append("COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION FROM INFORMATION_SCHEMA.COLUMNS WHERE 1=1");
+                {
+                    sql.Append("COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION");
+                    if (basicColumnMetadata) AppendUnknownColumnMetadata(sql);
+                    else sql.Append(", COLUMN_TYPE AS RAW_TYPE_DECLARATION, NULL AS RAW_DATA_LENGTH, NULL AS RAW_CHAR_USED, EXTRA AS RAW_GENERATION_FLAGS, GENERATION_EXPRESSION AS RAW_GENERATION_EXPRESSION, NULL AS RAW_IDENTITY, COLLATION_NAME, COLUMN_COMMENT");
+                    sql.Append(" FROM INFORMATION_SCHEMA.COLUMNS WHERE 1=1");
+                }
                 else
                     sql.Append("CASE WHEN TABLE_TYPE = 'BASE TABLE' THEN 'TABLE' ELSE TABLE_TYPE END AS TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE IN ('BASE TABLE', 'VIEW')");
                 filters = new[] { "TABLE_SCHEMA", null, "TABLE_NAME", columns ? "COLUMN_NAME" : "CASE WHEN TABLE_TYPE = 'BASE TABLE' THEN 'TABLE' ELSE TABLE_TYPE END" };
@@ -160,7 +167,12 @@ namespace OceanBaseConnector
             {
                 sql.Append("SELECT NULL AS TABLE_CATALOG, OWNER AS TABLE_SCHEMA, ");
                 if (columns)
-                    sql.Append("TABLE_NAME, COLUMN_NAME, COLUMN_ID AS ORDINAL_POSITION, DATA_DEFAULT AS COLUMN_DEFAULT, CASE WHEN NULLABLE = 'Y' THEN 'YES' WHEN NULLABLE = 'N' THEN 'NO' ELSE NULL END AS IS_NULLABLE, DATA_TYPE, CASE WHEN DATA_TYPE IN ('CHAR', 'VARCHAR', 'VARCHAR2', 'NCHAR', 'NVARCHAR2') THEN CHAR_LENGTH ELSE NULL END AS CHARACTER_MAXIMUM_LENGTH, DATA_PRECISION AS NUMERIC_PRECISION, CASE WHEN DATA_TYPE IN ('NUMBER', 'FLOAT') THEN DATA_SCALE ELSE NULL END AS NUMERIC_SCALE, CASE WHEN DATA_TYPE LIKE 'TIMESTAMP%' THEN DATA_SCALE ELSE NULL END AS DATETIME_PRECISION FROM ALL_TAB_COLUMNS WHERE OWNER <> '__recyclebin'");
+                {
+                    sql.Append("TABLE_NAME, COLUMN_NAME, COLUMN_ID AS ORDINAL_POSITION, DATA_DEFAULT AS COLUMN_DEFAULT, CASE WHEN NULLABLE = 'Y' THEN 'YES' WHEN NULLABLE = 'N' THEN 'NO' ELSE NULL END AS IS_NULLABLE, DATA_TYPE, CASE WHEN DATA_TYPE IN ('CHAR', 'VARCHAR', 'VARCHAR2', 'NCHAR', 'NVARCHAR2') THEN CHAR_LENGTH ELSE NULL END AS CHARACTER_MAXIMUM_LENGTH, DATA_PRECISION AS NUMERIC_PRECISION, CASE WHEN DATA_TYPE IN ('NUMBER', 'FLOAT') THEN DATA_SCALE ELSE NULL END AS NUMERIC_SCALE, CASE WHEN DATA_TYPE LIKE 'TIMESTAMP%' THEN DATA_SCALE ELSE NULL END AS DATETIME_PRECISION");
+                    if (basicColumnMetadata) { AppendUnknownColumnMetadata(sql); sql.Append(" FROM ALL_TAB_COLUMNS"); }
+                    else sql.Append(", NULL AS RAW_TYPE_DECLARATION, DATA_LENGTH AS RAW_DATA_LENGTH, CHAR_USED AS RAW_CHAR_USED, VIRTUAL_COLUMN AS RAW_GENERATION_FLAGS, NULL AS RAW_GENERATION_EXPRESSION, IDENTITY_COLUMN AS RAW_IDENTITY, COLLATION AS COLLATION_NAME, COLUMN_COMMENT FROM (SELECT c.*, v.VIRTUAL_COLUMN, m.COMMENTS AS COLUMN_COMMENT FROM ALL_TAB_COLUMNS c LEFT JOIN ALL_TAB_COLS v ON c.OWNER = v.OWNER AND c.TABLE_NAME = v.TABLE_NAME AND c.COLUMN_NAME = v.COLUMN_NAME LEFT JOIN ALL_COL_COMMENTS m ON c.OWNER = m.OWNER AND c.TABLE_NAME = m.TABLE_NAME AND c.COLUMN_NAME = m.COLUMN_NAME)");
+                    sql.Append(" WHERE OWNER <> '__recyclebin'");
+                }
                 else
                     sql.Append("OBJECT_NAME AS TABLE_NAME, OBJECT_TYPE AS TABLE_TYPE FROM ALL_OBJECTS WHERE OWNER <> '__recyclebin' AND OBJECT_TYPE IN ('TABLE', 'VIEW')");
                 filters = new[] { null, "OWNER", columns ? "TABLE_NAME" : "OBJECT_NAME", columns ? "COLUMN_NAME" : "OBJECT_TYPE" };
@@ -184,16 +196,19 @@ namespace OceanBaseConnector
 
         private static void ValidateSchemaResult(DataTable table, DbDataReader reader)
         {
-            if (reader.FieldCount != table.Columns.Count) throw new NotSupportedException("Unexpected directory result column count.");
+            var columns = table.TableName == "Columns";
+            if (reader.FieldCount != (columns ? 12 + SchemaColumnSourceColumns.Length : table.Columns.Count)) throw new NotSupportedException("Unexpected directory result column count.");
             for (var i = 0; i < reader.FieldCount; i++)
-                if (!string.Equals(reader.GetName(i), table.Columns[i].ColumnName, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(reader.GetName(i), columns && i >= 12 ? SchemaColumnSourceColumns[i - 12] : table.Columns[i].ColumnName, StringComparison.OrdinalIgnoreCase))
                     throw new NotSupportedException("Unexpected directory result column name.");
         }
 
-        private static void AddSchemaRow(DataTable table, DbDataReader reader)
+        private static void AddSchemaRow(DataTable table, DbDataReader reader, bool mysql = false)
         {
             var values = new object[table.Columns.Count];
-            for (var i = 0; i < values.Length; i++)
+            for (var i = 0; i < values.Length; i++) values[i] = DBNull.Value;
+            var columns = table.TableName == "Columns";
+            for (var i = 0; i < (columns ? 12 : values.Length); i++)
             {
                 var value = reader.GetValue(i);
                 if (value == DBNull.Value) { values[i] = value; continue; }
@@ -216,6 +231,7 @@ namespace OceanBaseConnector
                     values[i] = type == typeof(int) ? (object)checked((int)number) : checked((long)number);
                 }
             }
+            if (columns) CompleteColumnMetadata(values, reader, mysql);
             table.Rows.Add(values);
         }
     }

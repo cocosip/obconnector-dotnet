@@ -13,7 +13,7 @@ Oracle mode advertises 20 collections; MySQL mode advertises 18, excluding Types
 | DataTypes | None | Mode-aware CLR/provider mappings, precision/scale, creation templates and conditional codec support; no query |
 | Restrictions | None | Restriction descriptions; no query |
 | Tables | Catalog, Schema, Table, TableType | TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE; includes tables and views |
-| Columns | Catalog, Schema, Table, Column | Existing column type, ordinal, default, nullable and precision metadata |
+| Columns | Catalog, Schema, Table, Column | Column identity, original type/default/precision fields and additional declaration/generation metadata described below |
 | Procedures | Catalog, Schema, Routine, RoutineType, Package | Existing routine/package/overload/subprogram identity |
 | ProcedureParameters | Catalog, Schema, Routine, Parameter, Package | Existing top-level parameter direction, position, type identity and precision metadata |
 | Views | Catalog, Schema, View | Same four identity/type columns as Tables, with TABLE_TYPE=VIEW; does not retrieve view definition SQL |
@@ -30,6 +30,147 @@ Oracle mode advertises 20 collections; MySQL mode advertises 18, excluding Types
 | Synonyms | Catalog, Schema, Synonym | Oracle only: SYNONYM_CATALOG, SYNONYM_SCHEMA, SYNONYM_NAME, OBJECT_CATALOG, OBJECT_SCHEMA, OBJECT_NAME, DB_LINK |
 
 Types describes server named object/collection types; DataTypes separately describes built-in CLR/provider mappings and supported complex shapes. Use the separate command parameter-derivation API below to build command parameters from routine metadata.
+
+## Column metadata and completeness
+
+`Columns` now has 23 fields. The first twelve retain their names, ordinals,
+CLR types and meanings: TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME,
+ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE,
+CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION.
+ORDINAL_POSITION and the three precision/scale fields are System.Int32;
+CHARACTER_MAXIMUM_LENGTH is System.Int64; the other original fields are
+System.String. COLUMN_DEFAULT remains raw directory data, **not** a promise
+of DDL-ready SQL. Existing exact, parameterized restrictions are unchanged.
+
+The following fields are appended. All allow DBNull. Boolean fields use
+true/false/DBNull; there is no default false value.
+
+| Field | CLR type | Meaning |
+| --- | --- | --- |
+| TYPE_DECLARATION | System.String | Complete type declaration when public directory components suffice; otherwise DBNull. Does not include default/generation clauses, column collation or comments. |
+| IS_IDENTITY | System.Boolean | Established auto-increment/identity status, or DBNull when unknown. Does not describe identity mode or options. |
+| IS_COMPUTED | System.Boolean | Established generated-column status, or DBNull when unknown. |
+| COMPUTED_EXPRESSION | System.String | Generated expression without an AS clause, or DBNull for absent/unavailable information; inspect IS_COMPUTED. |
+| IS_STORED | System.Boolean | True for stored generation, false for virtual generation, DBNull for ordinary columns or unknown storage. |
+| HAS_DEFAULT | System.Boolean | Established presence/absence of a default clause, or DBNull when unknown. |
+| DEFAULT_VALUE_SQL | System.String | Reliable default SQL without DEFAULT, or DBNull for absent/unavailable SQL; inspect HAS_DEFAULT. |
+| HAS_ON_UPDATE | System.Boolean | Established presence/absence of ON UPDATE behavior, or DBNull when unknown. |
+| ON_UPDATE_SQL | System.String | Update expression without ON UPDATE, or DBNull for absent/unavailable SQL; inspect HAS_ON_UPDATE. |
+| COLLATION_NAME | System.String | Column collation when supplied by the directory; otherwise DBNull. |
+| COLUMN_COMMENT | System.String | Directory comment. A known empty string stays empty; SQL NULL/unavailable information stays DBNull. |
+
+The presence flag and its corresponding expression have four valid states:
+
+| Flag | SQL/expression | Interpretation |
+| --- | --- | --- |
+| false | DBNull | Confirmed absent |
+| true | Nonempty SQL text | Present; expression recovered |
+| true | DBNull | Present; expression unavailable/incomplete |
+| DBNull | DBNull | Presence unknown/incomplete |
+
+A consumer must not treat the last two states as absence. A quoted empty-string
+SQL literal is nonempty metadata text; an empty directory placeholder is not a
+recovered expression. When an authoritative expression establishes generation,
+IS_COMPUTED is true even if the storage flag is unavailable. Consumers must
+also check required storage/identity details separately.
+
+### Mode-specific sources and limits
+
+MySQL reads public INFORMATION_SCHEMA.COLUMNS. TYPE_DECLARATION preserves
+COLUMN_TYPE, including dimensions, unsigned/zerofill, fractional precision and
+enum/set members. Recognized EXTRA tokens establish auto increment, virtual or
+stored generation and ON UPDATE CURRENT_TIMESTAMP, including precision. The
+implementation handles combined tokens such as INVISIBLE; unrecognized tokens
+leave unestablished flags unknown. GENERATION_EXPRESSION supplies computed SQL.
+
+For an established ordinary MySQL column, a non-NULL COLUMN_DEFAULT establishes
+HAS_DEFAULT=true. DEFAULT_VALUE_SQL is currently reconstructed only for numeric
+literal text on numeric types and the catalog's CURRENT_TIMESTAMP marker on
+TIMESTAMP/DATETIME with known fractional precision. String, binary and other
+ambiguous defaults remain present but incomplete. The implementation does not
+depend on EXTRA containing DEFAULT_GENERATED and does not guess whether text
+such as uuid() is a string literal or an expression. A NULL COLUMN_DEFAULT does
+not distinguish no default from explicit DEFAULT NULL, so HAS_DEFAULT stays
+DBNull. A generated column has HAS_DEFAULT=false: its generated expression is
+not published as a default clause.
+
+Oracle keeps ALL_TAB_COLUMNS as the row source and joins public ALL_TAB_COLS
+and ALL_COL_COMMENTS by owner/table/column. It combines actual DATA_LENGTH,
+CHAR_LENGTH, CHAR_USED, DATA_PRECISION and DATA_SCALE for CHAR/VARCHAR/VARCHAR2
+BYTE/CHAR, national characters, RAW/UROWID, NUMBER and FLOAT declarations.
+NUMBER(*,s) and negative scales are retained. Already dimensioned TIMESTAMP
+zone/precision and INTERVAL strings are preserved; incomplete or unsupported
+declarations remain DBNull. Numeric precision is never reused as a RAW length.
+
+In the inspected OceanBase v4.4.2_CE dictionary, VIRTUAL_COLUMN='YES' establishes
+virtual generation and DATA_DEFAULT supplies its expression. **NO does not
+establish an ordinary column**: the view tests only the virtual-generation flag,
+not the stored-generation flag. Such columns retain IS_COMPUTED=DBNull and
+unknown default metadata, even when DATA_DEFAULT is non-NULL. IDENTITY_COLUMN
+is a constant NULL in that source baseline, so identity is unknown; a supplied
+YES/NO value is respected without copying Java's hard-coded NO. Oracle ON UPDATE
+status remains unknown. COLLATION is also constant NULL in this source baseline.
+Consequently, this release does not promise complete Oracle reverse engineering.
+
+If the extended query fails with a known unknown-column/invalid-identifier
+response (MySQL 1054 or Oracle 904), Columns makes one attempt with the original
+directory projection and NULL supplemental fields. Existing identifiers and
+filters, transaction/session ownership and command timeout are retained.
+The old twelve fields remain available; supplemental facts that can no longer
+be established stay DBNull. A failure of the original projection propagates.
+Permission/missing-object errors, connection failures, cancellation, malformed
+responses and other errors do not trigger this fallback. Error messages remain
+redacted under the existing exception contract.
+
+These are Connector API field conventions, not new OceanBase server fields.
+No EF dependency, server/Java/protocol change, internal __ALL_* access, per-table
+DDL query, SHOW CREATE/DBMS_METADATA parser or identity-option discovery is
+included. Appending fields preserves named access and original ordinals;
+consumers requiring exactly twelve fields must update their shape checks.
+
+### Public consumer example
+
+```csharp
+using System;
+using System.Data;
+using OceanBaseConnector;
+
+// connection is already open; owner is an exact directory identifier.
+string?[] restrictions = connection.CompatibilityMode == OceanBaseCompatibilityMode.MySql
+    ? new string?[] { owner, null, tableName, null }
+    : new string?[] { null, owner, tableName, null };
+using var columns = await connection.GetSchemaAsync("Columns", restrictions, cancellationToken);
+foreach (DataRow column in columns.Rows)
+{
+    var declaration = column.Field<string>("TYPE_DECLARATION")
+        ?? throw new NotSupportedException("Column type metadata is incomplete.");
+    foreach (var pair in new[] {
+        (Flag: "IS_COMPUTED", Sql: "COMPUTED_EXPRESSION"),
+        (Flag: "HAS_DEFAULT", Sql: "DEFAULT_VALUE_SQL"),
+        (Flag: "HAS_ON_UPDATE", Sql: "ON_UPDATE_SQL") })
+    {
+        bool? present = column.Field<bool?>(pair.Flag);
+        if (present == null || present == true && column.IsNull(pair.Sql))
+            throw new NotSupportedException("Column behavior metadata is incomplete.");
+    }
+    if (column.IsNull("IS_IDENTITY") ||
+        column.Field<bool?>("IS_COMPUTED") == true && column.IsNull("IS_STORED"))
+        throw new NotSupportedException("Column generation metadata is incomplete.");
+    // Map declaration and established behavior, or explicitly reject unsupported SQL/options.
+}
+```
+
+The same result contract applies to synchronous GetSchema. This example rejects
+unknown metadata intentionally; it does not imply that every complete behavior
+is supported by a particular EF provider. Identity options require a separate
+policy because this API does not recover them.
+
+The [investigation](column-metadata-investigation.md) pins Java/server source
+evidence. Loopback/consumer tests are local evidence. The opt-in integration
+test ExtendedColumnMetadataPreservesDeclarationsAndGeneration creates only its
+registered temporary table and uses existing cleanup. No new server version is
+accepted by these source changes; the current safe-profile connection attempts
+failed before directory SQL with a protocol error.
 
 ## Parameter derivation
 

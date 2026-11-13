@@ -127,6 +127,7 @@ namespace OceanBaseConnector.UnitTests
                 var transport = new ProtocolFaultStream(Array.Empty<byte>()); InstallFaultStream(connection, transport);
                 using var canceled = new CancellationTokenSource(); canceled.Cancel();
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection.GetSchemaAsync("Tables", canceled.Token));
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection.GetSchemaAsync("Columns", canceled.Token));
                 Assert.Empty(transport.Written); Assert.Equal(ConnectionState.Open, connection.State);
             }
             finally { connection.Close(); server.Stop(); }

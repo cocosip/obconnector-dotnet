@@ -12,6 +12,63 @@ namespace OceanBaseConnector.IntegrationTests.Schema;
 public sealed class SchemaTests
 {
     [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.WithCreateObjects), MemberType = typeof(ProfileTheoryData))]
+    public async Task ExtendedColumnMetadataPreservesDeclarationsAndGeneration(string profileName)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var name = await db.TableAsync(connection, db.Oracle
+            ? "ID NUMBER(18,0), N NUMBER(18,4) DEFAULT 1.25, B VARCHAR2(12 BYTE), C VARCHAR2(12 CHAR), R RAW(24), V NUMBER GENERATED ALWAYS AS (N+1) VIRTUAL, T TIMESTAMP(3) WITH TIME ZONE, I INTERVAL DAY(4) TO SECOND(9)"
+            : "id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, n DECIMAL(18,4) DEFAULT 1.25, literal VARCHAR(40) DEFAULT 'uuid()' COMMENT 'metadata', expr VARCHAR(40) DEFAULT (uuid()), v INT GENERATED ALWAYS AS (n+1) VIRTUAL, s INT GENERATED ALWAYS AS (n+1) STORED, ts TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)", CancellationToken.None);
+        var owner = db.Oracle
+            ? Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture)
+            : connection.Database;
+        var restrictions = db.Oracle ? new string?[] { null, owner, name } : new string?[] { owner, null, name };
+        using var sync = connection.GetSchema("Columns", restrictions);
+        using var asynchronous = await connection.GetSchemaAsync("Columns", restrictions);
+        Assert.Equal(sync.Rows.Count, asynchronous.Rows.Count);
+        foreach (var table in new[] { sync, asynchronous })
+        {
+            Assert.Equal(23, table.Columns.Count);
+            Assert.Equal(typeof(bool), table.Columns["IS_COMPUTED"]!.DataType);
+            DataRow Column(string column) => Assert.Single(table.Rows.Cast<DataRow>(), row => (string)row["COLUMN_NAME"] == column);
+            if (db.Oracle)
+            {
+                Assert.Equal("VARCHAR2(12 BYTE)", Column("B")["TYPE_DECLARATION"]);
+                Assert.Equal("VARCHAR2(12 CHAR)", Column("C")["TYPE_DECLARATION"]);
+                Assert.Equal("RAW(24)", Column("R")["TYPE_DECLARATION"]);
+                Assert.Equal("NUMBER(18,4)", Column("N")["TYPE_DECLARATION"]);
+                Assert.Equal("TIMESTAMP(3) WITH TIME ZONE", Column("T")["TYPE_DECLARATION"]);
+                Assert.Equal("INTERVAL DAY(4) TO SECOND(9)", Column("I")["TYPE_DECLARATION"]);
+                Assert.Equal(DBNull.Value, Column("ID")["IS_IDENTITY"]);
+                Assert.Equal(DBNull.Value, Column("N")["IS_COMPUTED"]);
+                Assert.Equal(DBNull.Value, Column("N")["DEFAULT_VALUE_SQL"]);
+                Assert.Equal(true, Column("V")["IS_COMPUTED"]);
+                Assert.Equal(false, Column("V")["IS_STORED"]);
+                Assert.False(Column("V").IsNull("COMPUTED_EXPRESSION"));
+                Assert.Equal(false, Column("V")["HAS_DEFAULT"]);
+            }
+            else
+            {
+                Assert.Contains("unsigned", (string)Column("id")["TYPE_DECLARATION"], StringComparison.OrdinalIgnoreCase);
+                Assert.Equal(true, Column("id")["IS_IDENTITY"]);
+                Assert.Equal("decimal(18,4)", ((string)Column("n")["TYPE_DECLARATION"]).ToLowerInvariant());
+                Assert.Equal(true, Column("n")["HAS_DEFAULT"]);
+                foreach (var column in new[] { "literal", "expr" })
+                {
+                    Assert.Equal(true, Column(column)["HAS_DEFAULT"]);
+                    Assert.Equal(DBNull.Value, Column(column)["DEFAULT_VALUE_SQL"]);
+                }
+                Assert.Equal("metadata", Column("literal")["COLUMN_COMMENT"]);
+                Assert.Equal(true, Column("v")["IS_COMPUTED"]); Assert.Equal(false, Column("v")["IS_STORED"]);
+                Assert.Equal(true, Column("s")["IS_COMPUTED"]); Assert.Equal(true, Column("s")["IS_STORED"]);
+                Assert.Equal(true, Column("ts")["HAS_ON_UPDATE"]); Assert.Equal("CURRENT_TIMESTAMP(6)", Column("ts")["ON_UPDATE_SQL"]);
+                Assert.Equal("CURRENT_TIMESTAMP(6)", Column("ts")["DEFAULT_VALUE_SQL"]);
+            }
+        }
+    }
+
+    [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.All), MemberType = typeof(ProfileTheoryData))]
     public async Task AllCollectionsMatchBetweenSyncAndAsync(string profileName)
     {
