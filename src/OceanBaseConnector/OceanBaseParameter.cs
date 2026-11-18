@@ -15,6 +15,10 @@ namespace OceanBaseConnector
         private ParameterDirection _direction = ParameterDirection.Input;
         private int _size;
         internal OceanBaseParameterCollection? Owner { get; set; }
+        /// <summary>The compatibility mode of the connection that created this parameter.
+        /// The command captures it when the parameter is created; it stays null when the
+        /// connection was not open or when the parameter was constructed directly.</summary>
+        public OceanBaseCompatibilityMode? CompatibilityMode { get; internal set; }
         public override DbType DbType
         {
             get => _dbType ?? InferType(Value);

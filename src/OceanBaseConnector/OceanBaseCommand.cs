@@ -66,7 +66,12 @@ namespace OceanBaseConnector
             set => _transaction = value == null ? null : value as OceanBaseTransaction ?? throw new ArgumentException("An OceanBaseTransaction is required.", nameof(value));
         }
         protected override DbParameterCollection DbParameterCollection => _parameters;
-        protected override DbParameter CreateDbParameter() => new OceanBaseParameter();
+        protected override DbParameter CreateDbParameter()
+        {
+            var parameter = new OceanBaseParameter();
+            if (_connection != null) parameter.CompatibilityMode = _connection.CompatibilityMode;
+            return parameter;
+        }
         public override int ExecuteNonQuery()
         {
             using var reader = ExecuteDbDataReader(CommandBehavior.Default);
