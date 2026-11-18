@@ -170,8 +170,10 @@ namespace OceanBaseConnector.UnitTests
             var server = Server(async channel =>
             {
                 await PrepareAnonymousBatchResult(channel, 90, 210); await StatementCommand(channel, 23);
-                await ReplyAnonymousBatchResult(channel, 210, row);
-                try { Assert.Equal(0, await channelStreamRead(channel)); } catch (IOException) { }
+                // The client breaks the connection while decoding the invalid LOB, so the trailing
+                // reply can hit an aborted socket; that abort is the expected outcome of this scenario.
+                try { await ReplyAnonymousBatchResult(channel, 210, row); Assert.Equal(0, await channelStreamRead(channel)); }
+                catch (IOException) { }
             }, lobLocators: true);
             using var connection = new OceanBaseConnection(LobConfiguration(server.Port) + ";Use Batch Multi Send=true");
             try
@@ -194,8 +196,10 @@ namespace OceanBaseConnector.UnitTests
             {
                 await PrepareAnonymousBatchResult(channel, 90, 203); await PrepareAnonymousBatchResult(channel, 91, 203);
                 await StatementCommand(channel, 23); await StatementCommand(channel, 23);
-                await ReplyAnonymousBatchResult(channel, 203, new byte[] { 0, 0, 253, 0, 0, 1 });
-                try { Assert.Equal(0, await channelStreamRead(channel)); } catch (IOException) { }
+                // The client discards the pipeline after the malformed member count, so the trailing
+                // reply can hit an aborted socket; that abort is the expected outcome of this scenario.
+                try { await ReplyAnonymousBatchResult(channel, 203, new byte[] { 0, 0, 253, 0, 0, 1 }); Assert.Equal(0, await channelStreamRead(channel)); }
+                catch (IOException) { }
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port) + ";Use Batch Multi Send=true;Batch Multi Send Number=2");
             try
