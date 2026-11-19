@@ -18,7 +18,7 @@ Oracle mode advertises 20 collections; MySQL mode advertises 18, excluding Types
 | ProcedureParameters | Catalog, Schema, Routine, Parameter, Package | Existing top-level parameter direction, position, type identity and precision metadata |
 | Views | Catalog, Schema, View | Same four identity/type columns as Tables, with TABLE_TYPE=VIEW; does not retrieve view definition SQL |
 | Indexes | Catalog, Schema, Table, Index | TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, INDEX_SCHEMA, INDEX_NAME, INDEX_TYPE, IS_UNIQUE |
-| IndexColumns | Catalog, Schema, Table, Index, Column | First five Indexes identity columns, COLUMN_NAME, ORDINAL_POSITION, SORT_ORDER, PREFIX_LENGTH |
+| IndexColumns | Catalog, Schema, Table, Index, Column | First five Indexes identity columns, COLUMN_NAME, ORDINAL_POSITION, SORT_ORDER, PREFIX_LENGTH, COLUMN_EXPRESSION |
 | Keys | Catalog, Schema, Table, Constraint, ConstraintType | TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, CONSTRAINT_TYPE; PRIMARY KEY and UNIQUE constraints |
 | Constraints | Catalog, Schema, Table, Constraint, ConstraintType | Same columns as Keys, including FOREIGN KEY and CHECK when reported by the dictionary |
 | ConstraintColumns | Catalog, Schema, Table, Constraint, Column | Table and constraint identity, COLUMN_NAME and ORDINAL_POSITION; column availability follows server dictionary |
@@ -221,6 +221,8 @@ The standard columns are TypeName, ProviderDbType, ColumnSize, CreateFormat, Cre
 
 Canonical MySQL declarations include signed/unsigned TINYINT, SMALLINT, MEDIUMINT, INT and BIGINT; DECIMAL and DECIMAL UNSIGNED; FLOAT/DOUBLE; CHAR/VARCHAR/TEXT; BINARY/VARBINARY/BLOB; TINYTEXT/MEDIUMTEXT/LONGTEXT and TINYBLOB/MEDIUMBLOB/LONGBLOB; DATE/DATETIME/TIMESTAMP/TIME; YEAR, BIT and JSON. TINYINT(1) has a Boolean mapping row only when TreatTinyAsBoolean is enabled. Unsigned/narrow/alias variants do not replace the preferred signed/general CLR mapping. MySQL BLOB uses byte[]/OceanBaseDbType.Binary, while Oracle BLOB uses a session-bound OceanBaseLob/OceanBaseDbType.Blob.
 
+Both compatibility modes expose a `JSON` row with `OceanBaseDbType.Json` and CLR `string`. Input parameters carry JSON text through ordinary string binding. The server validates and converts the text at the target column. Use `IsDBNull` to distinguish SQL NULL from the text `null`.
+
 Oracle declarations include NUMBER, BINARY_FLOAT/BINARY_DOUBLE, DATE, TIMESTAMP and its timezone variants, CHAR/VARCHAR2/NCHAR/NVARCHAR2, RAW, BLOB/CLOB, both interval families, OBJECT, ARRAY and REF CURSOR. OBJECT/ARRAY rows describe supported complex codecs: obtain an OceanBaseComplexType descriptor before binding, and use the supported binary protocol/member layouts. OBJECT needs a named type; ARRAY can use a named collection or the existing supported anonymous scalar-array descriptor. Binary named and anonymous complex results may expose BLOB/CLOB members as session-bound OceanBaseLob handles when Use Lob Locators is negotiated; non-empty complex LOB parameters remain unsupported. They do not provide generic CREATE TYPE DDL.
 
 MySQL also lists ENUM/SET using the existing String provider identity and label-list creation
@@ -268,7 +270,33 @@ Null restrictions mean unrestricted; empty strings, percent signs and underscore
 
 ## Dictionaries, permissions and verification
 
-MySQL uses INFORMATION_SCHEMA.VIEWS, STATISTICS, TABLE_CONSTRAINTS, KEY_COLUMN_USAGE and REFERENTIAL_CONSTRAINTS, plus `mysql.user` and `oceanbase.DBA_SEQUENCES`. Users and Sequences may require additional grants; only username/host and sequence metadata are selected, never password columns. Oracle uses the corresponding ALL_VIEWS, ALL_INDEXES, ALL_IND_COLUMNS, ALL_CONSTRAINTS, ALL_CONS_COLUMNS, ALL_TYPES, ALL_SEQUENCES, ALL_USERS and ALL_SYNONYMS views.
+MySQL uses INFORMATION_SCHEMA.VIEWS, STATISTICS, TABLE_CONSTRAINTS, KEY_COLUMN_USAGE and REFERENTIAL_CONSTRAINTS, plus `mysql.user` and `oceanbase.DBA_SEQUENCES`. Users and Sequences may require additional grants. Oracle uses ALL_VIEWS, ALL_INDEXES, ALL_IND_COLUMNS, ALL_IND_EXPRESSIONS, ALL_CONSTRAINTS, ALL_CONS_COLUMNS, ALL_TYPES, ALL_SEQUENCES, ALL_USERS and ALL_SYNONYMS.
+
+Read Oracle index members in `ORDINAL_POSITION` order. When `COLUMN_EXPRESSION` is populated, use its SQL as the index member. For example, `(UPPER(LABEL), ID)` yields `UPPER("LABEL")` in the first row and `DBNull` in the second row. Use `COLUMN_NAME` for the ordinary `ID` member. MySQL returns `DBNull` in the appended `COLUMN_EXPRESSION` field. Oracle expression metadata requires access to `ALL_IND_EXPRESSIONS`.
+
+On Oracle-mode OceanBase 4.4.2.2, the catalog can return error 600 when an index expression exceeds its `VARCHAR2(1000)` projection. The connector then reads expression positions from the catalog and recovers their SQL from `DBMS_METADATA.GET_DDL('INDEX', ...)`. This path also requires permission to read the affected index DDL.
+
+```csharp
+using var members = connection.GetSchema("IndexColumns", new[] { null, schema, "T_INDEX", "IX_LABEL_UPPER" });
+```
+
+### Oracle identity definitions and sequence start values
+
+`Columns.IS_IDENTITY` reflects `ALL_TAB_COLUMNS.IDENTITY_COLUMN` when the catalog supplies a value. `DBNull` means unknown. On Oracle-mode 4.4.2.2, it was `DBNull` for a working identity column, and the owner and management connections received error 942 from the identity catalog views. The per-object APIs query `DBMS_METADATA.GET_DDL` with bound object and schema names. Names match the catalog's case, and omitting the schema uses `USER`.
+
+In the same environment, Connector/J 2.4.19 returned `IS_AUTOINCREMENT=NO` for the identity column from `getColumns` and exposed the generated column name for the expression member from `getIndexInfo`.
+
+```csharp
+var identity = await connection.GetOracleIdentityColumnsAsync("T_ID", cancellationToken: token);
+foreach (var column in identity)
+    Console.WriteLine($"{column.ColumnName}: {column.GenerationType} {column.SequenceOptions}");
+
+OceanBaseDecimal start = await connection.GetOracleSequenceStartValueAsync("T_SEQ", cancellationToken: token);
+```
+
+The synchronous equivalents are `GetOracleIdentityColumns` and `GetOracleSequenceStartValue`. The identity API returns `ALWAYS`, `BY DEFAULT`, or `BY DEFAULT ON NULL` and the sequence option clauses emitted by the server, including server-expanded defaults. For example, `SELECT DBMS_METADATA.GET_DDL('TABLE', 'T_ID', USER) FROM DUAL` reports `START WITH 17`, `INCREMENT BY 5` and `NOCACHE` for a column declared with those options. A table without identity columns yields an empty list. Server errors such as missing objects or insufficient privileges propagate. Unsupported DDL shapes throw `NotSupportedException`.
+
+On 4.4.2.2, `SELECT DBMS_METADATA.GET_DDL('SEQUENCE', 'T_SEQ', USER) FROM DUAL` returns `START WITH 17` after consuming 17 and 22 for a sequence with increment 5. The `Sequences.LAST_NUMBER` snapshot was 27 with `NOCACHE` and 37 with `CACHE 4`. The latter represents the allocation boundary for the cache. The start-value API reads the value currently emitted in the DDL and does not advance the sequence.
 
 Dictionary visibility and permissions are server policy. Permission denial and missing views propagate as server errors, with no fallback to privileged internal tables, fabricated empty results or hidden retry. A known server rejection leaves the connection usable; interrupted requests follow the ordinary unknown-outcome and session-discard rules. Queries enumerate server-visible metadata and may be expensive without restrictions.
 

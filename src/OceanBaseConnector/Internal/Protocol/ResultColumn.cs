@@ -349,8 +349,8 @@ namespace OceanBaseConnector.Internal.Protocol
                         if (Mode != OceanBaseCompatibilityMode.Oracle) throw new NotSupportedException("ROWID requires Oracle mode.");
                         return typeof(string);
                     case 245:
-                        if (Mode != OceanBaseCompatibilityMode.MySql || Charset != 63 && !HasUtf8Charset)
-                            throw new NotSupportedException("Only MySQL JSON text with a supported UTF-8 or binary collation is supported.");
+                        if (Charset != 63 && !HasUtf8Charset)
+                            throw new NotSupportedException("JSON requires a supported UTF-8 or binary collation.");
                         return typeof(string);
                     case 15:
                     case 253:

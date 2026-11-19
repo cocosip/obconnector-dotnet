@@ -32,7 +32,7 @@ namespace OceanBaseConnector.UnitTests.TestInfrastructure
             {
                 "Views" => (new[] { "TABLE_TYPE" }, new string?[] { "VIEW" }),
                 "Indexes" => (new[] { "INDEX_SCHEMA", "INDEX_NAME", "INDEX_TYPE", "IS_UNIQUE" }, new[] { owner, "Index目标", "NORMAL", "YES" }),
-                "IndexColumns" => (new[] { "INDEX_SCHEMA", "INDEX_NAME", "COLUMN_NAME", "ORDINAL_POSITION", "SORT_ORDER", "PREFIX_LENGTH" }, new[] { owner, "Index目标", "Column目标", "2", "ASC", null }),
+                "IndexColumns" => (new[] { "INDEX_SCHEMA", "INDEX_NAME", "COLUMN_NAME", "ORDINAL_POSITION", "SORT_ORDER", "PREFIX_LENGTH", "COLUMN_EXPRESSION" }, new[] { owner, "Index目标", "Column目标", "2", "ASC", null, mysql ? null : "UPPER(\"LABEL\")" }),
                 "Keys" or "Constraints" => (new[] { "CONSTRAINT_SCHEMA", "CONSTRAINT_NAME", "CONSTRAINT_TYPE" }, new[] { owner, "Key目标", "UNIQUE" }),
                 "ConstraintColumns" => (new[] { "CONSTRAINT_SCHEMA", "CONSTRAINT_NAME", "COLUMN_NAME", "ORDINAL_POSITION" }, new[] { owner, "Key目标", "Column目标", "2" }),
                 "ForeignKeys" => (new[] { "CONSTRAINT_SCHEMA", "CONSTRAINT_NAME", "REFERENCED_TABLE_CATALOG", "REFERENCED_TABLE_SCHEMA", "REFERENCED_TABLE_NAME", "REFERENCED_CONSTRAINT_SCHEMA", "REFERENCED_CONSTRAINT_NAME", "UPDATE_RULE", "DELETE_RULE" }, new[] { owner, "FK目标", mysql ? "OtherDb" : null, mysql ? null : "OtherOwner", "Parent目标", mysql ? null : "OtherOwner", "PK目标", mysql ? "CASCADE" : "NO ACTION", "CASCADE" }),

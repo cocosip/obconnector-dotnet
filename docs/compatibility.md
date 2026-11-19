@@ -3,7 +3,77 @@
 Updated: 2026-11-04. This page records the limits of the current support claims; it does not repeat the development log.
 Scope follows the [capability matrix](obconnector-dotnet-progress.md); verdicts follow the [acceptance criteria](acceptance-criteria.md).
 Accepted combinations, the environment in which they were observed, and the failures that remain open are listed in the tables below.
-The recorded evidence was not re-run for this documentation pass, and no existing failure was closed by it.
+The environment matrix summarizes historical evidence. The Oracle JSON and metadata probes and the MySQL sequence default probes below were run on 4.4.2.2.
+
+The November 19 review records the database regression results, the Oracle directory issue still under investigation, and the commands to resume on another machine in [Oracle JSON and metadata verification](oracle-json-metadata-verification.md).
+
+## Oracle JSON and metadata on 4.4.2.2
+
+OceanBaseConnector 0.3.1 can write a JSON column with a `DbType.String` input, and rejects an explicit `OceanBaseDbType.Json` parameter and a native JSON result. The current source accepts both input declarations with CLR `string` or `DBNull.Value`. It uses the server's ordinary string-to-JSON conversion. Text and prepared result rows expose JSON as CLR `string` through `GetString` and `GetFieldValue<string>`. `GetValue` returns a string or `DBNull.Value`. Connector/J 2.4.19 also uses `setString` and reads the native column with `getString` and `getObject`. The C# example uses `CREATE TABLE T_JSON (ID INT PRIMARY KEY, DOC JSON)`.
+
+```csharp
+using var insert = connection.CreateCommand();
+insert.CommandText = "INSERT INTO T_JSON (ID, DOC) VALUES (1, :p)";
+insert.Parameters.Add(new OceanBaseParameter
+{
+    ParameterName = "p",
+    OceanBaseDbType = OceanBaseDbType.Json,
+    Value = "{\"count\":1}"
+});
+insert.ExecuteNonQuery();
+
+using var select = connection.CreateCommand();
+select.CommandText = "SELECT DOC FROM T_JSON WHERE ID = 1";
+using var reader = select.ExecuteReader();
+if (reader.Read())
+{
+    string? json = reader.IsDBNull(0) ? null : reader.GetString(0);
+}
+```
+
+With 0.3.1, `CAST(DOC AS VARCHAR2(4000))` returns text for small documents. For JSON `null` it returns the string `null`, and for SQL NULL it returns `DBNull.Value`. The tested larger document exceeded the VARCHAR2 bound. The native read path in current source avoids that SQL projection. See [schema APIs](schema.md) for Oracle identity, expression index and sequence DDL calls.
+
+## MySQL sequence defaults on 4.4.2.2
+
+MariaDB Connector/C 3.4.9 reproduced the MySQL-tenant server errors below.
+
+| Column default | Server error |
+| --- | --- |
+| `DEFAULT T_SEQ.NEXTVAL` | 1064 |
+| `DEFAULT (T_SEQ.NEXTVAL)` | 1235 |
+| `DEFAULT (NEXTVAL(T_SEQ))` | 1235 |
+| `DEFAULT (NEXT VALUE FOR T_SEQ)` | 1064 |
+
+The corresponding `ALTER TABLE ... ALTER COLUMN ID SET DEFAULT` probes returned 1064 for `T_SEQ.NEXTVAL` and 1235 for `(T_SEQ.NEXTVAL)`.
+
+The same tenant accepts a sequence expression in the INSERT and supports a trigger to assign the key when the INSERT omits it. A second table with its own corresponding trigger can use the same sequence.
+
+```sql
+CREATE SEQUENCE T_SEQ START WITH 17 INCREMENT BY 5 NOCACHE;
+CREATE TABLE T_EXPLICIT (ID BIGINT PRIMARY KEY, AMOUNT INT NOT NULL);
+INSERT INTO T_EXPLICIT (ID, AMOUNT) VALUES (T_SEQ.NEXTVAL, 10);
+
+CREATE TABLE T_DEFAULT (ID BIGINT DEFAULT 0 PRIMARY KEY, AMOUNT INT NOT NULL);
+CREATE TRIGGER T_DEFAULT_BI BEFORE INSERT ON T_DEFAULT FOR EACH ROW
+BEGIN
+    DECLARE k BIGINT;
+    SELECT T_SEQ.NEXTVAL INTO k;
+    SET NEW.ID = k;
+END;
+
+INSERT INTO T_DEFAULT (AMOUNT) VALUES (10);
+SELECT T_SEQ.CURRVAL;
+```
+
+Submit the entire trigger definition in a single command. This trigger allocates a key on every insert. For single-row inserts, read `CURRVAL` immediately on the same open connection before another use of that sequence. The probe returned 0 from `LAST_INSERT_ID()` and 1064 from `INSERT ... RETURNING ID`. In Oracle mode on the same server version, `ID NUMBER(19) DEFAULT T_SEQ.NEXTVAL PRIMARY KEY` and `INSERT ... RETURNING ID INTO :id` both succeeded.
+
+```csharp
+using var command = connection.CreateCommand();
+command.CommandText = "INSERT INTO T_DEFAULT (AMOUNT) VALUES (20)";
+command.ExecuteNonQuery();
+command.CommandText = "SELECT T_SEQ.CURRVAL";
+var id = (OceanBaseDecimal)command.ExecuteScalar()!;
+```
 
 ## Environment Matrix
 

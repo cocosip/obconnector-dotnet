@@ -44,7 +44,7 @@ public sealed class JsonClientCharacterSetTests
         {
             parameter.Value = value;
             Assert.Equal(new byte[] { 1, 1, 6, 0 }, PreparedParameters.Encode(new[] { parameter }, clientEncoding: encoding));
-            Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle, clientEncoding: encoding));
+            Assert.Equal(new byte[] { 1, 1, 6, 0 }, PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle, clientEncoding: encoding));
             parameter.Precision = 1;
             Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }, clientEncoding: encoding));
             parameter.Precision = 0; parameter.Scale = 1;

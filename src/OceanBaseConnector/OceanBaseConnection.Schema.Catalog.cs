@@ -7,6 +7,8 @@ namespace OceanBaseConnector
 {
     public sealed partial class OceanBaseConnection
     {
+        private const string OracleIndexExpressionProjection = "e.COLUMN_EXPRESSION";
+
         private static DataTable CreateCatalogDirectoryTable(string name)
         {
             var table = new DataTable(name) { Locale = CultureInfo.InvariantCulture };
@@ -15,7 +17,7 @@ namespace OceanBaseConnector
             {
                 case "Views": columns = "TABLE_CATALOG TABLE_SCHEMA TABLE_NAME TABLE_TYPE"; break;
                 case "Indexes": columns = "TABLE_CATALOG TABLE_SCHEMA TABLE_NAME INDEX_SCHEMA INDEX_NAME INDEX_TYPE IS_UNIQUE"; break;
-                case "IndexColumns": columns = "TABLE_CATALOG TABLE_SCHEMA TABLE_NAME INDEX_SCHEMA INDEX_NAME COLUMN_NAME ORDINAL_POSITION SORT_ORDER PREFIX_LENGTH"; break;
+                case "IndexColumns": columns = "TABLE_CATALOG TABLE_SCHEMA TABLE_NAME INDEX_SCHEMA INDEX_NAME COLUMN_NAME ORDINAL_POSITION SORT_ORDER PREFIX_LENGTH COLUMN_EXPRESSION"; break;
                 case "Keys":
                 case "Constraints": columns = "TABLE_CATALOG TABLE_SCHEMA TABLE_NAME CONSTRAINT_SCHEMA CONSTRAINT_NAME CONSTRAINT_TYPE"; break;
                 case "ConstraintColumns": columns = "TABLE_CATALOG TABLE_SCHEMA TABLE_NAME CONSTRAINT_SCHEMA CONSTRAINT_NAME COLUMN_NAME ORDINAL_POSITION"; break;
@@ -56,9 +58,9 @@ namespace OceanBaseConnector
                     break;
                 case "IndexColumns":
                     sql.Append(mysql
-                        ? "SELECT TABLE_SCHEMA AS TABLE_CATALOG, NULL AS TABLE_SCHEMA, TABLE_NAME, NULL AS INDEX_SCHEMA, INDEX_NAME, COLUMN_NAME, SEQ_IN_INDEX AS ORDINAL_POSITION, CASE WHEN COLLATION = 'A' THEN 'ASC' WHEN COLLATION = 'D' THEN 'DESC' ELSE NULL END AS SORT_ORDER, SUB_PART AS PREFIX_LENGTH FROM INFORMATION_SCHEMA.STATISTICS WHERE 1=1"
-                        : "SELECT NULL AS TABLE_CATALOG, TABLE_OWNER AS TABLE_SCHEMA, TABLE_NAME, INDEX_OWNER AS INDEX_SCHEMA, INDEX_NAME, COLUMN_NAME, COLUMN_POSITION AS ORDINAL_POSITION, DESCEND AS SORT_ORDER, NULL AS PREFIX_LENGTH FROM ALL_IND_COLUMNS WHERE TABLE_OWNER <> '__recyclebin'");
-                    filters = mysql ? new[] { "TABLE_SCHEMA", null, "TABLE_NAME", "INDEX_NAME", "COLUMN_NAME" } : new[] { null, "TABLE_OWNER", "TABLE_NAME", "INDEX_NAME", "COLUMN_NAME" };
+                        ? "SELECT TABLE_SCHEMA AS TABLE_CATALOG, NULL AS TABLE_SCHEMA, TABLE_NAME, NULL AS INDEX_SCHEMA, INDEX_NAME, COLUMN_NAME, SEQ_IN_INDEX AS ORDINAL_POSITION, CASE WHEN COLLATION = 'A' THEN 'ASC' WHEN COLLATION = 'D' THEN 'DESC' ELSE NULL END AS SORT_ORDER, SUB_PART AS PREFIX_LENGTH, NULL AS COLUMN_EXPRESSION FROM INFORMATION_SCHEMA.STATISTICS WHERE 1=1"
+                        : "SELECT NULL AS TABLE_CATALOG, c.TABLE_OWNER AS TABLE_SCHEMA, c.TABLE_NAME, c.INDEX_OWNER AS INDEX_SCHEMA, c.INDEX_NAME, c.COLUMN_NAME, c.COLUMN_POSITION AS ORDINAL_POSITION, c.DESCEND AS SORT_ORDER, NULL AS PREFIX_LENGTH, " + OracleIndexExpressionProjection + " FROM ALL_IND_COLUMNS c LEFT JOIN ALL_IND_EXPRESSIONS e ON e.INDEX_OWNER = c.INDEX_OWNER AND e.INDEX_NAME = c.INDEX_NAME AND e.TABLE_OWNER = c.TABLE_OWNER AND e.TABLE_NAME = c.TABLE_NAME AND e.COLUMN_POSITION = c.COLUMN_POSITION WHERE c.TABLE_OWNER <> '__recyclebin'");
+                    filters = mysql ? new[] { "TABLE_SCHEMA", null, "TABLE_NAME", "INDEX_NAME", "COLUMN_NAME" } : new[] { null, "c.TABLE_OWNER", "c.TABLE_NAME", "c.INDEX_NAME", "c.COLUMN_NAME" };
                     order += ", 4, 5, 7";
                     break;
                 case "Keys":

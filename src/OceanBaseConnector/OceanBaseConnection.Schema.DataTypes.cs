@@ -111,8 +111,6 @@ namespace OceanBaseConnector
                 var year = Number("YEAR", OceanBaseDbType.Year, typeof(ushort), 4, true);
                 year["IsBestMatch"] = false; year["RequiredFeatures"] = "Four-digit YEAR; values 0 or 1901..2155";
                 var bits = TypeRow("BIT", OceanBaseDbType.Bit, typeof(ulong), "BIT({0})", "length"); bits["ColumnSize"] = 64L; bits["IsUnsigned"] = true;
-                var json = TypeRow("JSON", OceanBaseDbType.Json, typeof(string), "JSON");
-                json["IsLong"] = true; json["RequiredFeatures"] = "Binary or supported UTF-8 JSON result collation";
                 var geometry = TypeRow("GEOMETRY", OceanBaseDbType.Binary, typeof(byte[]));
                 geometry["RequiredFeatures"] = "MySQL result type code 255; Binary parameters carry four-byte little-endian SRID plus WKB; server validates geometry and SRS";
             }
@@ -161,6 +159,9 @@ namespace OceanBaseConnector
                 var xml = TypeRow("XMLTYPE", OceanBaseDbType.String, typeof(string), "XMLTYPE");
                 xml["RequiredFeatures"] = "Oracle type code 160 ownerless text result or SYS.XMLTYPE metadata boundary; DbType.Xml parameters use the verified string wire";
             }
+            var json = TypeRow("JSON", OceanBaseDbType.Json, typeof(string), "JSON");
+            json["IsLong"] = true;
+            json["RequiredFeatures"] = "Binary or supported UTF-8 JSON result collation";
             return table;
         }
     }

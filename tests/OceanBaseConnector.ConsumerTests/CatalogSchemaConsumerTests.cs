@@ -92,8 +92,8 @@ namespace OceanBaseConnector.ConsumerTests
                     parameter.GetType().GetProperty("OceanBaseDbType")!.SetValue(parameter, Enum.ToObject(providerType, number["ProviderDbType"]));
                     Assert.Equal(DbType.Decimal, parameter.DbType);
                     var names = dataTypes.Rows.Cast<DataRow>().Select(row => (string)row["TypeName"]);
-                    Assert.Contains(mysql ? "JSON" : "REF CURSOR", names);
-                    Assert.DoesNotContain(mysql ? "NUMBER" : "JSON", names);
+                    Assert.Contains("JSON", names);
+                    Assert.DoesNotContain(mysql ? "NUMBER" : "BIT", names);
                     dataTypes.Rows.Clear(); using var fresh = connection.GetSchema("DataTypes"); Assert.NotEmpty(fresh.Rows.Cast<DataRow>());
                 }
                 foreach (var collection in collections)

@@ -160,12 +160,12 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public void MultiStatementJsonRetainsModeMetadataAndFallbackRestrictions()
+        public void MultiStatementJsonSupportsOracleAndRetainsFallbackRestrictions()
         {
-            Assert.Throws<NotSupportedException>(() => Build("select :p", OceanBaseCompatibilityMode.Oracle,
+            Assert.Equal("select (NULL)", Build("select :p", OceanBaseCompatibilityMode.Oracle,
                 new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.Json, Value = DBNull.Value }));
-            Assert.Throws<NotSupportedException>(() => BuildMulti("select :p; select 1 from dual", OceanBaseCompatibilityMode.Oracle,
-                new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.Json, Value = DBNull.Value }));
+            Assert.Equal("select (REPLACE( 'null',NULL,NULL)); select 1 from dual", BuildMulti("select :p; select 1 from dual", OceanBaseCompatibilityMode.Oracle,
+                new OceanBaseParameter { ParameterName = "p", OceanBaseDbType = OceanBaseDbType.Json, Value = "null" }));
             foreach (var parameter in new[]
             {
                 new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Precision = 1, Value = DBNull.Value },

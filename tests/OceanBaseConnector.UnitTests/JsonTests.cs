@@ -51,13 +51,16 @@ namespace OceanBaseConnector.UnitTests
             var parameter = new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Value = json };
             Assert.Equal(DbType.String, parameter.DbType);
             Assert.Equal(new byte[] { 0, 1, 253, 0 }.Concat(WithLength(bytes)), PreparedParameters.Encode(new[] { parameter }));
-            Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle));
+            Assert.Equal(new byte[] { 0, 1, 253, 0 }.Concat(WithLength(bytes)), PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle));
+            var oracle = JsonColumn(46, OceanBaseCompatibilityMode.Oracle, 255);
+            Assert.Equal(json, oracle.Decode(bytes));
+            Assert.Equal(json, oracle.DecodeBinary(oracle.ReadBinaryField(new ByteCursor(WithLength(bytes)))));
+            Assert.Equal(DBNull.Value, oracle.DecodeBinary(null));
         }
 
         [Theory]
         [InlineData(8, OceanBaseCompatibilityMode.MySql, 0)]
-        [InlineData(63, OceanBaseCompatibilityMode.Oracle, 0)]
-        [InlineData(45, OceanBaseCompatibilityMode.Oracle, 0)]
+        [InlineData(8, OceanBaseCompatibilityMode.Oracle, 0)]
         public void JsonUnsupportedColumnMetadataRejectsNullToo(ushort charset, OceanBaseCompatibilityMode mode, byte scale)
         {
             var column = JsonColumn(charset, mode, scale);
@@ -97,12 +100,12 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Fact]
-        public void JsonTypedNullsStillValidateModePrecisionAndScale()
+        public void JsonTypedNullsStillValidatePrecisionAndScale()
         {
             foreach (var value in new object?[] { null, DBNull.Value, "null" })
             {
                 var parameter = new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Json, Value = value };
-                Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle));
+                Assert.Equal(PreparedParameters.Encode(new[] { parameter }), PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle));
                 if (!(value is string)) Assert.Equal(new byte[] { 1, 1, 6, 0 }, PreparedParameters.Encode(new[] { parameter }));
                 parameter.Precision = 1; Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }));
                 parameter.Precision = 0; parameter.Scale = 1; Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }));

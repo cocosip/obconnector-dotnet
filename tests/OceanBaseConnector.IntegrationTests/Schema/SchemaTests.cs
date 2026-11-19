@@ -169,6 +169,96 @@ public sealed class SchemaTests
 
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.OracleWithCreateObjects), MemberType = typeof(ProfileTheoryData))]
+    public async Task OracleIdentityAndExpressionIndexPreserveDdlDefinitions(string profileName)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        const string columns = "ID NUMBER(10) GENERATED {0} AS IDENTITY START WITH 17 INCREMENT BY 5 NOCACHE PRIMARY KEY, LABEL VARCHAR2(50)";
+        foreach (var mode in new[] { "ALWAYS", "BY DEFAULT", "BY DEFAULT ON NULL" })
+        {
+            var table = await db.TableAsync(connection, string.Format(CultureInfo.InvariantCulture, columns, mode), CancellationToken.None);
+            await db.ExecuteAsync(connection, $"INSERT INTO {table} (LABEL) VALUES ('probe')", CancellationToken.None);
+            DatabaseContext.EqualNumber(await db.ScalarAsync(connection, $"SELECT ID FROM {table}", CancellationToken.None),
+                17, "The first insert uses the declared identity start.");
+            var identity = Assert.Single(await connection.GetOracleIdentityColumnsAsync(table));
+            Assert.Equal("ID", identity.ColumnName);
+            Assert.Equal(mode, identity.GenerationType);
+            Assert.Contains("start with 17", identity.SequenceOptions, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("increment by 5", identity.SequenceOptions, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("nocache", identity.SequenceOptions, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(identity.SequenceOptions, Assert.Single(connection.GetOracleIdentityColumns(table)).SequenceOptions);
+            if (mode != "BY DEFAULT") continue;
+
+            var index = table + "_IX";
+            await db.ExecuteAsync(connection, $"CREATE INDEX {index} ON {table} (UPPER(LABEL), ID)", CancellationToken.None);
+            using var members = await connection.GetSchemaAsync("IndexColumns", new[] { null, null, table, index });
+            Assert.Collection(members.Rows.Cast<DataRow>(), expression =>
+            {
+                Assert.Equal(1, expression["ORDINAL_POSITION"]);
+                Assert.Equal("UPPER(\"LABEL\")", expression["COLUMN_EXPRESSION"]);
+            }, column =>
+            {
+                Assert.Equal(2, column["ORDINAL_POSITION"]);
+                Assert.Equal("ID", column["COLUMN_NAME"]);
+                Assert.True(column.IsNull("COLUMN_EXPRESSION"));
+            });
+        }
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.OracleWithCreateObjects), MemberType = typeof(ProfileTheoryData))]
+    public async Task OracleIndexColumnsPreserveLongExpressions(string profileName)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var table = await db.TableAsync(connection, "ID INT PRIMARY KEY, LABEL VARCHAR2(20)", CancellationToken.None);
+        var index = table + "_IX";
+        var literal = new string('a', 1100) + ",(''quoted'')";
+        await db.ExecuteAsync(connection, $"CREATE INDEX {index} ON {table} (ID, LENGTH(LABEL || '{literal}'))",
+            CancellationToken.None);
+
+        using var members = await connection.GetSchemaAsync("IndexColumns", new[] { null, null, table });
+        var rows = members.Rows.Cast<DataRow>().Where(row => (string)row["INDEX_NAME"] == index).ToArray();
+        Assert.Equal(2, rows.Length);
+        Assert.Equal(1, rows[0]["ORDINAL_POSITION"]);
+        Assert.Equal("ID", rows[0]["COLUMN_NAME"]);
+        Assert.True(rows[0].IsNull("COLUMN_EXPRESSION"));
+        Assert.Equal(2, rows[1]["ORDINAL_POSITION"]);
+        var expression = Assert.IsType<string>(rows[1]["COLUMN_EXPRESSION"]);
+        Assert.Contains(literal, expression, StringComparison.Ordinal);
+        var rebuilt = await db.TableAsync(connection, "ID INT PRIMARY KEY, LABEL VARCHAR2(20)", CancellationToken.None);
+        await db.ExecuteAsync(connection, $"CREATE INDEX {rebuilt}_IX ON {rebuilt} (ID, {expression})",
+            CancellationToken.None);
+
+        using var syncMembers = connection.GetSchema("IndexColumns",
+            new[] { null, null, table, index, Assert.IsType<string>(rows[1]["COLUMN_NAME"]) });
+        Assert.Equal(expression, Assert.Single(syncMembers.Rows.Cast<DataRow>())["COLUMN_EXPRESSION"]);
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.OracleWithCreateObjects), MemberType = typeof(ProfileTheoryData))]
+    public async Task OracleSequenceStartSurvivesNextValueAndCacheAllocation(string profileName)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        var owner = Assert.IsType<string>(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None));
+        foreach (var (cache, lastNumber) in new[] { ("NOCACHE", "27"), ("CACHE 4", "37") })
+        {
+            var sequence = db.NewObject("SEQUENCE", registerCleanup: false);
+            await db.ExecuteAsync(connection, $"CREATE SEQUENCE {sequence} START WITH 17 INCREMENT BY 5 {cache}", CancellationToken.None);
+            db.RegisterDropCleanup("SEQUENCE", sequence);
+            Assert.Equal("17", connection.GetOracleSequenceStartValue(sequence, owner).ToString());
+            foreach (var expected in new[] { 17, 22 })
+                DatabaseContext.EqualNumber(await db.ScalarAsync(connection, $"SELECT {sequence}.NEXTVAL FROM DUAL", CancellationToken.None),
+                    expected, "Metadata preserves the next value.");
+            Assert.Equal("17", (await connection.GetOracleSequenceStartValueAsync(sequence, owner)).ToString());
+            using var runtime = await connection.GetSchemaAsync("Sequences", new[] { null, owner, sequence });
+            Assert.Equal(lastNumber, Assert.Single(runtime.Rows.Cast<DataRow>())["LAST_NUMBER"].ToString());
+        }
+    }
+
+    [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.OracleWithCreateObjects), MemberType = typeof(ProfileTheoryData))]
     public async Task OracleTypesAndSequencesAreDiscoverableWithoutAdvancingSequence(string profileName)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));

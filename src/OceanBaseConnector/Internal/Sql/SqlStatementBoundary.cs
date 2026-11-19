@@ -164,7 +164,7 @@ namespace OceanBaseConnector.Internal.Sql
             return text.Substring(start, position - start).ToUpperInvariant();
         }
 
-        private static void SkipTrivia(string text, ref int position, bool oracle)
+        internal static void SkipTrivia(string text, ref int position, bool oracle)
         {
             while (position < text.Length)
             {

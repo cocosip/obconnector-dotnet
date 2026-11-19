@@ -85,7 +85,7 @@ namespace OceanBaseConnector.UnitTests
                 {
                     Assert.Contains("NVARCHAR2", names); Assert.Contains("ARRAY", names); Assert.Contains("OBJECT", names);
                     Assert.Contains("XMLTYPE", names);
-                    Assert.DoesNotContain("JSON", names); Assert.DoesNotContain("BIT", names);
+                    Assert.Contains("JSON", names); Assert.DoesNotContain("BIT", names);
                     Assert.DoesNotContain("ENUM", names); Assert.DoesNotContain("SET", names); Assert.DoesNotContain("GEOMETRY", names);
                     var rowid = DataTypeRow(table, "ROWID", typeof(string));
                     Assert.False((bool)rowid["IsSupportedForParameters"]); Assert.True((bool)rowid["IsSupportedForResults"]);

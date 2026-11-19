@@ -118,11 +118,11 @@ executions, while prepared and explicit-alias samples returned UTF-8. A client-e
 also be valid UTF-8, so trying another decoder only on failure would still silently misname columns.
 No heuristic metadata decoder change was made.
 
-Explicit MySQL JSON parameters use the selected strict client encoding and the existing ordinary
+Explicit JSON parameters use the selected strict client encoding and the existing ordinary
 string wire type253. Unrepresentable text fails prevalidation before target preparation/execution;
 ASCII JSON escapes can represent characters outside the selected charset. The driver preserves
 JSON text rather than parsing or serializing it. SQL NULL remains distinct from JSON text `null`.
-Oracle mode and nonzero Precision/Scale remain rejected, including for SQL NULL. JSON results
+Nonzero Precision/Scale remain rejected, including for SQL NULL. JSON results
 retain strict UTF-8 decoding. Opt-in ordinary client fallback accepts explicit JSON Input after a
 complete automatic-Prepare1295/HY000 response, using fresh charset/collation/SQL_MODE facts and
 ordinary string escaping. Typed SQL NULL needs no literal-state query; raw NUL with

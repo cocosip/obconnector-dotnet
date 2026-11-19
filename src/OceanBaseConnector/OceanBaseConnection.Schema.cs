@@ -36,11 +36,23 @@ namespace OceanBaseConnector
             {
                 using var command = operation.Command;
                 if (command == null) return operation.Table;
-                using var reader = ExecuteSchemaReader(command, operation.Table.TableName == "Columns", CompatibilityMode == OceanBaseCompatibilityMode.MySql);
-                ValidateSchemaResult(operation.Table, reader);
-                while (reader.Read()) AddSchemaRow(operation.Table, reader, CompatibilityMode == OceanBaseCompatibilityMode.MySql);
-                if (reader.NextResult()) throw new NotSupportedException("A directory query returned multiple results.");
+                var mysql = CompatibilityMode == OceanBaseCompatibilityMode.MySql;
+                try { ReadRows(); }
+                catch (OceanBaseException error) when (CanRetryOracleIndexColumns(error, operation.Table, mysql))
+                {
+                    SelectOracleIndexExpressionPositions(operation.Table, command);
+                    ReadRows();
+                    ReadOracleIndexExpressionsAsync(operation.Table, command, false, CancellationToken.None).GetAwaiter().GetResult();
+                }
                 return operation.Table;
+
+                void ReadRows()
+                {
+                    using var reader = ExecuteSchemaReader(command, operation.Table.TableName == "Columns", mysql);
+                    ValidateSchemaResult(operation.Table, reader);
+                    while (reader.Read()) AddSchemaRow(operation.Table, reader, mysql);
+                    if (reader.NextResult()) throw new NotSupportedException("A directory query returned multiple results.");
+                }
             }
             catch { operation.Table.Dispose(); throw; }
         }
@@ -55,11 +67,23 @@ namespace OceanBaseConnector
             {
                 await using var command = operation.Command;
                 if (command == null) return operation.Table;
-                await using var reader = await ExecuteSchemaReaderAsync(command, operation.Table.TableName == "Columns", CompatibilityMode == OceanBaseCompatibilityMode.MySql, cancellationToken).ConfigureAwait(false);
-                ValidateSchemaResult(operation.Table, reader);
-                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) AddSchemaRow(operation.Table, reader, CompatibilityMode == OceanBaseCompatibilityMode.MySql);
-                if (await reader.NextResultAsync(cancellationToken).ConfigureAwait(false)) throw new NotSupportedException("A directory query returned multiple results.");
+                var mysql = CompatibilityMode == OceanBaseCompatibilityMode.MySql;
+                try { await ReadRowsAsync().ConfigureAwait(false); }
+                catch (OceanBaseException error) when (CanRetryOracleIndexColumns(error, operation.Table, mysql))
+                {
+                    SelectOracleIndexExpressionPositions(operation.Table, command);
+                    await ReadRowsAsync().ConfigureAwait(false);
+                    await ReadOracleIndexExpressionsAsync(operation.Table, command, true, cancellationToken).ConfigureAwait(false);
+                }
                 return operation.Table;
+
+                async Task ReadRowsAsync()
+                {
+                    await using var reader = await ExecuteSchemaReaderAsync(command, operation.Table.TableName == "Columns", mysql, cancellationToken).ConfigureAwait(false);
+                    ValidateSchemaResult(operation.Table, reader);
+                    while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) AddSchemaRow(operation.Table, reader, mysql);
+                    if (await reader.NextResultAsync(cancellationToken).ConfigureAwait(false)) throw new NotSupportedException("A directory query returned multiple results.");
+                }
             }
             catch { operation.Table.Dispose(); throw; }
         }
@@ -87,6 +111,7 @@ namespace OceanBaseConnector
                 var absent = index == 16 ? mysql ? -1 : 1 : mysql ? 1 : 0;
                 if (absent >= 0 && values.Length > absent && values[absent] != null || mysql && (index == 4 || index == 5) && values.Length > 4 && values[4] != null) return (table, null);
                 var command = new OceanBaseCommand { Connection = this, Transaction = _transaction, CommandTimeout = _builder.CommandTimeout, RequiredSession = session };
+                if (!mysql && table.TableName == "IndexColumns") command.RequiredTransactionEpoch = _transactionEpoch;
                 try { command.CommandText = index < 4 ? DirectorySql(index == 3, mysql, values, command) : index < 6 ? RoutineDirectorySql(index == 5, mysql, values, command) : CatalogDirectorySql(SchemaCollections[index], mysql, values, command); return (table, command); }
                 catch { command.Dispose(); table.Dispose(); throw; }
             }
