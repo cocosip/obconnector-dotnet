@@ -52,7 +52,11 @@ namespace OceanBaseConnector.UnitTests
             {
                 var request = await StatementCommand(channel, 3); var sql = Encoding.UTF8.GetString(request, 1, request.Length - 1);
                 Assert.Contains(CatalogSamples.Source(collection, mysql), sql);
-                if (collection == "ForeignKeyColumns" && !mysql) Assert.Contains("fk.POSITION = pk.POSITION", sql);
+                if (collection == "ForeignKeyColumns" && !mysql)
+                {
+                    Assert.StartsWith("SELECT /*+ LEADING(c fk p pk) USE_HASH(fk p pk) */", sql);
+                    Assert.Contains("fk.POSITION = pk.POSITION", sql);
+                }
                 if (collection == "Sequences")
                 {
                     Assert.DoesNotContain("NEXTVAL", sql); Assert.DoesNotContain("CURRVAL", sql);

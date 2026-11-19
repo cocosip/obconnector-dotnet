@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Data;
 using System.Linq;
@@ -128,7 +129,7 @@ public sealed class SchemaTests
         var suffix = Guid.NewGuid().ToString("N").Substring(0, 10).ToUpperInvariant();
         var pk = "OBI_PK_" + suffix; var fk = "OBI_FK_" + suffix; var index = "OBI_IX_" + suffix;
         var parent = await db.TableAsync(connection, "A INTEGER, B INTEGER, CONSTRAINT " + pk + " PRIMARY KEY (A, B)", CancellationToken.None);
-        var child = await db.TableAsync(connection, "A INTEGER, B INTEGER, CONSTRAINT " + fk + " FOREIGN KEY (A, B) REFERENCES " + parent + " (A, B) ON DELETE CASCADE", CancellationToken.None);
+        var child = await db.TableAsync(connection, "C INTEGER, D INTEGER, CONSTRAINT " + fk + " FOREIGN KEY (D, C) REFERENCES " + parent + " (A, B) ON DELETE CASCADE", CancellationToken.None);
         await db.ExecuteAsync(connection, "CREATE INDEX " + index + " ON " + parent + " (B, A)", CancellationToken.None);
         var owner = db.Oracle ? Convert.ToString(await db.ScalarAsync(connection, "SELECT USER FROM DUAL", CancellationToken.None), CultureInfo.InvariantCulture) : connection.Database;
         string?[] Filter(string table, string? item = null) => db.Oracle ? new[] { null, owner, table, item } : new[] { owner, null, table, item };
@@ -142,14 +143,24 @@ public sealed class SchemaTests
         using var constraints = await connection.GetSchemaAsync("Constraints", Filter(child, fk));
         Assert.Equal("FOREIGN KEY", Assert.Single(constraints.Rows.Cast<DataRow>())["CONSTRAINT_TYPE"]);
         using var columns = await connection.GetSchemaAsync("ConstraintColumns", Filter(child, fk));
-        Assert.Equal(new[] { "A", "B" }, columns.Rows.Cast<DataRow>().Select(row => (string)row["COLUMN_NAME"]));
+        Assert.Equal(new[] { "D", "C" }, columns.Rows.Cast<DataRow>().Select(row => (string)row["COLUMN_NAME"]));
         using var foreignKeys = await connection.GetSchemaAsync("ForeignKeys", Filter(child, fk));
         var key = Assert.Single(foreignKeys.Rows.Cast<DataRow>());
         Assert.True(string.Equals(parent, (string)key["REFERENCED_TABLE_NAME"], db.Oracle ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase));
         Assert.Equal("CASCADE", key["DELETE_RULE"]);
         using var foreignColumns = await connection.GetSchemaAsync("ForeignKeyColumns", Filter(child, fk));
-        Assert.Equal(new[] { "A", "B" }, foreignColumns.Rows.Cast<DataRow>().Select(row => (string)row["COLUMN_NAME"]));
-        Assert.Equal(new[] { "A", "B" }, foreignColumns.Rows.Cast<DataRow>().Select(row => (string)row["REFERENCED_COLUMN_NAME"]));
+        using var allForeignColumns = connection.GetSchema("ForeignKeyColumns");
+        AssertForeignColumns(foreignColumns.Rows.Cast<DataRow>());
+        AssertForeignColumns(allForeignColumns.Rows.Cast<DataRow>().Where(row =>
+            string.Equals(fk, (string)row["CONSTRAINT_NAME"], db.Oracle ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase)));
+
+        static void AssertForeignColumns(IEnumerable<DataRow> rows)
+        {
+            var members = rows.ToArray();
+            Assert.Equal(new[] { "D", "C" }, members.Select(row => (string)row["COLUMN_NAME"]));
+            Assert.Equal(new[] { "A", "B" }, members.Select(row => (string)row["REFERENCED_COLUMN_NAME"]));
+            Assert.Equal(new[] { 1, 2 }, members.Select(row => (int)row["ORDINAL_POSITION"]));
+        }
     }
 
     [IntegrationTheory]
