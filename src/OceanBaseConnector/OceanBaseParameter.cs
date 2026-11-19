@@ -83,11 +83,34 @@ namespace OceanBaseConnector
         internal byte? DeclaredScale => _scale;
         internal int? DeclaredDecimalScale => _decimalScale ?? (int?)_scale;
         internal void ClearScaleDeclaration() { _scale = null; _decimalScale = null; }
-        internal OceanBaseParameter Snapshot()
+
+        /// <summary>
+        /// Copies the parameter and its declared metadata without attaching it to a collection.
+        /// Byte arrays are copied. Other values retain their existing lifetime.
+        /// For a Stream value, use the overload with a separate stream.
+        /// </summary>
+        /// <exception cref="NotSupportedException">The current value is a Stream.</exception>
+        public OceanBaseParameter Clone() => Clone(Value);
+
+        /// <summary>
+        /// Copies the parameter and its declared metadata with a replacement value.
+        /// A replacement stream remains caller-owned and must be independent for each bind position.
+        /// </summary>
+        /// <exception cref="NotSupportedException">The replacement is the original Stream.</exception>
+        public OceanBaseParameter Clone(object? value)
+        {
+            if (value is Stream && ReferenceEquals(Value, value))
+                throw new NotSupportedException("Cloning a Stream parameter requires a separate stream.");
+            return Copy(value);
+        }
+
+        internal OceanBaseParameter Snapshot() => Copy(Value);
+
+        private OceanBaseParameter Copy(object? value)
         {
             var copy = (OceanBaseParameter)MemberwiseClone();
             copy.Owner = null;
-            if (copy.Value is byte[] bytes) copy.Value = (byte[])bytes.Clone();
+            copy.Value = value is byte[] bytes ? (byte[])bytes.Clone() : value;
             return copy;
         }
         public override void ResetDbType() { _dbType = null; _providerType = null; _complexType = null; }

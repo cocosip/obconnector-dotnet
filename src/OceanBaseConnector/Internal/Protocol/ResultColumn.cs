@@ -275,7 +275,7 @@ namespace OceanBaseConnector.Internal.Protocol
                         return typeof(OceanBaseDecimal);
                     }
                     var oracle = Mode == OceanBaseCompatibilityMode.Oracle;
-                    if (Precision > (oracle ? 38 : 65) || Scale < (oracle ? -84 : 0) || Scale > (oracle ? 127 : 30) ||
+                    if (Precision > (oracle ? 38 : DecimalCodec.MaxMySqlResultPrecision) || Scale < (oracle ? -84 : 0) || Scale > (oracle ? 127 : 30) ||
                         !oracle && Precision > 0 && Scale > Precision)
                         throw new NotSupportedException("The declared decimal metadata exceeds the supported mode limits.");
                     return Precision >= 1 && Precision <= 28 && Scale >= 0 && Scale <= Precision ? typeof(decimal) : typeof(OceanBaseDecimal);
@@ -573,6 +573,8 @@ namespace OceanBaseConnector.Internal.Protocol
                 number = new OceanBaseDecimal(Unsigned ? (decimal)integer : unchecked((int)integer));
             }
             else number = DecimalCodec.Parse(Utf8.GetString(value));
+            if (constrain && Mode == OceanBaseCompatibilityMode.MySql && Precision > 65)
+                return DecimalCodec.Constrain(number, (int)Precision, Scale, Unsigned, wideMySqlResult: true);
             // Oracle can report the same unknown precision/scale for binds and declared NUMBER(*,s).
             // FLOAT precision is binary digits and its scale is variable; the server already rounded the value.
             if (constrain && TypeCode != 206 && (Precision > 0 || Mode != OceanBaseCompatibilityMode.Oracle && Scale != 0))

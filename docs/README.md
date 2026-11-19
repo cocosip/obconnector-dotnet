@@ -29,6 +29,7 @@ turn into a product promise.
 | [Development tracking list](obconnector-dotnet-missing-features-roadmap.md) | **Single tracking entry for future development**: tasks D/A/S, progress, server prerequisites, scope decisions, pinned evidence sources. |
 | [Acceptance criteria](acceptance-criteria.md) | Test layers, minimum assertions, complete live/security/package gates and closing conditions. |
 | [Compatibility and known limitations](compatibility.md) | What each capability guarantees, what the current endpoints do not prove, and retained failures/skips. |
+| [EF Core 10 Connector dependency audit](efcore-10-connector-dependency-audit.md) | Public API contracts, Java and live database comparisons, resolved EF dependencies and remaining server boundaries. |
 | [Connection strings](connection-strings.md) | Every supported connection-string keyword, its default and purpose, validation rules and usage examples. |
 
 ## Reference contracts

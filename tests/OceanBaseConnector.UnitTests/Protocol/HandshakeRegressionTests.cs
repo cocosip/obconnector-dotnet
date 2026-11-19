@@ -27,7 +27,10 @@ namespace OceanBaseConnector.UnitTests.Protocol
             }
             Assert.Equal("_server_host", Encoding.UTF8.GetString(attributes.ReadLengthEncodedBytes()));
             Assert.Equal(host, Encoding.UTF8.GetString(attributes.ReadLengthEncodedBytes()));
+            Assert.Equal("__ob_client_attribute_capability_flag", Encoding.UTF8.GetString(attributes.ReadLengthEncodedBytes()));
+            Assert.Equal("4", Encoding.UTF8.GetString(attributes.ReadLengthEncodedBytes()));
             Assert.False(attributes.HasRemaining);
+            Assert.False(cursor.HasRemaining);
         }
 
         [Fact]

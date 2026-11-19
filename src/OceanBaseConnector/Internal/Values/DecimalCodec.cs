@@ -6,6 +6,9 @@ namespace OceanBaseConnector.Internal.Values
 {
     internal static class DecimalCodec
     {
+        // MySQL-mode expression results can exceed the 65-digit declaration limit.
+        internal const int MaxMySqlResultPrecision = 81;
+
         internal static OceanBaseDecimal Parse(string text)
         {
             // Bound untrusted payloads before constructing a coefficient or expanding an exponent.
@@ -63,9 +66,9 @@ namespace OceanBaseConnector.Internal.Values
             return sign + digits.Insert(digits.Length - value.Scale, ".");
         }
 
-        internal static OceanBaseDecimal Constrain(OceanBaseDecimal value, int precision, int scale, bool unsigned = false)
+        internal static OceanBaseDecimal Constrain(OceanBaseDecimal value, int precision, int scale, bool unsigned = false, bool wideMySqlResult = false)
         {
-            if (precision < 0 || precision > 65 || scale < -256 || scale > 256)
+            if (precision < 0 || precision > (wideMySqlResult ? MaxMySqlResultPrecision : 65) || scale < -256 || scale > 256)
                 throw new OverflowException("The decimal metadata exceeds the supported range.");
             var difference = (long)scale - value.Scale;
             if (difference < -256 || difference > 256) throw new OverflowException("The decimal scale exceeds the supported range.");

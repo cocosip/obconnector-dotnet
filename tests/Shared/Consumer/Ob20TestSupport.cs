@@ -526,7 +526,7 @@ namespace OceanBaseConnector.ConsumerTests
             Assert.False(handshake.HasRemaining);
             if (kind != "unrequested" && kind != "no-attributes") Assert.Equal("256", attributes["__proxy_capability_flag"]);
             else Assert.False(attributes.ContainsKey("__proxy_capability_flag"));
-            if (lobLocators) Assert.Equal("1", attributes["__ob_client_attribute_capability_flag"]);
+            if (kind != "no-attributes") Assert.Equal(lobLocators ? "5" : "4", attributes["__ob_client_attribute_capability_flag"]);
             var report = Report(kind != "unsupported", 0); if (mysql) report[3] &= 251;
             await channel.WritePacketAsync(report, token); channel.BeginCommand();
             await ReplyIdentity(channel, stream, kind == "enabled", token, deprecated, version, mysql, initializeAutocommit);

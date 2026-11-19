@@ -98,17 +98,21 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(false, false)] [InlineData(true, false)] [InlineData(true, true)]
-        public void LobV2CapabilityUsesClientAttributeWithoutChangingProxyCapabilities(bool ob20, bool trace)
+        [InlineData(false, false, false, "4")]
+        [InlineData(false, false, true, "5")]
+        [InlineData(true, false, true, "5")]
+        [InlineData(true, true, true, "5")]
+        public void BinaryDoubleAndLobV2CapabilitiesUseClientAttribute(bool ob20, bool trace, bool lobLocators, string expected)
         {
             var caps = CapabilityFlags.ClientProtocol41 | CapabilityFlags.ClientSecureConnection | CapabilityFlags.ClientConnectAttrs;
             var packet = HandshakeResponsePacket.Build("u", Array.Empty<byte>(), "", caps, caps, 45,
-                "mysql_native_password", "host", ob20, trace, requestLobLocators: true);
+                "mysql_native_password", "host", ob20, trace, requestLobLocators: lobLocators);
             var cursor = new ByteCursor(packet); cursor.Skip(32); cursor.ReadNullTerminatedAscii(); cursor.ReadLengthEncodedBytes();
             var attributes = new ByteCursor(cursor.ReadLengthEncodedBytes()); var values = new Dictionary<string, string>();
             while (attributes.HasRemaining)
                 values.Add(Encoding.UTF8.GetString(attributes.ReadLengthEncodedBytes()), Encoding.UTF8.GetString(attributes.ReadLengthEncodedBytes()));
-            Assert.Equal("1", values["__ob_client_attribute_capability_flag"]);
+            Assert.Equal(expected, values.GetValueOrDefault("__ob_client_attribute_capability_flag"));
+            Assert.False(cursor.HasRemaining);
             if (ob20) Assert.Equal(trace ? "311552" : "256", values["__proxy_capability_flag"]);
             else Assert.False(values.ContainsKey("__proxy_capability_flag"));
         }

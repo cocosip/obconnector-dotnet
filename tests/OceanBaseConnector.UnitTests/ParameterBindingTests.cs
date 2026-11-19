@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.IO;
 using OceanBaseConnector.Internal.Sql;
 using Xunit;
 
@@ -7,6 +8,72 @@ namespace OceanBaseConnector.UnitTests
 {
     public sealed class ParameterBindingTests
     {
+        [Fact]
+        public void ParameterClonePreservesDeclaredFacetsAndHasIndependentOwnership()
+        {
+            using var original = new OceanBaseCommand();
+            using var target = new OceanBaseCommand();
+            var parameter = new OceanBaseParameter
+            {
+                ParameterName = "value", OceanBaseDbType = OceanBaseDbType.Decimal, Value = 12.375m,
+                Precision = 18, DecimalScale = 4, Size = 20, IsNullable = true, SourceColumn = "source",
+                SourceColumnNullMapping = true, SourceVersion = DataRowVersion.Original,
+                CompatibilityMode = OceanBaseCompatibilityMode.MySql
+            };
+            original.Parameters.Add(parameter);
+
+            var first = parameter.Clone();
+            var second = parameter.Clone();
+            target.Parameters.Add(first);
+            target.Parameters.Add(second);
+            Assert.Same(parameter, original.Parameters[0]);
+            Assert.Same(first, target.Parameters[0]);
+            Assert.Same(second, target.Parameters[1]);
+            Assert.Equal(parameter.ParameterName, first.ParameterName);
+            Assert.Equal(parameter.DbType, first.DbType);
+            Assert.Equal(parameter.OceanBaseDbType, first.OceanBaseDbType);
+            Assert.Equal(parameter.Precision, first.Precision);
+            Assert.Equal(parameter.Scale, first.Scale);
+            Assert.Equal(parameter.DecimalScale, first.DecimalScale);
+            Assert.Null(first.DeclaredScale);
+            Assert.Equal(parameter.Size, first.Size);
+            Assert.Equal(parameter.Value, first.Value);
+            Assert.Equal(parameter.Direction, first.Direction);
+            Assert.Equal(parameter.IsNullable, first.IsNullable);
+            Assert.Equal(parameter.SourceColumn, first.SourceColumn);
+            Assert.Equal(parameter.SourceColumnNullMapping, first.SourceColumnNullMapping);
+            Assert.Equal(parameter.SourceVersion, first.SourceVersion);
+            Assert.Equal(parameter.CompatibilityMode, first.CompatibilityMode);
+
+            var inferred = new OceanBaseParameter { Value = 1 }.Clone(1m);
+            Assert.Equal(DbType.Decimal, inferred.DbType);
+            Assert.Null(inferred.DeclaredDecimalScale);
+            var explicitScale = new OceanBaseParameter { Scale = 0 }.Clone();
+            Assert.Equal((byte?)0, explicitScale.DeclaredScale);
+        }
+
+        [Fact]
+        public void ParameterCloneCopiesBytesAndRequiresAnIndependentStream()
+        {
+            var bytes = new byte[] { 1, 2 };
+            var parameter = new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Binary, Value = bytes };
+            var copy = parameter.Clone();
+            Assert.NotSame(bytes, copy.Value);
+            Assert.Equal(bytes, Assert.IsType<byte[]>(copy.Value));
+            bytes[0] = 3;
+            Assert.Equal(new byte[] { 1, 2 }, Assert.IsType<byte[]>(copy.Value));
+
+            using var original = new MemoryStream(bytes);
+            using var replacement = new MemoryStream(bytes);
+            parameter.Value = original;
+            Assert.Throws<NotSupportedException>(() => parameter.Clone());
+            Assert.Throws<NotSupportedException>(() => parameter.Clone(original));
+            Assert.Same(replacement, parameter.Clone(replacement).Value);
+            Assert.Same(original, parameter.Value);
+            Assert.Equal(0, original.Position);
+            Assert.Equal(0, replacement.Position);
+        }
+
         private static OceanBaseParameterCollection Parameters(params string[] names)
         {
             var parameters = new OceanBaseParameterCollection();

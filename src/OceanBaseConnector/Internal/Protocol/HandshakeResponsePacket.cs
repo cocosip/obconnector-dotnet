@@ -21,6 +21,8 @@ namespace OceanBaseConnector.Internal.Protocol
         private const string ClientVersionAttribute = "_client_version";
         private const string ServerHostAttribute = "_server_host";
         private const string DriverName = "OceanBase Connector/.NET";
+        private const int LobLocatorV2Capability = 1;
+        private const int JdbcBinaryDoubleCapability = 1 << 2;
 
         public static byte[] Build(
             string userId,
@@ -98,7 +100,9 @@ namespace OceanBaseConnector.Internal.Protocol
             WriteLengthString(attributes, ServerHostAttribute, serverHost ?? string.Empty);
             var proxyFlags = requestOb20 ? (requestFullLinkTrace ? 311552 : 256) : 0;
             if (proxyFlags != 0) WriteLengthString(attributes, "__proxy_capability_flag", proxyFlags.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            if (requestLobLocators) WriteLengthString(attributes, "__ob_client_attribute_capability_flag", "1");
+            // This capability keeps Oracle from converting standard DOUBLE binds through NUMBER.
+            var clientFlags = JdbcBinaryDoubleCapability | (requestLobLocators ? LobLocatorV2Capability : 0);
+            WriteLengthString(attributes, "__ob_client_attribute_capability_flag", clientFlags.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
             var attributeBytes = attributes.ToArray();
             WriteLengthEncodedInteger(writer, attributeBytes.Length);

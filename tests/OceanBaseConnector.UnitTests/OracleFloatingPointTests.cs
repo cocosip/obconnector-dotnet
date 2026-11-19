@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using OceanBaseConnector.Internal.Protocol;
 using OceanBaseConnector.UnitTests.TestInfrastructure;
 using Xunit;
 
@@ -23,6 +24,24 @@ namespace OceanBaseConnector.UnitTests
         public Task OracleFloatingPointReadersPreserveSpecialFiniteNullAndReuse(byte type, bool asynchronous, bool binary, bool sequential)
             => FloatingPointFixture.Verify(typeof(OceanBaseConnection), ProtocolFixture.Load("initial-handshake-oceanbase").Payload,
                 (channel, _) => ReadClientCommand(channel), type, asynchronous, binary, sequential);
+
+        [Theory]
+        [InlineData(double.MinValue, 0xffefffffffffffffUL)]
+        [InlineData(double.MaxValue, 0x7fefffffffffffffUL)]
+        [InlineData(double.Epsilon, 1UL)]
+        [InlineData(-double.Epsilon, 0x8000000000000001UL)]
+        [InlineData(-0.0d, 0x8000000000000000UL)]
+        public void OracleDoubleBindUsesTypeFiveZeroFlagsAndOriginalBits(double value, ulong bits)
+        {
+            var parameter = new OceanBaseParameter { Value = value, OceanBaseDbType = OceanBaseDbType.Double };
+            var cursor = new ByteCursor(PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.Oracle));
+            Assert.Equal(0, cursor.ReadUInt8()); // NULL bitmap
+            Assert.Equal(1, cursor.ReadUInt8()); // new parameter types
+            Assert.Equal(5, cursor.ReadUInt8());
+            Assert.Equal(0, cursor.ReadUInt8());
+            Assert.Equal(bits, cursor.ReadUInt64());
+            Assert.False(cursor.HasRemaining);
+        }
 
         [Theory]
         [InlineData(4)]

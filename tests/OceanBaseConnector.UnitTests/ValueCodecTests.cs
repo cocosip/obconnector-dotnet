@@ -79,7 +79,8 @@ namespace OceanBaseConnector.UnitTests
             var column = ValueColumn(246, mode, 5, 2, flags: 32);
             Assert.Equal(999.99m, column.Decode(Encoding.ASCII.GetBytes("999.99")));
             Assert.Throws<OverflowException>(() => column.Decode(Encoding.ASCII.GetBytes("-0.01")));
-            Assert.Throws<NotSupportedException>(() => ValueColumn(246, mode, 66, 20).Decode(null));
+            var unsupportedPrecision = mode == OceanBaseCompatibilityMode.MySql ? (byte)82 : (byte)39;
+            Assert.Throws<NotSupportedException>(() => ValueColumn(246, mode, unsupportedPrecision, 20).Decode(null));
         }
 
         [Fact]

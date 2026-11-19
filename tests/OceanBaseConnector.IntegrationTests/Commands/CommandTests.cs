@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using OceanBaseConnector.IntegrationTests.Infrastructure;
@@ -9,6 +10,38 @@ namespace OceanBaseConnector.IntegrationTests.Commands;
 
 public sealed class CommandTests
 {
+    [IntegrationTheory]
+    [MemberData(nameof(ProfileTheoryData.MySql), MemberType = typeof(ProfileTheoryData))]
+    public async Task ClonedParametersBindRepeatedMySqlPositions(string profileName)
+    {
+        await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
+        await using var connection = await db.OpenAsync();
+        using var owner = connection.CreateCommand();
+        var source = (OceanBaseParameter)owner.CreateParameter();
+        source.OceanBaseDbType = OceanBaseDbType.Decimal;
+        source.Precision = 18;
+        source.DecimalScale = 4;
+        source.Size = 20;
+        source.Value = 12.375m;
+        owner.Parameters.Add(source);
+
+        using var command = db.Command(connection, "SELECT CAST(? AS DECIMAL(18,4)) + CAST(? AS DECIMAL(18,4))");
+        command.Parameters.Add(source.Clone());
+        command.Parameters.Add(source.Clone());
+        await command.PrepareAsync();
+        Assert.Equal(24.7500m, Assert.IsType<decimal>(await command.ExecuteScalarAsync()));
+        Assert.Same(source, owner.Parameters[0]);
+
+        using var first = new MemoryStream(new byte[] { 0, 1, 255 });
+        using var second = new MemoryStream(new byte[] { 2, 3 });
+        using var streamCommand = db.Command(connection, "SELECT CONCAT(HEX(?), '/', HEX(?))");
+        var streamParameter = new OceanBaseParameter { OceanBaseDbType = OceanBaseDbType.Binary, Value = first };
+        streamCommand.Parameters.Add(streamParameter);
+        streamCommand.Parameters.Add(streamParameter.Clone(second));
+        Assert.Equal("0001FF/0203", await streamCommand.ExecuteScalarAsync());
+        Assert.True(first.CanRead && second.CanRead);
+    }
+
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.WithCreateObjects), MemberType = typeof(ProfileTheoryData))]
     public Task CrudTextAndPreparedCommandsSync(string profileName) => Crud(profileName, asynchronous: false);

@@ -15,6 +15,35 @@ namespace OceanBaseConnector.UnitTests
         private const string WideDecimalText = "123456789012345678901234567890123456789012345.12345678901234567890";
 
         [Theory]
+        [InlineData(81, 28)]
+        [InlineData(69, 30)]
+        public void MySqlWideExpressionResultsUseTheirDeclaredPrecisionAndScale(byte precision, byte scale)
+        {
+            var column = ValueColumn(246, OceanBaseCompatibilityMode.MySql, precision, scale);
+            var digits = new string('9', precision);
+            var wire = Encoding.ASCII.GetBytes("-" + digits.Insert(precision - scale, "."));
+            var expected = new OceanBaseDecimal(-BigInteger.Parse(digits, CultureInfo.InvariantCulture), scale);
+            var schema = new ResultDbColumn(column, 0);
+            Assert.Equal(typeof(OceanBaseDecimal), schema.DataType);
+            Assert.Equal<int?>(precision, schema.NumericPrecision);
+            Assert.Equal<int?>(scale, schema.NumericScale);
+            Assert.Equal(expected, column.Decode(wire));
+            Assert.Equal(expected, column.DecodeBinary(wire));
+            Assert.Equal(DBNull.Value, column.DecodeBinary(null));
+            Assert.Throws<OverflowException>(() => expected.ToDecimal());
+            Assert.Throws<OverflowException>(() => column.Decode(Encoding.ASCII.GetBytes("1" + new string('0', precision - scale))));
+            Assert.Throws<OverflowException>(() => column.DecodeBinary(Encoding.ASCII.GetBytes("1e-" + (scale + 1))));
+            var unsigned = ValueColumn(246, OceanBaseCompatibilityMode.MySql, precision, scale, flags: 32);
+            Assert.Throws<OverflowException>(() => unsigned.Decode(wire));
+            var parameter = new OceanBaseParameter { DbType = DbType.Decimal, Value = expected };
+            Assert.Throws<OverflowException>(() => PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.MySql));
+            parameter.Value = DBNull.Value;
+            parameter.Precision = precision;
+            parameter.Scale = scale;
+            Assert.Throws<NotSupportedException>(() => PreparedParameters.Encode(new[] { parameter }, OceanBaseCompatibilityMode.MySql));
+        }
+
+        [Theory]
         [InlineData(OceanBaseCompatibilityMode.MySql, 65, 20, WideDecimalText, "12345678901234567890123456789012345678901234512345678901234567890", 20)]
         [InlineData(OceanBaseCompatibilityMode.Oracle, 38, 0, "12345678901234567890123456789012345678", "12345678901234567890123456789012345678", 0)]
         [InlineData(OceanBaseCompatibilityMode.Oracle, 5, 254, "12300", "123", -2)]
@@ -171,7 +200,7 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData(OceanBaseCompatibilityMode.MySql, 66, 0)]
+        [InlineData(OceanBaseCompatibilityMode.MySql, 82, 0)]
         [InlineData(OceanBaseCompatibilityMode.MySql, 65, 31)]
         [InlineData(OceanBaseCompatibilityMode.MySql, 4, 5)]
         [InlineData(OceanBaseCompatibilityMode.Oracle, 39, 0)]

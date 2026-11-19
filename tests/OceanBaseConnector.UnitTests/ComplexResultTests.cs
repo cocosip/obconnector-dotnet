@@ -515,7 +515,10 @@ namespace OceanBaseConnector.UnitTests
                 await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof()); await StatementCommand(channel, 23);
                 await channel.WritePacketAsync(new byte[] { 1 }); await channel.WritePacketAsync(ComplexColumn()); await channel.WritePacketAsync(Eof());
                 var value = new byte[] { 0, 0, 1, 0, 3, 91, 0, 0 };
-                await channel.WritePacketAsync(value); await channel.WritePacketAsync(Eof());
+                await channel.WritePacketAsync(value);
+                // The malformed row can close the socket while the trailing EOF is being sent.
+                try { await channel.WritePacketAsync(Eof()); }
+                catch (IOException) { return; }
                 Assert.Equal(0, await channelStreamRead(channel));
             });
             using var connection = new OceanBaseConnection(Configuration(server.Port));
