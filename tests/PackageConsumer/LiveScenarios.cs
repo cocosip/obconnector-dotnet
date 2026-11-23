@@ -15,9 +15,9 @@ internal static class LiveScenarios
             if (string.IsNullOrWhiteSpace(connectionString)) throw new InvalidOperationException();
             var builder = new OceanBaseConnectionStringBuilder(connectionString);
             var mode = oracle ? OceanBaseCompatibilityMode.Oracle : OceanBaseCompatibilityMode.MySql;
-            if (builder.ExpectedMode.HasValue && builder.ExpectedMode != mode || builder.TlsMode != OceanBaseTlsMode.Disabled ||
+            if (builder.CompatibilityMode != OceanBaseCompatibilityMode.Auto && builder.CompatibilityMode != mode || builder.TlsMode != OceanBaseTlsMode.Disabled ||
                 builder.ConnectionTimeout <= 0 || builder.CommandTimeout <= 0) throw new InvalidOperationException();
-            builder.ExpectedMode = mode;
+            builder.CompatibilityMode = mode;
             builder.ConnectionTimeout = Math.Min(builder.ConnectionTimeout, 10);
             builder.CommandTimeout = Math.Min(builder.CommandTimeout, 15);
             builder.Pooling = true; builder.MinPoolSize = 0; builder.MaxPoolSize = 1;

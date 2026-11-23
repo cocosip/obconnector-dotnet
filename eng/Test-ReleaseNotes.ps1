@@ -31,7 +31,10 @@ try {
     Assert-Contains $first 'dotnet add package OceanBaseConnector --version 0.1.0'
 
     Set-Content Directory.Build.props '<Project><PropertyGroup><Version>0.2.0-rc.1</Version></PropertyGroup></Project>'
-    Invoke-Git @('add', 'Directory.Build.props')
+    $null = New-Item -ItemType Directory -Path 'docs/release-notes' -Force
+    Set-Content docs/release-notes/0.2.0-rc.1.md '## Migration notes: replace the old connection option.'
+    Set-Content docs/release-notes/0.1.0.md 'Previous version migration must not leak.'
+    Invoke-Git @('add', 'Directory.Build.props', 'docs/release-notes')
     Invoke-Git @('commit', '--quiet', '-m', 'Fix protocol handling')
     Invoke-Git @('tag', 'checkpoint')
     Invoke-Git @('tag', '0.2.0-rc.1')
@@ -40,6 +43,8 @@ try {
     Assert-Contains $next 'Fix protocol handling'
     Assert-Contains $next 'compare/v0.1.0...0.2.0-rc.1'
     Assert-Contains $next 'OceanBaseConnector.DependencyInjection --version 0.2.0-rc.1'
+    Assert-Contains $next '## Migration notes: replace the old connection option.'
+    if ($next.Contains('Previous version migration must not leak.')) { throw 'Previous version notes leaked into the new release.' }
     if ($next.Contains('Initial package')) { throw 'Previous release commits leaked into the new release.' }
 
     $rejected = $false
@@ -55,7 +60,7 @@ try {
     Invoke-Git @('tag', 'v0.2.0')
     & $script -Tag v0.2.0 -OutputPath stable.md
     Assert-Contains (Get-Content stable.md -Raw) 'compare/0.2.0-rc.1...v0.2.0'
-    Write-Host 'Release notes checks passed (first release, version ranges, prerelease, invalid version/commit).'
+    Write-Host 'Release notes checks passed (first release, version ranges, version-specific notes, prerelease, invalid version/commit).'
 } finally {
     Pop-Location
     Remove-Item -LiteralPath $fixture -Recurse -Force

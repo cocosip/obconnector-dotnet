@@ -87,7 +87,7 @@ public static class PackageConsumer
         Check(typeof(ILogger).Assembly.GetName().Version!.Major == major, "Logging assembly major");
         Check(typeof(ActivitySource).Assembly.GetName().Version!.Major == major, "DiagnosticSource assembly major");
         Check(connection.State == ConnectionState.Closed, "Factory must not connect");
-        const string connectionString = "Server=localhost;User ID=package_sample;Password=package-secret;Password2=second-secret;Password2147483647=last-secret;Service Principal Name=mariadb/trusted@REALM;ExpectedMode=Oracle";
+        const string connectionString = "Server=localhost;User ID=package_sample;Password=package-secret;Password2=second-secret;Password2147483647=last-secret;Service Principal Name=mariadb/trusted@REALM;CompatibilityMode=Oracle";
         var authentication = new OceanBaseConnectionStringBuilder(connectionString);
         Check(authentication.ServicePrincipalName == "mariadb/trusted@REALM" &&
             OceanBaseConnectionStringBuilder.ServicePrincipalNameKey == "Service Principal Name", "Packaged GSSAPI principal contract");

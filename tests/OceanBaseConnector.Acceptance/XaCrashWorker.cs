@@ -66,7 +66,7 @@ internal static class XaCrashWorker
             }
             var builder = new OceanBaseConnectionStringBuilder(request.ConnectionString) { Pooling = false };
             if (builder.ConnectionTimeout <= 0 || builder.CommandTimeout <= 0 ||
-                builder.ExpectedMode == OceanBaseCompatibilityMode.Oracle && !builder.UseOraclePrepareExecute)
+                builder.CompatibilityMode == OceanBaseCompatibilityMode.Oracle && !builder.UseOraclePrepareExecute)
                 throw new ArgumentException("Worker requires finite timeouts and Oracle PrepareExecute.");
             await using var connection = new OceanBaseConnection(builder.ConnectionString);
             var asynchronous = request.Asynchronous;

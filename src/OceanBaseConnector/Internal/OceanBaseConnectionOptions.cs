@@ -24,7 +24,7 @@ namespace OceanBaseConnector.Internal
             string tlsServerName,
             bool checkCertificateRevocation,
             bool persistSecurityInfo,
-            OceanBaseCompatibilityMode? expectedMode,
+            OceanBaseCompatibilityMode compatibilityMode,
             bool pooling,
             int minPoolSize,
             int maxPoolSize,
@@ -85,7 +85,7 @@ namespace OceanBaseConnector.Internal
             TlsServerName = tlsServerName;
             CheckCertificateRevocation = checkCertificateRevocation;
             PersistSecurityInfo = persistSecurityInfo;
-            ExpectedMode = expectedMode;
+            CompatibilityMode = compatibilityMode;
             Pooling = pooling;
             MinPoolSize = minPoolSize;
             MaxPoolSize = maxPoolSize;
@@ -114,7 +114,7 @@ namespace OceanBaseConnector.Internal
         internal OceanBaseConnectionOptions WithCredential(OceanBaseCredential credential) => Copy(Server, Port, credential);
         private OceanBaseConnectionOptions Copy(string server, int port, OceanBaseCredential? credential) => new OceanBaseConnectionOptions(
             server, port, credential?.UserId ?? UserId, credential?.Password ?? Password, Database, ConnectionTimeoutSeconds, CommandTimeoutSeconds,
-            TlsMode, TlsServerName, CheckCertificateRevocation, PersistSecurityInfo, ExpectedMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, credential?.AdditionalPasswords ?? AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows, UseBatchMultiSend, BatchMultiSendNumber, UseCompression, credential, StatementCacheSize, SlowQueryThresholdMilliseconds, ConnectRetryCount, ConnectRetryIntervalSeconds, HostRecheckSeconds, ClientCharacterSet.Name);
+            TlsMode, TlsServerName, CheckCertificateRevocation, PersistSecurityInfo, CompatibilityMode, Pooling, MinPoolSize, MaxPoolSize, PoolWaitTimeoutSeconds, ConnectionIdleLifetimeSeconds, ConnectionLifetimeSeconds, ServerRsaPublicKey, AllowPublicKeyRetrieval, UseOb20, EnableFullLinkTrace, UseOraclePrepareExecute, UseLobLocators, AllowMultiStatements, AllowLocalInfile, LoadBalance, SanitizedConnectionString, credential?.AdditionalPasswords ?? AdditionalPasswords, ServicePrincipalName, TreatTinyAsBoolean, UseAffectedRows, UseBatchMultiSend, BatchMultiSendNumber, UseCompression, credential, StatementCacheSize, SlowQueryThresholdMilliseconds, ConnectRetryCount, ConnectRetryIntervalSeconds, HostRecheckSeconds, ClientCharacterSet.Name);
 
         internal Protocol.ClientCharacterSet ClientCharacterSet { get; }
 
@@ -145,7 +145,7 @@ namespace OceanBaseConnector.Internal
 
         public bool PersistSecurityInfo { get; }
 
-        public OceanBaseCompatibilityMode? ExpectedMode { get; }
+        public OceanBaseCompatibilityMode CompatibilityMode { get; }
 
         public bool Pooling { get; }
         public int MinPoolSize { get; }

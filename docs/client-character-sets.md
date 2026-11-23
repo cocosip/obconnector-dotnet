@@ -26,7 +26,7 @@ does not select a different result decoder or make unsupported types legal.
 
 ```csharp
 using var connection = new OceanBaseConnection(
-    "Server=db.example;User ID=u;ExpectedMode=Oracle;Character Set=gbk");
+    "Server=db.example;User ID=u;CompatibilityMode=Oracle;Character Set=gbk");
 await connection.OpenAsync();
 using var command = connection.CreateCommand();
 command.CommandText = "SELECT :value FROM dual"; // Oracle mode example

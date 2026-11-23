@@ -51,7 +51,7 @@ public sealed partial class TextCommandTests
                 UserId = "synthetic",
                 Password = "synthetic-private",
                 TlsMode = OceanBaseTlsMode.Disabled,
-                ExpectedMode = OceanBaseCompatibilityMode.MySql,
+                CompatibilityMode = OceanBaseCompatibilityMode.MySql,
                 ConnectionTimeout = 3,
                 CommandTimeout = 3,
             };

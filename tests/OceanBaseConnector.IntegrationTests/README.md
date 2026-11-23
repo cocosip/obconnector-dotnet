@@ -163,7 +163,7 @@ Point `OB_INTEGRATION_CONFIG` at a JSON file, or place `integration-tests.json` 
 | Field | Meaning |
 | --- | --- |
 | `name` | Unique profile name used in test-case display and `OB_INTEGRATION_PROFILES` selection. |
-| `mode` | Required: `MySql` or `Oracle`. Forced into `ExpectedMode`; conflicting strings are rejected. |
+| `mode` | Required: `MySql` or `Oracle`. Forced into `CompatibilityMode`; conflicting strings are rejected. |
 | `connectionString` / `connectionStringEnvironment` / `connectionStringSecret` | Exactly one: literal text, an environment variable name, or a .NET User Secrets key. User Secrets is recommended for credentials. |
 | `tags` | Free-form labels. Suites keyed on `ob20` require that tag; `tls` tightens TLS-name assertions. |
 | `options` | Optional connection-string overrides: `useOb20`, `enableFullLinkTrace`, `useOraclePrepareExecute`, `useLobLocators`, `treatTinyAsBoolean`, `useAffectedRows`, `loadBalance`, `tlsMode`. Cross-option rules (trace requires OB20, LOB locators require prepare execute) are validated at load. |
@@ -209,7 +209,7 @@ Without a configuration file, `OB_REQUIRE_INTEGRATION=1` plus the four documente
 | Area | Suites (folder) |
 | --- | --- |
 | Open/close/reopen, identity vs `ob_version()`, factory/data source, ChangeDatabase, password hiding, address resolver, unreachable endpoint | `Connections/ConnectionTests` |
-| ExpectedMode mismatch, TLS name, pooling, EnlistTransaction, unsupported auth plugin, autocommit-disabled rejection | `Connections/IdentityGateTests` |
+| CompatibilityMode mismatch, TLS name, pooling, EnlistTransaction, unsupported auth plugin, autocommit-disabled rejection | `Connections/IdentityGateTests` |
 | Fresh implicit writes visible before/after Close, same-session prepared/generation reuse, explicit state discard, transaction rollback then next implicit commit, unread-reader and Oracle active temporary-LOB discard, optional ChangeDatabase reset (sync/async) | `Connections/PoolIsolationTests` |
 | Completed CloseConnection reader retained across same-physical-session pool reuse; old reader sync/async disposal preserves the new lease and real SQL | `Connections/PoolReaderLeaseTests` |
 | Same-endpoint single-slot persistent BLOB/CLOB handle/stream phases, safe reset/reuse after disposal, actual large external locator full reads, stale resource rejection and independent exact-content observer; Oracle REF CURSOR four phases under opaque-call retirement (sync/async) | `Connections/PoolResourceIsolationTests` |

@@ -13,7 +13,7 @@ namespace OceanBaseConnector
     /// <c>Server</c>, <c>Port</c>, <c>User ID</c>, <c>Password</c>,
     /// <c>Database</c>, <c>Connection Timeout</c>, <c>Connect Retry Count</c>, <c>Connect Retry Interval</c>, <c>Host Recheck Seconds</c>, <c>Command Timeout</c>, <c>Slow Query Threshold</c>,
     /// <c>TLS Mode</c> (or the common <c>SslMode</c> spelling), <c>TLS Server Name</c>, <c>Persist Security Info</c>,
-    /// <c>ExpectedMode</c>, <c>Pooling</c>, pool sizing/lifetime options,
+    /// <c>CompatibilityMode</c>, <c>Pooling</c>, pool sizing/lifetime options,
     /// <c>Server RSA Public Key</c> and
     /// <c>Allow Public Key Retrieval</c>, <c>Use OB20</c>, <c>Enable Full Link Trace</c> and
     /// <c>Use Oracle Prepare Execute</c>, <c>Use Lob Locators</c>, <c>Allow Multi Statements</c>, <c>Allow Local Infile</c>, <c>Check Certificate Revocation</c>, <c>Load Balance</c>, <c>Service Principal Name</c>,
@@ -40,7 +40,7 @@ namespace OceanBaseConnector
         public const string TlsServerNameKey = "TLS Server Name";
         public const string CheckCertificateRevocationKey = "Check Certificate Revocation";
         public const string PersistSecurityInfoKey = "Persist Security Info";
-        public const string ExpectedModeKey = "ExpectedMode";
+        public const string CompatibilityModeKey = "CompatibilityMode";
         public const string PoolingKey = "Pooling";
         public const string MinPoolSizeKey = "Min Pool Size";
         public const string MaxPoolSizeKey = "Max Pool Size";
@@ -202,24 +202,16 @@ namespace OceanBaseConnector
             set => this[PersistSecurityInfoKey] = value ? "true" : "false";
         }
 
-        public OceanBaseCompatibilityMode? ExpectedMode
+        /// <summary>Tenant compatibility mode; Auto detects it during authentication (default).
+        /// An explicit MySql or Oracle value rejects a session in the other mode.</summary>
+        public OceanBaseCompatibilityMode CompatibilityMode
         {
             get
             {
-                var value = GetString(ExpectedModeKey);
-                return value is null ? (OceanBaseCompatibilityMode?)null : ParseEnumValue<OceanBaseCompatibilityMode>(ExpectedModeKey, value);
+                var value = GetString(CompatibilityModeKey);
+                return value is null ? OceanBaseCompatibilityMode.Auto : ParseEnumValue<OceanBaseCompatibilityMode>(CompatibilityModeKey, value);
             }
-            set
-            {
-                if (value.HasValue)
-                {
-                    this[ExpectedModeKey] = value.Value.ToString();
-                }
-                else
-                {
-                    Remove(ExpectedModeKey);
-                }
-            }
+            set => this[CompatibilityModeKey] = value.ToString();
         }
 
         public bool Pooling
@@ -468,7 +460,7 @@ namespace OceanBaseConnector
                 TlsServerName,
                 CheckCertificateRevocation,
                 PersistSecurityInfo,
-                ExpectedMode,
+                CompatibilityMode,
                 Pooling,
                 MinPoolSize,
                 MaxPoolSize,
@@ -514,7 +506,7 @@ namespace OceanBaseConnector
             TlsServerNameKey,
             CheckCertificateRevocationKey,
             PersistSecurityInfoKey,
-            ExpectedModeKey,
+            CompatibilityModeKey,
             PoolingKey,
             MinPoolSizeKey,
             MaxPoolSizeKey,
@@ -614,7 +606,7 @@ namespace OceanBaseConnector
             if (Server.Length != 0) serializer[ServerKey] = Server;
             if (UserId.Length != 0) serializer[UserIdKey] = UserId;
             if (TlsServerName.Length != 0) serializer[TlsServerNameKey] = TlsServerName;
-            if (ExpectedMode.HasValue) serializer[ExpectedModeKey] = ExpectedMode.Value.ToString();
+            serializer[CompatibilityModeKey] = CompatibilityMode.ToString();
 
             var factors = new SortedDictionary<int, string>();
             foreach (string key in Keys)
@@ -770,7 +762,7 @@ namespace OceanBaseConnector
                         throw CreateKeywordError("RSA public key exceeds 16 KiB.", canonicalKey, includeValue: false, value: null);
                     return value;
 
-                case ExpectedModeKey:
+                case CompatibilityModeKey:
                     ParseEnumValue<OceanBaseCompatibilityMode>(canonicalKey, value);
                     return value;
 
@@ -915,8 +907,8 @@ namespace OceanBaseConnector
                 case "PERSIST SECURITY INFO":
                     canonical = PersistSecurityInfoKey;
                     return true;
-                case "EXPECTEDMODE":
-                    canonical = ExpectedModeKey;
+                case "COMPATIBILITYMODE":
+                    canonical = CompatibilityModeKey;
                     return true;
                 case "POOLING":
                     canonical = PoolingKey;

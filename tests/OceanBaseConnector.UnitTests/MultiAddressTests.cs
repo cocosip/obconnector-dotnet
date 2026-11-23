@@ -94,7 +94,7 @@ namespace OceanBaseConnector.UnitTests
             {
                 Server = $"127.0.0.1:{server.Port},127.0.0.1:{((IPEndPoint)fallback.LocalEndpoint).Port}",
             };
-            if (failurePhase == 2) builder.ExpectedMode = OceanBaseCompatibilityMode.MySql;
+            if (failurePhase == 2) builder.CompatibilityMode = OceanBaseCompatibilityMode.MySql;
             using var connection = new OceanBaseConnection(builder.ConnectionString);
             try
             {
@@ -109,7 +109,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal(failurePhase == 3, databaseError.IsExecutionOutcomeUnknown);
                 Assert.DoesNotContain("secret", databaseError.Message);
                 if (failurePhase == 1) Assert.Equal(1064, databaseError.ServerErrorCode);
-                if (failurePhase == 2) Assert.Contains("ExpectedMode", databaseError.Message);
+                if (failurePhase == 2) Assert.Contains("CompatibilityMode", databaseError.Message);
                 if (failurePhase == 4) Assert.Contains("could not be verified", databaseError.Message);
                 Assert.False(fallback.Pending());
                 Assert.NotEqual(ConnectionState.Open, connection.State);
@@ -299,7 +299,7 @@ namespace OceanBaseConnector.UnitTests
                 Database = "db",
                 TlsMode = OceanBaseTlsMode.VerifyFull,
                 TlsServerName = "cluster.test",
-                ExpectedMode = OceanBaseCompatibilityMode.Oracle,
+                CompatibilityMode = OceanBaseCompatibilityMode.Oracle,
                 CommandTimeout = 12,
                 ConnectionTimeout = 7,
                 PersistSecurityInfo = true,
@@ -314,7 +314,7 @@ namespace OceanBaseConnector.UnitTests
                 Assert.Equal("u", selected.UserId); Assert.Equal("secret", selected.Password); Assert.Equal("db", selected.Database);
                 Assert.Equal(7, selected.ConnectionTimeoutSeconds); Assert.Equal(12, selected.CommandTimeoutSeconds);
                 Assert.Equal(OceanBaseTlsMode.VerifyFull, selected.TlsMode); Assert.Equal("cluster.test", selected.TlsServerName);
-                Assert.Equal(OceanBaseCompatibilityMode.Oracle, selected.ExpectedMode); Assert.True(selected.PersistSecurityInfo);
+                Assert.Equal(OceanBaseCompatibilityMode.Oracle, selected.CompatibilityMode); Assert.True(selected.PersistSecurityInfo);
                 Assert.False(selected.Pooling); Assert.DoesNotContain("secret", selected.ToString());
             }
         }

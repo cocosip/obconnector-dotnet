@@ -21,6 +21,8 @@ namespace OceanBaseConnector.Internal.Session
             OceanBaseCapabilityFlags obCapabilityFlag,
             IReadOnlyDictionary<string, string> sessionVariables)
         {
+            if (mode != OceanBaseCompatibilityMode.MySql && mode != OceanBaseCompatibilityMode.Oracle)
+                throw new ArgumentOutOfRangeException(nameof(mode), mode, "An authenticated session requires a concrete compatibility mode.");
             GreetingVersion = serverVersion;
             ServerVersion = serverVersion;
             ConnectionId = connectionId;

@@ -17,18 +17,37 @@ public sealed class IntegrationConfigurationTests
     {
         var profile = IntegrationProfileConfig.Legacy(name, ConnectionString, "direct");
         Assert.Equal(mode, profile.Mode);
-        Assert.Equal(mode, profile.CreateBuilder().ExpectedMode);
+        Assert.Equal(mode, profile.CreateBuilder().CompatibilityMode);
     }
 
     [Theory]
     [InlineData("MySql", "Oracle")]
     [InlineData("Oracle", "MySql")]
-    public void ConflictingExpectedModeIsRejected(string mode, string expectedMode)
+    public void ConflictingCompatibilityModeIsRejected(string mode, string compatibilityMode)
     {
         var json = "{\"profiles\":[{\"name\":\"direct\",\"mode\":\"" + mode +
-            "\",\"connectionString\":\"" + ConnectionString + ";ExpectedMode=" + expectedMode + "\"}]}";
+            "\",\"connectionString\":\"" + ConnectionString + ";CompatibilityMode=" + compatibilityMode + "\"}]}";
         var error = Assert.Throws<InvalidOperationException>(() => IntegrationProfileConfig.Parse(json));
-        Assert.Contains("ExpectedMode", error.Message);
+        Assert.Contains("CompatibilityMode", error.Message);
+    }
+
+    [Theory]
+    [InlineData("MySql", OceanBaseCompatibilityMode.MySql)]
+    [InlineData("Oracle", OceanBaseCompatibilityMode.Oracle)]
+    public void AutoConnectionModeUsesTheConcreteProfileMode(string mode, OceanBaseCompatibilityMode expected)
+    {
+        var json = "{\"profiles\":[{\"name\":\"direct\",\"mode\":\"" + mode +
+            "\",\"connectionString\":\"" + ConnectionString + ";CompatibilityMode=Auto\"}]}";
+        Assert.Equal(expected, Assert.Single(IntegrationProfileConfig.Parse(json)).CreateBuilder().CompatibilityMode);
+    }
+
+    [Fact]
+    public void ProfileRequiresAConcreteTenantMode()
+    {
+        var profile = new IntegrationProfile { Name = "direct", Mode = OceanBaseCompatibilityMode.Auto, ConnectionString = ConnectionString };
+        Assert.Throws<InvalidOperationException>(() => profile.CreateBuilder());
+        var json = "{\"profiles\":[{\"name\":\"direct\",\"mode\":\"Auto\",\"connectionString\":\"" + ConnectionString + "\"}]}";
+        Assert.Throws<InvalidOperationException>(() => IntegrationProfileConfig.Parse(json));
     }
 
     [Theory]

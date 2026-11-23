@@ -31,14 +31,25 @@ public sealed class AcceptanceRunnerTests
     {
         var config = AcceptanceConfig.Parse("{\"mode\":\"Oracle\",\"connectionStringEnvironment\":\"TEST_DSN\"}");
         Assert.Throws<InvalidOperationException>(() => config.ResolveConnectionString(_ => null));
-        Assert.Throws<ArgumentException>(() => config.ResolveConnectionString(_ => "Server=x;User ID=u;ExpectedMode=MySql"));
+        Assert.Throws<ArgumentException>(() => config.ResolveConnectionString(_ => "Server=x;User ID=u;CompatibilityMode=MySql"));
         var builder = new OceanBaseConnectionStringBuilder(config.ResolveConnectionString(key =>
         {
             Assert.Equal("TEST_DSN", key);
             return "Server=x;User ID=u;Password=sensitive;TLS Mode=Disabled";
         }));
-        Assert.Equal(OceanBaseCompatibilityMode.Oracle, builder.ExpectedMode);
+        Assert.Equal(OceanBaseCompatibilityMode.Oracle, builder.CompatibilityMode);
         Assert.Equal("sensitive", builder.Password);
+    }
+
+    [Theory]
+    [InlineData("MySql", OceanBaseCompatibilityMode.MySql)]
+    [InlineData("Oracle", OceanBaseCompatibilityMode.Oracle)]
+    public void AutoConnectionModeUsesTheConcreteAcceptanceMode(string mode, OceanBaseCompatibilityMode expected)
+    {
+        var config = AcceptanceConfig.Parse("{\"mode\":\"" + mode + "\",\"connectionStringEnvironment\":\"TEST_DSN\"}");
+        var builder = new OceanBaseConnectionStringBuilder(config.ResolveConnectionString(_ =>
+            "Server=x;User ID=u;CompatibilityMode=Auto"));
+        Assert.Equal(expected, builder.CompatibilityMode);
     }
 
     [Fact]

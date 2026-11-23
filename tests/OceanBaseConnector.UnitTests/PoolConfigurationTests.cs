@@ -29,7 +29,7 @@ namespace OceanBaseConnector.UnitTests
             yield return new object[] { "TLS Server Name", "other.invalid" };
             yield return new object[] { "Check Certificate Revocation", "true" };
             yield return new object[] { "Persist Security Info", "true" };
-            yield return new object[] { "ExpectedMode", "MySql" };
+            yield return new object[] { "CompatibilityMode", "MySql" };
             yield return new object[] { "Pooling", "true" };
             yield return new object[] { "Min Pool Size", "1" };
             yield return new object[] { "Max Pool Size", "2" };
@@ -83,7 +83,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("")]
         [InlineData("Password2=\"\";Password10=ten")]
         [InlineData("Server=first,second;User ID=Case;Password=\"p;Password2=q\";Password2=\"q;Database=db\"")]
-        [InlineData("Server=[::1]:2882;ExpectedMode=oracle;Connection Timeout=7;Pool Wait Timeout=0")]
+        [InlineData("Server=[::1]:2882;CompatibilityMode=oracle;Connection Timeout=7;Pool Wait Timeout=0")]
         public void CanonicalIdentityCanBeReparsedWithoutChangingPublicSerialization(string configuration)
         {
             var builder = new OceanBaseConnectionStringBuilder(configuration);
@@ -104,7 +104,7 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("Server=first,second", "Server=second,first")]
         [InlineData("Server=First", "Server=first")]
         [InlineData("Connection Timeout=7", "Connection Timeout=7;Pool Wait Timeout=15")]
-        [InlineData("ExpectedMode=MySql", "")]
+        [InlineData("CompatibilityMode=MySql", "")]
         [InlineData("Password=\"p;Database=a\";Database=b", "Password=p;Database=\"a;Database=b\"")]
         public void TextSecretsOptionalFactorsAndPoliciesDoNotCollide(string first, string second)
         {
@@ -137,6 +137,8 @@ namespace OceanBaseConnector.UnitTests
         [InlineData("User ID=u;Pooling=true", "Pooling=true;User ID=u")]
         [InlineData("Pooling=true", "Pooling=true;Connect Retry Count=0;Connect Retry Interval=1")]
         [InlineData("Pooling=true", "Pooling=true;Host Recheck Seconds=0")]
+        [InlineData("Pooling=true", "Pooling=true;CompatibilityMode=Auto")]
+        [InlineData("Pooling=true;CompatibilityMode=Auto", "Pooling=true;compatibilitymode=auto")]
         [InlineData("Pooling=true", "Pooling=TRUE")]
         [InlineData("Pooling=true", "Pooling=true;Port=2881")]
         [InlineData("Pooling=true", "Pooling=true;Max Pool Size=0100")]

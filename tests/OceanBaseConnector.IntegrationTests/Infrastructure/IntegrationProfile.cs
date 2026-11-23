@@ -35,10 +35,12 @@ public sealed class IntegrationProfile
     /// </summary>
     public OceanBaseConnectionStringBuilder CreateBuilder()
     {
+        if (Mode != OceanBaseCompatibilityMode.MySql && Mode != OceanBaseCompatibilityMode.Oracle)
+            throw new InvalidOperationException($"Profile '{Name}': 'mode' must be MySql or Oracle.");
         var builder = new OceanBaseConnectionStringBuilder(ConnectionString);
-        if (builder.ExpectedMode.HasValue && builder.ExpectedMode != Mode)
-            throw new InvalidOperationException($"Profile '{Name}': connection string ExpectedMode conflicts with the configured mode.");
-        builder.ExpectedMode = Mode;
+        if (builder.CompatibilityMode != OceanBaseCompatibilityMode.Auto && builder.CompatibilityMode != Mode)
+            throw new InvalidOperationException($"Profile '{Name}': connection string CompatibilityMode conflicts with the configured mode.");
+        builder.CompatibilityMode = Mode;
         if (builder.ConnectionTimeout <= 0 || builder.CommandTimeout <= 0)
             throw new InvalidOperationException($"Profile '{Name}': integration tests require positive connection and command timeouts.");
         return builder;
@@ -87,16 +89,16 @@ internal static class IntegrationProfileConfig
         if (string.IsNullOrWhiteSpace(item.Name))
             throw new InvalidOperationException("Every profile needs a non-empty 'name'.");
         if (item.Mode is null || !Enum.TryParse<OceanBaseCompatibilityMode>(item.Mode, ignoreCase: false, out var mode)
-            || !Enum.IsDefined(mode))
+            || mode != OceanBaseCompatibilityMode.MySql && mode != OceanBaseCompatibilityMode.Oracle)
             throw new InvalidOperationException($"Profile '{item.Name}': 'mode' must be MySql or Oracle.");
         var resolved = ResolveConnectionString(item, requireValue: true);
         var options = item.Options ?? new ConfigOptions();
         var capabilities = item.Capabilities ?? new ConfigCapabilities();
 
         var builder = new OceanBaseConnectionStringBuilder(resolved);
-        if (builder.ExpectedMode.HasValue && builder.ExpectedMode != mode)
-            throw new InvalidOperationException($"Profile '{item.Name}': connection string ExpectedMode conflicts with the configured mode.");
-        builder.ExpectedMode = mode;
+        if (builder.CompatibilityMode != OceanBaseCompatibilityMode.Auto && builder.CompatibilityMode != mode)
+            throw new InvalidOperationException($"Profile '{item.Name}': connection string CompatibilityMode conflicts with the configured mode.");
+        builder.CompatibilityMode = mode;
         builder.UseOb20 = options.UseOb20 ?? builder.UseOb20;
         builder.EnableFullLinkTrace = options.EnableFullLinkTrace ?? builder.EnableFullLinkTrace;
         builder.UseOraclePrepareExecute = options.UseOraclePrepareExecute ?? builder.UseOraclePrepareExecute;

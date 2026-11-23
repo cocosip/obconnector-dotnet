@@ -33,7 +33,7 @@ fallback errors never hiding permissions, cancellation or malformed results.
   worktree or extra approval cycle is needed for this bounded change.
 - Implemented eleven appended fields with nullable Boolean presence flags,
   conservative public-catalog normalization and one legacy-projection retry for
-  known missing-column errors. No Java, server, protocol, ExpectedMode, EF or
+  known missing-column errors. No Java, server, protocol, CompatibilityMode, EF or
   dependency changes were made.
 - Release solution build succeeded for netstandard2.0, netstandard2.1, net8.0,
   net9.0 and net10.0 with zero warnings and zero errors.

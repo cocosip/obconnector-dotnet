@@ -36,7 +36,7 @@ copy them into repository files or shared logs/reports. Never print or commit re
 
 | Field | Meaning |
 | --- | --- |
-| `mode` | Required: `Oracle` or `MySql`. Must match `ExpectedMode` if supplied. |
+| `mode` | Required: `Oracle` or `MySql`. Must match `CompatibilityMode` if supplied. |
 | `connectionString` / `connectionStringEnvironment` | Set exactly one: connection text or the name of an environment variable. |
 | `groups` | Empty or omitted selects all groups; use `--list` for names. |
 | `allowCreateObjects` | Default false. Enables tests that create and drop schema objects; both example files set true. |
@@ -50,7 +50,7 @@ copy them into repository files or shared logs/reports. Never print or commit re
 | `slowQuery` | Optional read-only SQL taking over two seconds, for cancellation and timeout tests. Omitted means those cases are skipped. |
 | `alternateDatabase` | Optional MySQL database for change-and-restore testing. Omitted means skipped. |
 
-Use positive connection and command timeouts. The console sets `ExpectedMode` from configuration and enforces the driver's identity contract. Every Open confirms the actual product version and session mode; it does not enforce an exact tested-release allowlist. Oracle extension cases are skipped when their options are disabled; errors after enabling them count as failures.
+Use positive connection and command timeouts. The console sets `CompatibilityMode` from configuration and enforces the driver's identity contract. Every Open confirms the actual product version and session mode; it does not enforce an exact tested-release allowlist. Oracle extension cases are skipped when their options are disabled; errors after enabling them count as failures.
 
 ## Coverage and cleanup
 

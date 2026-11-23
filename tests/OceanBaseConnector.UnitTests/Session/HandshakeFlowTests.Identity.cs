@@ -15,6 +15,38 @@ namespace OceanBaseConnector.UnitTests.Session
 {
     public sealed partial class HandshakeFlowTests
     {
+        [Theory]
+        [InlineData(false, false, "")]
+        [InlineData(false, true, "")]
+        [InlineData(true, false, "")]
+        [InlineData(true, true, "")]
+        [InlineData(false, false, ";CompatibilityMode=Auto")]
+        [InlineData(false, true, ";CompatibilityMode=Auto")]
+        [InlineData(true, false, ";CompatibilityMode=auto")]
+        [InlineData(true, true, ";CompatibilityMode=auto")]
+        public async Task AutoCompatibilityModeReturnsTheAuthenticatedTenantMode(bool asynchronous, bool oracle, string configuration)
+        {
+            var server = LoopbackServer.Start(async client =>
+            {
+                var channel = new PacketChannel(client.GetStream());
+                await channel.WritePacketAsync(BuildInitialHandshake());
+                await channel.ReadPacketAsync();
+                await channel.WritePacketAsync(BuildAuthOk(oracleMode: oracle));
+                await IdentityResponse(channel, oracle);
+            });
+            try
+            {
+                using var transport = await TcpTransport.ConnectAsync("127.0.0.1", server.Port, TimeSpan.FromSeconds(10), default);
+                var channel = new PacketChannel(transport.Stream);
+                var options = new OceanBaseConnectionStringBuilder("Server=127.0.0.1;User ID=u;TLS Mode=Disabled" + configuration).Build();
+                var result = asynchronous ? await HandshakeFlow.AuthenticateAsync(transport, channel, options, default)
+                    : HandshakeFlow.Authenticate(transport, channel, options);
+                Assert.Equal(oracle ? OceanBaseCompatibilityMode.Oracle : OceanBaseCompatibilityMode.MySql, result.Mode);
+            }
+            finally { server.Stop(); }
+            await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         private static byte[] IdentityColumn()
         {
             using var data = new MemoryStream();
@@ -81,7 +113,7 @@ namespace OceanBaseConnector.UnitTests.Session
                 using var transport = await TcpTransport.ConnectAsync("127.0.0.1", server.Port, TimeSpan.FromSeconds(10), default);
                 var channel = new PacketChannel(transport.Stream);
                 var mode = oracle ? OceanBaseCompatibilityMode.Oracle : OceanBaseCompatibilityMode.MySql;
-                var options = BuildOptions(expectedMode: mode);
+                var options = BuildOptions(compatibilityMode: mode);
                 var result = asynchronous ? await HandshakeFlow.AuthenticateAsync(transport, channel, options, default)
                     : HandshakeFlow.Authenticate(transport, channel, options);
                 Assert.Equal(mode, result.Mode);

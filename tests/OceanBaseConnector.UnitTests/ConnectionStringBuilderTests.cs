@@ -24,7 +24,8 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal(15, options.ConnectionTimeoutSeconds);
             Assert.Equal(30, options.CommandTimeoutSeconds);
             Assert.False(options.Pooling);
-            Assert.Null(options.ExpectedMode);
+            Assert.Equal(OceanBaseCompatibilityMode.Auto, builder.CompatibilityMode);
+            Assert.Equal(OceanBaseCompatibilityMode.Auto, options.CompatibilityMode);
             Assert.Equal(string.Empty, options.TlsServerName);
             Assert.Equal(0, options.MinPoolSize);
             Assert.Equal(100, options.MaxPoolSize);
@@ -315,20 +316,22 @@ namespace OceanBaseConnector.UnitTests
         }
 
         [Theory]
-        [InlineData("ExpectedMode=MySQL", OceanBaseCompatibilityMode.MySql)]
-        [InlineData("ExpectedMode=Oracle", OceanBaseCompatibilityMode.Oracle)]
-        [InlineData("ExpectedMode=oracle", OceanBaseCompatibilityMode.Oracle)]
-        public void ExpectedModeParses(string pair, OceanBaseCompatibilityMode expected)
+        [InlineData("CompatibilityMode=Auto", OceanBaseCompatibilityMode.Auto)]
+        [InlineData("CompatibilityMode=auto", OceanBaseCompatibilityMode.Auto)]
+        [InlineData("CompatibilityMode=MySQL", OceanBaseCompatibilityMode.MySql)]
+        [InlineData("CompatibilityMode=Oracle", OceanBaseCompatibilityMode.Oracle)]
+        [InlineData("CompatibilityMode=oracle", OceanBaseCompatibilityMode.Oracle)]
+        public void CompatibilityModeParses(string pair, OceanBaseCompatibilityMode expected)
         {
             var builder = new OceanBaseConnectionStringBuilder(ValidMinimal + ";" + pair);
-            Assert.Equal(expected, builder.ExpectedMode);
-            Assert.Equal(expected, builder.Build().ExpectedMode);
+            Assert.Equal(expected, builder.CompatibilityMode);
+            Assert.Equal(expected, builder.Build().CompatibilityMode);
         }
 
         [Theory]
-        [InlineData("ExpectedMode=SqlServer")]
-        [InlineData("ExpectedMode=mysql,oracle")]
-        public void InvalidExpectedModeIsRejected(string pair)
+        [InlineData("CompatibilityMode=SqlServer")]
+        [InlineData("CompatibilityMode=mysql,oracle")]
+        public void InvalidCompatibilityModeIsRejected(string pair)
         {
             Assert.Throws<ArgumentException>(
                 () => new OceanBaseConnectionStringBuilder(ValidMinimal + ";" + pair));
@@ -381,7 +384,7 @@ namespace OceanBaseConnector.UnitTests
                 TlsMode = OceanBaseTlsMode.Required,
                 TlsServerName = "ob1.example.com",
                 PersistSecurityInfo = false,
-                ExpectedMode = OceanBaseCompatibilityMode.MySql,
+                CompatibilityMode = OceanBaseCompatibilityMode.MySql,
                 Pooling = false,
             };
 
@@ -395,7 +398,7 @@ namespace OceanBaseConnector.UnitTests
             Assert.Equal(11, options.CommandTimeoutSeconds);
             Assert.Equal(OceanBaseTlsMode.Required, options.TlsMode);
             Assert.Equal("ob1.example.com", options.TlsServerName);
-            Assert.Equal(OceanBaseCompatibilityMode.MySql, options.ExpectedMode);
+            Assert.Equal(OceanBaseCompatibilityMode.MySql, options.CompatibilityMode);
         }
 
         [Fact]

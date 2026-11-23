@@ -286,12 +286,12 @@ namespace OceanBaseConnector.UnitTests.Session
             try
             {
                 using var transport = await TcpTransport.ConnectAsync("127.0.0.1", server.Port, TimeSpan.FromSeconds(10), default);
-                var channel = new PacketChannel(transport.Stream); var options = BuildOptions(expectedMode: OceanBaseCompatibilityMode.MySql);
+                var channel = new PacketChannel(transport.Stream); var options = BuildOptions(compatibilityMode: OceanBaseCompatibilityMode.MySql);
                 if (oracleBit)
                 {
                     var error = asynchronous ? await Assert.ThrowsAsync<OceanBaseException>(() => HandshakeFlow.AuthenticateAsync(transport, channel, options, default))
                         : Assert.Throws<OceanBaseException>(() => HandshakeFlow.Authenticate(transport, channel, options));
-                    Assert.Contains("ExpectedMode", error.Message);
+                    Assert.Contains("CompatibilityMode", error.Message);
                 }
                 else
                 {

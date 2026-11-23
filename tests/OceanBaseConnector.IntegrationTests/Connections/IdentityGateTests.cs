@@ -15,14 +15,14 @@ public sealed class IdentityGateTests
 {
     [IntegrationTheory]
     [MemberData(nameof(ProfileTheoryData.All), MemberType = typeof(ProfileTheoryData))]
-    public async Task ExpectedModeMismatchIsRejected(string profileName)
+    public async Task CompatibilityModeMismatchIsRejected(string profileName)
     {
         await using var db = new DatabaseContext(IntegrationEnvironment.GetProfile(profileName));
         var builder = db.Profile.CreateBuilder();
-        builder.ExpectedMode = db.Oracle ? OceanBaseCompatibilityMode.MySql : OceanBaseCompatibilityMode.Oracle;
+        builder.CompatibilityMode = db.Oracle ? OceanBaseCompatibilityMode.MySql : OceanBaseCompatibilityMode.Oracle;
         await using var connection = new OceanBaseConnection(builder.ConnectionString);
         var error = await Assert.ThrowsAsync<OceanBaseException>(connection.OpenAsync);
-        Assert.Contains("ExpectedMode", error.Message, StringComparison.Ordinal);
+        Assert.Contains("CompatibilityMode", error.Message, StringComparison.Ordinal);
         Assert.Equal(ConnectionState.Closed, connection.State);
     }
 

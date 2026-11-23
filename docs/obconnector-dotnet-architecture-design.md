@@ -19,7 +19,7 @@ environment variables are present.
 The separate `-VerifyLive` path also requires `OB_REQUIRE_INTEGRATION=1` and both
 `OB_MYSQL_CONNECTION_STRING` / `OB_ORACLE_CONNECTION_STRING`. Supply these in the
 calling environment; the verifier does not load secrets. Both direct profiles
-must use TLS Disabled, compatible ExpectedMode and positive timeouts. Child
+must use TLS Disabled, compatible CompatibilityMode and positive timeouts. Child
 hosts receive profiles on stdin, and raw child errors are suppressed. The
 selected public-API storage/transaction/read/error/reopen scenarios must all
 pass with independent table cleanup; a deadline kill cannot certify cleanup.
@@ -61,7 +61,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 | `Host Recheck Seconds` | 0 seconds | TCP failure hint lifetime, 0..3600; zero disables. Recent failures move after other candidates without excluding any address. See [contract](#endpoint-tcp-health-cache). |
 | `Command Timeout` | 30 seconds | Command execution budget. |
 | `Slow Query Threshold` | 0 milliseconds | Nonnegative Int32 client execute/cursor lifetime threshold; zero disables slow reporting. See [contract](#slow-client-operation-diagnostics). |
-| `ExpectedMode` | Unset | Validates `MySql` or `Oracle` after detection. |
+| `CompatibilityMode` | `Auto` | `Auto` detects either tenant mode; explicit `MySql` or `Oracle` validates it after authentication. |
 | `TLS Mode` (`SslMode` alias) | `VerifyFull` | Validates certificate trust and hostname. `Required` encrypts without identity verification; `Disabled` uses plaintext transport. |
 | `TLS Server Name` | Endpoint hostname | Overrides the TLS certificate name. |
 | `Check Certificate Revocation` | false | Enables platform certificate revocation checks during TLS. |
@@ -87,7 +87,7 @@ Use `OceanBaseConnectionStringBuilder` to construct connection strings. Unknown 
 
 Every connection performs one read-only identity query after authentication:
 `select ob_version(), @@ob_compatibility_mode from dual`, extended with `, @@autocommit` in MySQL mode.
-The mode must match authentication and `ExpectedMode` when supplied.
+The mode must match authentication and any explicit `CompatibilityMode=MySql` or `CompatibilityMode=Oracle` setting. The default `Auto` accepts either verified tenant mode.
 `ServerVersion` and schema product-version metadata report the actual `ob_version()` value;
 the original MySQL-compatible greeting is retained internally and does not select features.
 Malformed identity results and unknown version formats fail Open without publishing a session.
@@ -172,7 +172,7 @@ Closing detaches the session together with its original pool, registry key and c
 
 ### Ordinary pool configuration identity
 
-With `Pooling=true`, ordinary connections share a pool when their effective configuration and policy identities match. Internal normalization covers option order/aliases, Boolean/integer/enum spelling and omitted versus explicit defaults. The default Pool Wait Timeout follows Connection Timeout. Every declared option participates, including pool/timeouts and security policy; text values remain ordinal, including Server/candidate order, user/database, passwords, RSA material and TLS/SPN names. This does not infer DNS, hostname-case or tenant equivalence. An unspecified ExpectedMode stays distinct from an explicit mode.
+With `Pooling=true`, ordinary connections share a pool when their effective configuration and policy identities match. Internal normalization covers option order/aliases, Boolean/integer/enum spelling and omitted versus explicit defaults. The default Pool Wait Timeout follows Connection Timeout. Every declared option participates, including pool/timeouts and security policy; text values remain ordinal, including Server/candidate order, user/database, passwords, RSA material and TLS/SPN names. This does not infer DNS, hostname-case or tenant equivalence. An omitted CompatibilityMode and explicit Auto share one configuration; explicit MySql and Oracle each remain distinct.
 
 PAM PasswordN factors are ordered numerically; a present empty factor differs from an absent one. Open, Close/discard, failed-open cleanup and ClearPool derive their identity from the original parsed builder before public serialization can lose quoted-empty presence. The internal identity includes secrets and is never a display/logging string. Public ConnectionString serialization and PersistSecurityInfo behavior are unchanged; passing a serialized string through another parser still follows ordinary ADO.NET empty-value parsing rules.
 

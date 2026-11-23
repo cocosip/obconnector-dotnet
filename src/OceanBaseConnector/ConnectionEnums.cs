@@ -27,16 +27,18 @@ namespace OceanBaseConnector
     }
 
     /// <summary>
-    /// OceanBase compatibility mode of a session. The effective mode is
-    /// determined by the server during authentication; this value is only the
-    /// client-side expectation used to reject a mismatched session.
+    /// OceanBase compatibility mode. Auto is a connection configuration option;
+    /// authenticated sessions report MySql or Oracle.
     /// </summary>
     public enum OceanBaseCompatibilityMode
     {
+        /// <summary>Automatically detect the tenant mode (connection configuration default only).</summary>
+        Auto = 0,
+
         /// <summary>MySQL compatibility mode.</summary>
-        MySql = 0,
+        MySql = 1,
 
         /// <summary>Oracle compatibility mode.</summary>
-        Oracle = 1,
+        Oracle = 2,
     }
 }

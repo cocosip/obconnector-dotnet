@@ -35,6 +35,10 @@ TLS defaults to VerifyFull; the local plain-transport test environments require 
 
 Both packages target `netstandard2.0`, `netstandard2.1`, `net8.0`, `net9.0` and `net10.0`. Data sources and batches are available on the .NET 8/9/10 assets.
 
+Version **0.5.0** replaces `ExpectedMode` with `CompatibilityMode` (default `Auto`) and changes
+the SDK enum values to `Auto = 0`, `MySql = 1`, `Oracle = 2`. See the
+[0.5.0 release and migration notes](docs/release-notes/0.5.0.md) before upgrading from 0.4.x.
+
 ## Usage
 
 This example uses Oracle mode and a server certificate trusted by the client:
@@ -44,7 +48,7 @@ using System.Data;
 using OceanBaseConnector;
 
 using var connection = new OceanBaseConnection(
-    "Server=db.example;Port=2881;User ID=test_user@tenant;Password=replace-me;ExpectedMode=Oracle");
+    "Server=db.example;Port=2881;User ID=test_user@tenant;Password=replace-me;CompatibilityMode=Oracle");
 await connection.OpenAsync();
 
 using var command = connection.CreateCommand();
@@ -60,7 +64,9 @@ var result = await command.ExecuteScalarAsync();
 
 For the complete keyword list, defaults and validation rules see the [connection string reference](docs/connection-strings.md).
 
-`ExpectedMode` validates the detected mode; it does not change the server mode. TLS defaults to `VerifyFull`, validating certificate trust and hostnames. Set `Check Certificate Revocation=true` to enable platform revocation checks. For mutual TLS, assign an application-owned certificate with a private key to `OceanBaseConnection.ClientCertificate` before opening. Pooling supports client certificates and isolates certificate instances and SHA-256 fingerprints; reuse a stable certificate instance for one ordinary pool. The application must keep that certificate valid through each Open.
+`CompatibilityMode` defaults to `Auto`: omit it or set `CompatibilityMode=Auto` to detect the tenant mode. Set `CompatibilityMode=MySql` or `CompatibilityMode=Oracle` to require that mode; a mismatch fails Open. This setting does not change the server mode.
+
+TLS defaults to `VerifyFull`, validating certificate trust and hostnames. Set `Check Certificate Revocation=true` to enable platform revocation checks. For mutual TLS, assign an application-owned certificate with a private key to `OceanBaseConnection.ClientCertificate` before opening. Pooling supports client certificates and isolates certificate instances and SHA-256 fingerprints; reuse a stable certificate instance for one ordinary pool. The application must keep that certificate valid through each Open.
 
 Modern data sources offer `OceanBaseDataSourceBuilder.UseClientCertificate(...)`. Build captures an owned copy even with pooling disabled, so the original can be disposed after Build succeeds. Source connections inherit fixed configuration. Certificate rotation uses a new data source; dispose the old source and close its borrowed connections when retiring that identity. Pooled borrow does not repeat TLS validation. See the [client certificate contract](docs/obconnector-dotnet-architecture-design.md#tls-client-certificates) for ownership and rotation limits.
 

@@ -126,7 +126,7 @@ namespace OceanBaseConnector.UnitTests
                 var config = AcceptanceConfig.Parse("{\"mode\":\"MySql\",\"connectionString\":\"unused\",\"zeroDateProfile\":true,\"allowCreateObjects\":true}");
                 var test = Assert.Single(DatabaseCases.All(), c => c.Name == "types.zero-date-policy");
                 var report = await AcceptanceSuite.RunAsync(config, new[] { test }, TextWriter.Null, stop.Token,
-                    Configuration(((IPEndPoint)listener.LocalEndpoint).Port) + ";Pooling=false;ExpectedMode=MySql");
+                    Configuration(((IPEndPoint)listener.LocalEndpoint).Port) + ";Pooling=false;CompatibilityMode=MySql");
                 var result = Assert.Single(report.Results);
                 Assert.True(result.Status == (passes ? "passed" : "failed"), result.Detail);
                 if (!passes) Assert.Contains(normalize == "none" ? "SQL_MODE" : "without normalization", result.Detail);

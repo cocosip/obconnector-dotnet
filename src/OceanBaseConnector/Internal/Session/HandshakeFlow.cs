@@ -227,11 +227,11 @@ namespace OceanBaseConnector.Internal.Session
             var mode = (statusFlags & ServerStatusFlags.ObServerUseOracleMode) != 0
                 ? OceanBaseCompatibilityMode.Oracle : OceanBaseCompatibilityMode.MySql;
 
-            if (options.ExpectedMode.HasValue && options.ExpectedMode.Value != mode)
+            if (options.CompatibilityMode != OceanBaseCompatibilityMode.Auto && options.CompatibilityMode != mode)
             {
                 throw new OceanBaseException(
                     $"Server at {options.Endpoint} authenticated in {mode} mode, but the connection string requires " +
-                    $"{options.ExpectedMode.Value} mode (ExpectedMode).");
+                    $"{options.CompatibilityMode} mode (CompatibilityMode).");
             }
 
             return mode;

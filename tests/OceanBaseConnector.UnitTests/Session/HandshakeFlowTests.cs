@@ -20,7 +20,7 @@ namespace OceanBaseConnector.UnitTests.Session
     /// <summary>
     /// Loopback authentication tests against a scripted server (A05):
     /// full handshake with mode identification and ob_capability_flag,
-    /// authentication switch, server ERR, ExpectedMode mismatch, non-OceanBase
+    /// authentication switch, server ERR, CompatibilityMode mismatch, non-OceanBase
     /// version refusal, unsupported plugins and the cleartext-over-TLS gate.
     /// </summary>
     public sealed partial class HandshakeFlowTests
@@ -66,7 +66,7 @@ namespace OceanBaseConnector.UnitTests.Session
             {
                 using var transport = await TcpTransport.ConnectAsync("127.0.0.1", server.Port, TimeSpan.FromSeconds(10), default);
                 var result = await HandshakeFlow.AuthenticateAsync(
-                    transport, new PacketChannel(transport.Stream), BuildOptions(expectedMode: OceanBaseCompatibilityMode.MySql), default);
+                    transport, new PacketChannel(transport.Stream), BuildOptions(compatibilityMode: OceanBaseCompatibilityMode.MySql), default);
                 Assert.Equal(OceanBaseCompatibilityMode.MySql, result.Mode);
                 Assert.Equal("4.4.2.1", result.ServerVersion);
             }
@@ -306,15 +306,19 @@ namespace OceanBaseConnector.UnitTests.Session
             Assert.False(exception.IsExecutionOutcomeUnknown);
         }
 
-        [Fact]
-        public async Task ExpectedModeMismatchIsRejected()
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public async Task CompatibilityModeMismatchIsRejected(bool asynchronous, bool oracle)
         {
             var server = LoopbackServer.Start(async client =>
             {
                 var stream = client.GetStream();
                 await stream.WriteAsync(Frame(0, BuildInitialHandshake()));
                 ReadResponse(stream);
-                await stream.WriteAsync(Frame(2, BuildAuthOk(oracleMode: true)));
+                await stream.WriteAsync(Frame(2, BuildAuthOk(oracleMode: oracle)));
             });
 
             OceanBaseException exception;
@@ -323,12 +327,10 @@ namespace OceanBaseConnector.UnitTests.Session
                 using var transport = await TcpTransport.ConnectAsync(
                     "127.0.0.1", server.Port, TimeSpan.FromSeconds(10), CancellationToken.None);
                 var channel = new PacketChannel(transport.Stream);
-                exception = await Assert.ThrowsAsync<OceanBaseException>(
-                    () => HandshakeFlow.AuthenticateAsync(
-                        transport,
-                        channel,
-                        BuildOptions(expectedMode: OceanBaseCompatibilityMode.MySql),
-                        CancellationToken.None));
+                var options = BuildOptions(compatibilityMode: oracle ? OceanBaseCompatibilityMode.MySql : OceanBaseCompatibilityMode.Oracle);
+                exception = asynchronous
+                    ? await Assert.ThrowsAsync<OceanBaseException>(() => HandshakeFlow.AuthenticateAsync(transport, channel, options, default))
+                    : Assert.Throws<OceanBaseException>(() => HandshakeFlow.Authenticate(transport, channel, options));
             }
             finally
             {
@@ -336,7 +338,7 @@ namespace OceanBaseConnector.UnitTests.Session
             }
 
             await server.Completion.WaitAsync(TimeSpan.FromSeconds(10));
-            Assert.Contains("ExpectedMode", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("CompatibilityMode", exception.Message, StringComparison.Ordinal);
         }
 
         [Fact]

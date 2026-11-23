@@ -44,7 +44,7 @@ internal static class ProtocolScenarios
     private static async Task Consume(int port, bool oracle, bool asynchronous, bool sequential, CancellationToken token)
     {
         using var connection = new OceanBaseConnection("Server=127.0.0.1;Port=" + port +
-            ";User ID=synthetic;TLS Mode=Disabled;Pooling=true;Max Pool Size=1;Connection Timeout=5;Command Timeout=5;ExpectedMode=" +
+            ";User ID=synthetic;TLS Mode=Disabled;Pooling=true;Max Pool Size=1;Connection Timeout=5;Command Timeout=5;CompatibilityMode=" +
             (oracle ? "Oracle" : "MySql"));
         try
         {

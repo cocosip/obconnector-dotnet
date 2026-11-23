@@ -130,7 +130,7 @@ namespace OceanBaseConnector.UnitTests.Session
         private static OceanBaseConnectionOptions BuildOptions(
             string password = "secretpw",
             OceanBaseTlsMode tlsMode = OceanBaseTlsMode.Disabled,
-            OceanBaseCompatibilityMode? expectedMode = null)
+            OceanBaseCompatibilityMode compatibilityMode = OceanBaseCompatibilityMode.Auto)
         {
             var builder = new OceanBaseConnectionStringBuilder
             {
@@ -138,12 +138,8 @@ namespace OceanBaseConnector.UnitTests.Session
                 UserId = "u@sys",
                 Password = password,
                 TlsMode = tlsMode,
+                CompatibilityMode = compatibilityMode,
             };
-            if (expectedMode.HasValue)
-            {
-                builder.ExpectedMode = expectedMode;
-            }
-
             return builder.Build();
         }
 

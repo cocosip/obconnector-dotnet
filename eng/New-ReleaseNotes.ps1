@@ -38,6 +38,10 @@ $comparison = if ($previous) {
 } else {
     "First release. [Commit history]($url/commits/$Tag)."
 }
+$versionNotesPath = Join-Path $root "docs/release-notes/$version.md"
+$versionNotes = if (Test-Path -LiteralPath $versionNotesPath) {
+    Get-Content -LiteralPath $versionNotesPath -Raw
+}
 $notes = @(
     "# OceanBaseConnector $version"
     ''
@@ -48,6 +52,7 @@ $notes = @(
     "dotnet add package OceanBaseConnector.DependencyInjection --version $version"
     '```'
     ''
+    if ($versionNotes) { $versionNotes.TrimEnd(); '' }
     '## Changes'
     ''
     $comparison

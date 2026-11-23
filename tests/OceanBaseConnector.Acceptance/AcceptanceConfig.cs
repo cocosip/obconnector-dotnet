@@ -52,9 +52,9 @@ internal sealed class AcceptanceConfig
         if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException("Connection string environment variable is empty.");
         var builder = new OceanBaseConnectionStringBuilder(value);
         var mode = Mode == "Oracle" ? OceanBaseCompatibilityMode.Oracle : OceanBaseCompatibilityMode.MySql;
-        if (builder.ExpectedMode.HasValue && builder.ExpectedMode != mode)
-            throw new ArgumentException("Configured mode conflicts with connection string ExpectedMode.");
-        builder.ExpectedMode = mode;
+        if (builder.CompatibilityMode != OceanBaseCompatibilityMode.Auto && builder.CompatibilityMode != mode)
+            throw new ArgumentException("Configured mode conflicts with connection string CompatibilityMode.");
+        builder.CompatibilityMode = mode;
         if (builder.ConnectionTimeout <= 0 || builder.CommandTimeout <= 0)
             throw new ArgumentException("Acceptance requires finite positive connection and command timeouts.");
         if (Ob20TraceProfile != null && (!builder.UseOb20 || builder.UseCompression || builder.EnableFullLinkTrace != (Ob20TraceProfile != "ob20")))

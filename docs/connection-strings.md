@@ -17,6 +17,30 @@ malformed value or two keywords that map to the same setting (`Server=a;Host=b`)
 
 ## Quick start
 
+`CompatibilityMode` defaults to `Auto`. Omitting the option and setting `CompatibilityMode=Auto`
+both detect the authenticated tenant mode. Explicit `MySql` or `Oracle` values require that mode;
+a mismatch fails Open. The option never changes the tenant's server-side mode.
+After Open, `OceanBaseConnection.CompatibilityMode` reports the actual `MySql` or `Oracle` mode,
+including when the builder's configured mode is `Auto`.
+The builder, connection and parameters use the same `OceanBaseCompatibilityMode` enum
+(`Auto`, `MySql`, `Oracle`). `Auto` is only a configuration option; an open connection reports
+the actual `MySql` or `Oracle` mode and never reports `Auto`.
+The SDK defines the enum values as `Auto = 0`, `MySql = 1`, and `Oracle = 2`;
+these numbers are not server protocol mode codes.
+`OceanBaseParameter.CompatibilityMode` is a snapshot captured by `command.CreateParameter()`;
+it is null if the connection is not open or the parameter is constructed directly. Execution uses
+the current session's actual mode. For mode-dependent SQL, read the open connection's mode.
+
+```csharp
+var builder = new OceanBaseConnectionStringBuilder(connectionString)
+{
+    CompatibilityMode = OceanBaseCompatibilityMode.Auto
+};
+using var connection = new OceanBaseConnection(builder.ConnectionString);
+await connection.OpenAsync();
+OceanBaseCompatibilityMode? mode = connection.CompatibilityMode;
+```
+
 MySQL tenant, plain transport (local test environment only - TLS defaults to `VerifyFull`):
 
 ```csharp
@@ -30,7 +54,7 @@ Oracle tenant with explicit mode validation and the Oracle extensions enabled:
 ```csharp
 using var connection = new OceanBaseConnection(
     "Server=ob.example.com;Port=2881;User ID=app@oracle_tenant;Password=replace-me;" +
-    "ExpectedMode=Oracle;Use Oracle Prepare Execute=true;Use Lob Locators=true");
+    "CompatibilityMode=Oracle;Use Oracle Prepare Execute=true;Use Lob Locators=true");
 await connection.OpenAsync();
 ```
 
@@ -85,7 +109,7 @@ create singletons whose connections the caller disposes.
 | `User ID` (required, alias `Uid`) | - | Login identity, normally `user@tenant`. Must not be empty. |
 | `Password` (alias `Pwd`) | empty | Login password. `PasswordN` (`N` >= 2) supplies PAM passwords. |
 | `Database` | empty | Initial database/schema sent during authentication. Empty leaves the server default. |
-| `ExpectedMode` | unset | `MySql` or `Oracle`. Validates the mode detected from the authenticated session; it never changes the server mode. Unset accepts either mode. |
+| `CompatibilityMode` | `Auto` | `Auto`, `MySql` or `Oracle` (case-insensitive). `Auto` detects and accepts either tenant mode. Explicit `MySql` or `Oracle` rejects a mismatched session; this never changes the server mode. |
 | `Character Set` (aliases `CharacterSet`, `CHARACTER SET`) | `utf8mb4` | Client encoding for SQL text and ordinary parameters; non-default values add cached session charset verification. Results are always decoded as UTF-8. Supported names are listed in [client character sets](client-character-sets.md). |
 | `Persist Security Info` | `false` | When `false`, `ConnectionString` hides the password after Open. Set `true` only if code must re-read the secret from the connection. |
 

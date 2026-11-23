@@ -45,7 +45,7 @@ Evidence accumulates layer by layer and cannot substitute across layers:
 
 | Capability ID | Behavior that must be checked | Test entry point/coverage owner |
 | --- | --- | --- |
-| C01–C04/C16 | Strict configuration/scope/redaction, real identity/version for both modes, ExpectedMode rejection, Open/reopen, cancellation, factory, ChangeDatabase under permissions | connection; Integration Connections |
+| C01–C04/C16 | Strict configuration/scope/redaction, real identity/version for both modes, CompatibilityMode rejection, Open/reopen, cancellation, factory, ChangeDatabase under permissions | connection; Integration Connections |
 | C05–C09 | Trusted chain + correct host succeeds; wrong name/untrusted/expired/missing client certificate fails without downgrade; credential expiry/rotation/redaction | SecurityTests + real TLS/plugin profiles; E01 is currently open |
 | C10–C14 | Capacity limits/wait cancellation/warm-up/pool clearing; reset and replacement of the same physical session proven separately; late release of old readers/LOBs/cursors/XA does not affect a new lease; routing isolation | connection/faults; Integration Connections (PoolIsolation/PoolResourceIsolation) and discovery specials; real HA verified separately |
 | Q01–Q07 | text/prepare/fallback/multi-statement kept separate; parameter values/NULL/direction/type, quotes/q quoting, failure does not mis-execute, atomic OUT publication | crud/routines; Integration Commands/Oracle/Types and the corresponding multi-statement specials |

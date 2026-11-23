@@ -359,7 +359,7 @@ namespace OceanBaseConnector.UnitTests
             });
             var resolver = AddressResolver.Returning($"127.0.0.1:{server.Port},127.0.0.1:{((IPEndPoint)unused.LocalEndpoint).Port}");
             var builder = new OceanBaseConnectionStringBuilder(Configuration(server.Port)) { LoadBalance = OceanBaseLoadBalance.RoundRobin };
-            if (failure == "mode") builder.ExpectedMode = OceanBaseCompatibilityMode.MySql;
+            if (failure == "mode") builder.CompatibilityMode = OceanBaseCompatibilityMode.MySql;
             using var connection = new OceanBaseConnection(builder.ConnectionString) { AddressResolver = resolver };
             try
             {

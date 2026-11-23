@@ -24,6 +24,7 @@ turn into a product promise.
 
 | Document | Purpose |
 | --- | --- |
+| [0.5.0 release and migration notes](release-notes/0.5.0.md) | Connection-string and enum changes, upgrade steps and validation scope. |
 | [Feature and capability matrix](obconnector-dotnet-progress.md) | What the SDK must provide, MySQL/Oracle differences, option/type/direction boundaries and current implementation. |
 | [Missing-feature and verification matrix](obconnector-dotnet-completeness.md) | Missing implementation, limited subsets, candidates, unverified areas, server-permission blockers (G01-G15, E01-E15) and exclusions. |
 | [Development tracking list](obconnector-dotnet-missing-features-roadmap.md) | **Single tracking entry for future development**: tasks D/A/S, progress, server prerequisites, scope decisions, pinned evidence sources. |

@@ -81,7 +81,7 @@ is shared.
 The first implementation is a bounded catalog API enhancement, not a promise
 of lossless reconstruction for every column. Use OceanBase's public
 INFORMATION_SCHEMA and SYS/ALL_* catalog views. Do not modify the server,
-Connector/J, the wire protocol, or ExpectedMode. Do not query internal
+Connector/J, the wire protocol, or CompatibilityMode. Do not query internal
 __ALL_* tables directly.
 
 The appended ADO.NET field names and three-state presence flags below are
@@ -114,7 +114,7 @@ Prefer appending fields to Columns. Keep the original twelve fields, their
 ordinals, CLR types and raw COLUMN_DEFAULT meaning. Preserve the ordered exact,
 parameterized Catalog/Schema/Table/Column restrictions and absent-identifier
 behavior. Keep the same authenticated mode, session/transaction ownership,
-timeouts, cancellation and error propagation; do not change ExpectedMode.
+timeouts, cancellation and error propagation; do not change CompatibilityMode.
 
 | Appended field | DataColumn.DataType | Proposed meaning |
 | --- | --- | --- |
